@@ -2,9 +2,13 @@
 
 同行者是一个 Flutter 开发的双语实地推广记录 App 原型。它面向不同城市的团队，帮助成员快速记录接触时间、地点、基础问卷、多条联系方式、关系/兴趣度，并给管理员提供定位校正与统计视图。
 
-## 项目设计文档
+## 项目文档
 
-新的推广分析产品设计、界面设计、交互设计、本地 SQLite 设计和未来 Snowflake 架构见 [docs/PROJECT_DESIGN.md](docs/PROJECT_DESIGN.md)。
+现代化产品的完整需求、架构边界、交付顺序和验收合同见 [docs/PRODUCT_SPEC.md](docs/PRODUCT_SPEC.md)；统一领域词汇见 [CONTEXT.md](CONTEXT.md)，单项决策见 [docs/adr/](docs/adr/)。
+
+[docs/PROJECT_DESIGN.md](docs/PROJECT_DESIGN.md) 保留为当前 legacy demo 的历史设计资料，可能与已确认的新模型冲突，不再作为新功能实现依据。
+
+如果你是刚开始学 Flutter / Dart / Git，可以先读 [docs/BEGINNER_LEARNING_GUIDE.md](docs/BEGINNER_LEARNING_GUIDE.md)。它按“先看哪个文件、顺便补什么基础知识”的方式带你拆这个项目。
 
 ## 当前功能
 
