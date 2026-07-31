@@ -19,6 +19,7 @@ android {
         applicationId = "com.tongxingzhe.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
+        // Flutter 3.44 的默认 API 24 高于安全存储所需 API 23。
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

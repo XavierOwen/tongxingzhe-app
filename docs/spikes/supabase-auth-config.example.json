@@ -1,0 +1,9 @@
+{
+  "SUPABASE_URL": "https://YOUR_TEST_PROJECT.supabase.co",
+  "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_REPLACE_WITH_TEST_PROJECT_KEY",
+  "AUTH_SPIKE_MODE": "session",
+  "AUTH_SPIKE_EMAIL": "synthetic-test-account@example.test",
+  "AUTH_SPIKE_PASSWORD": "REPLACE_IN_IGNORED_SECRETS_FILE",
+  "AUTH_SPIKE_OTP": "",
+  "AUTH_SPIKE_NEW_PASSWORD": ""
+}

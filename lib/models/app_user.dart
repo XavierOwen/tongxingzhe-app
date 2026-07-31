@@ -44,12 +44,11 @@ class AppUser {
   bool get isOrgAdmin => roleLevel >= 90;
   bool get isCityAdmin => roleLevel >= 70;
   bool get isActive => status == 'active';
-  int? get age {
+  int? ageAt(DateTime now) {
     final value = birthday;
     if (value == null) {
       return null;
     }
-    final now = DateTime.now();
     var years = now.year - value.year;
     final birthdayPassed =
         now.month > value.month ||
@@ -60,8 +59,8 @@ class AppUser {
     return years < 0 ? null : years;
   }
 
-  String get ageBand {
-    final years = age;
+  String ageBandAt(DateTime now) {
+    final years = ageAt(now);
     if (years == null) {
       return 'unknown';
     }

@@ -1,29 +1,37 @@
 import 'dart:convert';
-import 'dart:math';
 
-import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart';
 import 'package:flutter/material.dart';
 
 import '../data/local_database.dart';
+import '../foundation/runtime_values.dart';
 import '../models/app_user.dart';
 import '../models/conversation_record.dart';
+import 'legacy_demo_access.dart';
 
 class AppController extends ChangeNotifier {
-  AppController({LocalDatabase? database})
-    : _db = database ?? LocalDatabase.defaults();
+  factory AppController({
+    required LocalDatabase database,
+    required AppClock clock,
+    required IdGenerator idGenerator,
+    LegacyDemoAccess? legacyDemoAccess,
+  }) {
+    return AppController._(database, clock, idGenerator, legacyDemoAccess);
+  }
+
+  AppController._(
+    this._db,
+    this._clock,
+    this._idGenerator,
+    this._legacyDemoAccess,
+  );
 
   static const _maxFailedLogins = 4;
   static const _lockDuration = Duration(days: 30);
-  static const _demoUsernames = {
-    'admin1',
-    'admin2',
-    'admin3',
-    'user1',
-    'user2',
-  };
-
   final LocalDatabase _db;
+  final AppClock _clock;
+  final IdGenerator _idGenerator;
+  final LegacyDemoAccess? _legacyDemoAccess;
   final List<ConversationRecord> _records = [];
   final List<AppUser> _users = [];
 
@@ -39,6 +47,7 @@ class AppController extends ChangeNotifier {
   List<AppUser> get users => List.unmodifiable(_users);
 
   bool get isLoggedIn => currentUser != null;
+  bool get legacyDemoEnabled => _legacyDemoAccess != null;
   bool get canUseAdminMode => currentUser?.isCityAdmin == true;
   List<String> get availableAreas => areasForCity(cityName);
 
@@ -47,6 +56,12 @@ class AppController extends ChangeNotifier {
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return sorted;
   }
+
+  /// 让旧 UI 也通过统一 Clock 取得当前时间；现代 Feature 会把时间放进其深模块。
+  DateTime now() => _clock.now();
+
+  /// legacy 记录临时使用的不透明 ID；正式接触 ID 将由 ContactJournal 创建。
+  String nextLegacyRecordId() => 'legacy-${_idGenerator.next()}';
 
   List<ConversationRecord> get visibleRecords {
     final user = currentUser;
@@ -64,10 +79,14 @@ class AppController extends ChangeNotifier {
 
   Future<void> load() async {
     await _loadUsers();
-    await _ensureDefaultUsersExist();
+    if (legacyDemoEnabled) {
+      await _ensureDefaultUsersExist();
+    }
     await _loadSettings();
     await _loadRecords();
-    await _ensureSeedData();
+    if (legacyDemoEnabled) {
+      await _ensureSeedData();
+    }
   }
 
   @override
@@ -77,6 +96,13 @@ class AppController extends ChangeNotifier {
   }
 
   Future<AuthResult> login(String username, String password) async {
+    final legacyDemo = _legacyDemoAccess;
+    if (legacyDemo == null) {
+      return const AuthResult(
+        success: false,
+        messageKey: 'authUnavailableInProduction',
+      );
+    }
     final normalizedUsername = username.trim();
     final index = _users.indexWhere(
       (user) => user.username.toLowerCase() == normalizedUsername.toLowerCase(),
@@ -88,7 +114,7 @@ class AppController extends ChangeNotifier {
       return const AuthResult(success: false, messageKey: 'authInvalid');
     }
 
-    final now = DateTime.now();
+    final now = _clock.now();
     var user = _users[index];
     if (!user.isActive) {
       return const AuthResult(success: false, messageKey: 'authInactive');
@@ -106,8 +132,7 @@ class AppController extends ChangeNotifier {
 
     // Demo only: this simulates the app sending an MD5 password digest to a
     // cloud API, then the cloud comparing it with the stored digest.
-    final passwordMd5 = _md5(password);
-    if (passwordMd5 != user.passwordMd5) {
+    if (!legacyDemo.passwordMatches(user, password)) {
       final failedCount = user.failedLoginCount + 1;
       final lockedUntil = failedCount >= _maxFailedLogins
           ? now.add(_lockDuration)
@@ -152,12 +177,19 @@ class AppController extends ChangeNotifier {
   }
 
   Future<AuthResult> loginDemoAccount(String username) async {
+    final legacyDemo = _legacyDemoAccess;
+    if (legacyDemo == null) {
+      return const AuthResult(
+        success: false,
+        messageKey: 'authUnavailableInProduction',
+      );
+    }
     final normalizedUsername = username.trim();
 
     // Demo-only helper: these seeded accounts exist so the prototype can be
     // explored quickly. Resetting their local lock keeps accidental test taps
     // from making the demo unusable for a month.
-    if (_demoUsernames.contains(normalizedUsername)) {
+    if (legacyDemo.demoUsernames.contains(normalizedUsername)) {
       final index = _users.indexWhere(
         (user) =>
             user.username.toLowerCase() == normalizedUsername.toLowerCase(),
@@ -191,6 +223,13 @@ class AppController extends ChangeNotifier {
     required String city,
     required String password,
   }) async {
+    final legacyDemo = _legacyDemoAccess;
+    if (legacyDemo == null) {
+      return const AuthResult(
+        success: false,
+        messageKey: 'authUnavailableInProduction',
+      );
+    }
     final trimmedUsername = username.trim();
     if (trimmedUsername.isEmpty || password.isEmpty || email.trim().isEmpty) {
       return const AuthResult(success: false, messageKey: 'authMissingFields');
@@ -202,9 +241,9 @@ class AppController extends ChangeNotifier {
       return const AuthResult(success: false, messageKey: 'authUserExists');
     }
 
-    final now = DateTime.now();
+    final now = _clock.now();
     final user = AppUser(
-      userId: 'user-${now.microsecondsSinceEpoch}',
+      userId: 'user-${_idGenerator.next()}',
       username: trimmedUsername,
       displayName: displayName.trim().isEmpty
           ? trimmedUsername
@@ -217,7 +256,7 @@ class AppController extends ChangeNotifier {
       occupation: '',
       contactJson: '{}',
       teamName: 'New Team',
-      passwordMd5: _md5(password),
+      passwordMd5: legacyDemo.digestPassword(password),
       status: 'active',
       failedLoginCount: 0,
       mustChangePassword: false,
@@ -241,6 +280,13 @@ class AppController extends ChangeNotifier {
     required String displayName,
     required String email,
   }) async {
+    final legacyDemo = _legacyDemoAccess;
+    if (legacyDemo == null) {
+      return const AuthResult(
+        success: false,
+        messageKey: 'authUnavailableInProduction',
+      );
+    }
     final index = _users.indexWhere((user) {
       return user.displayName.toLowerCase() ==
               displayName.trim().toLowerCase() &&
@@ -254,9 +300,9 @@ class AppController extends ChangeNotifier {
       return const AuthResult(success: false, messageKey: 'authResetNotFound');
     }
 
-    final temporaryPassword = 'temp${100000 + Random().nextInt(900000)}';
+    final temporaryPassword = legacyDemo.createTemporaryPassword();
     final updated = _users[index].copyWith(
-      passwordMd5: _md5(temporaryPassword),
+      passwordMd5: legacyDemo.digestPassword(temporaryPassword),
       failedLoginCount: 0,
       clearLockedUntil: true,
       clearLastFailedLoginAt: true,
@@ -278,6 +324,13 @@ class AppController extends ChangeNotifier {
     required String currentPassword,
     required String newPassword,
   }) async {
+    final legacyDemo = _legacyDemoAccess;
+    if (legacyDemo == null) {
+      return const AuthResult(
+        success: false,
+        messageKey: 'authUnavailableInProduction',
+      );
+    }
     final user = currentUser;
     if (user == null) {
       return const AuthResult(success: false, messageKey: 'authLoginRequired');
@@ -285,7 +338,7 @@ class AppController extends ChangeNotifier {
     if (newPassword.trim().length < 4) {
       return const AuthResult(success: false, messageKey: 'authPasswordShort');
     }
-    if (_md5(currentPassword) != user.passwordMd5) {
+    if (!legacyDemo.passwordMatches(user, currentPassword)) {
       await _logSecurityEvent(user.userId, 'change_password_failed', {});
       return const AuthResult(success: false, messageKey: 'authCurrentWrong');
     }
@@ -294,7 +347,7 @@ class AppController extends ChangeNotifier {
       return const AuthResult(success: false, messageKey: 'authLoginRequired');
     }
     final updated = user.copyWith(
-      passwordMd5: _md5(newPassword),
+      passwordMd5: legacyDemo.digestPassword(newPassword),
       mustChangePassword: false,
       failedLoginCount: 0,
       clearLockedUntil: true,
@@ -385,10 +438,16 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> addDemoData() async {
-    final now = DateTime.now();
-    final records = _createSyntheticRecords(
+    final legacyDemo = _legacyDemoAccess;
+    if (legacyDemo == null) {
+      return;
+    }
+    final now = _clock.now();
+    final records = legacyDemo.createSyntheticRecords(
+      users: _users,
       now: now,
       seed: now.microsecondsSinceEpoch,
+      idGenerator: _idGenerator,
     );
     _records.addAll(records);
     notifyListeners();
@@ -435,7 +494,7 @@ class AppController extends ChangeNotifier {
     }
 
     final payload = {
-      'generatedAt': DateTime.now().toIso8601String(),
+      'generatedAt': _clock.now().toIso8601String(),
       'total': visibleRecords.length,
       'highInterest': highInterest,
       'rejected': rejected,
@@ -455,7 +514,7 @@ class AppController extends ChangeNotifier {
   }
 
   int countToday() {
-    final now = DateTime.now();
+    final now = _clock.now();
     return visibleRecords.where((record) {
       return record.createdAt.year == now.year &&
           record.createdAt.month == now.month &&
@@ -575,8 +634,12 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> _ensureSeedData() async {
+    final legacyDemo = _legacyDemoAccess;
+    if (legacyDemo == null) {
+      return;
+    }
     if (_users.isEmpty) {
-      _users.addAll(_defaultUsers());
+      _users.addAll(legacyDemo.createDefaultUsers());
       for (final user in _users) {
         await _upsertUser(user);
       }
@@ -595,7 +658,12 @@ class AppController extends ChangeNotifier {
         .where((record) => record.collectorUserId.isNotEmpty)
         .length;
     if (_records.isEmpty || permissionReadyRecords < 10) {
-      final records = _createSyntheticRecords(now: DateTime.now(), seed: 31);
+      final records = legacyDemo.createSyntheticRecords(
+        users: _users,
+        now: _clock.now(),
+        seed: 31,
+        idGenerator: _idGenerator,
+      );
       _records.addAll(records);
       await _insertRecords(records);
     }
@@ -616,8 +684,12 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> _ensureDefaultUsersExist() async {
+    final legacyDemo = _legacyDemoAccess;
+    if (legacyDemo == null) {
+      return;
+    }
     final existingUsernames = _users.map((user) => user.username).toSet();
-    for (final user in _defaultUsers()) {
+    for (final user in legacyDemo.createDefaultUsers()) {
       if (!existingUsernames.contains(user.username)) {
         _users.add(user);
         await _upsertUser(user);
@@ -697,12 +769,12 @@ class AppController extends ChangeNotifier {
     String eventType,
     Map<String, Object?> detail,
   ) async {
-    final now = DateTime.now();
+    final now = _clock.now();
     await _db
         .into(_db.dbSecurityEvents)
         .insert(
           DbSecurityEventsCompanion.insert(
-            eventId: 'event-${now.microsecondsSinceEpoch}',
+            eventId: 'event-${_idGenerator.next()}',
             userId: Value(userId),
             eventType: eventType,
             eventDetailJson: jsonEncode(detail),
@@ -833,182 +905,6 @@ class AppController extends ChangeNotifier {
     );
   }
 
-  List<ConversationRecord> _createSyntheticRecords({
-    required DateTime now,
-    required int seed,
-  }) {
-    final random = Random(seed);
-    final identities = [
-      'student',
-      'young_worker',
-      'undocumented',
-      'longtime_immigrant',
-      'newcomer',
-      'visitor',
-    ];
-    final places = [
-      'Central Station entrance',
-      'Campus gate',
-      'Grocery plaza',
-      'Factory bus stop',
-      'Weekend market',
-      'Library corner',
-    ];
-    final citySamples = [
-      ('Chicago, IL', 'Union', 41.8781, -87.6298, 'user1'),
-      ('Chicago, IL', 'IIT', 41.8349, -87.6270, 'user1'),
-      ('Chicago, IL', 'UIC', 41.8719, -87.6493, 'user1'),
-      ('Chicago, IL', 'Chinatown', 41.8526, -87.6321, 'admin2'),
-      ('New York, NY', 'Campus', 40.7128, -74.0060, 'user2'),
-      ('Los Angeles, CA', 'Downtown', 34.0522, -118.2437, 'admin1'),
-    ];
-    final records = <ConversationRecord>[];
-
-    for (var i = 0; i < 30; i++) {
-      final hourOffset = i % 9;
-      final city = citySamples[i % citySamples.length];
-      final collector = _users.firstWhere(
-        (user) => user.username == city.$5,
-        orElse: () => _users.first,
-      );
-      records.add(
-        ConversationRecord(
-          id: 'demo-${now.microsecondsSinceEpoch}-$i',
-          createdAt: DateTime(
-            now.year,
-            now.month,
-            now.day - (i ~/ 8),
-            8 + hourOffset,
-            (i * 11) % 60,
-          ),
-          collectorUserId: collector.userId,
-          cityName: city.$1,
-          areaName: city.$2,
-          teamName: collector.teamName,
-          recorderName: collector.displayName,
-          personName: i % 3 == 0 ? 'Demo Person $i' : '',
-          englishName: i % 3 == 1 ? 'Demo English $i' : '',
-          averageHeartRate: i % 4 == 0
-              ? 72 + random.nextInt(18).toDouble()
-              : null,
-          latitude: city.$3 + random.nextDouble() / 100,
-          longitude: city.$4 - random.nextDouble() / 100,
-          locationAccuracyMeters: 15 + random.nextInt(120).toDouble(),
-          manualPlaceName: places[i % places.length],
-          gender: i.isEven ? 'female' : 'male',
-          identity: identities[i % identities.length],
-          ageRange: i % 3 == 0 ? '18_25' : '26_40',
-          relationshipLevel: (i % 4) + 1,
-          interestLevel: i % 5,
-          contacts: i % 4 == 0
-              ? [
-                  ConversationContact(
-                    channel: 'wechat',
-                    value: 'demo-contact-$i',
-                  ),
-                ]
-              : const [],
-          attitudeLevel: (i % 5) - 2,
-          notes: 'Synthetic demo record',
-          isLocationVerified: i % 6 != 0,
-        ),
-      );
-    }
-
-    return records;
-  }
-
-  List<AppUser> _defaultUsers() {
-    return [
-      _fakeUser(
-        username: 'admin1',
-        displayName: 'Admin One',
-        email: 'admin1@example.com',
-        gender: 'male',
-        occupation: 'Director',
-        birthday: DateTime(1986, 4, 12),
-        roleLevel: 90,
-        cityNames: const ['Chicago, IL', 'New York, NY', 'Los Angeles, CA'],
-        teamName: 'Org Admins',
-      ),
-      _fakeUser(
-        username: 'admin2',
-        displayName: 'Admin Two',
-        email: 'admin2@example.com',
-        gender: 'female',
-        occupation: 'Chicago city lead',
-        birthday: DateTime(1990, 9, 3),
-        roleLevel: 80,
-        cityNames: const ['Chicago, IL'],
-        teamName: 'Chicago Admins',
-      ),
-      _fakeUser(
-        username: 'admin3',
-        displayName: 'Admin Three',
-        email: 'admin3@example.com',
-        gender: 'male',
-        occupation: 'New York city lead',
-        birthday: DateTime(1988, 1, 20),
-        roleLevel: 80,
-        cityNames: const ['New York, NY'],
-        teamName: 'New York Admins',
-      ),
-      _fakeUser(
-        username: 'user1',
-        displayName: 'User One',
-        email: 'user1@example.com',
-        gender: 'female',
-        occupation: 'Student',
-        birthday: DateTime(2001, 6, 18),
-        roleLevel: 10,
-        cityNames: const ['Chicago, IL'],
-        teamName: 'Chicago Team A',
-      ),
-      _fakeUser(
-        username: 'user2',
-        displayName: 'User Two',
-        email: 'user2@example.com',
-        gender: 'male',
-        occupation: 'Engineer',
-        birthday: DateTime(1997, 11, 8),
-        roleLevel: 10,
-        cityNames: const ['New York, NY'],
-        teamName: 'New York Team A',
-      ),
-    ];
-  }
-
-  AppUser _fakeUser({
-    required String username,
-    required String displayName,
-    required String email,
-    required String gender,
-    required String occupation,
-    required DateTime birthday,
-    required int roleLevel,
-    required List<String> cityNames,
-    required String teamName,
-  }) {
-    return AppUser(
-      userId: 'seed-$username',
-      username: username,
-      displayName: displayName,
-      email: email,
-      phone: '555-010-${username.substring(username.length - 1)}',
-      birthday: birthday,
-      gender: gender,
-      occupation: occupation,
-      contactJson: jsonEncode({'email': email, 'phone': '555-0100'}),
-      roleLevel: roleLevel,
-      cityNames: cityNames,
-      teamName: teamName,
-      passwordMd5: _md5(username),
-      status: 'active',
-      failedLoginCount: 0,
-      mustChangePassword: false,
-    );
-  }
-
   static List<String> areasForCity(String cityName) {
     if (cityName == 'Chicago, IL') {
       return const [
@@ -1033,10 +929,6 @@ class AppController extends ChangeNotifier {
 
   String _defaultAreaForCity(String cityName) {
     return areasForCity(cityName).first;
-  }
-
-  String _md5(String value) {
-    return md5.convert(utf8.encode(value)).toString();
   }
 
   ThemeMode _themeModeFromString(String? value) {

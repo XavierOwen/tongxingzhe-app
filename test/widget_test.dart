@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:tongxingzhe_app/app/app_controller.dart';
+import 'package:tongxingzhe_app/app/tongxingzhe_app.dart';
 import 'package:tongxingzhe_app/data/local_database.dart';
-import 'package:tongxingzhe_app/main.dart';
+import 'package:tongxingzhe_app/data/local_database_factory.dart';
+import 'package:tongxingzhe_app/legacy_demo/legacy_auth_screen.dart';
+import 'package:tongxingzhe_app/legacy_demo/legacy_demo_dependencies.dart';
 
 void main() {
   testWidgets('starts at login, switches language, and logs in', (
@@ -13,12 +15,19 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final controller = AppController(
-      database: LocalDatabase(NativeDatabase.memory()),
+    final database = LocalDatabase(NativeDatabase.memory());
+    final dependencies = LegacyDemoDependencies.create(
+      databaseFactory: _SingleDatabaseFactory(database),
     );
-    addTearDown(controller.dispose);
 
-    await tester.pumpWidget(TongxingzheApp(controller: controller));
+    await tester.pumpWidget(
+      TongxingzheApp(
+        dependencies: dependencies,
+        signedOutScreenBuilder: (context, controller) {
+          return LegacyAuthScreen(controller: controller);
+        },
+      ),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
 
@@ -56,4 +65,13 @@ void main() {
     expect(find.text('By identity'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+}
+
+final class _SingleDatabaseFactory implements LocalDatabaseFactory {
+  _SingleDatabaseFactory(this.database);
+
+  final LocalDatabase database;
+
+  @override
+  LocalDatabase open() => database;
 }

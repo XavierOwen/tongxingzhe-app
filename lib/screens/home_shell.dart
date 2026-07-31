@@ -180,7 +180,7 @@ class _QuickRecordViewState extends State<QuickRecordView> {
   final List<_ContactDraft> _contactDrafts = [_ContactDraft()];
   final _notesController = TextEditingController();
 
-  DateTime _recordTime = DateTime.now();
+  late DateTime _recordTime;
   LocationSnapshot? _location;
   double? _averageHeartRate;
   String _heartRateStatusKey = 'heartRateUnavailable';
@@ -196,6 +196,7 @@ class _QuickRecordViewState extends State<QuickRecordView> {
   @override
   void initState() {
     super.initState();
+    _recordTime = widget.controller.now();
     _areaName = widget.controller.areaName;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -511,7 +512,7 @@ class _QuickRecordViewState extends State<QuickRecordView> {
     }
 
     final record = ConversationRecord(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      id: widget.controller.nextLegacyRecordId(),
       createdAt: _recordTime,
       cityName: widget.controller.cityName,
       areaName: _areaName,
@@ -557,7 +558,7 @@ class _QuickRecordViewState extends State<QuickRecordView> {
       ..add(_ContactDraft());
     _notesController.clear();
     setState(() {
-      _recordTime = DateTime.now();
+      _recordTime = widget.controller.now();
       _gender = 'unknown';
       _identity = 'student';
       _ageRange = 'unknown';
@@ -1021,7 +1022,10 @@ class _SettingsViewState extends State<SettingsView> {
                   ),
                   _DetailRow(
                     label: text.t('promoterAgeBand'),
-                    value: text.option('promoterAge', user.ageBand),
+                    value: text.option(
+                      'promoterAge',
+                      user.ageBandAt(widget.controller.now()),
+                    ),
                   ),
                   _DetailRow(label: text.t('role'), value: '${user.roleLevel}'),
                   _DetailRow(
@@ -1424,7 +1428,7 @@ class _AdminRecordTileState extends State<AdminRecordTile> {
       correctedLongitude: longitude,
       clearCorrectedLongitude: longitudeText.isEmpty,
       isLocationVerified: _verified,
-      correctedAt: DateTime.now(),
+      correctedAt: widget.controller.now(),
     );
 
     await widget.controller.updateRecord(updated);

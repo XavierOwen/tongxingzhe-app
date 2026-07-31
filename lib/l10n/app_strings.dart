@@ -82,6 +82,10 @@ const Map<String, Map<String, String>> _strings = {
     'authPasswordShort': '新密码至少 4 位',
     'authCurrentWrong': '当前密码不正确',
     'authPasswordChanged': '密码已更新',
+    'authUnavailableInProduction': '正式认证尚未接入',
+    'productionAuthPending': '正式认证尚未配置',
+    'productionAuthPendingBody':
+        '这个安全入口不会使用本地演示密码。完成 Supabase 六平台验证后，将在这里接入正式登录。',
     'account': '账户',
     'role': '权限',
     'allowedCities': '可访问城市',
@@ -278,6 +282,10 @@ const Map<String, Map<String, String>> _strings = {
     'authPasswordShort': 'New password must be at least 4 characters',
     'authCurrentWrong': 'Current password is incorrect',
     'authPasswordChanged': 'Password updated',
+    'authUnavailableInProduction': 'Production authentication is not connected',
+    'productionAuthPending': 'Production authentication is not configured',
+    'productionAuthPendingBody':
+        'This secure entry point never uses local demo passwords. Production sign-in will appear here after the six-platform Supabase validation.',
     'account': 'Account',
     'role': 'Role',
     'allowedCities': 'Allowed cities',
