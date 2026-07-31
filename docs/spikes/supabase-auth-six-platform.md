@@ -37,16 +37,16 @@ Supabase 官方说明 Flutter 初始化使用 project URL 和 publishable／anon
 
 | 平台 | App build | 安全存储实际读写 | 注册／OTP／恢复 | 登录／刷新／重启恢复／登出 | 当前结论 |
 | --- | --- | --- | --- | --- | --- |
-| Android | 本机 debug APK pass | 真机待测 | 待测 | 待测 | build only |
-| iOS | 本机 device/no-codesign pass | 真机待测 | 待测 | 待测 | build only |
-| Web | 本机 release build pass | HTTPS／localhost 浏览器待测 | 待测 | 待测 | build only |
-| macOS | 本机 debug build pass | Keychain 待测 | 待测 | 待测 | build only |
-| Windows | CI 待运行 | 安全存储待测 | 待测 | 待测 | 未验证 |
-| Linux | CI 待运行 | libsecret＋keyring 待测 | 待测 | 待测 | 未验证 |
+| Android | CI pass；本机 debug APK pass | 真机待测 | 待测 | 待测 | build only |
+| iOS | CI pass；本机 device/no-codesign pass | 真机待测 | 待测 | 待测 | build only |
+| Web | CI pass；本机 release build pass | HTTPS／localhost 浏览器待测 | 待测 | 待测 | build only |
+| macOS | CI pass；本机 debug build pass | Keychain 待测 | 待测 | 待测 | build only |
+| Windows | CI pass | 安全存储待测 | 待测 | 待测 | build only |
+| Linux | CI pass | libsecret＋keyring 待测 | 待测 | 待测 | build only |
 
 GitHub Actions 的 build 只能把第一列改为 pass；其余列必须有真实 Supabase test project 和对应运行环境。`flutter_secure_storage` 声明支持六平台，但 Web 需要 HTTPS／localhost，Linux 需要 libsecret 与可用 keyring，这些都是 runtime 条件，不能从 package metadata 推导为真机通过：[package requirements](https://pub.dev/packages/flutter_secure_storage)。
 
-上述四个本机构建均在 2026-07-31 使用 Flutter 3.44.2 完成。Android 依赖目前会提示 `package_info_plus` 尚未迁移到未来的 Built-in Kotlin；本次 build 成功，但应在依赖发布兼容版本后升级并清除 warning。
+六个平台均在 [GitHub Actions run 30665678526](https://github.com/XavierOwen/tongxingzhe-app/actions/runs/30665678526) 的独立 job 中 build 通过；上述四个本机构建也在 2026-07-31 使用 Flutter 3.44.2 完成。Android 依赖目前会提示 `package_info_plus` 尚未迁移到未来的 Built-in Kotlin；本次 build 成功，但应在依赖发布兼容版本后升级并清除 warning。
 
 ## 4. 隔离测试 project 的设置
 

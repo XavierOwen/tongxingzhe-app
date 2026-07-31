@@ -23,7 +23,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Set up Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
@@ -93,7 +93,7 @@ jobs:
       PGRESTORE_URL: postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_restore
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install --yes postgresql-client
@@ -125,7 +125,8 @@ jobs:
           pg_dump "${DATABASE_URL}" --format=custom \
             --schema=app_data --schema=app_migrations \
             --file="${RUNNER_TEMP}/tongxingzhe.dump"
-          createdb "${PGRESTORE_URL}"
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --command='CREATE DATABASE tongxingzhe_restore;'
           pg_restore --dbname="${PGRESTORE_URL}" --exit-on-error \
             "${RUNNER_TEMP}/tongxingzhe.dump"
           psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
@@ -159,7 +160,7 @@ jobs:
             command: flutter config --enable-windows-desktop && flutter build windows --debug --no-pub
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Set up Java for Android
         if: matrix.target == 'Android'
