@@ -71,7 +71,7 @@ flutter run -t lib/main_demo.dart
 
 ```bash
 dart format --output=none --set-exit-if-changed \
-  lib test integration_test tool
+  lib test integration_test test_driver tool
 dart analyze
 flutter test --no-pub
 dart run tool/check_production_boundary.dart

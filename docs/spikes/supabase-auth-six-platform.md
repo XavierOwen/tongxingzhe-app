@@ -1,6 +1,6 @@
 # Supabase Auth 六平台 Spike
 
-状态：**macOS 真实认证合同已通过；其余五个平台仍须实测，因此不能把 Supabase 写成六平台最终 pass。**
+状态：**macOS 真实认证合同已通过；Web 的 session 路径部分通过；其余流程与平台仍须实测，因此不能把 Supabase 写成六平台最终 pass。**
 
 记录日期：2026-08-01
 
@@ -39,7 +39,7 @@ Supabase 官方说明 Flutter 初始化使用 project URL 和 publishable／anon
 | --- | --- | --- | --- | --- | --- |
 | Android | CI pass；本机 debug APK pass | 真机待测 | 待测 | 待测 | build only |
 | iOS | CI pass；本机 device/no-codesign pass | 真机待测 | 待测 | 待测 | build only |
-| Web | CI pass；本机 release build pass | HTTPS／localhost 浏览器待测 | 待测 | 待测 | build only |
+| Web | CI pass；本机 release build pass | localhost 写入与 Adapter 重建后读取 pass；关闭浏览器后待测 | 待测 | 登录、强制刷新、同浏览器 Adapter 恢复、登出 pass；跨浏览器进程恢复待测 | runtime partial |
 | macOS | CI pass；Apple Development 签名 debug pass | Keychain 读写 pass | 注册、8 位 OTP、恢复、改密码 pass | 登录、强制刷新、跨进程恢复、登出 pass | runtime pass |
 | Windows | CI pass | 安全存储待测 | 待测 | 待测 | build only |
 | Linux | CI pass | libsecret＋keyring 待测 | 待测 | 待测 | build only |
@@ -49,6 +49,8 @@ GitHub Actions 的 build 只能把第一列改为 pass；其余列必须有真�
 六个平台均在 [GitHub Actions run 30666113687](https://github.com/XavierOwen/tongxingzhe-app/actions/runs/30666113687) 的独立 job 中 build 通过；上述四个本机构建也在 2026-07-31 使用 Flutter 3.44.2 完成。Android 依赖目前会提示 `package_info_plus` 尚未迁移到未来的 Built-in Kotlin；本次 build 成功，但应在依赖发布兼容版本后升级并清除 warning。
 
 macOS 运行时证据于 2026-08-01 在 macOS 26.5.2、隔离 hosted Supabase project 和专用测试邮箱／SMTP 上取得。第一次实测暴露出 App Sandbox 缺少出站网络权限，以及 Keychain 缺少签名 entitlement；最小探针分别得到 `Operation not permitted` 和系统错误 `-34018`。修复 `com.apple.security.network.client`、`keychain-access-groups` 并使用 Apple Development 签名后，注册、注册 OTP、登录、刷新、Adapter 重建、密码恢复、修改后重新登录均通过。最后再用两个独立 App 进程执行 `session_start` 与 `session_restore`，证明恢复不只是同一进程内重建对象。
+
+Web 的部分运行时证据于 2026-08-01 在 Chrome 149.0.7827.200、ChromeDriver 149.0.7827.155 与 localhost 上取得。使用修改后的新密码，`session` 探针完成登录、token 强制刷新、安全存储读取、Adapter 重建恢复与登出。该结果不包含 Web 注册／OTP／密码恢复，也不证明关闭并重新启动浏览器后仍能恢复，所以只记为 `runtime partial`。
 
 ## 4. 隔离测试 project 的设置
 
@@ -77,6 +79,21 @@ export AUTH_SPIKE_CONFIG='secrets/supabase-auth-android.json'
 ./tool/run_supabase_auth_spike.sh
 ```
 
+Web 探针由 Flutter 官方的 `flutter drive` 路径运行，需要与本机 Chrome 主版本匹配的 ChromeDriver：[Flutter Web integration testing](https://docs.flutter.dev/testing/integration-tests#test-in-a-web-browser)。以 Apple Silicon 上的 Chrome 149 为例，可以把 driver 安装到已被 Git 忽略的 `.dart_tool/`：
+
+```bash
+driver_path="$(npx --yes @puppeteer/browsers install chromedriver@149 \
+  --platform mac_arm \
+  --path .dart_tool/chromedriver-cache \
+  --format '{{path}}')"
+export PATH="$(dirname "${driver_path}"):${PATH}"
+export AUTH_SPIKE_DEVICE='chrome'
+export AUTH_SPIKE_CONFIG='secrets/supabase-auth-macos.json'
+./tool/run_supabase_auth_spike.sh
+```
+
+其他 CPU／Chrome 版本需要替换 `--platform` 和 `chromedriver@<major>`；不要用版本不匹配的 driver 将 harness 失败误记为 Supabase 失败。
+
 配置中的 `AUTH_SPIKE_MODE` 按验证目的分阶段运行：
 
 | mode | 用途 | 需要的字段 |
@@ -93,6 +110,6 @@ export AUTH_SPIKE_CONFIG='secrets/supabase-auth-android.json'
 
 ## 6. 当前阻塞与决策
 
-隔离 hosted Supabase project、测试邮箱和 macOS 签名环境已经就绪，macOS 合同通过。尚缺 Android、iOS、Web、Windows、Linux 的真实运行环境与逐平台安全存储、OTP、恢复证据；CI build 不能替代这些运行时结果。本地 Supabase CLI／Docker 栈仍不可用，但不再阻塞 hosted project 的设备验证。
+隔离 hosted Supabase project、测试邮箱和 macOS 签名环境已经就绪，macOS 合同通过，Web `session` 路径部分通过。尚缺 Android、iOS、Windows、Linux 的真实运行环境，以及 Web 的 OTP、恢复和跨浏览器进程 session 恢复证据；CI build 不能替代这些运行时结果。本地 Supabase CLI／Docker 栈仍不可用，但不再阻塞 hosted project 的设备验证。
 
 当前决策是：保留 Supabase 的条件首选和已编译 Adapter；Issue #2 继续保持 open。继续按矩阵验证其余平台；如果某个必需平台在合理修复后仍失败，再记录失败证据并切 Cognito，而不是把 macOS 单平台成功扩张为六平台结论。
