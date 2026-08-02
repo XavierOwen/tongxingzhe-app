@@ -50,6 +50,15 @@ flutter run \
 
 Flutter 中禁止出现 Supabase secret/service-role key、PostgreSQL 密码或 warehouse 凭据。
 
+macOS 真实运行需要 Apple Development 签名。复制本地签名示例并填写自己的 Team ID；目标文件已被 Git 忽略：
+
+```bash
+cp -n macos/Runner/Configs/LocalSigning.xcconfig.example \
+  macos/Runner/Configs/LocalSigning.xcconfig
+```
+
+CI 的 macOS job 只做无签名编译，不能代替 Keychain 运行时探针；完整状态见六平台认证 Spike。
+
 需要回归旧原型时，必须显式选择 Demo 入口：
 
 ```bash

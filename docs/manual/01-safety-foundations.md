@@ -134,6 +134,10 @@ PostgreSQL schema 由仓库内按编号排序的 `.sql` 文件定义。例如：
 
 Supabase 的默认 Flutter 存储是 SharedPreferences，不适合直接保存 native refresh token。本项目用 `flutter_secure_storage` 覆盖 session 和 PKCE verifier；正式配置还会拒绝 secret/service-role key。没有配置时返回明确 unavailable，不回退到旧密码表。
 
+macOS 的安全能力还受 App Sandbox 和代码签名控制。[`com.apple.security.network.client`](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.network.client) 表示 App 可以主动连接 Supabase；调试 VM 使用的 `network.server` 不能替代它。[`flutter_secure_storage` 的 macOS 配置](https://pub.dev/packages/flutter_secure_storage)要求 `keychain-access-groups`，让 session 使用受数据保护的 Keychain；该 entitlement 必须由 Apple Development／Distribution 签名授权。缺少前者时 HTTPS 会得到 `Operation not permitted`，缺少后者时 Keychain 会得到系统错误 `-34018`。
+
+个人 Team ID 不写进共享 Xcode project。开发者把 `macos/Runner/Configs/LocalSigning.xcconfig.example` 复制为被 Git 忽略的 `LocalSigning.xcconfig`，再填写自己的 Team ID；正式运行因此使用签名和 Keychain。GitHub CI 没有开发者私钥，只执行 `CODE_SIGNING_ALLOWED=NO` 的无签名编译；它能证明代码可构建，却不能证明 Keychain 可运行。真实设备探针与静态 entitlement 测试分别覆盖这两个不同结论。
+
 “package 支持某平台”也不等于“运行时能力可用”。例如 Web 安全存储需要 HTTPS／localhost，Linux 需要 libsecret 和 keyring，定位还要权限。因此 `PlatformCapabilities` 有三种状态：available、runtime probe required、unavailable。`PlatformPolicy` 在 probe 尚未成功时禁止敏感对象离线缓存，并降级为前台同步；Widget 不自行猜平台。
 
 真实认证流程与 build 证据见 [Supabase Auth 六平台 Spike](../spikes/supabase-auth-six-platform.md)。
@@ -164,6 +168,12 @@ Drift v5 migration 测试：
 
 ```bash
 flutter test test/data/local_database_migration_test.dart
+```
+
+macOS 网络和 Keychain entitlement 回归：
+
+```bash
+flutter test test/platform/macos_entitlements_test.dart
 ```
 
 读完这一章，应能回答：正式入口为什么拿不到 MD5、测试为什么能固定时间、Drift 与 SQLite 各是什么，以及为什么 PostgreSQL migration 不能在 Dashboard 里手工代替。

@@ -1,8 +1,8 @@
 # Supabase Auth 六平台 Spike
 
-状态：**实现与自动 build 骨架完成；真实认证流程尚未通过，因此不能把 Supabase 写成最终 pass。**
+状态：**macOS 真实认证合同已通过；其余五个平台仍须实测，因此不能把 Supabase 写成六平台最终 pass。**
 
-记录日期：2026-07-31
+记录日期：2026-08-01
 
 适用需求：`AUTH-001`、`AUTH-004`、`AUTH-006`–`AUTH-008`、`TEST-002`、`TEST-006`
 
@@ -40,20 +40,22 @@ Supabase 官方说明 Flutter 初始化使用 project URL 和 publishable／anon
 | Android | CI pass；本机 debug APK pass | 真机待测 | 待测 | 待测 | build only |
 | iOS | CI pass；本机 device/no-codesign pass | 真机待测 | 待测 | 待测 | build only |
 | Web | CI pass；本机 release build pass | HTTPS／localhost 浏览器待测 | 待测 | 待测 | build only |
-| macOS | CI pass；本机 debug build pass | Keychain 待测 | 待测 | 待测 | build only |
+| macOS | CI pass；Apple Development 签名 debug pass | Keychain 读写 pass | 注册、8 位 OTP、恢复、改密码 pass | 登录、强制刷新、跨进程恢复、登出 pass | runtime pass |
 | Windows | CI pass | 安全存储待测 | 待测 | 待测 | build only |
 | Linux | CI pass | libsecret＋keyring 待测 | 待测 | 待测 | build only |
 
 GitHub Actions 的 build 只能把第一列改为 pass；其余列必须有真实 Supabase test project 和对应运行环境。`flutter_secure_storage` 声明支持六平台，但 Web 需要 HTTPS／localhost，Linux 需要 libsecret 与可用 keyring，这些都是 runtime 条件，不能从 package metadata 推导为真机通过：[package requirements](https://pub.dev/packages/flutter_secure_storage)。
 
-六个平台均在 [GitHub Actions run 30665678526](https://github.com/XavierOwen/tongxingzhe-app/actions/runs/30665678526) 的独立 job 中 build 通过；上述四个本机构建也在 2026-07-31 使用 Flutter 3.44.2 完成。Android 依赖目前会提示 `package_info_plus` 尚未迁移到未来的 Built-in Kotlin；本次 build 成功，但应在依赖发布兼容版本后升级并清除 warning。
+六个平台均在 [GitHub Actions run 30666113687](https://github.com/XavierOwen/tongxingzhe-app/actions/runs/30666113687) 的独立 job 中 build 通过；上述四个本机构建也在 2026-07-31 使用 Flutter 3.44.2 完成。Android 依赖目前会提示 `package_info_plus` 尚未迁移到未来的 Built-in Kotlin；本次 build 成功，但应在依赖发布兼容版本后升级并清除 warning。
+
+macOS 运行时证据于 2026-08-01 在 macOS 26.5.2、隔离 hosted Supabase project 和专用测试邮箱／SMTP 上取得。第一次实测暴露出 App Sandbox 缺少出站网络权限，以及 Keychain 缺少签名 entitlement；最小探针分别得到 `Operation not permitted` 和系统错误 `-34018`。修复 `com.apple.security.network.client`、`keychain-access-groups` 并使用 Apple Development 签名后，注册、注册 OTP、登录、刷新、Adapter 重建、密码恢复、修改后重新登录均通过。最后再用两个独立 App 进程执行 `session_start` 与 `session_restore`，证明恢复不只是同一进程内重建对象。
 
 ## 4. 隔离测试 project 的设置
 
 1. 只使用专门 staging／local project，不使用 production 用户池；
 2. 开启 email＋password，关闭 auto-confirm；
 3. 注册确认模板和密码恢复模板都显示 `{{ .Token }}`，使用户在 App 内输入 OTP；
-4. 只创建 `example.test` 或团队控制域名的 synthetic 测试账号；
+4. hosted project 使用能实际收信的专用测试邮箱或团队控制的别名；`example.test` 只适合不会真的投递邮件的 local／fixture；
 5. Flutter 只拿 publishable key；任何 secret/service-role key 只允许在隔离的服务器端测试辅助程序中使用，不能写入 JSON、Dart define、日志或 App；
 6. 每个平台测试后删除 synthetic 用户和邮件。
 
@@ -75,13 +77,15 @@ export AUTH_SPIKE_CONFIG='secrets/supabase-auth-android.json'
 ./tool/run_supabase_auth_spike.sh
 ```
 
-配置中的 `AUTH_SPIKE_MODE` 分五次运行：
+配置中的 `AUTH_SPIKE_MODE` 按验证目的分阶段运行：
 
 | mode | 用途 | 需要的字段 |
 | --- | --- | --- |
 | `signup_request` | 发注册邮件 | email、password |
 | `signup_confirm` | 输入刚收到的注册 OTP | email、otp |
-| `session` | 登录、刷新、关闭 Adapter、恢复、登出 | 已确认账号的 email、password |
+| `session` | 快速验证登录、刷新、同进程 Adapter 重建、恢复、登出 | 已确认账号的 email、password |
+| `session_start` | 第一进程登录、刷新并保留安全 session 后退出 | 已确认账号的 email、password |
+| `session_restore` | 第二进程只从安全存储恢复并登出 | email；password 不参与恢复 |
 | `recovery_request` | 发恢复邮件 | email |
 | `recovery_confirm` | 输入恢复 OTP、设置新密码、登出 | email、otp、new password |
 
@@ -89,6 +93,6 @@ export AUTH_SPIKE_CONFIG='secrets/supabase-auth-android.json'
 
 ## 6. 当前阻塞与决策
 
-当前机器没有可用的 Supabase CLI 本地栈，Docker daemon 也未运行；仓库没有隔离 staging project 的 URL、publishable key、测试邮箱或六平台设备会话。因此真实网络、OTP 邮件、安全存储和重启恢复还不能诚实验收。
+隔离 hosted Supabase project、测试邮箱和 macOS 签名环境已经就绪，macOS 合同通过。尚缺 Android、iOS、Web、Windows、Linux 的真实运行环境与逐平台安全存储、OTP、恢复证据；CI build 不能替代这些运行时结果。本地 Supabase CLI／Docker 栈仍不可用，但不再阻塞 hosted project 的设备验证。
 
-当前决策是：保留 Supabase 的条件首选和已编译 Adapter；Issue #2 继续保持 open。获得隔离测试环境后按矩阵逐项验证；如果某个必需平台在合理修复后仍失败，再记录失败证据并切 Cognito，而不是现在凭猜测切换。
+当前决策是：保留 Supabase 的条件首选和已编译 Adapter；Issue #2 继续保持 open。继续按矩阵验证其余平台；如果某个必需平台在合理修复后仍失败，再记录失败证据并切 Cognito，而不是把 macOS 单平台成功扩张为六平台结论。

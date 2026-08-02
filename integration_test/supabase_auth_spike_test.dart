@@ -24,6 +24,12 @@ void main() {
           // lifecycle 内已经关闭第一个 session，并接管第二个 session 的释放。
           session = const UnavailableIdentitySession();
           break;
+        case 'session_start':
+          await _startPersistedSession(session);
+          break;
+        case 'session_restore':
+          await _restorePersistedSession(session);
+          break;
         case 'signup_request':
           final result = await session.signUp(
             email: _email,
@@ -68,6 +74,25 @@ void main() {
       await session.close();
     }
   });
+}
+
+Future<void> _startPersistedSession(IdentitySession session) async {
+  final signedIn = await session.signIn(email: _email, password: _password);
+  expect(_success(signedIn).stage, IdentityStage.signedIn);
+
+  final refreshed = await session.refresh();
+  expect(_success(refreshed).stage, IdentityStage.signedIn);
+
+  final token = _success(await session.accessToken(forceRefresh: true));
+  expect(token.value, isNotEmpty);
+  // 此处故意不登出；进程结束后，下一次独立运行必须从安全存储恢复。
+}
+
+Future<void> _restorePersistedSession(IdentitySession session) async {
+  final restored = await session.restore();
+  expect(_success(restored).stage, IdentityStage.signedIn);
+  expect(_success(await session.accessToken()).value, isNotEmpty);
+  expect(_success(await session.signOut()).stage, IdentityStage.signedOut);
 }
 
 Future<void> _verifySessionLifecycle(
@@ -121,7 +146,8 @@ void _requireConfiguration() {
       _email.isEmpty) {
     fail('缺少 Supabase spike 配置；请通过 --dart-define-from-file 提供。');
   }
-  if ({'session', 'signup_request'}.contains(_mode) && _password.isEmpty) {
+  if ({'session', 'session_start', 'signup_request'}.contains(_mode) &&
+      _password.isEmpty) {
     fail('$_mode 需要 AUTH_SPIKE_PASSWORD。');
   }
   if ({'signup_confirm', 'recovery_confirm'}.contains(_mode) && _otp.isEmpty) {

@@ -154,7 +154,7 @@ jobs:
             command: flutter build ios --debug --no-codesign --no-pub
           - target: macOS
             os: macos-latest
-            command: flutter config --enable-macos-desktop && flutter build macos --debug --no-pub
+            command: ./tool/build_macos_unsigned.sh
           - target: Windows
             os: windows-latest
             command: flutter config --enable-windows-desktop && flutter build windows --debug --no-pub
