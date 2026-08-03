@@ -1,6 +1,8 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
+import '../features/contact_journal/contact_tables.dart';
+
 part 'local_database.g.dart';
 
 class DbUsers extends Table {
@@ -99,12 +101,19 @@ class DbSecurityEvents extends Table {
 }
 
 @DriftDatabase(
+  include: {
+    'package:tongxingzhe_app/features/contact_journal/contact_queries.drift',
+  },
   tables: [
     DbUsers,
     DbConversationRecords,
     DbRecordContacts,
     DbAppSettings,
     DbSecurityEvents,
+    DbContactRecords,
+    DbContactRevisions,
+    DbContactAnswers,
+    DbSyncOutbox,
   ],
 )
 class LocalDatabase extends _$LocalDatabase {
@@ -122,11 +131,16 @@ class LocalDatabase extends _$LocalDatabase {
       );
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (migrator) => migrator.createAll(),
+    beforeOpen: (details) async {
+      // SQLite 默认不会在每个连接上强制外键；显式开启后，revision 不可能
+      // 指向不存在的接触。该设置同样作用于正式库和内存测试库。
+      await customStatement('PRAGMA foreign_keys = ON');
+    },
     onUpgrade: (migrator, from, to) async {
       // v2 adds the relationship/progress stage for the person being recorded.
       // Existing local demo records are treated as level 1 ("new contact").
@@ -197,6 +211,18 @@ class LocalDatabase extends _$LocalDatabase {
             );
           }
         }
+      }
+      if (from < 6) {
+        // v6 采用 expand-contract：保留五张 legacy 表为只读兼容证据，新增
+        // 现代接触表。旧字段不能可靠推导空间、项目、问卷或匿名接触事实，
+        // 因而这里不猜测、不回填、不删除。
+        await migrator.createTable(dbContactRecords);
+        await migrator.createTable(dbContactRevisions);
+        await migrator.createTable(dbContactAnswers);
+        await migrator.createTable(dbSyncOutbox);
+        await migrator.createIndex(contactRecordsPersonalPeriod);
+        await migrator.createIndex(syncOutboxReady);
+        await migrator.createIndex(syncOutboxAggregateOrder);
       }
     },
   );

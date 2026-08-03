@@ -8,6 +8,7 @@
 
 1. [第 1 章：先让正式代码安全、可替换、可验证](01-safety-foundations.md)
 2. [第 2 章：用测试和证据安全地修改代码](02-testing-and-change-workflow.md)
+3. [第 3 章：匿名接触如何在 SQLite 中原子保存和统计](03-contact-journal-and-local-sql.md)
 
 当前认证验证状态见 [Supabase Auth 六平台 Spike](../spikes/supabase-auth-six-platform.md)。它会明确区分 package 声明、build 通过和真实设备流程通过。
 

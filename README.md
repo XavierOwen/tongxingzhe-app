@@ -6,13 +6,14 @@
 
 ## 当前状态
 
-项目已确认产品 Spec，正在实施 [Slice 0：安全地基与可测试接缝](https://github.com/XavierOwen/tongxingzhe-app/issues/2)。现代接触、推广对象、组织权限、同步和统计 UI 尚未完成，旧原型只作为显式 legacy Demo 保留。
+项目已完成 [Slice 0：安全地基与可测试接缝](https://github.com/XavierOwen/tongxingzhe-app/issues/2)，正在实施 [Slice 1：匿名接触闭环](https://github.com/XavierOwen/tongxingzhe-app/issues/3)。当前代码已有匿名接触的本地事务、首个 revision、布尔问卷答案、Outbox 命令和个人期间汇总。草稿 UI、同步执行器、Backend 和四个主导航仍未完成。旧原型只作为显式 legacy Demo 保留。
 
 已经建立的地基包括：
 
 - 正式 composition root，以及可控制的 Clock、ID、Database、Identity、错误结果和 Platform Capability 接缝；
 - 正式入口与 MD5、默认演示账号、自动 seed 和旧登录 UI 的 import 边界；
-- Drift v5 schema 快照与升级测试；
+- Drift v5 基线、当前 v6 schema 快照和 v5→v6 升级测试；
+- `ContactJournal` 本地深模块，以及可读的 SQLite 个人汇总 SQL；
 - Supabase `IdentitySession` Adapter、安全 session／PKCE 存储和 test-only fake；
 - PostgreSQL 有序 SQL migration、checksum、最小权限 runtime role、synthetic fixture 和恢复检查；
 - 六平台 build、格式、静态分析、测试、文档链接和生成文件 CI；
@@ -80,7 +81,7 @@ dart run tool/check_markdown_links.dart
 
 若中文路径使 `flutter analyze` 的 analysis server 输出异常，可使用 `dart analyze`；这不是跳过静态分析。
 
-Drift v5 快照检查：
+Drift 当前 v6 快照和 v5→v6 升级检查：
 
 ```bash
 flutter test test/data/local_database_migration_test.dart
@@ -110,4 +111,4 @@ PostgreSQL 空库重建需要一个明确的测试数据库，详见 [数据库�
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE).
+本项目使用 MIT License，详见 [LICENSE](LICENSE)。

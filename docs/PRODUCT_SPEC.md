@@ -698,7 +698,7 @@ Slice 0、1、2 完成后可以发放内部 Alpha，用于验证匿名接触闭�
 
 本文件 1.0 已于 2026-07-31 由用户整体确认；1.1 的 Outbox、早期闭环、平台证据、隐私查询面和 ADR 治理调整已于 2026-08-03 确认，状态为 `accepted`。后续实现以 GitHub 父 Issue、Slice 0 至 7 子票和独立发布门槛控制范围，不以口头理解取代 requirement ID、测试和 Definition of Done。
 
-GitHub 实施地图为 [#1](https://github.com/XavierOwen/tongxingzhe-app/issues/1)；当前实施前沿是 [#2 Slice 0](https://github.com/XavierOwen/tongxingzhe-app/issues/2)。后续切片依次为 [#3](https://github.com/XavierOwen/tongxingzhe-app/issues/3)、[#4](https://github.com/XavierOwen/tongxingzhe-app/issues/4)、[#5](https://github.com/XavierOwen/tongxingzhe-app/issues/5)、[#6](https://github.com/XavierOwen/tongxingzhe-app/issues/6)、[#7](https://github.com/XavierOwen/tongxingzhe-app/issues/7)、[#8](https://github.com/XavierOwen/tongxingzhe-app/issues/8) 和 [#9](https://github.com/XavierOwen/tongxingzhe-app/issues/9)。Android、Windows、Linux 的认证与安全存储运行时证据由 [#11](https://github.com/XavierOwen/tongxingzhe-app/issues/11) 并行推进；它不阻塞 Slice 1 和 2，但阻塞首个公开版本。
+GitHub 实施地图为 [#1](https://github.com/XavierOwen/tongxingzhe-app/issues/1)。[#2 Slice 0](https://github.com/XavierOwen/tongxingzhe-app/issues/2) 已完成，当前实施前沿是 [#3 Slice 1](https://github.com/XavierOwen/tongxingzhe-app/issues/3)。后续切片依次为 [#4](https://github.com/XavierOwen/tongxingzhe-app/issues/4)、[#5](https://github.com/XavierOwen/tongxingzhe-app/issues/5)、[#6](https://github.com/XavierOwen/tongxingzhe-app/issues/6)、[#7](https://github.com/XavierOwen/tongxingzhe-app/issues/7)、[#8](https://github.com/XavierOwen/tongxingzhe-app/issues/8) 和 [#9](https://github.com/XavierOwen/tongxingzhe-app/issues/9)。Android、Windows、Linux 的认证与安全存储运行时证据由 [#11](https://github.com/XavierOwen/tongxingzhe-app/issues/11) 并行推进；它不阻塞 Slice 1 和 2，但阻塞首个公开版本。
 
 批准后的执行规则：
 
