@@ -1,6 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/identity/supabase/supabase_identity_session.dart';
 
@@ -86,6 +89,38 @@ void main() {
     );
 
     await identity.close();
+  });
+
+  test('Supabase 500 不冒充设备断网', () async {
+    // synthetic HTTP 边界精确复现 SMTP／数据库服务器返回 500 的情形。
+    final httpClient = MockClient(
+      (_) async => http.Response(
+        '{"message":"synthetic provider failure"}',
+        500,
+        headers: const {'content-type': 'application/json'},
+      ),
+    );
+    final supabase = SupabaseClient(
+      'https://synthetic.supabase.co',
+      'synthetic-publishable-key',
+      // 本测试只验证 HTTP 500 映射，不涉及需要存储的 PKCE 回调。
+      authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit),
+      httpClient: httpClient,
+    );
+    final identity = SupabaseIdentitySession(
+      client: supabase,
+      disposeSupabase: supabase.dispose,
+    );
+    addTearDown(identity.close);
+
+    final result = await identity.signUp(
+      email: 'learner@example.test',
+      password: 'synthetic-password',
+    );
+
+    final failure = (result as IdentityRejected<IdentitySnapshot>).failure;
+    expect(failure.code, IdentityFailureCode.providerRejected);
+    expect(failure.providerCode, 'http_500');
   });
 }
 

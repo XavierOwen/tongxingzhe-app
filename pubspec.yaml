@@ -51,6 +51,8 @@ dev_dependencies:
     sdk: flutter
   integration_test:
     sdk: flutter
+  # 只在测试认证商 HTTP 边界时制造 synthetic response，不进入生产代码。
+  http: ^1.6.0
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

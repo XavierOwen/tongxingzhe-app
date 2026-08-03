@@ -26,6 +26,21 @@ if [[ "${AUTH_SPIKE_DEVICE}" == "chrome" ]]; then
     exit 1
   fi
 
+  # Web 安全存储受 origin 和浏览器 profile 约束。固定 hostname／port，并让
+  # 前后两次 runner 复用同一个被 Git 忽略的 profile，才能真实验证进程重启恢复。
+  auth_spike_web_port="${AUTH_SPIKE_WEB_PORT:-57320}"
+  if [[ ! "${auth_spike_web_port}" =~ ^[0-9]+$ ]] ||
+    ((auth_spike_web_port < 1024 || auth_spike_web_port > 65535)); then
+    echo "AUTH_SPIKE_WEB_PORT 必须是 1024–65535 的端口号。" >&2
+    exit 1
+  fi
+
+  auth_spike_web_profile_dir="${AUTH_SPIKE_WEB_PROFILE_DIR:-.dart_tool/supabase-auth-web-profile}"
+  if [[ "${auth_spike_web_profile_dir}" != /* ]]; then
+    auth_spike_web_profile_dir="$(pwd -P)/${auth_spike_web_profile_dir}"
+  fi
+  mkdir -p "${auth_spike_web_profile_dir}"
+
   chromedriver_owned=false
   # 复用已在 4444 端口运行的 driver；否则由本脚本临时启动并负责关闭。
   if ! curl --silent --fail http://127.0.0.1:4444/status >/dev/null 2>&1; then
@@ -59,12 +74,19 @@ if [[ "${AUTH_SPIKE_DEVICE}" == "chrome" ]]; then
   flutter drive \
     --driver=test_driver/integration_test.dart \
     --target=integration_test/supabase_auth_spike_test.dart \
-    --device-id chrome \
+    --device-id web-server \
+    --browser-name chrome \
+    --web-hostname=127.0.0.1 \
+    --web-port "${auth_spike_web_port}" \
+    --web-browser-flag="--user-data-dir=${auth_spike_web_profile_dir}" \
     --dart-define-from-file "${AUTH_SPIKE_CONFIG}"
 else
   # 原生平台可以直接把 integration_test 运行在目标设备上。
+  # 默认卸载会让 iOS 删除设备上唯一的开发 App，并连带撤销开发者信任；保留 App
+  # 也让多阶段 OTP 探针无需在每次重新构建后手工信任同一张证书。
   flutter test \
     integration_test/supabase_auth_spike_test.dart \
     --device-id "${AUTH_SPIKE_DEVICE}" \
+    --no-uninstall \
     --dart-define-from-file "${AUTH_SPIKE_CONFIG}"
 fi

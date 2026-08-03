@@ -138,7 +138,17 @@ macOS 的安全能力还受 App Sandbox 和代码签名控制。[`com.apple.secu
 
 个人 Team ID 不写进共享 Xcode project。开发者把 `macos/Runner/Configs/LocalSigning.xcconfig.example` 复制为被 Git 忽略的 `LocalSigning.xcconfig`，再填写自己的 Team ID；正式运行因此使用签名和 Keychain。GitHub CI 没有开发者私钥，只执行 `CODE_SIGNING_ALLOWED=NO` 的无签名编译；它能证明代码可构建，却不能证明 Keychain 可运行。真实设备探针与静态 entitlement 测试分别覆盖这两个不同结论。
 
-“package 支持某平台”也不等于“运行时能力可用”。例如 Web 安全存储需要 HTTPS／localhost，Linux 需要 libsecret 和 keyring，定位还要权限。因此 `PlatformCapabilities` 有三种状态：available、runtime probe required、unavailable。`PlatformPolicy` 在 probe 尚未成功时禁止敏感对象离线缓存，并降级为前台同步；Widget 不自行猜平台。
+iOS 同样把 refresh token 放进 Keychain，因此 Runner 的 Debug／Profile 和 Release 都必须引用包含 `keychain-access-groups` 的 entitlement。共享工程只记录能力声明，由 Xcode 在本机选择开发 Team 和 provisioning profile；个人证书资料不提交。静态测试能防止 entitlement 文件或 Xcode 接线以后被误删，但只有 Apple Development 签名后的真机探针，才能证明系统确实允许 App 写入并在下一进程读取 Keychain。
+
+真机启动还存在三个容易混淆的系统门槛：设备信任这台 Mac、Developer Mode 已启用、Developer App Certificate 已信任。前两项通过并不表示第三项自动通过。若 Xcode 报 `Developer App Certificate is not trusted`，应在 iPhone 的“设置 → 通用 → VPN 与设备管理”中信任对应开发者，再重新发起启动；已经失败的那次启动不会因事后信任而自动重试。测试时保持设备解锁、连接稳定，并把这类环境失败与 Supabase／业务失败分开记录。
+
+本项目的原生认证探针必须给 `flutter test` 传入 `--no-uninstall`。Flutter 的 integration test 默认在结束时卸载 App；当它是设备上该开发者签名的最后一款 App 时，iOS 随后也不再保留这项开发者信任，下一阶段重新安装就会再次要求手工信任。`--no-uninstall` 不会跳过下一次构建或覆盖安装，只是不在每轮测试结束时删除 App。整套真机验证完成后，可以手工删除测试 App；此时以后再次安装需要重新信任属于预期安全行为。
+
+“package 支持某平台”也不等于“运行时能力可用”。例如 Web 安全存储需要 HTTPS／localhost，Linux 需要 libsecret 和 keyring，定位还要权限。因此 `PlatformCapabilities` 记录当前设备的五种运行态：available、runtime probe required、denied、temporarily unavailable、unavailable。它不记录项目是否已取得该平台的发布证据。`PlatformPolicy` 在 probe 尚未成功、权限被拒绝或能力暂时失败时禁止敏感对象离线缓存，并按能力降级；Widget 不自行猜平台。跨平台 build、真实设备流程和发布结论另见 [六平台能力证据矩阵](../spikes/six-platform-capability-matrix.md)。
+
+Web 自动化还需要明确“谁拥有浏览器”。`flutter drive` 已经会让 WebDriver 启动测试浏览器；如果同时把 App device 设成 `chrome`，受影响的 Flutter 版本还会额外启动一个普通 Chrome，使同一认证测试执行两遍。本项目的 runner 对使用者仍接受 `AUTH_SPIKE_DEVICE=chrome`，但内部使用 `web-server`，只让 ChromeDriver 启动浏览器。这里守住的是一个重要副作用边界：一次测试只能对应一次注册、发信或恢复请求。跨浏览器进程恢复还必须固定 localhost origin，并复用持久 Chrome profile；否则 port 或 profile 改变后得到的是另一份 Web 存储，失败不能归因于 Supabase session。
+
+错误类型也不能只看 SDK 类名。Supabase SDK 的 `AuthRetryableFetchException` 既可能表示根本没有收到 HTTP response，也可能包装服务器的 5xx response。前者没有 HTTP status，映射为 `networkUnavailable`；后者带 status，映射为 `providerRejected`，并只暴露 `http_<status>` 这种安全 provider code。服务器 response body 不进入 UI、分析事件或稳定业务合同。
 
 真实认证流程与 build 证据见 [Supabase Auth 六平台 Spike](../spikes/supabase-auth-six-platform.md)。
 
@@ -174,6 +184,12 @@ macOS 网络和 Keychain entitlement 回归：
 
 ```bash
 flutter test test/platform/macos_entitlements_test.dart
+```
+
+iOS Keychain entitlement 与 Xcode 接线回归：
+
+```bash
+flutter test test/platform/ios_entitlements_test.dart
 ```
 
 读完这一章，应能回答：正式入口为什么拿不到 MD5、测试为什么能固定时间、Drift 与 SQLite 各是什么，以及为什么 PostgreSQL migration 不能在 Dashboard 里手工代替。

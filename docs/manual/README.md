@@ -7,8 +7,11 @@
 ## 阅读路线
 
 1. [第 1 章：先让正式代码安全、可替换、可验证](01-safety-foundations.md)
+2. [第 2 章：用测试和证据安全地修改代码](02-testing-and-change-workflow.md)
 
 当前认证验证状态见 [Supabase Auth 六平台 Spike](../spikes/supabase-auth-six-platform.md)。它会明确区分 package 声明、build 通过和真实设备流程通过。
+
+数据库、离线、同步、界面和认证的整体证据见 [六平台能力证据矩阵](../spikes/six-platform-capability-matrix.md)。
 
 后续切片会依次加入：领域与数据模型、接触记录、离线同步、认证与权限、推广对象、问卷、个人计划、统计与隐私、六平台能力、发布与恢复演练。
 
@@ -24,7 +27,7 @@
 
 - 产品合同：[产品规格](../PRODUCT_SPEC.md)
 - 统一领域语言：[领域上下文](../../CONTEXT.md)
-- 单项架构决策：[ADR 目录](../adr/)
+- 单项架构决策：[ADR 索引](../adr/README.md)
 - legacy v5 证据：[v5 盘点](../migrations/legacy-v5-inventory.md)
 
 `docs/PROJECT_DESIGN.md` 是旧 Demo 的历史资料，不是现代实现依据。

@@ -414,8 +414,14 @@ final class SupabaseIdentitySession implements IdentitySession {
 
   static IdentityFailure _mapFailure(Object error, StackTrace stackTrace) {
     if (error is AuthRetryableFetchException) {
+      // SDK 同时用这个类型表示“未收到 HTTP response”和“服务器 5xx”。
+      // 只有前者是设备网络不可用；后者必须保留为认证商拒绝证据。
+      final statusCode = error.statusCode;
       return IdentityFailure(
-        code: IdentityFailureCode.networkUnavailable,
+        code: statusCode == null
+            ? IdentityFailureCode.networkUnavailable
+            : IdentityFailureCode.providerRejected,
+        providerCode: statusCode == null ? null : 'http_$statusCode',
         cause: error,
         stackTrace: stackTrace,
       );
