@@ -1,9 +1,9 @@
 # 同行者 App 现代化产品与技术 Spec
 
 - Spec ID：`TXZ-SPEC-001`
-- 版本：`1.0`
-- 更新日期：2026-07-31
-- 状态：**已于 2026-07-31 获用户确认；后续实施必须通过本 Spec 对应的 GitHub Issues**
+- 版本：`1.1`
+- 更新日期：2026-08-03
+- 状态：**1.0 已于 2026-07-31 确认；1.1 的五项设计调整已于 2026-08-03 确认；后续实施必须通过本 Spec 对应的 GitHub Issues**
 - 覆盖范围：iOS、Android、Web、macOS、Windows、Linux 六平台正式 App
 
 ## 0. 文档权威与使用方式
@@ -13,7 +13,7 @@
 权威顺序为：
 
 1. [领域词汇 `CONTEXT.md`](../CONTEXT.md) 规定词语含义；
-2. [ADR](./adr/) 记录已接受的单项决策；
+2. [ADR 索引](./adr/README.md) 记录已接受单项决策的状态和取代关系；
 3. 本 Spec 定义产品全貌、交付顺序与验收条件；
 4. [`docs/research/`](./research/) 提供技术证据与备选比较；
 5. 当前代码只代表 legacy demo 现状，冲突时不得覆盖已确认需求。
@@ -45,7 +45,7 @@
 
 - 简单匿名接触只需填写核心事实，不必创建推广对象或穿过多页向导。
 - 草稿、正式提交和同步不会因断网、App 转入后台或意外退出而静默丢失。
-- 管理者无法通过报表、排名、导出或相减查询获得小群体或个人的精确行动数据。
+- 已批准的管理报告不提供个人绩效或排名，并通过受限查询面、贡献者保护和完整网格抑制降低小群体精确值被恢复的风险。
 - 同一指标在 Dart／SQLite、PostgreSQL 和未来 warehouse 上对同一 synthetic fixture 得出一致结果。
 - 问卷、指标或认证商变更不需让无关 Flutter Feature 同时重写。
 - 六平台共用领域语义、数据约束和主要测试，平台差异局限于 Adapter 与响应式表现。
@@ -318,12 +318,12 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `PRIVACY-002` | 每个可显示或可推导统计单元至少包含 `10` 个该指标的真实统计单位；不足时只返回“样本不足”。 |
 | `PRIVACY-003` | 每个管理单元还必须包含至少三位不同推广者，且任一人的统计单位不超过该单元一半。 |
 | `PRIVACY-004` | 二元比例的两类和多级分布的每格分别检查阈值；隐藏小格时使用互补隐藏，不让总数相减恢复精确值。 |
-| `PRIVACY-005` | 后端在返回 API、图表或导出前完成阈值、贡献者保护和防差分；Flutter 不先收到精确明细再隐藏。 |
-| `PRIVACY-006` | 第一阶段不对安全单元加随机噪声；阈值不是统计显著性或结论可靠性的证明。 |
+| `PRIVACY-005` | 后端在返回 API、图表或导出前完成阈值、贡献者保护、完整结果网格和互补隐藏；Flutter 不先收到精确明细再隐藏。 |
+| `PRIVACY-006` | 第一阶段不对安全单元加随机噪声；这些控制用于降低披露风险，不构成形式化的不可重识别保证，也不证明统计显著性或结论可靠性。 |
 | `PRIVACY-007` | 去身份化异常只包含纠错所需时间、区域、定位状态和必要坐标，不含推广者／对象身份、联系方式或备注。 |
 | `PRIVACY-008` | 本人查看自己的事实不受管理匿名阈值限制，但界面必须标明这是个人数据，不能据此代表团队或总体。 |
 | `PRIVACY-009` | 组织可以提高最小统计单位、要求更多推广者或降低单人占比上限，但不能弱化平台底线。 |
-| `PRIVACY-010` | 后端限制可分析维度与时间／区域粒度，并检测可能用于相减反推的连续重叠查询；单次查询通过阈值不代表查询序列安全。 |
+| `PRIVACY-010` | 第一阶段只开放服务端定义、版本化的固定报告形状；后端对维度、时间／区域粒度、筛选和导出字段使用 allowlist，将请求 canonicalize 后执行完整网格与互补隐藏，并以审计和重识别 fixture 验证风险边界。 |
 | `PRIVACY-011` | 查看或修正去身份化异常需要相应 capability 并留下审计；修正采用接触 revision，不借纠错入口取得记录者或对象身份。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
@@ -454,6 +454,19 @@ typed_payload
 
 首批 command 是 `contact.submit.v1`、`contact.revise.v1` 和 `contact.void.v1`。同一 `app_user_id + command_id` 重放必须返回原结果，不重复写入、计数或发布 warehouse 事实。
 
+Outbox 采用 ADR-0098 的持久状态机。`ContactJournal` 在本地业务 transaction 中写入唯一 command；内部 `SyncEngine` 在 SQLite transaction 中领取并租赁待发送项，ACK 后再更新稳定结果和 cursor。关键运行合同如下：
+
+| 合同 | 规则 |
+| --- | --- |
+| 状态 | `pending`、`leased`、`needs_resolution`、`permanent_failure`、`completed` |
+| 顺序与并行 | 同一 aggregate 同时最多一条租约并按创建顺序发送；其他 aggregate 可以继续 |
+| 崩溃恢复 | 租约过期后可重新领取；Web 以持久租约保证单 drainer，tab 内存锁只作优化 |
+| 结果 | accepted／duplicate 完成，conflict 待解决，rejected／forbidden 永久失败，超时／429／5xx 退避重试 |
+| 确认与清理 | result 和 cursor 在本地 transaction 中持久化后才清理 completed；待解决项不自动清理 |
+| 健康状态 | 只返回数量、最旧等待时长、最后成功时间和稳定错误码，不暴露 payload、PII 或自由文本 |
+
+重试采用有上限的指数退避、jitter 和可信 `Retry-After`。服务端幂等仍是 ACK 丢失后重放的最终安全边界。
+
 ### 7.4 SQL 的三个学习层
 
 | 层 | 用途 | 学习重点 |
@@ -500,7 +513,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `MetricRepository` | 返回带版本、单位和口径的 `MetricResult` | SQL、去重、分母／排除、隐私抑制和数据截止 |
 | `ManualCatalog` | 目录、章节、版本、代码块和复制内容 | bundled Markdown、manifest、snippet 和在线／本地版本差异 |
 
-`SyncEngine` 是内部基础模块，页面只观察“仅本机／同步中／失败／冲突／已同步”，不需理解重试协议。
+`SyncEngine` 是内部深模块，独占领取、租约、ACK、退避、cursor 和错误分类。页面只观察“仅本机／同步中／失败／冲突／已同步”及不含 payload 的健康状态，不需理解 HTTP 或 Outbox 表结构。
 
 ### 8.3 七类固定测试接缝
 
@@ -510,9 +523,9 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | --- | --- |
 | `TEST-001` | `ContactJournal` 使用真实测试 Drift，证明草稿、接触、revision、答案和 Outbox 的原子成功／失败。 |
 | `TEST-002` | Identity fake／staging Adapter 与 Backend SQL 授权共同证明内部身份映射、membership、capability、对象分配、撤权和越权拒绝。 |
-| `TEST-003` | Sync 的 HTTP／内存合同 Adapter 共同覆盖幂等、重试、离线重启、乱序、部分失败、冲突和旧 contract。 |
+| `TEST-003` | Sync 的 HTTP／内存合同 Adapter 共同覆盖幂等、原子 claim／lease／ACK、过期租约、指数退避、离线重启、Web 单 drainer、乱序、部分失败、冲突、健康状态和旧 contract。 |
 | `TEST-004` | Questionnaire 的 Flutter evaluator 与 Backend validator 对同一 fixture 运行八题型、五状态、显示规则、旧草稿和升级用例。 |
-| `TEST-005` | Metric fixture 对账 Dart／SQLite、PostgreSQL 与未来 warehouse；`MetricResult` 固定单位、分母、排除、时区、版本、截止与隐私状态。 |
+| `TEST-005` | Metric fixture 对账 Dart／SQLite、PostgreSQL 与未来 warehouse；`MetricResult` 固定来源层级、单位、分母、排除、时区、版本、截止、同步覆盖与隐私状态。 |
 | `TEST-006` | Platform Capability／Policy 覆盖位置、持久化、认证、安全缓存、通知和后台同步的可用、拒绝、超时与降级。 |
 | `TEST-007` | Database fixture 覆盖新库初始化、每次正式升级、关键 SQL、失败恢复和 forward-fix，不拿真实用户资料试 migration。 |
 
@@ -562,10 +575,10 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 
 - 保存 v5 schema、SQLite／数据备份和 legacy 行为证据，隔离 Demo seed 与旧 MD5 登录；
 - 建立 composition root，并为 Clock、ID、Error mapping、Database factory、Authentication 和平台 Capability 提供可替换边界；
-- 通过 Fake Identity 完成本地单元／Widget 测试，通过真实 Supabase test project 完成六平台认证 spike；若任何平台无法稳定满足安全恢复和会话合同，则按 ADR-0096 改用 AWS Cognito；
+- 通过 Fake Identity 完成本地单元／Widget 测试，以真实 Supabase test project 建立六平台认证与安全存储证据矩阵；已验证、仅 build 通过和待实测必须分开记录；
 - 建立 PostgreSQL 本地／测试 migration runner、受限 runtime role、CI 空库重建和 fixture 机制。
 
-验收：生产路径不存在 MD5、Demo 密码、客户端数据库凭据或 service-role secret；时间、ID、数据库和认证失败均可确定性测试；任意空 PostgreSQL 与空 Drift 数据库都能从 migration 重建。
+验收：生产路径不存在 MD5、Demo 密码、客户端数据库凭据或 service-role secret；时间、ID、数据库和认证失败均可确定性测试；任意空 PostgreSQL 与空 Drift 数据库都能从 migration 重建；证据矩阵诚实记录各平台已通过和待完成项目。尚未完成的 Android、Windows、Linux 运行时证据可与领域切片并行推进，但仍是公开发布门槛；失败平台按 ADR-0096 评估 Cognito。
 
 ### Slice 1：匿名接触的第一个完整闭环
 
@@ -574,16 +587,22 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 - `Identity → app_user → 个人空间 → 推广项目 → 当前上下文 → 基础问卷`；
 - 多草稿、自动保存、匿名接触、七类渠道、地点／`N/A`、触达人数和单次兴趣；
 - Drift 事务内同时写入接触、首个 revision、答案和 `sync_outbox`；
+- `SyncEngine` 实现原子 claim／lease／ACK、过期租约恢复、基本退避和不含 payload 的同步健康状态；
 - 自有 API 将幂等 mutation 写入 PostgreSQL，并以游标拉取服务端变化；
-- 本人看到即时接触场次和“仅本机／同步中／失败／已同步”状态。
+- 建立稳定 router 和跨尺寸主框架；“今日”和“接触”可完成本切片行为，“分析”显示最近七日个人接触场次及来源／新鲜度／同步覆盖，“对象”明确显示尚未开放，不伪造功能；
+- 本人看到保存后的即时反馈和“仅本机／同步中／失败／已同步”状态。
 
-验收：用户可断网完成、关闭并重开草稿，联网后重复重放同一 mutation 不产生重复事实；整个切片不要求或生成 PII；个人计数只统计当前有效、已提交的接触。
+验收：用户可断网完成、关闭并重开草稿，联网后重复重放同一 mutation 不产生重复事实；进程退出和过期租约不会永久卡住 command，Web 双标签最多一个 drainer；整个切片不要求或生成 PII；最近七日计数只统计当前有效、已提交的接触，并明确显示同步覆盖。
 
 ### Slice 2：修订、作废、重试与冲突
 
-交付：接触尝试、提交、补录、修订、作废、稳定服务端处理结果、失败重试、跨设备冲突和旧 contract fixture。
+交付：接触尝试、提交、补录、修订、作废、稳定服务端处理结果、完整退避与错误分类、批次部分失败、跨设备冲突和旧 contract fixture。
 
 验收：历史只追加不覆盖；重复请求幂等；不同字段可按规则合并，同字段并发进入显式冲突；作废记录从当前指标排除但审计仍可见；失败可区分可重试、需用户处理和永久拒绝。
+
+### Slice 2 后的内部 Alpha 门槛
+
+Slice 0、1、2 完成后可以发放内部 Alpha，用于验证匿名接触闭环、修订、冲突和同步恢复。该里程碑只允许测试资料，不开放推广对象 PII、组织管理或管理分析，也不等于公开发布。平台能力页面和证据矩阵必须明确哪些平台只完成 build、哪些已通过真实运行；未完成认证或安全存储实测的平台不得被宣称为已支持。
 
 ### Slice 3：项目问卷设计与版本化
 
@@ -599,9 +618,9 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 
 验收：未授权访问必须由后端拒绝；取消分配、退出、过期和登出后本地敏感缓存按合同清除；日志、通知、匿名分析和 warehouse 不含 PII；导入不生成接触、兴趣、阶段或同意事实。
 
-### Slice 5：今天、导航与个人计划
+### Slice 5：私人计划、提醒与跨平台交互
 
-交付：四个主导航、当前上下文、项目提醒、可选每周接触场次目标、私人进度、可恢复的权限／同步状态和跨尺寸 Material 3 UI。
+交付：在 Slice 1 的稳定导航上加入项目提醒、可选每周接触场次目标、私人进度、系统通知 opt-in，以及键盘、鼠标、触摸和可访问状态的跨平台细化。
 
 验收：不存在供管理者读取个人目标或差距的 API／UI；不做排名；计划时区、周起始日、下周期生效和逐设备通知 opt-in 有自动测试；通知默认不含项目名和任何对象资料。
 
@@ -609,7 +628,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 
 交付：指标目录、个人即时分析、管理匿名汇总、区域与时间分析、问卷兼容合并、动态报表、固定报告快照和必要 SQL 教学样例。
 
-验收：Drift、PostgreSQL 和前端使用同一 synthetic fixture 对账；后端统一执行 `k=10`、至少三位推广者、单人不超过一半、逐格与互补隐藏和防差分；Widget 只渲染已带单位、版本、截止时间和抑制状态的 `MetricResult`，拿不到被隐藏的精确值。
+验收：Drift、PostgreSQL 和前端使用同一 synthetic fixture 对账；管理界面只调用版本化固定报告，后端 canonicalize 请求并统一执行 `k=10`、至少三位推广者、单人不超过一半、完整结果网格与互补隐藏；相邻周期、重叠区域、互补类别和已知外部事实的重识别 fixture 通过。Widget 只渲染已带来源、单位、版本、截止时间和抑制状态的 `MetricResult`，拿不到被隐藏的精确值。验收结论只能说明降低披露风险，不宣称形式化不可重识别。
 
 ### Slice 7：组织治理与数据可携带性
 
@@ -642,7 +661,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 - 依 ADR-0097 对预计生产规模、备份恢复、区域、连接池、日志与成本重新评审 Supabase PostgreSQL；必要时迁移到 Cloud SQL；
 - PostgreSQL 与 Drift 都完成备份、恢复、灾难演练，并记录可接受的 RPO／RTO；
 - 六个平台都能构建，并通过登录、持久化、离线记录、同步恢复和会话恢复 smoke test；
-- 匿名管理统计通过阈值、贡献者保护、互补隐藏和防差分测试；
+- 管理统计只开放已批准的固定报告形状，并通过阈值、贡献者保护、完整网格、互补隐藏、审计和重识别测试；发布材料不声称形式化不可重识别；
 - 权限撤销、成员退出、账号／组织删除、PII 保留到期和本地缓存清除完成演练；
 - App 内置说明书与发布 commit／版本一致，章节、snippet、链接和复制功能检查通过。
 
@@ -677,9 +696,9 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 
 ## 16. 批准状态与 GitHub Issues 输出
 
-本文件已于 2026-07-31 由用户整体确认，状态为 `accepted`。后续实现以 GitHub 父 Issue 和 Slice 0–7 子票控制范围，不以口头理解取代 requirement ID、测试和 Definition of Done。
+本文件 1.0 已于 2026-07-31 由用户整体确认；1.1 的 Outbox、早期闭环、平台证据、隐私查询面和 ADR 治理调整已于 2026-08-03 确认，状态为 `accepted`。后续实现以 GitHub 父 Issue、Slice 0 至 7 子票和独立发布门槛控制范围，不以口头理解取代 requirement ID、测试和 Definition of Done。
 
-GitHub 实施地图为 [#1](https://github.com/XavierOwen/tongxingzhe-app/issues/1)；当前实施前沿是 [#2 Slice 0](https://github.com/XavierOwen/tongxingzhe-app/issues/2)。后续切片依次为 [#3](https://github.com/XavierOwen/tongxingzhe-app/issues/3)、[#4](https://github.com/XavierOwen/tongxingzhe-app/issues/4)、[#5](https://github.com/XavierOwen/tongxingzhe-app/issues/5)、[#6](https://github.com/XavierOwen/tongxingzhe-app/issues/6)、[#7](https://github.com/XavierOwen/tongxingzhe-app/issues/7)、[#8](https://github.com/XavierOwen/tongxingzhe-app/issues/8) 和 [#9](https://github.com/XavierOwen/tongxingzhe-app/issues/9)。
+GitHub 实施地图为 [#1](https://github.com/XavierOwen/tongxingzhe-app/issues/1)；当前实施前沿是 [#2 Slice 0](https://github.com/XavierOwen/tongxingzhe-app/issues/2)。后续切片依次为 [#3](https://github.com/XavierOwen/tongxingzhe-app/issues/3)、[#4](https://github.com/XavierOwen/tongxingzhe-app/issues/4)、[#5](https://github.com/XavierOwen/tongxingzhe-app/issues/5)、[#6](https://github.com/XavierOwen/tongxingzhe-app/issues/6)、[#7](https://github.com/XavierOwen/tongxingzhe-app/issues/7)、[#8](https://github.com/XavierOwen/tongxingzhe-app/issues/8) 和 [#9](https://github.com/XavierOwen/tongxingzhe-app/issues/9)。Android、Windows、Linux 的认证与安全存储运行时证据由 [#11](https://github.com/XavierOwen/tongxingzhe-app/issues/11) 并行推进；它不阻塞 Slice 1 和 2，但阻塞首个公开版本。
 
 批准后的执行规则：
 
@@ -693,7 +712,7 @@ GitHub 实施地图为 [#1](https://github.com/XavierOwen/tongxingzhe-app/issues
 ## 17. 追溯来源
 
 - [领域上下文与统一语言](../CONTEXT.md)
-- [架构决策记录](./adr/)
+- [架构决策记录](./adr/README.md)
 - [当前代码差距审计](./research/current-code-gap-audit.md)
 - [目标架构](./research/target-architecture-and-migration-plan.md)
 - [Flutter／Drift 六平台研究](./research/flutter-drift-six-platform-constraints-2026.md)

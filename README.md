@@ -24,7 +24,7 @@ Supabase 仍是有条件首选。SDK 接线完成不等于六平台认证通过�
 
 - [产品规格](docs/PRODUCT_SPEC.md)：需求、架构、切片与 Definition of Done；
 - [统一领域语言](CONTEXT.md)：术语及其精确定义；
-- [架构决策](docs/adr/)：每项已确认决策的理由与后果；
+- [架构决策索引](docs/adr/README.md)：每项决策的状态、取代关系、关联 Slice 和主题入口；
 - [正式开发说明书](docs/manual/README.md)：面向初学者解释 Flutter、SQL、设计和数学背景的唯一入口；
 - [Legacy v5 盘点](docs/migrations/legacy-v5-inventory.md)：旧 schema、数据分类和停止规则；
 - [PostgreSQL migration 说明](backend/database/README.md)：空库重建、权限与 fixture。

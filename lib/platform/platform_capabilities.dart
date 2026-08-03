@@ -2,9 +2,17 @@ import 'package:flutter/foundation.dart';
 
 enum AppPlatform { android, ios, web, macos, windows, linux, unknown }
 
-/// available 表示当前实现可直接使用；runtimeProbeRequired 表示必须先做权限、
-/// secure context 或 keyring 等运行时检查；unavailable 表示本版本没有实现。
-enum CapabilityAvailability { available, runtimeProbeRequired, unavailable }
+/// 当前设备这一次运行所观察到的能力状态，不表示项目已取得该平台的发布证据。
+///
+/// Adapter 必须通过真实调用或权限探针，才能把 runtimeProbeRequired 升级为
+/// available。拒绝和暂时失败分开保存，方便 UI 给出不同的恢复动作。
+enum CapabilityAvailability {
+  available,
+  runtimeProbeRequired,
+  denied,
+  temporarilyUnavailable,
+  unavailable,
+}
 
 enum PlatformCapability {
   durableLocalDatabase,
@@ -70,8 +78,8 @@ abstract interface class PlatformCapabilitiesProvider {
   Future<PlatformCapabilities> load();
 }
 
-/// 这是“当前 App 已实现能力”的静态起点；requiresRuntimeProbe 的项目必须由
-/// 后续 Adapter 实测成功后才能升级为 available。
+/// 这是当前 App 已接线能力的保守起点。它不代表某个平台已通过发布验收；
+/// runtimeProbeRequired 必须由后续 Adapter 在当前设备实测后才能升级。
 final class FlutterPlatformCapabilitiesProvider
     implements PlatformCapabilitiesProvider {
   const FlutterPlatformCapabilitiesProvider();
@@ -95,10 +103,8 @@ final class FlutterPlatformCapabilitiesProvider
             ? CapabilityAvailability.available
             : CapabilityAvailability.unavailable,
         PlatformCapability.secureSessionStorage:
-            platform == AppPlatform.web || platform == AppPlatform.linux
+            native || platform == AppPlatform.web
             ? CapabilityAvailability.runtimeProbeRequired
-            : native
-            ? CapabilityAvailability.available
             : CapabilityAvailability.unavailable,
         PlatformCapability.location: locationImplemented
             ? CapabilityAvailability.runtimeProbeRequired
