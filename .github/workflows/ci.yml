@@ -1,0 +1,191 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: 3.44.2
+
+jobs:
+  flutter-quality:
+    name: Flutter quality and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Verify formatting
+        run: >-
+          dart format --output=none --set-exit-if-changed
+          lib test integration_test test_driver tool
+
+      - name: Analyze
+        run: dart analyze
+
+      - name: Run tests
+        run: flutter test --no-pub
+
+      - name: Verify production boundary
+        run: dart run tool/check_production_boundary.dart
+
+      - name: Verify Markdown links
+        run: dart run tool/check_markdown_links.dart
+
+      - name: Verify Drift v5 schema snapshot
+        run: |
+          dart run drift_dev schema dump \
+            lib/data/local_database.dart \
+            "${RUNNER_TEMP}/drift_schema_v5.json"
+          cmp drift_schemas/drift_schema_v5.json \
+            "${RUNNER_TEMP}/drift_schema_v5.json"
+
+      - name: Verify Drift migration helpers are current
+        run: |
+          mkdir -p "${RUNNER_TEMP}/generated_migrations"
+          dart run drift_dev schema generate \
+            drift_schemas \
+            "${RUNNER_TEMP}/generated_migrations"
+          diff -ru test/generated_migrations \
+            "${RUNNER_TEMP}/generated_migrations"
+
+  postgres-migrations:
+    name: PostgreSQL rebuild, permissions, and restore
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        # ubuntu-latest 提供 PostgreSQL 16 client；同 major 可执行 pg_dump restore。
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tongxingzhe_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d tongxingzhe_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test
+      PGRESTORE_URL: postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_restore
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
+
+      - name: Rebuild and rerun migrations
+        run: |
+          ./tool/postgres_migrate.sh
+          ./tool/postgres_migrate.sh
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_bootstrap.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0001_runtime_probe.sql
+
+      - name: Reject edited migration history
+        run: |
+          temporary_migrations="${RUNNER_TEMP}/edited-migrations"
+          mkdir -p "${temporary_migrations}"
+          cp backend/database/migrations/*.sql "${temporary_migrations}/"
+          printf '\n-- synthetic checksum drift\n' \
+            >> "${temporary_migrations}/0001_bootstrap.sql"
+          if MIGRATION_DIR="${temporary_migrations}" \
+            ./tool/postgres_migrate.sh; then
+            echo "Checksum drift was accepted unexpectedly" >&2
+            exit 1
+          fi
+
+      - name: Exercise pg_dump and restore
+        run: |
+          pg_dump "${DATABASE_URL}" --format=custom \
+            --schema=app_data --schema=app_migrations \
+            --file="${RUNNER_TEMP}/tongxingzhe.dump"
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --command='CREATE DATABASE tongxingzhe_restore;'
+          pg_restore --dbname="${PGRESTORE_URL}" --exit-on-error \
+            "${RUNNER_TEMP}/tongxingzhe.dump"
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_bootstrap.sql
+
+  platform-build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: Android
+            os: ubuntu-latest
+            command: flutter build apk --debug --no-pub
+          - target: Web
+            os: ubuntu-latest
+            command: flutter build web --release --no-pub
+          - target: Linux
+            os: ubuntu-latest
+            command: flutter config --enable-linux-desktop && flutter build linux --debug --no-pub
+          - target: iOS
+            os: macos-latest
+            command: flutter build ios --debug --no-codesign --no-pub
+          - target: macOS
+            os: macos-latest
+            command: ./tool/build_macos_unsigned.sh
+          - target: Windows
+            os: windows-latest
+            command: flutter config --enable-windows-desktop && flutter build windows --debug --no-pub
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Set up Java for Android
+        if: matrix.target == 'Android'
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Linux native dependencies
+        if: matrix.target == 'Linux'
+        run: >-
+          sudo apt-get update && sudo apt-get install --yes
+          clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          libsecret-1-dev
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Build
+        shell: bash
+        run: ${{ matrix.command }}

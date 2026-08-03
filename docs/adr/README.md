@@ -1,0 +1,40 @@
+# 架构决策索引
+
+本目录记录已经影响产品合同、数据边界或发布风险的决定。领域词语以 [`CONTEXT.md`](../../CONTEXT.md) 为准，完整需求和 Slice 以 [`PRODUCT_SPEC.md`](../PRODUCT_SPEC.md) 为准。
+
+## 状态规则
+
+- ADR-0001 至 ADR-0095 作为 `TXZ-SPEC-001` 的首批决策集，于 2026-07-31 一并接受；文件另有状态时以文件为准。
+- ADR-0096、ADR-0097 于 2026-07-31 接受；ADR-0098、ADR-0099 于 2026-08-03 接受。
+- 被取代的 ADR 保留原文和指向新 ADR 的状态，不再作为当前实现合同。
+- 新 ADR 默认只需一个清楚的决定段落。只有背景、备选和后果能帮助未来维护者避免误读时，才增加这些章节。
+- 可逆的 UI 细节、库选择和票内实现步骤留在 Spec 或 Issue，不为增加编号而创建 ADR。
+
+## 当前状态与取代关系
+
+| ADR | 状态 | Slice／Requirement | 说明 |
+| --- | --- | --- | --- |
+| [0022](./0022-offline-first-contact-recording-with-an-outbox.md) | 已接受，2026-07-31 | Slice 1–2；`ARCH-001`、`ARCH-007`、`TEST-001`、`TEST-003` | 离线事实和 Outbox 总原则；运行状态由 ADR-0098 细化 |
+| [0025](./0025-use-firebase-authentication-for-production-identity.md) | 已被 ADR-0096 取代 | Slice 0；`AUTH-004`–`AUTH-008` | 保留认证决策历史 |
+| [0067](./0067-anonymous-analytics-prevent-differencing-without-noise.md) | 已被 ADR-0099 取代 | Slice 6；`PRIVACY-001`–`PRIVACY-011` | 原“防相减”表述不再是当前保证 |
+| [0096](./0096-use-supabase-auth-with-cognito-fallback.md) | 已接受，2026-07-31 | Slice 0／发布门槛；`AUTH-004`–`AUTH-008` | Supabase Auth 首选，Cognito 后备 |
+| [0097](./0097-use-supabase-postgresql-for-the-initial-stage.md) | 已接受，2026-07-31 | Slice 0／发布门槛；`ARCH-003`–`ARCH-010` | 首阶段数据库与发布前复审 |
+| [0098](./0098-persistent-outbox-uses-claim-lease-and-ack.md) | 已接受，2026-08-03 | Slice 1–2；`ARCH-001`、`ARCH-007`、`TEST-001`、`TEST-003` | Outbox 领取、租约、ACK、退避和健康状态 |
+| [0099](./0099-management-analytics-use-bounded-query-surfaces.md) | 已接受，2026-08-03 | Slice 6；`ANALYTICS-007`–`ANALYTICS-014`、`PRIVACY-001`–`PRIVACY-011` | 固定报告形状和披露风险边界 |
+
+## 按主题查找
+
+| 主题 | ADR 范围 | 主要 Slice／Requirement |
+| --- | --- | --- |
+| 接触、工作空间、身份与权限 | [0001](./0001-contact-records-independent-of-promotion-targets.md)–[0010](./0010-capability-based-membership-permissions.md) | Slice 1、4、7；`CONTACT`、`AUTHZ`、`CTX` |
+| 区域、对象、隐私资料与修订 | [0011](./0011-shared-hierarchical-regions-with-eventual-resolution.md)–[0021](./0021-submitted-contacts-are-voided-not-silently-deleted.md) | Slice 1、2、4；`REGION`、`TARGET`、`CONTACT` |
+| 离线、同步、认证与平台 | [0022](./0022-offline-first-contact-recording-with-an-outbox.md)–[0029](./0029-use-one-capability-adaptive-flutter-application.md)，另见 [0096](./0096-use-supabase-auth-with-cognito-fallback.md)、[0098](./0098-persistent-outbox-uses-claim-lease-and-ack.md) | Slice 0–2；`ARCH`、`AUTH`、`PLATFORM`、`TEST-003` |
+| 组织、保留、导入导出与合并 | [0030](./0030-allow-verified-users-to-create-organizations.md)–[0043](./0043-promotion-target-merges-are-reversible.md) | Slice 4、7；`ORG`、`TARGET`、`AUTHZ` |
+| 私人计划、通知与周期 | [0044](./0044-personal-action-plans-are-private-and-user-controlled.md)–[0052](./0052-late-entered-contacts-count-in-their-occurrence-period.md) | Slice 5；`PLAN`、`PLATFORM` |
+| 说明书与发布检查 | [0053](./0053-production-code-and-learning-materials-evolve-together.md)–[0059](./0059-documentation-and-statistics-checks-block-releases.md) | 全部 Slice；`MANUAL`、Definition of Done |
+| 指标、报告与隐私 | [0060](./0060-ordinal-scale-distributions-are-primary.md)–[0077](./0077-core-metrics-ship-with-code-and-project-metrics-use-safe-configuration.md)，另见 [0099](./0099-management-analytics-use-bounded-query-surfaces.md) | Slice 6；`ANALYTICS`、`PRIVACY`、`TEST-005` |
+| 当前上下文、问卷、草稿与导航 | [0078](./0078-a-visible-project-context-scopes-default-work.md)–[0090](./0090-contact-entry-prioritizes-core-facts-with-progressive-disclosure.md) | Slice 1、3、5；`CTX`、`QUESTION`、`DRAFT`、`UI` |
+| 尝试、渠道、触达和机构关系 | [0091](./0091-unsuccessful-direct-outreach-is-a-contact-attempt.md)–[0095](./0095-person-to-institution-relationships-use-six-stable-kinds.md) | Slice 1、2、4；`CONTACT`、`TARGET` |
+| 基础设施 | [0097](./0097-use-supabase-postgresql-for-the-initial-stage.md) | Slice 0／发布门槛；`ARCH-003`–`ARCH-010` |
+
+文件名中的编号只表示记录顺序，不表示优先级。实现时先读取相关 ADR 的正文，再用当前 Spec 和 GitHub Issue 确认范围与验收条件。

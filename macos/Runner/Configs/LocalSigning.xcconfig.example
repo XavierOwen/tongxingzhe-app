@@ -1,0 +1,4 @@
+// 复制为 LocalSigning.xcconfig，并填写自己的 Apple Team ID。
+// LocalSigning.xcconfig 已被 Git 忽略，不要提交个人签名配置。
+DEVELOPMENT_TEAM = YOUR_APPLE_TEAM_ID
+CODE_SIGN_IDENTITY[sdk=macosx*] = Apple Development
