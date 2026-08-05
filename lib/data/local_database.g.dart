@@ -3,6 +3,928 @@
 part of 'local_database.dart';
 
 // ignore_for_file: type=lint
+class $DbSyncOutboxTable extends DbSyncOutbox
+    with TableInfo<$DbSyncOutboxTable, DbSyncOutboxData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DbSyncOutboxTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _commandIdMeta = const VerificationMeta(
+    'commandId',
+  );
+  @override
+  late final GeneratedColumn<String> commandId = GeneratedColumn<String>(
+    'command_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _protocolVersionMeta = const VerificationMeta(
+    'protocolVersion',
+  );
+  @override
+  late final GeneratedColumn<int> protocolVersion = GeneratedColumn<int>(
+    'protocol_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _commandTypeMeta = const VerificationMeta(
+    'commandType',
+  );
+  @override
+  late final GeneratedColumn<String> commandType = GeneratedColumn<String>(
+    'command_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deviceIdMeta = const VerificationMeta(
+    'deviceId',
+  );
+  @override
+  late final GeneratedColumn<String> deviceId = GeneratedColumn<String>(
+    'device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _aggregateIdMeta = const VerificationMeta(
+    'aggregateId',
+  );
+  @override
+  late final GeneratedColumn<String> aggregateId = GeneratedColumn<String>(
+    'aggregate_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _baseRevisionMeta = const VerificationMeta(
+    'baseRevision',
+  );
+  @override
+  late final GeneratedColumn<int> baseRevision = GeneratedColumn<int>(
+    'base_revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _payloadJsonMeta = const VerificationMeta(
+    'payloadJson',
+  );
+  @override
+  late final GeneratedColumn<String> payloadJson = GeneratedColumn<String>(
+    'payload_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtUtcMeta = const VerificationMeta(
+    'createdAtUtc',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAtUtc = GeneratedColumn<DateTime>(
+    'created_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _attemptCountMeta = const VerificationMeta(
+    'attemptCount',
+  );
+  @override
+  late final GeneratedColumn<int> attemptCount = GeneratedColumn<int>(
+    'attempt_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _nextAttemptAtUtcMeta = const VerificationMeta(
+    'nextAttemptAtUtc',
+  );
+  @override
+  late final GeneratedColumn<DateTime> nextAttemptAtUtc =
+      GeneratedColumn<DateTime>(
+        'next_attempt_at_utc',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _leaseOwnerMeta = const VerificationMeta(
+    'leaseOwner',
+  );
+  @override
+  late final GeneratedColumn<String> leaseOwner = GeneratedColumn<String>(
+    'lease_owner',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _leaseExpiresAtUtcMeta = const VerificationMeta(
+    'leaseExpiresAtUtc',
+  );
+  @override
+  late final GeneratedColumn<DateTime> leaseExpiresAtUtc =
+      GeneratedColumn<DateTime>(
+        'lease_expires_at_utc',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _lastFailureCodeMeta = const VerificationMeta(
+    'lastFailureCode',
+  );
+  @override
+  late final GeneratedColumn<String> lastFailureCode = GeneratedColumn<String>(
+    'last_failure_code',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _completedAtUtcMeta = const VerificationMeta(
+    'completedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<DateTime> completedAtUtc =
+      GeneratedColumn<DateTime>(
+        'completed_at_utc',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  @override
+  List<GeneratedColumn> get $columns => [
+    commandId,
+    protocolVersion,
+    commandType,
+    deviceId,
+    aggregateId,
+    baseRevision,
+    payloadJson,
+    createdAtUtc,
+    status,
+    attemptCount,
+    nextAttemptAtUtc,
+    leaseOwner,
+    leaseExpiresAtUtc,
+    lastFailureCode,
+    completedAtUtc,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'db_sync_outbox';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DbSyncOutboxData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('command_id')) {
+      context.handle(
+        _commandIdMeta,
+        commandId.isAcceptableOrUnknown(data['command_id']!, _commandIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_commandIdMeta);
+    }
+    if (data.containsKey('protocol_version')) {
+      context.handle(
+        _protocolVersionMeta,
+        protocolVersion.isAcceptableOrUnknown(
+          data['protocol_version']!,
+          _protocolVersionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_protocolVersionMeta);
+    }
+    if (data.containsKey('command_type')) {
+      context.handle(
+        _commandTypeMeta,
+        commandType.isAcceptableOrUnknown(
+          data['command_type']!,
+          _commandTypeMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_commandTypeMeta);
+    }
+    if (data.containsKey('device_id')) {
+      context.handle(
+        _deviceIdMeta,
+        deviceId.isAcceptableOrUnknown(data['device_id']!, _deviceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_deviceIdMeta);
+    }
+    if (data.containsKey('aggregate_id')) {
+      context.handle(
+        _aggregateIdMeta,
+        aggregateId.isAcceptableOrUnknown(
+          data['aggregate_id']!,
+          _aggregateIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_aggregateIdMeta);
+    }
+    if (data.containsKey('base_revision')) {
+      context.handle(
+        _baseRevisionMeta,
+        baseRevision.isAcceptableOrUnknown(
+          data['base_revision']!,
+          _baseRevisionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_baseRevisionMeta);
+    }
+    if (data.containsKey('payload_json')) {
+      context.handle(
+        _payloadJsonMeta,
+        payloadJson.isAcceptableOrUnknown(
+          data['payload_json']!,
+          _payloadJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_payloadJsonMeta);
+    }
+    if (data.containsKey('created_at_utc')) {
+      context.handle(
+        _createdAtUtcMeta,
+        createdAtUtc.isAcceptableOrUnknown(
+          data['created_at_utc']!,
+          _createdAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtUtcMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_statusMeta);
+    }
+    if (data.containsKey('attempt_count')) {
+      context.handle(
+        _attemptCountMeta,
+        attemptCount.isAcceptableOrUnknown(
+          data['attempt_count']!,
+          _attemptCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('next_attempt_at_utc')) {
+      context.handle(
+        _nextAttemptAtUtcMeta,
+        nextAttemptAtUtc.isAcceptableOrUnknown(
+          data['next_attempt_at_utc']!,
+          _nextAttemptAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_nextAttemptAtUtcMeta);
+    }
+    if (data.containsKey('lease_owner')) {
+      context.handle(
+        _leaseOwnerMeta,
+        leaseOwner.isAcceptableOrUnknown(data['lease_owner']!, _leaseOwnerMeta),
+      );
+    }
+    if (data.containsKey('lease_expires_at_utc')) {
+      context.handle(
+        _leaseExpiresAtUtcMeta,
+        leaseExpiresAtUtc.isAcceptableOrUnknown(
+          data['lease_expires_at_utc']!,
+          _leaseExpiresAtUtcMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_failure_code')) {
+      context.handle(
+        _lastFailureCodeMeta,
+        lastFailureCode.isAcceptableOrUnknown(
+          data['last_failure_code']!,
+          _lastFailureCodeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('completed_at_utc')) {
+      context.handle(
+        _completedAtUtcMeta,
+        completedAtUtc.isAcceptableOrUnknown(
+          data['completed_at_utc']!,
+          _completedAtUtcMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {commandId};
+  @override
+  DbSyncOutboxData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DbSyncOutboxData(
+      commandId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}command_id'],
+      )!,
+      protocolVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}protocol_version'],
+      )!,
+      commandType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}command_type'],
+      )!,
+      deviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}device_id'],
+      )!,
+      aggregateId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}aggregate_id'],
+      )!,
+      baseRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}base_revision'],
+      )!,
+      payloadJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payload_json'],
+      )!,
+      createdAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at_utc'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      attemptCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}attempt_count'],
+      )!,
+      nextAttemptAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}next_attempt_at_utc'],
+      )!,
+      leaseOwner: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}lease_owner'],
+      ),
+      leaseExpiresAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}lease_expires_at_utc'],
+      ),
+      lastFailureCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_failure_code'],
+      ),
+      completedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}completed_at_utc'],
+      ),
+    );
+  }
+
+  @override
+  $DbSyncOutboxTable createAlias(String alias) {
+    return $DbSyncOutboxTable(attachedDatabase, alias);
+  }
+}
+
+class DbSyncOutboxData extends DataClass
+    implements Insertable<DbSyncOutboxData> {
+  final String commandId;
+  final int protocolVersion;
+  final String commandType;
+  final String deviceId;
+  final String aggregateId;
+  final int baseRevision;
+  final String payloadJson;
+  final DateTime createdAtUtc;
+  final String status;
+  final int attemptCount;
+  final DateTime nextAttemptAtUtc;
+  final String? leaseOwner;
+  final DateTime? leaseExpiresAtUtc;
+  final String? lastFailureCode;
+  final DateTime? completedAtUtc;
+  const DbSyncOutboxData({
+    required this.commandId,
+    required this.protocolVersion,
+    required this.commandType,
+    required this.deviceId,
+    required this.aggregateId,
+    required this.baseRevision,
+    required this.payloadJson,
+    required this.createdAtUtc,
+    required this.status,
+    required this.attemptCount,
+    required this.nextAttemptAtUtc,
+    this.leaseOwner,
+    this.leaseExpiresAtUtc,
+    this.lastFailureCode,
+    this.completedAtUtc,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['command_id'] = Variable<String>(commandId);
+    map['protocol_version'] = Variable<int>(protocolVersion);
+    map['command_type'] = Variable<String>(commandType);
+    map['device_id'] = Variable<String>(deviceId);
+    map['aggregate_id'] = Variable<String>(aggregateId);
+    map['base_revision'] = Variable<int>(baseRevision);
+    map['payload_json'] = Variable<String>(payloadJson);
+    map['created_at_utc'] = Variable<DateTime>(createdAtUtc);
+    map['status'] = Variable<String>(status);
+    map['attempt_count'] = Variable<int>(attemptCount);
+    map['next_attempt_at_utc'] = Variable<DateTime>(nextAttemptAtUtc);
+    if (!nullToAbsent || leaseOwner != null) {
+      map['lease_owner'] = Variable<String>(leaseOwner);
+    }
+    if (!nullToAbsent || leaseExpiresAtUtc != null) {
+      map['lease_expires_at_utc'] = Variable<DateTime>(leaseExpiresAtUtc);
+    }
+    if (!nullToAbsent || lastFailureCode != null) {
+      map['last_failure_code'] = Variable<String>(lastFailureCode);
+    }
+    if (!nullToAbsent || completedAtUtc != null) {
+      map['completed_at_utc'] = Variable<DateTime>(completedAtUtc);
+    }
+    return map;
+  }
+
+  DbSyncOutboxCompanion toCompanion(bool nullToAbsent) {
+    return DbSyncOutboxCompanion(
+      commandId: Value(commandId),
+      protocolVersion: Value(protocolVersion),
+      commandType: Value(commandType),
+      deviceId: Value(deviceId),
+      aggregateId: Value(aggregateId),
+      baseRevision: Value(baseRevision),
+      payloadJson: Value(payloadJson),
+      createdAtUtc: Value(createdAtUtc),
+      status: Value(status),
+      attemptCount: Value(attemptCount),
+      nextAttemptAtUtc: Value(nextAttemptAtUtc),
+      leaseOwner: leaseOwner == null && nullToAbsent
+          ? const Value.absent()
+          : Value(leaseOwner),
+      leaseExpiresAtUtc: leaseExpiresAtUtc == null && nullToAbsent
+          ? const Value.absent()
+          : Value(leaseExpiresAtUtc),
+      lastFailureCode: lastFailureCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastFailureCode),
+      completedAtUtc: completedAtUtc == null && nullToAbsent
+          ? const Value.absent()
+          : Value(completedAtUtc),
+    );
+  }
+
+  factory DbSyncOutboxData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DbSyncOutboxData(
+      commandId: serializer.fromJson<String>(json['commandId']),
+      protocolVersion: serializer.fromJson<int>(json['protocolVersion']),
+      commandType: serializer.fromJson<String>(json['commandType']),
+      deviceId: serializer.fromJson<String>(json['deviceId']),
+      aggregateId: serializer.fromJson<String>(json['aggregateId']),
+      baseRevision: serializer.fromJson<int>(json['baseRevision']),
+      payloadJson: serializer.fromJson<String>(json['payloadJson']),
+      createdAtUtc: serializer.fromJson<DateTime>(json['createdAtUtc']),
+      status: serializer.fromJson<String>(json['status']),
+      attemptCount: serializer.fromJson<int>(json['attemptCount']),
+      nextAttemptAtUtc: serializer.fromJson<DateTime>(json['nextAttemptAtUtc']),
+      leaseOwner: serializer.fromJson<String?>(json['leaseOwner']),
+      leaseExpiresAtUtc: serializer.fromJson<DateTime?>(
+        json['leaseExpiresAtUtc'],
+      ),
+      lastFailureCode: serializer.fromJson<String?>(json['lastFailureCode']),
+      completedAtUtc: serializer.fromJson<DateTime?>(json['completedAtUtc']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'commandId': serializer.toJson<String>(commandId),
+      'protocolVersion': serializer.toJson<int>(protocolVersion),
+      'commandType': serializer.toJson<String>(commandType),
+      'deviceId': serializer.toJson<String>(deviceId),
+      'aggregateId': serializer.toJson<String>(aggregateId),
+      'baseRevision': serializer.toJson<int>(baseRevision),
+      'payloadJson': serializer.toJson<String>(payloadJson),
+      'createdAtUtc': serializer.toJson<DateTime>(createdAtUtc),
+      'status': serializer.toJson<String>(status),
+      'attemptCount': serializer.toJson<int>(attemptCount),
+      'nextAttemptAtUtc': serializer.toJson<DateTime>(nextAttemptAtUtc),
+      'leaseOwner': serializer.toJson<String?>(leaseOwner),
+      'leaseExpiresAtUtc': serializer.toJson<DateTime?>(leaseExpiresAtUtc),
+      'lastFailureCode': serializer.toJson<String?>(lastFailureCode),
+      'completedAtUtc': serializer.toJson<DateTime?>(completedAtUtc),
+    };
+  }
+
+  DbSyncOutboxData copyWith({
+    String? commandId,
+    int? protocolVersion,
+    String? commandType,
+    String? deviceId,
+    String? aggregateId,
+    int? baseRevision,
+    String? payloadJson,
+    DateTime? createdAtUtc,
+    String? status,
+    int? attemptCount,
+    DateTime? nextAttemptAtUtc,
+    Value<String?> leaseOwner = const Value.absent(),
+    Value<DateTime?> leaseExpiresAtUtc = const Value.absent(),
+    Value<String?> lastFailureCode = const Value.absent(),
+    Value<DateTime?> completedAtUtc = const Value.absent(),
+  }) => DbSyncOutboxData(
+    commandId: commandId ?? this.commandId,
+    protocolVersion: protocolVersion ?? this.protocolVersion,
+    commandType: commandType ?? this.commandType,
+    deviceId: deviceId ?? this.deviceId,
+    aggregateId: aggregateId ?? this.aggregateId,
+    baseRevision: baseRevision ?? this.baseRevision,
+    payloadJson: payloadJson ?? this.payloadJson,
+    createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+    status: status ?? this.status,
+    attemptCount: attemptCount ?? this.attemptCount,
+    nextAttemptAtUtc: nextAttemptAtUtc ?? this.nextAttemptAtUtc,
+    leaseOwner: leaseOwner.present ? leaseOwner.value : this.leaseOwner,
+    leaseExpiresAtUtc: leaseExpiresAtUtc.present
+        ? leaseExpiresAtUtc.value
+        : this.leaseExpiresAtUtc,
+    lastFailureCode: lastFailureCode.present
+        ? lastFailureCode.value
+        : this.lastFailureCode,
+    completedAtUtc: completedAtUtc.present
+        ? completedAtUtc.value
+        : this.completedAtUtc,
+  );
+  DbSyncOutboxData copyWithCompanion(DbSyncOutboxCompanion data) {
+    return DbSyncOutboxData(
+      commandId: data.commandId.present ? data.commandId.value : this.commandId,
+      protocolVersion: data.protocolVersion.present
+          ? data.protocolVersion.value
+          : this.protocolVersion,
+      commandType: data.commandType.present
+          ? data.commandType.value
+          : this.commandType,
+      deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
+      aggregateId: data.aggregateId.present
+          ? data.aggregateId.value
+          : this.aggregateId,
+      baseRevision: data.baseRevision.present
+          ? data.baseRevision.value
+          : this.baseRevision,
+      payloadJson: data.payloadJson.present
+          ? data.payloadJson.value
+          : this.payloadJson,
+      createdAtUtc: data.createdAtUtc.present
+          ? data.createdAtUtc.value
+          : this.createdAtUtc,
+      status: data.status.present ? data.status.value : this.status,
+      attemptCount: data.attemptCount.present
+          ? data.attemptCount.value
+          : this.attemptCount,
+      nextAttemptAtUtc: data.nextAttemptAtUtc.present
+          ? data.nextAttemptAtUtc.value
+          : this.nextAttemptAtUtc,
+      leaseOwner: data.leaseOwner.present
+          ? data.leaseOwner.value
+          : this.leaseOwner,
+      leaseExpiresAtUtc: data.leaseExpiresAtUtc.present
+          ? data.leaseExpiresAtUtc.value
+          : this.leaseExpiresAtUtc,
+      lastFailureCode: data.lastFailureCode.present
+          ? data.lastFailureCode.value
+          : this.lastFailureCode,
+      completedAtUtc: data.completedAtUtc.present
+          ? data.completedAtUtc.value
+          : this.completedAtUtc,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbSyncOutboxData(')
+          ..write('commandId: $commandId, ')
+          ..write('protocolVersion: $protocolVersion, ')
+          ..write('commandType: $commandType, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('aggregateId: $aggregateId, ')
+          ..write('baseRevision: $baseRevision, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('status: $status, ')
+          ..write('attemptCount: $attemptCount, ')
+          ..write('nextAttemptAtUtc: $nextAttemptAtUtc, ')
+          ..write('leaseOwner: $leaseOwner, ')
+          ..write('leaseExpiresAtUtc: $leaseExpiresAtUtc, ')
+          ..write('lastFailureCode: $lastFailureCode, ')
+          ..write('completedAtUtc: $completedAtUtc')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    commandId,
+    protocolVersion,
+    commandType,
+    deviceId,
+    aggregateId,
+    baseRevision,
+    payloadJson,
+    createdAtUtc,
+    status,
+    attemptCount,
+    nextAttemptAtUtc,
+    leaseOwner,
+    leaseExpiresAtUtc,
+    lastFailureCode,
+    completedAtUtc,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DbSyncOutboxData &&
+          other.commandId == this.commandId &&
+          other.protocolVersion == this.protocolVersion &&
+          other.commandType == this.commandType &&
+          other.deviceId == this.deviceId &&
+          other.aggregateId == this.aggregateId &&
+          other.baseRevision == this.baseRevision &&
+          other.payloadJson == this.payloadJson &&
+          other.createdAtUtc == this.createdAtUtc &&
+          other.status == this.status &&
+          other.attemptCount == this.attemptCount &&
+          other.nextAttemptAtUtc == this.nextAttemptAtUtc &&
+          other.leaseOwner == this.leaseOwner &&
+          other.leaseExpiresAtUtc == this.leaseExpiresAtUtc &&
+          other.lastFailureCode == this.lastFailureCode &&
+          other.completedAtUtc == this.completedAtUtc);
+}
+
+class DbSyncOutboxCompanion extends UpdateCompanion<DbSyncOutboxData> {
+  final Value<String> commandId;
+  final Value<int> protocolVersion;
+  final Value<String> commandType;
+  final Value<String> deviceId;
+  final Value<String> aggregateId;
+  final Value<int> baseRevision;
+  final Value<String> payloadJson;
+  final Value<DateTime> createdAtUtc;
+  final Value<String> status;
+  final Value<int> attemptCount;
+  final Value<DateTime> nextAttemptAtUtc;
+  final Value<String?> leaseOwner;
+  final Value<DateTime?> leaseExpiresAtUtc;
+  final Value<String?> lastFailureCode;
+  final Value<DateTime?> completedAtUtc;
+  final Value<int> rowid;
+  const DbSyncOutboxCompanion({
+    this.commandId = const Value.absent(),
+    this.protocolVersion = const Value.absent(),
+    this.commandType = const Value.absent(),
+    this.deviceId = const Value.absent(),
+    this.aggregateId = const Value.absent(),
+    this.baseRevision = const Value.absent(),
+    this.payloadJson = const Value.absent(),
+    this.createdAtUtc = const Value.absent(),
+    this.status = const Value.absent(),
+    this.attemptCount = const Value.absent(),
+    this.nextAttemptAtUtc = const Value.absent(),
+    this.leaseOwner = const Value.absent(),
+    this.leaseExpiresAtUtc = const Value.absent(),
+    this.lastFailureCode = const Value.absent(),
+    this.completedAtUtc = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DbSyncOutboxCompanion.insert({
+    required String commandId,
+    required int protocolVersion,
+    required String commandType,
+    required String deviceId,
+    required String aggregateId,
+    required int baseRevision,
+    required String payloadJson,
+    required DateTime createdAtUtc,
+    required String status,
+    this.attemptCount = const Value.absent(),
+    required DateTime nextAttemptAtUtc,
+    this.leaseOwner = const Value.absent(),
+    this.leaseExpiresAtUtc = const Value.absent(),
+    this.lastFailureCode = const Value.absent(),
+    this.completedAtUtc = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : commandId = Value(commandId),
+       protocolVersion = Value(protocolVersion),
+       commandType = Value(commandType),
+       deviceId = Value(deviceId),
+       aggregateId = Value(aggregateId),
+       baseRevision = Value(baseRevision),
+       payloadJson = Value(payloadJson),
+       createdAtUtc = Value(createdAtUtc),
+       status = Value(status),
+       nextAttemptAtUtc = Value(nextAttemptAtUtc);
+  static Insertable<DbSyncOutboxData> custom({
+    Expression<String>? commandId,
+    Expression<int>? protocolVersion,
+    Expression<String>? commandType,
+    Expression<String>? deviceId,
+    Expression<String>? aggregateId,
+    Expression<int>? baseRevision,
+    Expression<String>? payloadJson,
+    Expression<DateTime>? createdAtUtc,
+    Expression<String>? status,
+    Expression<int>? attemptCount,
+    Expression<DateTime>? nextAttemptAtUtc,
+    Expression<String>? leaseOwner,
+    Expression<DateTime>? leaseExpiresAtUtc,
+    Expression<String>? lastFailureCode,
+    Expression<DateTime>? completedAtUtc,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (commandId != null) 'command_id': commandId,
+      if (protocolVersion != null) 'protocol_version': protocolVersion,
+      if (commandType != null) 'command_type': commandType,
+      if (deviceId != null) 'device_id': deviceId,
+      if (aggregateId != null) 'aggregate_id': aggregateId,
+      if (baseRevision != null) 'base_revision': baseRevision,
+      if (payloadJson != null) 'payload_json': payloadJson,
+      if (createdAtUtc != null) 'created_at_utc': createdAtUtc,
+      if (status != null) 'status': status,
+      if (attemptCount != null) 'attempt_count': attemptCount,
+      if (nextAttemptAtUtc != null) 'next_attempt_at_utc': nextAttemptAtUtc,
+      if (leaseOwner != null) 'lease_owner': leaseOwner,
+      if (leaseExpiresAtUtc != null) 'lease_expires_at_utc': leaseExpiresAtUtc,
+      if (lastFailureCode != null) 'last_failure_code': lastFailureCode,
+      if (completedAtUtc != null) 'completed_at_utc': completedAtUtc,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DbSyncOutboxCompanion copyWith({
+    Value<String>? commandId,
+    Value<int>? protocolVersion,
+    Value<String>? commandType,
+    Value<String>? deviceId,
+    Value<String>? aggregateId,
+    Value<int>? baseRevision,
+    Value<String>? payloadJson,
+    Value<DateTime>? createdAtUtc,
+    Value<String>? status,
+    Value<int>? attemptCount,
+    Value<DateTime>? nextAttemptAtUtc,
+    Value<String?>? leaseOwner,
+    Value<DateTime?>? leaseExpiresAtUtc,
+    Value<String?>? lastFailureCode,
+    Value<DateTime?>? completedAtUtc,
+    Value<int>? rowid,
+  }) {
+    return DbSyncOutboxCompanion(
+      commandId: commandId ?? this.commandId,
+      protocolVersion: protocolVersion ?? this.protocolVersion,
+      commandType: commandType ?? this.commandType,
+      deviceId: deviceId ?? this.deviceId,
+      aggregateId: aggregateId ?? this.aggregateId,
+      baseRevision: baseRevision ?? this.baseRevision,
+      payloadJson: payloadJson ?? this.payloadJson,
+      createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+      status: status ?? this.status,
+      attemptCount: attemptCount ?? this.attemptCount,
+      nextAttemptAtUtc: nextAttemptAtUtc ?? this.nextAttemptAtUtc,
+      leaseOwner: leaseOwner ?? this.leaseOwner,
+      leaseExpiresAtUtc: leaseExpiresAtUtc ?? this.leaseExpiresAtUtc,
+      lastFailureCode: lastFailureCode ?? this.lastFailureCode,
+      completedAtUtc: completedAtUtc ?? this.completedAtUtc,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (commandId.present) {
+      map['command_id'] = Variable<String>(commandId.value);
+    }
+    if (protocolVersion.present) {
+      map['protocol_version'] = Variable<int>(protocolVersion.value);
+    }
+    if (commandType.present) {
+      map['command_type'] = Variable<String>(commandType.value);
+    }
+    if (deviceId.present) {
+      map['device_id'] = Variable<String>(deviceId.value);
+    }
+    if (aggregateId.present) {
+      map['aggregate_id'] = Variable<String>(aggregateId.value);
+    }
+    if (baseRevision.present) {
+      map['base_revision'] = Variable<int>(baseRevision.value);
+    }
+    if (payloadJson.present) {
+      map['payload_json'] = Variable<String>(payloadJson.value);
+    }
+    if (createdAtUtc.present) {
+      map['created_at_utc'] = Variable<DateTime>(createdAtUtc.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (attemptCount.present) {
+      map['attempt_count'] = Variable<int>(attemptCount.value);
+    }
+    if (nextAttemptAtUtc.present) {
+      map['next_attempt_at_utc'] = Variable<DateTime>(nextAttemptAtUtc.value);
+    }
+    if (leaseOwner.present) {
+      map['lease_owner'] = Variable<String>(leaseOwner.value);
+    }
+    if (leaseExpiresAtUtc.present) {
+      map['lease_expires_at_utc'] = Variable<DateTime>(leaseExpiresAtUtc.value);
+    }
+    if (lastFailureCode.present) {
+      map['last_failure_code'] = Variable<String>(lastFailureCode.value);
+    }
+    if (completedAtUtc.present) {
+      map['completed_at_utc'] = Variable<DateTime>(completedAtUtc.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbSyncOutboxCompanion(')
+          ..write('commandId: $commandId, ')
+          ..write('protocolVersion: $protocolVersion, ')
+          ..write('commandType: $commandType, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('aggregateId: $aggregateId, ')
+          ..write('baseRevision: $baseRevision, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('status: $status, ')
+          ..write('attemptCount: $attemptCount, ')
+          ..write('nextAttemptAtUtc: $nextAttemptAtUtc, ')
+          ..write('leaseOwner: $leaseOwner, ')
+          ..write('leaseExpiresAtUtc: $leaseExpiresAtUtc, ')
+          ..write('lastFailureCode: $lastFailureCode, ')
+          ..write('completedAtUtc: $completedAtUtc, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $DbContactRecordsTable extends DbContactRecords
     with TableInfo<$DbContactRecordsTable, DbContactRecord> {
   @override
@@ -1195,133 +2117,23 @@ class DbContactRecordsCompanion extends UpdateCompanion<DbContactRecord> {
   }
 }
 
-class $DbSyncOutboxTable extends DbSyncOutbox
-    with TableInfo<$DbSyncOutboxTable, DbSyncOutboxData> {
+class $DbSyncDrainerLeasesTable extends DbSyncDrainerLeases
+    with TableInfo<$DbSyncDrainerLeasesTable, DbSyncDrainerLease> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
-  $DbSyncOutboxTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _commandIdMeta = const VerificationMeta(
-    'commandId',
+  $DbSyncDrainerLeasesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _leaseNameMeta = const VerificationMeta(
+    'leaseName',
   );
   @override
-  late final GeneratedColumn<String> commandId = GeneratedColumn<String>(
-    'command_id',
+  late final GeneratedColumn<String> leaseName = GeneratedColumn<String>(
+    'lease_name',
     aliasedName,
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _protocolVersionMeta = const VerificationMeta(
-    'protocolVersion',
-  );
-  @override
-  late final GeneratedColumn<int> protocolVersion = GeneratedColumn<int>(
-    'protocol_version',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _commandTypeMeta = const VerificationMeta(
-    'commandType',
-  );
-  @override
-  late final GeneratedColumn<String> commandType = GeneratedColumn<String>(
-    'command_type',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _deviceIdMeta = const VerificationMeta(
-    'deviceId',
-  );
-  @override
-  late final GeneratedColumn<String> deviceId = GeneratedColumn<String>(
-    'device_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _aggregateIdMeta = const VerificationMeta(
-    'aggregateId',
-  );
-  @override
-  late final GeneratedColumn<String> aggregateId = GeneratedColumn<String>(
-    'aggregate_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _baseRevisionMeta = const VerificationMeta(
-    'baseRevision',
-  );
-  @override
-  late final GeneratedColumn<int> baseRevision = GeneratedColumn<int>(
-    'base_revision',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _payloadJsonMeta = const VerificationMeta(
-    'payloadJson',
-  );
-  @override
-  late final GeneratedColumn<String> payloadJson = GeneratedColumn<String>(
-    'payload_json',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _createdAtUtcMeta = const VerificationMeta(
-    'createdAtUtc',
-  );
-  @override
-  late final GeneratedColumn<DateTime> createdAtUtc = GeneratedColumn<DateTime>(
-    'created_at_utc',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _statusMeta = const VerificationMeta('status');
-  @override
-  late final GeneratedColumn<String> status = GeneratedColumn<String>(
-    'status',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _attemptCountMeta = const VerificationMeta(
-    'attemptCount',
-  );
-  @override
-  late final GeneratedColumn<int> attemptCount = GeneratedColumn<int>(
-    'attempt_count',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0),
-  );
-  static const VerificationMeta _nextAttemptAtUtcMeta = const VerificationMeta(
-    'nextAttemptAtUtc',
-  );
-  @override
-  late final GeneratedColumn<DateTime> nextAttemptAtUtc =
-      GeneratedColumn<DateTime>(
-        'next_attempt_at_utc',
-        aliasedName,
-        false,
-        type: DriftSqlType.dateTime,
-        requiredDuringInsert: true,
-      );
   static const VerificationMeta _leaseOwnerMeta = const VerificationMeta(
     'leaseOwner',
   );
@@ -1329,9 +2141,9 @@ class $DbSyncOutboxTable extends DbSyncOutbox
   late final GeneratedColumn<String> leaseOwner = GeneratedColumn<String>(
     'lease_owner',
     aliasedName,
-    true,
+    false,
     type: DriftSqlType.string,
-    requiredDuringInsert: false,
+    requiredDuringInsert: true,
   );
   static const VerificationMeta _leaseExpiresAtUtcMeta = const VerificationMeta(
     'leaseExpiresAtUtc',
@@ -1340,6 +2152,312 @@ class $DbSyncOutboxTable extends DbSyncOutbox
   late final GeneratedColumn<DateTime> leaseExpiresAtUtc =
       GeneratedColumn<DateTime>(
         'lease_expires_at_utc',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      );
+  @override
+  List<GeneratedColumn> get $columns => [
+    leaseName,
+    leaseOwner,
+    leaseExpiresAtUtc,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'db_sync_drainer_leases';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DbSyncDrainerLease> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('lease_name')) {
+      context.handle(
+        _leaseNameMeta,
+        leaseName.isAcceptableOrUnknown(data['lease_name']!, _leaseNameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_leaseNameMeta);
+    }
+    if (data.containsKey('lease_owner')) {
+      context.handle(
+        _leaseOwnerMeta,
+        leaseOwner.isAcceptableOrUnknown(data['lease_owner']!, _leaseOwnerMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_leaseOwnerMeta);
+    }
+    if (data.containsKey('lease_expires_at_utc')) {
+      context.handle(
+        _leaseExpiresAtUtcMeta,
+        leaseExpiresAtUtc.isAcceptableOrUnknown(
+          data['lease_expires_at_utc']!,
+          _leaseExpiresAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_leaseExpiresAtUtcMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {leaseName};
+  @override
+  DbSyncDrainerLease map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DbSyncDrainerLease(
+      leaseName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}lease_name'],
+      )!,
+      leaseOwner: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}lease_owner'],
+      )!,
+      leaseExpiresAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}lease_expires_at_utc'],
+      )!,
+    );
+  }
+
+  @override
+  $DbSyncDrainerLeasesTable createAlias(String alias) {
+    return $DbSyncDrainerLeasesTable(attachedDatabase, alias);
+  }
+}
+
+class DbSyncDrainerLease extends DataClass
+    implements Insertable<DbSyncDrainerLease> {
+  final String leaseName;
+  final String leaseOwner;
+  final DateTime leaseExpiresAtUtc;
+  const DbSyncDrainerLease({
+    required this.leaseName,
+    required this.leaseOwner,
+    required this.leaseExpiresAtUtc,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['lease_name'] = Variable<String>(leaseName);
+    map['lease_owner'] = Variable<String>(leaseOwner);
+    map['lease_expires_at_utc'] = Variable<DateTime>(leaseExpiresAtUtc);
+    return map;
+  }
+
+  DbSyncDrainerLeasesCompanion toCompanion(bool nullToAbsent) {
+    return DbSyncDrainerLeasesCompanion(
+      leaseName: Value(leaseName),
+      leaseOwner: Value(leaseOwner),
+      leaseExpiresAtUtc: Value(leaseExpiresAtUtc),
+    );
+  }
+
+  factory DbSyncDrainerLease.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DbSyncDrainerLease(
+      leaseName: serializer.fromJson<String>(json['leaseName']),
+      leaseOwner: serializer.fromJson<String>(json['leaseOwner']),
+      leaseExpiresAtUtc: serializer.fromJson<DateTime>(
+        json['leaseExpiresAtUtc'],
+      ),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'leaseName': serializer.toJson<String>(leaseName),
+      'leaseOwner': serializer.toJson<String>(leaseOwner),
+      'leaseExpiresAtUtc': serializer.toJson<DateTime>(leaseExpiresAtUtc),
+    };
+  }
+
+  DbSyncDrainerLease copyWith({
+    String? leaseName,
+    String? leaseOwner,
+    DateTime? leaseExpiresAtUtc,
+  }) => DbSyncDrainerLease(
+    leaseName: leaseName ?? this.leaseName,
+    leaseOwner: leaseOwner ?? this.leaseOwner,
+    leaseExpiresAtUtc: leaseExpiresAtUtc ?? this.leaseExpiresAtUtc,
+  );
+  DbSyncDrainerLease copyWithCompanion(DbSyncDrainerLeasesCompanion data) {
+    return DbSyncDrainerLease(
+      leaseName: data.leaseName.present ? data.leaseName.value : this.leaseName,
+      leaseOwner: data.leaseOwner.present
+          ? data.leaseOwner.value
+          : this.leaseOwner,
+      leaseExpiresAtUtc: data.leaseExpiresAtUtc.present
+          ? data.leaseExpiresAtUtc.value
+          : this.leaseExpiresAtUtc,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbSyncDrainerLease(')
+          ..write('leaseName: $leaseName, ')
+          ..write('leaseOwner: $leaseOwner, ')
+          ..write('leaseExpiresAtUtc: $leaseExpiresAtUtc')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(leaseName, leaseOwner, leaseExpiresAtUtc);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DbSyncDrainerLease &&
+          other.leaseName == this.leaseName &&
+          other.leaseOwner == this.leaseOwner &&
+          other.leaseExpiresAtUtc == this.leaseExpiresAtUtc);
+}
+
+class DbSyncDrainerLeasesCompanion extends UpdateCompanion<DbSyncDrainerLease> {
+  final Value<String> leaseName;
+  final Value<String> leaseOwner;
+  final Value<DateTime> leaseExpiresAtUtc;
+  final Value<int> rowid;
+  const DbSyncDrainerLeasesCompanion({
+    this.leaseName = const Value.absent(),
+    this.leaseOwner = const Value.absent(),
+    this.leaseExpiresAtUtc = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DbSyncDrainerLeasesCompanion.insert({
+    required String leaseName,
+    required String leaseOwner,
+    required DateTime leaseExpiresAtUtc,
+    this.rowid = const Value.absent(),
+  }) : leaseName = Value(leaseName),
+       leaseOwner = Value(leaseOwner),
+       leaseExpiresAtUtc = Value(leaseExpiresAtUtc);
+  static Insertable<DbSyncDrainerLease> custom({
+    Expression<String>? leaseName,
+    Expression<String>? leaseOwner,
+    Expression<DateTime>? leaseExpiresAtUtc,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (leaseName != null) 'lease_name': leaseName,
+      if (leaseOwner != null) 'lease_owner': leaseOwner,
+      if (leaseExpiresAtUtc != null) 'lease_expires_at_utc': leaseExpiresAtUtc,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DbSyncDrainerLeasesCompanion copyWith({
+    Value<String>? leaseName,
+    Value<String>? leaseOwner,
+    Value<DateTime>? leaseExpiresAtUtc,
+    Value<int>? rowid,
+  }) {
+    return DbSyncDrainerLeasesCompanion(
+      leaseName: leaseName ?? this.leaseName,
+      leaseOwner: leaseOwner ?? this.leaseOwner,
+      leaseExpiresAtUtc: leaseExpiresAtUtc ?? this.leaseExpiresAtUtc,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (leaseName.present) {
+      map['lease_name'] = Variable<String>(leaseName.value);
+    }
+    if (leaseOwner.present) {
+      map['lease_owner'] = Variable<String>(leaseOwner.value);
+    }
+    if (leaseExpiresAtUtc.present) {
+      map['lease_expires_at_utc'] = Variable<DateTime>(leaseExpiresAtUtc.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbSyncDrainerLeasesCompanion(')
+          ..write('leaseName: $leaseName, ')
+          ..write('leaseOwner: $leaseOwner, ')
+          ..write('leaseExpiresAtUtc: $leaseExpiresAtUtc, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $DbSyncScopesTable extends DbSyncScopes
+    with TableInfo<$DbSyncScopesTable, DbSyncScope> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DbSyncScopesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _appUserIdMeta = const VerificationMeta(
+    'appUserId',
+  );
+  @override
+  late final GeneratedColumn<String> appUserId = GeneratedColumn<String>(
+    'app_user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _workspaceIdMeta = const VerificationMeta(
+    'workspaceId',
+  );
+  @override
+  late final GeneratedColumn<String> workspaceId = GeneratedColumn<String>(
+    'workspace_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<String> projectId = GeneratedColumn<String>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _serverCursorMeta = const VerificationMeta(
+    'serverCursor',
+  );
+  @override
+  late final GeneratedColumn<String> serverCursor = GeneratedColumn<String>(
+    'server_cursor',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastSuccessAtUtcMeta = const VerificationMeta(
+    'lastSuccessAtUtc',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastSuccessAtUtc =
+      GeneratedColumn<DateTime>(
+        'last_success_at_utc',
         aliasedName,
         true,
         type: DriftSqlType.dateTime,
@@ -1356,170 +2474,81 @@ class $DbSyncOutboxTable extends DbSyncOutbox
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _completedAtUtcMeta = const VerificationMeta(
-    'completedAtUtc',
+  static const VerificationMeta _updatedAtUtcMeta = const VerificationMeta(
+    'updatedAtUtc',
   );
   @override
-  late final GeneratedColumn<DateTime> completedAtUtc =
-      GeneratedColumn<DateTime>(
-        'completed_at_utc',
-        aliasedName,
-        true,
-        type: DriftSqlType.dateTime,
-        requiredDuringInsert: false,
-      );
+  late final GeneratedColumn<DateTime> updatedAtUtc = GeneratedColumn<DateTime>(
+    'updated_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
   @override
   List<GeneratedColumn> get $columns => [
-    commandId,
-    protocolVersion,
-    commandType,
-    deviceId,
-    aggregateId,
-    baseRevision,
-    payloadJson,
-    createdAtUtc,
-    status,
-    attemptCount,
-    nextAttemptAtUtc,
-    leaseOwner,
-    leaseExpiresAtUtc,
+    appUserId,
+    workspaceId,
+    projectId,
+    serverCursor,
+    lastSuccessAtUtc,
     lastFailureCode,
-    completedAtUtc,
+    updatedAtUtc,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
   String get actualTableName => $name;
-  static const String $name = 'db_sync_outbox';
+  static const String $name = 'db_sync_scopes';
   @override
   VerificationContext validateIntegrity(
-    Insertable<DbSyncOutboxData> instance, {
+    Insertable<DbSyncScope> instance, {
     bool isInserting = false,
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
-    if (data.containsKey('command_id')) {
+    if (data.containsKey('app_user_id')) {
       context.handle(
-        _commandIdMeta,
-        commandId.isAcceptableOrUnknown(data['command_id']!, _commandIdMeta),
+        _appUserIdMeta,
+        appUserId.isAcceptableOrUnknown(data['app_user_id']!, _appUserIdMeta),
       );
     } else if (isInserting) {
-      context.missing(_commandIdMeta);
+      context.missing(_appUserIdMeta);
     }
-    if (data.containsKey('protocol_version')) {
+    if (data.containsKey('workspace_id')) {
       context.handle(
-        _protocolVersionMeta,
-        protocolVersion.isAcceptableOrUnknown(
-          data['protocol_version']!,
-          _protocolVersionMeta,
+        _workspaceIdMeta,
+        workspaceId.isAcceptableOrUnknown(
+          data['workspace_id']!,
+          _workspaceIdMeta,
         ),
       );
     } else if (isInserting) {
-      context.missing(_protocolVersionMeta);
+      context.missing(_workspaceIdMeta);
     }
-    if (data.containsKey('command_type')) {
+    if (data.containsKey('project_id')) {
       context.handle(
-        _commandTypeMeta,
-        commandType.isAcceptableOrUnknown(
-          data['command_type']!,
-          _commandTypeMeta,
-        ),
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
       );
     } else if (isInserting) {
-      context.missing(_commandTypeMeta);
+      context.missing(_projectIdMeta);
     }
-    if (data.containsKey('device_id')) {
+    if (data.containsKey('server_cursor')) {
       context.handle(
-        _deviceIdMeta,
-        deviceId.isAcceptableOrUnknown(data['device_id']!, _deviceIdMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_deviceIdMeta);
-    }
-    if (data.containsKey('aggregate_id')) {
-      context.handle(
-        _aggregateIdMeta,
-        aggregateId.isAcceptableOrUnknown(
-          data['aggregate_id']!,
-          _aggregateIdMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_aggregateIdMeta);
-    }
-    if (data.containsKey('base_revision')) {
-      context.handle(
-        _baseRevisionMeta,
-        baseRevision.isAcceptableOrUnknown(
-          data['base_revision']!,
-          _baseRevisionMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_baseRevisionMeta);
-    }
-    if (data.containsKey('payload_json')) {
-      context.handle(
-        _payloadJsonMeta,
-        payloadJson.isAcceptableOrUnknown(
-          data['payload_json']!,
-          _payloadJsonMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_payloadJsonMeta);
-    }
-    if (data.containsKey('created_at_utc')) {
-      context.handle(
-        _createdAtUtcMeta,
-        createdAtUtc.isAcceptableOrUnknown(
-          data['created_at_utc']!,
-          _createdAtUtcMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_createdAtUtcMeta);
-    }
-    if (data.containsKey('status')) {
-      context.handle(
-        _statusMeta,
-        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_statusMeta);
-    }
-    if (data.containsKey('attempt_count')) {
-      context.handle(
-        _attemptCountMeta,
-        attemptCount.isAcceptableOrUnknown(
-          data['attempt_count']!,
-          _attemptCountMeta,
+        _serverCursorMeta,
+        serverCursor.isAcceptableOrUnknown(
+          data['server_cursor']!,
+          _serverCursorMeta,
         ),
       );
     }
-    if (data.containsKey('next_attempt_at_utc')) {
+    if (data.containsKey('last_success_at_utc')) {
       context.handle(
-        _nextAttemptAtUtcMeta,
-        nextAttemptAtUtc.isAcceptableOrUnknown(
-          data['next_attempt_at_utc']!,
-          _nextAttemptAtUtcMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_nextAttemptAtUtcMeta);
-    }
-    if (data.containsKey('lease_owner')) {
-      context.handle(
-        _leaseOwnerMeta,
-        leaseOwner.isAcceptableOrUnknown(data['lease_owner']!, _leaseOwnerMeta),
-      );
-    }
-    if (data.containsKey('lease_expires_at_utc')) {
-      context.handle(
-        _leaseExpiresAtUtcMeta,
-        leaseExpiresAtUtc.isAcceptableOrUnknown(
-          data['lease_expires_at_utc']!,
-          _leaseExpiresAtUtcMeta,
+        _lastSuccessAtUtcMeta,
+        lastSuccessAtUtc.isAcceptableOrUnknown(
+          data['last_success_at_utc']!,
+          _lastSuccessAtUtcMeta,
         ),
       );
     }
@@ -1532,509 +2561,300 @@ class $DbSyncOutboxTable extends DbSyncOutbox
         ),
       );
     }
-    if (data.containsKey('completed_at_utc')) {
+    if (data.containsKey('updated_at_utc')) {
       context.handle(
-        _completedAtUtcMeta,
-        completedAtUtc.isAcceptableOrUnknown(
-          data['completed_at_utc']!,
-          _completedAtUtcMeta,
+        _updatedAtUtcMeta,
+        updatedAtUtc.isAcceptableOrUnknown(
+          data['updated_at_utc']!,
+          _updatedAtUtcMeta,
         ),
       );
+    } else if (isInserting) {
+      context.missing(_updatedAtUtcMeta);
     }
     return context;
   }
 
   @override
-  Set<GeneratedColumn> get $primaryKey => {commandId};
+  Set<GeneratedColumn> get $primaryKey => {appUserId, workspaceId, projectId};
   @override
-  DbSyncOutboxData map(Map<String, dynamic> data, {String? tablePrefix}) {
+  DbSyncScope map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return DbSyncOutboxData(
-      commandId: attachedDatabase.typeMapping.read(
+    return DbSyncScope(
+      appUserId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}command_id'],
+        data['${effectivePrefix}app_user_id'],
       )!,
-      protocolVersion: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}protocol_version'],
-      )!,
-      commandType: attachedDatabase.typeMapping.read(
+      workspaceId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}command_type'],
+        data['${effectivePrefix}workspace_id'],
       )!,
-      deviceId: attachedDatabase.typeMapping.read(
+      projectId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}device_id'],
+        data['${effectivePrefix}project_id'],
       )!,
-      aggregateId: attachedDatabase.typeMapping.read(
+      serverCursor: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}aggregate_id'],
-      )!,
-      baseRevision: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}base_revision'],
-      )!,
-      payloadJson: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}payload_json'],
-      )!,
-      createdAtUtc: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}created_at_utc'],
-      )!,
-      status: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}status'],
-      )!,
-      attemptCount: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}attempt_count'],
-      )!,
-      nextAttemptAtUtc: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}next_attempt_at_utc'],
-      )!,
-      leaseOwner: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}lease_owner'],
+        data['${effectivePrefix}server_cursor'],
       ),
-      leaseExpiresAtUtc: attachedDatabase.typeMapping.read(
+      lastSuccessAtUtc: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
-        data['${effectivePrefix}lease_expires_at_utc'],
+        data['${effectivePrefix}last_success_at_utc'],
       ),
       lastFailureCode: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}last_failure_code'],
       ),
-      completedAtUtc: attachedDatabase.typeMapping.read(
+      updatedAtUtc: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
-        data['${effectivePrefix}completed_at_utc'],
-      ),
+        data['${effectivePrefix}updated_at_utc'],
+      )!,
     );
   }
 
   @override
-  $DbSyncOutboxTable createAlias(String alias) {
-    return $DbSyncOutboxTable(attachedDatabase, alias);
+  $DbSyncScopesTable createAlias(String alias) {
+    return $DbSyncScopesTable(attachedDatabase, alias);
   }
 }
 
-class DbSyncOutboxData extends DataClass
-    implements Insertable<DbSyncOutboxData> {
-  final String commandId;
-  final int protocolVersion;
-  final String commandType;
-  final String deviceId;
-  final String aggregateId;
-  final int baseRevision;
-  final String payloadJson;
-  final DateTime createdAtUtc;
-  final String status;
-  final int attemptCount;
-  final DateTime nextAttemptAtUtc;
-  final String? leaseOwner;
-  final DateTime? leaseExpiresAtUtc;
+class DbSyncScope extends DataClass implements Insertable<DbSyncScope> {
+  final String appUserId;
+  final String workspaceId;
+  final String projectId;
+  final String? serverCursor;
+  final DateTime? lastSuccessAtUtc;
   final String? lastFailureCode;
-  final DateTime? completedAtUtc;
-  const DbSyncOutboxData({
-    required this.commandId,
-    required this.protocolVersion,
-    required this.commandType,
-    required this.deviceId,
-    required this.aggregateId,
-    required this.baseRevision,
-    required this.payloadJson,
-    required this.createdAtUtc,
-    required this.status,
-    required this.attemptCount,
-    required this.nextAttemptAtUtc,
-    this.leaseOwner,
-    this.leaseExpiresAtUtc,
+  final DateTime updatedAtUtc;
+  const DbSyncScope({
+    required this.appUserId,
+    required this.workspaceId,
+    required this.projectId,
+    this.serverCursor,
+    this.lastSuccessAtUtc,
     this.lastFailureCode,
-    this.completedAtUtc,
+    required this.updatedAtUtc,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['command_id'] = Variable<String>(commandId);
-    map['protocol_version'] = Variable<int>(protocolVersion);
-    map['command_type'] = Variable<String>(commandType);
-    map['device_id'] = Variable<String>(deviceId);
-    map['aggregate_id'] = Variable<String>(aggregateId);
-    map['base_revision'] = Variable<int>(baseRevision);
-    map['payload_json'] = Variable<String>(payloadJson);
-    map['created_at_utc'] = Variable<DateTime>(createdAtUtc);
-    map['status'] = Variable<String>(status);
-    map['attempt_count'] = Variable<int>(attemptCount);
-    map['next_attempt_at_utc'] = Variable<DateTime>(nextAttemptAtUtc);
-    if (!nullToAbsent || leaseOwner != null) {
-      map['lease_owner'] = Variable<String>(leaseOwner);
+    map['app_user_id'] = Variable<String>(appUserId);
+    map['workspace_id'] = Variable<String>(workspaceId);
+    map['project_id'] = Variable<String>(projectId);
+    if (!nullToAbsent || serverCursor != null) {
+      map['server_cursor'] = Variable<String>(serverCursor);
     }
-    if (!nullToAbsent || leaseExpiresAtUtc != null) {
-      map['lease_expires_at_utc'] = Variable<DateTime>(leaseExpiresAtUtc);
+    if (!nullToAbsent || lastSuccessAtUtc != null) {
+      map['last_success_at_utc'] = Variable<DateTime>(lastSuccessAtUtc);
     }
     if (!nullToAbsent || lastFailureCode != null) {
       map['last_failure_code'] = Variable<String>(lastFailureCode);
     }
-    if (!nullToAbsent || completedAtUtc != null) {
-      map['completed_at_utc'] = Variable<DateTime>(completedAtUtc);
-    }
+    map['updated_at_utc'] = Variable<DateTime>(updatedAtUtc);
     return map;
   }
 
-  DbSyncOutboxCompanion toCompanion(bool nullToAbsent) {
-    return DbSyncOutboxCompanion(
-      commandId: Value(commandId),
-      protocolVersion: Value(protocolVersion),
-      commandType: Value(commandType),
-      deviceId: Value(deviceId),
-      aggregateId: Value(aggregateId),
-      baseRevision: Value(baseRevision),
-      payloadJson: Value(payloadJson),
-      createdAtUtc: Value(createdAtUtc),
-      status: Value(status),
-      attemptCount: Value(attemptCount),
-      nextAttemptAtUtc: Value(nextAttemptAtUtc),
-      leaseOwner: leaseOwner == null && nullToAbsent
+  DbSyncScopesCompanion toCompanion(bool nullToAbsent) {
+    return DbSyncScopesCompanion(
+      appUserId: Value(appUserId),
+      workspaceId: Value(workspaceId),
+      projectId: Value(projectId),
+      serverCursor: serverCursor == null && nullToAbsent
           ? const Value.absent()
-          : Value(leaseOwner),
-      leaseExpiresAtUtc: leaseExpiresAtUtc == null && nullToAbsent
+          : Value(serverCursor),
+      lastSuccessAtUtc: lastSuccessAtUtc == null && nullToAbsent
           ? const Value.absent()
-          : Value(leaseExpiresAtUtc),
+          : Value(lastSuccessAtUtc),
       lastFailureCode: lastFailureCode == null && nullToAbsent
           ? const Value.absent()
           : Value(lastFailureCode),
-      completedAtUtc: completedAtUtc == null && nullToAbsent
-          ? const Value.absent()
-          : Value(completedAtUtc),
+      updatedAtUtc: Value(updatedAtUtc),
     );
   }
 
-  factory DbSyncOutboxData.fromJson(
+  factory DbSyncScope.fromJson(
     Map<String, dynamic> json, {
     ValueSerializer? serializer,
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return DbSyncOutboxData(
-      commandId: serializer.fromJson<String>(json['commandId']),
-      protocolVersion: serializer.fromJson<int>(json['protocolVersion']),
-      commandType: serializer.fromJson<String>(json['commandType']),
-      deviceId: serializer.fromJson<String>(json['deviceId']),
-      aggregateId: serializer.fromJson<String>(json['aggregateId']),
-      baseRevision: serializer.fromJson<int>(json['baseRevision']),
-      payloadJson: serializer.fromJson<String>(json['payloadJson']),
-      createdAtUtc: serializer.fromJson<DateTime>(json['createdAtUtc']),
-      status: serializer.fromJson<String>(json['status']),
-      attemptCount: serializer.fromJson<int>(json['attemptCount']),
-      nextAttemptAtUtc: serializer.fromJson<DateTime>(json['nextAttemptAtUtc']),
-      leaseOwner: serializer.fromJson<String?>(json['leaseOwner']),
-      leaseExpiresAtUtc: serializer.fromJson<DateTime?>(
-        json['leaseExpiresAtUtc'],
+    return DbSyncScope(
+      appUserId: serializer.fromJson<String>(json['appUserId']),
+      workspaceId: serializer.fromJson<String>(json['workspaceId']),
+      projectId: serializer.fromJson<String>(json['projectId']),
+      serverCursor: serializer.fromJson<String?>(json['serverCursor']),
+      lastSuccessAtUtc: serializer.fromJson<DateTime?>(
+        json['lastSuccessAtUtc'],
       ),
       lastFailureCode: serializer.fromJson<String?>(json['lastFailureCode']),
-      completedAtUtc: serializer.fromJson<DateTime?>(json['completedAtUtc']),
+      updatedAtUtc: serializer.fromJson<DateTime>(json['updatedAtUtc']),
     );
   }
   @override
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'commandId': serializer.toJson<String>(commandId),
-      'protocolVersion': serializer.toJson<int>(protocolVersion),
-      'commandType': serializer.toJson<String>(commandType),
-      'deviceId': serializer.toJson<String>(deviceId),
-      'aggregateId': serializer.toJson<String>(aggregateId),
-      'baseRevision': serializer.toJson<int>(baseRevision),
-      'payloadJson': serializer.toJson<String>(payloadJson),
-      'createdAtUtc': serializer.toJson<DateTime>(createdAtUtc),
-      'status': serializer.toJson<String>(status),
-      'attemptCount': serializer.toJson<int>(attemptCount),
-      'nextAttemptAtUtc': serializer.toJson<DateTime>(nextAttemptAtUtc),
-      'leaseOwner': serializer.toJson<String?>(leaseOwner),
-      'leaseExpiresAtUtc': serializer.toJson<DateTime?>(leaseExpiresAtUtc),
+      'appUserId': serializer.toJson<String>(appUserId),
+      'workspaceId': serializer.toJson<String>(workspaceId),
+      'projectId': serializer.toJson<String>(projectId),
+      'serverCursor': serializer.toJson<String?>(serverCursor),
+      'lastSuccessAtUtc': serializer.toJson<DateTime?>(lastSuccessAtUtc),
       'lastFailureCode': serializer.toJson<String?>(lastFailureCode),
-      'completedAtUtc': serializer.toJson<DateTime?>(completedAtUtc),
+      'updatedAtUtc': serializer.toJson<DateTime>(updatedAtUtc),
     };
   }
 
-  DbSyncOutboxData copyWith({
-    String? commandId,
-    int? protocolVersion,
-    String? commandType,
-    String? deviceId,
-    String? aggregateId,
-    int? baseRevision,
-    String? payloadJson,
-    DateTime? createdAtUtc,
-    String? status,
-    int? attemptCount,
-    DateTime? nextAttemptAtUtc,
-    Value<String?> leaseOwner = const Value.absent(),
-    Value<DateTime?> leaseExpiresAtUtc = const Value.absent(),
+  DbSyncScope copyWith({
+    String? appUserId,
+    String? workspaceId,
+    String? projectId,
+    Value<String?> serverCursor = const Value.absent(),
+    Value<DateTime?> lastSuccessAtUtc = const Value.absent(),
     Value<String?> lastFailureCode = const Value.absent(),
-    Value<DateTime?> completedAtUtc = const Value.absent(),
-  }) => DbSyncOutboxData(
-    commandId: commandId ?? this.commandId,
-    protocolVersion: protocolVersion ?? this.protocolVersion,
-    commandType: commandType ?? this.commandType,
-    deviceId: deviceId ?? this.deviceId,
-    aggregateId: aggregateId ?? this.aggregateId,
-    baseRevision: baseRevision ?? this.baseRevision,
-    payloadJson: payloadJson ?? this.payloadJson,
-    createdAtUtc: createdAtUtc ?? this.createdAtUtc,
-    status: status ?? this.status,
-    attemptCount: attemptCount ?? this.attemptCount,
-    nextAttemptAtUtc: nextAttemptAtUtc ?? this.nextAttemptAtUtc,
-    leaseOwner: leaseOwner.present ? leaseOwner.value : this.leaseOwner,
-    leaseExpiresAtUtc: leaseExpiresAtUtc.present
-        ? leaseExpiresAtUtc.value
-        : this.leaseExpiresAtUtc,
+    DateTime? updatedAtUtc,
+  }) => DbSyncScope(
+    appUserId: appUserId ?? this.appUserId,
+    workspaceId: workspaceId ?? this.workspaceId,
+    projectId: projectId ?? this.projectId,
+    serverCursor: serverCursor.present ? serverCursor.value : this.serverCursor,
+    lastSuccessAtUtc: lastSuccessAtUtc.present
+        ? lastSuccessAtUtc.value
+        : this.lastSuccessAtUtc,
     lastFailureCode: lastFailureCode.present
         ? lastFailureCode.value
         : this.lastFailureCode,
-    completedAtUtc: completedAtUtc.present
-        ? completedAtUtc.value
-        : this.completedAtUtc,
+    updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
   );
-  DbSyncOutboxData copyWithCompanion(DbSyncOutboxCompanion data) {
-    return DbSyncOutboxData(
-      commandId: data.commandId.present ? data.commandId.value : this.commandId,
-      protocolVersion: data.protocolVersion.present
-          ? data.protocolVersion.value
-          : this.protocolVersion,
-      commandType: data.commandType.present
-          ? data.commandType.value
-          : this.commandType,
-      deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
-      aggregateId: data.aggregateId.present
-          ? data.aggregateId.value
-          : this.aggregateId,
-      baseRevision: data.baseRevision.present
-          ? data.baseRevision.value
-          : this.baseRevision,
-      payloadJson: data.payloadJson.present
-          ? data.payloadJson.value
-          : this.payloadJson,
-      createdAtUtc: data.createdAtUtc.present
-          ? data.createdAtUtc.value
-          : this.createdAtUtc,
-      status: data.status.present ? data.status.value : this.status,
-      attemptCount: data.attemptCount.present
-          ? data.attemptCount.value
-          : this.attemptCount,
-      nextAttemptAtUtc: data.nextAttemptAtUtc.present
-          ? data.nextAttemptAtUtc.value
-          : this.nextAttemptAtUtc,
-      leaseOwner: data.leaseOwner.present
-          ? data.leaseOwner.value
-          : this.leaseOwner,
-      leaseExpiresAtUtc: data.leaseExpiresAtUtc.present
-          ? data.leaseExpiresAtUtc.value
-          : this.leaseExpiresAtUtc,
+  DbSyncScope copyWithCompanion(DbSyncScopesCompanion data) {
+    return DbSyncScope(
+      appUserId: data.appUserId.present ? data.appUserId.value : this.appUserId,
+      workspaceId: data.workspaceId.present
+          ? data.workspaceId.value
+          : this.workspaceId,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      serverCursor: data.serverCursor.present
+          ? data.serverCursor.value
+          : this.serverCursor,
+      lastSuccessAtUtc: data.lastSuccessAtUtc.present
+          ? data.lastSuccessAtUtc.value
+          : this.lastSuccessAtUtc,
       lastFailureCode: data.lastFailureCode.present
           ? data.lastFailureCode.value
           : this.lastFailureCode,
-      completedAtUtc: data.completedAtUtc.present
-          ? data.completedAtUtc.value
-          : this.completedAtUtc,
+      updatedAtUtc: data.updatedAtUtc.present
+          ? data.updatedAtUtc.value
+          : this.updatedAtUtc,
     );
   }
 
   @override
   String toString() {
-    return (StringBuffer('DbSyncOutboxData(')
-          ..write('commandId: $commandId, ')
-          ..write('protocolVersion: $protocolVersion, ')
-          ..write('commandType: $commandType, ')
-          ..write('deviceId: $deviceId, ')
-          ..write('aggregateId: $aggregateId, ')
-          ..write('baseRevision: $baseRevision, ')
-          ..write('payloadJson: $payloadJson, ')
-          ..write('createdAtUtc: $createdAtUtc, ')
-          ..write('status: $status, ')
-          ..write('attemptCount: $attemptCount, ')
-          ..write('nextAttemptAtUtc: $nextAttemptAtUtc, ')
-          ..write('leaseOwner: $leaseOwner, ')
-          ..write('leaseExpiresAtUtc: $leaseExpiresAtUtc, ')
+    return (StringBuffer('DbSyncScope(')
+          ..write('appUserId: $appUserId, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('projectId: $projectId, ')
+          ..write('serverCursor: $serverCursor, ')
+          ..write('lastSuccessAtUtc: $lastSuccessAtUtc, ')
           ..write('lastFailureCode: $lastFailureCode, ')
-          ..write('completedAtUtc: $completedAtUtc')
+          ..write('updatedAtUtc: $updatedAtUtc')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode => Object.hash(
-    commandId,
-    protocolVersion,
-    commandType,
-    deviceId,
-    aggregateId,
-    baseRevision,
-    payloadJson,
-    createdAtUtc,
-    status,
-    attemptCount,
-    nextAttemptAtUtc,
-    leaseOwner,
-    leaseExpiresAtUtc,
+    appUserId,
+    workspaceId,
+    projectId,
+    serverCursor,
+    lastSuccessAtUtc,
     lastFailureCode,
-    completedAtUtc,
+    updatedAtUtc,
   );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is DbSyncOutboxData &&
-          other.commandId == this.commandId &&
-          other.protocolVersion == this.protocolVersion &&
-          other.commandType == this.commandType &&
-          other.deviceId == this.deviceId &&
-          other.aggregateId == this.aggregateId &&
-          other.baseRevision == this.baseRevision &&
-          other.payloadJson == this.payloadJson &&
-          other.createdAtUtc == this.createdAtUtc &&
-          other.status == this.status &&
-          other.attemptCount == this.attemptCount &&
-          other.nextAttemptAtUtc == this.nextAttemptAtUtc &&
-          other.leaseOwner == this.leaseOwner &&
-          other.leaseExpiresAtUtc == this.leaseExpiresAtUtc &&
+      (other is DbSyncScope &&
+          other.appUserId == this.appUserId &&
+          other.workspaceId == this.workspaceId &&
+          other.projectId == this.projectId &&
+          other.serverCursor == this.serverCursor &&
+          other.lastSuccessAtUtc == this.lastSuccessAtUtc &&
           other.lastFailureCode == this.lastFailureCode &&
-          other.completedAtUtc == this.completedAtUtc);
+          other.updatedAtUtc == this.updatedAtUtc);
 }
 
-class DbSyncOutboxCompanion extends UpdateCompanion<DbSyncOutboxData> {
-  final Value<String> commandId;
-  final Value<int> protocolVersion;
-  final Value<String> commandType;
-  final Value<String> deviceId;
-  final Value<String> aggregateId;
-  final Value<int> baseRevision;
-  final Value<String> payloadJson;
-  final Value<DateTime> createdAtUtc;
-  final Value<String> status;
-  final Value<int> attemptCount;
-  final Value<DateTime> nextAttemptAtUtc;
-  final Value<String?> leaseOwner;
-  final Value<DateTime?> leaseExpiresAtUtc;
+class DbSyncScopesCompanion extends UpdateCompanion<DbSyncScope> {
+  final Value<String> appUserId;
+  final Value<String> workspaceId;
+  final Value<String> projectId;
+  final Value<String?> serverCursor;
+  final Value<DateTime?> lastSuccessAtUtc;
   final Value<String?> lastFailureCode;
-  final Value<DateTime?> completedAtUtc;
+  final Value<DateTime> updatedAtUtc;
   final Value<int> rowid;
-  const DbSyncOutboxCompanion({
-    this.commandId = const Value.absent(),
-    this.protocolVersion = const Value.absent(),
-    this.commandType = const Value.absent(),
-    this.deviceId = const Value.absent(),
-    this.aggregateId = const Value.absent(),
-    this.baseRevision = const Value.absent(),
-    this.payloadJson = const Value.absent(),
-    this.createdAtUtc = const Value.absent(),
-    this.status = const Value.absent(),
-    this.attemptCount = const Value.absent(),
-    this.nextAttemptAtUtc = const Value.absent(),
-    this.leaseOwner = const Value.absent(),
-    this.leaseExpiresAtUtc = const Value.absent(),
+  const DbSyncScopesCompanion({
+    this.appUserId = const Value.absent(),
+    this.workspaceId = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.serverCursor = const Value.absent(),
+    this.lastSuccessAtUtc = const Value.absent(),
     this.lastFailureCode = const Value.absent(),
-    this.completedAtUtc = const Value.absent(),
+    this.updatedAtUtc = const Value.absent(),
     this.rowid = const Value.absent(),
   });
-  DbSyncOutboxCompanion.insert({
-    required String commandId,
-    required int protocolVersion,
-    required String commandType,
-    required String deviceId,
-    required String aggregateId,
-    required int baseRevision,
-    required String payloadJson,
-    required DateTime createdAtUtc,
-    required String status,
-    this.attemptCount = const Value.absent(),
-    required DateTime nextAttemptAtUtc,
-    this.leaseOwner = const Value.absent(),
-    this.leaseExpiresAtUtc = const Value.absent(),
+  DbSyncScopesCompanion.insert({
+    required String appUserId,
+    required String workspaceId,
+    required String projectId,
+    this.serverCursor = const Value.absent(),
+    this.lastSuccessAtUtc = const Value.absent(),
     this.lastFailureCode = const Value.absent(),
-    this.completedAtUtc = const Value.absent(),
+    required DateTime updatedAtUtc,
     this.rowid = const Value.absent(),
-  }) : commandId = Value(commandId),
-       protocolVersion = Value(protocolVersion),
-       commandType = Value(commandType),
-       deviceId = Value(deviceId),
-       aggregateId = Value(aggregateId),
-       baseRevision = Value(baseRevision),
-       payloadJson = Value(payloadJson),
-       createdAtUtc = Value(createdAtUtc),
-       status = Value(status),
-       nextAttemptAtUtc = Value(nextAttemptAtUtc);
-  static Insertable<DbSyncOutboxData> custom({
-    Expression<String>? commandId,
-    Expression<int>? protocolVersion,
-    Expression<String>? commandType,
-    Expression<String>? deviceId,
-    Expression<String>? aggregateId,
-    Expression<int>? baseRevision,
-    Expression<String>? payloadJson,
-    Expression<DateTime>? createdAtUtc,
-    Expression<String>? status,
-    Expression<int>? attemptCount,
-    Expression<DateTime>? nextAttemptAtUtc,
-    Expression<String>? leaseOwner,
-    Expression<DateTime>? leaseExpiresAtUtc,
+  }) : appUserId = Value(appUserId),
+       workspaceId = Value(workspaceId),
+       projectId = Value(projectId),
+       updatedAtUtc = Value(updatedAtUtc);
+  static Insertable<DbSyncScope> custom({
+    Expression<String>? appUserId,
+    Expression<String>? workspaceId,
+    Expression<String>? projectId,
+    Expression<String>? serverCursor,
+    Expression<DateTime>? lastSuccessAtUtc,
     Expression<String>? lastFailureCode,
-    Expression<DateTime>? completedAtUtc,
+    Expression<DateTime>? updatedAtUtc,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
-      if (commandId != null) 'command_id': commandId,
-      if (protocolVersion != null) 'protocol_version': protocolVersion,
-      if (commandType != null) 'command_type': commandType,
-      if (deviceId != null) 'device_id': deviceId,
-      if (aggregateId != null) 'aggregate_id': aggregateId,
-      if (baseRevision != null) 'base_revision': baseRevision,
-      if (payloadJson != null) 'payload_json': payloadJson,
-      if (createdAtUtc != null) 'created_at_utc': createdAtUtc,
-      if (status != null) 'status': status,
-      if (attemptCount != null) 'attempt_count': attemptCount,
-      if (nextAttemptAtUtc != null) 'next_attempt_at_utc': nextAttemptAtUtc,
-      if (leaseOwner != null) 'lease_owner': leaseOwner,
-      if (leaseExpiresAtUtc != null) 'lease_expires_at_utc': leaseExpiresAtUtc,
+      if (appUserId != null) 'app_user_id': appUserId,
+      if (workspaceId != null) 'workspace_id': workspaceId,
+      if (projectId != null) 'project_id': projectId,
+      if (serverCursor != null) 'server_cursor': serverCursor,
+      if (lastSuccessAtUtc != null) 'last_success_at_utc': lastSuccessAtUtc,
       if (lastFailureCode != null) 'last_failure_code': lastFailureCode,
-      if (completedAtUtc != null) 'completed_at_utc': completedAtUtc,
+      if (updatedAtUtc != null) 'updated_at_utc': updatedAtUtc,
       if (rowid != null) 'rowid': rowid,
     });
   }
 
-  DbSyncOutboxCompanion copyWith({
-    Value<String>? commandId,
-    Value<int>? protocolVersion,
-    Value<String>? commandType,
-    Value<String>? deviceId,
-    Value<String>? aggregateId,
-    Value<int>? baseRevision,
-    Value<String>? payloadJson,
-    Value<DateTime>? createdAtUtc,
-    Value<String>? status,
-    Value<int>? attemptCount,
-    Value<DateTime>? nextAttemptAtUtc,
-    Value<String?>? leaseOwner,
-    Value<DateTime?>? leaseExpiresAtUtc,
+  DbSyncScopesCompanion copyWith({
+    Value<String>? appUserId,
+    Value<String>? workspaceId,
+    Value<String>? projectId,
+    Value<String?>? serverCursor,
+    Value<DateTime?>? lastSuccessAtUtc,
     Value<String?>? lastFailureCode,
-    Value<DateTime?>? completedAtUtc,
+    Value<DateTime>? updatedAtUtc,
     Value<int>? rowid,
   }) {
-    return DbSyncOutboxCompanion(
-      commandId: commandId ?? this.commandId,
-      protocolVersion: protocolVersion ?? this.protocolVersion,
-      commandType: commandType ?? this.commandType,
-      deviceId: deviceId ?? this.deviceId,
-      aggregateId: aggregateId ?? this.aggregateId,
-      baseRevision: baseRevision ?? this.baseRevision,
-      payloadJson: payloadJson ?? this.payloadJson,
-      createdAtUtc: createdAtUtc ?? this.createdAtUtc,
-      status: status ?? this.status,
-      attemptCount: attemptCount ?? this.attemptCount,
-      nextAttemptAtUtc: nextAttemptAtUtc ?? this.nextAttemptAtUtc,
-      leaseOwner: leaseOwner ?? this.leaseOwner,
-      leaseExpiresAtUtc: leaseExpiresAtUtc ?? this.leaseExpiresAtUtc,
+    return DbSyncScopesCompanion(
+      appUserId: appUserId ?? this.appUserId,
+      workspaceId: workspaceId ?? this.workspaceId,
+      projectId: projectId ?? this.projectId,
+      serverCursor: serverCursor ?? this.serverCursor,
+      lastSuccessAtUtc: lastSuccessAtUtc ?? this.lastSuccessAtUtc,
       lastFailureCode: lastFailureCode ?? this.lastFailureCode,
-      completedAtUtc: completedAtUtc ?? this.completedAtUtc,
+      updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -2042,50 +2862,26 @@ class DbSyncOutboxCompanion extends UpdateCompanion<DbSyncOutboxData> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    if (commandId.present) {
-      map['command_id'] = Variable<String>(commandId.value);
+    if (appUserId.present) {
+      map['app_user_id'] = Variable<String>(appUserId.value);
     }
-    if (protocolVersion.present) {
-      map['protocol_version'] = Variable<int>(protocolVersion.value);
+    if (workspaceId.present) {
+      map['workspace_id'] = Variable<String>(workspaceId.value);
     }
-    if (commandType.present) {
-      map['command_type'] = Variable<String>(commandType.value);
+    if (projectId.present) {
+      map['project_id'] = Variable<String>(projectId.value);
     }
-    if (deviceId.present) {
-      map['device_id'] = Variable<String>(deviceId.value);
+    if (serverCursor.present) {
+      map['server_cursor'] = Variable<String>(serverCursor.value);
     }
-    if (aggregateId.present) {
-      map['aggregate_id'] = Variable<String>(aggregateId.value);
-    }
-    if (baseRevision.present) {
-      map['base_revision'] = Variable<int>(baseRevision.value);
-    }
-    if (payloadJson.present) {
-      map['payload_json'] = Variable<String>(payloadJson.value);
-    }
-    if (createdAtUtc.present) {
-      map['created_at_utc'] = Variable<DateTime>(createdAtUtc.value);
-    }
-    if (status.present) {
-      map['status'] = Variable<String>(status.value);
-    }
-    if (attemptCount.present) {
-      map['attempt_count'] = Variable<int>(attemptCount.value);
-    }
-    if (nextAttemptAtUtc.present) {
-      map['next_attempt_at_utc'] = Variable<DateTime>(nextAttemptAtUtc.value);
-    }
-    if (leaseOwner.present) {
-      map['lease_owner'] = Variable<String>(leaseOwner.value);
-    }
-    if (leaseExpiresAtUtc.present) {
-      map['lease_expires_at_utc'] = Variable<DateTime>(leaseExpiresAtUtc.value);
+    if (lastSuccessAtUtc.present) {
+      map['last_success_at_utc'] = Variable<DateTime>(lastSuccessAtUtc.value);
     }
     if (lastFailureCode.present) {
       map['last_failure_code'] = Variable<String>(lastFailureCode.value);
     }
-    if (completedAtUtc.present) {
-      map['completed_at_utc'] = Variable<DateTime>(completedAtUtc.value);
+    if (updatedAtUtc.present) {
+      map['updated_at_utc'] = Variable<DateTime>(updatedAtUtc.value);
     }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
@@ -2095,22 +2891,14 @@ class DbSyncOutboxCompanion extends UpdateCompanion<DbSyncOutboxData> {
 
   @override
   String toString() {
-    return (StringBuffer('DbSyncOutboxCompanion(')
-          ..write('commandId: $commandId, ')
-          ..write('protocolVersion: $protocolVersion, ')
-          ..write('commandType: $commandType, ')
-          ..write('deviceId: $deviceId, ')
-          ..write('aggregateId: $aggregateId, ')
-          ..write('baseRevision: $baseRevision, ')
-          ..write('payloadJson: $payloadJson, ')
-          ..write('createdAtUtc: $createdAtUtc, ')
-          ..write('status: $status, ')
-          ..write('attemptCount: $attemptCount, ')
-          ..write('nextAttemptAtUtc: $nextAttemptAtUtc, ')
-          ..write('leaseOwner: $leaseOwner, ')
-          ..write('leaseExpiresAtUtc: $leaseExpiresAtUtc, ')
+    return (StringBuffer('DbSyncScopesCompanion(')
+          ..write('appUserId: $appUserId, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('projectId: $projectId, ')
+          ..write('serverCursor: $serverCursor, ')
+          ..write('lastSuccessAtUtc: $lastSuccessAtUtc, ')
           ..write('lastFailureCode: $lastFailureCode, ')
-          ..write('completedAtUtc: $completedAtUtc, ')
+          ..write('updatedAtUtc: $updatedAtUtc, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -8919,10 +9707,13 @@ class DbSecurityEventsCompanion extends UpdateCompanion<DbSecurityEvent> {
 abstract class _$LocalDatabase extends GeneratedDatabase {
   _$LocalDatabase(QueryExecutor e) : super(e);
   $LocalDatabaseManager get managers => $LocalDatabaseManager(this);
+  late final $DbSyncOutboxTable dbSyncOutbox = $DbSyncOutboxTable(this);
   late final $DbContactRecordsTable dbContactRecords = $DbContactRecordsTable(
     this,
   );
-  late final $DbSyncOutboxTable dbSyncOutbox = $DbSyncOutboxTable(this);
+  late final $DbSyncDrainerLeasesTable dbSyncDrainerLeases =
+      $DbSyncDrainerLeasesTable(this);
+  late final $DbSyncScopesTable dbSyncScopes = $DbSyncScopesTable(this);
   late final $DbContactRevisionsTable dbContactRevisions =
       $DbContactRevisionsTable(this);
   late final $DbContactAnswersTable dbContactAnswers = $DbContactAnswersTable(
@@ -8959,6 +9750,50 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
   late final $DbSecurityEventsTable dbSecurityEvents = $DbSecurityEventsTable(
     this,
   );
+  Selectable<DbSyncOutboxData> readReadySyncCommand(
+    String appUserId,
+    String workspaceId,
+    String projectId,
+    DateTime nowUtc,
+  ) {
+    return customSelect(
+      'SELECT outbox.* FROM db_sync_outbox AS outbox JOIN db_contact_records AS contact ON contact.contact_id = outbox.aggregate_id WHERE contact.app_user_id = ?1 AND contact.workspace_id = ?2 AND contact.project_id = ?3 AND outbox.status = \'pending\' AND outbox.next_attempt_at_utc <= ?4 AND NOT EXISTS (SELECT 1 AS _c0 FROM db_sync_outbox AS earlier WHERE earlier.aggregate_id = outbox.aggregate_id AND earlier.status != \'completed\' AND(earlier.created_at_utc < outbox.created_at_utc OR(earlier.created_at_utc = outbox.created_at_utc AND earlier.command_id < outbox.command_id))) ORDER BY outbox.created_at_utc, outbox.command_id LIMIT 1',
+      variables: [
+        Variable<String>(appUserId),
+        Variable<String>(workspaceId),
+        Variable<String>(projectId),
+        Variable<DateTime>(nowUtc),
+      ],
+      readsFrom: {dbSyncOutbox, dbContactRecords},
+    ).asyncMap(dbSyncOutbox.mapFromRow);
+  }
+
+  Selectable<ReadSyncHealthResult> readSyncHealth(
+    String appUserId,
+    String workspaceId,
+    String projectId,
+  ) {
+    return customSelect(
+      'WITH contact_sync AS (SELECT contact.contact_id, CASE WHEN COUNT(outbox.command_id) = 0 THEN \'completed\' WHEN SUM(CASE WHEN outbox.status = \'permanent_failure\' THEN 1 ELSE 0 END) > 0 THEN \'permanent_failure\' WHEN SUM(CASE WHEN outbox.status = \'needs_resolution\' THEN 1 ELSE 0 END) > 0 THEN \'needs_resolution\' WHEN SUM(CASE WHEN outbox.status = \'leased\' THEN 1 ELSE 0 END) > 0 THEN \'syncing\' WHEN SUM(CASE WHEN outbox.status = \'pending\' AND outbox.attempt_count > 0 THEN 1 ELSE 0 END) > 0 THEN \'retrying\' WHEN SUM(CASE WHEN outbox.status = \'pending\' AND outbox.attempt_count = 0 THEN 1 ELSE 0 END) > 0 THEN \'only_on_device\' ELSE \'completed\' END AS contact_status, MIN(CASE WHEN outbox.status IS NOT NULL AND outbox.status != \'completed\' THEN outbox.created_at_utc ELSE NULL END) AS oldest_pending_at_utc FROM db_contact_records AS contact LEFT JOIN db_sync_outbox AS outbox ON outbox.aggregate_id = contact.contact_id WHERE contact.app_user_id = ?1 AND contact.workspace_id = ?2 AND contact.project_id = ?3 GROUP BY contact.contact_id) SELECT COALESCE(SUM(CASE WHEN contact_status = \'only_on_device\' THEN 1 ELSE 0 END), 0) AS only_on_device_count, COALESCE(SUM(CASE WHEN contact_status = \'syncing\' THEN 1 ELSE 0 END), 0) AS syncing_count, COALESCE(SUM(CASE WHEN contact_status = \'retrying\' THEN 1 ELSE 0 END), 0) AS retrying_count, COALESCE(SUM(CASE WHEN contact_status = \'needs_resolution\' THEN 1 ELSE 0 END), 0) AS needs_resolution_count, COALESCE(SUM(CASE WHEN contact_status = \'permanent_failure\' THEN 1 ELSE 0 END), 0) AS permanent_failure_count, COALESCE(SUM(CASE WHEN contact_status = \'completed\' THEN 1 ELSE 0 END), 0) AS completed_count, MIN(oldest_pending_at_utc) AS oldest_pending_at_utc FROM contact_sync',
+      variables: [
+        Variable<String>(appUserId),
+        Variable<String>(workspaceId),
+        Variable<String>(projectId),
+      ],
+      readsFrom: {dbContactRecords, dbSyncOutbox},
+    ).map(
+      (QueryRow row) => ReadSyncHealthResult(
+        onlyOnDeviceCount: row.read<int>('only_on_device_count'),
+        syncingCount: row.read<int>('syncing_count'),
+        retryingCount: row.read<int>('retrying_count'),
+        needsResolutionCount: row.read<int>('needs_resolution_count'),
+        permanentFailureCount: row.read<int>('permanent_failure_count'),
+        completedCount: row.read<int>('completed_count'),
+        oldestPendingAtUtc: row.readNullable<DateTime>('oldest_pending_at_utc'),
+      ),
+    );
+  }
+
   Selectable<ReadPersonalContactSummaryResult> readPersonalContactSummary(
     String appUserId,
     String workspaceId,
@@ -8967,7 +9802,7 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
     DateTime untilUtc,
   ) {
     return customSelect(
-      'SELECT COUNT(*) AS contact_session_count, COALESCE(SUM(contact.reach_count), 0) AS reach_count, COALESCE(SUM(CASE WHEN contact.interest_level = 0 THEN 1 ELSE 0 END), 0) AS interest_0_count, COALESCE(SUM(CASE WHEN contact.interest_level = 1 THEN 1 ELSE 0 END), 0) AS interest_1_count, COALESCE(SUM(CASE WHEN contact.interest_level = 2 THEN 1 ELSE 0 END), 0) AS interest_2_count, COALESCE(SUM(CASE WHEN contact.interest_level = 3 THEN 1 ELSE 0 END), 0) AS interest_3_count, COALESCE(SUM(CASE WHEN contact.interest_level = 4 THEN 1 ELSE 0 END), 0) AS interest_4_count, COALESCE(SUM(CASE WHEN EXISTS (SELECT 1 AS _c0 FROM db_sync_outbox AS outbox WHERE outbox.aggregate_id = contact.contact_id AND outbox.status != \'completed\') THEN 1 ELSE 0 END), 0) AS pending_sync_count FROM db_contact_records AS contact WHERE contact.app_user_id = ?1 AND contact.workspace_id = ?2 AND contact.project_id = ?3 AND contact.occurred_at_utc >= ?4 AND contact.occurred_at_utc < ?5 AND contact.lifecycle_status = \'active\'',
+      'SELECT COUNT(*) AS contact_session_count, COALESCE(SUM(contact.reach_count), 0) AS reach_count, COALESCE(SUM(CASE WHEN contact.interest_level = 0 THEN 1 ELSE 0 END), 0) AS interest_0_count, COALESCE(SUM(CASE WHEN contact.interest_level = 1 THEN 1 ELSE 0 END), 0) AS interest_1_count, COALESCE(SUM(CASE WHEN contact.interest_level = 2 THEN 1 ELSE 0 END), 0) AS interest_2_count, COALESCE(SUM(CASE WHEN contact.interest_level = 3 THEN 1 ELSE 0 END), 0) AS interest_3_count, COALESCE(SUM(CASE WHEN contact.interest_level = 4 THEN 1 ELSE 0 END), 0) AS interest_4_count, COALESCE(SUM(CASE WHEN EXISTS (SELECT 1 AS _c0 FROM db_sync_outbox AS outbox WHERE outbox.aggregate_id = contact.contact_id AND outbox.status != \'completed\') THEN 1 ELSE 0 END), 0) AS pending_sync_count, MAX(contact.occurred_at_utc) AS latest_occurred_at_utc FROM db_contact_records AS contact WHERE contact.app_user_id = ?1 AND contact.workspace_id = ?2 AND contact.project_id = ?3 AND contact.occurred_at_utc >= ?4 AND contact.occurred_at_utc < ?5 AND contact.lifecycle_status = \'active\'',
       variables: [
         Variable<String>(appUserId),
         Variable<String>(workspaceId),
@@ -8986,6 +9821,35 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
         interest3Count: row.read<int>('interest_3_count'),
         interest4Count: row.read<int>('interest_4_count'),
         pendingSyncCount: row.read<int>('pending_sync_count'),
+        latestOccurredAtUtc: row.readNullable<DateTime>(
+          'latest_occurred_at_utc',
+        ),
+      ),
+    );
+  }
+
+  Selectable<ReadPersonalContactChannelSummaryResult>
+  readPersonalContactChannelSummary(
+    String appUserId,
+    String workspaceId,
+    String projectId,
+    DateTime fromUtc,
+    DateTime untilUtc,
+  ) {
+    return customSelect(
+      'SELECT contact.channel AS channel, COUNT(*) AS contact_session_count FROM db_contact_records AS contact WHERE contact.app_user_id = ?1 AND contact.workspace_id = ?2 AND contact.project_id = ?3 AND contact.occurred_at_utc >= ?4 AND contact.occurred_at_utc < ?5 AND contact.lifecycle_status = \'active\' GROUP BY contact.channel ORDER BY contact.channel',
+      variables: [
+        Variable<String>(appUserId),
+        Variable<String>(workspaceId),
+        Variable<String>(projectId),
+        Variable<DateTime>(fromUtc),
+        Variable<DateTime>(untilUtc),
+      ],
+      readsFrom: {dbContactRecords},
+    ).map(
+      (QueryRow row) => ReadPersonalContactChannelSummaryResult(
+        channel: row.read<String>('channel'),
+        contactSessionCount: row.read<int>('contact_session_count'),
       ),
     );
   }
@@ -8995,8 +9859,10 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
-    dbContactRecords,
     dbSyncOutbox,
+    dbContactRecords,
+    dbSyncDrainerLeases,
+    dbSyncScopes,
     dbContactRevisions,
     dbContactAnswers,
     dbContactDrafts,
@@ -9013,6 +9879,424 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
   ];
 }
 
+typedef $$DbSyncOutboxTableCreateCompanionBuilder =
+    DbSyncOutboxCompanion Function({
+      required String commandId,
+      required int protocolVersion,
+      required String commandType,
+      required String deviceId,
+      required String aggregateId,
+      required int baseRevision,
+      required String payloadJson,
+      required DateTime createdAtUtc,
+      required String status,
+      Value<int> attemptCount,
+      required DateTime nextAttemptAtUtc,
+      Value<String?> leaseOwner,
+      Value<DateTime?> leaseExpiresAtUtc,
+      Value<String?> lastFailureCode,
+      Value<DateTime?> completedAtUtc,
+      Value<int> rowid,
+    });
+typedef $$DbSyncOutboxTableUpdateCompanionBuilder =
+    DbSyncOutboxCompanion Function({
+      Value<String> commandId,
+      Value<int> protocolVersion,
+      Value<String> commandType,
+      Value<String> deviceId,
+      Value<String> aggregateId,
+      Value<int> baseRevision,
+      Value<String> payloadJson,
+      Value<DateTime> createdAtUtc,
+      Value<String> status,
+      Value<int> attemptCount,
+      Value<DateTime> nextAttemptAtUtc,
+      Value<String?> leaseOwner,
+      Value<DateTime?> leaseExpiresAtUtc,
+      Value<String?> lastFailureCode,
+      Value<DateTime?> completedAtUtc,
+      Value<int> rowid,
+    });
+
+class $$DbSyncOutboxTableFilterComposer
+    extends Composer<_$LocalDatabase, $DbSyncOutboxTable> {
+  $$DbSyncOutboxTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get commandId => $composableBuilder(
+    column: $table.commandId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get protocolVersion => $composableBuilder(
+    column: $table.protocolVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get commandType => $composableBuilder(
+    column: $table.commandType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get aggregateId => $composableBuilder(
+    column: $table.aggregateId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get baseRevision => $composableBuilder(
+    column: $table.baseRevision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get attemptCount => $composableBuilder(
+    column: $table.attemptCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get nextAttemptAtUtc => $composableBuilder(
+    column: $table.nextAttemptAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get leaseOwner => $composableBuilder(
+    column: $table.leaseOwner,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get leaseExpiresAtUtc => $composableBuilder(
+    column: $table.leaseExpiresAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastFailureCode => $composableBuilder(
+    column: $table.lastFailureCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get completedAtUtc => $composableBuilder(
+    column: $table.completedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DbSyncOutboxTableOrderingComposer
+    extends Composer<_$LocalDatabase, $DbSyncOutboxTable> {
+  $$DbSyncOutboxTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get commandId => $composableBuilder(
+    column: $table.commandId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get protocolVersion => $composableBuilder(
+    column: $table.protocolVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get commandType => $composableBuilder(
+    column: $table.commandType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get aggregateId => $composableBuilder(
+    column: $table.aggregateId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get baseRevision => $composableBuilder(
+    column: $table.baseRevision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get attemptCount => $composableBuilder(
+    column: $table.attemptCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get nextAttemptAtUtc => $composableBuilder(
+    column: $table.nextAttemptAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get leaseOwner => $composableBuilder(
+    column: $table.leaseOwner,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get leaseExpiresAtUtc => $composableBuilder(
+    column: $table.leaseExpiresAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastFailureCode => $composableBuilder(
+    column: $table.lastFailureCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get completedAtUtc => $composableBuilder(
+    column: $table.completedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DbSyncOutboxTableAnnotationComposer
+    extends Composer<_$LocalDatabase, $DbSyncOutboxTable> {
+  $$DbSyncOutboxTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get commandId =>
+      $composableBuilder(column: $table.commandId, builder: (column) => column);
+
+  GeneratedColumn<int> get protocolVersion => $composableBuilder(
+    column: $table.protocolVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get commandType => $composableBuilder(
+    column: $table.commandType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get deviceId =>
+      $composableBuilder(column: $table.deviceId, builder: (column) => column);
+
+  GeneratedColumn<String> get aggregateId => $composableBuilder(
+    column: $table.aggregateId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get baseRevision => $composableBuilder(
+    column: $table.baseRevision,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<int> get attemptCount => $composableBuilder(
+    column: $table.attemptCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get nextAttemptAtUtc => $composableBuilder(
+    column: $table.nextAttemptAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get leaseOwner => $composableBuilder(
+    column: $table.leaseOwner,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get leaseExpiresAtUtc => $composableBuilder(
+    column: $table.leaseExpiresAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastFailureCode => $composableBuilder(
+    column: $table.lastFailureCode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get completedAtUtc => $composableBuilder(
+    column: $table.completedAtUtc,
+    builder: (column) => column,
+  );
+}
+
+class $$DbSyncOutboxTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $DbSyncOutboxTable,
+          DbSyncOutboxData,
+          $$DbSyncOutboxTableFilterComposer,
+          $$DbSyncOutboxTableOrderingComposer,
+          $$DbSyncOutboxTableAnnotationComposer,
+          $$DbSyncOutboxTableCreateCompanionBuilder,
+          $$DbSyncOutboxTableUpdateCompanionBuilder,
+          (
+            DbSyncOutboxData,
+            BaseReferences<
+              _$LocalDatabase,
+              $DbSyncOutboxTable,
+              DbSyncOutboxData
+            >,
+          ),
+          DbSyncOutboxData,
+          PrefetchHooks Function()
+        > {
+  $$DbSyncOutboxTableTableManager(_$LocalDatabase db, $DbSyncOutboxTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DbSyncOutboxTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DbSyncOutboxTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DbSyncOutboxTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> commandId = const Value.absent(),
+                Value<int> protocolVersion = const Value.absent(),
+                Value<String> commandType = const Value.absent(),
+                Value<String> deviceId = const Value.absent(),
+                Value<String> aggregateId = const Value.absent(),
+                Value<int> baseRevision = const Value.absent(),
+                Value<String> payloadJson = const Value.absent(),
+                Value<DateTime> createdAtUtc = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<int> attemptCount = const Value.absent(),
+                Value<DateTime> nextAttemptAtUtc = const Value.absent(),
+                Value<String?> leaseOwner = const Value.absent(),
+                Value<DateTime?> leaseExpiresAtUtc = const Value.absent(),
+                Value<String?> lastFailureCode = const Value.absent(),
+                Value<DateTime?> completedAtUtc = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbSyncOutboxCompanion(
+                commandId: commandId,
+                protocolVersion: protocolVersion,
+                commandType: commandType,
+                deviceId: deviceId,
+                aggregateId: aggregateId,
+                baseRevision: baseRevision,
+                payloadJson: payloadJson,
+                createdAtUtc: createdAtUtc,
+                status: status,
+                attemptCount: attemptCount,
+                nextAttemptAtUtc: nextAttemptAtUtc,
+                leaseOwner: leaseOwner,
+                leaseExpiresAtUtc: leaseExpiresAtUtc,
+                lastFailureCode: lastFailureCode,
+                completedAtUtc: completedAtUtc,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String commandId,
+                required int protocolVersion,
+                required String commandType,
+                required String deviceId,
+                required String aggregateId,
+                required int baseRevision,
+                required String payloadJson,
+                required DateTime createdAtUtc,
+                required String status,
+                Value<int> attemptCount = const Value.absent(),
+                required DateTime nextAttemptAtUtc,
+                Value<String?> leaseOwner = const Value.absent(),
+                Value<DateTime?> leaseExpiresAtUtc = const Value.absent(),
+                Value<String?> lastFailureCode = const Value.absent(),
+                Value<DateTime?> completedAtUtc = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbSyncOutboxCompanion.insert(
+                commandId: commandId,
+                protocolVersion: protocolVersion,
+                commandType: commandType,
+                deviceId: deviceId,
+                aggregateId: aggregateId,
+                baseRevision: baseRevision,
+                payloadJson: payloadJson,
+                createdAtUtc: createdAtUtc,
+                status: status,
+                attemptCount: attemptCount,
+                nextAttemptAtUtc: nextAttemptAtUtc,
+                leaseOwner: leaseOwner,
+                leaseExpiresAtUtc: leaseExpiresAtUtc,
+                lastFailureCode: lastFailureCode,
+                completedAtUtc: completedAtUtc,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DbSyncOutboxTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $DbSyncOutboxTable,
+      DbSyncOutboxData,
+      $$DbSyncOutboxTableFilterComposer,
+      $$DbSyncOutboxTableOrderingComposer,
+      $$DbSyncOutboxTableAnnotationComposer,
+      $$DbSyncOutboxTableCreateCompanionBuilder,
+      $$DbSyncOutboxTableUpdateCompanionBuilder,
+      (
+        DbSyncOutboxData,
+        BaseReferences<_$LocalDatabase, $DbSyncOutboxTable, DbSyncOutboxData>,
+      ),
+      DbSyncOutboxData,
+      PrefetchHooks Function()
+    >;
 typedef $$DbContactRecordsTableCreateCompanionBuilder =
     DbContactRecordsCompanion Function({
       required String contactId,
@@ -9753,106 +11037,32 @@ typedef $$DbContactRecordsTableProcessedTableManager =
         bool dbContactAnswersRefs,
       })
     >;
-typedef $$DbSyncOutboxTableCreateCompanionBuilder =
-    DbSyncOutboxCompanion Function({
-      required String commandId,
-      required int protocolVersion,
-      required String commandType,
-      required String deviceId,
-      required String aggregateId,
-      required int baseRevision,
-      required String payloadJson,
-      required DateTime createdAtUtc,
-      required String status,
-      Value<int> attemptCount,
-      required DateTime nextAttemptAtUtc,
-      Value<String?> leaseOwner,
-      Value<DateTime?> leaseExpiresAtUtc,
-      Value<String?> lastFailureCode,
-      Value<DateTime?> completedAtUtc,
+typedef $$DbSyncDrainerLeasesTableCreateCompanionBuilder =
+    DbSyncDrainerLeasesCompanion Function({
+      required String leaseName,
+      required String leaseOwner,
+      required DateTime leaseExpiresAtUtc,
       Value<int> rowid,
     });
-typedef $$DbSyncOutboxTableUpdateCompanionBuilder =
-    DbSyncOutboxCompanion Function({
-      Value<String> commandId,
-      Value<int> protocolVersion,
-      Value<String> commandType,
-      Value<String> deviceId,
-      Value<String> aggregateId,
-      Value<int> baseRevision,
-      Value<String> payloadJson,
-      Value<DateTime> createdAtUtc,
-      Value<String> status,
-      Value<int> attemptCount,
-      Value<DateTime> nextAttemptAtUtc,
-      Value<String?> leaseOwner,
-      Value<DateTime?> leaseExpiresAtUtc,
-      Value<String?> lastFailureCode,
-      Value<DateTime?> completedAtUtc,
+typedef $$DbSyncDrainerLeasesTableUpdateCompanionBuilder =
+    DbSyncDrainerLeasesCompanion Function({
+      Value<String> leaseName,
+      Value<String> leaseOwner,
+      Value<DateTime> leaseExpiresAtUtc,
       Value<int> rowid,
     });
 
-class $$DbSyncOutboxTableFilterComposer
-    extends Composer<_$LocalDatabase, $DbSyncOutboxTable> {
-  $$DbSyncOutboxTableFilterComposer({
+class $$DbSyncDrainerLeasesTableFilterComposer
+    extends Composer<_$LocalDatabase, $DbSyncDrainerLeasesTable> {
+  $$DbSyncDrainerLeasesTableFilterComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<String> get commandId => $composableBuilder(
-    column: $table.commandId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get protocolVersion => $composableBuilder(
-    column: $table.protocolVersion,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get commandType => $composableBuilder(
-    column: $table.commandType,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get deviceId => $composableBuilder(
-    column: $table.deviceId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get aggregateId => $composableBuilder(
-    column: $table.aggregateId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get baseRevision => $composableBuilder(
-    column: $table.baseRevision,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get payloadJson => $composableBuilder(
-    column: $table.payloadJson,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get createdAtUtc => $composableBuilder(
-    column: $table.createdAtUtc,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get status => $composableBuilder(
-    column: $table.status,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get attemptCount => $composableBuilder(
-    column: $table.attemptCount,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get nextAttemptAtUtc => $composableBuilder(
-    column: $table.nextAttemptAtUtc,
+  ColumnFilters<String> get leaseName => $composableBuilder(
+    column: $table.leaseName,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9865,79 +11075,19 @@ class $$DbSyncOutboxTableFilterComposer
     column: $table.leaseExpiresAtUtc,
     builder: (column) => ColumnFilters(column),
   );
-
-  ColumnFilters<String> get lastFailureCode => $composableBuilder(
-    column: $table.lastFailureCode,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get completedAtUtc => $composableBuilder(
-    column: $table.completedAtUtc,
-    builder: (column) => ColumnFilters(column),
-  );
 }
 
-class $$DbSyncOutboxTableOrderingComposer
-    extends Composer<_$LocalDatabase, $DbSyncOutboxTable> {
-  $$DbSyncOutboxTableOrderingComposer({
+class $$DbSyncDrainerLeasesTableOrderingComposer
+    extends Composer<_$LocalDatabase, $DbSyncDrainerLeasesTable> {
+  $$DbSyncDrainerLeasesTableOrderingComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<String> get commandId => $composableBuilder(
-    column: $table.commandId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get protocolVersion => $composableBuilder(
-    column: $table.protocolVersion,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get commandType => $composableBuilder(
-    column: $table.commandType,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get deviceId => $composableBuilder(
-    column: $table.deviceId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get aggregateId => $composableBuilder(
-    column: $table.aggregateId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get baseRevision => $composableBuilder(
-    column: $table.baseRevision,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get payloadJson => $composableBuilder(
-    column: $table.payloadJson,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get createdAtUtc => $composableBuilder(
-    column: $table.createdAtUtc,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get status => $composableBuilder(
-    column: $table.status,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get attemptCount => $composableBuilder(
-    column: $table.attemptCount,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get nextAttemptAtUtc => $composableBuilder(
-    column: $table.nextAttemptAtUtc,
+  ColumnOrderings<String> get leaseName => $composableBuilder(
+    column: $table.leaseName,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -9950,75 +11100,19 @@ class $$DbSyncOutboxTableOrderingComposer
     column: $table.leaseExpiresAtUtc,
     builder: (column) => ColumnOrderings(column),
   );
-
-  ColumnOrderings<String> get lastFailureCode => $composableBuilder(
-    column: $table.lastFailureCode,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get completedAtUtc => $composableBuilder(
-    column: $table.completedAtUtc,
-    builder: (column) => ColumnOrderings(column),
-  );
 }
 
-class $$DbSyncOutboxTableAnnotationComposer
-    extends Composer<_$LocalDatabase, $DbSyncOutboxTable> {
-  $$DbSyncOutboxTableAnnotationComposer({
+class $$DbSyncDrainerLeasesTableAnnotationComposer
+    extends Composer<_$LocalDatabase, $DbSyncDrainerLeasesTable> {
+  $$DbSyncDrainerLeasesTableAnnotationComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get commandId =>
-      $composableBuilder(column: $table.commandId, builder: (column) => column);
-
-  GeneratedColumn<int> get protocolVersion => $composableBuilder(
-    column: $table.protocolVersion,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get commandType => $composableBuilder(
-    column: $table.commandType,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get deviceId =>
-      $composableBuilder(column: $table.deviceId, builder: (column) => column);
-
-  GeneratedColumn<String> get aggregateId => $composableBuilder(
-    column: $table.aggregateId,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get baseRevision => $composableBuilder(
-    column: $table.baseRevision,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get payloadJson => $composableBuilder(
-    column: $table.payloadJson,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<DateTime> get createdAtUtc => $composableBuilder(
-    column: $table.createdAtUtc,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get status =>
-      $composableBuilder(column: $table.status, builder: (column) => column);
-
-  GeneratedColumn<int> get attemptCount => $composableBuilder(
-    column: $table.attemptCount,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<DateTime> get nextAttemptAtUtc => $composableBuilder(
-    column: $table.nextAttemptAtUtc,
-    builder: (column) => column,
-  );
+  GeneratedColumn<String> get leaseName =>
+      $composableBuilder(column: $table.leaseName, builder: (column) => column);
 
   GeneratedColumn<String> get leaseOwner => $composableBuilder(
     column: $table.leaseOwner,
@@ -10029,121 +11123,71 @@ class $$DbSyncOutboxTableAnnotationComposer
     column: $table.leaseExpiresAtUtc,
     builder: (column) => column,
   );
-
-  GeneratedColumn<String> get lastFailureCode => $composableBuilder(
-    column: $table.lastFailureCode,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<DateTime> get completedAtUtc => $composableBuilder(
-    column: $table.completedAtUtc,
-    builder: (column) => column,
-  );
 }
 
-class $$DbSyncOutboxTableTableManager
+class $$DbSyncDrainerLeasesTableTableManager
     extends
         RootTableManager<
           _$LocalDatabase,
-          $DbSyncOutboxTable,
-          DbSyncOutboxData,
-          $$DbSyncOutboxTableFilterComposer,
-          $$DbSyncOutboxTableOrderingComposer,
-          $$DbSyncOutboxTableAnnotationComposer,
-          $$DbSyncOutboxTableCreateCompanionBuilder,
-          $$DbSyncOutboxTableUpdateCompanionBuilder,
+          $DbSyncDrainerLeasesTable,
+          DbSyncDrainerLease,
+          $$DbSyncDrainerLeasesTableFilterComposer,
+          $$DbSyncDrainerLeasesTableOrderingComposer,
+          $$DbSyncDrainerLeasesTableAnnotationComposer,
+          $$DbSyncDrainerLeasesTableCreateCompanionBuilder,
+          $$DbSyncDrainerLeasesTableUpdateCompanionBuilder,
           (
-            DbSyncOutboxData,
+            DbSyncDrainerLease,
             BaseReferences<
               _$LocalDatabase,
-              $DbSyncOutboxTable,
-              DbSyncOutboxData
+              $DbSyncDrainerLeasesTable,
+              DbSyncDrainerLease
             >,
           ),
-          DbSyncOutboxData,
+          DbSyncDrainerLease,
           PrefetchHooks Function()
         > {
-  $$DbSyncOutboxTableTableManager(_$LocalDatabase db, $DbSyncOutboxTable table)
-    : super(
+  $$DbSyncDrainerLeasesTableTableManager(
+    _$LocalDatabase db,
+    $DbSyncDrainerLeasesTable table,
+  ) : super(
         TableManagerState(
           db: db,
           table: table,
           createFilteringComposer: () =>
-              $$DbSyncOutboxTableFilterComposer($db: db, $table: table),
+              $$DbSyncDrainerLeasesTableFilterComposer($db: db, $table: table),
           createOrderingComposer: () =>
-              $$DbSyncOutboxTableOrderingComposer($db: db, $table: table),
+              $$DbSyncDrainerLeasesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
           createComputedFieldComposer: () =>
-              $$DbSyncOutboxTableAnnotationComposer($db: db, $table: table),
+              $$DbSyncDrainerLeasesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
           updateCompanionCallback:
               ({
-                Value<String> commandId = const Value.absent(),
-                Value<int> protocolVersion = const Value.absent(),
-                Value<String> commandType = const Value.absent(),
-                Value<String> deviceId = const Value.absent(),
-                Value<String> aggregateId = const Value.absent(),
-                Value<int> baseRevision = const Value.absent(),
-                Value<String> payloadJson = const Value.absent(),
-                Value<DateTime> createdAtUtc = const Value.absent(),
-                Value<String> status = const Value.absent(),
-                Value<int> attemptCount = const Value.absent(),
-                Value<DateTime> nextAttemptAtUtc = const Value.absent(),
-                Value<String?> leaseOwner = const Value.absent(),
-                Value<DateTime?> leaseExpiresAtUtc = const Value.absent(),
-                Value<String?> lastFailureCode = const Value.absent(),
-                Value<DateTime?> completedAtUtc = const Value.absent(),
+                Value<String> leaseName = const Value.absent(),
+                Value<String> leaseOwner = const Value.absent(),
+                Value<DateTime> leaseExpiresAtUtc = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
-              }) => DbSyncOutboxCompanion(
-                commandId: commandId,
-                protocolVersion: protocolVersion,
-                commandType: commandType,
-                deviceId: deviceId,
-                aggregateId: aggregateId,
-                baseRevision: baseRevision,
-                payloadJson: payloadJson,
-                createdAtUtc: createdAtUtc,
-                status: status,
-                attemptCount: attemptCount,
-                nextAttemptAtUtc: nextAttemptAtUtc,
+              }) => DbSyncDrainerLeasesCompanion(
+                leaseName: leaseName,
                 leaseOwner: leaseOwner,
                 leaseExpiresAtUtc: leaseExpiresAtUtc,
-                lastFailureCode: lastFailureCode,
-                completedAtUtc: completedAtUtc,
                 rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                required String commandId,
-                required int protocolVersion,
-                required String commandType,
-                required String deviceId,
-                required String aggregateId,
-                required int baseRevision,
-                required String payloadJson,
-                required DateTime createdAtUtc,
-                required String status,
-                Value<int> attemptCount = const Value.absent(),
-                required DateTime nextAttemptAtUtc,
-                Value<String?> leaseOwner = const Value.absent(),
-                Value<DateTime?> leaseExpiresAtUtc = const Value.absent(),
-                Value<String?> lastFailureCode = const Value.absent(),
-                Value<DateTime?> completedAtUtc = const Value.absent(),
+                required String leaseName,
+                required String leaseOwner,
+                required DateTime leaseExpiresAtUtc,
                 Value<int> rowid = const Value.absent(),
-              }) => DbSyncOutboxCompanion.insert(
-                commandId: commandId,
-                protocolVersion: protocolVersion,
-                commandType: commandType,
-                deviceId: deviceId,
-                aggregateId: aggregateId,
-                baseRevision: baseRevision,
-                payloadJson: payloadJson,
-                createdAtUtc: createdAtUtc,
-                status: status,
-                attemptCount: attemptCount,
-                nextAttemptAtUtc: nextAttemptAtUtc,
+              }) => DbSyncDrainerLeasesCompanion.insert(
+                leaseName: leaseName,
                 leaseOwner: leaseOwner,
                 leaseExpiresAtUtc: leaseExpiresAtUtc,
-                lastFailureCode: lastFailureCode,
-                completedAtUtc: completedAtUtc,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -10154,21 +11198,273 @@ class $$DbSyncOutboxTableTableManager
       );
 }
 
-typedef $$DbSyncOutboxTableProcessedTableManager =
+typedef $$DbSyncDrainerLeasesTableProcessedTableManager =
     ProcessedTableManager<
       _$LocalDatabase,
-      $DbSyncOutboxTable,
-      DbSyncOutboxData,
-      $$DbSyncOutboxTableFilterComposer,
-      $$DbSyncOutboxTableOrderingComposer,
-      $$DbSyncOutboxTableAnnotationComposer,
-      $$DbSyncOutboxTableCreateCompanionBuilder,
-      $$DbSyncOutboxTableUpdateCompanionBuilder,
+      $DbSyncDrainerLeasesTable,
+      DbSyncDrainerLease,
+      $$DbSyncDrainerLeasesTableFilterComposer,
+      $$DbSyncDrainerLeasesTableOrderingComposer,
+      $$DbSyncDrainerLeasesTableAnnotationComposer,
+      $$DbSyncDrainerLeasesTableCreateCompanionBuilder,
+      $$DbSyncDrainerLeasesTableUpdateCompanionBuilder,
       (
-        DbSyncOutboxData,
-        BaseReferences<_$LocalDatabase, $DbSyncOutboxTable, DbSyncOutboxData>,
+        DbSyncDrainerLease,
+        BaseReferences<
+          _$LocalDatabase,
+          $DbSyncDrainerLeasesTable,
+          DbSyncDrainerLease
+        >,
       ),
-      DbSyncOutboxData,
+      DbSyncDrainerLease,
+      PrefetchHooks Function()
+    >;
+typedef $$DbSyncScopesTableCreateCompanionBuilder =
+    DbSyncScopesCompanion Function({
+      required String appUserId,
+      required String workspaceId,
+      required String projectId,
+      Value<String?> serverCursor,
+      Value<DateTime?> lastSuccessAtUtc,
+      Value<String?> lastFailureCode,
+      required DateTime updatedAtUtc,
+      Value<int> rowid,
+    });
+typedef $$DbSyncScopesTableUpdateCompanionBuilder =
+    DbSyncScopesCompanion Function({
+      Value<String> appUserId,
+      Value<String> workspaceId,
+      Value<String> projectId,
+      Value<String?> serverCursor,
+      Value<DateTime?> lastSuccessAtUtc,
+      Value<String?> lastFailureCode,
+      Value<DateTime> updatedAtUtc,
+      Value<int> rowid,
+    });
+
+class $$DbSyncScopesTableFilterComposer
+    extends Composer<_$LocalDatabase, $DbSyncScopesTable> {
+  $$DbSyncScopesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get appUserId => $composableBuilder(
+    column: $table.appUserId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get projectId => $composableBuilder(
+    column: $table.projectId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get serverCursor => $composableBuilder(
+    column: $table.serverCursor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastSuccessAtUtc => $composableBuilder(
+    column: $table.lastSuccessAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastFailureCode => $composableBuilder(
+    column: $table.lastFailureCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DbSyncScopesTableOrderingComposer
+    extends Composer<_$LocalDatabase, $DbSyncScopesTable> {
+  $$DbSyncScopesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get appUserId => $composableBuilder(
+    column: $table.appUserId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get projectId => $composableBuilder(
+    column: $table.projectId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get serverCursor => $composableBuilder(
+    column: $table.serverCursor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastSuccessAtUtc => $composableBuilder(
+    column: $table.lastSuccessAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastFailureCode => $composableBuilder(
+    column: $table.lastFailureCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DbSyncScopesTableAnnotationComposer
+    extends Composer<_$LocalDatabase, $DbSyncScopesTable> {
+  $$DbSyncScopesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get appUserId =>
+      $composableBuilder(column: $table.appUserId, builder: (column) => column);
+
+  GeneratedColumn<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get projectId =>
+      $composableBuilder(column: $table.projectId, builder: (column) => column);
+
+  GeneratedColumn<String> get serverCursor => $composableBuilder(
+    column: $table.serverCursor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get lastSuccessAtUtc => $composableBuilder(
+    column: $table.lastSuccessAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastFailureCode => $composableBuilder(
+    column: $table.lastFailureCode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => column,
+  );
+}
+
+class $$DbSyncScopesTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $DbSyncScopesTable,
+          DbSyncScope,
+          $$DbSyncScopesTableFilterComposer,
+          $$DbSyncScopesTableOrderingComposer,
+          $$DbSyncScopesTableAnnotationComposer,
+          $$DbSyncScopesTableCreateCompanionBuilder,
+          $$DbSyncScopesTableUpdateCompanionBuilder,
+          (
+            DbSyncScope,
+            BaseReferences<_$LocalDatabase, $DbSyncScopesTable, DbSyncScope>,
+          ),
+          DbSyncScope,
+          PrefetchHooks Function()
+        > {
+  $$DbSyncScopesTableTableManager(_$LocalDatabase db, $DbSyncScopesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DbSyncScopesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DbSyncScopesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DbSyncScopesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> appUserId = const Value.absent(),
+                Value<String> workspaceId = const Value.absent(),
+                Value<String> projectId = const Value.absent(),
+                Value<String?> serverCursor = const Value.absent(),
+                Value<DateTime?> lastSuccessAtUtc = const Value.absent(),
+                Value<String?> lastFailureCode = const Value.absent(),
+                Value<DateTime> updatedAtUtc = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbSyncScopesCompanion(
+                appUserId: appUserId,
+                workspaceId: workspaceId,
+                projectId: projectId,
+                serverCursor: serverCursor,
+                lastSuccessAtUtc: lastSuccessAtUtc,
+                lastFailureCode: lastFailureCode,
+                updatedAtUtc: updatedAtUtc,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String appUserId,
+                required String workspaceId,
+                required String projectId,
+                Value<String?> serverCursor = const Value.absent(),
+                Value<DateTime?> lastSuccessAtUtc = const Value.absent(),
+                Value<String?> lastFailureCode = const Value.absent(),
+                required DateTime updatedAtUtc,
+                Value<int> rowid = const Value.absent(),
+              }) => DbSyncScopesCompanion.insert(
+                appUserId: appUserId,
+                workspaceId: workspaceId,
+                projectId: projectId,
+                serverCursor: serverCursor,
+                lastSuccessAtUtc: lastSuccessAtUtc,
+                lastFailureCode: lastFailureCode,
+                updatedAtUtc: updatedAtUtc,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DbSyncScopesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $DbSyncScopesTable,
+      DbSyncScope,
+      $$DbSyncScopesTableFilterComposer,
+      $$DbSyncScopesTableOrderingComposer,
+      $$DbSyncScopesTableAnnotationComposer,
+      $$DbSyncScopesTableCreateCompanionBuilder,
+      $$DbSyncScopesTableUpdateCompanionBuilder,
+      (
+        DbSyncScope,
+        BaseReferences<_$LocalDatabase, $DbSyncScopesTable, DbSyncScope>,
+      ),
+      DbSyncScope,
       PrefetchHooks Function()
     >;
 typedef $$DbContactRevisionsTableCreateCompanionBuilder =
@@ -13880,10 +15176,14 @@ typedef $$DbSecurityEventsTableProcessedTableManager =
 class $LocalDatabaseManager {
   final _$LocalDatabase _db;
   $LocalDatabaseManager(this._db);
-  $$DbContactRecordsTableTableManager get dbContactRecords =>
-      $$DbContactRecordsTableTableManager(_db, _db.dbContactRecords);
   $$DbSyncOutboxTableTableManager get dbSyncOutbox =>
       $$DbSyncOutboxTableTableManager(_db, _db.dbSyncOutbox);
+  $$DbContactRecordsTableTableManager get dbContactRecords =>
+      $$DbContactRecordsTableTableManager(_db, _db.dbContactRecords);
+  $$DbSyncDrainerLeasesTableTableManager get dbSyncDrainerLeases =>
+      $$DbSyncDrainerLeasesTableTableManager(_db, _db.dbSyncDrainerLeases);
+  $$DbSyncScopesTableTableManager get dbSyncScopes =>
+      $$DbSyncScopesTableTableManager(_db, _db.dbSyncScopes);
   $$DbContactRevisionsTableTableManager get dbContactRevisions =>
       $$DbContactRevisionsTableTableManager(_db, _db.dbContactRevisions);
   $$DbContactAnswersTableTableManager get dbContactAnswers =>
@@ -13904,6 +15204,25 @@ class $LocalDatabaseManager {
       $$DbSecurityEventsTableTableManager(_db, _db.dbSecurityEvents);
 }
 
+class ReadSyncHealthResult {
+  final int onlyOnDeviceCount;
+  final int syncingCount;
+  final int retryingCount;
+  final int needsResolutionCount;
+  final int permanentFailureCount;
+  final int completedCount;
+  final DateTime? oldestPendingAtUtc;
+  ReadSyncHealthResult({
+    required this.onlyOnDeviceCount,
+    required this.syncingCount,
+    required this.retryingCount,
+    required this.needsResolutionCount,
+    required this.permanentFailureCount,
+    required this.completedCount,
+    this.oldestPendingAtUtc,
+  });
+}
+
 class ReadPersonalContactSummaryResult {
   final int contactSessionCount;
   final int reachCount;
@@ -13913,6 +15232,7 @@ class ReadPersonalContactSummaryResult {
   final int interest3Count;
   final int interest4Count;
   final int pendingSyncCount;
+  final DateTime? latestOccurredAtUtc;
   ReadPersonalContactSummaryResult({
     required this.contactSessionCount,
     required this.reachCount,
@@ -13922,5 +15242,15 @@ class ReadPersonalContactSummaryResult {
     required this.interest3Count,
     required this.interest4Count,
     required this.pendingSyncCount,
+    this.latestOccurredAtUtc,
+  });
+}
+
+class ReadPersonalContactChannelSummaryResult {
+  final String channel;
+  final int contactSessionCount;
+  ReadPersonalContactChannelSummaryResult({
+    required this.channel,
+    required this.contactSessionCount,
   });
 }

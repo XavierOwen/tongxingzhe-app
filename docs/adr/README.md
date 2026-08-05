@@ -21,6 +21,7 @@
 | [0097](./0097-use-supabase-postgresql-for-the-initial-stage.md) | 已接受，2026-07-31 | Slice 0／发布门槛；`ARCH-003`–`ARCH-010` | 首阶段数据库与发布前复审 |
 | [0098](./0098-persistent-outbox-uses-claim-lease-and-ack.md) | 已接受，2026-08-03 | Slice 1–2；`ARCH-001`、`ARCH-007`、`TEST-001`、`TEST-003` | Outbox 领取、租约、ACK、退避和健康状态 |
 | [0099](./0099-management-analytics-use-bounded-query-surfaces.md) | 已接受，2026-08-03 | Slice 6；`ANALYTICS-007`–`ANALYTICS-014`、`PRIVACY-001`–`PRIVACY-011` | 固定报告形状和披露风险边界 |
+| [0100](./0100-pull-cursor-advances-only-after-local-batch-apply.md) | 已接受，2026-08-05 | Slice 1–2；`ARCH-001`、`ARCH-007`、`TEST-003` | push ACK cursor 与 pull cursor 分离，整批落盘后才推进 |
 
 ## 按主题查找
 
@@ -28,7 +29,7 @@
 | --- | --- | --- |
 | 接触、工作空间、身份与权限 | [0001](./0001-contact-records-independent-of-promotion-targets.md)–[0010](./0010-capability-based-membership-permissions.md) | Slice 1、4、7；`CONTACT`、`AUTHZ`、`CTX` |
 | 区域、对象、隐私资料与修订 | [0011](./0011-shared-hierarchical-regions-with-eventual-resolution.md)–[0021](./0021-submitted-contacts-are-voided-not-silently-deleted.md) | Slice 1、2、4；`REGION`、`TARGET`、`CONTACT` |
-| 离线、同步、认证与平台 | [0022](./0022-offline-first-contact-recording-with-an-outbox.md)–[0029](./0029-use-one-capability-adaptive-flutter-application.md)，另见 [0096](./0096-use-supabase-auth-with-cognito-fallback.md)、[0098](./0098-persistent-outbox-uses-claim-lease-and-ack.md) | Slice 0–2；`ARCH`、`AUTH`、`PLATFORM`、`TEST-003` |
+| 离线、同步、认证与平台 | [0022](./0022-offline-first-contact-recording-with-an-outbox.md)–[0029](./0029-use-one-capability-adaptive-flutter-application.md)，另见 [0096](./0096-use-supabase-auth-with-cognito-fallback.md)、[0098](./0098-persistent-outbox-uses-claim-lease-and-ack.md)、[0100](./0100-pull-cursor-advances-only-after-local-batch-apply.md) | Slice 0–2；`ARCH`、`AUTH`、`PLATFORM`、`TEST-003` |
 | 组织、保留、导入导出与合并 | [0030](./0030-allow-verified-users-to-create-organizations.md)–[0043](./0043-promotion-target-merges-are-reversible.md) | Slice 4、7；`ORG`、`TARGET`、`AUTHZ` |
 | 私人计划、通知与周期 | [0044](./0044-personal-action-plans-are-private-and-user-controlled.md)–[0052](./0052-late-entered-contacts-count-in-their-occurrence-period.md) | Slice 5；`PLAN`、`PLATFORM` |
 | 说明书与发布检查 | [0053](./0053-production-code-and-learning-materials-evolve-together.md)–[0059](./0059-documentation-and-statistics-checks-block-releases.md) | 全部 Slice；`MANUAL`、Definition of Done |

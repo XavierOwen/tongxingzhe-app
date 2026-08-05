@@ -6,16 +6,17 @@
 
 ## 当前状态
 
-项目已完成 [Slice 0：安全地基与可测试接缝](https://github.com/XavierOwen/tongxingzhe-app/issues/2)，正在实施 [Slice 1：匿名接触闭环](https://github.com/XavierOwen/tongxingzhe-app/issues/3)。当前代码已有多份私有草稿的事务性保存、放弃与短时撤销、草稿原子提交、Outbox 命令和个人期间汇总。正式身份尚未映射到内部用户和当前推广项目，因此草稿 UI、同步执行器、Backend 和四个主导航仍未接线。旧原型只作为显式 legacy Demo 保留。
+项目已完成 [Slice 0：安全地基与可测试接缝](https://github.com/XavierOwen/tongxingzhe-app/issues/2)，正在实施 [Slice 1：匿名接触闭环](https://github.com/XavierOwen/tongxingzhe-app/issues/3)。Backend 可验证 Supabase JWT，并原子映射内部用户、个人空间、起始项目和基础问卷版本。Flutter `AppSession` 只接受这份可信上下文。正式 App 已接入邮箱密码登录、四个主导航、私有草稿、七类匿名接触、面对面坐标、其他渠道说明、“今日”与最近七日个人统计，以及 SQLite 到自有 Backend／PostgreSQL 的持久双向同步。区域树解析、问卷题目、正式注册与恢复界面仍未完成。旧原型只作为显式 legacy Demo 保留。
 
 已经建立的地基包括：
 
 - 正式 composition root，以及可控制的 Clock、ID、Database、Identity、错误结果和 Platform Capability 接缝；
 - 正式入口与 MD5、默认演示账号、自动 seed 和旧登录 UI 的 import 边界；
-- Drift v5 基线、v6 中间版本、当前 v7 schema 快照和 v5／v6→v7 升级测试；
+- Drift v5 基线、v6／v7 中间版本、当前 v8 schema 快照和 v5／v6→v8 升级测试；
 - `ContactJournal` 本地深模块，以及可读的 SQLite 个人汇总 SQL；
 - Supabase `IdentitySession` Adapter、安全 session／PKCE 存储和 test-only fake；
 - PostgreSQL 有序 SQL migration、checksum、最小权限 runtime role、synthetic fixture 和恢复检查；
+- 自有 Backend 的 JWKS 验证、`(issuer, subject) → app_user_id` 映射和上下文端点；
 - 六平台 build、格式、静态分析、测试、文档链接和生成文件 CI；
 - 与代码一同演进的中文开发说明书。
 
@@ -29,6 +30,7 @@ Supabase 仍是有条件首选。SDK 接线完成不等于六平台认证通过�
 - [正式开发说明书](docs/manual/README.md)：面向初学者解释 Flutter、SQL、设计和数学背景的唯一入口；
 - [Legacy v5 盘点](docs/migrations/legacy-v5-inventory.md)：旧 schema、数据分类和停止规则；
 - [PostgreSQL migration 说明](backend/database/README.md)：空库重建、权限与 fixture。
+- [Backend 运行说明](backend/server/README.md)：身份验证、配置、测试和上下文端点。
 
 `docs/PROJECT_DESIGN.md` 和 `docs/BEGINNER_LEARNING_GUIDE.md` 是 legacy Demo 历史资料，不作为现代功能实现依据。
 
@@ -46,7 +48,8 @@ flutter run
 ```bash
 flutter run \
   --dart-define=SUPABASE_URL='https://YOUR_TEST_PROJECT.supabase.co' \
-  --dart-define=SUPABASE_PUBLISHABLE_KEY='sb_publishable_REPLACE_ME'
+  --dart-define=SUPABASE_PUBLISHABLE_KEY='sb_publishable_REPLACE_ME' \
+  --dart-define=BACKEND_BASE_URL='https://YOUR_BACKEND.example.com'
 ```
 
 Flutter 中禁止出现 Supabase secret/service-role key、PostgreSQL 密码或 warehouse 凭据。
@@ -81,7 +84,7 @@ dart run tool/check_markdown_links.dart
 
 若中文路径使 `flutter analyze` 的 analysis server 输出异常，可使用 `dart analyze`；这不是跳过静态分析。
 
-Drift 当前 v7 快照和 v5／v6→v7 升级检查：
+Drift 当前 v8 快照和 v5／v6→v8 升级检查：
 
 ```bash
 flutter test test/data/local_database_migration_test.dart

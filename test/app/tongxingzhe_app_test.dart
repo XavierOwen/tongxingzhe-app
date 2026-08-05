@@ -1,22 +1,40 @@
 import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/app/app_dependencies.dart';
 import 'package:tongxingzhe_app/app/tongxingzhe_app.dart';
+import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
 import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/data/local_database_factory.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
+import 'package:tongxingzhe_app/identity/identity_session.dart';
+import 'package:tongxingzhe_app/services/location_service.dart';
+import 'package:tongxingzhe_app/sync/sync_models.dart';
+import 'package:tongxingzhe_app/sync/sync_transport.dart';
 
 import '../support/fake_identity_session.dart';
 import '../support/fake_platform_capabilities.dart';
+import '../support/fake_session_context_gateway.dart';
 
 void main() {
-  testWidgets('正式入口不显示 legacy 登录、注册或演示账号', (tester) async {
+  testWidgets('可信上下文进入四项主框架并显示当前推广项目', (tester) async {
     final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
     final dependencies = AppDependencies(
       databaseFactory: _SingleDatabaseFactory(database),
       clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
       idGenerator: _SequenceIdGenerator(),
-      identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
     );
 
@@ -24,10 +42,659 @@ void main() {
     await tester.pumpAndSettle();
     addTearDown(database.close);
 
-    expect(find.text('正式认证尚未配置'), findsOneWidget);
+    expect(find.text('个人空间 → 我的推广项目'), findsOneWidget);
+    expect(find.text('今日'), findsWidgets);
+    expect(find.text('接触'), findsOneWidget);
+    expect(find.text('对象'), findsOneWidget);
+    expect(find.text('分析'), findsOneWidget);
+    expect(find.text('记录接触'), findsOneWidget);
+    expect(find.text('正式认证尚未配置'), findsNothing);
+  });
+
+  testWidgets('稳定地址可直达、跟随导航并保留表单返回语义', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final routeInformationProvider = PlatformRouteInformationProvider(
+      initialRouteInformation: RouteInformation(uri: Uri.parse('/analysis')),
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+    );
+
+    await tester.pumpWidget(
+      TongxingzheApp(
+        dependencies: dependencies,
+        routeInformationProvider: routeInformationProvider,
+      ),
+    );
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+    addTearDown(routeInformationProvider.dispose);
+
+    expect(find.text('最近七日接触场次 0'), findsOneWidget);
+    expect(routeInformationProvider.value.uri.path, '/analysis');
+
+    await tester.tap(find.text('接触'));
+    await tester.pumpAndSettle();
+    expect(routeInformationProvider.value.uri.path, '/contacts');
+
+    await tester.tap(find.text('记录接触'));
+    await tester.pumpAndSettle();
+    expect(routeInformationProvider.value.uri.path, '/contacts/new');
+
+    await tester.tap(find.text('视频通话'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+
+    expect(routeInformationProvider.value.uri.path, '/contacts');
+    expect(find.text('草稿 (1)'), findsOneWidget);
+
+    await tester.tap(find.text('记录接触'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('语音通话'));
+    await tester.pump();
+
+    await tester.binding.handlePushRoute('/analysis');
+    await tester.pumpAndSettle();
+
+    expect(routeInformationProvider.value.uri.path, '/analysis');
+    expect(find.text('最近七日接触场次 0'), findsOneWidget);
+    await tester.tap(find.text('接触'));
+    await tester.pumpAndSettle();
+    expect(find.text('草稿 (2)'), findsOneWidget);
+  });
+
+  testWidgets('不存在的草稿地址显示可返回错误而不是永久加载', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final routeInformationProvider = PlatformRouteInformationProvider(
+      initialRouteInformation: RouteInformation(
+        uri: Uri.parse('/contacts/drafts/missing-draft'),
+      ),
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+    );
+
+    await tester.pumpWidget(
+      TongxingzheApp(
+        dependencies: dependencies,
+        routeInformationProvider: routeInformationProvider,
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    addTearDown(database.close);
+    addTearDown(routeInformationProvider.dispose);
+
+    expect(find.text('找不到这份草稿，或它不属于当前项目。'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(BackButton), findsOneWidget);
+  });
+
+  testWidgets('未登录用户用邮箱密码取得可信上下文后进入主框架', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession();
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+    );
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+
+    expect(find.byKey(const ValueKey('auth-email')), findsOneWidget);
+    expect(find.byKey(const ValueKey('auth-password')), findsOneWidget);
     expect(find.text('admin1'), findsNothing);
-    expect(find.text('注册'), findsNothing);
-    expect(find.text('忘记密码'), findsNothing);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('auth-email')),
+      'person@example.test',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('auth-password')),
+      'test-password',
+    );
+    await tester.tap(find.text('登录'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('个人空间 → 我的推广项目'), findsOneWidget);
+    expect(find.text('记录接触'), findsOneWidget);
+  });
+
+  testWidgets('可信上下文失败时关闭记录入口并允许退出登录', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(
+        rejectWith: SessionContextFailureCode.unauthorized,
+      ),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+    );
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+
+    expect(find.text('无法载入当前推广项目'), findsOneWidget);
+    expect(find.text('记录接触'), findsNothing);
+
+    await tester.tap(find.text('退出登录'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('auth-email')), findsOneWidget);
+  });
+
+  testWidgets('首次选择渠道后自动保存草稿并在接触页恢复列表', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+    );
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+
+    await tester.tap(find.text('记录接触'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('问卷版本 1'), findsOneWidget);
+    expect(find.text('选择接触渠道'), findsOneWidget);
+
+    await tester.tap(find.text('视频通话'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已保存'), findsOneWidget);
+
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+
+    expect(find.text('草稿 (1)'), findsOneWidget);
+    expect(find.text('视频通话'), findsOneWidget);
+    expect(find.textContaining('项目：我的推广项目'), findsOneWidget);
+    expect(find.textContaining('发生：2030-01-02T03:04:00.000Z'), findsOneWidget);
+    expect(find.textContaining('修改：2030-01-02T03:04:00.000Z'), findsOneWidget);
+    expect(find.textContaining('问卷版本：1'), findsOneWidget);
+
+    await tester.tap(find.text('视频通话'));
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(ListView), const Offset(0, -180));
+    await tester.pumpAndSettle();
+    expect(find.text('3 / 5'), findsOneWidget);
+    expect(find.text('已保存'), findsOneWidget);
+  });
+
+  testWidgets('放弃草稿后可从提示中撤销并恢复原内容', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+    );
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+
+    await tester.tap(find.text('记录接触'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('视频通话'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('放弃草稿'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('草稿 (0)'), findsOneWidget);
+    expect(find.text('草稿已放弃'), findsOneWidget);
+
+    await tester.tap(find.text('撤销'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('草稿 (1)'), findsOneWidget);
+    expect(find.text('视频通话'), findsOneWidget);
+  });
+
+  testWidgets('修改草稿后立即返回也会先保存最后一次输入', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+    );
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+
+    await tester.tap(find.text('记录接触'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('视频通话'));
+    await tester.pump();
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+
+    expect(find.text('草稿 (1)'), findsOneWidget);
+    expect(find.text('视频通话'), findsOneWidget);
+  });
+
+  testWidgets('应用进入后台时立即保存尚在等待的草稿', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+    );
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+
+    await tester.tap(find.text('记录接触'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('视频通话'));
+    await tester.pump();
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+
+    expect(find.text('已保存'), findsOneWidget);
+  });
+
+  testWidgets('纯线上匿名接触提交后移除草稿并显示成功反馈', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+    );
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+
+    await tester.tap(find.text('记录接触'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('视频通话'));
+    await tester.enterText(
+      find.byKey(const ValueKey('contact-reach-count')),
+      '2',
+    );
+    // 小屏幕上需要像真实用户一样向上滚动，避开固定提交栏。
+    await tester.drag(find.byType(ListView), const Offset(0, -180));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('3'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    expect(find.text('5 / 5'), findsOneWidget);
+
+    await tester.tap(find.text('正式提交'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('接触已提交'), findsOneWidget);
+    expect(find.text('草稿 (0)'), findsOneWidget);
+    expect(find.text('今日接触场次 1'), findsOneWidget);
+    expect(find.text('仅本机 1'), findsOneWidget);
+
+    await tester.tap(find.text('今日'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('今日接触场次 1'), findsOneWidget);
+    expect(find.text('今日触达人数 2'), findsOneWidget);
+    expect(find.text('待同步 1'), findsOneWidget);
+
+    await tester.tap(find.text('分析'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('最近七日接触场次 1'), findsOneWidget);
+    expect(find.text('最近七日触达人数 2'), findsOneWidget);
+    expect(find.text('兴趣 3：1 场'), findsOneWidget);
+    expect(find.text('视频通话：1 场'), findsOneWidget);
+    await tester.drag(find.byType(ListView), const Offset(0, -220));
+    await tester.pumpAndSettle();
+    expect(find.text('最近发生 2030-01-02T03:04:00.000Z'), findsOneWidget);
+    expect(find.text('同步覆盖 0 / 1'), findsOneWidget);
+  });
+
+  testWidgets('联网提交经 ACK 后从仅本机变为已同步', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final transport = _AcceptingSyncTransport();
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      syncTransportBuilder: (_) => transport,
+    );
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+
+    await tester.tap(find.text('记录接触'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('视频通话'));
+    await tester.enterText(
+      find.byKey(const ValueKey('contact-reach-count')),
+      '2',
+    );
+    await tester.drag(find.byType(ListView), const Offset(0, -180));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('3'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('正式提交'));
+    await tester.pumpAndSettle();
+
+    expect(transport.commands, hasLength(1));
+    expect(find.text('仅本机 0'), findsOneWidget);
+    expect(find.text('已同步 1'), findsOneWidget);
+  });
+
+  testWidgets('启动时拉取其他设备的接触并刷新今日事实', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final transport = _AcceptingSyncTransport(
+      pullReplies: [
+        SyncPullSucceeded(
+          SyncPullBatch(
+            changes: [
+              SyncRemoteChange(
+                changeType: 'contact.submitted',
+                revisionNumber: 1,
+                payload: {
+                  'contactId': 'other-device-contact',
+                  'workspaceId': syntheticSessionContext.workspace.id,
+                  'projectId': syntheticSessionContext.project.id,
+                  'questionnaireVersionId':
+                      syntheticSessionContext.questionnaireVersion.id,
+                  'occurredAtUtc': '2030-01-02T02:30:00.000Z',
+                  'occurredTimeZone': 'America/Chicago',
+                  'firstSubmittedAtUtc': '2030-01-02T03:00:00.000Z',
+                  'channel': 'voice_call',
+                  'channelDetail': null,
+                  'location': {'kind': 'not_applicable'},
+                  'reachCount': 3,
+                  'interestLevel': 2,
+                  'answers': <Object?>[],
+                },
+              ),
+            ],
+            nextCursor: 'remote-cursor-1',
+          ),
+        ),
+      ],
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      syncTransportBuilder: (_) => transport,
+    );
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+
+    expect(transport.pullCursors.first, isNull);
+    expect(find.text('今日接触场次 1'), findsOneWidget);
+    expect(find.text('今日触达人数 3'), findsOneWidget);
+    expect(find.text('待同步 0'), findsOneWidget);
+  });
+
+  testWidgets('面对面接触取得坐标后才可正式提交', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      locationCapture: const _FakeLocationCapture(
+        LocationSnapshot(
+          latitude: 41.7897,
+          longitude: -87.5997,
+          accuracyMeters: 8.5,
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+
+    await tester.tap(find.text('记录接触'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('面对面'));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, -180));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('需要具体线下地点'), findsOneWidget);
+    expect(find.text('获取当前坐标'), findsOneWidget);
+
+    await tester.tap(find.text('获取当前坐标'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('41.789700, -87.599700'), findsOneWidget);
+    expect(find.textContaining('精度 8.5 m'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('contact-reach-count')),
+      '1',
+    );
+    await tester.drag(find.byType(ListView), const Offset(0, -240));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('正式提交'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('接触已提交'), findsOneWidget);
+    expect(find.text('今日接触场次 1'), findsOneWidget);
+  });
+
+  testWidgets('其他直接渠道必须输入可分析的渠道说明', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+    );
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+
+    await tester.tap(find.text('记录接触'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('其他直接渠道'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('contact-channel-detail')),
+      findsOneWidget,
+    );
+    await tester.drag(find.byType(ListView), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(find.text('2 / 5'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const ValueKey('contact-channel-detail')),
+      '线上游戏语音房',
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    expect(find.text('3 / 5'), findsOneWidget);
   });
 }
 
@@ -54,4 +721,46 @@ final class _SequenceIdGenerator implements IdGenerator {
 
   @override
   String next() => 'test-${_next++}';
+}
+
+final class _AcceptingSyncTransport implements SyncTransport {
+  _AcceptingSyncTransport({List<SyncPullResult> pullReplies = const []})
+    : _pullReplies = [...pullReplies];
+
+  final List<SyncCommand> commands = [];
+  final List<SyncPullResult> _pullReplies;
+  final List<String?> pullCursors = [];
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  Future<SyncPullResult> pull({
+    required SyncScope scope,
+    required String? cursor,
+    int limit = 100,
+  }) async {
+    pullCursors.add(cursor);
+    if (_pullReplies.isNotEmpty) {
+      return _pullReplies.removeAt(0);
+    }
+    return SyncPullSucceeded(
+      SyncPullBatch(changes: const [], nextCursor: cursor),
+    );
+  }
+
+  @override
+  Future<SyncPushResult> push(SyncCommand command) async {
+    commands.add(command);
+    return const SyncPushAccepted(serverCursor: 'test-cursor-1');
+  }
+}
+
+final class _FakeLocationCapture implements ContactLocationCapture {
+  const _FakeLocationCapture(this.snapshot);
+
+  final LocationSnapshot snapshot;
+
+  @override
+  Future<LocationSnapshot> captureCurrentPosition() async => snapshot;
 }

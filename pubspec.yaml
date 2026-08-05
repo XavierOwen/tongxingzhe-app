@@ -43,6 +43,7 @@ dependencies:
   crypto: ^3.0.7
   drift: ^2.34.0
   drift_flutter: ^0.3.0
+  http: ^1.6.0
   path_provider: ^2.1.5
   supabase_flutter: ^2.16.0
 
@@ -51,9 +52,6 @@ dev_dependencies:
     sdk: flutter
   integration_test:
     sdk: flutter
-  # 只在测试认证商 HTTP 边界时制造 synthetic response，不进入生产代码。
-  http: ^1.6.0
-
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
   # activated in the `analysis_options.yaml` file located at the root of your

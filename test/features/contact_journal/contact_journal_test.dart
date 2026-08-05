@@ -357,6 +357,7 @@ void main() {
     await journal.submitAnonymousContact(
       _submission(
         occurredAtUtc: DateTime.utc(2030, 1, 14, 20),
+        channel: ContactChannel.voiceCall,
         reachCount: 1,
         interestLevel: 4,
       ),
@@ -397,6 +398,8 @@ void main() {
     expect(summary.reachCount, 4);
     expect(summary.interestDistribution, [1, 0, 0, 0, 1]);
     expect(summary.pendingSyncCount, 2);
+    expect(summary.channelDistribution, [0, 1, 1, 0, 0, 0, 0]);
+    expect(summary.latestOccurredAtUtc, DateTime.utc(2030, 1, 14, 20));
   });
 
   test('实际发生时刻必须是 UTC 并另外保存 IANA 时区', () async {

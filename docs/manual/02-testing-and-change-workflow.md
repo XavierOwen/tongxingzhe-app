@@ -29,7 +29,7 @@
 
 这些词不能互相替代。例如，CI 中 Web build 成功只证明代码能够编译，不证明 Gmail 收到了 OTP；真实 OTP 成功也不证明 Windows 安全存储可用。
 
-## 3. 什么是 Red–Green，以及它和回归测试有什么区别
+## 3. 什么是 Red-Green，以及它和回归测试有什么区别
 
 ### 3.1 Red：先看到测试正确地失败
 
@@ -57,7 +57,7 @@ Green 阶段强调最小实现。它不顺便重写所有脚本、不提前设�
 
 ### 3.3 Review／Refactor：行为稳定后再整理
 
-行业常把完整节奏称为 **Red–Green–Refactor**：先失败、再通过、最后在不改变行为的前提下改善结构。为了降低一次改动的范围，本项目把工作组织为多个很小的 Red–Green vertical slice，等行为完整后再进入独立的 review／refactor 阶段：
+行业常把完整节奏称为 **Red-Green-Refactor**：先失败、再通过、最后在不改变行为的前提下改善结构。为了降低一次改动的范围，本项目把工作组织为多个很小的 Red-Green vertical slice，等行为完整后再进入独立的 review／refactor 阶段：
 
 - 删除临时诊断输出；
 - 合并重复代码；
@@ -65,13 +65,13 @@ Green 阶段强调最小实现。它不顺便重写所有脚本、不提前设�
 - 检查测试是否绑死私有实现；
 - 重新运行完整测试，而不只运行刚才的目标测试。
 
-重构不是“再加几个功能”。如果行为合同发生变化，应重新开启下一轮 Red–Green。
+重构不是“再加几个功能”。如果行为合同发生变化，应重新开启下一轮 Red-Green。
 
 ### 3.4 回归测试描述用途，不描述写法
 
-回归测试的目的，是把已经发生过的错误变成一个长期自动检查。它可以用 TDD 的 Red–Green 方法写成，也可能在已有测试中补充断言。
+回归测试的目的，是把已经发生过的错误变成一个长期自动检查。它可以用 TDD 的 Red-Green 方法写成，也可能在已有测试中补充断言。
 
-所以“红—绿回归测试”不是一种与单元测试并列的独立类别。更准确的说法是：**我们用 Red–Green 流程建立了一条回归测试。**
+所以“红绿回归测试”不是一种与单元测试并列的独立类别。更准确的说法是：**我们用 Red-Green 流程建立了一条回归测试。**
 
 本轮保留下来的两条回归测试分别防止：
 
@@ -89,9 +89,9 @@ Green 阶段强调最小实现。它不顺便重写所有脚本、不提前设�
 
 测试不直接调用 `_mapFailure` 这样的私有函数，也不只断言某个内部 helper 被调用一次。私有实现可以重构；只要公开结果没变，测试就不应该无故失败。
 
-### 4.1 Arrange–Act–Assert
+### 4.1 Arrange-Act-Assert
 
-很多测试使用 **Arrange–Act–Assert（准备—行动—断言）** 结构：
+很多测试使用 **Arrange-Act-Assert（准备、行动、断言）** 结构：
 
 ```dart
 // 教学化简示例，不是另一套生产实现。
@@ -109,7 +109,7 @@ expect(result.failure.code, IdentityFailureCode.providerRejected);
 expect(result.failure.providerCode, 'http_500');
 ```
 
-BDD 文档有时把同一结构写成 **Given–When–Then（给定—当—那么）**。名字不同，核心都是把输入、动作和可观察结果分开，使测试像一条可读规格。
+BDD 文档有时把同一结构写成 **Given-When-Then（给定、当、那么）**。名字不同，核心都是把输入、动作和可观察结果分开，使测试像一条可读规格。
 
 ### 4.2 只在系统边界使用 mock／fake
 
@@ -129,7 +129,7 @@ HTTP 500 测试使用 synthetic response，是因为它要稳定制造认证商�
 | 真实 Web／设备探针 | 较慢、依赖环境 | Flutter、平台存储、网络、Supabase 的完整路径 | 其他未运行平台 |
 | 六平台 build CI | 较慢、自动化 | 各平台代码能在干净环境构建 | 真机 Keychain、keyring、邮件到达 |
 
-正确策略不是只保留一种测试，而是让每层回答自己的问题。若真实探针失败，先用较小的测试缩小范围；若局部测试全绿但真实探针仍失败，就检查平台权限、外部服务和测试 harness。
+正确策略不是只保留一种测试，而是让每层回答自己的问题。若真实探针失败，先用较小的测试缩小范围；若局部测试全绿但真实探针仍失败，就检查平台权限、外部服务和测试执行框架。
 
 ## 6. 本轮 Web 与 iOS 认证为什么按这些步骤测试
 
@@ -242,7 +242,7 @@ iOS 的快速 `session` 已经验证登录、刷新、Keychain 读取、Adapter 
 
 继续检查公开命令后发现，`flutter test` 的 integration test 参数 `uninstall` 默认为 true，测试设备结束时会停止并卸载 App。该 App 又是手机上由这位开发者签名的唯一 App；删除后设备不再保留这项信任，下一阶段重新安装便再次询问。
 
-修复仍按 Red–Green 进行：runner 回归测试通过公开 shell 入口捕获原生 Flutter 参数，先要求出现 `--no-uninstall`。旧命令缺少它，测试准确变红；原生分支加入参数后，同一测试转绿。Web 使用 `flutter drive`，不经过这个分支，所以没有被顺带改变。
+修复仍按 Red-Green 进行：runner 回归测试通过公开 shell 入口捕获原生 Flutter 参数，先要求出现 `--no-uninstall`。旧命令缺少它，测试准确变红；原生分支加入参数后，同一测试转绿。Web 使用 `flutter drive`，不经过这个分支，所以没有被顺带改变。
 
 ```text
 旧流程：构建 → 安装 → 测试 → 卸载最后一款开发 App → 信任消失
@@ -280,10 +280,17 @@ iOS 第一次 `signup_request` 对原测试邮箱返回 HTTP 200，导出的 Sup
 | iOS `session_start` | 第一真机进程留下 Keychain session | 登录、刷新后退出且不登出 | pass |
 | iOS `session_restore` | 第二真机进程不使用密码恢复 | restore、token 读取、登出成功 | pass |
 | 原生 runner 保留 App | 避免每个 mode 后卸载最后一款开发 App 并丢失信任 | 原生命令包含 `--no-uninstall` | Red 后 Green，自动测试保留 |
+| push/pull cursor 分离 | 防止上传 ACK 跳过较早的其他设备变化 | push 不推进 pull cursor；batch 落盘后才推进 | Red 后 Green，ADR-0100 与回归测试保留 |
+| 同 ID 快照冲突 | 防止将不同内容静默当成幂等重放 | 保留本地事实，batch 与 cursor 回滚 | Red 后 Green，自动测试保留 |
+| 无效 cursor 错误分类 | 避免将客户端错误无限重试为 `503` | PostgreSQL `22023` 稳定转为 `400 invalid_cursor` | Red 后 Green，Backend 自动测试保留 |
+| Router 直达与返回 | 证明 URL、主导航和草稿保存共用同一页栈 | `/analysis` 直达，导航改 URL，返回前保存草稿 | Red 后 Green，parser 与 Widget 测试保留 |
 | `dart analyze` | 发现类型和静态问题 | 0 issue | pass |
-| 全部 Flutter tests | 检查已有合同未被破坏 | 全部通过 | 23 tests pass |
+| 全部 Flutter tests | 检查已有合同未被破坏 | 全部通过 | 98 tests pass |
+| Backend tests | 检查 JWT、可信上下文、上传、拉取和错误分类 | TypeScript 检查与全部测试通过 | 25 tests pass |
+| PostgreSQL 16 重建与恢复 | 证明 migration、最小权限、幂等、cursor 和备份可用 | 空库、重跑、fixture、`pg_dump`、`pg_restore` 全部通过 | pass |
+| 本机 build smoke | 发现平台插件、编译和 Xcode／Gradle 接线问题 | Android debug、Web release、macOS debug、iOS debug no-codesign 构建 | pass；Linux 与 Windows 等待本分支 CI |
 | production boundary | 防止 test-only fake 进入正式代码 | 边界检查通过 | pass |
-| Markdown links | 防止说明书入口和链接失效 | 全部文档链接通过 | pass；117 files checked |
+| Markdown links | 防止说明书入口和链接失效 | 全部文档链接通过 | pass；127 files checked |
 
 “当前结果”是特定日期、设备、浏览器和 staging project 的证据，不是永久真理。依赖升级、浏览器版本变化或认证设置变化后，应重新运行相关探针。
 
@@ -305,7 +312,7 @@ Vertical slice（垂直切片）是一次贯穿必要层次、但范围很小的
 
 这种先穿通一条窄路径的做法也常叫 tracer bullet（曳光弹）：它先证明方向和连接点正确，再逐条扩展能力。
 
-### 第四步：执行 Red–Green
+### 第四步：执行 Red-Green
 
 1. 加一个通过公开接缝观察行为的测试；
 2. 在旧实现上运行，确认因目标能力缺失而失败；
@@ -322,7 +329,7 @@ Vertical slice（垂直切片）是一次贯穿必要层次、但范围很小的
 出现失败时按下面的顺序，而不是立刻猜一个修复：
 
 1. 保存可重复的症状和最小输入；
-2. 区分 App、SDK、网络、云服务、数据库和测试 harness；
+2. 区分 App、SDK、网络、云服务、数据库和测试执行框架；
 3. 列出多个可能解释；
 4. 找能区分这些解释的日志或最小实验；
 5. 修正最小根因；

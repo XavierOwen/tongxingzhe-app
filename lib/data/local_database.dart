@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
 import '../features/contact_journal/contact_tables.dart';
+import '../sync/sync_tables.dart';
 
 part 'local_database.g.dart';
 
@@ -103,6 +104,7 @@ class DbSecurityEvents extends Table {
 @DriftDatabase(
   include: {
     'package:tongxingzhe_app/features/contact_journal/contact_queries.drift',
+    'package:tongxingzhe_app/sync/sync_queries.drift',
   },
   tables: [
     DbUsers,
@@ -116,6 +118,8 @@ class DbSecurityEvents extends Table {
     DbSyncOutbox,
     DbContactDrafts,
     DbContactDraftAnswers,
+    DbSyncDrainerLeases,
+    DbSyncScopes,
   ],
 )
 class LocalDatabase extends _$LocalDatabase {
@@ -133,7 +137,7 @@ class LocalDatabase extends _$LocalDatabase {
       );
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -232,6 +236,12 @@ class LocalDatabase extends _$LocalDatabase {
         await migrator.createTable(dbContactDrafts);
         await migrator.createTable(dbContactDraftAnswers);
         await migrator.createIndex(contactDraftsOwnerUpdated);
+      }
+      if (from < 8) {
+        // v8 把同步执行租约和按用户项目保存的 server cursor 分开。
+        // 旧 Outbox 行保持原样；首次运行 SyncEngine 时再领取它们。
+        await migrator.createTable(dbSyncDrainerLeases);
+        await migrator.createTable(dbSyncScopes);
       }
     },
   );

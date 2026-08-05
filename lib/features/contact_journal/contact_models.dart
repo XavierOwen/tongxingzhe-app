@@ -463,7 +463,8 @@ final class ContactRecord {
 /// 一位推广者在一个项目、一个明确 UTC 期间内的个人接触汇总。
 ///
 /// [contactSessionCount] 以接触记录为单位；[reachCount] 以参与互动的自然
-/// 人次为单位；[interestDistribution] 的索引 `0–4` 对应五档单次兴趣。
+/// 人次为单位；[interestDistribution] 的索引 `0–4` 对应五档单次兴趣；
+/// [channelDistribution] 的索引与 [ContactChannel.values] 一致。
 /// 这是个人自我分析，不应用匿名阈值，也不能解释成管理考核。
 final class PersonalContactSummary {
   const PersonalContactSummary({
@@ -471,10 +472,14 @@ final class PersonalContactSummary {
     required this.reachCount,
     required this.interestDistribution,
     required this.pendingSyncCount,
+    this.channelDistribution = const [0, 0, 0, 0, 0, 0, 0],
+    this.latestOccurredAtUtc,
   });
 
   final int contactSessionCount;
   final int reachCount;
   final List<int> interestDistribution;
   final int pendingSyncCount;
+  final List<int> channelDistribution;
+  final DateTime? latestOccurredAtUtc;
 }

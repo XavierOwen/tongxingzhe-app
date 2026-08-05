@@ -323,15 +323,36 @@ final class ContactJournal {
     if (!fromUtc.isUtc || !untilUtc.isUtc || !fromUtc.isBefore(untilUtc)) {
       throw const ContactValidationException('invalid_summary_period');
     }
-    final row = await _database
-        .readPersonalContactSummary(
-          appUserId,
-          workspaceId,
-          projectId,
-          fromUtc,
-          untilUtc,
-        )
-        .getSingle();
+    final queryResult = await _database.transaction(() async {
+      final summary = await _database
+          .readPersonalContactSummary(
+            appUserId,
+            workspaceId,
+            projectId,
+            fromUtc,
+            untilUtc,
+          )
+          .getSingle();
+      final channels = await _database
+          .readPersonalContactChannelSummary(
+            appUserId,
+            workspaceId,
+            projectId,
+            fromUtc,
+            untilUtc,
+          )
+          .get();
+      return (summary: summary, channels: channels);
+    });
+    final channelDistribution = List<int>.filled(
+      ContactChannel.values.length,
+      0,
+    );
+    for (final channelRow in queryResult.channels) {
+      final channel = ContactChannel.fromStorage(channelRow.channel);
+      channelDistribution[channel.index] = channelRow.contactSessionCount;
+    }
+    final row = queryResult.summary;
 
     return PersonalContactSummary(
       contactSessionCount: row.contactSessionCount,
@@ -344,6 +365,8 @@ final class ContactJournal {
         row.interest4Count,
       ],
       pendingSyncCount: row.pendingSyncCount,
+      channelDistribution: channelDistribution,
+      latestOccurredAtUtc: row.latestOccurredAtUtc?.toUtc(),
     );
   }
 

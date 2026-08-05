@@ -7,16 +7,16 @@ import '../generated_migrations/schema_v5.dart' as v5;
 import '../generated_migrations/schema_v6.dart' as v6;
 
 void main() {
-  test('保存的 schema v7 可以独立重建', () async {
+  test('保存的 schema v8 可以独立重建', () async {
     final verifier = SchemaVerifier(GeneratedHelper());
-    final connection = await verifier.startAt(7);
+    final connection = await verifier.startAt(8);
     final database = LocalDatabase(connection);
     addTearDown(database.close);
 
-    await verifier.migrateAndValidate(database, 7);
+    await verifier.migrateAndValidate(database, 8);
   });
 
-  test('v6 升级到 v7 时保留已提交接触并新增空草稿表', () async {
+  test('v6 升级到 v8 时保留已提交接触并新增同步协调表', () async {
     final verifier = SchemaVerifier(GeneratedHelper());
     final schema = await verifier.schemaAt(6);
     addTearDown(schema.close);
@@ -71,7 +71,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 7);
+    await verifier.migrateAndValidate(database, 8);
 
     final contact = await database
         .select(database.dbContactRecords)
@@ -82,9 +82,11 @@ void main() {
       await database.select(database.dbContactDraftAnswers).get(),
       isEmpty,
     );
+    expect(await database.select(database.dbSyncDrainerLeases).get(), isEmpty);
+    expect(await database.select(database.dbSyncScopes).get(), isEmpty);
   });
 
-  test('v5 升级到 v7 时保留 legacy 数据并新增现代空表', () async {
+  test('v5 升级到 v8 时保留 legacy 数据并新增现代空表', () async {
     final verifier = SchemaVerifier(GeneratedHelper());
     final schema = await verifier.schemaAt(5);
     addTearDown(schema.close);
@@ -97,7 +99,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 7);
+    await verifier.migrateAndValidate(database, 8);
 
     final legacySetting = await (database.select(
       database.dbAppSettings,
@@ -112,5 +114,7 @@ void main() {
       await database.select(database.dbContactDraftAnswers).get(),
       isEmpty,
     );
+    expect(await database.select(database.dbSyncDrainerLeases).get(), isEmpty);
+    expect(await database.select(database.dbSyncScopes).get(), isEmpty);
   });
 }

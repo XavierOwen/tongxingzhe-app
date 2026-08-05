@@ -31,7 +31,8 @@ SELECT
       WHERE outbox.aggregate_id = contact.contact_id
         AND outbox.status != 'completed'
     ) THEN 1 ELSE 0 END
-  ), 0) AS pending_sync_count
+  ), 0) AS pending_sync_count,
+  MAX(contact.occurred_at_utc) AS latest_occurred_at_utc
 FROM db_contact_records AS contact
 WHERE contact.app_user_id = :app_user_id
   AND contact.workspace_id = :workspace_id
@@ -39,3 +40,26 @@ WHERE contact.app_user_id = :app_user_id
   AND contact.occurred_at_utc >= :from_utc
   AND contact.occurred_at_utc < :until_utc
   AND contact.lifecycle_status = 'active';
+
+-- 渠道来源单独按稳定存储值分组。它与上方总计使用完全相同的筛选条件；
+-- ContactJournal 在同一个只读 transaction 中执行两条查询，保证页面看到
+-- 同一数据库快照。
+readPersonalContactChannelSummary(
+  REQUIRED :app_user_id AS TEXT,
+  REQUIRED :workspace_id AS TEXT,
+  REQUIRED :project_id AS TEXT,
+  REQUIRED :from_utc AS DATETIME,
+  REQUIRED :until_utc AS DATETIME
+):
+SELECT
+  contact.channel AS channel,
+  COUNT(*) AS contact_session_count
+FROM db_contact_records AS contact
+WHERE contact.app_user_id = :app_user_id
+  AND contact.workspace_id = :workspace_id
+  AND contact.project_id = :project_id
+  AND contact.occurred_at_utc >= :from_utc
+  AND contact.occurred_at_utc < :until_utc
+  AND contact.lifecycle_status = 'active'
+GROUP BY contact.channel
+ORDER BY contact.channel;

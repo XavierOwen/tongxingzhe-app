@@ -1,6 +1,6 @@
 # Legacy Drift v5 盘点与保全记录
 
-状态：v5 基线和 v6 中间版本已保存；Slice 1B 已加入当前 v7 升级测试
+状态：v5 基线与 v6／v7 中间版本已保存；Slice 1 已加入当前 v8 升级测试
 
 记录日期：2026-07-31
 
@@ -41,7 +41,7 @@ drift_schemas/drift_schema_v5.json
 bf98732ab6801a3667f127289a333a24a31688f79cae36ea53cf4cc565767901
 ```
 
-v5 是不可改写的历史基线。当前 `LocalDatabase` 已是 v7，不能再用当前 Dart 定义重新导出 v5 或 v6。以下命令生成全部已保存版本的测试辅助代码：
+v5 是不可改写的历史基线。当前 `LocalDatabase` 已是 v8，不能再用当前 Dart 定义重新导出 v5、v6 或 v7。以下命令生成全部已保存版本的测试辅助代码：
 
 ```bash
 dart run drift_dev schema generate \
@@ -81,19 +81,19 @@ dart run drift_dev schema generate \
 
 若将来需要保存真实旧版本 fixture，应先做最小化、去标识化和人工复核，并放入受控测试资产；不得直接复制用户数据库。
 
-### 4.1 当前 v7 的用途
+### 4.1 当前 v8 的用途
 
-当前 schema 快照位于 `drift_schemas/drift_schema_v7.json`。v6 保留五张 legacy 表，并新增现代接触、revision、类型化答案和持久 Outbox 表。v7 再新增私有草稿及草稿答案表。两个版本都不从 legacy 宽表猜测现代接触事实。
+当前 schema 快照位于 `drift_schemas/drift_schema_v8.json`。v6 保留五张 legacy 表，并新增现代接触、revision、类型化答案和持久 Outbox 表。v7 新增私有草稿及草稿答案表。v8 新增同步租约和范围 cursor 表。这些版本都不从 legacy 宽表猜测现代接触事实。
 
-当前 v7 可以用下列命令重新导出：
+当前 v8 可以用下列命令重新导出：
 
 ```bash
 dart run drift_dev schema dump \
   lib/data/local_database.dart \
-  drift_schemas/drift_schema_v7.json
+  drift_schemas/drift_schema_v8.json
 ```
 
-迁移测试保存三条证据。当前 v7 可从快照独立重建。v6 的 synthetic 接触升级后仍存在，草稿表为空。v5 的 synthetic 设置升级后仍存在，全部现代表为空。测试也核对索引与 v7 快照。
+迁移测试保存三条证据。当前 v8 可从快照独立重建。v6 的 synthetic 接触升级后仍存在，草稿和同步协调表为空。v5 的 synthetic 设置升级后仍存在，全部现代表为空。测试也核对索引与 v8 快照。
 
 ## 5. 意外发现未知 v5 数据时
 

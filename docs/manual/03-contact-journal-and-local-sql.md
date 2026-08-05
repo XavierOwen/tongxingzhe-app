@@ -1,6 +1,6 @@
 # 第 3 章：接触草稿如何在 SQLite 中保存、提交和统计
 
-本章解释 Slice 1A 和 Slice 1B 的本地数据模块。当前代码可以保存多份私有草稿，也可以把完整草稿原子提交为匿名接触。正式页面、跨设备草稿同步和 Backend 仍未完成。
+本章解释 Slice 1 的本地数据模块。当前代码可以保存多份私有草稿，也可以把完整草稿原子提交为匿名接触。正式页面和已提交接触的 Backend 同步已接线；跨设备草稿同步仍未完成。
 
 ## 1. `ContactJournal` 为什么是一个深模块
 
@@ -18,7 +18,7 @@
 
 模块接收真实 Drift 数据库、Clock 和 ID generator。测试使用真实 SQLite、固定时间和确定性 ID。测试可以稳定重现失败，不把测试条件带入正式代码。
 
-## 2. v7 的六张现代接触表
+## 2. v8 的八张现代接触与同步表
 
 表结构定义在 [`contact_tables.dart`](../../lib/features/contact_journal/contact_tables.dart)。Drift 根据这些定义生成 SQLite schema 和类型安全的 Dart row。
 
@@ -30,6 +30,8 @@
 | `db_contact_revisions` | 每次提交或更正的完整核心快照 | 被覆盖后消失的历史 |
 | `db_contact_answers` | 问题 ID、回答状态、答案类型和值 | 含义不明的任意 JSON |
 | `db_sync_outbox` | 命令、协议版本、状态和重试字段 | 身份令牌、日志用 PII |
+| `db_sync_drainer_leases` | 跨执行器互斥的全局租约 | 远端锁、用户身份 |
+| `db_sync_scopes` | 每个用户和项目的拉取 cursor、最后成功和失败 | command payload、token |
 
 草稿答案与正式答案分表保存。统计 SQL 只查询 `db_contact_records`，因此草稿不会增加接触场次、触达人数或兴趣分布。
 
@@ -69,7 +71,7 @@ Native Drift 读取日期时可能使用设备本地时区表示同一瞬间。`
 
 一份草稿包含主表行和零到多条问卷答案。创建或更新时，`ContactJournal` 在一个 SQLite transaction 内保存两部分。更新使用当前表单快照替换旧答案。
 
-如果答案写入失败，主表变化也会回滚。UI 以后只有在 `saveDraft` 返回后才能显示“已保存”。页面切换、进入后台和输入防抖等触发时机属于 UI 生命周期，当前尚未接线。
+如果答案写入失败，主表变化也会回滚。UI 只有在 `saveDraft` 返回后才能显示“已保存”。正式表单在输入停止 350 毫秒后保存，在页面返回或 App 进入后台时立即排空待保存编辑。
 
 文件型 SQLite 测试会执行以下步骤：
 
@@ -169,26 +171,18 @@ WHERE app_user_id = :app_user_id
 
 兴趣是有序等级。核心分析先返回五档分布，不计算平均值。若以后显示兴趣算术指数，页面必须说明它额外假设相邻等级距离相等。
 
-## 12. v5 和 v6 如何升级到 v7
+## 12. v5 和 v6 如何升级到 v8
 
-v6 使用 expand-contract 新增已提交接触、revision、答案和 Outbox 表。v7 再新增草稿和草稿答案表。升级不删除五张 legacy 表，也不从旧宽表猜测现代接触。
+v6 使用 expand-contract 新增已提交接触、revision、答案和 Outbox 表。v7 新增草稿和草稿答案表。v8 新增同步执行租约和按可信范围保存的 cursor。升级不删除五张 legacy 表，也不从旧宽表猜测现代接触。
 
 [`local_database_migration_test.dart`](../../test/data/local_database_migration_test.dart) 保存三类证据：
 
-- 当前 v7 快照可以独立重建；
-- v6 的 synthetic 已提交接触升级后仍存在，新增草稿表为空；
+- 当前 v8 快照可以独立重建；
+- v6 的 synthetic 已提交接触升级后仍存在，新增草稿和同步协调表为空；
 - v5 的 synthetic 设置升级后仍存在，全部现代表为空。
 
-机器可读快照位于 [`drift_schema_v7.json`](../../drift_schemas/drift_schema_v7.json)。CI 会重新导出当前 schema 并逐字比较，也会重新生成所有 migration 测试辅助代码。
+机器可读快照位于 [`drift_schema_v8.json`](../../drift_schemas/drift_schema_v8.json)。CI 会重新导出当前 schema 并逐字比较，也会重新生成所有 migration 测试辅助代码。
 
 ## 13. 当前边界
 
-v7 完成草稿和正式接触的本地数据行为。以下能力仍未完成：
-
-- 正式身份到内部 `app_user_id`、个人空间和当前项目的 Backend 映射；
-- 页面输入防抖、后台保存和保存状态反馈；
-- 草稿跨设备同步、冲突副本和本地数据库应用层加密；
-- Outbox claim、lease、ACK 和 Backend 接收；
-- Today、接触列表和最近七日分析页面。
-
-正式页面需要可信的用户和项目上下文。当前代码不会从 Supabase subject 或 email 自行推导内部权限，也不会把旧 Demo 的城市和团队字段伪装成现代推广项目。
+v8 完成草稿、正式接触、本机同步状态和远端 cursor 的本地数据行为。草稿跨设备同步、冲突副本和本地数据库应用层加密仍属后续切片。同步状态机和 Backend SQL 见 [第 6 章](06-persistent-sync-and-backend-sql.md)。
