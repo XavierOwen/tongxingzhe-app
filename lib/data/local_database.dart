@@ -114,6 +114,8 @@ class DbSecurityEvents extends Table {
     DbContactRevisions,
     DbContactAnswers,
     DbSyncOutbox,
+    DbContactDrafts,
+    DbContactDraftAnswers,
   ],
 )
 class LocalDatabase extends _$LocalDatabase {
@@ -131,7 +133,7 @@ class LocalDatabase extends _$LocalDatabase {
       );
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -223,6 +225,13 @@ class LocalDatabase extends _$LocalDatabase {
         await migrator.createIndex(contactRecordsPersonalPeriod);
         await migrator.createIndex(syncOutboxReady);
         await migrator.createIndex(syncOutboxAggregateOrder);
+      }
+      if (from < 7) {
+        // v7 新增私有多草稿。草稿是尚未提交的填写状态，不从 legacy 宽表
+        // 或已提交接触反推，因而升级只建新表和创建者列表索引。
+        await migrator.createTable(dbContactDrafts);
+        await migrator.createTable(dbContactDraftAnswers);
+        await migrator.createIndex(contactDraftsOwnerUpdated);
       }
     },
   );

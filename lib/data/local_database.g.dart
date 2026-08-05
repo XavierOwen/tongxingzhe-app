@@ -3654,6 +3654,1700 @@ class DbContactAnswersCompanion extends UpdateCompanion<DbContactAnswer> {
   }
 }
 
+class $DbContactDraftsTable extends DbContactDrafts
+    with TableInfo<$DbContactDraftsTable, DbContactDraft> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DbContactDraftsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _draftIdMeta = const VerificationMeta(
+    'draftId',
+  );
+  @override
+  late final GeneratedColumn<String> draftId = GeneratedColumn<String>(
+    'draft_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _appUserIdMeta = const VerificationMeta(
+    'appUserId',
+  );
+  @override
+  late final GeneratedColumn<String> appUserId = GeneratedColumn<String>(
+    'app_user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _workspaceIdMeta = const VerificationMeta(
+    'workspaceId',
+  );
+  @override
+  late final GeneratedColumn<String> workspaceId = GeneratedColumn<String>(
+    'workspace_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<String> projectId = GeneratedColumn<String>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _questionnaireVersionIdMeta =
+      const VerificationMeta('questionnaireVersionId');
+  @override
+  late final GeneratedColumn<String> questionnaireVersionId =
+      GeneratedColumn<String>(
+        'questionnaire_version_id',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _createdAtUtcMeta = const VerificationMeta(
+    'createdAtUtc',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAtUtc = GeneratedColumn<DateTime>(
+    'created_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtUtcMeta = const VerificationMeta(
+    'updatedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAtUtc = GeneratedColumn<DateTime>(
+    'updated_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _occurredAtUtcMeta = const VerificationMeta(
+    'occurredAtUtc',
+  );
+  @override
+  late final GeneratedColumn<DateTime> occurredAtUtc =
+      GeneratedColumn<DateTime>(
+        'occurred_at_utc',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _occurredTimeZoneMeta = const VerificationMeta(
+    'occurredTimeZone',
+  );
+  @override
+  late final GeneratedColumn<String> occurredTimeZone = GeneratedColumn<String>(
+    'occurred_time_zone',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _channelMeta = const VerificationMeta(
+    'channel',
+  );
+  @override
+  late final GeneratedColumn<String> channel = GeneratedColumn<String>(
+    'channel',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _channelDetailMeta = const VerificationMeta(
+    'channelDetail',
+  );
+  @override
+  late final GeneratedColumn<String> channelDetail = GeneratedColumn<String>(
+    'channel_detail',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _locationKindMeta = const VerificationMeta(
+    'locationKind',
+  );
+  @override
+  late final GeneratedColumn<String> locationKind = GeneratedColumn<String>(
+    'location_kind',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _placeNameMeta = const VerificationMeta(
+    'placeName',
+  );
+  @override
+  late final GeneratedColumn<String> placeName = GeneratedColumn<String>(
+    'place_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _smallestRegionIdMeta = const VerificationMeta(
+    'smallestRegionId',
+  );
+  @override
+  late final GeneratedColumn<String> smallestRegionId = GeneratedColumn<String>(
+    'smallest_region_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _latitudeMeta = const VerificationMeta(
+    'latitude',
+  );
+  @override
+  late final GeneratedColumn<double> latitude = GeneratedColumn<double>(
+    'latitude',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _longitudeMeta = const VerificationMeta(
+    'longitude',
+  );
+  @override
+  late final GeneratedColumn<double> longitude = GeneratedColumn<double>(
+    'longitude',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _locationAccuracyMetersMeta =
+      const VerificationMeta('locationAccuracyMeters');
+  @override
+  late final GeneratedColumn<double> locationAccuracyMeters =
+      GeneratedColumn<double>(
+        'location_accuracy_meters',
+        aliasedName,
+        true,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _reachCountMeta = const VerificationMeta(
+    'reachCount',
+  );
+  @override
+  late final GeneratedColumn<int> reachCount = GeneratedColumn<int>(
+    'reach_count',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _interestLevelMeta = const VerificationMeta(
+    'interestLevel',
+  );
+  @override
+  late final GeneratedColumn<int> interestLevel = GeneratedColumn<int>(
+    'interest_level',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _syncModeMeta = const VerificationMeta(
+    'syncMode',
+  );
+  @override
+  late final GeneratedColumn<String> syncMode = GeneratedColumn<String>(
+    'sync_mode',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('account_private'),
+  );
+  static const VerificationMeta _abandonedAtUtcMeta = const VerificationMeta(
+    'abandonedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<DateTime> abandonedAtUtc =
+      GeneratedColumn<DateTime>(
+        'abandoned_at_utc',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _undoUntilUtcMeta = const VerificationMeta(
+    'undoUntilUtc',
+  );
+  @override
+  late final GeneratedColumn<DateTime> undoUntilUtc = GeneratedColumn<DateTime>(
+    'undo_until_utc',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    draftId,
+    appUserId,
+    workspaceId,
+    projectId,
+    questionnaireVersionId,
+    createdAtUtc,
+    updatedAtUtc,
+    occurredAtUtc,
+    occurredTimeZone,
+    channel,
+    channelDetail,
+    locationKind,
+    placeName,
+    smallestRegionId,
+    latitude,
+    longitude,
+    locationAccuracyMeters,
+    reachCount,
+    interestLevel,
+    syncMode,
+    abandonedAtUtc,
+    undoUntilUtc,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'db_contact_drafts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DbContactDraft> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('draft_id')) {
+      context.handle(
+        _draftIdMeta,
+        draftId.isAcceptableOrUnknown(data['draft_id']!, _draftIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_draftIdMeta);
+    }
+    if (data.containsKey('app_user_id')) {
+      context.handle(
+        _appUserIdMeta,
+        appUserId.isAcceptableOrUnknown(data['app_user_id']!, _appUserIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_appUserIdMeta);
+    }
+    if (data.containsKey('workspace_id')) {
+      context.handle(
+        _workspaceIdMeta,
+        workspaceId.isAcceptableOrUnknown(
+          data['workspace_id']!,
+          _workspaceIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_workspaceIdMeta);
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('questionnaire_version_id')) {
+      context.handle(
+        _questionnaireVersionIdMeta,
+        questionnaireVersionId.isAcceptableOrUnknown(
+          data['questionnaire_version_id']!,
+          _questionnaireVersionIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_questionnaireVersionIdMeta);
+    }
+    if (data.containsKey('created_at_utc')) {
+      context.handle(
+        _createdAtUtcMeta,
+        createdAtUtc.isAcceptableOrUnknown(
+          data['created_at_utc']!,
+          _createdAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtUtcMeta);
+    }
+    if (data.containsKey('updated_at_utc')) {
+      context.handle(
+        _updatedAtUtcMeta,
+        updatedAtUtc.isAcceptableOrUnknown(
+          data['updated_at_utc']!,
+          _updatedAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtUtcMeta);
+    }
+    if (data.containsKey('occurred_at_utc')) {
+      context.handle(
+        _occurredAtUtcMeta,
+        occurredAtUtc.isAcceptableOrUnknown(
+          data['occurred_at_utc']!,
+          _occurredAtUtcMeta,
+        ),
+      );
+    }
+    if (data.containsKey('occurred_time_zone')) {
+      context.handle(
+        _occurredTimeZoneMeta,
+        occurredTimeZone.isAcceptableOrUnknown(
+          data['occurred_time_zone']!,
+          _occurredTimeZoneMeta,
+        ),
+      );
+    }
+    if (data.containsKey('channel')) {
+      context.handle(
+        _channelMeta,
+        channel.isAcceptableOrUnknown(data['channel']!, _channelMeta),
+      );
+    }
+    if (data.containsKey('channel_detail')) {
+      context.handle(
+        _channelDetailMeta,
+        channelDetail.isAcceptableOrUnknown(
+          data['channel_detail']!,
+          _channelDetailMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_kind')) {
+      context.handle(
+        _locationKindMeta,
+        locationKind.isAcceptableOrUnknown(
+          data['location_kind']!,
+          _locationKindMeta,
+        ),
+      );
+    }
+    if (data.containsKey('place_name')) {
+      context.handle(
+        _placeNameMeta,
+        placeName.isAcceptableOrUnknown(data['place_name']!, _placeNameMeta),
+      );
+    }
+    if (data.containsKey('smallest_region_id')) {
+      context.handle(
+        _smallestRegionIdMeta,
+        smallestRegionId.isAcceptableOrUnknown(
+          data['smallest_region_id']!,
+          _smallestRegionIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('latitude')) {
+      context.handle(
+        _latitudeMeta,
+        latitude.isAcceptableOrUnknown(data['latitude']!, _latitudeMeta),
+      );
+    }
+    if (data.containsKey('longitude')) {
+      context.handle(
+        _longitudeMeta,
+        longitude.isAcceptableOrUnknown(data['longitude']!, _longitudeMeta),
+      );
+    }
+    if (data.containsKey('location_accuracy_meters')) {
+      context.handle(
+        _locationAccuracyMetersMeta,
+        locationAccuracyMeters.isAcceptableOrUnknown(
+          data['location_accuracy_meters']!,
+          _locationAccuracyMetersMeta,
+        ),
+      );
+    }
+    if (data.containsKey('reach_count')) {
+      context.handle(
+        _reachCountMeta,
+        reachCount.isAcceptableOrUnknown(data['reach_count']!, _reachCountMeta),
+      );
+    }
+    if (data.containsKey('interest_level')) {
+      context.handle(
+        _interestLevelMeta,
+        interestLevel.isAcceptableOrUnknown(
+          data['interest_level']!,
+          _interestLevelMeta,
+        ),
+      );
+    }
+    if (data.containsKey('sync_mode')) {
+      context.handle(
+        _syncModeMeta,
+        syncMode.isAcceptableOrUnknown(data['sync_mode']!, _syncModeMeta),
+      );
+    }
+    if (data.containsKey('abandoned_at_utc')) {
+      context.handle(
+        _abandonedAtUtcMeta,
+        abandonedAtUtc.isAcceptableOrUnknown(
+          data['abandoned_at_utc']!,
+          _abandonedAtUtcMeta,
+        ),
+      );
+    }
+    if (data.containsKey('undo_until_utc')) {
+      context.handle(
+        _undoUntilUtcMeta,
+        undoUntilUtc.isAcceptableOrUnknown(
+          data['undo_until_utc']!,
+          _undoUntilUtcMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {draftId};
+  @override
+  DbContactDraft map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DbContactDraft(
+      draftId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}draft_id'],
+      )!,
+      appUserId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}app_user_id'],
+      )!,
+      workspaceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}workspace_id'],
+      )!,
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}project_id'],
+      )!,
+      questionnaireVersionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}questionnaire_version_id'],
+      )!,
+      createdAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at_utc'],
+      )!,
+      updatedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at_utc'],
+      )!,
+      occurredAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}occurred_at_utc'],
+      ),
+      occurredTimeZone: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}occurred_time_zone'],
+      ),
+      channel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}channel'],
+      ),
+      channelDetail: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}channel_detail'],
+      ),
+      locationKind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}location_kind'],
+      ),
+      placeName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}place_name'],
+      ),
+      smallestRegionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}smallest_region_id'],
+      ),
+      latitude: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}latitude'],
+      ),
+      longitude: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}longitude'],
+      ),
+      locationAccuracyMeters: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}location_accuracy_meters'],
+      ),
+      reachCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}reach_count'],
+      ),
+      interestLevel: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}interest_level'],
+      ),
+      syncMode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sync_mode'],
+      )!,
+      abandonedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}abandoned_at_utc'],
+      ),
+      undoUntilUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}undo_until_utc'],
+      ),
+    );
+  }
+
+  @override
+  $DbContactDraftsTable createAlias(String alias) {
+    return $DbContactDraftsTable(attachedDatabase, alias);
+  }
+}
+
+class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
+  final String draftId;
+  final String appUserId;
+  final String workspaceId;
+  final String projectId;
+  final String questionnaireVersionId;
+  final DateTime createdAtUtc;
+  final DateTime updatedAtUtc;
+  final DateTime? occurredAtUtc;
+  final String? occurredTimeZone;
+  final String? channel;
+  final String? channelDetail;
+  final String? locationKind;
+  final String? placeName;
+  final String? smallestRegionId;
+  final double? latitude;
+  final double? longitude;
+  final double? locationAccuracyMeters;
+  final int? reachCount;
+  final int? interestLevel;
+  final String syncMode;
+  final DateTime? abandonedAtUtc;
+  final DateTime? undoUntilUtc;
+  const DbContactDraft({
+    required this.draftId,
+    required this.appUserId,
+    required this.workspaceId,
+    required this.projectId,
+    required this.questionnaireVersionId,
+    required this.createdAtUtc,
+    required this.updatedAtUtc,
+    this.occurredAtUtc,
+    this.occurredTimeZone,
+    this.channel,
+    this.channelDetail,
+    this.locationKind,
+    this.placeName,
+    this.smallestRegionId,
+    this.latitude,
+    this.longitude,
+    this.locationAccuracyMeters,
+    this.reachCount,
+    this.interestLevel,
+    required this.syncMode,
+    this.abandonedAtUtc,
+    this.undoUntilUtc,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['draft_id'] = Variable<String>(draftId);
+    map['app_user_id'] = Variable<String>(appUserId);
+    map['workspace_id'] = Variable<String>(workspaceId);
+    map['project_id'] = Variable<String>(projectId);
+    map['questionnaire_version_id'] = Variable<String>(questionnaireVersionId);
+    map['created_at_utc'] = Variable<DateTime>(createdAtUtc);
+    map['updated_at_utc'] = Variable<DateTime>(updatedAtUtc);
+    if (!nullToAbsent || occurredAtUtc != null) {
+      map['occurred_at_utc'] = Variable<DateTime>(occurredAtUtc);
+    }
+    if (!nullToAbsent || occurredTimeZone != null) {
+      map['occurred_time_zone'] = Variable<String>(occurredTimeZone);
+    }
+    if (!nullToAbsent || channel != null) {
+      map['channel'] = Variable<String>(channel);
+    }
+    if (!nullToAbsent || channelDetail != null) {
+      map['channel_detail'] = Variable<String>(channelDetail);
+    }
+    if (!nullToAbsent || locationKind != null) {
+      map['location_kind'] = Variable<String>(locationKind);
+    }
+    if (!nullToAbsent || placeName != null) {
+      map['place_name'] = Variable<String>(placeName);
+    }
+    if (!nullToAbsent || smallestRegionId != null) {
+      map['smallest_region_id'] = Variable<String>(smallestRegionId);
+    }
+    if (!nullToAbsent || latitude != null) {
+      map['latitude'] = Variable<double>(latitude);
+    }
+    if (!nullToAbsent || longitude != null) {
+      map['longitude'] = Variable<double>(longitude);
+    }
+    if (!nullToAbsent || locationAccuracyMeters != null) {
+      map['location_accuracy_meters'] = Variable<double>(
+        locationAccuracyMeters,
+      );
+    }
+    if (!nullToAbsent || reachCount != null) {
+      map['reach_count'] = Variable<int>(reachCount);
+    }
+    if (!nullToAbsent || interestLevel != null) {
+      map['interest_level'] = Variable<int>(interestLevel);
+    }
+    map['sync_mode'] = Variable<String>(syncMode);
+    if (!nullToAbsent || abandonedAtUtc != null) {
+      map['abandoned_at_utc'] = Variable<DateTime>(abandonedAtUtc);
+    }
+    if (!nullToAbsent || undoUntilUtc != null) {
+      map['undo_until_utc'] = Variable<DateTime>(undoUntilUtc);
+    }
+    return map;
+  }
+
+  DbContactDraftsCompanion toCompanion(bool nullToAbsent) {
+    return DbContactDraftsCompanion(
+      draftId: Value(draftId),
+      appUserId: Value(appUserId),
+      workspaceId: Value(workspaceId),
+      projectId: Value(projectId),
+      questionnaireVersionId: Value(questionnaireVersionId),
+      createdAtUtc: Value(createdAtUtc),
+      updatedAtUtc: Value(updatedAtUtc),
+      occurredAtUtc: occurredAtUtc == null && nullToAbsent
+          ? const Value.absent()
+          : Value(occurredAtUtc),
+      occurredTimeZone: occurredTimeZone == null && nullToAbsent
+          ? const Value.absent()
+          : Value(occurredTimeZone),
+      channel: channel == null && nullToAbsent
+          ? const Value.absent()
+          : Value(channel),
+      channelDetail: channelDetail == null && nullToAbsent
+          ? const Value.absent()
+          : Value(channelDetail),
+      locationKind: locationKind == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationKind),
+      placeName: placeName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(placeName),
+      smallestRegionId: smallestRegionId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(smallestRegionId),
+      latitude: latitude == null && nullToAbsent
+          ? const Value.absent()
+          : Value(latitude),
+      longitude: longitude == null && nullToAbsent
+          ? const Value.absent()
+          : Value(longitude),
+      locationAccuracyMeters: locationAccuracyMeters == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationAccuracyMeters),
+      reachCount: reachCount == null && nullToAbsent
+          ? const Value.absent()
+          : Value(reachCount),
+      interestLevel: interestLevel == null && nullToAbsent
+          ? const Value.absent()
+          : Value(interestLevel),
+      syncMode: Value(syncMode),
+      abandonedAtUtc: abandonedAtUtc == null && nullToAbsent
+          ? const Value.absent()
+          : Value(abandonedAtUtc),
+      undoUntilUtc: undoUntilUtc == null && nullToAbsent
+          ? const Value.absent()
+          : Value(undoUntilUtc),
+    );
+  }
+
+  factory DbContactDraft.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DbContactDraft(
+      draftId: serializer.fromJson<String>(json['draftId']),
+      appUserId: serializer.fromJson<String>(json['appUserId']),
+      workspaceId: serializer.fromJson<String>(json['workspaceId']),
+      projectId: serializer.fromJson<String>(json['projectId']),
+      questionnaireVersionId: serializer.fromJson<String>(
+        json['questionnaireVersionId'],
+      ),
+      createdAtUtc: serializer.fromJson<DateTime>(json['createdAtUtc']),
+      updatedAtUtc: serializer.fromJson<DateTime>(json['updatedAtUtc']),
+      occurredAtUtc: serializer.fromJson<DateTime?>(json['occurredAtUtc']),
+      occurredTimeZone: serializer.fromJson<String?>(json['occurredTimeZone']),
+      channel: serializer.fromJson<String?>(json['channel']),
+      channelDetail: serializer.fromJson<String?>(json['channelDetail']),
+      locationKind: serializer.fromJson<String?>(json['locationKind']),
+      placeName: serializer.fromJson<String?>(json['placeName']),
+      smallestRegionId: serializer.fromJson<String?>(json['smallestRegionId']),
+      latitude: serializer.fromJson<double?>(json['latitude']),
+      longitude: serializer.fromJson<double?>(json['longitude']),
+      locationAccuracyMeters: serializer.fromJson<double?>(
+        json['locationAccuracyMeters'],
+      ),
+      reachCount: serializer.fromJson<int?>(json['reachCount']),
+      interestLevel: serializer.fromJson<int?>(json['interestLevel']),
+      syncMode: serializer.fromJson<String>(json['syncMode']),
+      abandonedAtUtc: serializer.fromJson<DateTime?>(json['abandonedAtUtc']),
+      undoUntilUtc: serializer.fromJson<DateTime?>(json['undoUntilUtc']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'draftId': serializer.toJson<String>(draftId),
+      'appUserId': serializer.toJson<String>(appUserId),
+      'workspaceId': serializer.toJson<String>(workspaceId),
+      'projectId': serializer.toJson<String>(projectId),
+      'questionnaireVersionId': serializer.toJson<String>(
+        questionnaireVersionId,
+      ),
+      'createdAtUtc': serializer.toJson<DateTime>(createdAtUtc),
+      'updatedAtUtc': serializer.toJson<DateTime>(updatedAtUtc),
+      'occurredAtUtc': serializer.toJson<DateTime?>(occurredAtUtc),
+      'occurredTimeZone': serializer.toJson<String?>(occurredTimeZone),
+      'channel': serializer.toJson<String?>(channel),
+      'channelDetail': serializer.toJson<String?>(channelDetail),
+      'locationKind': serializer.toJson<String?>(locationKind),
+      'placeName': serializer.toJson<String?>(placeName),
+      'smallestRegionId': serializer.toJson<String?>(smallestRegionId),
+      'latitude': serializer.toJson<double?>(latitude),
+      'longitude': serializer.toJson<double?>(longitude),
+      'locationAccuracyMeters': serializer.toJson<double?>(
+        locationAccuracyMeters,
+      ),
+      'reachCount': serializer.toJson<int?>(reachCount),
+      'interestLevel': serializer.toJson<int?>(interestLevel),
+      'syncMode': serializer.toJson<String>(syncMode),
+      'abandonedAtUtc': serializer.toJson<DateTime?>(abandonedAtUtc),
+      'undoUntilUtc': serializer.toJson<DateTime?>(undoUntilUtc),
+    };
+  }
+
+  DbContactDraft copyWith({
+    String? draftId,
+    String? appUserId,
+    String? workspaceId,
+    String? projectId,
+    String? questionnaireVersionId,
+    DateTime? createdAtUtc,
+    DateTime? updatedAtUtc,
+    Value<DateTime?> occurredAtUtc = const Value.absent(),
+    Value<String?> occurredTimeZone = const Value.absent(),
+    Value<String?> channel = const Value.absent(),
+    Value<String?> channelDetail = const Value.absent(),
+    Value<String?> locationKind = const Value.absent(),
+    Value<String?> placeName = const Value.absent(),
+    Value<String?> smallestRegionId = const Value.absent(),
+    Value<double?> latitude = const Value.absent(),
+    Value<double?> longitude = const Value.absent(),
+    Value<double?> locationAccuracyMeters = const Value.absent(),
+    Value<int?> reachCount = const Value.absent(),
+    Value<int?> interestLevel = const Value.absent(),
+    String? syncMode,
+    Value<DateTime?> abandonedAtUtc = const Value.absent(),
+    Value<DateTime?> undoUntilUtc = const Value.absent(),
+  }) => DbContactDraft(
+    draftId: draftId ?? this.draftId,
+    appUserId: appUserId ?? this.appUserId,
+    workspaceId: workspaceId ?? this.workspaceId,
+    projectId: projectId ?? this.projectId,
+    questionnaireVersionId:
+        questionnaireVersionId ?? this.questionnaireVersionId,
+    createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+    updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
+    occurredAtUtc: occurredAtUtc.present
+        ? occurredAtUtc.value
+        : this.occurredAtUtc,
+    occurredTimeZone: occurredTimeZone.present
+        ? occurredTimeZone.value
+        : this.occurredTimeZone,
+    channel: channel.present ? channel.value : this.channel,
+    channelDetail: channelDetail.present
+        ? channelDetail.value
+        : this.channelDetail,
+    locationKind: locationKind.present ? locationKind.value : this.locationKind,
+    placeName: placeName.present ? placeName.value : this.placeName,
+    smallestRegionId: smallestRegionId.present
+        ? smallestRegionId.value
+        : this.smallestRegionId,
+    latitude: latitude.present ? latitude.value : this.latitude,
+    longitude: longitude.present ? longitude.value : this.longitude,
+    locationAccuracyMeters: locationAccuracyMeters.present
+        ? locationAccuracyMeters.value
+        : this.locationAccuracyMeters,
+    reachCount: reachCount.present ? reachCount.value : this.reachCount,
+    interestLevel: interestLevel.present
+        ? interestLevel.value
+        : this.interestLevel,
+    syncMode: syncMode ?? this.syncMode,
+    abandonedAtUtc: abandonedAtUtc.present
+        ? abandonedAtUtc.value
+        : this.abandonedAtUtc,
+    undoUntilUtc: undoUntilUtc.present ? undoUntilUtc.value : this.undoUntilUtc,
+  );
+  DbContactDraft copyWithCompanion(DbContactDraftsCompanion data) {
+    return DbContactDraft(
+      draftId: data.draftId.present ? data.draftId.value : this.draftId,
+      appUserId: data.appUserId.present ? data.appUserId.value : this.appUserId,
+      workspaceId: data.workspaceId.present
+          ? data.workspaceId.value
+          : this.workspaceId,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      questionnaireVersionId: data.questionnaireVersionId.present
+          ? data.questionnaireVersionId.value
+          : this.questionnaireVersionId,
+      createdAtUtc: data.createdAtUtc.present
+          ? data.createdAtUtc.value
+          : this.createdAtUtc,
+      updatedAtUtc: data.updatedAtUtc.present
+          ? data.updatedAtUtc.value
+          : this.updatedAtUtc,
+      occurredAtUtc: data.occurredAtUtc.present
+          ? data.occurredAtUtc.value
+          : this.occurredAtUtc,
+      occurredTimeZone: data.occurredTimeZone.present
+          ? data.occurredTimeZone.value
+          : this.occurredTimeZone,
+      channel: data.channel.present ? data.channel.value : this.channel,
+      channelDetail: data.channelDetail.present
+          ? data.channelDetail.value
+          : this.channelDetail,
+      locationKind: data.locationKind.present
+          ? data.locationKind.value
+          : this.locationKind,
+      placeName: data.placeName.present ? data.placeName.value : this.placeName,
+      smallestRegionId: data.smallestRegionId.present
+          ? data.smallestRegionId.value
+          : this.smallestRegionId,
+      latitude: data.latitude.present ? data.latitude.value : this.latitude,
+      longitude: data.longitude.present ? data.longitude.value : this.longitude,
+      locationAccuracyMeters: data.locationAccuracyMeters.present
+          ? data.locationAccuracyMeters.value
+          : this.locationAccuracyMeters,
+      reachCount: data.reachCount.present
+          ? data.reachCount.value
+          : this.reachCount,
+      interestLevel: data.interestLevel.present
+          ? data.interestLevel.value
+          : this.interestLevel,
+      syncMode: data.syncMode.present ? data.syncMode.value : this.syncMode,
+      abandonedAtUtc: data.abandonedAtUtc.present
+          ? data.abandonedAtUtc.value
+          : this.abandonedAtUtc,
+      undoUntilUtc: data.undoUntilUtc.present
+          ? data.undoUntilUtc.value
+          : this.undoUntilUtc,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbContactDraft(')
+          ..write('draftId: $draftId, ')
+          ..write('appUserId: $appUserId, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('projectId: $projectId, ')
+          ..write('questionnaireVersionId: $questionnaireVersionId, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('updatedAtUtc: $updatedAtUtc, ')
+          ..write('occurredAtUtc: $occurredAtUtc, ')
+          ..write('occurredTimeZone: $occurredTimeZone, ')
+          ..write('channel: $channel, ')
+          ..write('channelDetail: $channelDetail, ')
+          ..write('locationKind: $locationKind, ')
+          ..write('placeName: $placeName, ')
+          ..write('smallestRegionId: $smallestRegionId, ')
+          ..write('latitude: $latitude, ')
+          ..write('longitude: $longitude, ')
+          ..write('locationAccuracyMeters: $locationAccuracyMeters, ')
+          ..write('reachCount: $reachCount, ')
+          ..write('interestLevel: $interestLevel, ')
+          ..write('syncMode: $syncMode, ')
+          ..write('abandonedAtUtc: $abandonedAtUtc, ')
+          ..write('undoUntilUtc: $undoUntilUtc')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hashAll([
+    draftId,
+    appUserId,
+    workspaceId,
+    projectId,
+    questionnaireVersionId,
+    createdAtUtc,
+    updatedAtUtc,
+    occurredAtUtc,
+    occurredTimeZone,
+    channel,
+    channelDetail,
+    locationKind,
+    placeName,
+    smallestRegionId,
+    latitude,
+    longitude,
+    locationAccuracyMeters,
+    reachCount,
+    interestLevel,
+    syncMode,
+    abandonedAtUtc,
+    undoUntilUtc,
+  ]);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DbContactDraft &&
+          other.draftId == this.draftId &&
+          other.appUserId == this.appUserId &&
+          other.workspaceId == this.workspaceId &&
+          other.projectId == this.projectId &&
+          other.questionnaireVersionId == this.questionnaireVersionId &&
+          other.createdAtUtc == this.createdAtUtc &&
+          other.updatedAtUtc == this.updatedAtUtc &&
+          other.occurredAtUtc == this.occurredAtUtc &&
+          other.occurredTimeZone == this.occurredTimeZone &&
+          other.channel == this.channel &&
+          other.channelDetail == this.channelDetail &&
+          other.locationKind == this.locationKind &&
+          other.placeName == this.placeName &&
+          other.smallestRegionId == this.smallestRegionId &&
+          other.latitude == this.latitude &&
+          other.longitude == this.longitude &&
+          other.locationAccuracyMeters == this.locationAccuracyMeters &&
+          other.reachCount == this.reachCount &&
+          other.interestLevel == this.interestLevel &&
+          other.syncMode == this.syncMode &&
+          other.abandonedAtUtc == this.abandonedAtUtc &&
+          other.undoUntilUtc == this.undoUntilUtc);
+}
+
+class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
+  final Value<String> draftId;
+  final Value<String> appUserId;
+  final Value<String> workspaceId;
+  final Value<String> projectId;
+  final Value<String> questionnaireVersionId;
+  final Value<DateTime> createdAtUtc;
+  final Value<DateTime> updatedAtUtc;
+  final Value<DateTime?> occurredAtUtc;
+  final Value<String?> occurredTimeZone;
+  final Value<String?> channel;
+  final Value<String?> channelDetail;
+  final Value<String?> locationKind;
+  final Value<String?> placeName;
+  final Value<String?> smallestRegionId;
+  final Value<double?> latitude;
+  final Value<double?> longitude;
+  final Value<double?> locationAccuracyMeters;
+  final Value<int?> reachCount;
+  final Value<int?> interestLevel;
+  final Value<String> syncMode;
+  final Value<DateTime?> abandonedAtUtc;
+  final Value<DateTime?> undoUntilUtc;
+  final Value<int> rowid;
+  const DbContactDraftsCompanion({
+    this.draftId = const Value.absent(),
+    this.appUserId = const Value.absent(),
+    this.workspaceId = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.questionnaireVersionId = const Value.absent(),
+    this.createdAtUtc = const Value.absent(),
+    this.updatedAtUtc = const Value.absent(),
+    this.occurredAtUtc = const Value.absent(),
+    this.occurredTimeZone = const Value.absent(),
+    this.channel = const Value.absent(),
+    this.channelDetail = const Value.absent(),
+    this.locationKind = const Value.absent(),
+    this.placeName = const Value.absent(),
+    this.smallestRegionId = const Value.absent(),
+    this.latitude = const Value.absent(),
+    this.longitude = const Value.absent(),
+    this.locationAccuracyMeters = const Value.absent(),
+    this.reachCount = const Value.absent(),
+    this.interestLevel = const Value.absent(),
+    this.syncMode = const Value.absent(),
+    this.abandonedAtUtc = const Value.absent(),
+    this.undoUntilUtc = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DbContactDraftsCompanion.insert({
+    required String draftId,
+    required String appUserId,
+    required String workspaceId,
+    required String projectId,
+    required String questionnaireVersionId,
+    required DateTime createdAtUtc,
+    required DateTime updatedAtUtc,
+    this.occurredAtUtc = const Value.absent(),
+    this.occurredTimeZone = const Value.absent(),
+    this.channel = const Value.absent(),
+    this.channelDetail = const Value.absent(),
+    this.locationKind = const Value.absent(),
+    this.placeName = const Value.absent(),
+    this.smallestRegionId = const Value.absent(),
+    this.latitude = const Value.absent(),
+    this.longitude = const Value.absent(),
+    this.locationAccuracyMeters = const Value.absent(),
+    this.reachCount = const Value.absent(),
+    this.interestLevel = const Value.absent(),
+    this.syncMode = const Value.absent(),
+    this.abandonedAtUtc = const Value.absent(),
+    this.undoUntilUtc = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : draftId = Value(draftId),
+       appUserId = Value(appUserId),
+       workspaceId = Value(workspaceId),
+       projectId = Value(projectId),
+       questionnaireVersionId = Value(questionnaireVersionId),
+       createdAtUtc = Value(createdAtUtc),
+       updatedAtUtc = Value(updatedAtUtc);
+  static Insertable<DbContactDraft> custom({
+    Expression<String>? draftId,
+    Expression<String>? appUserId,
+    Expression<String>? workspaceId,
+    Expression<String>? projectId,
+    Expression<String>? questionnaireVersionId,
+    Expression<DateTime>? createdAtUtc,
+    Expression<DateTime>? updatedAtUtc,
+    Expression<DateTime>? occurredAtUtc,
+    Expression<String>? occurredTimeZone,
+    Expression<String>? channel,
+    Expression<String>? channelDetail,
+    Expression<String>? locationKind,
+    Expression<String>? placeName,
+    Expression<String>? smallestRegionId,
+    Expression<double>? latitude,
+    Expression<double>? longitude,
+    Expression<double>? locationAccuracyMeters,
+    Expression<int>? reachCount,
+    Expression<int>? interestLevel,
+    Expression<String>? syncMode,
+    Expression<DateTime>? abandonedAtUtc,
+    Expression<DateTime>? undoUntilUtc,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (draftId != null) 'draft_id': draftId,
+      if (appUserId != null) 'app_user_id': appUserId,
+      if (workspaceId != null) 'workspace_id': workspaceId,
+      if (projectId != null) 'project_id': projectId,
+      if (questionnaireVersionId != null)
+        'questionnaire_version_id': questionnaireVersionId,
+      if (createdAtUtc != null) 'created_at_utc': createdAtUtc,
+      if (updatedAtUtc != null) 'updated_at_utc': updatedAtUtc,
+      if (occurredAtUtc != null) 'occurred_at_utc': occurredAtUtc,
+      if (occurredTimeZone != null) 'occurred_time_zone': occurredTimeZone,
+      if (channel != null) 'channel': channel,
+      if (channelDetail != null) 'channel_detail': channelDetail,
+      if (locationKind != null) 'location_kind': locationKind,
+      if (placeName != null) 'place_name': placeName,
+      if (smallestRegionId != null) 'smallest_region_id': smallestRegionId,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+      if (locationAccuracyMeters != null)
+        'location_accuracy_meters': locationAccuracyMeters,
+      if (reachCount != null) 'reach_count': reachCount,
+      if (interestLevel != null) 'interest_level': interestLevel,
+      if (syncMode != null) 'sync_mode': syncMode,
+      if (abandonedAtUtc != null) 'abandoned_at_utc': abandonedAtUtc,
+      if (undoUntilUtc != null) 'undo_until_utc': undoUntilUtc,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DbContactDraftsCompanion copyWith({
+    Value<String>? draftId,
+    Value<String>? appUserId,
+    Value<String>? workspaceId,
+    Value<String>? projectId,
+    Value<String>? questionnaireVersionId,
+    Value<DateTime>? createdAtUtc,
+    Value<DateTime>? updatedAtUtc,
+    Value<DateTime?>? occurredAtUtc,
+    Value<String?>? occurredTimeZone,
+    Value<String?>? channel,
+    Value<String?>? channelDetail,
+    Value<String?>? locationKind,
+    Value<String?>? placeName,
+    Value<String?>? smallestRegionId,
+    Value<double?>? latitude,
+    Value<double?>? longitude,
+    Value<double?>? locationAccuracyMeters,
+    Value<int?>? reachCount,
+    Value<int?>? interestLevel,
+    Value<String>? syncMode,
+    Value<DateTime?>? abandonedAtUtc,
+    Value<DateTime?>? undoUntilUtc,
+    Value<int>? rowid,
+  }) {
+    return DbContactDraftsCompanion(
+      draftId: draftId ?? this.draftId,
+      appUserId: appUserId ?? this.appUserId,
+      workspaceId: workspaceId ?? this.workspaceId,
+      projectId: projectId ?? this.projectId,
+      questionnaireVersionId:
+          questionnaireVersionId ?? this.questionnaireVersionId,
+      createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+      updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
+      occurredAtUtc: occurredAtUtc ?? this.occurredAtUtc,
+      occurredTimeZone: occurredTimeZone ?? this.occurredTimeZone,
+      channel: channel ?? this.channel,
+      channelDetail: channelDetail ?? this.channelDetail,
+      locationKind: locationKind ?? this.locationKind,
+      placeName: placeName ?? this.placeName,
+      smallestRegionId: smallestRegionId ?? this.smallestRegionId,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      locationAccuracyMeters:
+          locationAccuracyMeters ?? this.locationAccuracyMeters,
+      reachCount: reachCount ?? this.reachCount,
+      interestLevel: interestLevel ?? this.interestLevel,
+      syncMode: syncMode ?? this.syncMode,
+      abandonedAtUtc: abandonedAtUtc ?? this.abandonedAtUtc,
+      undoUntilUtc: undoUntilUtc ?? this.undoUntilUtc,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (draftId.present) {
+      map['draft_id'] = Variable<String>(draftId.value);
+    }
+    if (appUserId.present) {
+      map['app_user_id'] = Variable<String>(appUserId.value);
+    }
+    if (workspaceId.present) {
+      map['workspace_id'] = Variable<String>(workspaceId.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<String>(projectId.value);
+    }
+    if (questionnaireVersionId.present) {
+      map['questionnaire_version_id'] = Variable<String>(
+        questionnaireVersionId.value,
+      );
+    }
+    if (createdAtUtc.present) {
+      map['created_at_utc'] = Variable<DateTime>(createdAtUtc.value);
+    }
+    if (updatedAtUtc.present) {
+      map['updated_at_utc'] = Variable<DateTime>(updatedAtUtc.value);
+    }
+    if (occurredAtUtc.present) {
+      map['occurred_at_utc'] = Variable<DateTime>(occurredAtUtc.value);
+    }
+    if (occurredTimeZone.present) {
+      map['occurred_time_zone'] = Variable<String>(occurredTimeZone.value);
+    }
+    if (channel.present) {
+      map['channel'] = Variable<String>(channel.value);
+    }
+    if (channelDetail.present) {
+      map['channel_detail'] = Variable<String>(channelDetail.value);
+    }
+    if (locationKind.present) {
+      map['location_kind'] = Variable<String>(locationKind.value);
+    }
+    if (placeName.present) {
+      map['place_name'] = Variable<String>(placeName.value);
+    }
+    if (smallestRegionId.present) {
+      map['smallest_region_id'] = Variable<String>(smallestRegionId.value);
+    }
+    if (latitude.present) {
+      map['latitude'] = Variable<double>(latitude.value);
+    }
+    if (longitude.present) {
+      map['longitude'] = Variable<double>(longitude.value);
+    }
+    if (locationAccuracyMeters.present) {
+      map['location_accuracy_meters'] = Variable<double>(
+        locationAccuracyMeters.value,
+      );
+    }
+    if (reachCount.present) {
+      map['reach_count'] = Variable<int>(reachCount.value);
+    }
+    if (interestLevel.present) {
+      map['interest_level'] = Variable<int>(interestLevel.value);
+    }
+    if (syncMode.present) {
+      map['sync_mode'] = Variable<String>(syncMode.value);
+    }
+    if (abandonedAtUtc.present) {
+      map['abandoned_at_utc'] = Variable<DateTime>(abandonedAtUtc.value);
+    }
+    if (undoUntilUtc.present) {
+      map['undo_until_utc'] = Variable<DateTime>(undoUntilUtc.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbContactDraftsCompanion(')
+          ..write('draftId: $draftId, ')
+          ..write('appUserId: $appUserId, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('projectId: $projectId, ')
+          ..write('questionnaireVersionId: $questionnaireVersionId, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('updatedAtUtc: $updatedAtUtc, ')
+          ..write('occurredAtUtc: $occurredAtUtc, ')
+          ..write('occurredTimeZone: $occurredTimeZone, ')
+          ..write('channel: $channel, ')
+          ..write('channelDetail: $channelDetail, ')
+          ..write('locationKind: $locationKind, ')
+          ..write('placeName: $placeName, ')
+          ..write('smallestRegionId: $smallestRegionId, ')
+          ..write('latitude: $latitude, ')
+          ..write('longitude: $longitude, ')
+          ..write('locationAccuracyMeters: $locationAccuracyMeters, ')
+          ..write('reachCount: $reachCount, ')
+          ..write('interestLevel: $interestLevel, ')
+          ..write('syncMode: $syncMode, ')
+          ..write('abandonedAtUtc: $abandonedAtUtc, ')
+          ..write('undoUntilUtc: $undoUntilUtc, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $DbContactDraftAnswersTable extends DbContactDraftAnswers
+    with TableInfo<$DbContactDraftAnswersTable, DbContactDraftAnswer> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DbContactDraftAnswersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _draftIdMeta = const VerificationMeta(
+    'draftId',
+  );
+  @override
+  late final GeneratedColumn<String> draftId = GeneratedColumn<String>(
+    'draft_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES db_contact_drafts (draft_id)',
+    ),
+  );
+  static const VerificationMeta _questionIdMeta = const VerificationMeta(
+    'questionId',
+  );
+  @override
+  late final GeneratedColumn<String> questionId = GeneratedColumn<String>(
+    'question_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _answerStateMeta = const VerificationMeta(
+    'answerState',
+  );
+  @override
+  late final GeneratedColumn<String> answerState = GeneratedColumn<String>(
+    'answer_state',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _answerTypeMeta = const VerificationMeta(
+    'answerType',
+  );
+  @override
+  late final GeneratedColumn<String> answerType = GeneratedColumn<String>(
+    'answer_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _booleanValueMeta = const VerificationMeta(
+    'booleanValue',
+  );
+  @override
+  late final GeneratedColumn<bool> booleanValue = GeneratedColumn<bool>(
+    'boolean_value',
+    aliasedName,
+    true,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("boolean_value" IN (0, 1))',
+    ),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    draftId,
+    questionId,
+    answerState,
+    answerType,
+    booleanValue,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'db_contact_draft_answers';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DbContactDraftAnswer> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('draft_id')) {
+      context.handle(
+        _draftIdMeta,
+        draftId.isAcceptableOrUnknown(data['draft_id']!, _draftIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_draftIdMeta);
+    }
+    if (data.containsKey('question_id')) {
+      context.handle(
+        _questionIdMeta,
+        questionId.isAcceptableOrUnknown(data['question_id']!, _questionIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_questionIdMeta);
+    }
+    if (data.containsKey('answer_state')) {
+      context.handle(
+        _answerStateMeta,
+        answerState.isAcceptableOrUnknown(
+          data['answer_state']!,
+          _answerStateMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_answerStateMeta);
+    }
+    if (data.containsKey('answer_type')) {
+      context.handle(
+        _answerTypeMeta,
+        answerType.isAcceptableOrUnknown(data['answer_type']!, _answerTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_answerTypeMeta);
+    }
+    if (data.containsKey('boolean_value')) {
+      context.handle(
+        _booleanValueMeta,
+        booleanValue.isAcceptableOrUnknown(
+          data['boolean_value']!,
+          _booleanValueMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {draftId, questionId};
+  @override
+  DbContactDraftAnswer map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DbContactDraftAnswer(
+      draftId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}draft_id'],
+      )!,
+      questionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}question_id'],
+      )!,
+      answerState: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}answer_state'],
+      )!,
+      answerType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}answer_type'],
+      )!,
+      booleanValue: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}boolean_value'],
+      ),
+    );
+  }
+
+  @override
+  $DbContactDraftAnswersTable createAlias(String alias) {
+    return $DbContactDraftAnswersTable(attachedDatabase, alias);
+  }
+}
+
+class DbContactDraftAnswer extends DataClass
+    implements Insertable<DbContactDraftAnswer> {
+  final String draftId;
+  final String questionId;
+  final String answerState;
+  final String answerType;
+  final bool? booleanValue;
+  const DbContactDraftAnswer({
+    required this.draftId,
+    required this.questionId,
+    required this.answerState,
+    required this.answerType,
+    this.booleanValue,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['draft_id'] = Variable<String>(draftId);
+    map['question_id'] = Variable<String>(questionId);
+    map['answer_state'] = Variable<String>(answerState);
+    map['answer_type'] = Variable<String>(answerType);
+    if (!nullToAbsent || booleanValue != null) {
+      map['boolean_value'] = Variable<bool>(booleanValue);
+    }
+    return map;
+  }
+
+  DbContactDraftAnswersCompanion toCompanion(bool nullToAbsent) {
+    return DbContactDraftAnswersCompanion(
+      draftId: Value(draftId),
+      questionId: Value(questionId),
+      answerState: Value(answerState),
+      answerType: Value(answerType),
+      booleanValue: booleanValue == null && nullToAbsent
+          ? const Value.absent()
+          : Value(booleanValue),
+    );
+  }
+
+  factory DbContactDraftAnswer.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DbContactDraftAnswer(
+      draftId: serializer.fromJson<String>(json['draftId']),
+      questionId: serializer.fromJson<String>(json['questionId']),
+      answerState: serializer.fromJson<String>(json['answerState']),
+      answerType: serializer.fromJson<String>(json['answerType']),
+      booleanValue: serializer.fromJson<bool?>(json['booleanValue']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'draftId': serializer.toJson<String>(draftId),
+      'questionId': serializer.toJson<String>(questionId),
+      'answerState': serializer.toJson<String>(answerState),
+      'answerType': serializer.toJson<String>(answerType),
+      'booleanValue': serializer.toJson<bool?>(booleanValue),
+    };
+  }
+
+  DbContactDraftAnswer copyWith({
+    String? draftId,
+    String? questionId,
+    String? answerState,
+    String? answerType,
+    Value<bool?> booleanValue = const Value.absent(),
+  }) => DbContactDraftAnswer(
+    draftId: draftId ?? this.draftId,
+    questionId: questionId ?? this.questionId,
+    answerState: answerState ?? this.answerState,
+    answerType: answerType ?? this.answerType,
+    booleanValue: booleanValue.present ? booleanValue.value : this.booleanValue,
+  );
+  DbContactDraftAnswer copyWithCompanion(DbContactDraftAnswersCompanion data) {
+    return DbContactDraftAnswer(
+      draftId: data.draftId.present ? data.draftId.value : this.draftId,
+      questionId: data.questionId.present
+          ? data.questionId.value
+          : this.questionId,
+      answerState: data.answerState.present
+          ? data.answerState.value
+          : this.answerState,
+      answerType: data.answerType.present
+          ? data.answerType.value
+          : this.answerType,
+      booleanValue: data.booleanValue.present
+          ? data.booleanValue.value
+          : this.booleanValue,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbContactDraftAnswer(')
+          ..write('draftId: $draftId, ')
+          ..write('questionId: $questionId, ')
+          ..write('answerState: $answerState, ')
+          ..write('answerType: $answerType, ')
+          ..write('booleanValue: $booleanValue')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(draftId, questionId, answerState, answerType, booleanValue);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DbContactDraftAnswer &&
+          other.draftId == this.draftId &&
+          other.questionId == this.questionId &&
+          other.answerState == this.answerState &&
+          other.answerType == this.answerType &&
+          other.booleanValue == this.booleanValue);
+}
+
+class DbContactDraftAnswersCompanion
+    extends UpdateCompanion<DbContactDraftAnswer> {
+  final Value<String> draftId;
+  final Value<String> questionId;
+  final Value<String> answerState;
+  final Value<String> answerType;
+  final Value<bool?> booleanValue;
+  final Value<int> rowid;
+  const DbContactDraftAnswersCompanion({
+    this.draftId = const Value.absent(),
+    this.questionId = const Value.absent(),
+    this.answerState = const Value.absent(),
+    this.answerType = const Value.absent(),
+    this.booleanValue = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DbContactDraftAnswersCompanion.insert({
+    required String draftId,
+    required String questionId,
+    required String answerState,
+    required String answerType,
+    this.booleanValue = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : draftId = Value(draftId),
+       questionId = Value(questionId),
+       answerState = Value(answerState),
+       answerType = Value(answerType);
+  static Insertable<DbContactDraftAnswer> custom({
+    Expression<String>? draftId,
+    Expression<String>? questionId,
+    Expression<String>? answerState,
+    Expression<String>? answerType,
+    Expression<bool>? booleanValue,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (draftId != null) 'draft_id': draftId,
+      if (questionId != null) 'question_id': questionId,
+      if (answerState != null) 'answer_state': answerState,
+      if (answerType != null) 'answer_type': answerType,
+      if (booleanValue != null) 'boolean_value': booleanValue,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DbContactDraftAnswersCompanion copyWith({
+    Value<String>? draftId,
+    Value<String>? questionId,
+    Value<String>? answerState,
+    Value<String>? answerType,
+    Value<bool?>? booleanValue,
+    Value<int>? rowid,
+  }) {
+    return DbContactDraftAnswersCompanion(
+      draftId: draftId ?? this.draftId,
+      questionId: questionId ?? this.questionId,
+      answerState: answerState ?? this.answerState,
+      answerType: answerType ?? this.answerType,
+      booleanValue: booleanValue ?? this.booleanValue,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (draftId.present) {
+      map['draft_id'] = Variable<String>(draftId.value);
+    }
+    if (questionId.present) {
+      map['question_id'] = Variable<String>(questionId.value);
+    }
+    if (answerState.present) {
+      map['answer_state'] = Variable<String>(answerState.value);
+    }
+    if (answerType.present) {
+      map['answer_type'] = Variable<String>(answerType.value);
+    }
+    if (booleanValue.present) {
+      map['boolean_value'] = Variable<bool>(booleanValue.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbContactDraftAnswersCompanion(')
+          ..write('draftId: $draftId, ')
+          ..write('questionId: $questionId, ')
+          ..write('answerState: $answerState, ')
+          ..write('answerType: $answerType, ')
+          ..write('booleanValue: $booleanValue, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $DbUsersTable extends DbUsers with TableInfo<$DbUsersTable, DbUser> {
   @override
   final GeneratedDatabase attachedDatabase;
@@ -7234,6 +8928,15 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
   late final $DbContactAnswersTable dbContactAnswers = $DbContactAnswersTable(
     this,
   );
+  late final $DbContactDraftsTable dbContactDrafts = $DbContactDraftsTable(
+    this,
+  );
+  late final $DbContactDraftAnswersTable dbContactDraftAnswers =
+      $DbContactDraftAnswersTable(this);
+  late final Index contactDraftsOwnerUpdated = Index(
+    'contact_drafts_owner_updated',
+    'CREATE INDEX contact_drafts_owner_updated ON db_contact_drafts (app_user_id, abandoned_at_utc, updated_at_utc)',
+  );
   late final Index contactRecordsPersonalPeriod = Index(
     'contact_records_personal_period',
     'CREATE INDEX contact_records_personal_period ON db_contact_records (app_user_id, workspace_id, project_id, occurred_at_utc)',
@@ -7296,6 +8999,9 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
     dbSyncOutbox,
     dbContactRevisions,
     dbContactAnswers,
+    dbContactDrafts,
+    dbContactDraftAnswers,
+    contactDraftsOwnerUpdated,
     contactRecordsPersonalPeriod,
     syncOutboxReady,
     syncOutboxAggregateOrder,
@@ -9432,6 +11138,1031 @@ typedef $$DbContactAnswersTableProcessedTableManager =
       DbContactAnswer,
       PrefetchHooks Function({bool contactId})
     >;
+typedef $$DbContactDraftsTableCreateCompanionBuilder =
+    DbContactDraftsCompanion Function({
+      required String draftId,
+      required String appUserId,
+      required String workspaceId,
+      required String projectId,
+      required String questionnaireVersionId,
+      required DateTime createdAtUtc,
+      required DateTime updatedAtUtc,
+      Value<DateTime?> occurredAtUtc,
+      Value<String?> occurredTimeZone,
+      Value<String?> channel,
+      Value<String?> channelDetail,
+      Value<String?> locationKind,
+      Value<String?> placeName,
+      Value<String?> smallestRegionId,
+      Value<double?> latitude,
+      Value<double?> longitude,
+      Value<double?> locationAccuracyMeters,
+      Value<int?> reachCount,
+      Value<int?> interestLevel,
+      Value<String> syncMode,
+      Value<DateTime?> abandonedAtUtc,
+      Value<DateTime?> undoUntilUtc,
+      Value<int> rowid,
+    });
+typedef $$DbContactDraftsTableUpdateCompanionBuilder =
+    DbContactDraftsCompanion Function({
+      Value<String> draftId,
+      Value<String> appUserId,
+      Value<String> workspaceId,
+      Value<String> projectId,
+      Value<String> questionnaireVersionId,
+      Value<DateTime> createdAtUtc,
+      Value<DateTime> updatedAtUtc,
+      Value<DateTime?> occurredAtUtc,
+      Value<String?> occurredTimeZone,
+      Value<String?> channel,
+      Value<String?> channelDetail,
+      Value<String?> locationKind,
+      Value<String?> placeName,
+      Value<String?> smallestRegionId,
+      Value<double?> latitude,
+      Value<double?> longitude,
+      Value<double?> locationAccuracyMeters,
+      Value<int?> reachCount,
+      Value<int?> interestLevel,
+      Value<String> syncMode,
+      Value<DateTime?> abandonedAtUtc,
+      Value<DateTime?> undoUntilUtc,
+      Value<int> rowid,
+    });
+
+final class $$DbContactDraftsTableReferences
+    extends
+        BaseReferences<_$LocalDatabase, $DbContactDraftsTable, DbContactDraft> {
+  $$DbContactDraftsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static MultiTypedResultKey<
+    $DbContactDraftAnswersTable,
+    List<DbContactDraftAnswer>
+  >
+  _dbContactDraftAnswersRefsTable(_$LocalDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.dbContactDraftAnswers,
+        aliasName:
+            'db_contact_drafts__draft_id__db_contact_draft_answers__draft_id',
+      );
+
+  $$DbContactDraftAnswersTableProcessedTableManager
+  get dbContactDraftAnswersRefs {
+    final manager =
+        $$DbContactDraftAnswersTableTableManager(
+          $_db,
+          $_db.dbContactDraftAnswers,
+        ).filter(
+          (f) => f.draftId.draftId.sqlEquals($_itemColumn<String>('draft_id')!),
+        );
+
+    final cache = $_typedResult.readTableOrNull(
+      _dbContactDraftAnswersRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$DbContactDraftsTableFilterComposer
+    extends Composer<_$LocalDatabase, $DbContactDraftsTable> {
+  $$DbContactDraftsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get draftId => $composableBuilder(
+    column: $table.draftId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get appUserId => $composableBuilder(
+    column: $table.appUserId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get projectId => $composableBuilder(
+    column: $table.projectId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get questionnaireVersionId => $composableBuilder(
+    column: $table.questionnaireVersionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get occurredAtUtc => $composableBuilder(
+    column: $table.occurredAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get occurredTimeZone => $composableBuilder(
+    column: $table.occurredTimeZone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get channel => $composableBuilder(
+    column: $table.channel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get channelDetail => $composableBuilder(
+    column: $table.channelDetail,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get locationKind => $composableBuilder(
+    column: $table.locationKind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get placeName => $composableBuilder(
+    column: $table.placeName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get smallestRegionId => $composableBuilder(
+    column: $table.smallestRegionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get latitude => $composableBuilder(
+    column: $table.latitude,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get longitude => $composableBuilder(
+    column: $table.longitude,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get locationAccuracyMeters => $composableBuilder(
+    column: $table.locationAccuracyMeters,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get reachCount => $composableBuilder(
+    column: $table.reachCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get interestLevel => $composableBuilder(
+    column: $table.interestLevel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get syncMode => $composableBuilder(
+    column: $table.syncMode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get abandonedAtUtc => $composableBuilder(
+    column: $table.abandonedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get undoUntilUtc => $composableBuilder(
+    column: $table.undoUntilUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  Expression<bool> dbContactDraftAnswersRefs(
+    Expression<bool> Function($$DbContactDraftAnswersTableFilterComposer f) f,
+  ) {
+    final $$DbContactDraftAnswersTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.draftId,
+          referencedTable: $db.dbContactDraftAnswers,
+          getReferencedColumn: (t) => t.draftId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbContactDraftAnswersTableFilterComposer(
+                $db: $db,
+                $table: $db.dbContactDraftAnswers,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+}
+
+class $$DbContactDraftsTableOrderingComposer
+    extends Composer<_$LocalDatabase, $DbContactDraftsTable> {
+  $$DbContactDraftsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get draftId => $composableBuilder(
+    column: $table.draftId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get appUserId => $composableBuilder(
+    column: $table.appUserId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get projectId => $composableBuilder(
+    column: $table.projectId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get questionnaireVersionId => $composableBuilder(
+    column: $table.questionnaireVersionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get occurredAtUtc => $composableBuilder(
+    column: $table.occurredAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get occurredTimeZone => $composableBuilder(
+    column: $table.occurredTimeZone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get channel => $composableBuilder(
+    column: $table.channel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get channelDetail => $composableBuilder(
+    column: $table.channelDetail,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get locationKind => $composableBuilder(
+    column: $table.locationKind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get placeName => $composableBuilder(
+    column: $table.placeName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get smallestRegionId => $composableBuilder(
+    column: $table.smallestRegionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get latitude => $composableBuilder(
+    column: $table.latitude,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get longitude => $composableBuilder(
+    column: $table.longitude,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get locationAccuracyMeters => $composableBuilder(
+    column: $table.locationAccuracyMeters,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get reachCount => $composableBuilder(
+    column: $table.reachCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get interestLevel => $composableBuilder(
+    column: $table.interestLevel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get syncMode => $composableBuilder(
+    column: $table.syncMode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get abandonedAtUtc => $composableBuilder(
+    column: $table.abandonedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get undoUntilUtc => $composableBuilder(
+    column: $table.undoUntilUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DbContactDraftsTableAnnotationComposer
+    extends Composer<_$LocalDatabase, $DbContactDraftsTable> {
+  $$DbContactDraftsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get draftId =>
+      $composableBuilder(column: $table.draftId, builder: (column) => column);
+
+  GeneratedColumn<String> get appUserId =>
+      $composableBuilder(column: $table.appUserId, builder: (column) => column);
+
+  GeneratedColumn<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get projectId =>
+      $composableBuilder(column: $table.projectId, builder: (column) => column);
+
+  GeneratedColumn<String> get questionnaireVersionId => $composableBuilder(
+    column: $table.questionnaireVersionId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get occurredAtUtc => $composableBuilder(
+    column: $table.occurredAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get occurredTimeZone => $composableBuilder(
+    column: $table.occurredTimeZone,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get channel =>
+      $composableBuilder(column: $table.channel, builder: (column) => column);
+
+  GeneratedColumn<String> get channelDetail => $composableBuilder(
+    column: $table.channelDetail,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get locationKind => $composableBuilder(
+    column: $table.locationKind,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get placeName =>
+      $composableBuilder(column: $table.placeName, builder: (column) => column);
+
+  GeneratedColumn<String> get smallestRegionId => $composableBuilder(
+    column: $table.smallestRegionId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get latitude =>
+      $composableBuilder(column: $table.latitude, builder: (column) => column);
+
+  GeneratedColumn<double> get longitude =>
+      $composableBuilder(column: $table.longitude, builder: (column) => column);
+
+  GeneratedColumn<double> get locationAccuracyMeters => $composableBuilder(
+    column: $table.locationAccuracyMeters,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get reachCount => $composableBuilder(
+    column: $table.reachCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get interestLevel => $composableBuilder(
+    column: $table.interestLevel,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get syncMode =>
+      $composableBuilder(column: $table.syncMode, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get abandonedAtUtc => $composableBuilder(
+    column: $table.abandonedAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get undoUntilUtc => $composableBuilder(
+    column: $table.undoUntilUtc,
+    builder: (column) => column,
+  );
+
+  Expression<T> dbContactDraftAnswersRefs<T extends Object>(
+    Expression<T> Function($$DbContactDraftAnswersTableAnnotationComposer a) f,
+  ) {
+    final $$DbContactDraftAnswersTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.draftId,
+          referencedTable: $db.dbContactDraftAnswers,
+          getReferencedColumn: (t) => t.draftId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbContactDraftAnswersTableAnnotationComposer(
+                $db: $db,
+                $table: $db.dbContactDraftAnswers,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+}
+
+class $$DbContactDraftsTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $DbContactDraftsTable,
+          DbContactDraft,
+          $$DbContactDraftsTableFilterComposer,
+          $$DbContactDraftsTableOrderingComposer,
+          $$DbContactDraftsTableAnnotationComposer,
+          $$DbContactDraftsTableCreateCompanionBuilder,
+          $$DbContactDraftsTableUpdateCompanionBuilder,
+          (DbContactDraft, $$DbContactDraftsTableReferences),
+          DbContactDraft,
+          PrefetchHooks Function({bool dbContactDraftAnswersRefs})
+        > {
+  $$DbContactDraftsTableTableManager(
+    _$LocalDatabase db,
+    $DbContactDraftsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DbContactDraftsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DbContactDraftsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DbContactDraftsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> draftId = const Value.absent(),
+                Value<String> appUserId = const Value.absent(),
+                Value<String> workspaceId = const Value.absent(),
+                Value<String> projectId = const Value.absent(),
+                Value<String> questionnaireVersionId = const Value.absent(),
+                Value<DateTime> createdAtUtc = const Value.absent(),
+                Value<DateTime> updatedAtUtc = const Value.absent(),
+                Value<DateTime?> occurredAtUtc = const Value.absent(),
+                Value<String?> occurredTimeZone = const Value.absent(),
+                Value<String?> channel = const Value.absent(),
+                Value<String?> channelDetail = const Value.absent(),
+                Value<String?> locationKind = const Value.absent(),
+                Value<String?> placeName = const Value.absent(),
+                Value<String?> smallestRegionId = const Value.absent(),
+                Value<double?> latitude = const Value.absent(),
+                Value<double?> longitude = const Value.absent(),
+                Value<double?> locationAccuracyMeters = const Value.absent(),
+                Value<int?> reachCount = const Value.absent(),
+                Value<int?> interestLevel = const Value.absent(),
+                Value<String> syncMode = const Value.absent(),
+                Value<DateTime?> abandonedAtUtc = const Value.absent(),
+                Value<DateTime?> undoUntilUtc = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbContactDraftsCompanion(
+                draftId: draftId,
+                appUserId: appUserId,
+                workspaceId: workspaceId,
+                projectId: projectId,
+                questionnaireVersionId: questionnaireVersionId,
+                createdAtUtc: createdAtUtc,
+                updatedAtUtc: updatedAtUtc,
+                occurredAtUtc: occurredAtUtc,
+                occurredTimeZone: occurredTimeZone,
+                channel: channel,
+                channelDetail: channelDetail,
+                locationKind: locationKind,
+                placeName: placeName,
+                smallestRegionId: smallestRegionId,
+                latitude: latitude,
+                longitude: longitude,
+                locationAccuracyMeters: locationAccuracyMeters,
+                reachCount: reachCount,
+                interestLevel: interestLevel,
+                syncMode: syncMode,
+                abandonedAtUtc: abandonedAtUtc,
+                undoUntilUtc: undoUntilUtc,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String draftId,
+                required String appUserId,
+                required String workspaceId,
+                required String projectId,
+                required String questionnaireVersionId,
+                required DateTime createdAtUtc,
+                required DateTime updatedAtUtc,
+                Value<DateTime?> occurredAtUtc = const Value.absent(),
+                Value<String?> occurredTimeZone = const Value.absent(),
+                Value<String?> channel = const Value.absent(),
+                Value<String?> channelDetail = const Value.absent(),
+                Value<String?> locationKind = const Value.absent(),
+                Value<String?> placeName = const Value.absent(),
+                Value<String?> smallestRegionId = const Value.absent(),
+                Value<double?> latitude = const Value.absent(),
+                Value<double?> longitude = const Value.absent(),
+                Value<double?> locationAccuracyMeters = const Value.absent(),
+                Value<int?> reachCount = const Value.absent(),
+                Value<int?> interestLevel = const Value.absent(),
+                Value<String> syncMode = const Value.absent(),
+                Value<DateTime?> abandonedAtUtc = const Value.absent(),
+                Value<DateTime?> undoUntilUtc = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbContactDraftsCompanion.insert(
+                draftId: draftId,
+                appUserId: appUserId,
+                workspaceId: workspaceId,
+                projectId: projectId,
+                questionnaireVersionId: questionnaireVersionId,
+                createdAtUtc: createdAtUtc,
+                updatedAtUtc: updatedAtUtc,
+                occurredAtUtc: occurredAtUtc,
+                occurredTimeZone: occurredTimeZone,
+                channel: channel,
+                channelDetail: channelDetail,
+                locationKind: locationKind,
+                placeName: placeName,
+                smallestRegionId: smallestRegionId,
+                latitude: latitude,
+                longitude: longitude,
+                locationAccuracyMeters: locationAccuracyMeters,
+                reachCount: reachCount,
+                interestLevel: interestLevel,
+                syncMode: syncMode,
+                abandonedAtUtc: abandonedAtUtc,
+                undoUntilUtc: undoUntilUtc,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$DbContactDraftsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({dbContactDraftAnswersRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [
+                if (dbContactDraftAnswersRefs) db.dbContactDraftAnswers,
+              ],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (dbContactDraftAnswersRefs)
+                    await $_getPrefetchedData<
+                      DbContactDraft,
+                      $DbContactDraftsTable,
+                      DbContactDraftAnswer
+                    >(
+                      currentTable: table,
+                      referencedTable: $$DbContactDraftsTableReferences
+                          ._dbContactDraftAnswersRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$DbContactDraftsTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).dbContactDraftAnswersRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where(
+                            (e) => e.draftId == item.draftId,
+                          ),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$DbContactDraftsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $DbContactDraftsTable,
+      DbContactDraft,
+      $$DbContactDraftsTableFilterComposer,
+      $$DbContactDraftsTableOrderingComposer,
+      $$DbContactDraftsTableAnnotationComposer,
+      $$DbContactDraftsTableCreateCompanionBuilder,
+      $$DbContactDraftsTableUpdateCompanionBuilder,
+      (DbContactDraft, $$DbContactDraftsTableReferences),
+      DbContactDraft,
+      PrefetchHooks Function({bool dbContactDraftAnswersRefs})
+    >;
+typedef $$DbContactDraftAnswersTableCreateCompanionBuilder =
+    DbContactDraftAnswersCompanion Function({
+      required String draftId,
+      required String questionId,
+      required String answerState,
+      required String answerType,
+      Value<bool?> booleanValue,
+      Value<int> rowid,
+    });
+typedef $$DbContactDraftAnswersTableUpdateCompanionBuilder =
+    DbContactDraftAnswersCompanion Function({
+      Value<String> draftId,
+      Value<String> questionId,
+      Value<String> answerState,
+      Value<String> answerType,
+      Value<bool?> booleanValue,
+      Value<int> rowid,
+    });
+
+final class $$DbContactDraftAnswersTableReferences
+    extends
+        BaseReferences<
+          _$LocalDatabase,
+          $DbContactDraftAnswersTable,
+          DbContactDraftAnswer
+        > {
+  $$DbContactDraftAnswersTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $DbContactDraftsTable _draftIdTable(_$LocalDatabase db) =>
+      db.dbContactDrafts.createAlias(
+        'db_contact_draft_answers__draft_id__db_contact_drafts__draft_id',
+      );
+
+  $$DbContactDraftsTableProcessedTableManager get draftId {
+    final $_column = $_itemColumn<String>('draft_id')!;
+
+    final manager = $$DbContactDraftsTableTableManager(
+      $_db,
+      $_db.dbContactDrafts,
+    ).filter((f) => f.draftId.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_draftIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$DbContactDraftAnswersTableFilterComposer
+    extends Composer<_$LocalDatabase, $DbContactDraftAnswersTable> {
+  $$DbContactDraftAnswersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get questionId => $composableBuilder(
+    column: $table.questionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get answerState => $composableBuilder(
+    column: $table.answerState,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get answerType => $composableBuilder(
+    column: $table.answerType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get booleanValue => $composableBuilder(
+    column: $table.booleanValue,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$DbContactDraftsTableFilterComposer get draftId {
+    final $$DbContactDraftsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.draftId,
+      referencedTable: $db.dbContactDrafts,
+      getReferencedColumn: (t) => t.draftId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbContactDraftsTableFilterComposer(
+            $db: $db,
+            $table: $db.dbContactDrafts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DbContactDraftAnswersTableOrderingComposer
+    extends Composer<_$LocalDatabase, $DbContactDraftAnswersTable> {
+  $$DbContactDraftAnswersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get questionId => $composableBuilder(
+    column: $table.questionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get answerState => $composableBuilder(
+    column: $table.answerState,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get answerType => $composableBuilder(
+    column: $table.answerType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get booleanValue => $composableBuilder(
+    column: $table.booleanValue,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$DbContactDraftsTableOrderingComposer get draftId {
+    final $$DbContactDraftsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.draftId,
+      referencedTable: $db.dbContactDrafts,
+      getReferencedColumn: (t) => t.draftId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbContactDraftsTableOrderingComposer(
+            $db: $db,
+            $table: $db.dbContactDrafts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DbContactDraftAnswersTableAnnotationComposer
+    extends Composer<_$LocalDatabase, $DbContactDraftAnswersTable> {
+  $$DbContactDraftAnswersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get questionId => $composableBuilder(
+    column: $table.questionId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get answerState => $composableBuilder(
+    column: $table.answerState,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get answerType => $composableBuilder(
+    column: $table.answerType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get booleanValue => $composableBuilder(
+    column: $table.booleanValue,
+    builder: (column) => column,
+  );
+
+  $$DbContactDraftsTableAnnotationComposer get draftId {
+    final $$DbContactDraftsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.draftId,
+      referencedTable: $db.dbContactDrafts,
+      getReferencedColumn: (t) => t.draftId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbContactDraftsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.dbContactDrafts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DbContactDraftAnswersTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $DbContactDraftAnswersTable,
+          DbContactDraftAnswer,
+          $$DbContactDraftAnswersTableFilterComposer,
+          $$DbContactDraftAnswersTableOrderingComposer,
+          $$DbContactDraftAnswersTableAnnotationComposer,
+          $$DbContactDraftAnswersTableCreateCompanionBuilder,
+          $$DbContactDraftAnswersTableUpdateCompanionBuilder,
+          (DbContactDraftAnswer, $$DbContactDraftAnswersTableReferences),
+          DbContactDraftAnswer,
+          PrefetchHooks Function({bool draftId})
+        > {
+  $$DbContactDraftAnswersTableTableManager(
+    _$LocalDatabase db,
+    $DbContactDraftAnswersTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DbContactDraftAnswersTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$DbContactDraftAnswersTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$DbContactDraftAnswersTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> draftId = const Value.absent(),
+                Value<String> questionId = const Value.absent(),
+                Value<String> answerState = const Value.absent(),
+                Value<String> answerType = const Value.absent(),
+                Value<bool?> booleanValue = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbContactDraftAnswersCompanion(
+                draftId: draftId,
+                questionId: questionId,
+                answerState: answerState,
+                answerType: answerType,
+                booleanValue: booleanValue,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String draftId,
+                required String questionId,
+                required String answerState,
+                required String answerType,
+                Value<bool?> booleanValue = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbContactDraftAnswersCompanion.insert(
+                draftId: draftId,
+                questionId: questionId,
+                answerState: answerState,
+                answerType: answerType,
+                booleanValue: booleanValue,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$DbContactDraftAnswersTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({draftId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (draftId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.draftId,
+                                referencedTable:
+                                    $$DbContactDraftAnswersTableReferences
+                                        ._draftIdTable(db),
+                                referencedColumn:
+                                    $$DbContactDraftAnswersTableReferences
+                                        ._draftIdTable(db)
+                                        .draftId,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$DbContactDraftAnswersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $DbContactDraftAnswersTable,
+      DbContactDraftAnswer,
+      $$DbContactDraftAnswersTableFilterComposer,
+      $$DbContactDraftAnswersTableOrderingComposer,
+      $$DbContactDraftAnswersTableAnnotationComposer,
+      $$DbContactDraftAnswersTableCreateCompanionBuilder,
+      $$DbContactDraftAnswersTableUpdateCompanionBuilder,
+      (DbContactDraftAnswer, $$DbContactDraftAnswersTableReferences),
+      DbContactDraftAnswer,
+      PrefetchHooks Function({bool draftId})
+    >;
 typedef $$DbUsersTableCreateCompanionBuilder =
     DbUsersCompanion Function({
       required String userId,
@@ -11157,6 +13888,10 @@ class $LocalDatabaseManager {
       $$DbContactRevisionsTableTableManager(_db, _db.dbContactRevisions);
   $$DbContactAnswersTableTableManager get dbContactAnswers =>
       $$DbContactAnswersTableTableManager(_db, _db.dbContactAnswers);
+  $$DbContactDraftsTableTableManager get dbContactDrafts =>
+      $$DbContactDraftsTableTableManager(_db, _db.dbContactDrafts);
+  $$DbContactDraftAnswersTableTableManager get dbContactDraftAnswers =>
+      $$DbContactDraftAnswersTableTableManager(_db, _db.dbContactDraftAnswers);
   $$DbUsersTableTableManager get dbUsers =>
       $$DbUsersTableTableManager(_db, _db.dbUsers);
   $$DbConversationRecordsTableTableManager get dbConversationRecords =>

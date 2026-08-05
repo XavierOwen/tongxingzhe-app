@@ -1,5 +1,102 @@
 import 'package:drift/drift.dart';
 
+/// 尚未正式提交、只对创建者可见的接触草稿。
+///
+/// 草稿允许核心字段暂时为空，因为它保存的是填写过程，不是正式接触事实。
+/// 项目和问卷版本在创建时固定，避免后续发布悄悄改变旧草稿的解释。
+@TableIndex(
+  name: 'contact_drafts_owner_updated',
+  columns: {#appUserId, #abandonedAtUtc, #updatedAtUtc},
+)
+class DbContactDrafts extends Table {
+  TextColumn get draftId => text()();
+  TextColumn get appUserId => text()();
+  TextColumn get workspaceId => text()();
+  TextColumn get projectId => text()();
+  TextColumn get questionnaireVersionId => text()();
+  DateTimeColumn get createdAtUtc => dateTime()();
+  DateTimeColumn get updatedAtUtc => dateTime()();
+  DateTimeColumn get occurredAtUtc => dateTime().nullable()();
+  TextColumn get occurredTimeZone => text().nullable()();
+  TextColumn get channel => text().nullable()();
+  TextColumn get channelDetail => text().nullable()();
+  TextColumn get locationKind => text().nullable()();
+  TextColumn get placeName => text().nullable()();
+  TextColumn get smallestRegionId => text().nullable()();
+  RealColumn get latitude => real().nullable()();
+  RealColumn get longitude => real().nullable()();
+  RealColumn get locationAccuracyMeters => real().nullable()();
+  IntColumn get reachCount => integer().nullable()();
+  IntColumn get interestLevel => integer().nullable()();
+  TextColumn get syncMode =>
+      text().withDefault(const Constant('account_private'))();
+  DateTimeColumn get abandonedAtUtc => dateTime().nullable()();
+  DateTimeColumn get undoUntilUtc => dateTime().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {draftId};
+
+  @override
+  List<String> get customConstraints => const [
+    'CHECK (length(trim(app_user_id)) > 0)',
+    'CHECK (length(trim(workspace_id)) > 0)',
+    'CHECK (length(trim(project_id)) > 0)',
+    'CHECK (length(trim(questionnaire_version_id)) > 0)',
+    'CHECK (updated_at_utc >= created_at_utc)',
+    'CHECK ((occurred_at_utc IS NULL AND occurred_time_zone IS NULL) OR '
+        '(occurred_at_utc IS NOT NULL AND occurred_time_zone IS NOT NULL '
+        'AND length(trim(occurred_time_zone)) > 0))',
+    "CHECK (channel IS NULL OR channel IN ('face_to_face', 'voice_call', "
+        "'video_call', 'instant_text', 'asynchronous_message', 'mixed', "
+        "'other_direct'))",
+    "CHECK ((location_kind IS NULL AND place_name IS NULL AND "
+        'smallest_region_id IS NULL AND latitude IS NULL AND '
+        'longitude IS NULL AND location_accuracy_meters IS NULL) OR '
+        "(location_kind = 'resolved' AND place_name IS NOT NULL AND "
+        'length(trim(place_name)) > 0 AND smallest_region_id IS NOT NULL '
+        'AND length(trim(smallest_region_id)) > 0 AND latitude IS NULL '
+        'AND longitude IS NULL AND location_accuracy_meters IS NULL) OR '
+        "(location_kind = 'not_applicable' AND place_name IS NULL AND "
+        'smallest_region_id IS NULL AND latitude IS NULL AND '
+        'longitude IS NULL AND location_accuracy_meters IS NULL) OR '
+        "(location_kind = 'pending_resolution' AND place_name IS NULL AND "
+        'smallest_region_id IS NULL AND latitude BETWEEN -90 AND 90 AND '
+        'longitude BETWEEN -180 AND 180 AND '
+        '(location_accuracy_meters IS NULL OR '
+        'location_accuracy_meters >= 0)))',
+    'CHECK (reach_count IS NULL OR reach_count > 0)',
+    'CHECK (interest_level IS NULL OR interest_level BETWEEN 0 AND 4)',
+    "CHECK (sync_mode IN ('account_private', 'device_only'))",
+    'CHECK ((abandoned_at_utc IS NULL AND undo_until_utc IS NULL) OR '
+        '(abandoned_at_utc IS NOT NULL AND undo_until_utc IS NOT NULL AND '
+        'undo_until_utc >= abandoned_at_utc))',
+  ];
+}
+
+/// 草稿中的类型化问卷回答。
+///
+/// 它与已提交答案分表保存，使草稿不会进入接触事实或分析查询。每次自动保存
+/// 会在同一 transaction 内用当前表单快照替换这些行。
+class DbContactDraftAnswers extends Table {
+  TextColumn get draftId => text().references(DbContactDrafts, #draftId)();
+  TextColumn get questionId => text()();
+  TextColumn get answerState => text()();
+  TextColumn get answerType => text()();
+  BoolColumn get booleanValue => boolean().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {draftId, questionId};
+
+  @override
+  List<String> get customConstraints => const [
+    'CHECK (length(trim(question_id)) > 0)',
+    "CHECK (answer_type = 'boolean' AND "
+        "((answer_state = 'answered' AND boolean_value IS NOT NULL) OR "
+        "(answer_state IN ('unknown', 'refused', 'not_applicable', "
+        "'unanswered') AND boolean_value IS NULL)))",
+  ];
+}
+
 /// 已提交接触的当前有效投影。
 ///
 /// 核心字段保持类型化，便于 SQLite 直接筛选和统计；姓名、电话、邮箱等 PII

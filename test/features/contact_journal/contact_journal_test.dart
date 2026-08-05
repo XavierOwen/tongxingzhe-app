@@ -495,6 +495,52 @@ void main() {
     );
   });
 
+  test('待同步接触必须带有非空设备 ID', () async {
+    final journal = _journal(const []);
+
+    await expectLater(
+      journal.submitAnonymousContact(
+        _submission(
+          deviceId: '   ',
+          occurredAtUtc: DateTime.utc(2030, 1, 10, 9),
+          reachCount: 1,
+          interestLevel: 2,
+        ),
+      ),
+      throwsA(
+        isA<ContactValidationException>().having(
+          (error) => error.code,
+          'code',
+          'contact_device_required',
+        ),
+      ),
+    );
+  });
+
+  test('问卷答案必须带有非空问题 ID', () async {
+    final journal = _journal(const []);
+
+    await expectLater(
+      journal.submitAnonymousContact(
+        _submission(
+          occurredAtUtc: DateTime.utc(2030, 1, 10, 9),
+          reachCount: 1,
+          interestLevel: 2,
+          answers: const [
+            BooleanQuestionnaireAnswer(questionId: '   ', value: true),
+          ],
+        ),
+      ),
+      throwsA(
+        isA<ContactValidationException>().having(
+          (error) => error.code,
+          'code',
+          'question_id_required',
+        ),
+      ),
+    );
+  });
+
   test('同一 revision 不能为同一道问卷题保存两个答案', () async {
     final journal = _journal([
       'contact-duplicate-answer',

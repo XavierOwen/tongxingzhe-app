@@ -6,12 +6,16 @@ import '../../data/local_database.dart';
 import '../../foundation/runtime_values.dart';
 import 'contact_models.dart';
 
+part 'contact_draft_operations.dart';
+
 /// 负责匿名接触本地事实的深模块。
 ///
-/// 调用者只提交完整行为，不分别写接触、revision 或 Outbox。模块在一个 Drift
-/// transaction 中协调这些表；任一步失败都会回滚，因而 UI 只有在本方法返回
-/// [ContactSubmissionReceipt] 后才能显示“已保存”。
+/// 调用者只表达保存草稿或提交接触，不分别写接触、revision 或 Outbox。草稿保存
+/// 返回 [ContactDraft]；正式提交在一个 Drift transaction 中协调所有正式表，
+/// 因而 UI 只有在收到 [ContactSubmissionReceipt] 后才能显示“已提交”。
 final class ContactJournal {
+  static const _abandonUndoWindow = Duration(seconds: 10);
+
   factory ContactJournal({
     required LocalDatabase database,
     required AppClock clock,
@@ -26,11 +30,7 @@ final class ContactJournal {
   final AppClock _clock;
   final IdGenerator _idGenerator;
 
-  /// 提交一条默认匿名的真实接触。
-  ///
-  /// 输入中的归属 ID 来自当前上下文；本地保存不代表远端授权成功。成功时会在
-  /// 同一事务写入当前投影、首个 revision 和唯一同步命令。数据库错误转换成
-  /// 稳定的 [ContactPersistenceException]，不会返回虚假的成功回执。
+  /// 直接提交不经过草稿的完整匿名接触。
   Future<ContactSubmissionReceipt> submitAnonymousContact(
     AnonymousContactSubmission submission,
   ) async {
@@ -39,149 +39,16 @@ final class ContactJournal {
     final revisionId = _idGenerator.next();
     final commandId = _idGenerator.next();
     final submittedAtUtc = _clock.now().toUtc();
-    final location = switch (submission.location) {
-      final ResolvedContactLocation resolved => (
-        kind: 'resolved',
-        placeName: resolved.placeName,
-        smallestRegionId: resolved.smallestRegionId,
-        latitude: null,
-        longitude: null,
-        accuracyMeters: null,
-      ),
-      NotApplicableContactLocation() => (
-        kind: 'not_applicable',
-        placeName: null,
-        smallestRegionId: null,
-        latitude: null,
-        longitude: null,
-        accuracyMeters: null,
-      ),
-      final PendingContactLocation pending => (
-        kind: 'pending_resolution',
-        placeName: null,
-        smallestRegionId: null,
-        latitude: pending.latitude,
-        longitude: pending.longitude,
-        accuracyMeters: pending.accuracyMeters,
-      ),
-    };
 
     try {
       await _database.transaction(() async {
-        await _database
-            .into(_database.dbContactRecords)
-            .insert(
-              DbContactRecordsCompanion.insert(
-                contactId: contactId,
-                appUserId: submission.appUserId,
-                workspaceId: submission.workspaceId,
-                projectId: submission.projectId,
-                questionnaireVersionId: submission.questionnaireVersionId,
-                occurredAtUtc: submission.occurredAtUtc,
-                occurredTimeZone: submission.occurredTimeZone,
-                firstSubmittedAtUtc: submittedAtUtc,
-                channel: submission.channel.storageValue,
-                channelDetail: Value(submission.channelDetail),
-                locationKind: location.kind,
-                placeName: Value(location.placeName),
-                smallestRegionId: Value(location.smallestRegionId),
-                latitude: Value(location.latitude),
-                longitude: Value(location.longitude),
-                locationAccuracyMeters: Value(location.accuracyMeters),
-                reachCount: submission.reachCount,
-                interestLevel: submission.interestLevel,
-                currentRevision: 1,
-                lifecycleStatus: 'active',
-              ),
-            );
-
-        await _database
-            .into(_database.dbContactRevisions)
-            .insert(
-              DbContactRevisionsCompanion.insert(
-                revisionId: revisionId,
-                contactId: contactId,
-                revisionNumber: 1,
-                revisedByAppUserId: submission.appUserId,
-                revisedAtUtc: submittedAtUtc,
-                occurredAtUtc: submission.occurredAtUtc,
-                occurredTimeZone: submission.occurredTimeZone,
-                channel: submission.channel.storageValue,
-                channelDetail: Value(submission.channelDetail),
-                locationKind: location.kind,
-                placeName: Value(location.placeName),
-                smallestRegionId: Value(location.smallestRegionId),
-                latitude: Value(location.latitude),
-                longitude: Value(location.longitude),
-                locationAccuracyMeters: Value(location.accuracyMeters),
-                reachCount: submission.reachCount,
-                interestLevel: submission.interestLevel,
-              ),
-            );
-
-        for (final answer in submission.answers) {
-          final booleanAnswer = answer as BooleanQuestionnaireAnswer;
-          await _database
-              .into(_database.dbContactAnswers)
-              .insert(
-                DbContactAnswersCompanion.insert(
-                  contactId: contactId,
-                  revisionNumber: 1,
-                  questionId: booleanAnswer.questionId,
-                  answerState: booleanAnswer.state.storageValue,
-                  answerType: 'boolean',
-                  booleanValue: Value(booleanAnswer.value),
-                ),
-              );
-        }
-
-        final payload = jsonEncode({
-          'contact_id': contactId,
-          'workspace_id': submission.workspaceId,
-          'project_id': submission.projectId,
-          'questionnaire_version_id': submission.questionnaireVersionId,
-          'occurred_at_utc': submission.occurredAtUtc.toIso8601String(),
-          'occurred_time_zone': submission.occurredTimeZone,
-          'channel': submission.channel.storageValue,
-          'channel_detail': submission.channelDetail,
-          'location': {
-            'kind': location.kind,
-            'place_name': location.placeName,
-            'smallest_region_id': location.smallestRegionId,
-            'latitude': location.latitude,
-            'longitude': location.longitude,
-            'accuracy_meters': location.accuracyMeters,
-          },
-          'reach_count': submission.reachCount,
-          'interest_level': submission.interestLevel,
-          'answers': [
-            for (final answer in submission.answers)
-              switch (answer) {
-                final BooleanQuestionnaireAnswer booleanAnswer => {
-                  'question_id': booleanAnswer.questionId,
-                  'state': booleanAnswer.state.storageValue,
-                  'type': 'boolean',
-                  'value': booleanAnswer.value,
-                },
-              },
-          ],
-        });
-        await _database
-            .into(_database.dbSyncOutbox)
-            .insert(
-              DbSyncOutboxCompanion.insert(
-                commandId: commandId,
-                protocolVersion: 1,
-                commandType: 'contact.submit.v1',
-                deviceId: submission.deviceId,
-                aggregateId: contactId,
-                baseRevision: 0,
-                payloadJson: payload,
-                createdAtUtc: submittedAtUtc,
-                status: 'pending',
-                nextAttemptAtUtc: submittedAtUtc,
-              ),
-            );
+        await _writeSubmission(
+          submission: submission,
+          contactId: contactId,
+          revisionId: revisionId,
+          commandId: commandId,
+          submittedAtUtc: submittedAtUtc,
+        );
       });
     } catch (error, stackTrace) {
       throw ContactPersistenceException(
@@ -198,12 +65,139 @@ final class ContactJournal {
     );
   }
 
+  Future<void> _writeSubmission({
+    required AnonymousContactSubmission submission,
+    required String contactId,
+    required String revisionId,
+    required String commandId,
+    required DateTime submittedAtUtc,
+  }) async {
+    final location = _contactLocationColumns(submission.location);
+    await _database
+        .into(_database.dbContactRecords)
+        .insert(
+          DbContactRecordsCompanion.insert(
+            contactId: contactId,
+            appUserId: submission.appUserId,
+            workspaceId: submission.workspaceId,
+            projectId: submission.projectId,
+            questionnaireVersionId: submission.questionnaireVersionId,
+            occurredAtUtc: submission.occurredAtUtc,
+            occurredTimeZone: submission.occurredTimeZone,
+            firstSubmittedAtUtc: submittedAtUtc,
+            channel: submission.channel.storageValue,
+            channelDetail: Value(submission.channelDetail),
+            locationKind: location.kind!,
+            placeName: Value(location.placeName),
+            smallestRegionId: Value(location.smallestRegionId),
+            latitude: Value(location.latitude),
+            longitude: Value(location.longitude),
+            locationAccuracyMeters: Value(location.accuracyMeters),
+            reachCount: submission.reachCount,
+            interestLevel: submission.interestLevel,
+            currentRevision: 1,
+            lifecycleStatus: 'active',
+          ),
+        );
+
+    await _database
+        .into(_database.dbContactRevisions)
+        .insert(
+          DbContactRevisionsCompanion.insert(
+            revisionId: revisionId,
+            contactId: contactId,
+            revisionNumber: 1,
+            revisedByAppUserId: submission.appUserId,
+            revisedAtUtc: submittedAtUtc,
+            occurredAtUtc: submission.occurredAtUtc,
+            occurredTimeZone: submission.occurredTimeZone,
+            channel: submission.channel.storageValue,
+            channelDetail: Value(submission.channelDetail),
+            locationKind: location.kind!,
+            placeName: Value(location.placeName),
+            smallestRegionId: Value(location.smallestRegionId),
+            latitude: Value(location.latitude),
+            longitude: Value(location.longitude),
+            locationAccuracyMeters: Value(location.accuracyMeters),
+            reachCount: submission.reachCount,
+            interestLevel: submission.interestLevel,
+          ),
+        );
+
+    for (final answer in submission.answers) {
+      final booleanAnswer = answer as BooleanQuestionnaireAnswer;
+      await _database
+          .into(_database.dbContactAnswers)
+          .insert(
+            DbContactAnswersCompanion.insert(
+              contactId: contactId,
+              revisionNumber: 1,
+              questionId: booleanAnswer.questionId,
+              answerState: booleanAnswer.state.storageValue,
+              answerType: 'boolean',
+              booleanValue: Value(booleanAnswer.value),
+            ),
+          );
+    }
+
+    final payload = jsonEncode({
+      'contact_id': contactId,
+      'workspace_id': submission.workspaceId,
+      'project_id': submission.projectId,
+      'questionnaire_version_id': submission.questionnaireVersionId,
+      'occurred_at_utc': submission.occurredAtUtc.toIso8601String(),
+      'occurred_time_zone': submission.occurredTimeZone,
+      'channel': submission.channel.storageValue,
+      'channel_detail': submission.channelDetail,
+      'location': {
+        'kind': location.kind,
+        'place_name': location.placeName,
+        'smallest_region_id': location.smallestRegionId,
+        'latitude': location.latitude,
+        'longitude': location.longitude,
+        'accuracy_meters': location.accuracyMeters,
+      },
+      'reach_count': submission.reachCount,
+      'interest_level': submission.interestLevel,
+      'answers': [
+        for (final answer in submission.answers)
+          switch (answer) {
+            final BooleanQuestionnaireAnswer booleanAnswer => {
+              'question_id': booleanAnswer.questionId,
+              'state': booleanAnswer.state.storageValue,
+              'type': 'boolean',
+              'value': booleanAnswer.value,
+            },
+          },
+      ],
+    });
+    await _database
+        .into(_database.dbSyncOutbox)
+        .insert(
+          DbSyncOutboxCompanion.insert(
+            commandId: commandId,
+            protocolVersion: 1,
+            commandType: 'contact.submit.v1',
+            deviceId: submission.deviceId,
+            aggregateId: contactId,
+            baseRevision: 0,
+            payloadJson: payload,
+            createdAtUtc: submittedAtUtc,
+            status: 'pending',
+            nextAttemptAtUtc: submittedAtUtc,
+          ),
+        );
+  }
+
   void _validateSubmission(AnonymousContactSubmission submission) {
     if (submission.appUserId.trim().isEmpty ||
         submission.workspaceId.trim().isEmpty ||
         submission.projectId.trim().isEmpty ||
         submission.questionnaireVersionId.trim().isEmpty) {
       throw const ContactValidationException('contact_context_required');
+    }
+    if (submission.deviceId.trim().isEmpty) {
+      throw const ContactValidationException('contact_device_required');
     }
     if (!submission.occurredAtUtc.isUtc) {
       throw const ContactValidationException('occurred_at_must_be_utc');
@@ -224,6 +218,9 @@ final class ContactJournal {
     }
     final questionIds = <String>{};
     for (final answer in submission.answers) {
+      if (answer.questionId.trim().isEmpty) {
+        throw const ContactValidationException('question_id_required');
+      }
       if (!questionIds.add(answer.questionId)) {
         throw const ContactValidationException('duplicate_question_answer');
       }

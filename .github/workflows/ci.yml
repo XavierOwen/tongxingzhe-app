@@ -52,13 +52,13 @@ jobs:
       - name: Verify Markdown links
         run: dart run tool/check_markdown_links.dart
 
-      - name: Verify current Drift v6 schema snapshot
+      - name: Verify current Drift v7 schema snapshot
         run: |
           dart run drift_dev schema dump \
             lib/data/local_database.dart \
-            "${RUNNER_TEMP}/drift_schema_v6.json"
-          cmp drift_schemas/drift_schema_v6.json \
-            "${RUNNER_TEMP}/drift_schema_v6.json"
+            "${RUNNER_TEMP}/drift_schema_v7.json"
+          cmp drift_schemas/drift_schema_v7.json \
+            "${RUNNER_TEMP}/drift_schema_v7.json"
 
       - name: Verify Drift migration helpers are current
         run: |

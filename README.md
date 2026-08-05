@@ -6,13 +6,13 @@
 
 ## 当前状态
 
-项目已完成 [Slice 0：安全地基与可测试接缝](https://github.com/XavierOwen/tongxingzhe-app/issues/2)，正在实施 [Slice 1：匿名接触闭环](https://github.com/XavierOwen/tongxingzhe-app/issues/3)。当前代码已有匿名接触的本地事务、首个 revision、布尔问卷答案、Outbox 命令和个人期间汇总。草稿 UI、同步执行器、Backend 和四个主导航仍未完成。旧原型只作为显式 legacy Demo 保留。
+项目已完成 [Slice 0：安全地基与可测试接缝](https://github.com/XavierOwen/tongxingzhe-app/issues/2)，正在实施 [Slice 1：匿名接触闭环](https://github.com/XavierOwen/tongxingzhe-app/issues/3)。当前代码已有多份私有草稿的事务性保存、放弃与短时撤销、草稿原子提交、Outbox 命令和个人期间汇总。正式身份尚未映射到内部用户和当前推广项目，因此草稿 UI、同步执行器、Backend 和四个主导航仍未接线。旧原型只作为显式 legacy Demo 保留。
 
 已经建立的地基包括：
 
 - 正式 composition root，以及可控制的 Clock、ID、Database、Identity、错误结果和 Platform Capability 接缝；
 - 正式入口与 MD5、默认演示账号、自动 seed 和旧登录 UI 的 import 边界；
-- Drift v5 基线、当前 v6 schema 快照和 v5→v6 升级测试；
+- Drift v5 基线、v6 中间版本、当前 v7 schema 快照和 v5／v6→v7 升级测试；
 - `ContactJournal` 本地深模块，以及可读的 SQLite 个人汇总 SQL；
 - Supabase `IdentitySession` Adapter、安全 session／PKCE 存储和 test-only fake；
 - PostgreSQL 有序 SQL migration、checksum、最小权限 runtime role、synthetic fixture 和恢复检查；
@@ -81,7 +81,7 @@ dart run tool/check_markdown_links.dart
 
 若中文路径使 `flutter analyze` 的 analysis server 输出异常，可使用 `dart analyze`；这不是跳过静态分析。
 
-Drift 当前 v6 快照和 v5→v6 升级检查：
+Drift 当前 v7 快照和 v5／v6→v7 升级检查：
 
 ```bash
 flutter test test/data/local_database_migration_test.dart

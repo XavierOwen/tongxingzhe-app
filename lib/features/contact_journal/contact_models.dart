@@ -190,6 +190,199 @@ final class ContactPersistenceException implements Exception {
   String toString() => 'ContactPersistenceException($code)';
 }
 
+/// 一份草稿的私有保存边界。
+enum ContactDraftSyncMode {
+  accountPrivate('account_private'),
+  deviceOnly('device_only');
+
+  const ContactDraftSyncMode(this.storageValue);
+
+  final String storageValue;
+
+  static ContactDraftSyncMode fromStorage(String value) {
+    return ContactDraftSyncMode.values.singleWhere(
+      (mode) => mode.storageValue == value,
+    );
+  }
+}
+
+/// 草稿保存时 UI 交给 [ContactJournal] 的当前表单内容。
+///
+/// 归属字段只是上下文，本身不算用户输入。其余 nullable 字段代表尚未填写；
+/// [ContactJournal] 负责判断是否已经出现足以创建草稿的有意义内容。
+final class ContactDraftInput {
+  const ContactDraftInput({
+    this.draftId,
+    required this.appUserId,
+    required this.workspaceId,
+    required this.projectId,
+    required this.questionnaireVersionId,
+    this.occurredAtUtc,
+    this.occurredTimeZone,
+    this.channel,
+    this.channelDetail,
+    this.location,
+    this.reachCount,
+    this.interestLevel,
+    this.answers = const [],
+    this.syncMode = ContactDraftSyncMode.accountPrivate,
+  });
+
+  final String? draftId;
+  final String appUserId;
+  final String workspaceId;
+  final String projectId;
+  final String questionnaireVersionId;
+  final DateTime? occurredAtUtc;
+  final String? occurredTimeZone;
+  final ContactChannel? channel;
+  final String? channelDetail;
+  final ContactLocation? location;
+  final int? reachCount;
+  final int? interestLevel;
+  final List<QuestionnaireAnswer> answers;
+  final ContactDraftSyncMode syncMode;
+}
+
+/// 已经落入 SQLite 的私有接触草稿。
+final class ContactDraft {
+  const ContactDraft({
+    required this.draftId,
+    required this.appUserId,
+    required this.workspaceId,
+    required this.projectId,
+    required this.questionnaireVersionId,
+    required this.createdAtUtc,
+    required this.updatedAtUtc,
+    required this.occurredAtUtc,
+    required this.occurredTimeZone,
+    required this.channel,
+    required this.channelDetail,
+    required this.location,
+    required this.reachCount,
+    required this.interestLevel,
+    required this.answers,
+    required this.syncMode,
+  });
+
+  final String draftId;
+  final String appUserId;
+  final String workspaceId;
+  final String projectId;
+  final String questionnaireVersionId;
+  final DateTime createdAtUtc;
+  final DateTime updatedAtUtc;
+  final DateTime? occurredAtUtc;
+  final String? occurredTimeZone;
+  final ContactChannel? channel;
+  final String? channelDetail;
+  final ContactLocation? location;
+  final int? reachCount;
+  final int? interestLevel;
+  final List<QuestionnaireAnswer> answers;
+  final ContactDraftSyncMode syncMode;
+
+  /// 草稿列表使用的稳定核心事实总数。
+  int get requiredCoreFactCount => 5;
+
+  /// 已经达到正式提交最低语义要求的核心事实组数。
+  int get completedCoreFactCount {
+    var completed = 0;
+    if (occurredAtUtc != null &&
+        occurredTimeZone != null &&
+        occurredTimeZone!.trim().isNotEmpty) {
+      completed++;
+    }
+    if (channel != null &&
+        (channel != ContactChannel.otherDirect ||
+            (channelDetail?.trim().isNotEmpty ?? false))) {
+      completed++;
+    }
+    if (location != null &&
+        !(channel == ContactChannel.faceToFace &&
+            location is NotApplicableContactLocation)) {
+      completed++;
+    }
+    if (reachCount != null && reachCount! > 0) {
+      completed++;
+    }
+    if (interestLevel != null && interestLevel! >= 0 && interestLevel! <= 4) {
+      completed++;
+    }
+    return completed;
+  }
+
+  bool get hasCompleteCoreFacts =>
+      completedCoreFactCount == requiredCoreFactCount;
+
+  @override
+  bool operator ==(Object other) {
+    return other is ContactDraft &&
+        other.draftId == draftId &&
+        other.appUserId == appUserId &&
+        other.workspaceId == workspaceId &&
+        other.projectId == projectId &&
+        other.questionnaireVersionId == questionnaireVersionId &&
+        other.createdAtUtc == createdAtUtc &&
+        other.updatedAtUtc == updatedAtUtc &&
+        other.occurredAtUtc == occurredAtUtc &&
+        other.occurredTimeZone == occurredTimeZone &&
+        other.channel == channel &&
+        other.channelDetail == channelDetail &&
+        other.location == location &&
+        other.reachCount == reachCount &&
+        other.interestLevel == interestLevel &&
+        _answerListsEqual(other.answers, answers) &&
+        other.syncMode == syncMode;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    draftId,
+    appUserId,
+    workspaceId,
+    projectId,
+    questionnaireVersionId,
+    createdAtUtc,
+    updatedAtUtc,
+    occurredAtUtc,
+    occurredTimeZone,
+    channel,
+    channelDetail,
+    location,
+    reachCount,
+    interestLevel,
+    Object.hashAll(answers),
+    syncMode,
+  );
+}
+
+/// 草稿已进入隐藏放弃状态后的撤销回执。
+final class ContactDraftAbandonmentReceipt {
+  const ContactDraftAbandonmentReceipt({
+    required this.draftId,
+    required this.undoUntilUtc,
+  });
+
+  final String draftId;
+  final DateTime undoUntilUtc;
+}
+
+bool _answerListsEqual(
+  List<QuestionnaireAnswer> first,
+  List<QuestionnaireAnswer> second,
+) {
+  if (first.length != second.length) {
+    return false;
+  }
+  for (var index = 0; index < first.length; index++) {
+    if (first[index] != second[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /// UI 提交一条默认匿名接触时交给 [ContactJournal] 的完整输入。
 ///
 /// `appUserId`、空间、项目和问卷版本来自当前上下文；它们用于确定本地归属，
