@@ -136,6 +136,26 @@ test("malformed contact payload returns stable rejected result", async () => {
   });
 });
 
+test("private draft upsert keeps trusted owner outside the client payload", async () => {
+  let storedCommand: SyncCommand | undefined;
+  const response = await handleSyncCommand(
+    "Bearer synthetic-token",
+    validDraftCommandBody(),
+    fakeDependencies({
+      apply: async (_resolvedContext, command) => {
+        storedCommand = command;
+        return { result: "accepted", serverCursor: "opaque-draft-1" };
+      },
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(storedCommand?.type, "draft.upsert.v1");
+  assert.equal(storedCommand?.baseRevision, 0);
+  assert.equal(storedCommand?.payload.projectId, context.current.project.id);
+  assert.equal("appUserId" in (storedCommand?.payload ?? {}), false);
+});
+
 function validCommandBody(): Record<string, unknown> {
   return {
     protocol_version: 1,
@@ -163,6 +183,33 @@ function validCommandBody(): Record<string, unknown> {
       },
       reach_count: 2,
       interest_level: 3,
+      answers: [],
+    },
+  };
+}
+
+function validDraftCommandBody(): Record<string, unknown> {
+  return {
+    protocol_version: 1,
+    command_id: "draft-1:upsert:1",
+    device_id: "device-1",
+    aggregate_id: "draft-1",
+    base_revision: 0,
+    type: "draft.upsert.v1",
+    typed_payload: {
+      draft_id: "draft-1",
+      workspace_id: context.current.workspace.id,
+      project_id: context.current.project.id,
+      questionnaire_version_id: context.current.questionnaireVersion.id,
+      created_at_utc: "2030-01-08T18:00:00.000Z",
+      updated_at_utc: "2030-01-08T18:30:00.000Z",
+      occurred_at_utc: null,
+      occurred_time_zone: null,
+      channel: "video_call",
+      channel_detail: null,
+      location: null,
+      reach_count: null,
+      interest_level: null,
       answers: [],
     },
   };

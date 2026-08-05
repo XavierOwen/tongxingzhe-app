@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/data/local_database.dart';
@@ -11,6 +12,7 @@ void main() {
   test('空白接触页不创建草稿，首次有意义输入才创建', () async {
     final journal = _journal(['draft-1']);
     const contextOnly = ContactDraftInput(
+      deviceId: 'device-1',
       appUserId: 'app-user-1',
       workspaceId: 'personal-workspace-1',
       projectId: 'project-1',
@@ -22,6 +24,7 @@ void main() {
 
     final saved = await journal.saveDraft(
       const ContactDraftInput(
+        deviceId: 'device-1',
         appUserId: 'app-user-1',
         workspaceId: 'personal-workspace-1',
         projectId: 'project-1',
@@ -58,6 +61,7 @@ void main() {
     );
     final created = await journal.saveDraft(
       const ContactDraftInput(
+        deviceId: 'device-1',
         appUserId: 'app-user-1',
         workspaceId: 'personal-workspace-1',
         projectId: 'project-1',
@@ -70,6 +74,7 @@ void main() {
     final updated = await journal.saveDraft(
       ContactDraftInput(
         draftId: created!.draftId,
+        deviceId: 'device-1',
         appUserId: created.appUserId,
         workspaceId: created.workspaceId,
         projectId: created.projectId,
@@ -85,10 +90,127 @@ void main() {
     expect(await journal.listDrafts(appUserId: 'app-user-1'), hasLength(1));
   });
 
+  test('本人私有草稿写入持久同步命令且连续自动保存只保留最新快照', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final clock = _MutableClock(DateTime.utc(2030, 1, 8, 18, 30));
+    final journal = ContactJournal(
+      database: database,
+      clock: clock,
+      idGenerator: _SequenceIdGenerator(['draft-private-sync']),
+    );
+    final created = await journal.saveDraft(
+      const ContactDraftInput(
+        deviceId: 'device-a',
+        appUserId: 'app-user-1',
+        workspaceId: 'personal-workspace-1',
+        projectId: 'project-1',
+        questionnaireVersionId: 'questionnaire-v1',
+        channel: ContactChannel.videoCall,
+      ),
+    );
+
+    clock.value = DateTime.utc(2030, 1, 8, 18, 31);
+    await journal.saveDraft(
+      ContactDraftInput(
+        draftId: created!.draftId,
+        deviceId: 'device-a',
+        appUserId: created.appUserId,
+        workspaceId: created.workspaceId,
+        projectId: created.projectId,
+        questionnaireVersionId: created.questionnaireVersionId,
+        channel: ContactChannel.voiceCall,
+      ),
+    );
+
+    final commands = await database.select(database.dbSyncOutbox).get();
+    expect(commands, hasLength(1));
+    expect(commands.single.commandType, 'draft.upsert.v1');
+    expect(commands.single.deviceId, 'device-a');
+    expect(commands.single.appUserId, 'app-user-1');
+    expect(commands.single.baseRevision, 0);
+    expect(commands.single.payloadJson, contains('voice_call'));
+    expect(commands.single.payloadJson, isNot(contains('video_call')));
+  });
+
+  test('仅本设备草稿不写入跨设备同步命令', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final journal = ContactJournal(
+      database: database,
+      clock: _FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
+      idGenerator: _SequenceIdGenerator(['draft-device-only']),
+    );
+
+    await journal.saveDraft(
+      const ContactDraftInput(
+        deviceId: 'device-a',
+        appUserId: 'app-user-1',
+        workspaceId: 'personal-workspace-1',
+        projectId: 'project-1',
+        questionnaireVersionId: 'questionnaire-v1',
+        channel: ContactChannel.videoCall,
+        syncMode: ContactDraftSyncMode.deviceOnly,
+      ),
+    );
+
+    expect(await database.select(database.dbSyncOutbox).get(), isEmpty);
+  });
+
+  test('账号私有上传结果不确定时不假装已经切为仅本设备', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final journal = ContactJournal(
+      database: database,
+      clock: _FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
+      idGenerator: _SequenceIdGenerator(['draft-transition']),
+    );
+    final draft = await journal.saveDraft(
+      const ContactDraftInput(
+        deviceId: 'device-a',
+        appUserId: 'app-user-1',
+        workspaceId: 'personal-workspace-1',
+        projectId: 'project-1',
+        questionnaireVersionId: 'questionnaire-v1',
+        channel: ContactChannel.videoCall,
+      ),
+    );
+    await database
+        .update(database.dbSyncOutbox)
+        .write(const DbSyncOutboxCompanion(attemptCount: Value(1)));
+
+    await expectLater(
+      journal.saveDraft(
+        ContactDraftInput(
+          draftId: draft!.draftId,
+          deviceId: 'device-a',
+          appUserId: draft.appUserId,
+          workspaceId: draft.workspaceId,
+          projectId: draft.projectId,
+          questionnaireVersionId: draft.questionnaireVersionId,
+          channel: draft.channel,
+          syncMode: ContactDraftSyncMode.deviceOnly,
+        ),
+      ),
+      throwsA(
+        isA<ContactValidationException>().having(
+          (error) => error.code,
+          'code',
+          'draft_sync_transition_waiting_for_confirmation',
+        ),
+      ),
+    );
+    expect(
+      (await journal.listDrafts(appUserId: 'app-user-1')).single.syncMode,
+      ContactDraftSyncMode.accountPrivate,
+    );
+  });
+
   test('草稿可恢复全部核心事实、类型化答案和同步模式', () async {
     final journal = _journal(['draft-complete']);
     final saved = await journal.saveDraft(
       ContactDraftInput(
+        deviceId: 'device-1',
         appUserId: 'app-user-1',
         workspaceId: 'personal-workspace-1',
         projectId: 'project-1',
@@ -157,6 +279,9 @@ void main() {
       interestLevel: null,
       answers: const [],
       syncMode: ContactDraftSyncMode.accountPrivate,
+      localRevision: 1,
+      serverRevision: 0,
+      conflictOfDraftId: null,
     );
 
     expect(draft.completedCoreFactCount, 3);
@@ -182,6 +307,7 @@ void main() {
     );
     await firstJournal.saveDraft(
       const ContactDraftInput(
+        deviceId: 'device-1',
         appUserId: 'app-user-1',
         workspaceId: 'personal-workspace-1',
         projectId: 'project-1',
@@ -192,6 +318,7 @@ void main() {
     clock.value = DateTime.utc(2030, 1, 8, 18, 31);
     await firstJournal.saveDraft(
       const ContactDraftInput(
+        deviceId: 'device-1',
         appUserId: 'app-user-1',
         workspaceId: 'personal-workspace-1',
         projectId: 'project-2',
@@ -201,6 +328,7 @@ void main() {
     );
     await firstJournal.saveDraft(
       const ContactDraftInput(
+        deviceId: 'device-1',
         appUserId: 'app-user-2',
         workspaceId: 'personal-workspace-2',
         projectId: 'project-other-user',
@@ -229,6 +357,36 @@ void main() {
     ]);
   });
 
+  test('稳定草稿地址按创建者读取并保留原项目归属', () async {
+    final journal = _journal(['draft-project-2']);
+    await journal.saveDraft(
+      const ContactDraftInput(
+        deviceId: 'device-1',
+        appUserId: 'app-user-1',
+        workspaceId: 'personal-workspace-1',
+        projectId: 'project-2',
+        questionnaireVersionId: 'questionnaire-v2',
+        channel: ContactChannel.voiceCall,
+      ),
+    );
+
+    final restored = await journal.draftByIdForOwner(
+      draftId: 'draft-project-2',
+      appUserId: 'app-user-1',
+    );
+
+    expect(restored, isNotNull);
+    expect(restored!.projectId, 'project-2');
+    expect(restored.questionnaireVersionId, 'questionnaire-v2');
+    expect(
+      await journal.draftByIdForOwner(
+        draftId: 'draft-project-2',
+        appUserId: 'app-user-2',
+      ),
+      isNull,
+    );
+  });
+
   test('正式提交把完整草稿原子转换为接触并从草稿列表移除', () async {
     final journal = _journal([
       'draft-to-submit',
@@ -238,6 +396,7 @@ void main() {
     ]);
     final draft = await journal.saveDraft(
       ContactDraftInput(
+        deviceId: 'device-1',
         appUserId: 'app-user-1',
         workspaceId: 'personal-workspace-1',
         projectId: 'project-1',
@@ -298,6 +457,7 @@ void main() {
     ]);
     final draft = await journal.saveDraft(
       ContactDraftInput(
+        deviceId: 'device-1',
         appUserId: 'app-user-1',
         workspaceId: 'personal-workspace-1',
         projectId: 'project-1',
@@ -358,6 +518,7 @@ void main() {
     );
     final draft = await journal.saveDraft(
       const ContactDraftInput(
+        deviceId: 'device-1',
         appUserId: 'app-user-1',
         workspaceId: 'personal-workspace-1',
         projectId: 'project-1',
@@ -369,6 +530,7 @@ void main() {
     final abandoned = await journal.abandonDraft(
       draftId: draft!.draftId,
       appUserId: 'app-user-1',
+      deviceId: 'device-1',
     );
     expect(abandoned.undoUntilUtc, DateTime.utc(2030, 1, 8, 18, 30, 10));
     expect(await journal.listDrafts(appUserId: 'app-user-1'), isEmpty);
@@ -377,6 +539,7 @@ void main() {
     final restored = await journal.undoAbandonDraft(
       draftId: draft.draftId,
       appUserId: 'app-user-1',
+      deviceId: 'device-1',
     );
     expect(restored.draftId, 'draft-to-abandon');
     expect(
@@ -396,6 +559,7 @@ void main() {
     );
     final draft = await journal.saveDraft(
       const ContactDraftInput(
+        deviceId: 'device-1',
         appUserId: 'app-user-1',
         workspaceId: 'personal-workspace-1',
         projectId: 'project-1',
@@ -406,11 +570,16 @@ void main() {
     await journal.abandonDraft(
       draftId: draft!.draftId,
       appUserId: 'app-user-1',
+      deviceId: 'device-1',
     );
 
     clock.value = DateTime.utc(2030, 1, 8, 18, 30, 11);
     await expectLater(
-      journal.undoAbandonDraft(draftId: draft.draftId, appUserId: 'app-user-1'),
+      journal.undoAbandonDraft(
+        draftId: draft.draftId,
+        appUserId: 'app-user-1',
+        deviceId: 'device-1',
+      ),
       throwsA(
         isA<ContactValidationException>().having(
           (error) => error.code,
@@ -426,6 +595,7 @@ void main() {
     final journal = _journal(['draft-incomplete']);
     final draft = await journal.saveDraft(
       const ContactDraftInput(
+        deviceId: 'device-1',
         appUserId: 'app-user-1',
         workspaceId: 'personal-workspace-1',
         projectId: 'project-1',

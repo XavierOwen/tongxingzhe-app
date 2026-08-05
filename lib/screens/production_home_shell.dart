@@ -4,15 +4,16 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../app/app_controller.dart';
+import '../app_session/app_session.dart';
 import '../app_session/session_context_gateway.dart';
 import '../features/contact_entry/contact_entry_screen.dart';
 import '../features/contact_journal/contact_journal.dart';
 import '../features/contact_journal/contact_models.dart';
+import '../features/contact_metrics/personal_contact_overview.dart';
 import '../l10n/app_strings.dart';
 import '../services/location_service.dart';
-import '../sync/sync_engine.dart';
+import '../sync/foreground_sync_coordinator.dart';
 import '../sync/sync_engine_factory.dart';
-import '../sync/sync_models.dart';
 
 /// 正式产品的四项主框架。
 ///
@@ -22,6 +23,7 @@ final class ProductionHomeShell extends StatefulWidget {
   const ProductionHomeShell({
     super.key,
     required this.controller,
+    required this.appSession,
     required this.context,
     required this.contactJournal,
     required this.deviceId,
@@ -34,6 +36,7 @@ final class ProductionHomeShell extends StatefulWidget {
   });
 
   final AppController controller;
+  final AppSession appSession;
   final TrustedSessionContext context;
   final ContactJournal contactJournal;
   final String deviceId;
@@ -50,8 +53,8 @@ final class ProductionHomeShell extends StatefulWidget {
 
 final class _ProductionHomeShellState extends State<ProductionHomeShell>
     with WidgetsBindingObserver {
-  SyncEngine? _syncEngine;
-  var _drainRunning = false;
+  late final ForegroundSyncCoordinator _syncCoordinator;
+  late PersonalContactOverviewRepository _overviewRepository;
   late int _handledSubmissionEvent;
 
   @override
@@ -60,9 +63,11 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
     WidgetsBinding.instance.addObserver(this);
     _handledSubmissionEvent = widget.contactSubmissionEvents.value;
     widget.contactSubmissionEvents.addListener(_contactSubmitted);
-    _syncEngine = widget.syncEngineFactory?.create(widget.context);
+    _syncCoordinator = ForegroundSyncCoordinator(worker: _createSyncWorker())
+      ..addListener(_syncStateChanged);
+    _overviewRepository = _createOverviewRepository();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_drainAvailableCommands());
+      unawaited(_syncCoordinator.synchronize());
     });
   }
 
@@ -70,13 +75,16 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     widget.contactSubmissionEvents.removeListener(_contactSubmitted);
+    _syncCoordinator
+      ..removeListener(_syncStateChanged)
+      ..dispose();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      unawaited(_drainAvailableCommands());
+      unawaited(_syncCoordinator.synchronize());
     }
   }
 
@@ -90,10 +98,14 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
     }
     if (oldWidget.syncEngineFactory != widget.syncEngineFactory ||
         !_sameScope(oldWidget.context, widget.context)) {
-      _syncEngine = widget.syncEngineFactory?.create(widget.context);
+      _syncCoordinator.replaceWorker(_createSyncWorker());
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        unawaited(_drainAvailableCommands());
+        unawaited(_syncCoordinator.synchronize());
       });
+    }
+    if (oldWidget.contactJournal != widget.contactJournal ||
+        oldWidget.controller != widget.controller) {
+      _overviewRepository = _createOverviewRepository();
     }
   }
 
@@ -110,14 +122,14 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
       _PersonalSummaryPage(
         controller: widget.controller,
         context: widget.context,
-        contactJournal: widget.contactJournal,
-        period: _SummaryPeriod.today,
+        repository: _overviewRepository,
+        period: PersonalSummaryPeriod.today,
       ),
       _ContactsPage(
         controller: widget.controller,
         context: widget.context,
-        contactJournal: widget.contactJournal,
-        syncEngine: _syncEngine,
+        availableContexts: widget.appSession.current.availableContexts,
+        repository: _overviewRepository,
         onOpenDraft: _openContactEntry,
         onAbandonDraft: _abandonDraft,
       ),
@@ -129,8 +141,8 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
       _PersonalSummaryPage(
         controller: widget.controller,
         context: widget.context,
-        contactJournal: widget.contactJournal,
-        period: _SummaryPeriod.recentSevenDays,
+        repository: _overviewRepository,
+        period: PersonalSummaryPeriod.recentSevenDays,
       ),
     ];
 
@@ -139,6 +151,44 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
         title: Text(
           '${widget.context.workspace.name} → ${widget.context.project.name}',
         ),
+        actions: [
+          PopupMenuButton<String>(
+            key: const ValueKey('project-context-menu'),
+            tooltip: strings.t('projectMenu'),
+            onSelected: _handleProjectMenuSelection,
+            itemBuilder: (context) => [
+              for (final available
+                  in widget.appSession.current.availableContexts)
+                PopupMenuItem<String>(
+                  value: available.project.id,
+                  child: Row(
+                    children: [
+                      if (available.project.id == widget.context.project.id)
+                        const Padding(
+                          padding: EdgeInsets.only(right: 8),
+                          child: Icon(Icons.check, size: 18),
+                        )
+                      else
+                        const SizedBox(width: 26),
+                      Text(available.project.name),
+                    ],
+                  ),
+                ),
+              const PopupMenuDivider(),
+              PopupMenuItem<String>(
+                value: _createProjectMenuValue,
+                child: Row(
+                  children: [
+                    const Icon(Icons.add, size: 18),
+                    const SizedBox(width: 8),
+                    Text(strings.t('createProject')),
+                  ],
+                ),
+              ),
+            ],
+            icon: const Icon(Icons.swap_horiz_outlined),
+          ),
+        ],
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -198,8 +248,56 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
     widget.onDestinationSelected(index);
   }
 
-  void _openContactEntry(ContactDraft? draft) {
+  Future<void> _openContactEntry(ContactDraft? draft) async {
+    if (draft != null && draft.projectId != widget.context.project.id) {
+      final result = await widget.appSession.selectProject(draft.projectId);
+      if (result is SessionContextRejected) {
+        if (mounted) {
+          _showProjectFailure();
+        }
+        return;
+      }
+    }
+    if (!mounted) {
+      return;
+    }
     widget.onOpenContactEntry(draft);
+  }
+
+  Future<void> _handleProjectMenuSelection(String value) async {
+    if (value == _createProjectMenuValue) {
+      await _createProject();
+      return;
+    }
+    if (value == widget.context.project.id) {
+      return;
+    }
+    final result = await widget.appSession.selectProject(value);
+    if (result is SessionContextRejected && mounted) {
+      _showProjectFailure();
+    }
+  }
+
+  Future<void> _createProject() async {
+    final text = AppStrings(widget.controller.localeCode);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => _CreateProjectDialog(text: text),
+    );
+    if (name == null || !mounted) {
+      return;
+    }
+    final result = await widget.appSession.createPersonalProject(name);
+    if (result is SessionContextRejected && mounted) {
+      _showProjectFailure();
+    }
+  }
+
+  void _showProjectFailure() {
+    final text = AppStrings(widget.controller.localeCode);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(text.t('projectChangeFailed'))));
   }
 
   void _contactSubmitted() {
@@ -220,7 +318,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(text.t('contactSubmitted'))));
-      unawaited(_drainAvailableCommands());
+      unawaited(_syncCoordinator.synchronize());
     });
   }
 
@@ -230,6 +328,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
       await widget.contactJournal.abandonDraft(
         draftId: draft.draftId,
         appUserId: widget.context.appUserId,
+        deviceId: widget.deviceId,
       );
       if (!mounted) {
         return;
@@ -245,6 +344,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
           ),
         ),
       );
+      unawaited(_syncCoordinator.synchronize());
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -260,9 +360,11 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
       await widget.contactJournal.undoAbandonDraft(
         draftId: draft.draftId,
         appUserId: widget.context.appUserId,
+        deviceId: widget.deviceId,
       );
       if (mounted) {
         setState(() {});
+        unawaited(_syncCoordinator.synchronize());
       }
     } catch (_) {
       if (mounted) {
@@ -273,33 +375,22 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
     }
   }
 
-  Future<void> _drainAvailableCommands() async {
-    final engine = _syncEngine;
-    if (engine == null || _drainRunning) {
-      return;
-    }
-    _drainRunning = true;
-    try {
-      for (var sent = 0; sent < 20; sent++) {
-        final result = await engine.drainOnce();
-        if (mounted) {
-          setState(() {});
-        }
-        if (result != SyncDrainResult.completed) {
-          break;
-        }
-      }
-      for (var received = 0; received < 20; received++) {
-        final result = await engine.pullOnce();
-        if (mounted) {
-          setState(() {});
-        }
-        if (result != SyncPullApplyResult.applied) {
-          break;
-        }
-      }
-    } finally {
-      _drainRunning = false;
+  ForegroundSyncWorker? _createSyncWorker() {
+    final engine = widget.syncEngineFactory?.create(widget.context);
+    return engine == null ? null : SyncEngineForegroundWorker(engine);
+  }
+
+  PersonalContactOverviewRepository _createOverviewRepository() {
+    return PersonalContactOverviewRepository(
+      source: ContactJournalOverviewSource(widget.contactJournal),
+      now: widget.controller.now,
+      loadSyncHealth: _syncCoordinator.health,
+    );
+  }
+
+  void _syncStateChanged() {
+    if (mounted) {
+      setState(() {});
     }
   }
 
@@ -310,37 +401,82 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
   }
 }
 
-enum _SummaryPeriod { today, recentSevenDays }
+const _createProjectMenuValue = '__create_personal_project__';
+
+/// 对话框自行持有输入控制器，关闭动画结束后再随 State 一起释放。
+final class _CreateProjectDialog extends StatefulWidget {
+  const _CreateProjectDialog({required this.text});
+
+  final AppStrings text;
+
+  @override
+  State<_CreateProjectDialog> createState() => _CreateProjectDialogState();
+}
+
+final class _CreateProjectDialogState extends State<_CreateProjectDialog> {
+  final TextEditingController _nameController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.text.t('createProject')),
+      content: TextField(
+        key: const ValueKey('new-project-name'),
+        controller: _nameController,
+        autofocus: true,
+        textInputAction: TextInputAction.done,
+        decoration: InputDecoration(labelText: widget.text.t('projectName')),
+        onSubmitted: _submit,
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(widget.text.t('cancel')),
+        ),
+        FilledButton(
+          onPressed: () => _submit(_nameController.text),
+          child: Text(widget.text.t('create')),
+        ),
+      ],
+    );
+  }
+
+  void _submit(String value) {
+    final normalized = value.trim();
+    if (normalized.isNotEmpty) {
+      Navigator.of(context).pop(normalized);
+    }
+  }
+}
 
 /// 从同一份已提交接触事实生成“今日”和最近七日的个人反馈。
 ///
-/// 当前上下文尚未定义项目报告时区，因此边界明确使用 UTC 自然日。以后加入
-/// 项目时区时，只需替换 [_periodBounds]，页面不接触 Drift 或 SQL。
+/// 时间边界和同步覆盖由 [PersonalContactOverviewRepository] 统一计算；页面
+/// 只把同一单位的结果显示出来。
 final class _PersonalSummaryPage extends StatelessWidget {
   const _PersonalSummaryPage({
     required this.controller,
     required this.context,
-    required this.contactJournal,
+    required this.repository,
     required this.period,
   });
 
   final AppController controller;
   final TrustedSessionContext context;
-  final ContactJournal contactJournal;
-  final _SummaryPeriod period;
+  final PersonalContactOverviewRepository repository;
+  final PersonalSummaryPeriod period;
 
   @override
   Widget build(BuildContext context) {
     final text = AppStrings(controller.localeCode);
-    final bounds = _periodBounds(controller.now().toUtc());
-    return FutureBuilder<PersonalContactSummary>(
-      future: contactJournal.summarizePersonalContacts(
-        appUserId: this.context.appUserId,
-        workspaceId: this.context.workspace.id,
-        projectId: this.context.project.id,
-        fromUtc: bounds.fromUtc,
-        untilUtc: bounds.untilUtc,
-      ),
+    return FutureBuilder<PersonalSummarySnapshot>(
+      future: repository.loadSummary(context: this.context, period: period),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(child: Text(text.t('summaryLoadFailed')));
@@ -348,12 +484,13 @@ final class _PersonalSummaryPage extends StatelessWidget {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        final summary = snapshot.requireData;
+        final result = snapshot.requireData;
+        final summary = result.summary;
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
             Text(
-              period == _SummaryPeriod.today
+              period == PersonalSummaryPeriod.today
                   ? text.t('today')
                   : text.t('recentSevenDays'),
               style: Theme.of(context).textTheme.headlineSmall,
@@ -363,14 +500,14 @@ final class _PersonalSummaryPage extends StatelessWidget {
             const SizedBox(height: 16),
             _SummaryFactCard(
               icon: Icons.forum_outlined,
-              label: period == _SummaryPeriod.today
+              label: period == PersonalSummaryPeriod.today
                   ? text.t('todayContactSessions')
                   : text.t('sevenDayContactSessions'),
               value: summary.contactSessionCount,
             ),
             _SummaryFactCard(
               icon: Icons.groups_outlined,
-              label: period == _SummaryPeriod.today
+              label: period == PersonalSummaryPeriod.today
                   ? text.t('todayReachCount')
                   : text.t('sevenDayReachCount'),
               value: summary.reachCount,
@@ -380,7 +517,7 @@ final class _PersonalSummaryPage extends StatelessWidget {
               label: text.t('pendingSync'),
               value: summary.pendingSyncCount,
             ),
-            if (period == _SummaryPeriod.recentSevenDays) ...[
+            if (period == PersonalSummaryPeriod.recentSevenDays) ...[
               const SizedBox(height: 8),
               Text(
                 text.t('interestDistribution'),
@@ -416,8 +553,8 @@ final class _PersonalSummaryPage extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 '${text.t('syncCoverage')} '
-                '${summary.contactSessionCount - summary.pendingSyncCount} / '
-                '${summary.contactSessionCount}',
+                '${result.syncedContactSessionCount} / '
+                '${result.syncCoverageDenominator}',
               ),
             ],
           ],
@@ -425,25 +562,6 @@ final class _PersonalSummaryPage extends StatelessWidget {
       },
     );
   }
-
-  _UtcPeriod _periodBounds(DateTime nowUtc) {
-    final tomorrowUtc = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day + 1);
-    final todayUtc = tomorrowUtc.subtract(const Duration(days: 1));
-    return switch (period) {
-      _SummaryPeriod.today => _UtcPeriod(todayUtc, tomorrowUtc),
-      _SummaryPeriod.recentSevenDays => _UtcPeriod(
-        todayUtc.subtract(const Duration(days: 6)),
-        tomorrowUtc,
-      ),
-    };
-  }
-}
-
-final class _UtcPeriod {
-  const _UtcPeriod(this.fromUtc, this.untilUtc);
-
-  final DateTime fromUtc;
-  final DateTime untilUtc;
 }
 
 final class _SummaryFactCard extends StatelessWidget {
@@ -507,30 +625,24 @@ final class _ContactsPage extends StatelessWidget {
   const _ContactsPage({
     required this.controller,
     required this.context,
-    required this.contactJournal,
-    required this.syncEngine,
+    required this.availableContexts,
+    required this.repository,
     required this.onOpenDraft,
     required this.onAbandonDraft,
   });
 
   final AppController controller;
   final TrustedSessionContext context;
-  final ContactJournal contactJournal;
-  final SyncEngine? syncEngine;
+  final List<TrustedSessionContext> availableContexts;
+  final PersonalContactOverviewRepository repository;
   final ValueChanged<ContactDraft?> onOpenDraft;
   final ValueChanged<ContactDraft> onAbandonDraft;
 
   @override
   Widget build(BuildContext context) {
     final text = AppStrings(controller.localeCode);
-    return FutureBuilder<
-      ({
-        List<ContactDraft> drafts,
-        PersonalContactSummary todaySummary,
-        SyncHealth? syncHealth,
-      })
-    >(
-      future: _loadContactPage(),
+    return FutureBuilder<ContactOverviewSnapshot>(
+      future: repository.loadContacts(context: this.context),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
@@ -596,12 +708,15 @@ final class _ContactsPage extends StatelessWidget {
   }
 
   String _draftDetails(AppStrings text, ContactDraft draft) {
-    final project = draft.projectId == context.project.id
-        ? context.project.name
-        : draft.projectId;
+    final contextsByProjectId = {
+      for (final available in availableContexts)
+        available.project.id: available,
+    };
+    final draftContext = contextsByProjectId[draft.projectId];
+    final project = draftContext?.project.name ?? draft.projectId;
     final questionnaire =
-        draft.questionnaireVersionId == context.questionnaireVersion.id
-        ? context.questionnaireVersion.versionNumber.toString()
+        draftContext?.questionnaireVersion.id == draft.questionnaireVersionId
+        ? draftContext!.questionnaireVersion.versionNumber.toString()
         : draft.questionnaireVersionId;
     return [
       '${text.t('draftProject')}：$project',
@@ -613,30 +728,5 @@ final class _ContactsPage extends StatelessWidget {
       '${text.t('draftCompletion')}：'
           '${draft.completedCoreFactCount} / ${draft.requiredCoreFactCount}',
     ].join('\n');
-  }
-
-  Future<
-    ({
-      List<ContactDraft> drafts,
-      PersonalContactSummary todaySummary,
-      SyncHealth? syncHealth,
-    })
-  >
-  _loadContactPage() async {
-    final nowUtc = controller.now().toUtc();
-    final untilUtc = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day + 1);
-    final fromUtc = untilUtc.subtract(const Duration(days: 1));
-    final drafts = await contactJournal.listDrafts(
-      appUserId: context.appUserId,
-    );
-    final todaySummary = await contactJournal.summarizePersonalContacts(
-      appUserId: context.appUserId,
-      workspaceId: context.workspace.id,
-      projectId: context.project.id,
-      fromUtc: fromUtc,
-      untilUtc: untilUtc,
-    );
-    final syncHealth = await syncEngine?.health();
-    return (drafts: drafts, todaySummary: todaySummary, syncHealth: syncHealth);
   }
 }

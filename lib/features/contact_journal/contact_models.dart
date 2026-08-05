@@ -35,20 +35,24 @@ final class ResolvedContactLocation extends ContactLocation {
   const ResolvedContactLocation({
     required this.placeName,
     required this.smallestRegionId,
+    required this.regionTreeVersion,
   });
 
   final String placeName;
   final String smallestRegionId;
+  final String regionTreeVersion;
 
   @override
   bool operator ==(Object other) {
     return other is ResolvedContactLocation &&
         other.placeName == placeName &&
-        other.smallestRegionId == smallestRegionId;
+        other.smallestRegionId == smallestRegionId &&
+        other.regionTreeVersion == regionTreeVersion;
   }
 
   @override
-  int get hashCode => Object.hash(placeName, smallestRegionId);
+  int get hashCode =>
+      Object.hash(placeName, smallestRegionId, regionTreeVersion);
 }
 
 /// 纯非线下接触明确记录的“不适用”地点。
@@ -213,6 +217,7 @@ enum ContactDraftSyncMode {
 final class ContactDraftInput {
   const ContactDraftInput({
     this.draftId,
+    required this.deviceId,
     required this.appUserId,
     required this.workspaceId,
     required this.projectId,
@@ -229,6 +234,7 @@ final class ContactDraftInput {
   });
 
   final String? draftId;
+  final String deviceId;
   final String appUserId;
   final String workspaceId;
   final String projectId;
@@ -263,6 +269,9 @@ final class ContactDraft {
     required this.interestLevel,
     required this.answers,
     required this.syncMode,
+    required this.localRevision,
+    required this.serverRevision,
+    required this.conflictOfDraftId,
   });
 
   final String draftId;
@@ -281,6 +290,11 @@ final class ContactDraft {
   final int? interestLevel;
   final List<QuestionnaireAnswer> answers;
   final ContactDraftSyncMode syncMode;
+  final int localRevision;
+  final int serverRevision;
+  final String? conflictOfDraftId;
+
+  bool get isConflictCopy => conflictOfDraftId != null;
 
   /// 草稿列表使用的稳定核心事实总数。
   int get requiredCoreFactCount => 5;
@@ -333,7 +347,10 @@ final class ContactDraft {
         other.reachCount == reachCount &&
         other.interestLevel == interestLevel &&
         _answerListsEqual(other.answers, answers) &&
-        other.syncMode == syncMode;
+        other.syncMode == syncMode &&
+        other.localRevision == localRevision &&
+        other.serverRevision == serverRevision &&
+        other.conflictOfDraftId == conflictOfDraftId;
   }
 
   @override
@@ -354,6 +371,9 @@ final class ContactDraft {
     interestLevel,
     Object.hashAll(answers),
     syncMode,
+    localRevision,
+    serverRevision,
+    conflictOfDraftId,
   );
 }
 

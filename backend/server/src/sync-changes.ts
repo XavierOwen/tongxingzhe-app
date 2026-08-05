@@ -2,6 +2,7 @@ import {
   IdentityVerificationError,
   type IdentityVerifier,
 } from "./identity.js";
+import { bearerToken } from "./authorization.js";
 import type {
   SessionContext,
   SessionContextStore,
@@ -85,13 +86,6 @@ export async function handleSyncChanges(
     }
     return failure(503, "sync_unavailable");
   }
-}
-
-function bearerToken(authorization: string | undefined): string | null {
-  if (authorization === undefined) {
-    return null;
-  }
-  return /^Bearer ([^\s]+)$/i.exec(authorization.trim())?.[1] ?? null;
 }
 
 function failure(status: number, code: string): SyncChangesHttpResult {

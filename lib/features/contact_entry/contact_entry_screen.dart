@@ -4,10 +4,13 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_controller.dart';
 import '../../app_session/session_context_gateway.dart';
+import '../../device/device_time_zone.dart';
+import '../../foundation/runtime_values.dart';
 import '../../l10n/app_strings.dart';
 import '../../services/location_service.dart';
 import '../contact_journal/contact_journal.dart';
 import '../contact_journal/contact_models.dart';
+import 'contact_entry_view_model.dart';
 
 /// 正式接触表单的首个渐进式切片。
 ///
@@ -17,74 +20,65 @@ final class ContactEntryScreen extends StatefulWidget {
   const ContactEntryScreen({
     super.key,
     required this.controller,
+    required this.clock,
     required this.context,
     required this.contactJournal,
     required this.deviceId,
     required this.locationCapture,
+    required this.timeZoneProvider,
     this.initialDraft,
+    this.entryStore,
   });
 
   final AppController controller;
+  final AppClock clock;
   final TrustedSessionContext context;
   final ContactJournal contactJournal;
   final String deviceId;
   final ContactLocationCapture locationCapture;
+  final DeviceTimeZoneProvider timeZoneProvider;
   final ContactDraft? initialDraft;
+  final ContactEntryStore? entryStore;
 
   @override
   State<ContactEntryScreen> createState() => _ContactEntryScreenState();
 }
 
-enum _DraftSaveState { untouched, waiting, saving, saved, failed }
-
 final class _ContactEntryScreenState extends State<ContactEntryScreen>
     with WidgetsBindingObserver {
-  static const _saveDelay = Duration(milliseconds: 350);
-
-  Timer? _saveTimer;
   late final TextEditingController _reachController;
   late final TextEditingController _channelDetailController;
-  ContactDraft? _draft;
-  late DateTime _occurredAtUtc;
-  late String _occurredTimeZone;
-  ContactChannel? _channel;
-  ContactLocation? _location;
-  int? _reachCount;
-  int? _interestLevel;
-  Future<void>? _activeSave;
-  var _editRevision = 0;
-  var _savedRevision = 0;
-  var _saveState = _DraftSaveState.untouched;
-  var _submitting = false;
-  var _capturingLocation = false;
+  late final ContactEntryViewModel _viewModel;
   var _allowPop = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _draft = widget.initialDraft;
-    _occurredAtUtc = _draft?.occurredAtUtc ?? widget.controller.now().toUtc();
-    _occurredTimeZone = _draft?.occurredTimeZone ?? 'UTC';
-    _channel = _draft?.channel;
-    _location = _draft?.location;
-    _reachCount = _draft?.reachCount;
-    _interestLevel = _draft?.interestLevel;
     _reachController = TextEditingController(
-      text: _reachCount?.toString() ?? '',
+      text: widget.initialDraft?.reachCount?.toString() ?? '',
     );
     _channelDetailController = TextEditingController(
-      text: _draft?.channelDetail ?? '',
+      text: widget.initialDraft?.channelDetail ?? '',
     );
-    if (_draft != null) {
-      _saveState = _DraftSaveState.saved;
-    }
+    _viewModel = ContactEntryViewModel(
+      clock: widget.clock,
+      timeZoneProvider: widget.timeZoneProvider,
+      context: widget.context,
+      deviceId: widget.deviceId,
+      store:
+          widget.entryStore ?? ContactJournalEntryStore(widget.contactJournal),
+      locationCapture: widget.locationCapture,
+    )..addListener(_onViewStateChanged);
+    unawaited(_viewModel.initialize(draft: widget.initialDraft));
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _saveTimer?.cancel();
+    _viewModel
+      ..removeListener(_onViewStateChanged)
+      ..dispose();
     _reachController.dispose();
     _channelDetailController.dispose();
     super.dispose();
@@ -96,15 +90,26 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
-      unawaited(_saveDraft());
+      unawaited(_viewModel.flushDraft());
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final text = AppStrings(widget.controller.localeCode);
+    final entryState = _viewModel.state;
+    if (!entryState.isReady) {
+      return Scaffold(
+        appBar: AppBar(title: Text(text.t('recordContact'))),
+        body: Center(
+          child: entryState.initializationFailure == null
+              ? const CircularProgressIndicator()
+              : Text(text.t(entryState.initializationFailure!)),
+        ),
+      );
+    }
     return PopScope<bool>(
-      canPop: _allowPop || !_hasUnsavedChanges,
+      canPop: _allowPop || !entryState.hasUnsavedChanges,
       onPopInvokedWithResult: _onPopInvoked,
       child: Scaffold(
         appBar: AppBar(title: Text(text.t('recordContact'))),
@@ -114,6 +119,37 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
           children: [
             _ContextCard(context: widget.context, text: text),
+            const SizedBox(height: 16),
+            if (entryState.isConflictCopy)
+              _ConflictDraftCard(text: text)
+            else
+              SegmentedButton<ContactDraftSyncMode>(
+                key: const ValueKey('draft-sync-mode'),
+                segments: [
+                  ButtonSegment(
+                    value: ContactDraftSyncMode.accountPrivate,
+                    icon: const Icon(Icons.devices_outlined),
+                    label: Text(text.t('draftSyncAccountPrivate')),
+                  ),
+                  ButtonSegment(
+                    value: ContactDraftSyncMode.deviceOnly,
+                    icon: const Icon(Icons.phone_iphone_outlined),
+                    label: Text(text.t('draftSyncDeviceOnly')),
+                  ),
+                ],
+                selected: {entryState.syncMode},
+                onSelectionChanged: (selection) {
+                  _viewModel.setSyncMode(selection.single);
+                },
+              ),
+            const SizedBox(height: 6),
+            Text(
+              entryState.isConflictCopy
+                  ? text.t('draftConflictHelp')
+                  : entryState.syncMode == ContactDraftSyncMode.accountPrivate
+                  ? text.t('draftSyncAccountPrivateHelp')
+                  : text.t('draftSyncDeviceOnlyHelp'),
+            ),
             const SizedBox(height: 16),
             Text(
               text.t('coreContactFacts'),
@@ -129,12 +165,12 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
                 for (final channel in ContactChannel.values)
                   ChoiceChip(
                     label: Text(contactChannelLabel(text, channel)),
-                    selected: _channel == channel,
-                    onSelected: (_) => _setChannel(channel),
+                    selected: entryState.channel == channel,
+                    onSelected: (_) => _viewModel.setChannel(channel),
                   ),
               ],
             ),
-            if (_channel == ContactChannel.otherDirect) ...[
+            if (entryState.channel == ContactChannel.otherDirect) ...[
               const SizedBox(height: 16),
               TextField(
                 key: const ValueKey('contact-channel-detail'),
@@ -144,42 +180,50 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
                   helperText: text.t('otherChannelDetailHelp'),
                   prefixIcon: const Icon(Icons.edit_outlined),
                 ),
-                onChanged: (_) => _markEdited(),
+                onChanged: _viewModel.setChannelDetail,
               ),
             ],
             const SizedBox(height: 16),
             _FactRow(
               icon: Icons.schedule_outlined,
               label: text.t('occurredAt'),
-              value: _occurredAtUtc.toIso8601String(),
+              value: entryState.occurredAtUtc!.toIso8601String(),
+              trailing: IconButton(
+                key: const ValueKey('edit-occurred-at'),
+                tooltip: text.t('editOccurredAt'),
+                onPressed: _editOccurredAt,
+                icon: const Icon(Icons.edit_calendar_outlined),
+              ),
             ),
             const SizedBox(height: 8),
             _FactRow(
               icon: Icons.public_outlined,
               label: text.t('occurredTimeZone'),
-              value: _occurredTimeZone,
+              value: entryState.occurredTimeZone!,
             ),
             const SizedBox(height: 8),
             _FactRow(
               icon: Icons.place_outlined,
               label: text.t('location'),
-              value: _locationLabel(text),
+              value: _locationLabel(text, entryState.location),
             ),
-            if (_channel == ContactChannel.faceToFace ||
-                _channel == ContactChannel.mixed) ...[
+            if (entryState.channel == ContactChannel.faceToFace ||
+                entryState.channel == ContactChannel.mixed) ...[
               const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerLeft,
                 child: OutlinedButton.icon(
-                  onPressed: _capturingLocation ? null : _captureLocation,
-                  icon: _capturingLocation
+                  onPressed: entryState.isCapturingLocation
+                      ? null
+                      : _captureLocation,
+                  icon: entryState.isCapturingLocation
                       ? const SizedBox.square(
                           dimension: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.my_location_outlined),
                   label: Text(
-                    _capturingLocation
+                    entryState.isCapturingLocation
                         ? text.t('gettingLocation')
                         : text.t('captureContactLocation'),
                   ),
@@ -196,7 +240,7 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
                 helperText: text.t('reachCountHelp'),
                 prefixIcon: const Icon(Icons.groups_outlined),
               ),
-              onChanged: _setReachCount,
+              onChanged: _viewModel.setReachCountText,
             ),
             const SizedBox(height: 16),
             Text(text.t('singleContactInterest')),
@@ -206,20 +250,20 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
                 for (var level = 0; level <= 4; level++)
                   ButtonSegment(value: level, label: Text('$level')),
               ],
-              selected: _interestLevel == null
+              selected: entryState.interestLevel == null
                   ? const <int>{}
-                  : {_interestLevel!},
+                  : {entryState.interestLevel!},
               emptySelectionAllowed: true,
               onSelectionChanged: (selection) {
                 if (selection.isNotEmpty) {
-                  _setInterestLevel(selection.single);
+                  _viewModel.setInterestLevel(selection.single);
                 }
               },
             ),
             const SizedBox(height: 12),
             Text(
-              '${_draft?.completedCoreFactCount ?? 0} / '
-              '${_draft?.requiredCoreFactCount ?? 5}',
+              '${entryState.completedCoreFactCount} / '
+              '${entryState.requiredCoreFactCount}',
               textAlign: TextAlign.end,
             ),
           ],
@@ -229,12 +273,19 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             child: Row(
               children: [
-                Icon(_saveIcon, size: 18),
+                Icon(_saveIcon(entryState.saveState), size: 18),
                 const SizedBox(width: 8),
-                Expanded(child: Text(_saveLabel(text))),
+                Expanded(child: Text(_saveLabel(text, entryState.saveState))),
+                if (entryState.saveState == ContactDraftSaveState.failed)
+                  IconButton(
+                    key: const ValueKey('retry-draft-save'),
+                    tooltip: text.t('retry'),
+                    onPressed: () => unawaited(_viewModel.retrySave()),
+                    icon: const Icon(Icons.refresh_outlined),
+                  ),
                 FilledButton(
-                  onPressed: _canSubmit ? _submit : null,
-                  child: _submitting
+                  onPressed: entryState.canSubmit ? _submit : null,
+                  child: entryState.isSubmitting
                       ? const SizedBox.square(
                           dimension: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
@@ -249,88 +300,81 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
     );
   }
 
-  IconData get _saveIcon => switch (_saveState) {
-    _DraftSaveState.untouched => Icons.edit_outlined,
-    _DraftSaveState.waiting || _DraftSaveState.saving => Icons.sync_outlined,
-    _DraftSaveState.saved => Icons.cloud_done_outlined,
-    _DraftSaveState.failed => Icons.error_outline,
+  IconData _saveIcon(ContactDraftSaveState state) => switch (state) {
+    ContactDraftSaveState.untouched => Icons.edit_outlined,
+    ContactDraftSaveState.waiting ||
+    ContactDraftSaveState.saving => Icons.sync_outlined,
+    ContactDraftSaveState.saved => Icons.cloud_done_outlined,
+    ContactDraftSaveState.failed => Icons.error_outline,
   };
 
-  String _saveLabel(AppStrings text) {
-    return switch (_saveState) {
-      _DraftSaveState.untouched => text.t('draftStartsAfterInput'),
-      _DraftSaveState.waiting || _DraftSaveState.saving => text.t('saving'),
-      _DraftSaveState.saved => text.t('saved'),
-      _DraftSaveState.failed => text.t('draftSaveFailed'),
+  String _saveLabel(AppStrings text, ContactDraftSaveState state) {
+    return switch (state) {
+      ContactDraftSaveState.untouched => text.t('draftStartsAfterInput'),
+      ContactDraftSaveState.waiting ||
+      ContactDraftSaveState.saving => text.t('saving'),
+      ContactDraftSaveState.saved => text.t('saved'),
+      ContactDraftSaveState.failed => text.t('draftSaveFailed'),
     };
   }
 
-  bool get _canSubmit =>
-      !_submitting &&
-      _saveState == _DraftSaveState.saved &&
-      (_draft?.hasCompleteCoreFacts ?? false);
-
-  bool get _hasUnsavedChanges => _editRevision > _savedRevision;
-
-  void _setChannel(ContactChannel channel) {
-    setState(() {
-      _channel = channel;
-      if (channel != ContactChannel.otherDirect) {
-        _channelDetailController.clear();
+  void _onViewStateChanged() {
+    if (mounted) {
+      final detail = _viewModel.state.channelDetail;
+      if (_channelDetailController.text != detail) {
+        _channelDetailController.value = TextEditingValue(
+          text: detail,
+          selection: TextSelection.collapsed(offset: detail.length),
+        );
       }
-      if (_usesAutomaticNotApplicableLocation(channel)) {
-        _location = const NotApplicableContactLocation();
-      } else if (channel == ContactChannel.faceToFace &&
-          _location is NotApplicableContactLocation) {
-        _location = null;
-      }
-      _editRevision++;
-      _saveState = _DraftSaveState.waiting;
-    });
-    _scheduleSave();
+      setState(() {});
+    }
   }
 
-  void _markEdited() {
-    setState(() {
-      _editRevision++;
-      _saveState = _DraftSaveState.waiting;
-    });
-    _scheduleSave();
+  Future<void> _editOccurredAt() async {
+    final currentLocal = _viewModel.state.occurredAtUtc!.toLocal();
+    final selectedDate = await showDatePicker(
+      context: context,
+      initialDate: currentLocal,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+    );
+    if (selectedDate == null || !mounted) {
+      return;
+    }
+    final selectedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(currentLocal),
+    );
+    if (selectedTime == null || !mounted) {
+      return;
+    }
+    _viewModel.setOccurredAtLocal(
+      DateTime(
+        selectedDate.year,
+        selectedDate.month,
+        selectedDate.day,
+        selectedTime.hour,
+        selectedTime.minute,
+      ),
+    );
   }
 
   Future<void> _captureLocation() async {
-    if (_capturingLocation) {
-      return;
-    }
-    setState(() => _capturingLocation = true);
-    final snapshot = await widget.locationCapture.captureCurrentPosition();
+    final failureCode = await _viewModel.captureLocation();
     if (!mounted) {
       return;
     }
-    if (!snapshot.hasPosition) {
-      setState(() => _capturingLocation = false);
-      final code = snapshot.error ?? 'location_unavailable';
+    if (failureCode != null) {
       final text = AppStrings(widget.controller.localeCode);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(text.t(code))));
-      return;
+      ).showSnackBar(SnackBar(content: Text(text.t(failureCode))));
     }
-    setState(() {
-      _location = PendingContactLocation(
-        latitude: snapshot.latitude!,
-        longitude: snapshot.longitude!,
-        accuracyMeters: snapshot.accuracyMeters,
-      );
-      _capturingLocation = false;
-      _editRevision++;
-      _saveState = _DraftSaveState.waiting;
-    });
-    _scheduleSave();
   }
 
-  String _locationLabel(AppStrings text) {
-    return switch (_location) {
+  String _locationLabel(AppStrings text, ContactLocation? location) {
+    return switch (location) {
       NotApplicableContactLocation() => text.t('locationNotApplicable'),
       final PendingContactLocation pending =>
         '${pending.latitude.toStringAsFixed(6)}, '
@@ -341,98 +385,12 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
     };
   }
 
-  void _setReachCount(String value) {
-    final parsed = int.tryParse(value.trim());
-    setState(() {
-      _reachCount = parsed != null && parsed > 0 ? parsed : null;
-      _editRevision++;
-      _saveState = _DraftSaveState.waiting;
-    });
-    _scheduleSave();
-  }
-
-  void _setInterestLevel(int value) {
-    setState(() {
-      _interestLevel = value;
-      _editRevision++;
-      _saveState = _DraftSaveState.waiting;
-    });
-    _scheduleSave();
-  }
-
-  void _scheduleSave() {
-    _saveTimer?.cancel();
-    _saveTimer = Timer(_saveDelay, () => unawaited(_saveDraft()));
-  }
-
-  Future<void> _saveDraft() {
-    _saveTimer?.cancel();
-    final active = _activeSave;
-    if (active != null) {
-      return active;
-    }
-    if (!_hasUnsavedChanges || !mounted) {
-      return Future.value();
-    }
-
-    late final Future<void> operation;
-    operation = _drainPendingSaves().whenComplete(() {
-      if (identical(_activeSave, operation)) {
-        _activeSave = null;
-      }
-    });
-    _activeSave = operation;
-    return operation;
-  }
-
-  Future<void> _drainPendingSaves() async {
-    while (mounted && _hasUnsavedChanges) {
-      final savingRevision = _editRevision;
-      setState(() => _saveState = _DraftSaveState.saving);
-      try {
-        final saved = await widget.contactJournal.saveDraft(
-          ContactDraftInput(
-            draftId: _draft?.draftId,
-            appUserId: widget.context.appUserId,
-            workspaceId: widget.context.workspace.id,
-            projectId: widget.context.project.id,
-            questionnaireVersionId: widget.context.questionnaireVersion.id,
-            occurredAtUtc: _occurredAtUtc,
-            occurredTimeZone: _occurredTimeZone,
-            channel: _channel,
-            channelDetail: _channel == ContactChannel.otherDirect
-                ? _channelDetailController.text.trim()
-                : null,
-            location: _location,
-            reachCount: _reachCount,
-            interestLevel: _interestLevel,
-          ),
-        );
-        if (!mounted) {
-          return;
-        }
-        setState(() {
-          _draft = saved;
-          _savedRevision = savingRevision;
-          _saveState = _hasUnsavedChanges
-              ? _DraftSaveState.waiting
-              : _DraftSaveState.saved;
-        });
-      } catch (_) {
-        if (mounted) {
-          setState(() => _saveState = _DraftSaveState.failed);
-        }
-        return;
-      }
-    }
-  }
-
   Future<void> _onPopInvoked(bool didPop, bool? result) async {
     if (didPop || _allowPop) {
       return;
     }
-    await _saveDraft();
-    if (!mounted || _hasUnsavedChanges) {
+    final canLeave = await _viewModel.canLeaveAfterSave();
+    if (!mounted || !canLeave) {
       return;
     }
     setState(() => _allowPop = true);
@@ -444,37 +402,35 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
   }
 
   Future<void> _submit() async {
-    if (!_canSubmit) {
+    final submitted = await _viewModel.submit();
+    if (!mounted) {
       return;
     }
-    setState(() => _submitting = true);
-    try {
-      await widget.contactJournal.submitDraft(
-        draftId: _draft!.draftId,
-        appUserId: widget.context.appUserId,
-        deviceId: widget.deviceId,
-      );
-      if (mounted) {
-        Navigator.of(context).pop(true);
-      }
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _submitting = false;
-        _saveState = _DraftSaveState.failed;
-      });
+    if (submitted) {
+      Navigator.of(context).pop(true);
+      return;
     }
+    final text = AppStrings(widget.controller.localeCode);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(text.t('contactSubmissionFailed'))));
   }
+}
 
-  bool _usesAutomaticNotApplicableLocation(ContactChannel channel) {
-    return channel == ContactChannel.voiceCall ||
-        channel == ContactChannel.videoCall ||
-        channel == ContactChannel.instantText ||
-        channel == ContactChannel.asynchronousMessage ||
-        channel == ContactChannel.otherDirect ||
-        channel == ContactChannel.mixed;
+final class _ConflictDraftCard extends StatelessWidget {
+  const _ConflictDraftCard({required this.text});
+
+  final AppStrings text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: Theme.of(context).colorScheme.errorContainer,
+      child: ListTile(
+        leading: const Icon(Icons.call_split_outlined),
+        title: Text(text.t('draftConflictCopy')),
+      ),
+    );
   }
 }
 
@@ -513,11 +469,13 @@ final class _FactRow extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.value,
+    this.trailing,
   });
 
   final IconData icon;
   final String label;
   final String value;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -526,6 +484,7 @@ final class _FactRow extends StatelessWidget {
         Icon(icon, size: 20),
         const SizedBox(width: 8),
         Expanded(child: Text('$label：$value')),
+        ?trailing,
       ],
     );
   }

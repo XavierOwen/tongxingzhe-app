@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
 import '../features/contact_journal/contact_tables.dart';
+import '../regions/region_tables.dart';
 import '../sync/sync_tables.dart';
 
 part 'local_database.g.dart';
@@ -120,6 +121,9 @@ class DbSecurityEvents extends Table {
     DbContactDraftAnswers,
     DbSyncDrainerLeases,
     DbSyncScopes,
+    DbCanonicalRegionVersions,
+    DbContactRegionAssignments,
+    DbDraftRegionAssignments,
   ],
 )
 class LocalDatabase extends _$LocalDatabase {
@@ -137,7 +141,7 @@ class LocalDatabase extends _$LocalDatabase {
       );
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -243,6 +247,69 @@ class LocalDatabase extends _$LocalDatabase {
         await migrator.createTable(dbSyncDrainerLeases);
         await migrator.createTable(dbSyncScopes);
       }
+      if (from < 9) {
+        // v9 的新列同时参与 CHECK 约束，SQLite `ADD COLUMN` 不会更新旧表
+        // 约束。因此这里重建四张表并复制旧数据。跨多版升级时，v6/v7
+        // 可能已按当前定义创建新列；动态 newColumns 避免随后重复加列。
+        final contactRecordColumns = await _missingColumns(
+          dbContactRecords.actualTableName,
+          [dbContactRecords.regionTreeVersion],
+        );
+        await migrator.alterTable(
+          TableMigration(dbContactRecords, newColumns: contactRecordColumns),
+        );
+        final contactRevisionColumns = await _missingColumns(
+          dbContactRevisions.actualTableName,
+          [dbContactRevisions.regionTreeVersion],
+        );
+        await migrator.alterTable(
+          TableMigration(
+            dbContactRevisions,
+            newColumns: contactRevisionColumns,
+          ),
+        );
+        final draftColumns =
+            await _missingColumns(dbContactDrafts.actualTableName, [
+              dbContactDrafts.regionTreeVersion,
+              dbContactDrafts.localRevision,
+              dbContactDrafts.serverRevision,
+              dbContactDrafts.conflictOfDraftId,
+            ]);
+        await migrator.alterTable(
+          TableMigration(dbContactDrafts, newColumns: draftColumns),
+        );
+        final outboxColumns = await _missingColumns(
+          dbSyncOutbox.actualTableName,
+          [
+            dbSyncOutbox.appUserId,
+            dbSyncOutbox.workspaceId,
+            dbSyncOutbox.projectId,
+          ],
+        );
+        await migrator.alterTable(
+          TableMigration(dbSyncOutbox, newColumns: outboxColumns),
+        );
+
+        // 旧接触没有可证明的区域版本，因此不猜测、不自动分配。
+        await migrator.createTable(dbCanonicalRegionVersions);
+        await migrator.createTable(dbContactRegionAssignments);
+        await migrator.createTable(dbDraftRegionAssignments);
+      }
     },
   );
+
+  Future<List<GeneratedColumn<Object>>> _missingColumns(
+    String tableName,
+    List<GeneratedColumn<Object>> candidates,
+  ) async {
+    final rows = await customSelect(
+      'SELECT name FROM pragma_table_info(?)',
+      variables: [Variable<String>(tableName)],
+    ).get();
+    final existing = {for (final row in rows) row.read<String>('name')};
+    return [
+      for (final column in candidates)
+        if (!existing.contains(column.$name)) column,
+    ];
+  }
 }

@@ -37,29 +37,77 @@ final class HttpSessionContextGateway implements SessionContextGateway {
 
   @override
   Future<SessionContextResult> resolve(IdentityAccessToken accessToken) async {
+    return _requestContext(
+      accessToken: accessToken,
+      request: () => _client.get(
+        _baseUri.resolve('/v1/session/context'),
+        headers: {
+          'accept': 'application/json',
+          'authorization': 'Bearer ${accessToken.value}',
+        },
+      ),
+    );
+  }
+
+  @override
+  Future<SessionContextResult> selectProject(
+    IdentityAccessToken accessToken,
+    String projectId,
+  ) async {
+    return _requestContext(
+      accessToken: accessToken,
+      request: () => _client.post(
+        _baseUri.resolve('/v1/session/context/select'),
+        headers: {
+          'accept': 'application/json',
+          'authorization': 'Bearer ${accessToken.value}',
+          'content-type': 'application/json; charset=utf-8',
+        },
+        body: jsonEncode({'project_id': projectId}),
+      ),
+    );
+  }
+
+  @override
+  Future<SessionContextResult> createPersonalProject(
+    IdentityAccessToken accessToken,
+    String displayName,
+  ) async {
+    return _requestContext(
+      accessToken: accessToken,
+      acceptedStatusCodes: const {201},
+      request: () => _client.post(
+        _baseUri.resolve('/v1/session/projects'),
+        headers: {
+          'accept': 'application/json',
+          'authorization': 'Bearer ${accessToken.value}',
+          'content-type': 'application/json; charset=utf-8',
+        },
+        body: jsonEncode({'display_name': displayName}),
+      ),
+    );
+  }
+
+  Future<SessionContextResult> _requestContext({
+    required IdentityAccessToken accessToken,
+    required Future<http.Response> Function() request,
+    Set<int> acceptedStatusCodes = const {200},
+  }) async {
     try {
-      final response = await _client
-          .get(
-            _baseUri.resolve('/v1/session/context'),
-            headers: {
-              'accept': 'application/json',
-              'authorization': 'Bearer ${accessToken.value}',
-            },
-          )
-          .timeout(_timeout);
+      final response = await request().timeout(_timeout);
 
       if (response.statusCode == 401 || response.statusCode == 403) {
         return const SessionContextRejected(
           SessionContextFailureCode.unauthorized,
         );
       }
-      if (response.statusCode != 200) {
+      if (!acceptedStatusCodes.contains(response.statusCode)) {
         return const SessionContextRejected(
           SessionContextFailureCode.serverRejected,
         );
       }
 
-      return SessionContextSuccess(_parseContext(response.body));
+      return _parseContextResult(response.body);
     } on TimeoutException {
       return const SessionContextRejected(
         SessionContextFailureCode.networkUnavailable,
@@ -76,8 +124,26 @@ final class HttpSessionContextGateway implements SessionContextGateway {
   }
 }
 
-TrustedSessionContext _parseContext(String responseBody) {
+SessionContextSuccess _parseContextResult(String responseBody) {
   final root = _object(jsonDecode(responseBody), 'response');
+  final current = _parseContext(root);
+  final availableValue = root['available_contexts'];
+  if (availableValue == null) {
+    return SessionContextSuccess(current);
+  }
+  if (availableValue is! List<Object?>) {
+    throw const FormatException('available_contexts must be a list');
+  }
+  return SessionContextSuccess(
+    current,
+    availableContexts: [
+      for (final value in availableValue)
+        _parseContext(_object(value, 'available context')),
+    ],
+  );
+}
+
+TrustedSessionContext _parseContext(Map<String, Object?> root) {
   final current = _object(root['current_context'], 'current_context');
   final workspace = _object(current['workspace'], 'workspace');
   final project = _object(current['project'], 'project');

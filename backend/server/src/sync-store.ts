@@ -21,6 +21,7 @@ export type ContactLocation =
       readonly kind: "resolved";
       readonly placeName: string;
       readonly smallestRegionId: string;
+      readonly regionTreeVersion: string;
     };
 
 export interface ContactAnswer {
@@ -50,15 +51,58 @@ export interface ContactSubmitPayload {
   readonly answers: readonly ContactAnswer[];
 }
 
-export interface SyncCommand {
+export interface DraftUpsertPayload {
+  readonly draftId: string;
+  readonly workspaceId: string;
+  readonly projectId: string;
+  readonly questionnaireVersionId: string;
+  readonly createdAtUtc: string;
+  readonly updatedAtUtc: string;
+  readonly occurredAtUtc: string | null;
+  readonly occurredTimeZone: string | null;
+  readonly channel: ContactChannel | null;
+  readonly channelDetail: string | null;
+  readonly location: ContactLocation | null;
+  readonly reachCount: number | null;
+  readonly interestLevel: number | null;
+  readonly answers: readonly ContactAnswer[];
+}
+
+export interface DraftDeletePayload {
+  readonly draftId: string;
+  readonly workspaceId: string;
+  readonly projectId: string;
+  readonly reachCount?: never;
+}
+
+interface SyncCommandEnvelope {
   readonly protocolVersion: 1;
   readonly commandId: string;
   readonly deviceId: string;
   readonly aggregateId: string;
+  readonly baseRevision: number;
+}
+
+export interface ContactSubmitCommand extends SyncCommandEnvelope {
   readonly baseRevision: 0;
   readonly type: "contact.submit.v1";
   readonly payload: ContactSubmitPayload;
 }
+
+export interface DraftUpsertCommand extends SyncCommandEnvelope {
+  readonly type: "draft.upsert.v1";
+  readonly payload: DraftUpsertPayload;
+}
+
+export interface DraftDeleteCommand extends SyncCommandEnvelope {
+  readonly type: "draft.delete.v1";
+  readonly payload: DraftDeletePayload;
+}
+
+export type SyncCommand =
+  | ContactSubmitCommand
+  | DraftUpsertCommand
+  | DraftDeleteCommand;
 
 export type SyncCommandResult =
   | { readonly result: "accepted"; readonly serverCursor: string }
@@ -114,7 +158,7 @@ interface SyncChangeRow {
   readonly server_cursor: unknown;
   readonly change_type: unknown;
   readonly revision_number: unknown;
-  readonly contact_payload: unknown;
+  readonly typed_payload: unknown;
 }
 
 export class PostgresSyncCommandStore implements SyncCommandStore {
@@ -124,9 +168,14 @@ export class PostgresSyncCommandStore implements SyncCommandStore {
     context: SessionContext,
     command: SyncCommand,
   ): Promise<SyncCommandResult> {
+    const functionName = command.type === "contact.submit.v1"
+      ? "apply_contact_submit"
+      : command.type === "draft.upsert.v1"
+      ? "apply_draft_upsert"
+      : "apply_draft_delete";
     const result = await this.query(
       `SELECT result_code, server_cursor, failure_code
-       FROM app_data.apply_contact_submit(
+       FROM app_data.${functionName}(
          $1::uuid,
          $2::text,
          $3::integer,
@@ -161,8 +210,8 @@ export class PostgresSyncCommandStore implements SyncCommandStore {
     let result: { readonly rows: readonly unknown[] };
     try {
       result = await this.query(
-        `SELECT server_cursor, change_type, revision_number, contact_payload
-         FROM app_data.pull_contact_changes(
+        `SELECT server_cursor, change_type, revision_number, typed_payload
+         FROM app_data.pull_sync_changes(
            $1::uuid,
            $2::uuid,
            $3::uuid,
@@ -242,15 +291,15 @@ function parseChangeRow(value: unknown): SyncRemoteChange {
     row.change_type.length === 0 ||
     typeof row.revision_number !== "number" ||
     !Number.isInteger(row.revision_number) ||
-    typeof row.contact_payload !== "object" ||
-    row.contact_payload === null ||
-    Array.isArray(row.contact_payload)
+    typeof row.typed_payload !== "object" ||
+    row.typed_payload === null ||
+    Array.isArray(row.typed_payload)
   ) {
     throw new Error("Sync pull function returned an invalid change row");
   }
   return {
     changeType: row.change_type,
     revisionNumber: row.revision_number,
-    payload: row.contact_payload as Readonly<Record<string, unknown>>,
+    payload: row.typed_payload as Readonly<Record<string, unknown>>,
   };
 }

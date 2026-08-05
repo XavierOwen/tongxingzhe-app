@@ -64,6 +64,39 @@ class $DbSyncOutboxTable extends DbSyncOutbox
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _appUserIdMeta = const VerificationMeta(
+    'appUserId',
+  );
+  @override
+  late final GeneratedColumn<String> appUserId = GeneratedColumn<String>(
+    'app_user_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _workspaceIdMeta = const VerificationMeta(
+    'workspaceId',
+  );
+  @override
+  late final GeneratedColumn<String> workspaceId = GeneratedColumn<String>(
+    'workspace_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<String> projectId = GeneratedColumn<String>(
+    'project_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _baseRevisionMeta = const VerificationMeta(
     'baseRevision',
   );
@@ -183,6 +216,9 @@ class $DbSyncOutboxTable extends DbSyncOutbox
     commandType,
     deviceId,
     aggregateId,
+    appUserId,
+    workspaceId,
+    projectId,
     baseRevision,
     payloadJson,
     createdAtUtc,
@@ -254,6 +290,27 @@ class $DbSyncOutboxTable extends DbSyncOutbox
       );
     } else if (isInserting) {
       context.missing(_aggregateIdMeta);
+    }
+    if (data.containsKey('app_user_id')) {
+      context.handle(
+        _appUserIdMeta,
+        appUserId.isAcceptableOrUnknown(data['app_user_id']!, _appUserIdMeta),
+      );
+    }
+    if (data.containsKey('workspace_id')) {
+      context.handle(
+        _workspaceIdMeta,
+        workspaceId.isAcceptableOrUnknown(
+          data['workspace_id']!,
+          _workspaceIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
     }
     if (data.containsKey('base_revision')) {
       context.handle(
@@ -378,6 +435,18 @@ class $DbSyncOutboxTable extends DbSyncOutbox
         DriftSqlType.string,
         data['${effectivePrefix}aggregate_id'],
       )!,
+      appUserId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}app_user_id'],
+      ),
+      workspaceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}workspace_id'],
+      ),
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}project_id'],
+      ),
       baseRevision: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}base_revision'],
@@ -434,6 +503,9 @@ class DbSyncOutboxData extends DataClass
   final String commandType;
   final String deviceId;
   final String aggregateId;
+  final String? appUserId;
+  final String? workspaceId;
+  final String? projectId;
   final int baseRevision;
   final String payloadJson;
   final DateTime createdAtUtc;
@@ -450,6 +522,9 @@ class DbSyncOutboxData extends DataClass
     required this.commandType,
     required this.deviceId,
     required this.aggregateId,
+    this.appUserId,
+    this.workspaceId,
+    this.projectId,
     required this.baseRevision,
     required this.payloadJson,
     required this.createdAtUtc,
@@ -469,6 +544,15 @@ class DbSyncOutboxData extends DataClass
     map['command_type'] = Variable<String>(commandType);
     map['device_id'] = Variable<String>(deviceId);
     map['aggregate_id'] = Variable<String>(aggregateId);
+    if (!nullToAbsent || appUserId != null) {
+      map['app_user_id'] = Variable<String>(appUserId);
+    }
+    if (!nullToAbsent || workspaceId != null) {
+      map['workspace_id'] = Variable<String>(workspaceId);
+    }
+    if (!nullToAbsent || projectId != null) {
+      map['project_id'] = Variable<String>(projectId);
+    }
     map['base_revision'] = Variable<int>(baseRevision);
     map['payload_json'] = Variable<String>(payloadJson);
     map['created_at_utc'] = Variable<DateTime>(createdAtUtc);
@@ -497,6 +581,15 @@ class DbSyncOutboxData extends DataClass
       commandType: Value(commandType),
       deviceId: Value(deviceId),
       aggregateId: Value(aggregateId),
+      appUserId: appUserId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(appUserId),
+      workspaceId: workspaceId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(workspaceId),
+      projectId: projectId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(projectId),
       baseRevision: Value(baseRevision),
       payloadJson: Value(payloadJson),
       createdAtUtc: Value(createdAtUtc),
@@ -529,6 +622,9 @@ class DbSyncOutboxData extends DataClass
       commandType: serializer.fromJson<String>(json['commandType']),
       deviceId: serializer.fromJson<String>(json['deviceId']),
       aggregateId: serializer.fromJson<String>(json['aggregateId']),
+      appUserId: serializer.fromJson<String?>(json['appUserId']),
+      workspaceId: serializer.fromJson<String?>(json['workspaceId']),
+      projectId: serializer.fromJson<String?>(json['projectId']),
       baseRevision: serializer.fromJson<int>(json['baseRevision']),
       payloadJson: serializer.fromJson<String>(json['payloadJson']),
       createdAtUtc: serializer.fromJson<DateTime>(json['createdAtUtc']),
@@ -552,6 +648,9 @@ class DbSyncOutboxData extends DataClass
       'commandType': serializer.toJson<String>(commandType),
       'deviceId': serializer.toJson<String>(deviceId),
       'aggregateId': serializer.toJson<String>(aggregateId),
+      'appUserId': serializer.toJson<String?>(appUserId),
+      'workspaceId': serializer.toJson<String?>(workspaceId),
+      'projectId': serializer.toJson<String?>(projectId),
       'baseRevision': serializer.toJson<int>(baseRevision),
       'payloadJson': serializer.toJson<String>(payloadJson),
       'createdAtUtc': serializer.toJson<DateTime>(createdAtUtc),
@@ -571,6 +670,9 @@ class DbSyncOutboxData extends DataClass
     String? commandType,
     String? deviceId,
     String? aggregateId,
+    Value<String?> appUserId = const Value.absent(),
+    Value<String?> workspaceId = const Value.absent(),
+    Value<String?> projectId = const Value.absent(),
     int? baseRevision,
     String? payloadJson,
     DateTime? createdAtUtc,
@@ -587,6 +689,9 @@ class DbSyncOutboxData extends DataClass
     commandType: commandType ?? this.commandType,
     deviceId: deviceId ?? this.deviceId,
     aggregateId: aggregateId ?? this.aggregateId,
+    appUserId: appUserId.present ? appUserId.value : this.appUserId,
+    workspaceId: workspaceId.present ? workspaceId.value : this.workspaceId,
+    projectId: projectId.present ? projectId.value : this.projectId,
     baseRevision: baseRevision ?? this.baseRevision,
     payloadJson: payloadJson ?? this.payloadJson,
     createdAtUtc: createdAtUtc ?? this.createdAtUtc,
@@ -617,6 +722,11 @@ class DbSyncOutboxData extends DataClass
       aggregateId: data.aggregateId.present
           ? data.aggregateId.value
           : this.aggregateId,
+      appUserId: data.appUserId.present ? data.appUserId.value : this.appUserId,
+      workspaceId: data.workspaceId.present
+          ? data.workspaceId.value
+          : this.workspaceId,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
       baseRevision: data.baseRevision.present
           ? data.baseRevision.value
           : this.baseRevision,
@@ -656,6 +766,9 @@ class DbSyncOutboxData extends DataClass
           ..write('commandType: $commandType, ')
           ..write('deviceId: $deviceId, ')
           ..write('aggregateId: $aggregateId, ')
+          ..write('appUserId: $appUserId, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('projectId: $projectId, ')
           ..write('baseRevision: $baseRevision, ')
           ..write('payloadJson: $payloadJson, ')
           ..write('createdAtUtc: $createdAtUtc, ')
@@ -677,6 +790,9 @@ class DbSyncOutboxData extends DataClass
     commandType,
     deviceId,
     aggregateId,
+    appUserId,
+    workspaceId,
+    projectId,
     baseRevision,
     payloadJson,
     createdAtUtc,
@@ -697,6 +813,9 @@ class DbSyncOutboxData extends DataClass
           other.commandType == this.commandType &&
           other.deviceId == this.deviceId &&
           other.aggregateId == this.aggregateId &&
+          other.appUserId == this.appUserId &&
+          other.workspaceId == this.workspaceId &&
+          other.projectId == this.projectId &&
           other.baseRevision == this.baseRevision &&
           other.payloadJson == this.payloadJson &&
           other.createdAtUtc == this.createdAtUtc &&
@@ -715,6 +834,9 @@ class DbSyncOutboxCompanion extends UpdateCompanion<DbSyncOutboxData> {
   final Value<String> commandType;
   final Value<String> deviceId;
   final Value<String> aggregateId;
+  final Value<String?> appUserId;
+  final Value<String?> workspaceId;
+  final Value<String?> projectId;
   final Value<int> baseRevision;
   final Value<String> payloadJson;
   final Value<DateTime> createdAtUtc;
@@ -732,6 +854,9 @@ class DbSyncOutboxCompanion extends UpdateCompanion<DbSyncOutboxData> {
     this.commandType = const Value.absent(),
     this.deviceId = const Value.absent(),
     this.aggregateId = const Value.absent(),
+    this.appUserId = const Value.absent(),
+    this.workspaceId = const Value.absent(),
+    this.projectId = const Value.absent(),
     this.baseRevision = const Value.absent(),
     this.payloadJson = const Value.absent(),
     this.createdAtUtc = const Value.absent(),
@@ -750,6 +875,9 @@ class DbSyncOutboxCompanion extends UpdateCompanion<DbSyncOutboxData> {
     required String commandType,
     required String deviceId,
     required String aggregateId,
+    this.appUserId = const Value.absent(),
+    this.workspaceId = const Value.absent(),
+    this.projectId = const Value.absent(),
     required int baseRevision,
     required String payloadJson,
     required DateTime createdAtUtc,
@@ -777,6 +905,9 @@ class DbSyncOutboxCompanion extends UpdateCompanion<DbSyncOutboxData> {
     Expression<String>? commandType,
     Expression<String>? deviceId,
     Expression<String>? aggregateId,
+    Expression<String>? appUserId,
+    Expression<String>? workspaceId,
+    Expression<String>? projectId,
     Expression<int>? baseRevision,
     Expression<String>? payloadJson,
     Expression<DateTime>? createdAtUtc,
@@ -795,6 +926,9 @@ class DbSyncOutboxCompanion extends UpdateCompanion<DbSyncOutboxData> {
       if (commandType != null) 'command_type': commandType,
       if (deviceId != null) 'device_id': deviceId,
       if (aggregateId != null) 'aggregate_id': aggregateId,
+      if (appUserId != null) 'app_user_id': appUserId,
+      if (workspaceId != null) 'workspace_id': workspaceId,
+      if (projectId != null) 'project_id': projectId,
       if (baseRevision != null) 'base_revision': baseRevision,
       if (payloadJson != null) 'payload_json': payloadJson,
       if (createdAtUtc != null) 'created_at_utc': createdAtUtc,
@@ -815,6 +949,9 @@ class DbSyncOutboxCompanion extends UpdateCompanion<DbSyncOutboxData> {
     Value<String>? commandType,
     Value<String>? deviceId,
     Value<String>? aggregateId,
+    Value<String?>? appUserId,
+    Value<String?>? workspaceId,
+    Value<String?>? projectId,
     Value<int>? baseRevision,
     Value<String>? payloadJson,
     Value<DateTime>? createdAtUtc,
@@ -833,6 +970,9 @@ class DbSyncOutboxCompanion extends UpdateCompanion<DbSyncOutboxData> {
       commandType: commandType ?? this.commandType,
       deviceId: deviceId ?? this.deviceId,
       aggregateId: aggregateId ?? this.aggregateId,
+      appUserId: appUserId ?? this.appUserId,
+      workspaceId: workspaceId ?? this.workspaceId,
+      projectId: projectId ?? this.projectId,
       baseRevision: baseRevision ?? this.baseRevision,
       payloadJson: payloadJson ?? this.payloadJson,
       createdAtUtc: createdAtUtc ?? this.createdAtUtc,
@@ -864,6 +1004,15 @@ class DbSyncOutboxCompanion extends UpdateCompanion<DbSyncOutboxData> {
     }
     if (aggregateId.present) {
       map['aggregate_id'] = Variable<String>(aggregateId.value);
+    }
+    if (appUserId.present) {
+      map['app_user_id'] = Variable<String>(appUserId.value);
+    }
+    if (workspaceId.present) {
+      map['workspace_id'] = Variable<String>(workspaceId.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<String>(projectId.value);
     }
     if (baseRevision.present) {
       map['base_revision'] = Variable<int>(baseRevision.value);
@@ -909,6 +1058,9 @@ class DbSyncOutboxCompanion extends UpdateCompanion<DbSyncOutboxData> {
           ..write('commandType: $commandType, ')
           ..write('deviceId: $deviceId, ')
           ..write('aggregateId: $aggregateId, ')
+          ..write('appUserId: $appUserId, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('projectId: $projectId, ')
           ..write('baseRevision: $baseRevision, ')
           ..write('payloadJson: $payloadJson, ')
           ..write('createdAtUtc: $createdAtUtc, ')
@@ -1075,6 +1227,18 @@ class $DbContactRecordsTable extends DbContactRecords
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _regionTreeVersionMeta = const VerificationMeta(
+    'regionTreeVersion',
+  );
+  @override
+  late final GeneratedColumn<String> regionTreeVersion =
+      GeneratedColumn<String>(
+        'region_tree_version',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _latitudeMeta = const VerificationMeta(
     'latitude',
   );
@@ -1167,6 +1331,7 @@ class $DbContactRecordsTable extends DbContactRecords
     locationKind,
     placeName,
     smallestRegionId,
+    regionTreeVersion,
     latitude,
     longitude,
     locationAccuracyMeters,
@@ -1309,6 +1474,15 @@ class $DbContactRecordsTable extends DbContactRecords
         ),
       );
     }
+    if (data.containsKey('region_tree_version')) {
+      context.handle(
+        _regionTreeVersionMeta,
+        regionTreeVersion.isAcceptableOrUnknown(
+          data['region_tree_version']!,
+          _regionTreeVersionMeta,
+        ),
+      );
+    }
     if (data.containsKey('latitude')) {
       context.handle(
         _latitudeMeta,
@@ -1432,6 +1606,10 @@ class $DbContactRecordsTable extends DbContactRecords
         DriftSqlType.string,
         data['${effectivePrefix}smallest_region_id'],
       ),
+      regionTreeVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}region_tree_version'],
+      ),
       latitude: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}latitude'],
@@ -1483,6 +1661,7 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
   final String locationKind;
   final String? placeName;
   final String? smallestRegionId;
+  final String? regionTreeVersion;
   final double? latitude;
   final double? longitude;
   final double? locationAccuracyMeters;
@@ -1504,6 +1683,7 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
     required this.locationKind,
     this.placeName,
     this.smallestRegionId,
+    this.regionTreeVersion,
     this.latitude,
     this.longitude,
     this.locationAccuracyMeters,
@@ -1533,6 +1713,9 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
     }
     if (!nullToAbsent || smallestRegionId != null) {
       map['smallest_region_id'] = Variable<String>(smallestRegionId);
+    }
+    if (!nullToAbsent || regionTreeVersion != null) {
+      map['region_tree_version'] = Variable<String>(regionTreeVersion);
     }
     if (!nullToAbsent || latitude != null) {
       map['latitude'] = Variable<double>(latitude);
@@ -1573,6 +1756,9 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
       smallestRegionId: smallestRegionId == null && nullToAbsent
           ? const Value.absent()
           : Value(smallestRegionId),
+      regionTreeVersion: regionTreeVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(regionTreeVersion),
       latitude: latitude == null && nullToAbsent
           ? const Value.absent()
           : Value(latitude),
@@ -1612,6 +1798,9 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
       locationKind: serializer.fromJson<String>(json['locationKind']),
       placeName: serializer.fromJson<String?>(json['placeName']),
       smallestRegionId: serializer.fromJson<String?>(json['smallestRegionId']),
+      regionTreeVersion: serializer.fromJson<String?>(
+        json['regionTreeVersion'],
+      ),
       latitude: serializer.fromJson<double?>(json['latitude']),
       longitude: serializer.fromJson<double?>(json['longitude']),
       locationAccuracyMeters: serializer.fromJson<double?>(
@@ -1642,6 +1831,7 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
       'locationKind': serializer.toJson<String>(locationKind),
       'placeName': serializer.toJson<String?>(placeName),
       'smallestRegionId': serializer.toJson<String?>(smallestRegionId),
+      'regionTreeVersion': serializer.toJson<String?>(regionTreeVersion),
       'latitude': serializer.toJson<double?>(latitude),
       'longitude': serializer.toJson<double?>(longitude),
       'locationAccuracyMeters': serializer.toJson<double?>(
@@ -1668,6 +1858,7 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
     String? locationKind,
     Value<String?> placeName = const Value.absent(),
     Value<String?> smallestRegionId = const Value.absent(),
+    Value<String?> regionTreeVersion = const Value.absent(),
     Value<double?> latitude = const Value.absent(),
     Value<double?> longitude = const Value.absent(),
     Value<double?> locationAccuracyMeters = const Value.absent(),
@@ -1694,6 +1885,9 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
     smallestRegionId: smallestRegionId.present
         ? smallestRegionId.value
         : this.smallestRegionId,
+    regionTreeVersion: regionTreeVersion.present
+        ? regionTreeVersion.value
+        : this.regionTreeVersion,
     latitude: latitude.present ? latitude.value : this.latitude,
     longitude: longitude.present ? longitude.value : this.longitude,
     locationAccuracyMeters: locationAccuracyMeters.present
@@ -1735,6 +1929,9 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
       smallestRegionId: data.smallestRegionId.present
           ? data.smallestRegionId.value
           : this.smallestRegionId,
+      regionTreeVersion: data.regionTreeVersion.present
+          ? data.regionTreeVersion.value
+          : this.regionTreeVersion,
       latitude: data.latitude.present ? data.latitude.value : this.latitude,
       longitude: data.longitude.present ? data.longitude.value : this.longitude,
       locationAccuracyMeters: data.locationAccuracyMeters.present
@@ -1771,6 +1968,7 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
           ..write('locationKind: $locationKind, ')
           ..write('placeName: $placeName, ')
           ..write('smallestRegionId: $smallestRegionId, ')
+          ..write('regionTreeVersion: $regionTreeVersion, ')
           ..write('latitude: $latitude, ')
           ..write('longitude: $longitude, ')
           ..write('locationAccuracyMeters: $locationAccuracyMeters, ')
@@ -1783,7 +1981,7 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     contactId,
     appUserId,
     workspaceId,
@@ -1797,6 +1995,7 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
     locationKind,
     placeName,
     smallestRegionId,
+    regionTreeVersion,
     latitude,
     longitude,
     locationAccuracyMeters,
@@ -1804,7 +2003,7 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
     interestLevel,
     currentRevision,
     lifecycleStatus,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1822,6 +2021,7 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
           other.locationKind == this.locationKind &&
           other.placeName == this.placeName &&
           other.smallestRegionId == this.smallestRegionId &&
+          other.regionTreeVersion == this.regionTreeVersion &&
           other.latitude == this.latitude &&
           other.longitude == this.longitude &&
           other.locationAccuracyMeters == this.locationAccuracyMeters &&
@@ -1845,6 +2045,7 @@ class DbContactRecordsCompanion extends UpdateCompanion<DbContactRecord> {
   final Value<String> locationKind;
   final Value<String?> placeName;
   final Value<String?> smallestRegionId;
+  final Value<String?> regionTreeVersion;
   final Value<double?> latitude;
   final Value<double?> longitude;
   final Value<double?> locationAccuracyMeters;
@@ -1867,6 +2068,7 @@ class DbContactRecordsCompanion extends UpdateCompanion<DbContactRecord> {
     this.locationKind = const Value.absent(),
     this.placeName = const Value.absent(),
     this.smallestRegionId = const Value.absent(),
+    this.regionTreeVersion = const Value.absent(),
     this.latitude = const Value.absent(),
     this.longitude = const Value.absent(),
     this.locationAccuracyMeters = const Value.absent(),
@@ -1890,6 +2092,7 @@ class DbContactRecordsCompanion extends UpdateCompanion<DbContactRecord> {
     required String locationKind,
     this.placeName = const Value.absent(),
     this.smallestRegionId = const Value.absent(),
+    this.regionTreeVersion = const Value.absent(),
     this.latitude = const Value.absent(),
     this.longitude = const Value.absent(),
     this.locationAccuracyMeters = const Value.absent(),
@@ -1926,6 +2129,7 @@ class DbContactRecordsCompanion extends UpdateCompanion<DbContactRecord> {
     Expression<String>? locationKind,
     Expression<String>? placeName,
     Expression<String>? smallestRegionId,
+    Expression<String>? regionTreeVersion,
     Expression<double>? latitude,
     Expression<double>? longitude,
     Expression<double>? locationAccuracyMeters,
@@ -1951,6 +2155,7 @@ class DbContactRecordsCompanion extends UpdateCompanion<DbContactRecord> {
       if (locationKind != null) 'location_kind': locationKind,
       if (placeName != null) 'place_name': placeName,
       if (smallestRegionId != null) 'smallest_region_id': smallestRegionId,
+      if (regionTreeVersion != null) 'region_tree_version': regionTreeVersion,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
       if (locationAccuracyMeters != null)
@@ -1977,6 +2182,7 @@ class DbContactRecordsCompanion extends UpdateCompanion<DbContactRecord> {
     Value<String>? locationKind,
     Value<String?>? placeName,
     Value<String?>? smallestRegionId,
+    Value<String?>? regionTreeVersion,
     Value<double?>? latitude,
     Value<double?>? longitude,
     Value<double?>? locationAccuracyMeters,
@@ -2001,6 +2207,7 @@ class DbContactRecordsCompanion extends UpdateCompanion<DbContactRecord> {
       locationKind: locationKind ?? this.locationKind,
       placeName: placeName ?? this.placeName,
       smallestRegionId: smallestRegionId ?? this.smallestRegionId,
+      regionTreeVersion: regionTreeVersion ?? this.regionTreeVersion,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       locationAccuracyMeters:
@@ -2059,6 +2266,9 @@ class DbContactRecordsCompanion extends UpdateCompanion<DbContactRecord> {
     if (smallestRegionId.present) {
       map['smallest_region_id'] = Variable<String>(smallestRegionId.value);
     }
+    if (regionTreeVersion.present) {
+      map['region_tree_version'] = Variable<String>(regionTreeVersion.value);
+    }
     if (latitude.present) {
       map['latitude'] = Variable<double>(latitude.value);
     }
@@ -2104,6 +2314,7 @@ class DbContactRecordsCompanion extends UpdateCompanion<DbContactRecord> {
           ..write('locationKind: $locationKind, ')
           ..write('placeName: $placeName, ')
           ..write('smallestRegionId: $smallestRegionId, ')
+          ..write('regionTreeVersion: $regionTreeVersion, ')
           ..write('latitude: $latitude, ')
           ..write('longitude: $longitude, ')
           ..write('locationAccuracyMeters: $locationAccuracyMeters, ')
@@ -3056,6 +3267,18 @@ class $DbContactRevisionsTable extends DbContactRevisions
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _regionTreeVersionMeta = const VerificationMeta(
+    'regionTreeVersion',
+  );
+  @override
+  late final GeneratedColumn<String> regionTreeVersion =
+      GeneratedColumn<String>(
+        'region_tree_version',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _latitudeMeta = const VerificationMeta(
     'latitude',
   );
@@ -3126,6 +3349,7 @@ class $DbContactRevisionsTable extends DbContactRevisions
     locationKind,
     placeName,
     smallestRegionId,
+    regionTreeVersion,
     latitude,
     longitude,
     locationAccuracyMeters,
@@ -3264,6 +3488,15 @@ class $DbContactRevisionsTable extends DbContactRevisions
         ),
       );
     }
+    if (data.containsKey('region_tree_version')) {
+      context.handle(
+        _regionTreeVersionMeta,
+        regionTreeVersion.isAcceptableOrUnknown(
+          data['region_tree_version']!,
+          _regionTreeVersionMeta,
+        ),
+      );
+    }
     if (data.containsKey('latitude')) {
       context.handle(
         _latitudeMeta,
@@ -3369,6 +3602,10 @@ class $DbContactRevisionsTable extends DbContactRevisions
         DriftSqlType.string,
         data['${effectivePrefix}smallest_region_id'],
       ),
+      regionTreeVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}region_tree_version'],
+      ),
       latitude: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}latitude'],
@@ -3413,6 +3650,7 @@ class DbContactRevision extends DataClass
   final String locationKind;
   final String? placeName;
   final String? smallestRegionId;
+  final String? regionTreeVersion;
   final double? latitude;
   final double? longitude;
   final double? locationAccuracyMeters;
@@ -3432,6 +3670,7 @@ class DbContactRevision extends DataClass
     required this.locationKind,
     this.placeName,
     this.smallestRegionId,
+    this.regionTreeVersion,
     this.latitude,
     this.longitude,
     this.locationAccuracyMeters,
@@ -3461,6 +3700,9 @@ class DbContactRevision extends DataClass
     }
     if (!nullToAbsent || smallestRegionId != null) {
       map['smallest_region_id'] = Variable<String>(smallestRegionId);
+    }
+    if (!nullToAbsent || regionTreeVersion != null) {
+      map['region_tree_version'] = Variable<String>(regionTreeVersion);
     }
     if (!nullToAbsent || latitude != null) {
       map['latitude'] = Variable<double>(latitude);
@@ -3501,6 +3743,9 @@ class DbContactRevision extends DataClass
       smallestRegionId: smallestRegionId == null && nullToAbsent
           ? const Value.absent()
           : Value(smallestRegionId),
+      regionTreeVersion: regionTreeVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(regionTreeVersion),
       latitude: latitude == null && nullToAbsent
           ? const Value.absent()
           : Value(latitude),
@@ -3536,6 +3781,9 @@ class DbContactRevision extends DataClass
       locationKind: serializer.fromJson<String>(json['locationKind']),
       placeName: serializer.fromJson<String?>(json['placeName']),
       smallestRegionId: serializer.fromJson<String?>(json['smallestRegionId']),
+      regionTreeVersion: serializer.fromJson<String?>(
+        json['regionTreeVersion'],
+      ),
       latitude: serializer.fromJson<double?>(json['latitude']),
       longitude: serializer.fromJson<double?>(json['longitude']),
       locationAccuracyMeters: serializer.fromJson<double?>(
@@ -3562,6 +3810,7 @@ class DbContactRevision extends DataClass
       'locationKind': serializer.toJson<String>(locationKind),
       'placeName': serializer.toJson<String?>(placeName),
       'smallestRegionId': serializer.toJson<String?>(smallestRegionId),
+      'regionTreeVersion': serializer.toJson<String?>(regionTreeVersion),
       'latitude': serializer.toJson<double?>(latitude),
       'longitude': serializer.toJson<double?>(longitude),
       'locationAccuracyMeters': serializer.toJson<double?>(
@@ -3586,6 +3835,7 @@ class DbContactRevision extends DataClass
     String? locationKind,
     Value<String?> placeName = const Value.absent(),
     Value<String?> smallestRegionId = const Value.absent(),
+    Value<String?> regionTreeVersion = const Value.absent(),
     Value<double?> latitude = const Value.absent(),
     Value<double?> longitude = const Value.absent(),
     Value<double?> locationAccuracyMeters = const Value.absent(),
@@ -3609,6 +3859,9 @@ class DbContactRevision extends DataClass
     smallestRegionId: smallestRegionId.present
         ? smallestRegionId.value
         : this.smallestRegionId,
+    regionTreeVersion: regionTreeVersion.present
+        ? regionTreeVersion.value
+        : this.regionTreeVersion,
     latitude: latitude.present ? latitude.value : this.latitude,
     longitude: longitude.present ? longitude.value : this.longitude,
     locationAccuracyMeters: locationAccuracyMeters.present
@@ -3650,6 +3903,9 @@ class DbContactRevision extends DataClass
       smallestRegionId: data.smallestRegionId.present
           ? data.smallestRegionId.value
           : this.smallestRegionId,
+      regionTreeVersion: data.regionTreeVersion.present
+          ? data.regionTreeVersion.value
+          : this.regionTreeVersion,
       latitude: data.latitude.present ? data.latitude.value : this.latitude,
       longitude: data.longitude.present ? data.longitude.value : this.longitude,
       locationAccuracyMeters: data.locationAccuracyMeters.present
@@ -3680,6 +3936,7 @@ class DbContactRevision extends DataClass
           ..write('locationKind: $locationKind, ')
           ..write('placeName: $placeName, ')
           ..write('smallestRegionId: $smallestRegionId, ')
+          ..write('regionTreeVersion: $regionTreeVersion, ')
           ..write('latitude: $latitude, ')
           ..write('longitude: $longitude, ')
           ..write('locationAccuracyMeters: $locationAccuracyMeters, ')
@@ -3704,6 +3961,7 @@ class DbContactRevision extends DataClass
     locationKind,
     placeName,
     smallestRegionId,
+    regionTreeVersion,
     latitude,
     longitude,
     locationAccuracyMeters,
@@ -3727,6 +3985,7 @@ class DbContactRevision extends DataClass
           other.locationKind == this.locationKind &&
           other.placeName == this.placeName &&
           other.smallestRegionId == this.smallestRegionId &&
+          other.regionTreeVersion == this.regionTreeVersion &&
           other.latitude == this.latitude &&
           other.longitude == this.longitude &&
           other.locationAccuracyMeters == this.locationAccuracyMeters &&
@@ -3748,6 +4007,7 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
   final Value<String> locationKind;
   final Value<String?> placeName;
   final Value<String?> smallestRegionId;
+  final Value<String?> regionTreeVersion;
   final Value<double?> latitude;
   final Value<double?> longitude;
   final Value<double?> locationAccuracyMeters;
@@ -3768,6 +4028,7 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
     this.locationKind = const Value.absent(),
     this.placeName = const Value.absent(),
     this.smallestRegionId = const Value.absent(),
+    this.regionTreeVersion = const Value.absent(),
     this.latitude = const Value.absent(),
     this.longitude = const Value.absent(),
     this.locationAccuracyMeters = const Value.absent(),
@@ -3789,6 +4050,7 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
     required String locationKind,
     this.placeName = const Value.absent(),
     this.smallestRegionId = const Value.absent(),
+    this.regionTreeVersion = const Value.absent(),
     this.latitude = const Value.absent(),
     this.longitude = const Value.absent(),
     this.locationAccuracyMeters = const Value.absent(),
@@ -3820,6 +4082,7 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
     Expression<String>? locationKind,
     Expression<String>? placeName,
     Expression<String>? smallestRegionId,
+    Expression<String>? regionTreeVersion,
     Expression<double>? latitude,
     Expression<double>? longitude,
     Expression<double>? locationAccuracyMeters,
@@ -3842,6 +4105,7 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
       if (locationKind != null) 'location_kind': locationKind,
       if (placeName != null) 'place_name': placeName,
       if (smallestRegionId != null) 'smallest_region_id': smallestRegionId,
+      if (regionTreeVersion != null) 'region_tree_version': regionTreeVersion,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
       if (locationAccuracyMeters != null)
@@ -3866,6 +4130,7 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
     Value<String>? locationKind,
     Value<String?>? placeName,
     Value<String?>? smallestRegionId,
+    Value<String?>? regionTreeVersion,
     Value<double?>? latitude,
     Value<double?>? longitude,
     Value<double?>? locationAccuracyMeters,
@@ -3887,6 +4152,7 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
       locationKind: locationKind ?? this.locationKind,
       placeName: placeName ?? this.placeName,
       smallestRegionId: smallestRegionId ?? this.smallestRegionId,
+      regionTreeVersion: regionTreeVersion ?? this.regionTreeVersion,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       locationAccuracyMeters:
@@ -3941,6 +4207,9 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
     if (smallestRegionId.present) {
       map['smallest_region_id'] = Variable<String>(smallestRegionId.value);
     }
+    if (regionTreeVersion.present) {
+      map['region_tree_version'] = Variable<String>(regionTreeVersion.value);
+    }
     if (latitude.present) {
       map['latitude'] = Variable<double>(latitude.value);
     }
@@ -3980,6 +4249,7 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
           ..write('locationKind: $locationKind, ')
           ..write('placeName: $placeName, ')
           ..write('smallestRegionId: $smallestRegionId, ')
+          ..write('regionTreeVersion: $regionTreeVersion, ')
           ..write('latitude: $latitude, ')
           ..write('longitude: $longitude, ')
           ..write('locationAccuracyMeters: $locationAccuracyMeters, ')
@@ -4603,6 +4873,18 @@ class $DbContactDraftsTable extends DbContactDrafts
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _regionTreeVersionMeta = const VerificationMeta(
+    'regionTreeVersion',
+  );
+  @override
+  late final GeneratedColumn<String> regionTreeVersion =
+      GeneratedColumn<String>(
+        'region_tree_version',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _latitudeMeta = const VerificationMeta(
     'latitude',
   );
@@ -4670,6 +4952,42 @@ class $DbContactDraftsTable extends DbContactDrafts
     requiredDuringInsert: false,
     defaultValue: const Constant('account_private'),
   );
+  static const VerificationMeta _localRevisionMeta = const VerificationMeta(
+    'localRevision',
+  );
+  @override
+  late final GeneratedColumn<int> localRevision = GeneratedColumn<int>(
+    'local_revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _serverRevisionMeta = const VerificationMeta(
+    'serverRevision',
+  );
+  @override
+  late final GeneratedColumn<int> serverRevision = GeneratedColumn<int>(
+    'server_revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _conflictOfDraftIdMeta = const VerificationMeta(
+    'conflictOfDraftId',
+  );
+  @override
+  late final GeneratedColumn<String> conflictOfDraftId =
+      GeneratedColumn<String>(
+        'conflict_of_draft_id',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _abandonedAtUtcMeta = const VerificationMeta(
     'abandonedAtUtc',
   );
@@ -4709,12 +5027,16 @@ class $DbContactDraftsTable extends DbContactDrafts
     locationKind,
     placeName,
     smallestRegionId,
+    regionTreeVersion,
     latitude,
     longitude,
     locationAccuracyMeters,
     reachCount,
     interestLevel,
     syncMode,
+    localRevision,
+    serverRevision,
+    conflictOfDraftId,
     abandonedAtUtc,
     undoUntilUtc,
   ];
@@ -4855,6 +5177,15 @@ class $DbContactDraftsTable extends DbContactDrafts
         ),
       );
     }
+    if (data.containsKey('region_tree_version')) {
+      context.handle(
+        _regionTreeVersionMeta,
+        regionTreeVersion.isAcceptableOrUnknown(
+          data['region_tree_version']!,
+          _regionTreeVersionMeta,
+        ),
+      );
+    }
     if (data.containsKey('latitude')) {
       context.handle(
         _latitudeMeta,
@@ -4895,6 +5226,33 @@ class $DbContactDraftsTable extends DbContactDrafts
       context.handle(
         _syncModeMeta,
         syncMode.isAcceptableOrUnknown(data['sync_mode']!, _syncModeMeta),
+      );
+    }
+    if (data.containsKey('local_revision')) {
+      context.handle(
+        _localRevisionMeta,
+        localRevision.isAcceptableOrUnknown(
+          data['local_revision']!,
+          _localRevisionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('server_revision')) {
+      context.handle(
+        _serverRevisionMeta,
+        serverRevision.isAcceptableOrUnknown(
+          data['server_revision']!,
+          _serverRevisionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('conflict_of_draft_id')) {
+      context.handle(
+        _conflictOfDraftIdMeta,
+        conflictOfDraftId.isAcceptableOrUnknown(
+          data['conflict_of_draft_id']!,
+          _conflictOfDraftIdMeta,
+        ),
       );
     }
     if (data.containsKey('abandoned_at_utc')) {
@@ -4980,6 +5338,10 @@ class $DbContactDraftsTable extends DbContactDrafts
         DriftSqlType.string,
         data['${effectivePrefix}smallest_region_id'],
       ),
+      regionTreeVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}region_tree_version'],
+      ),
       latitude: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}latitude'],
@@ -5004,6 +5366,18 @@ class $DbContactDraftsTable extends DbContactDrafts
         DriftSqlType.string,
         data['${effectivePrefix}sync_mode'],
       )!,
+      localRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}local_revision'],
+      )!,
+      serverRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}server_revision'],
+      )!,
+      conflictOfDraftId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}conflict_of_draft_id'],
+      ),
       abandonedAtUtc: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}abandoned_at_utc'],
@@ -5036,12 +5410,16 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
   final String? locationKind;
   final String? placeName;
   final String? smallestRegionId;
+  final String? regionTreeVersion;
   final double? latitude;
   final double? longitude;
   final double? locationAccuracyMeters;
   final int? reachCount;
   final int? interestLevel;
   final String syncMode;
+  final int localRevision;
+  final int serverRevision;
+  final String? conflictOfDraftId;
   final DateTime? abandonedAtUtc;
   final DateTime? undoUntilUtc;
   const DbContactDraft({
@@ -5059,12 +5437,16 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
     this.locationKind,
     this.placeName,
     this.smallestRegionId,
+    this.regionTreeVersion,
     this.latitude,
     this.longitude,
     this.locationAccuracyMeters,
     this.reachCount,
     this.interestLevel,
     required this.syncMode,
+    required this.localRevision,
+    required this.serverRevision,
+    this.conflictOfDraftId,
     this.abandonedAtUtc,
     this.undoUntilUtc,
   });
@@ -5099,6 +5481,9 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
     if (!nullToAbsent || smallestRegionId != null) {
       map['smallest_region_id'] = Variable<String>(smallestRegionId);
     }
+    if (!nullToAbsent || regionTreeVersion != null) {
+      map['region_tree_version'] = Variable<String>(regionTreeVersion);
+    }
     if (!nullToAbsent || latitude != null) {
       map['latitude'] = Variable<double>(latitude);
     }
@@ -5117,6 +5502,11 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
       map['interest_level'] = Variable<int>(interestLevel);
     }
     map['sync_mode'] = Variable<String>(syncMode);
+    map['local_revision'] = Variable<int>(localRevision);
+    map['server_revision'] = Variable<int>(serverRevision);
+    if (!nullToAbsent || conflictOfDraftId != null) {
+      map['conflict_of_draft_id'] = Variable<String>(conflictOfDraftId);
+    }
     if (!nullToAbsent || abandonedAtUtc != null) {
       map['abandoned_at_utc'] = Variable<DateTime>(abandonedAtUtc);
     }
@@ -5156,6 +5546,9 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
       smallestRegionId: smallestRegionId == null && nullToAbsent
           ? const Value.absent()
           : Value(smallestRegionId),
+      regionTreeVersion: regionTreeVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(regionTreeVersion),
       latitude: latitude == null && nullToAbsent
           ? const Value.absent()
           : Value(latitude),
@@ -5172,6 +5565,11 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
           ? const Value.absent()
           : Value(interestLevel),
       syncMode: Value(syncMode),
+      localRevision: Value(localRevision),
+      serverRevision: Value(serverRevision),
+      conflictOfDraftId: conflictOfDraftId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(conflictOfDraftId),
       abandonedAtUtc: abandonedAtUtc == null && nullToAbsent
           ? const Value.absent()
           : Value(abandonedAtUtc),
@@ -5203,6 +5601,9 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
       locationKind: serializer.fromJson<String?>(json['locationKind']),
       placeName: serializer.fromJson<String?>(json['placeName']),
       smallestRegionId: serializer.fromJson<String?>(json['smallestRegionId']),
+      regionTreeVersion: serializer.fromJson<String?>(
+        json['regionTreeVersion'],
+      ),
       latitude: serializer.fromJson<double?>(json['latitude']),
       longitude: serializer.fromJson<double?>(json['longitude']),
       locationAccuracyMeters: serializer.fromJson<double?>(
@@ -5211,6 +5612,11 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
       reachCount: serializer.fromJson<int?>(json['reachCount']),
       interestLevel: serializer.fromJson<int?>(json['interestLevel']),
       syncMode: serializer.fromJson<String>(json['syncMode']),
+      localRevision: serializer.fromJson<int>(json['localRevision']),
+      serverRevision: serializer.fromJson<int>(json['serverRevision']),
+      conflictOfDraftId: serializer.fromJson<String?>(
+        json['conflictOfDraftId'],
+      ),
       abandonedAtUtc: serializer.fromJson<DateTime?>(json['abandonedAtUtc']),
       undoUntilUtc: serializer.fromJson<DateTime?>(json['undoUntilUtc']),
     );
@@ -5235,6 +5641,7 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
       'locationKind': serializer.toJson<String?>(locationKind),
       'placeName': serializer.toJson<String?>(placeName),
       'smallestRegionId': serializer.toJson<String?>(smallestRegionId),
+      'regionTreeVersion': serializer.toJson<String?>(regionTreeVersion),
       'latitude': serializer.toJson<double?>(latitude),
       'longitude': serializer.toJson<double?>(longitude),
       'locationAccuracyMeters': serializer.toJson<double?>(
@@ -5243,6 +5650,9 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
       'reachCount': serializer.toJson<int?>(reachCount),
       'interestLevel': serializer.toJson<int?>(interestLevel),
       'syncMode': serializer.toJson<String>(syncMode),
+      'localRevision': serializer.toJson<int>(localRevision),
+      'serverRevision': serializer.toJson<int>(serverRevision),
+      'conflictOfDraftId': serializer.toJson<String?>(conflictOfDraftId),
       'abandonedAtUtc': serializer.toJson<DateTime?>(abandonedAtUtc),
       'undoUntilUtc': serializer.toJson<DateTime?>(undoUntilUtc),
     };
@@ -5263,12 +5673,16 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
     Value<String?> locationKind = const Value.absent(),
     Value<String?> placeName = const Value.absent(),
     Value<String?> smallestRegionId = const Value.absent(),
+    Value<String?> regionTreeVersion = const Value.absent(),
     Value<double?> latitude = const Value.absent(),
     Value<double?> longitude = const Value.absent(),
     Value<double?> locationAccuracyMeters = const Value.absent(),
     Value<int?> reachCount = const Value.absent(),
     Value<int?> interestLevel = const Value.absent(),
     String? syncMode,
+    int? localRevision,
+    int? serverRevision,
+    Value<String?> conflictOfDraftId = const Value.absent(),
     Value<DateTime?> abandonedAtUtc = const Value.absent(),
     Value<DateTime?> undoUntilUtc = const Value.absent(),
   }) => DbContactDraft(
@@ -5295,6 +5709,9 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
     smallestRegionId: smallestRegionId.present
         ? smallestRegionId.value
         : this.smallestRegionId,
+    regionTreeVersion: regionTreeVersion.present
+        ? regionTreeVersion.value
+        : this.regionTreeVersion,
     latitude: latitude.present ? latitude.value : this.latitude,
     longitude: longitude.present ? longitude.value : this.longitude,
     locationAccuracyMeters: locationAccuracyMeters.present
@@ -5305,6 +5722,11 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
         ? interestLevel.value
         : this.interestLevel,
     syncMode: syncMode ?? this.syncMode,
+    localRevision: localRevision ?? this.localRevision,
+    serverRevision: serverRevision ?? this.serverRevision,
+    conflictOfDraftId: conflictOfDraftId.present
+        ? conflictOfDraftId.value
+        : this.conflictOfDraftId,
     abandonedAtUtc: abandonedAtUtc.present
         ? abandonedAtUtc.value
         : this.abandonedAtUtc,
@@ -5344,6 +5766,9 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
       smallestRegionId: data.smallestRegionId.present
           ? data.smallestRegionId.value
           : this.smallestRegionId,
+      regionTreeVersion: data.regionTreeVersion.present
+          ? data.regionTreeVersion.value
+          : this.regionTreeVersion,
       latitude: data.latitude.present ? data.latitude.value : this.latitude,
       longitude: data.longitude.present ? data.longitude.value : this.longitude,
       locationAccuracyMeters: data.locationAccuracyMeters.present
@@ -5356,6 +5781,15 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
           ? data.interestLevel.value
           : this.interestLevel,
       syncMode: data.syncMode.present ? data.syncMode.value : this.syncMode,
+      localRevision: data.localRevision.present
+          ? data.localRevision.value
+          : this.localRevision,
+      serverRevision: data.serverRevision.present
+          ? data.serverRevision.value
+          : this.serverRevision,
+      conflictOfDraftId: data.conflictOfDraftId.present
+          ? data.conflictOfDraftId.value
+          : this.conflictOfDraftId,
       abandonedAtUtc: data.abandonedAtUtc.present
           ? data.abandonedAtUtc.value
           : this.abandonedAtUtc,
@@ -5382,12 +5816,16 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
           ..write('locationKind: $locationKind, ')
           ..write('placeName: $placeName, ')
           ..write('smallestRegionId: $smallestRegionId, ')
+          ..write('regionTreeVersion: $regionTreeVersion, ')
           ..write('latitude: $latitude, ')
           ..write('longitude: $longitude, ')
           ..write('locationAccuracyMeters: $locationAccuracyMeters, ')
           ..write('reachCount: $reachCount, ')
           ..write('interestLevel: $interestLevel, ')
           ..write('syncMode: $syncMode, ')
+          ..write('localRevision: $localRevision, ')
+          ..write('serverRevision: $serverRevision, ')
+          ..write('conflictOfDraftId: $conflictOfDraftId, ')
           ..write('abandonedAtUtc: $abandonedAtUtc, ')
           ..write('undoUntilUtc: $undoUntilUtc')
           ..write(')'))
@@ -5410,12 +5848,16 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
     locationKind,
     placeName,
     smallestRegionId,
+    regionTreeVersion,
     latitude,
     longitude,
     locationAccuracyMeters,
     reachCount,
     interestLevel,
     syncMode,
+    localRevision,
+    serverRevision,
+    conflictOfDraftId,
     abandonedAtUtc,
     undoUntilUtc,
   ]);
@@ -5437,12 +5879,16 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
           other.locationKind == this.locationKind &&
           other.placeName == this.placeName &&
           other.smallestRegionId == this.smallestRegionId &&
+          other.regionTreeVersion == this.regionTreeVersion &&
           other.latitude == this.latitude &&
           other.longitude == this.longitude &&
           other.locationAccuracyMeters == this.locationAccuracyMeters &&
           other.reachCount == this.reachCount &&
           other.interestLevel == this.interestLevel &&
           other.syncMode == this.syncMode &&
+          other.localRevision == this.localRevision &&
+          other.serverRevision == this.serverRevision &&
+          other.conflictOfDraftId == this.conflictOfDraftId &&
           other.abandonedAtUtc == this.abandonedAtUtc &&
           other.undoUntilUtc == this.undoUntilUtc);
 }
@@ -5462,12 +5908,16 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
   final Value<String?> locationKind;
   final Value<String?> placeName;
   final Value<String?> smallestRegionId;
+  final Value<String?> regionTreeVersion;
   final Value<double?> latitude;
   final Value<double?> longitude;
   final Value<double?> locationAccuracyMeters;
   final Value<int?> reachCount;
   final Value<int?> interestLevel;
   final Value<String> syncMode;
+  final Value<int> localRevision;
+  final Value<int> serverRevision;
+  final Value<String?> conflictOfDraftId;
   final Value<DateTime?> abandonedAtUtc;
   final Value<DateTime?> undoUntilUtc;
   final Value<int> rowid;
@@ -5486,12 +5936,16 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
     this.locationKind = const Value.absent(),
     this.placeName = const Value.absent(),
     this.smallestRegionId = const Value.absent(),
+    this.regionTreeVersion = const Value.absent(),
     this.latitude = const Value.absent(),
     this.longitude = const Value.absent(),
     this.locationAccuracyMeters = const Value.absent(),
     this.reachCount = const Value.absent(),
     this.interestLevel = const Value.absent(),
     this.syncMode = const Value.absent(),
+    this.localRevision = const Value.absent(),
+    this.serverRevision = const Value.absent(),
+    this.conflictOfDraftId = const Value.absent(),
     this.abandonedAtUtc = const Value.absent(),
     this.undoUntilUtc = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -5511,12 +5965,16 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
     this.locationKind = const Value.absent(),
     this.placeName = const Value.absent(),
     this.smallestRegionId = const Value.absent(),
+    this.regionTreeVersion = const Value.absent(),
     this.latitude = const Value.absent(),
     this.longitude = const Value.absent(),
     this.locationAccuracyMeters = const Value.absent(),
     this.reachCount = const Value.absent(),
     this.interestLevel = const Value.absent(),
     this.syncMode = const Value.absent(),
+    this.localRevision = const Value.absent(),
+    this.serverRevision = const Value.absent(),
+    this.conflictOfDraftId = const Value.absent(),
     this.abandonedAtUtc = const Value.absent(),
     this.undoUntilUtc = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -5542,12 +6000,16 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
     Expression<String>? locationKind,
     Expression<String>? placeName,
     Expression<String>? smallestRegionId,
+    Expression<String>? regionTreeVersion,
     Expression<double>? latitude,
     Expression<double>? longitude,
     Expression<double>? locationAccuracyMeters,
     Expression<int>? reachCount,
     Expression<int>? interestLevel,
     Expression<String>? syncMode,
+    Expression<int>? localRevision,
+    Expression<int>? serverRevision,
+    Expression<String>? conflictOfDraftId,
     Expression<DateTime>? abandonedAtUtc,
     Expression<DateTime>? undoUntilUtc,
     Expression<int>? rowid,
@@ -5568,6 +6030,7 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
       if (locationKind != null) 'location_kind': locationKind,
       if (placeName != null) 'place_name': placeName,
       if (smallestRegionId != null) 'smallest_region_id': smallestRegionId,
+      if (regionTreeVersion != null) 'region_tree_version': regionTreeVersion,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
       if (locationAccuracyMeters != null)
@@ -5575,6 +6038,9 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
       if (reachCount != null) 'reach_count': reachCount,
       if (interestLevel != null) 'interest_level': interestLevel,
       if (syncMode != null) 'sync_mode': syncMode,
+      if (localRevision != null) 'local_revision': localRevision,
+      if (serverRevision != null) 'server_revision': serverRevision,
+      if (conflictOfDraftId != null) 'conflict_of_draft_id': conflictOfDraftId,
       if (abandonedAtUtc != null) 'abandoned_at_utc': abandonedAtUtc,
       if (undoUntilUtc != null) 'undo_until_utc': undoUntilUtc,
       if (rowid != null) 'rowid': rowid,
@@ -5596,12 +6062,16 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
     Value<String?>? locationKind,
     Value<String?>? placeName,
     Value<String?>? smallestRegionId,
+    Value<String?>? regionTreeVersion,
     Value<double?>? latitude,
     Value<double?>? longitude,
     Value<double?>? locationAccuracyMeters,
     Value<int?>? reachCount,
     Value<int?>? interestLevel,
     Value<String>? syncMode,
+    Value<int>? localRevision,
+    Value<int>? serverRevision,
+    Value<String?>? conflictOfDraftId,
     Value<DateTime?>? abandonedAtUtc,
     Value<DateTime?>? undoUntilUtc,
     Value<int>? rowid,
@@ -5622,6 +6092,7 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
       locationKind: locationKind ?? this.locationKind,
       placeName: placeName ?? this.placeName,
       smallestRegionId: smallestRegionId ?? this.smallestRegionId,
+      regionTreeVersion: regionTreeVersion ?? this.regionTreeVersion,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       locationAccuracyMeters:
@@ -5629,6 +6100,9 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
       reachCount: reachCount ?? this.reachCount,
       interestLevel: interestLevel ?? this.interestLevel,
       syncMode: syncMode ?? this.syncMode,
+      localRevision: localRevision ?? this.localRevision,
+      serverRevision: serverRevision ?? this.serverRevision,
+      conflictOfDraftId: conflictOfDraftId ?? this.conflictOfDraftId,
       abandonedAtUtc: abandonedAtUtc ?? this.abandonedAtUtc,
       undoUntilUtc: undoUntilUtc ?? this.undoUntilUtc,
       rowid: rowid ?? this.rowid,
@@ -5682,6 +6156,9 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
     if (smallestRegionId.present) {
       map['smallest_region_id'] = Variable<String>(smallestRegionId.value);
     }
+    if (regionTreeVersion.present) {
+      map['region_tree_version'] = Variable<String>(regionTreeVersion.value);
+    }
     if (latitude.present) {
       map['latitude'] = Variable<double>(latitude.value);
     }
@@ -5701,6 +6178,15 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
     }
     if (syncMode.present) {
       map['sync_mode'] = Variable<String>(syncMode.value);
+    }
+    if (localRevision.present) {
+      map['local_revision'] = Variable<int>(localRevision.value);
+    }
+    if (serverRevision.present) {
+      map['server_revision'] = Variable<int>(serverRevision.value);
+    }
+    if (conflictOfDraftId.present) {
+      map['conflict_of_draft_id'] = Variable<String>(conflictOfDraftId.value);
     }
     if (abandonedAtUtc.present) {
       map['abandoned_at_utc'] = Variable<DateTime>(abandonedAtUtc.value);
@@ -5731,12 +6217,16 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
           ..write('locationKind: $locationKind, ')
           ..write('placeName: $placeName, ')
           ..write('smallestRegionId: $smallestRegionId, ')
+          ..write('regionTreeVersion: $regionTreeVersion, ')
           ..write('latitude: $latitude, ')
           ..write('longitude: $longitude, ')
           ..write('locationAccuracyMeters: $locationAccuracyMeters, ')
           ..write('reachCount: $reachCount, ')
           ..write('interestLevel: $interestLevel, ')
           ..write('syncMode: $syncMode, ')
+          ..write('localRevision: $localRevision, ')
+          ..write('serverRevision: $serverRevision, ')
+          ..write('conflictOfDraftId: $conflictOfDraftId, ')
           ..write('abandonedAtUtc: $abandonedAtUtc, ')
           ..write('undoUntilUtc: $undoUntilUtc, ')
           ..write('rowid: $rowid')
@@ -9704,6 +10194,1008 @@ class DbSecurityEventsCompanion extends UpdateCompanion<DbSecurityEvent> {
   }
 }
 
+class $DbCanonicalRegionVersionsTable extends DbCanonicalRegionVersions
+    with TableInfo<$DbCanonicalRegionVersionsTable, DbCanonicalRegionVersion> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DbCanonicalRegionVersionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _regionVersionKeyMeta = const VerificationMeta(
+    'regionVersionKey',
+  );
+  @override
+  late final GeneratedColumn<String> regionVersionKey = GeneratedColumn<String>(
+    'region_version_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _regionIdMeta = const VerificationMeta(
+    'regionId',
+  );
+  @override
+  late final GeneratedColumn<String> regionId = GeneratedColumn<String>(
+    'region_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _treeVersionMeta = const VerificationMeta(
+    'treeVersion',
+  );
+  @override
+  late final GeneratedColumn<String> treeVersion = GeneratedColumn<String>(
+    'tree_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _parentRegionVersionKeyMeta =
+      const VerificationMeta('parentRegionVersionKey');
+  @override
+  late final GeneratedColumn<String> parentRegionVersionKey =
+      GeneratedColumn<String>(
+        'parent_region_version_key',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'REFERENCES db_canonical_region_versions (region_version_key)',
+        ),
+      );
+  static const VerificationMeta _canonicalNameMeta = const VerificationMeta(
+    'canonicalName',
+  );
+  @override
+  late final GeneratedColumn<String> canonicalName = GeneratedColumn<String>(
+    'canonical_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _attributesJsonMeta = const VerificationMeta(
+    'attributesJson',
+  );
+  @override
+  late final GeneratedColumn<String> attributesJson = GeneratedColumn<String>(
+    'attributes_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    regionVersionKey,
+    regionId,
+    treeVersion,
+    parentRegionVersionKey,
+    canonicalName,
+    kind,
+    attributesJson,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'db_canonical_region_versions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DbCanonicalRegionVersion> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('region_version_key')) {
+      context.handle(
+        _regionVersionKeyMeta,
+        regionVersionKey.isAcceptableOrUnknown(
+          data['region_version_key']!,
+          _regionVersionKeyMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_regionVersionKeyMeta);
+    }
+    if (data.containsKey('region_id')) {
+      context.handle(
+        _regionIdMeta,
+        regionId.isAcceptableOrUnknown(data['region_id']!, _regionIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_regionIdMeta);
+    }
+    if (data.containsKey('tree_version')) {
+      context.handle(
+        _treeVersionMeta,
+        treeVersion.isAcceptableOrUnknown(
+          data['tree_version']!,
+          _treeVersionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_treeVersionMeta);
+    }
+    if (data.containsKey('parent_region_version_key')) {
+      context.handle(
+        _parentRegionVersionKeyMeta,
+        parentRegionVersionKey.isAcceptableOrUnknown(
+          data['parent_region_version_key']!,
+          _parentRegionVersionKeyMeta,
+        ),
+      );
+    }
+    if (data.containsKey('canonical_name')) {
+      context.handle(
+        _canonicalNameMeta,
+        canonicalName.isAcceptableOrUnknown(
+          data['canonical_name']!,
+          _canonicalNameMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_canonicalNameMeta);
+    }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_kindMeta);
+    }
+    if (data.containsKey('attributes_json')) {
+      context.handle(
+        _attributesJsonMeta,
+        attributesJson.isAcceptableOrUnknown(
+          data['attributes_json']!,
+          _attributesJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_attributesJsonMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {regionVersionKey};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {regionId, treeVersion},
+  ];
+  @override
+  DbCanonicalRegionVersion map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DbCanonicalRegionVersion(
+      regionVersionKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}region_version_key'],
+      )!,
+      regionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}region_id'],
+      )!,
+      treeVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tree_version'],
+      )!,
+      parentRegionVersionKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parent_region_version_key'],
+      ),
+      canonicalName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}canonical_name'],
+      )!,
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      attributesJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}attributes_json'],
+      )!,
+    );
+  }
+
+  @override
+  $DbCanonicalRegionVersionsTable createAlias(String alias) {
+    return $DbCanonicalRegionVersionsTable(attachedDatabase, alias);
+  }
+}
+
+class DbCanonicalRegionVersion extends DataClass
+    implements Insertable<DbCanonicalRegionVersion> {
+  final String regionVersionKey;
+  final String regionId;
+  final String treeVersion;
+  final String? parentRegionVersionKey;
+  final String canonicalName;
+  final String kind;
+  final String attributesJson;
+  const DbCanonicalRegionVersion({
+    required this.regionVersionKey,
+    required this.regionId,
+    required this.treeVersion,
+    this.parentRegionVersionKey,
+    required this.canonicalName,
+    required this.kind,
+    required this.attributesJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['region_version_key'] = Variable<String>(regionVersionKey);
+    map['region_id'] = Variable<String>(regionId);
+    map['tree_version'] = Variable<String>(treeVersion);
+    if (!nullToAbsent || parentRegionVersionKey != null) {
+      map['parent_region_version_key'] = Variable<String>(
+        parentRegionVersionKey,
+      );
+    }
+    map['canonical_name'] = Variable<String>(canonicalName);
+    map['kind'] = Variable<String>(kind);
+    map['attributes_json'] = Variable<String>(attributesJson);
+    return map;
+  }
+
+  DbCanonicalRegionVersionsCompanion toCompanion(bool nullToAbsent) {
+    return DbCanonicalRegionVersionsCompanion(
+      regionVersionKey: Value(regionVersionKey),
+      regionId: Value(regionId),
+      treeVersion: Value(treeVersion),
+      parentRegionVersionKey: parentRegionVersionKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentRegionVersionKey),
+      canonicalName: Value(canonicalName),
+      kind: Value(kind),
+      attributesJson: Value(attributesJson),
+    );
+  }
+
+  factory DbCanonicalRegionVersion.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DbCanonicalRegionVersion(
+      regionVersionKey: serializer.fromJson<String>(json['regionVersionKey']),
+      regionId: serializer.fromJson<String>(json['regionId']),
+      treeVersion: serializer.fromJson<String>(json['treeVersion']),
+      parentRegionVersionKey: serializer.fromJson<String?>(
+        json['parentRegionVersionKey'],
+      ),
+      canonicalName: serializer.fromJson<String>(json['canonicalName']),
+      kind: serializer.fromJson<String>(json['kind']),
+      attributesJson: serializer.fromJson<String>(json['attributesJson']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'regionVersionKey': serializer.toJson<String>(regionVersionKey),
+      'regionId': serializer.toJson<String>(regionId),
+      'treeVersion': serializer.toJson<String>(treeVersion),
+      'parentRegionVersionKey': serializer.toJson<String?>(
+        parentRegionVersionKey,
+      ),
+      'canonicalName': serializer.toJson<String>(canonicalName),
+      'kind': serializer.toJson<String>(kind),
+      'attributesJson': serializer.toJson<String>(attributesJson),
+    };
+  }
+
+  DbCanonicalRegionVersion copyWith({
+    String? regionVersionKey,
+    String? regionId,
+    String? treeVersion,
+    Value<String?> parentRegionVersionKey = const Value.absent(),
+    String? canonicalName,
+    String? kind,
+    String? attributesJson,
+  }) => DbCanonicalRegionVersion(
+    regionVersionKey: regionVersionKey ?? this.regionVersionKey,
+    regionId: regionId ?? this.regionId,
+    treeVersion: treeVersion ?? this.treeVersion,
+    parentRegionVersionKey: parentRegionVersionKey.present
+        ? parentRegionVersionKey.value
+        : this.parentRegionVersionKey,
+    canonicalName: canonicalName ?? this.canonicalName,
+    kind: kind ?? this.kind,
+    attributesJson: attributesJson ?? this.attributesJson,
+  );
+  DbCanonicalRegionVersion copyWithCompanion(
+    DbCanonicalRegionVersionsCompanion data,
+  ) {
+    return DbCanonicalRegionVersion(
+      regionVersionKey: data.regionVersionKey.present
+          ? data.regionVersionKey.value
+          : this.regionVersionKey,
+      regionId: data.regionId.present ? data.regionId.value : this.regionId,
+      treeVersion: data.treeVersion.present
+          ? data.treeVersion.value
+          : this.treeVersion,
+      parentRegionVersionKey: data.parentRegionVersionKey.present
+          ? data.parentRegionVersionKey.value
+          : this.parentRegionVersionKey,
+      canonicalName: data.canonicalName.present
+          ? data.canonicalName.value
+          : this.canonicalName,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      attributesJson: data.attributesJson.present
+          ? data.attributesJson.value
+          : this.attributesJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbCanonicalRegionVersion(')
+          ..write('regionVersionKey: $regionVersionKey, ')
+          ..write('regionId: $regionId, ')
+          ..write('treeVersion: $treeVersion, ')
+          ..write('parentRegionVersionKey: $parentRegionVersionKey, ')
+          ..write('canonicalName: $canonicalName, ')
+          ..write('kind: $kind, ')
+          ..write('attributesJson: $attributesJson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    regionVersionKey,
+    regionId,
+    treeVersion,
+    parentRegionVersionKey,
+    canonicalName,
+    kind,
+    attributesJson,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DbCanonicalRegionVersion &&
+          other.regionVersionKey == this.regionVersionKey &&
+          other.regionId == this.regionId &&
+          other.treeVersion == this.treeVersion &&
+          other.parentRegionVersionKey == this.parentRegionVersionKey &&
+          other.canonicalName == this.canonicalName &&
+          other.kind == this.kind &&
+          other.attributesJson == this.attributesJson);
+}
+
+class DbCanonicalRegionVersionsCompanion
+    extends UpdateCompanion<DbCanonicalRegionVersion> {
+  final Value<String> regionVersionKey;
+  final Value<String> regionId;
+  final Value<String> treeVersion;
+  final Value<String?> parentRegionVersionKey;
+  final Value<String> canonicalName;
+  final Value<String> kind;
+  final Value<String> attributesJson;
+  final Value<int> rowid;
+  const DbCanonicalRegionVersionsCompanion({
+    this.regionVersionKey = const Value.absent(),
+    this.regionId = const Value.absent(),
+    this.treeVersion = const Value.absent(),
+    this.parentRegionVersionKey = const Value.absent(),
+    this.canonicalName = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.attributesJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DbCanonicalRegionVersionsCompanion.insert({
+    required String regionVersionKey,
+    required String regionId,
+    required String treeVersion,
+    this.parentRegionVersionKey = const Value.absent(),
+    required String canonicalName,
+    required String kind,
+    required String attributesJson,
+    this.rowid = const Value.absent(),
+  }) : regionVersionKey = Value(regionVersionKey),
+       regionId = Value(regionId),
+       treeVersion = Value(treeVersion),
+       canonicalName = Value(canonicalName),
+       kind = Value(kind),
+       attributesJson = Value(attributesJson);
+  static Insertable<DbCanonicalRegionVersion> custom({
+    Expression<String>? regionVersionKey,
+    Expression<String>? regionId,
+    Expression<String>? treeVersion,
+    Expression<String>? parentRegionVersionKey,
+    Expression<String>? canonicalName,
+    Expression<String>? kind,
+    Expression<String>? attributesJson,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (regionVersionKey != null) 'region_version_key': regionVersionKey,
+      if (regionId != null) 'region_id': regionId,
+      if (treeVersion != null) 'tree_version': treeVersion,
+      if (parentRegionVersionKey != null)
+        'parent_region_version_key': parentRegionVersionKey,
+      if (canonicalName != null) 'canonical_name': canonicalName,
+      if (kind != null) 'kind': kind,
+      if (attributesJson != null) 'attributes_json': attributesJson,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DbCanonicalRegionVersionsCompanion copyWith({
+    Value<String>? regionVersionKey,
+    Value<String>? regionId,
+    Value<String>? treeVersion,
+    Value<String?>? parentRegionVersionKey,
+    Value<String>? canonicalName,
+    Value<String>? kind,
+    Value<String>? attributesJson,
+    Value<int>? rowid,
+  }) {
+    return DbCanonicalRegionVersionsCompanion(
+      regionVersionKey: regionVersionKey ?? this.regionVersionKey,
+      regionId: regionId ?? this.regionId,
+      treeVersion: treeVersion ?? this.treeVersion,
+      parentRegionVersionKey:
+          parentRegionVersionKey ?? this.parentRegionVersionKey,
+      canonicalName: canonicalName ?? this.canonicalName,
+      kind: kind ?? this.kind,
+      attributesJson: attributesJson ?? this.attributesJson,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (regionVersionKey.present) {
+      map['region_version_key'] = Variable<String>(regionVersionKey.value);
+    }
+    if (regionId.present) {
+      map['region_id'] = Variable<String>(regionId.value);
+    }
+    if (treeVersion.present) {
+      map['tree_version'] = Variable<String>(treeVersion.value);
+    }
+    if (parentRegionVersionKey.present) {
+      map['parent_region_version_key'] = Variable<String>(
+        parentRegionVersionKey.value,
+      );
+    }
+    if (canonicalName.present) {
+      map['canonical_name'] = Variable<String>(canonicalName.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (attributesJson.present) {
+      map['attributes_json'] = Variable<String>(attributesJson.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbCanonicalRegionVersionsCompanion(')
+          ..write('regionVersionKey: $regionVersionKey, ')
+          ..write('regionId: $regionId, ')
+          ..write('treeVersion: $treeVersion, ')
+          ..write('parentRegionVersionKey: $parentRegionVersionKey, ')
+          ..write('canonicalName: $canonicalName, ')
+          ..write('kind: $kind, ')
+          ..write('attributesJson: $attributesJson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $DbContactRegionAssignmentsTable extends DbContactRegionAssignments
+    with
+        TableInfo<$DbContactRegionAssignmentsTable, DbContactRegionAssignment> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DbContactRegionAssignmentsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _contactIdMeta = const VerificationMeta(
+    'contactId',
+  );
+  @override
+  late final GeneratedColumn<String> contactId = GeneratedColumn<String>(
+    'contact_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES db_contact_records (contact_id)',
+    ),
+  );
+  static const VerificationMeta _regionVersionKeyMeta = const VerificationMeta(
+    'regionVersionKey',
+  );
+  @override
+  late final GeneratedColumn<String> regionVersionKey = GeneratedColumn<String>(
+    'region_version_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES db_canonical_region_versions (region_version_key)',
+    ),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [contactId, regionVersionKey];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'db_contact_region_assignments';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DbContactRegionAssignment> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('contact_id')) {
+      context.handle(
+        _contactIdMeta,
+        contactId.isAcceptableOrUnknown(data['contact_id']!, _contactIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_contactIdMeta);
+    }
+    if (data.containsKey('region_version_key')) {
+      context.handle(
+        _regionVersionKeyMeta,
+        regionVersionKey.isAcceptableOrUnknown(
+          data['region_version_key']!,
+          _regionVersionKeyMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_regionVersionKeyMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {contactId};
+  @override
+  DbContactRegionAssignment map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DbContactRegionAssignment(
+      contactId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}contact_id'],
+      )!,
+      regionVersionKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}region_version_key'],
+      )!,
+    );
+  }
+
+  @override
+  $DbContactRegionAssignmentsTable createAlias(String alias) {
+    return $DbContactRegionAssignmentsTable(attachedDatabase, alias);
+  }
+}
+
+class DbContactRegionAssignment extends DataClass
+    implements Insertable<DbContactRegionAssignment> {
+  final String contactId;
+  final String regionVersionKey;
+  const DbContactRegionAssignment({
+    required this.contactId,
+    required this.regionVersionKey,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['contact_id'] = Variable<String>(contactId);
+    map['region_version_key'] = Variable<String>(regionVersionKey);
+    return map;
+  }
+
+  DbContactRegionAssignmentsCompanion toCompanion(bool nullToAbsent) {
+    return DbContactRegionAssignmentsCompanion(
+      contactId: Value(contactId),
+      regionVersionKey: Value(regionVersionKey),
+    );
+  }
+
+  factory DbContactRegionAssignment.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DbContactRegionAssignment(
+      contactId: serializer.fromJson<String>(json['contactId']),
+      regionVersionKey: serializer.fromJson<String>(json['regionVersionKey']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'contactId': serializer.toJson<String>(contactId),
+      'regionVersionKey': serializer.toJson<String>(regionVersionKey),
+    };
+  }
+
+  DbContactRegionAssignment copyWith({
+    String? contactId,
+    String? regionVersionKey,
+  }) => DbContactRegionAssignment(
+    contactId: contactId ?? this.contactId,
+    regionVersionKey: regionVersionKey ?? this.regionVersionKey,
+  );
+  DbContactRegionAssignment copyWithCompanion(
+    DbContactRegionAssignmentsCompanion data,
+  ) {
+    return DbContactRegionAssignment(
+      contactId: data.contactId.present ? data.contactId.value : this.contactId,
+      regionVersionKey: data.regionVersionKey.present
+          ? data.regionVersionKey.value
+          : this.regionVersionKey,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbContactRegionAssignment(')
+          ..write('contactId: $contactId, ')
+          ..write('regionVersionKey: $regionVersionKey')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(contactId, regionVersionKey);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DbContactRegionAssignment &&
+          other.contactId == this.contactId &&
+          other.regionVersionKey == this.regionVersionKey);
+}
+
+class DbContactRegionAssignmentsCompanion
+    extends UpdateCompanion<DbContactRegionAssignment> {
+  final Value<String> contactId;
+  final Value<String> regionVersionKey;
+  final Value<int> rowid;
+  const DbContactRegionAssignmentsCompanion({
+    this.contactId = const Value.absent(),
+    this.regionVersionKey = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DbContactRegionAssignmentsCompanion.insert({
+    required String contactId,
+    required String regionVersionKey,
+    this.rowid = const Value.absent(),
+  }) : contactId = Value(contactId),
+       regionVersionKey = Value(regionVersionKey);
+  static Insertable<DbContactRegionAssignment> custom({
+    Expression<String>? contactId,
+    Expression<String>? regionVersionKey,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (contactId != null) 'contact_id': contactId,
+      if (regionVersionKey != null) 'region_version_key': regionVersionKey,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DbContactRegionAssignmentsCompanion copyWith({
+    Value<String>? contactId,
+    Value<String>? regionVersionKey,
+    Value<int>? rowid,
+  }) {
+    return DbContactRegionAssignmentsCompanion(
+      contactId: contactId ?? this.contactId,
+      regionVersionKey: regionVersionKey ?? this.regionVersionKey,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (contactId.present) {
+      map['contact_id'] = Variable<String>(contactId.value);
+    }
+    if (regionVersionKey.present) {
+      map['region_version_key'] = Variable<String>(regionVersionKey.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbContactRegionAssignmentsCompanion(')
+          ..write('contactId: $contactId, ')
+          ..write('regionVersionKey: $regionVersionKey, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $DbDraftRegionAssignmentsTable extends DbDraftRegionAssignments
+    with TableInfo<$DbDraftRegionAssignmentsTable, DbDraftRegionAssignment> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DbDraftRegionAssignmentsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _draftIdMeta = const VerificationMeta(
+    'draftId',
+  );
+  @override
+  late final GeneratedColumn<String> draftId = GeneratedColumn<String>(
+    'draft_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES db_contact_drafts (draft_id)',
+    ),
+  );
+  static const VerificationMeta _regionVersionKeyMeta = const VerificationMeta(
+    'regionVersionKey',
+  );
+  @override
+  late final GeneratedColumn<String> regionVersionKey = GeneratedColumn<String>(
+    'region_version_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES db_canonical_region_versions (region_version_key)',
+    ),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [draftId, regionVersionKey];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'db_draft_region_assignments';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DbDraftRegionAssignment> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('draft_id')) {
+      context.handle(
+        _draftIdMeta,
+        draftId.isAcceptableOrUnknown(data['draft_id']!, _draftIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_draftIdMeta);
+    }
+    if (data.containsKey('region_version_key')) {
+      context.handle(
+        _regionVersionKeyMeta,
+        regionVersionKey.isAcceptableOrUnknown(
+          data['region_version_key']!,
+          _regionVersionKeyMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_regionVersionKeyMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {draftId};
+  @override
+  DbDraftRegionAssignment map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DbDraftRegionAssignment(
+      draftId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}draft_id'],
+      )!,
+      regionVersionKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}region_version_key'],
+      )!,
+    );
+  }
+
+  @override
+  $DbDraftRegionAssignmentsTable createAlias(String alias) {
+    return $DbDraftRegionAssignmentsTable(attachedDatabase, alias);
+  }
+}
+
+class DbDraftRegionAssignment extends DataClass
+    implements Insertable<DbDraftRegionAssignment> {
+  final String draftId;
+  final String regionVersionKey;
+  const DbDraftRegionAssignment({
+    required this.draftId,
+    required this.regionVersionKey,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['draft_id'] = Variable<String>(draftId);
+    map['region_version_key'] = Variable<String>(regionVersionKey);
+    return map;
+  }
+
+  DbDraftRegionAssignmentsCompanion toCompanion(bool nullToAbsent) {
+    return DbDraftRegionAssignmentsCompanion(
+      draftId: Value(draftId),
+      regionVersionKey: Value(regionVersionKey),
+    );
+  }
+
+  factory DbDraftRegionAssignment.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DbDraftRegionAssignment(
+      draftId: serializer.fromJson<String>(json['draftId']),
+      regionVersionKey: serializer.fromJson<String>(json['regionVersionKey']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'draftId': serializer.toJson<String>(draftId),
+      'regionVersionKey': serializer.toJson<String>(regionVersionKey),
+    };
+  }
+
+  DbDraftRegionAssignment copyWith({
+    String? draftId,
+    String? regionVersionKey,
+  }) => DbDraftRegionAssignment(
+    draftId: draftId ?? this.draftId,
+    regionVersionKey: regionVersionKey ?? this.regionVersionKey,
+  );
+  DbDraftRegionAssignment copyWithCompanion(
+    DbDraftRegionAssignmentsCompanion data,
+  ) {
+    return DbDraftRegionAssignment(
+      draftId: data.draftId.present ? data.draftId.value : this.draftId,
+      regionVersionKey: data.regionVersionKey.present
+          ? data.regionVersionKey.value
+          : this.regionVersionKey,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbDraftRegionAssignment(')
+          ..write('draftId: $draftId, ')
+          ..write('regionVersionKey: $regionVersionKey')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(draftId, regionVersionKey);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DbDraftRegionAssignment &&
+          other.draftId == this.draftId &&
+          other.regionVersionKey == this.regionVersionKey);
+}
+
+class DbDraftRegionAssignmentsCompanion
+    extends UpdateCompanion<DbDraftRegionAssignment> {
+  final Value<String> draftId;
+  final Value<String> regionVersionKey;
+  final Value<int> rowid;
+  const DbDraftRegionAssignmentsCompanion({
+    this.draftId = const Value.absent(),
+    this.regionVersionKey = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DbDraftRegionAssignmentsCompanion.insert({
+    required String draftId,
+    required String regionVersionKey,
+    this.rowid = const Value.absent(),
+  }) : draftId = Value(draftId),
+       regionVersionKey = Value(regionVersionKey);
+  static Insertable<DbDraftRegionAssignment> custom({
+    Expression<String>? draftId,
+    Expression<String>? regionVersionKey,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (draftId != null) 'draft_id': draftId,
+      if (regionVersionKey != null) 'region_version_key': regionVersionKey,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DbDraftRegionAssignmentsCompanion copyWith({
+    Value<String>? draftId,
+    Value<String>? regionVersionKey,
+    Value<int>? rowid,
+  }) {
+    return DbDraftRegionAssignmentsCompanion(
+      draftId: draftId ?? this.draftId,
+      regionVersionKey: regionVersionKey ?? this.regionVersionKey,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (draftId.present) {
+      map['draft_id'] = Variable<String>(draftId.value);
+    }
+    if (regionVersionKey.present) {
+      map['region_version_key'] = Variable<String>(regionVersionKey.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbDraftRegionAssignmentsCompanion(')
+          ..write('draftId: $draftId, ')
+          ..write('regionVersionKey: $regionVersionKey, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$LocalDatabase extends GeneratedDatabase {
   _$LocalDatabase(QueryExecutor e) : super(e);
   $LocalDatabaseManager get managers => $LocalDatabaseManager(this);
@@ -9750,6 +11242,12 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
   late final $DbSecurityEventsTable dbSecurityEvents = $DbSecurityEventsTable(
     this,
   );
+  late final $DbCanonicalRegionVersionsTable dbCanonicalRegionVersions =
+      $DbCanonicalRegionVersionsTable(this);
+  late final $DbContactRegionAssignmentsTable dbContactRegionAssignments =
+      $DbContactRegionAssignmentsTable(this);
+  late final $DbDraftRegionAssignmentsTable dbDraftRegionAssignments =
+      $DbDraftRegionAssignmentsTable(this);
   Selectable<DbSyncOutboxData> readReadySyncCommand(
     String appUserId,
     String workspaceId,
@@ -9757,7 +11255,7 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
     DateTime nowUtc,
   ) {
     return customSelect(
-      'SELECT outbox.* FROM db_sync_outbox AS outbox JOIN db_contact_records AS contact ON contact.contact_id = outbox.aggregate_id WHERE contact.app_user_id = ?1 AND contact.workspace_id = ?2 AND contact.project_id = ?3 AND outbox.status = \'pending\' AND outbox.next_attempt_at_utc <= ?4 AND NOT EXISTS (SELECT 1 AS _c0 FROM db_sync_outbox AS earlier WHERE earlier.aggregate_id = outbox.aggregate_id AND earlier.status != \'completed\' AND(earlier.created_at_utc < outbox.created_at_utc OR(earlier.created_at_utc = outbox.created_at_utc AND earlier.command_id < outbox.command_id))) ORDER BY outbox.created_at_utc, outbox.command_id LIMIT 1',
+      'SELECT outbox.* FROM db_sync_outbox AS outbox LEFT JOIN db_contact_records AS contact ON contact.contact_id = outbox.aggregate_id WHERE COALESCE(outbox.app_user_id, contact.app_user_id) = ?1 AND COALESCE(outbox.workspace_id, contact.workspace_id) = ?2 AND COALESCE(outbox.project_id, contact.project_id) = ?3 AND outbox.status = \'pending\' AND outbox.next_attempt_at_utc <= ?4 AND NOT EXISTS (SELECT 1 AS _c0 FROM db_sync_outbox AS earlier WHERE earlier.aggregate_id = outbox.aggregate_id AND earlier.status != \'completed\' AND(earlier.created_at_utc < outbox.created_at_utc OR(earlier.created_at_utc = outbox.created_at_utc AND earlier.command_id < outbox.command_id))) ORDER BY outbox.created_at_utc, outbox.command_id LIMIT 1',
       variables: [
         Variable<String>(appUserId),
         Variable<String>(workspaceId),
@@ -9876,6 +11374,9 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
     dbRecordContacts,
     dbAppSettings,
     dbSecurityEvents,
+    dbCanonicalRegionVersions,
+    dbContactRegionAssignments,
+    dbDraftRegionAssignments,
   ];
 }
 
@@ -9886,6 +11387,9 @@ typedef $$DbSyncOutboxTableCreateCompanionBuilder =
       required String commandType,
       required String deviceId,
       required String aggregateId,
+      Value<String?> appUserId,
+      Value<String?> workspaceId,
+      Value<String?> projectId,
       required int baseRevision,
       required String payloadJson,
       required DateTime createdAtUtc,
@@ -9905,6 +11409,9 @@ typedef $$DbSyncOutboxTableUpdateCompanionBuilder =
       Value<String> commandType,
       Value<String> deviceId,
       Value<String> aggregateId,
+      Value<String?> appUserId,
+      Value<String?> workspaceId,
+      Value<String?> projectId,
       Value<int> baseRevision,
       Value<String> payloadJson,
       Value<DateTime> createdAtUtc,
@@ -9949,6 +11456,21 @@ class $$DbSyncOutboxTableFilterComposer
 
   ColumnFilters<String> get aggregateId => $composableBuilder(
     column: $table.aggregateId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get appUserId => $composableBuilder(
+    column: $table.appUserId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get projectId => $composableBuilder(
+    column: $table.projectId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10037,6 +11559,21 @@ class $$DbSyncOutboxTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get appUserId => $composableBuilder(
+    column: $table.appUserId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get projectId => $composableBuilder(
+    column: $table.projectId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get baseRevision => $composableBuilder(
     column: $table.baseRevision,
     builder: (column) => ColumnOrderings(column),
@@ -10117,6 +11654,17 @@ class $$DbSyncOutboxTableAnnotationComposer
     column: $table.aggregateId,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get appUserId =>
+      $composableBuilder(column: $table.appUserId, builder: (column) => column);
+
+  GeneratedColumn<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get projectId =>
+      $composableBuilder(column: $table.projectId, builder: (column) => column);
 
   GeneratedColumn<int> get baseRevision => $composableBuilder(
     column: $table.baseRevision,
@@ -10207,6 +11755,9 @@ class $$DbSyncOutboxTableTableManager
                 Value<String> commandType = const Value.absent(),
                 Value<String> deviceId = const Value.absent(),
                 Value<String> aggregateId = const Value.absent(),
+                Value<String?> appUserId = const Value.absent(),
+                Value<String?> workspaceId = const Value.absent(),
+                Value<String?> projectId = const Value.absent(),
                 Value<int> baseRevision = const Value.absent(),
                 Value<String> payloadJson = const Value.absent(),
                 Value<DateTime> createdAtUtc = const Value.absent(),
@@ -10224,6 +11775,9 @@ class $$DbSyncOutboxTableTableManager
                 commandType: commandType,
                 deviceId: deviceId,
                 aggregateId: aggregateId,
+                appUserId: appUserId,
+                workspaceId: workspaceId,
+                projectId: projectId,
                 baseRevision: baseRevision,
                 payloadJson: payloadJson,
                 createdAtUtc: createdAtUtc,
@@ -10243,6 +11797,9 @@ class $$DbSyncOutboxTableTableManager
                 required String commandType,
                 required String deviceId,
                 required String aggregateId,
+                Value<String?> appUserId = const Value.absent(),
+                Value<String?> workspaceId = const Value.absent(),
+                Value<String?> projectId = const Value.absent(),
                 required int baseRevision,
                 required String payloadJson,
                 required DateTime createdAtUtc,
@@ -10260,6 +11817,9 @@ class $$DbSyncOutboxTableTableManager
                 commandType: commandType,
                 deviceId: deviceId,
                 aggregateId: aggregateId,
+                appUserId: appUserId,
+                workspaceId: workspaceId,
+                projectId: projectId,
                 baseRevision: baseRevision,
                 payloadJson: payloadJson,
                 createdAtUtc: createdAtUtc,
@@ -10312,6 +11872,7 @@ typedef $$DbContactRecordsTableCreateCompanionBuilder =
       required String locationKind,
       Value<String?> placeName,
       Value<String?> smallestRegionId,
+      Value<String?> regionTreeVersion,
       Value<double?> latitude,
       Value<double?> longitude,
       Value<double?> locationAccuracyMeters,
@@ -10336,6 +11897,7 @@ typedef $$DbContactRecordsTableUpdateCompanionBuilder =
       Value<String> locationKind,
       Value<String?> placeName,
       Value<String?> smallestRegionId,
+      Value<String?> regionTreeVersion,
       Value<double?> latitude,
       Value<double?> longitude,
       Value<double?> locationAccuracyMeters,
@@ -10404,6 +11966,38 @@ final class $$DbContactRecordsTableReferences
 
     final cache = $_typedResult.readTableOrNull(
       _dbContactAnswersRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $DbContactRegionAssignmentsTable,
+    List<DbContactRegionAssignment>
+  >
+  _dbContactRegionAssignmentsRefsTable(
+    _$LocalDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.dbContactRegionAssignments,
+    aliasName:
+        'db_contact_records__contact_id__db_contact_region_assignments__contact_id',
+  );
+
+  $$DbContactRegionAssignmentsTableProcessedTableManager
+  get dbContactRegionAssignmentsRefs {
+    final manager =
+        $$DbContactRegionAssignmentsTableTableManager(
+          $_db,
+          $_db.dbContactRegionAssignments,
+        ).filter(
+          (f) => f.contactId.contactId.sqlEquals(
+            $_itemColumn<String>('contact_id')!,
+          ),
+        );
+
+    final cache = $_typedResult.readTableOrNull(
+      _dbContactRegionAssignmentsRefsTable($_db),
     );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
@@ -10482,6 +12076,11 @@ class $$DbContactRecordsTableFilterComposer
 
   ColumnFilters<String> get smallestRegionId => $composableBuilder(
     column: $table.smallestRegionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get regionTreeVersion => $composableBuilder(
+    column: $table.regionTreeVersion,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10569,6 +12168,33 @@ class $$DbContactRecordsTableFilterComposer
     );
     return f(composer);
   }
+
+  Expression<bool> dbContactRegionAssignmentsRefs(
+    Expression<bool> Function($$DbContactRegionAssignmentsTableFilterComposer f)
+    f,
+  ) {
+    final $$DbContactRegionAssignmentsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.contactId,
+          referencedTable: $db.dbContactRegionAssignments,
+          getReferencedColumn: (t) => t.contactId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbContactRegionAssignmentsTableFilterComposer(
+                $db: $db,
+                $table: $db.dbContactRegionAssignments,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$DbContactRecordsTableOrderingComposer
@@ -10642,6 +12268,11 @@ class $$DbContactRecordsTableOrderingComposer
 
   ColumnOrderings<String> get smallestRegionId => $composableBuilder(
     column: $table.smallestRegionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get regionTreeVersion => $composableBuilder(
+    column: $table.regionTreeVersion,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -10745,6 +12376,11 @@ class $$DbContactRecordsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get regionTreeVersion => $composableBuilder(
+    column: $table.regionTreeVersion,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<double> get latitude =>
       $composableBuilder(column: $table.latitude, builder: (column) => column);
 
@@ -10826,6 +12462,35 @@ class $$DbContactRecordsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> dbContactRegionAssignmentsRefs<T extends Object>(
+    Expression<T> Function(
+      $$DbContactRegionAssignmentsTableAnnotationComposer a,
+    )
+    f,
+  ) {
+    final $$DbContactRegionAssignmentsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.contactId,
+          referencedTable: $db.dbContactRegionAssignments,
+          getReferencedColumn: (t) => t.contactId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbContactRegionAssignmentsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.dbContactRegionAssignments,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$DbContactRecordsTableTableManager
@@ -10844,6 +12509,7 @@ class $$DbContactRecordsTableTableManager
           PrefetchHooks Function({
             bool dbContactRevisionsRefs,
             bool dbContactAnswersRefs,
+            bool dbContactRegionAssignmentsRefs,
           })
         > {
   $$DbContactRecordsTableTableManager(
@@ -10874,6 +12540,7 @@ class $$DbContactRecordsTableTableManager
                 Value<String> locationKind = const Value.absent(),
                 Value<String?> placeName = const Value.absent(),
                 Value<String?> smallestRegionId = const Value.absent(),
+                Value<String?> regionTreeVersion = const Value.absent(),
                 Value<double?> latitude = const Value.absent(),
                 Value<double?> longitude = const Value.absent(),
                 Value<double?> locationAccuracyMeters = const Value.absent(),
@@ -10896,6 +12563,7 @@ class $$DbContactRecordsTableTableManager
                 locationKind: locationKind,
                 placeName: placeName,
                 smallestRegionId: smallestRegionId,
+                regionTreeVersion: regionTreeVersion,
                 latitude: latitude,
                 longitude: longitude,
                 locationAccuracyMeters: locationAccuracyMeters,
@@ -10920,6 +12588,7 @@ class $$DbContactRecordsTableTableManager
                 required String locationKind,
                 Value<String?> placeName = const Value.absent(),
                 Value<String?> smallestRegionId = const Value.absent(),
+                Value<String?> regionTreeVersion = const Value.absent(),
                 Value<double?> latitude = const Value.absent(),
                 Value<double?> longitude = const Value.absent(),
                 Value<double?> locationAccuracyMeters = const Value.absent(),
@@ -10942,6 +12611,7 @@ class $$DbContactRecordsTableTableManager
                 locationKind: locationKind,
                 placeName: placeName,
                 smallestRegionId: smallestRegionId,
+                regionTreeVersion: regionTreeVersion,
                 latitude: latitude,
                 longitude: longitude,
                 locationAccuracyMeters: locationAccuracyMeters,
@@ -10960,12 +12630,18 @@ class $$DbContactRecordsTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({dbContactRevisionsRefs = false, dbContactAnswersRefs = false}) {
+              ({
+                dbContactRevisionsRefs = false,
+                dbContactAnswersRefs = false,
+                dbContactRegionAssignmentsRefs = false,
+              }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
                     if (dbContactRevisionsRefs) db.dbContactRevisions,
                     if (dbContactAnswersRefs) db.dbContactAnswers,
+                    if (dbContactRegionAssignmentsRefs)
+                      db.dbContactRegionAssignments,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -11012,6 +12688,27 @@ class $$DbContactRecordsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (dbContactRegionAssignmentsRefs)
+                        await $_getPrefetchedData<
+                          DbContactRecord,
+                          $DbContactRecordsTable,
+                          DbContactRegionAssignment
+                        >(
+                          currentTable: table,
+                          referencedTable: $$DbContactRecordsTableReferences
+                              ._dbContactRegionAssignmentsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$DbContactRecordsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).dbContactRegionAssignmentsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.contactId == item.contactId,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -11035,6 +12732,7 @@ typedef $$DbContactRecordsTableProcessedTableManager =
       PrefetchHooks Function({
         bool dbContactRevisionsRefs,
         bool dbContactAnswersRefs,
+        bool dbContactRegionAssignmentsRefs,
       })
     >;
 typedef $$DbSyncDrainerLeasesTableCreateCompanionBuilder =
@@ -11482,6 +13180,7 @@ typedef $$DbContactRevisionsTableCreateCompanionBuilder =
       required String locationKind,
       Value<String?> placeName,
       Value<String?> smallestRegionId,
+      Value<String?> regionTreeVersion,
       Value<double?> latitude,
       Value<double?> longitude,
       Value<double?> locationAccuracyMeters,
@@ -11504,6 +13203,7 @@ typedef $$DbContactRevisionsTableUpdateCompanionBuilder =
       Value<String> locationKind,
       Value<String?> placeName,
       Value<String?> smallestRegionId,
+      Value<String?> regionTreeVersion,
       Value<double?> latitude,
       Value<double?> longitude,
       Value<double?> locationAccuracyMeters,
@@ -11611,6 +13311,11 @@ class $$DbContactRevisionsTableFilterComposer
 
   ColumnFilters<String> get smallestRegionId => $composableBuilder(
     column: $table.smallestRegionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get regionTreeVersion => $composableBuilder(
+    column: $table.regionTreeVersion,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -11732,6 +13437,11 @@ class $$DbContactRevisionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get regionTreeVersion => $composableBuilder(
+    column: $table.regionTreeVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<double> get latitude => $composableBuilder(
     column: $table.latitude,
     builder: (column) => ColumnOrderings(column),
@@ -11844,6 +13554,11 @@ class $$DbContactRevisionsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get regionTreeVersion => $composableBuilder(
+    column: $table.regionTreeVersion,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<double> get latitude =>
       $composableBuilder(column: $table.latitude, builder: (column) => column);
 
@@ -11935,6 +13650,7 @@ class $$DbContactRevisionsTableTableManager
                 Value<String> locationKind = const Value.absent(),
                 Value<String?> placeName = const Value.absent(),
                 Value<String?> smallestRegionId = const Value.absent(),
+                Value<String?> regionTreeVersion = const Value.absent(),
                 Value<double?> latitude = const Value.absent(),
                 Value<double?> longitude = const Value.absent(),
                 Value<double?> locationAccuracyMeters = const Value.absent(),
@@ -11955,6 +13671,7 @@ class $$DbContactRevisionsTableTableManager
                 locationKind: locationKind,
                 placeName: placeName,
                 smallestRegionId: smallestRegionId,
+                regionTreeVersion: regionTreeVersion,
                 latitude: latitude,
                 longitude: longitude,
                 locationAccuracyMeters: locationAccuracyMeters,
@@ -11977,6 +13694,7 @@ class $$DbContactRevisionsTableTableManager
                 required String locationKind,
                 Value<String?> placeName = const Value.absent(),
                 Value<String?> smallestRegionId = const Value.absent(),
+                Value<String?> regionTreeVersion = const Value.absent(),
                 Value<double?> latitude = const Value.absent(),
                 Value<double?> longitude = const Value.absent(),
                 Value<double?> locationAccuracyMeters = const Value.absent(),
@@ -11997,6 +13715,7 @@ class $$DbContactRevisionsTableTableManager
                 locationKind: locationKind,
                 placeName: placeName,
                 smallestRegionId: smallestRegionId,
+                regionTreeVersion: regionTreeVersion,
                 latitude: latitude,
                 longitude: longitude,
                 locationAccuracyMeters: locationAccuracyMeters,
@@ -12450,12 +14169,16 @@ typedef $$DbContactDraftsTableCreateCompanionBuilder =
       Value<String?> locationKind,
       Value<String?> placeName,
       Value<String?> smallestRegionId,
+      Value<String?> regionTreeVersion,
       Value<double?> latitude,
       Value<double?> longitude,
       Value<double?> locationAccuracyMeters,
       Value<int?> reachCount,
       Value<int?> interestLevel,
       Value<String> syncMode,
+      Value<int> localRevision,
+      Value<int> serverRevision,
+      Value<String?> conflictOfDraftId,
       Value<DateTime?> abandonedAtUtc,
       Value<DateTime?> undoUntilUtc,
       Value<int> rowid,
@@ -12476,12 +14199,16 @@ typedef $$DbContactDraftsTableUpdateCompanionBuilder =
       Value<String?> locationKind,
       Value<String?> placeName,
       Value<String?> smallestRegionId,
+      Value<String?> regionTreeVersion,
       Value<double?> latitude,
       Value<double?> longitude,
       Value<double?> locationAccuracyMeters,
       Value<int?> reachCount,
       Value<int?> interestLevel,
       Value<String> syncMode,
+      Value<int> localRevision,
+      Value<int> serverRevision,
+      Value<String?> conflictOfDraftId,
       Value<DateTime?> abandonedAtUtc,
       Value<DateTime?> undoUntilUtc,
       Value<int> rowid,
@@ -12519,6 +14246,36 @@ final class $$DbContactDraftsTableReferences
 
     final cache = $_typedResult.readTableOrNull(
       _dbContactDraftAnswersRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $DbDraftRegionAssignmentsTable,
+    List<DbDraftRegionAssignment>
+  >
+  _dbDraftRegionAssignmentsRefsTable(
+    _$LocalDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.dbDraftRegionAssignments,
+    aliasName:
+        'db_contact_drafts__draft_id__db_draft_region_assignments__draft_id',
+  );
+
+  $$DbDraftRegionAssignmentsTableProcessedTableManager
+  get dbDraftRegionAssignmentsRefs {
+    final manager =
+        $$DbDraftRegionAssignmentsTableTableManager(
+          $_db,
+          $_db.dbDraftRegionAssignments,
+        ).filter(
+          (f) => f.draftId.draftId.sqlEquals($_itemColumn<String>('draft_id')!),
+        );
+
+    final cache = $_typedResult.readTableOrNull(
+      _dbDraftRegionAssignmentsRefsTable($_db),
     );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
@@ -12605,6 +14362,11 @@ class $$DbContactDraftsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get regionTreeVersion => $composableBuilder(
+    column: $table.regionTreeVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<double> get latitude => $composableBuilder(
     column: $table.latitude,
     builder: (column) => ColumnFilters(column),
@@ -12635,6 +14397,21 @@ class $$DbContactDraftsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<int> get localRevision => $composableBuilder(
+    column: $table.localRevision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get serverRevision => $composableBuilder(
+    column: $table.serverRevision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get conflictOfDraftId => $composableBuilder(
+    column: $table.conflictOfDraftId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<DateTime> get abandonedAtUtc => $composableBuilder(
     column: $table.abandonedAtUtc,
     builder: (column) => ColumnFilters(column),
@@ -12662,6 +14439,33 @@ class $$DbContactDraftsTableFilterComposer
               }) => $$DbContactDraftAnswersTableFilterComposer(
                 $db: $db,
                 $table: $db.dbContactDraftAnswers,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+
+  Expression<bool> dbDraftRegionAssignmentsRefs(
+    Expression<bool> Function($$DbDraftRegionAssignmentsTableFilterComposer f)
+    f,
+  ) {
+    final $$DbDraftRegionAssignmentsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.draftId,
+          referencedTable: $db.dbDraftRegionAssignments,
+          getReferencedColumn: (t) => t.draftId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbDraftRegionAssignmentsTableFilterComposer(
+                $db: $db,
+                $table: $db.dbDraftRegionAssignments,
                 $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
                 joinBuilder: joinBuilder,
                 $removeJoinBuilderFromRootComposer:
@@ -12751,6 +14555,11 @@ class $$DbContactDraftsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get regionTreeVersion => $composableBuilder(
+    column: $table.regionTreeVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<double> get latitude => $composableBuilder(
     column: $table.latitude,
     builder: (column) => ColumnOrderings(column),
@@ -12778,6 +14587,21 @@ class $$DbContactDraftsTableOrderingComposer
 
   ColumnOrderings<String> get syncMode => $composableBuilder(
     column: $table.syncMode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get localRevision => $composableBuilder(
+    column: $table.localRevision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get serverRevision => $composableBuilder(
+    column: $table.serverRevision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get conflictOfDraftId => $composableBuilder(
+    column: $table.conflictOfDraftId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -12861,6 +14685,11 @@ class $$DbContactDraftsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get regionTreeVersion => $composableBuilder(
+    column: $table.regionTreeVersion,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<double> get latitude =>
       $composableBuilder(column: $table.latitude, builder: (column) => column);
 
@@ -12884,6 +14713,21 @@ class $$DbContactDraftsTableAnnotationComposer
 
   GeneratedColumn<String> get syncMode =>
       $composableBuilder(column: $table.syncMode, builder: (column) => column);
+
+  GeneratedColumn<int> get localRevision => $composableBuilder(
+    column: $table.localRevision,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get serverRevision => $composableBuilder(
+    column: $table.serverRevision,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get conflictOfDraftId => $composableBuilder(
+    column: $table.conflictOfDraftId,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get abandonedAtUtc => $composableBuilder(
     column: $table.abandonedAtUtc,
@@ -12920,6 +14764,33 @@ class $$DbContactDraftsTableAnnotationComposer
         );
     return f(composer);
   }
+
+  Expression<T> dbDraftRegionAssignmentsRefs<T extends Object>(
+    Expression<T> Function($$DbDraftRegionAssignmentsTableAnnotationComposer a)
+    f,
+  ) {
+    final $$DbDraftRegionAssignmentsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.draftId,
+          referencedTable: $db.dbDraftRegionAssignments,
+          getReferencedColumn: (t) => t.draftId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbDraftRegionAssignmentsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.dbDraftRegionAssignments,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$DbContactDraftsTableTableManager
@@ -12935,7 +14806,10 @@ class $$DbContactDraftsTableTableManager
           $$DbContactDraftsTableUpdateCompanionBuilder,
           (DbContactDraft, $$DbContactDraftsTableReferences),
           DbContactDraft,
-          PrefetchHooks Function({bool dbContactDraftAnswersRefs})
+          PrefetchHooks Function({
+            bool dbContactDraftAnswersRefs,
+            bool dbDraftRegionAssignmentsRefs,
+          })
         > {
   $$DbContactDraftsTableTableManager(
     _$LocalDatabase db,
@@ -12966,12 +14840,16 @@ class $$DbContactDraftsTableTableManager
                 Value<String?> locationKind = const Value.absent(),
                 Value<String?> placeName = const Value.absent(),
                 Value<String?> smallestRegionId = const Value.absent(),
+                Value<String?> regionTreeVersion = const Value.absent(),
                 Value<double?> latitude = const Value.absent(),
                 Value<double?> longitude = const Value.absent(),
                 Value<double?> locationAccuracyMeters = const Value.absent(),
                 Value<int?> reachCount = const Value.absent(),
                 Value<int?> interestLevel = const Value.absent(),
                 Value<String> syncMode = const Value.absent(),
+                Value<int> localRevision = const Value.absent(),
+                Value<int> serverRevision = const Value.absent(),
+                Value<String?> conflictOfDraftId = const Value.absent(),
                 Value<DateTime?> abandonedAtUtc = const Value.absent(),
                 Value<DateTime?> undoUntilUtc = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -12990,12 +14868,16 @@ class $$DbContactDraftsTableTableManager
                 locationKind: locationKind,
                 placeName: placeName,
                 smallestRegionId: smallestRegionId,
+                regionTreeVersion: regionTreeVersion,
                 latitude: latitude,
                 longitude: longitude,
                 locationAccuracyMeters: locationAccuracyMeters,
                 reachCount: reachCount,
                 interestLevel: interestLevel,
                 syncMode: syncMode,
+                localRevision: localRevision,
+                serverRevision: serverRevision,
+                conflictOfDraftId: conflictOfDraftId,
                 abandonedAtUtc: abandonedAtUtc,
                 undoUntilUtc: undoUntilUtc,
                 rowid: rowid,
@@ -13016,12 +14898,16 @@ class $$DbContactDraftsTableTableManager
                 Value<String?> locationKind = const Value.absent(),
                 Value<String?> placeName = const Value.absent(),
                 Value<String?> smallestRegionId = const Value.absent(),
+                Value<String?> regionTreeVersion = const Value.absent(),
                 Value<double?> latitude = const Value.absent(),
                 Value<double?> longitude = const Value.absent(),
                 Value<double?> locationAccuracyMeters = const Value.absent(),
                 Value<int?> reachCount = const Value.absent(),
                 Value<int?> interestLevel = const Value.absent(),
                 Value<String> syncMode = const Value.absent(),
+                Value<int> localRevision = const Value.absent(),
+                Value<int> serverRevision = const Value.absent(),
+                Value<String?> conflictOfDraftId = const Value.absent(),
                 Value<DateTime?> abandonedAtUtc = const Value.absent(),
                 Value<DateTime?> undoUntilUtc = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -13040,12 +14926,16 @@ class $$DbContactDraftsTableTableManager
                 locationKind: locationKind,
                 placeName: placeName,
                 smallestRegionId: smallestRegionId,
+                regionTreeVersion: regionTreeVersion,
                 latitude: latitude,
                 longitude: longitude,
                 locationAccuracyMeters: locationAccuracyMeters,
                 reachCount: reachCount,
                 interestLevel: interestLevel,
                 syncMode: syncMode,
+                localRevision: localRevision,
+                serverRevision: serverRevision,
+                conflictOfDraftId: conflictOfDraftId,
                 abandonedAtUtc: abandonedAtUtc,
                 undoUntilUtc: undoUntilUtc,
                 rowid: rowid,
@@ -13058,40 +14948,67 @@ class $$DbContactDraftsTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({dbContactDraftAnswersRefs = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [
-                if (dbContactDraftAnswersRefs) db.dbContactDraftAnswers,
-              ],
-              addJoins: null,
-              getPrefetchedDataCallback: (items) async {
-                return [
-                  if (dbContactDraftAnswersRefs)
-                    await $_getPrefetchedData<
-                      DbContactDraft,
-                      $DbContactDraftsTable,
-                      DbContactDraftAnswer
-                    >(
-                      currentTable: table,
-                      referencedTable: $$DbContactDraftsTableReferences
-                          ._dbContactDraftAnswersRefsTable(db),
-                      managerFromTypedResult: (p0) =>
-                          $$DbContactDraftsTableReferences(
-                            db,
-                            table,
-                            p0,
-                          ).dbContactDraftAnswersRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where(
-                            (e) => e.draftId == item.draftId,
-                          ),
-                      typedResults: items,
-                    ),
-                ];
+          prefetchHooksCallback:
+              ({
+                dbContactDraftAnswersRefs = false,
+                dbDraftRegionAssignmentsRefs = false,
+              }) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (dbContactDraftAnswersRefs) db.dbContactDraftAnswers,
+                    if (dbDraftRegionAssignmentsRefs)
+                      db.dbDraftRegionAssignments,
+                  ],
+                  addJoins: null,
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (dbContactDraftAnswersRefs)
+                        await $_getPrefetchedData<
+                          DbContactDraft,
+                          $DbContactDraftsTable,
+                          DbContactDraftAnswer
+                        >(
+                          currentTable: table,
+                          referencedTable: $$DbContactDraftsTableReferences
+                              ._dbContactDraftAnswersRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$DbContactDraftsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).dbContactDraftAnswersRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.draftId == item.draftId,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (dbDraftRegionAssignmentsRefs)
+                        await $_getPrefetchedData<
+                          DbContactDraft,
+                          $DbContactDraftsTable,
+                          DbDraftRegionAssignment
+                        >(
+                          currentTable: table,
+                          referencedTable: $$DbContactDraftsTableReferences
+                              ._dbDraftRegionAssignmentsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$DbContactDraftsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).dbDraftRegionAssignmentsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.draftId == item.draftId,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -13108,7 +15025,10 @@ typedef $$DbContactDraftsTableProcessedTableManager =
       $$DbContactDraftsTableUpdateCompanionBuilder,
       (DbContactDraft, $$DbContactDraftsTableReferences),
       DbContactDraft,
-      PrefetchHooks Function({bool dbContactDraftAnswersRefs})
+      PrefetchHooks Function({
+        bool dbContactDraftAnswersRefs,
+        bool dbDraftRegionAssignmentsRefs,
+      })
     >;
 typedef $$DbContactDraftAnswersTableCreateCompanionBuilder =
     DbContactDraftAnswersCompanion Function({
@@ -15172,6 +17092,1403 @@ typedef $$DbSecurityEventsTableProcessedTableManager =
       DbSecurityEvent,
       PrefetchHooks Function()
     >;
+typedef $$DbCanonicalRegionVersionsTableCreateCompanionBuilder =
+    DbCanonicalRegionVersionsCompanion Function({
+      required String regionVersionKey,
+      required String regionId,
+      required String treeVersion,
+      Value<String?> parentRegionVersionKey,
+      required String canonicalName,
+      required String kind,
+      required String attributesJson,
+      Value<int> rowid,
+    });
+typedef $$DbCanonicalRegionVersionsTableUpdateCompanionBuilder =
+    DbCanonicalRegionVersionsCompanion Function({
+      Value<String> regionVersionKey,
+      Value<String> regionId,
+      Value<String> treeVersion,
+      Value<String?> parentRegionVersionKey,
+      Value<String> canonicalName,
+      Value<String> kind,
+      Value<String> attributesJson,
+      Value<int> rowid,
+    });
+
+final class $$DbCanonicalRegionVersionsTableReferences
+    extends
+        BaseReferences<
+          _$LocalDatabase,
+          $DbCanonicalRegionVersionsTable,
+          DbCanonicalRegionVersion
+        > {
+  $$DbCanonicalRegionVersionsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $DbCanonicalRegionVersionsTable _parentRegionVersionKeyTable(
+    _$LocalDatabase db,
+  ) => db.dbCanonicalRegionVersions.createAlias(
+    'db_canonical_region_versions__parent_region_version_key__db_canonical_region_versions__region_version_key',
+  );
+
+  $$DbCanonicalRegionVersionsTableProcessedTableManager?
+  get parentRegionVersionKey {
+    final $_column = $_itemColumn<String>('parent_region_version_key');
+    if ($_column == null) return null;
+    final manager = $$DbCanonicalRegionVersionsTableTableManager(
+      $_db,
+      $_db.dbCanonicalRegionVersions,
+    ).filter((f) => f.regionVersionKey.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(
+      _parentRegionVersionKeyTable($_db),
+    );
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $DbContactRegionAssignmentsTable,
+    List<DbContactRegionAssignment>
+  >
+  _dbContactRegionAssignmentsRefsTable(
+    _$LocalDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.dbContactRegionAssignments,
+    aliasName:
+        'db_canonical_region_versions__region_version_key__db_contact_region_assignments__region_version_key',
+  );
+
+  $$DbContactRegionAssignmentsTableProcessedTableManager
+  get dbContactRegionAssignmentsRefs {
+    final manager =
+        $$DbContactRegionAssignmentsTableTableManager(
+          $_db,
+          $_db.dbContactRegionAssignments,
+        ).filter(
+          (f) => f.regionVersionKey.regionVersionKey.sqlEquals(
+            $_itemColumn<String>('region_version_key')!,
+          ),
+        );
+
+    final cache = $_typedResult.readTableOrNull(
+      _dbContactRegionAssignmentsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $DbDraftRegionAssignmentsTable,
+    List<DbDraftRegionAssignment>
+  >
+  _dbDraftRegionAssignmentsRefsTable(
+    _$LocalDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.dbDraftRegionAssignments,
+    aliasName:
+        'db_canonical_region_versions__region_version_key__db_draft_region_assignments__region_version_key',
+  );
+
+  $$DbDraftRegionAssignmentsTableProcessedTableManager
+  get dbDraftRegionAssignmentsRefs {
+    final manager =
+        $$DbDraftRegionAssignmentsTableTableManager(
+          $_db,
+          $_db.dbDraftRegionAssignments,
+        ).filter(
+          (f) => f.regionVersionKey.regionVersionKey.sqlEquals(
+            $_itemColumn<String>('region_version_key')!,
+          ),
+        );
+
+    final cache = $_typedResult.readTableOrNull(
+      _dbDraftRegionAssignmentsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$DbCanonicalRegionVersionsTableFilterComposer
+    extends Composer<_$LocalDatabase, $DbCanonicalRegionVersionsTable> {
+  $$DbCanonicalRegionVersionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get regionVersionKey => $composableBuilder(
+    column: $table.regionVersionKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get regionId => $composableBuilder(
+    column: $table.regionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get treeVersion => $composableBuilder(
+    column: $table.treeVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get canonicalName => $composableBuilder(
+    column: $table.canonicalName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get attributesJson => $composableBuilder(
+    column: $table.attributesJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$DbCanonicalRegionVersionsTableFilterComposer get parentRegionVersionKey {
+    final $$DbCanonicalRegionVersionsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.parentRegionVersionKey,
+          referencedTable: $db.dbCanonicalRegionVersions,
+          getReferencedColumn: (t) => t.regionVersionKey,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbCanonicalRegionVersionsTableFilterComposer(
+                $db: $db,
+                $table: $db.dbCanonicalRegionVersions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+
+  Expression<bool> dbContactRegionAssignmentsRefs(
+    Expression<bool> Function($$DbContactRegionAssignmentsTableFilterComposer f)
+    f,
+  ) {
+    final $$DbContactRegionAssignmentsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.regionVersionKey,
+          referencedTable: $db.dbContactRegionAssignments,
+          getReferencedColumn: (t) => t.regionVersionKey,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbContactRegionAssignmentsTableFilterComposer(
+                $db: $db,
+                $table: $db.dbContactRegionAssignments,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+
+  Expression<bool> dbDraftRegionAssignmentsRefs(
+    Expression<bool> Function($$DbDraftRegionAssignmentsTableFilterComposer f)
+    f,
+  ) {
+    final $$DbDraftRegionAssignmentsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.regionVersionKey,
+          referencedTable: $db.dbDraftRegionAssignments,
+          getReferencedColumn: (t) => t.regionVersionKey,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbDraftRegionAssignmentsTableFilterComposer(
+                $db: $db,
+                $table: $db.dbDraftRegionAssignments,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+}
+
+class $$DbCanonicalRegionVersionsTableOrderingComposer
+    extends Composer<_$LocalDatabase, $DbCanonicalRegionVersionsTable> {
+  $$DbCanonicalRegionVersionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get regionVersionKey => $composableBuilder(
+    column: $table.regionVersionKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get regionId => $composableBuilder(
+    column: $table.regionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get treeVersion => $composableBuilder(
+    column: $table.treeVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get canonicalName => $composableBuilder(
+    column: $table.canonicalName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get attributesJson => $composableBuilder(
+    column: $table.attributesJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$DbCanonicalRegionVersionsTableOrderingComposer get parentRegionVersionKey {
+    final $$DbCanonicalRegionVersionsTableOrderingComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.parentRegionVersionKey,
+          referencedTable: $db.dbCanonicalRegionVersions,
+          getReferencedColumn: (t) => t.regionVersionKey,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbCanonicalRegionVersionsTableOrderingComposer(
+                $db: $db,
+                $table: $db.dbCanonicalRegionVersions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$DbCanonicalRegionVersionsTableAnnotationComposer
+    extends Composer<_$LocalDatabase, $DbCanonicalRegionVersionsTable> {
+  $$DbCanonicalRegionVersionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get regionVersionKey => $composableBuilder(
+    column: $table.regionVersionKey,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get regionId =>
+      $composableBuilder(column: $table.regionId, builder: (column) => column);
+
+  GeneratedColumn<String> get treeVersion => $composableBuilder(
+    column: $table.treeVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get canonicalName => $composableBuilder(
+    column: $table.canonicalName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get attributesJson => $composableBuilder(
+    column: $table.attributesJson,
+    builder: (column) => column,
+  );
+
+  $$DbCanonicalRegionVersionsTableAnnotationComposer
+  get parentRegionVersionKey {
+    final $$DbCanonicalRegionVersionsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.parentRegionVersionKey,
+          referencedTable: $db.dbCanonicalRegionVersions,
+          getReferencedColumn: (t) => t.regionVersionKey,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbCanonicalRegionVersionsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.dbCanonicalRegionVersions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+
+  Expression<T> dbContactRegionAssignmentsRefs<T extends Object>(
+    Expression<T> Function(
+      $$DbContactRegionAssignmentsTableAnnotationComposer a,
+    )
+    f,
+  ) {
+    final $$DbContactRegionAssignmentsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.regionVersionKey,
+          referencedTable: $db.dbContactRegionAssignments,
+          getReferencedColumn: (t) => t.regionVersionKey,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbContactRegionAssignmentsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.dbContactRegionAssignments,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+
+  Expression<T> dbDraftRegionAssignmentsRefs<T extends Object>(
+    Expression<T> Function($$DbDraftRegionAssignmentsTableAnnotationComposer a)
+    f,
+  ) {
+    final $$DbDraftRegionAssignmentsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.regionVersionKey,
+          referencedTable: $db.dbDraftRegionAssignments,
+          getReferencedColumn: (t) => t.regionVersionKey,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbDraftRegionAssignmentsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.dbDraftRegionAssignments,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+}
+
+class $$DbCanonicalRegionVersionsTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $DbCanonicalRegionVersionsTable,
+          DbCanonicalRegionVersion,
+          $$DbCanonicalRegionVersionsTableFilterComposer,
+          $$DbCanonicalRegionVersionsTableOrderingComposer,
+          $$DbCanonicalRegionVersionsTableAnnotationComposer,
+          $$DbCanonicalRegionVersionsTableCreateCompanionBuilder,
+          $$DbCanonicalRegionVersionsTableUpdateCompanionBuilder,
+          (
+            DbCanonicalRegionVersion,
+            $$DbCanonicalRegionVersionsTableReferences,
+          ),
+          DbCanonicalRegionVersion,
+          PrefetchHooks Function({
+            bool parentRegionVersionKey,
+            bool dbContactRegionAssignmentsRefs,
+            bool dbDraftRegionAssignmentsRefs,
+          })
+        > {
+  $$DbCanonicalRegionVersionsTableTableManager(
+    _$LocalDatabase db,
+    $DbCanonicalRegionVersionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DbCanonicalRegionVersionsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$DbCanonicalRegionVersionsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$DbCanonicalRegionVersionsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> regionVersionKey = const Value.absent(),
+                Value<String> regionId = const Value.absent(),
+                Value<String> treeVersion = const Value.absent(),
+                Value<String?> parentRegionVersionKey = const Value.absent(),
+                Value<String> canonicalName = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<String> attributesJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbCanonicalRegionVersionsCompanion(
+                regionVersionKey: regionVersionKey,
+                regionId: regionId,
+                treeVersion: treeVersion,
+                parentRegionVersionKey: parentRegionVersionKey,
+                canonicalName: canonicalName,
+                kind: kind,
+                attributesJson: attributesJson,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String regionVersionKey,
+                required String regionId,
+                required String treeVersion,
+                Value<String?> parentRegionVersionKey = const Value.absent(),
+                required String canonicalName,
+                required String kind,
+                required String attributesJson,
+                Value<int> rowid = const Value.absent(),
+              }) => DbCanonicalRegionVersionsCompanion.insert(
+                regionVersionKey: regionVersionKey,
+                regionId: regionId,
+                treeVersion: treeVersion,
+                parentRegionVersionKey: parentRegionVersionKey,
+                canonicalName: canonicalName,
+                kind: kind,
+                attributesJson: attributesJson,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$DbCanonicalRegionVersionsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({
+                parentRegionVersionKey = false,
+                dbContactRegionAssignmentsRefs = false,
+                dbDraftRegionAssignmentsRefs = false,
+              }) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (dbContactRegionAssignmentsRefs)
+                      db.dbContactRegionAssignments,
+                    if (dbDraftRegionAssignmentsRefs)
+                      db.dbDraftRegionAssignments,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (parentRegionVersionKey) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.parentRegionVersionKey,
+                                    referencedTable:
+                                        $$DbCanonicalRegionVersionsTableReferences
+                                            ._parentRegionVersionKeyTable(db),
+                                    referencedColumn:
+                                        $$DbCanonicalRegionVersionsTableReferences
+                                            ._parentRegionVersionKeyTable(db)
+                                            .regionVersionKey,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (dbContactRegionAssignmentsRefs)
+                        await $_getPrefetchedData<
+                          DbCanonicalRegionVersion,
+                          $DbCanonicalRegionVersionsTable,
+                          DbContactRegionAssignment
+                        >(
+                          currentTable: table,
+                          referencedTable:
+                              $$DbCanonicalRegionVersionsTableReferences
+                                  ._dbContactRegionAssignmentsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$DbCanonicalRegionVersionsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).dbContactRegionAssignmentsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) =>
+                                    e.regionVersionKey == item.regionVersionKey,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (dbDraftRegionAssignmentsRefs)
+                        await $_getPrefetchedData<
+                          DbCanonicalRegionVersion,
+                          $DbCanonicalRegionVersionsTable,
+                          DbDraftRegionAssignment
+                        >(
+                          currentTable: table,
+                          referencedTable:
+                              $$DbCanonicalRegionVersionsTableReferences
+                                  ._dbDraftRegionAssignmentsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$DbCanonicalRegionVersionsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).dbDraftRegionAssignmentsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) =>
+                                    e.regionVersionKey == item.regionVersionKey,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$DbCanonicalRegionVersionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $DbCanonicalRegionVersionsTable,
+      DbCanonicalRegionVersion,
+      $$DbCanonicalRegionVersionsTableFilterComposer,
+      $$DbCanonicalRegionVersionsTableOrderingComposer,
+      $$DbCanonicalRegionVersionsTableAnnotationComposer,
+      $$DbCanonicalRegionVersionsTableCreateCompanionBuilder,
+      $$DbCanonicalRegionVersionsTableUpdateCompanionBuilder,
+      (DbCanonicalRegionVersion, $$DbCanonicalRegionVersionsTableReferences),
+      DbCanonicalRegionVersion,
+      PrefetchHooks Function({
+        bool parentRegionVersionKey,
+        bool dbContactRegionAssignmentsRefs,
+        bool dbDraftRegionAssignmentsRefs,
+      })
+    >;
+typedef $$DbContactRegionAssignmentsTableCreateCompanionBuilder =
+    DbContactRegionAssignmentsCompanion Function({
+      required String contactId,
+      required String regionVersionKey,
+      Value<int> rowid,
+    });
+typedef $$DbContactRegionAssignmentsTableUpdateCompanionBuilder =
+    DbContactRegionAssignmentsCompanion Function({
+      Value<String> contactId,
+      Value<String> regionVersionKey,
+      Value<int> rowid,
+    });
+
+final class $$DbContactRegionAssignmentsTableReferences
+    extends
+        BaseReferences<
+          _$LocalDatabase,
+          $DbContactRegionAssignmentsTable,
+          DbContactRegionAssignment
+        > {
+  $$DbContactRegionAssignmentsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $DbContactRecordsTable _contactIdTable(
+    _$LocalDatabase db,
+  ) => db.dbContactRecords.createAlias(
+    'db_contact_region_assignments__contact_id__db_contact_records__contact_id',
+  );
+
+  $$DbContactRecordsTableProcessedTableManager get contactId {
+    final $_column = $_itemColumn<String>('contact_id')!;
+
+    final manager = $$DbContactRecordsTableTableManager(
+      $_db,
+      $_db.dbContactRecords,
+    ).filter((f) => f.contactId.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_contactIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $DbCanonicalRegionVersionsTable _regionVersionKeyTable(
+    _$LocalDatabase db,
+  ) => db.dbCanonicalRegionVersions.createAlias(
+    'db_contact_region_assignments__region_version_key__db_canonical_region_versions__region_version_key',
+  );
+
+  $$DbCanonicalRegionVersionsTableProcessedTableManager get regionVersionKey {
+    final $_column = $_itemColumn<String>('region_version_key')!;
+
+    final manager = $$DbCanonicalRegionVersionsTableTableManager(
+      $_db,
+      $_db.dbCanonicalRegionVersions,
+    ).filter((f) => f.regionVersionKey.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_regionVersionKeyTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$DbContactRegionAssignmentsTableFilterComposer
+    extends Composer<_$LocalDatabase, $DbContactRegionAssignmentsTable> {
+  $$DbContactRegionAssignmentsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  $$DbContactRecordsTableFilterComposer get contactId {
+    final $$DbContactRecordsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.contactId,
+      referencedTable: $db.dbContactRecords,
+      getReferencedColumn: (t) => t.contactId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbContactRecordsTableFilterComposer(
+            $db: $db,
+            $table: $db.dbContactRecords,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$DbCanonicalRegionVersionsTableFilterComposer get regionVersionKey {
+    final $$DbCanonicalRegionVersionsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.regionVersionKey,
+          referencedTable: $db.dbCanonicalRegionVersions,
+          getReferencedColumn: (t) => t.regionVersionKey,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbCanonicalRegionVersionsTableFilterComposer(
+                $db: $db,
+                $table: $db.dbCanonicalRegionVersions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$DbContactRegionAssignmentsTableOrderingComposer
+    extends Composer<_$LocalDatabase, $DbContactRegionAssignmentsTable> {
+  $$DbContactRegionAssignmentsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  $$DbContactRecordsTableOrderingComposer get contactId {
+    final $$DbContactRecordsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.contactId,
+      referencedTable: $db.dbContactRecords,
+      getReferencedColumn: (t) => t.contactId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbContactRecordsTableOrderingComposer(
+            $db: $db,
+            $table: $db.dbContactRecords,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$DbCanonicalRegionVersionsTableOrderingComposer get regionVersionKey {
+    final $$DbCanonicalRegionVersionsTableOrderingComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.regionVersionKey,
+          referencedTable: $db.dbCanonicalRegionVersions,
+          getReferencedColumn: (t) => t.regionVersionKey,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbCanonicalRegionVersionsTableOrderingComposer(
+                $db: $db,
+                $table: $db.dbCanonicalRegionVersions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$DbContactRegionAssignmentsTableAnnotationComposer
+    extends Composer<_$LocalDatabase, $DbContactRegionAssignmentsTable> {
+  $$DbContactRegionAssignmentsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  $$DbContactRecordsTableAnnotationComposer get contactId {
+    final $$DbContactRecordsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.contactId,
+      referencedTable: $db.dbContactRecords,
+      getReferencedColumn: (t) => t.contactId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbContactRecordsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.dbContactRecords,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$DbCanonicalRegionVersionsTableAnnotationComposer get regionVersionKey {
+    final $$DbCanonicalRegionVersionsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.regionVersionKey,
+          referencedTable: $db.dbCanonicalRegionVersions,
+          getReferencedColumn: (t) => t.regionVersionKey,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbCanonicalRegionVersionsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.dbCanonicalRegionVersions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$DbContactRegionAssignmentsTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $DbContactRegionAssignmentsTable,
+          DbContactRegionAssignment,
+          $$DbContactRegionAssignmentsTableFilterComposer,
+          $$DbContactRegionAssignmentsTableOrderingComposer,
+          $$DbContactRegionAssignmentsTableAnnotationComposer,
+          $$DbContactRegionAssignmentsTableCreateCompanionBuilder,
+          $$DbContactRegionAssignmentsTableUpdateCompanionBuilder,
+          (
+            DbContactRegionAssignment,
+            $$DbContactRegionAssignmentsTableReferences,
+          ),
+          DbContactRegionAssignment,
+          PrefetchHooks Function({bool contactId, bool regionVersionKey})
+        > {
+  $$DbContactRegionAssignmentsTableTableManager(
+    _$LocalDatabase db,
+    $DbContactRegionAssignmentsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DbContactRegionAssignmentsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$DbContactRegionAssignmentsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$DbContactRegionAssignmentsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> contactId = const Value.absent(),
+                Value<String> regionVersionKey = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbContactRegionAssignmentsCompanion(
+                contactId: contactId,
+                regionVersionKey: regionVersionKey,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String contactId,
+                required String regionVersionKey,
+                Value<int> rowid = const Value.absent(),
+              }) => DbContactRegionAssignmentsCompanion.insert(
+                contactId: contactId,
+                regionVersionKey: regionVersionKey,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$DbContactRegionAssignmentsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({contactId = false, regionVersionKey = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (contactId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.contactId,
+                                referencedTable:
+                                    $$DbContactRegionAssignmentsTableReferences
+                                        ._contactIdTable(db),
+                                referencedColumn:
+                                    $$DbContactRegionAssignmentsTableReferences
+                                        ._contactIdTable(db)
+                                        .contactId,
+                              )
+                              as T;
+                    }
+                    if (regionVersionKey) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.regionVersionKey,
+                                referencedTable:
+                                    $$DbContactRegionAssignmentsTableReferences
+                                        ._regionVersionKeyTable(db),
+                                referencedColumn:
+                                    $$DbContactRegionAssignmentsTableReferences
+                                        ._regionVersionKeyTable(db)
+                                        .regionVersionKey,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$DbContactRegionAssignmentsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $DbContactRegionAssignmentsTable,
+      DbContactRegionAssignment,
+      $$DbContactRegionAssignmentsTableFilterComposer,
+      $$DbContactRegionAssignmentsTableOrderingComposer,
+      $$DbContactRegionAssignmentsTableAnnotationComposer,
+      $$DbContactRegionAssignmentsTableCreateCompanionBuilder,
+      $$DbContactRegionAssignmentsTableUpdateCompanionBuilder,
+      (DbContactRegionAssignment, $$DbContactRegionAssignmentsTableReferences),
+      DbContactRegionAssignment,
+      PrefetchHooks Function({bool contactId, bool regionVersionKey})
+    >;
+typedef $$DbDraftRegionAssignmentsTableCreateCompanionBuilder =
+    DbDraftRegionAssignmentsCompanion Function({
+      required String draftId,
+      required String regionVersionKey,
+      Value<int> rowid,
+    });
+typedef $$DbDraftRegionAssignmentsTableUpdateCompanionBuilder =
+    DbDraftRegionAssignmentsCompanion Function({
+      Value<String> draftId,
+      Value<String> regionVersionKey,
+      Value<int> rowid,
+    });
+
+final class $$DbDraftRegionAssignmentsTableReferences
+    extends
+        BaseReferences<
+          _$LocalDatabase,
+          $DbDraftRegionAssignmentsTable,
+          DbDraftRegionAssignment
+        > {
+  $$DbDraftRegionAssignmentsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $DbContactDraftsTable _draftIdTable(_$LocalDatabase db) =>
+      db.dbContactDrafts.createAlias(
+        'db_draft_region_assignments__draft_id__db_contact_drafts__draft_id',
+      );
+
+  $$DbContactDraftsTableProcessedTableManager get draftId {
+    final $_column = $_itemColumn<String>('draft_id')!;
+
+    final manager = $$DbContactDraftsTableTableManager(
+      $_db,
+      $_db.dbContactDrafts,
+    ).filter((f) => f.draftId.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_draftIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $DbCanonicalRegionVersionsTable _regionVersionKeyTable(
+    _$LocalDatabase db,
+  ) => db.dbCanonicalRegionVersions.createAlias(
+    'db_draft_region_assignments__region_version_key__db_canonical_region_versions__region_version_key',
+  );
+
+  $$DbCanonicalRegionVersionsTableProcessedTableManager get regionVersionKey {
+    final $_column = $_itemColumn<String>('region_version_key')!;
+
+    final manager = $$DbCanonicalRegionVersionsTableTableManager(
+      $_db,
+      $_db.dbCanonicalRegionVersions,
+    ).filter((f) => f.regionVersionKey.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_regionVersionKeyTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$DbDraftRegionAssignmentsTableFilterComposer
+    extends Composer<_$LocalDatabase, $DbDraftRegionAssignmentsTable> {
+  $$DbDraftRegionAssignmentsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  $$DbContactDraftsTableFilterComposer get draftId {
+    final $$DbContactDraftsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.draftId,
+      referencedTable: $db.dbContactDrafts,
+      getReferencedColumn: (t) => t.draftId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbContactDraftsTableFilterComposer(
+            $db: $db,
+            $table: $db.dbContactDrafts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$DbCanonicalRegionVersionsTableFilterComposer get regionVersionKey {
+    final $$DbCanonicalRegionVersionsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.regionVersionKey,
+          referencedTable: $db.dbCanonicalRegionVersions,
+          getReferencedColumn: (t) => t.regionVersionKey,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbCanonicalRegionVersionsTableFilterComposer(
+                $db: $db,
+                $table: $db.dbCanonicalRegionVersions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$DbDraftRegionAssignmentsTableOrderingComposer
+    extends Composer<_$LocalDatabase, $DbDraftRegionAssignmentsTable> {
+  $$DbDraftRegionAssignmentsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  $$DbContactDraftsTableOrderingComposer get draftId {
+    final $$DbContactDraftsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.draftId,
+      referencedTable: $db.dbContactDrafts,
+      getReferencedColumn: (t) => t.draftId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbContactDraftsTableOrderingComposer(
+            $db: $db,
+            $table: $db.dbContactDrafts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$DbCanonicalRegionVersionsTableOrderingComposer get regionVersionKey {
+    final $$DbCanonicalRegionVersionsTableOrderingComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.regionVersionKey,
+          referencedTable: $db.dbCanonicalRegionVersions,
+          getReferencedColumn: (t) => t.regionVersionKey,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbCanonicalRegionVersionsTableOrderingComposer(
+                $db: $db,
+                $table: $db.dbCanonicalRegionVersions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$DbDraftRegionAssignmentsTableAnnotationComposer
+    extends Composer<_$LocalDatabase, $DbDraftRegionAssignmentsTable> {
+  $$DbDraftRegionAssignmentsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  $$DbContactDraftsTableAnnotationComposer get draftId {
+    final $$DbContactDraftsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.draftId,
+      referencedTable: $db.dbContactDrafts,
+      getReferencedColumn: (t) => t.draftId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbContactDraftsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.dbContactDrafts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$DbCanonicalRegionVersionsTableAnnotationComposer get regionVersionKey {
+    final $$DbCanonicalRegionVersionsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.regionVersionKey,
+          referencedTable: $db.dbCanonicalRegionVersions,
+          getReferencedColumn: (t) => t.regionVersionKey,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbCanonicalRegionVersionsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.dbCanonicalRegionVersions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$DbDraftRegionAssignmentsTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $DbDraftRegionAssignmentsTable,
+          DbDraftRegionAssignment,
+          $$DbDraftRegionAssignmentsTableFilterComposer,
+          $$DbDraftRegionAssignmentsTableOrderingComposer,
+          $$DbDraftRegionAssignmentsTableAnnotationComposer,
+          $$DbDraftRegionAssignmentsTableCreateCompanionBuilder,
+          $$DbDraftRegionAssignmentsTableUpdateCompanionBuilder,
+          (DbDraftRegionAssignment, $$DbDraftRegionAssignmentsTableReferences),
+          DbDraftRegionAssignment,
+          PrefetchHooks Function({bool draftId, bool regionVersionKey})
+        > {
+  $$DbDraftRegionAssignmentsTableTableManager(
+    _$LocalDatabase db,
+    $DbDraftRegionAssignmentsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DbDraftRegionAssignmentsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$DbDraftRegionAssignmentsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$DbDraftRegionAssignmentsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> draftId = const Value.absent(),
+                Value<String> regionVersionKey = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbDraftRegionAssignmentsCompanion(
+                draftId: draftId,
+                regionVersionKey: regionVersionKey,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String draftId,
+                required String regionVersionKey,
+                Value<int> rowid = const Value.absent(),
+              }) => DbDraftRegionAssignmentsCompanion.insert(
+                draftId: draftId,
+                regionVersionKey: regionVersionKey,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$DbDraftRegionAssignmentsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({draftId = false, regionVersionKey = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (draftId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.draftId,
+                                referencedTable:
+                                    $$DbDraftRegionAssignmentsTableReferences
+                                        ._draftIdTable(db),
+                                referencedColumn:
+                                    $$DbDraftRegionAssignmentsTableReferences
+                                        ._draftIdTable(db)
+                                        .draftId,
+                              )
+                              as T;
+                    }
+                    if (regionVersionKey) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.regionVersionKey,
+                                referencedTable:
+                                    $$DbDraftRegionAssignmentsTableReferences
+                                        ._regionVersionKeyTable(db),
+                                referencedColumn:
+                                    $$DbDraftRegionAssignmentsTableReferences
+                                        ._regionVersionKeyTable(db)
+                                        .regionVersionKey,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$DbDraftRegionAssignmentsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $DbDraftRegionAssignmentsTable,
+      DbDraftRegionAssignment,
+      $$DbDraftRegionAssignmentsTableFilterComposer,
+      $$DbDraftRegionAssignmentsTableOrderingComposer,
+      $$DbDraftRegionAssignmentsTableAnnotationComposer,
+      $$DbDraftRegionAssignmentsTableCreateCompanionBuilder,
+      $$DbDraftRegionAssignmentsTableUpdateCompanionBuilder,
+      (DbDraftRegionAssignment, $$DbDraftRegionAssignmentsTableReferences),
+      DbDraftRegionAssignment,
+      PrefetchHooks Function({bool draftId, bool regionVersionKey})
+    >;
 
 class $LocalDatabaseManager {
   final _$LocalDatabase _db;
@@ -15202,6 +18519,22 @@ class $LocalDatabaseManager {
       $$DbAppSettingsTableTableManager(_db, _db.dbAppSettings);
   $$DbSecurityEventsTableTableManager get dbSecurityEvents =>
       $$DbSecurityEventsTableTableManager(_db, _db.dbSecurityEvents);
+  $$DbCanonicalRegionVersionsTableTableManager get dbCanonicalRegionVersions =>
+      $$DbCanonicalRegionVersionsTableTableManager(
+        _db,
+        _db.dbCanonicalRegionVersions,
+      );
+  $$DbContactRegionAssignmentsTableTableManager
+  get dbContactRegionAssignments =>
+      $$DbContactRegionAssignmentsTableTableManager(
+        _db,
+        _db.dbContactRegionAssignments,
+      );
+  $$DbDraftRegionAssignmentsTableTableManager get dbDraftRegionAssignments =>
+      $$DbDraftRegionAssignmentsTableTableManager(
+        _db,
+        _db.dbDraftRegionAssignments,
+      );
 }
 
 class ReadSyncHealthResult {

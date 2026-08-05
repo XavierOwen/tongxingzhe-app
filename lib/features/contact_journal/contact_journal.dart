@@ -4,6 +4,8 @@ import 'package:drift/drift.dart';
 
 import '../../data/local_database.dart';
 import '../../foundation/runtime_values.dart';
+import '../../regions/region_catalog.dart';
+import '../../regions/region_models.dart';
 import 'contact_models.dart';
 
 part 'contact_draft_operations.dart';
@@ -21,20 +23,32 @@ final class ContactJournal {
     required AppClock clock,
     required IdGenerator idGenerator,
   }) {
-    return ContactJournal._(database, clock, idGenerator);
+    return ContactJournal._(
+      database,
+      clock,
+      idGenerator,
+      RegionCatalog(database),
+    );
   }
 
-  ContactJournal._(this._database, this._clock, this._idGenerator);
+  ContactJournal._(
+    this._database,
+    this._clock,
+    this._idGenerator,
+    this._regionCatalog,
+  );
 
   final LocalDatabase _database;
   final AppClock _clock;
   final IdGenerator _idGenerator;
+  final RegionCatalog _regionCatalog;
 
   /// 直接提交不经过草稿的完整匿名接触。
   Future<ContactSubmissionReceipt> submitAnonymousContact(
     AnonymousContactSubmission submission,
   ) async {
     _validateSubmission(submission);
+    await _validateResolvedRegion(submission.location);
     final contactId = _idGenerator.next();
     final revisionId = _idGenerator.next();
     final commandId = _idGenerator.next();
@@ -90,6 +104,7 @@ final class ContactJournal {
             locationKind: location.kind!,
             placeName: Value(location.placeName),
             smallestRegionId: Value(location.smallestRegionId),
+            regionTreeVersion: Value(location.regionTreeVersion),
             latitude: Value(location.latitude),
             longitude: Value(location.longitude),
             locationAccuracyMeters: Value(location.accuracyMeters),
@@ -99,6 +114,14 @@ final class ContactJournal {
             lifecycleStatus: 'active',
           ),
         );
+
+    if (submission.location case final ResolvedContactLocation resolved) {
+      await _regionCatalog.assignContact(
+        contactId: contactId,
+        regionId: resolved.smallestRegionId,
+        treeVersion: resolved.regionTreeVersion,
+      );
+    }
 
     await _database
         .into(_database.dbContactRevisions)
@@ -116,6 +139,7 @@ final class ContactJournal {
             locationKind: location.kind!,
             placeName: Value(location.placeName),
             smallestRegionId: Value(location.smallestRegionId),
+            regionTreeVersion: Value(location.regionTreeVersion),
             latitude: Value(location.latitude),
             longitude: Value(location.longitude),
             locationAccuracyMeters: Value(location.accuracyMeters),
@@ -153,6 +177,7 @@ final class ContactJournal {
         'kind': location.kind,
         'place_name': location.placeName,
         'smallest_region_id': location.smallestRegionId,
+        'region_tree_version': location.regionTreeVersion,
         'latitude': location.latitude,
         'longitude': location.longitude,
         'accuracy_meters': location.accuracyMeters,
@@ -180,6 +205,9 @@ final class ContactJournal {
             commandType: 'contact.submit.v1',
             deviceId: submission.deviceId,
             aggregateId: contactId,
+            appUserId: Value(submission.appUserId),
+            workspaceId: Value(submission.workspaceId),
+            projectId: Value(submission.projectId),
             baseRevision: 0,
             payloadJson: payload,
             createdAtUtc: submittedAtUtc,
@@ -239,7 +267,8 @@ final class ContactJournal {
     }
     if (submission.location case final ResolvedContactLocation resolved) {
       if (resolved.placeName.trim().isEmpty ||
-          resolved.smallestRegionId.trim().isEmpty) {
+          resolved.smallestRegionId.trim().isEmpty ||
+          resolved.regionTreeVersion.trim().isEmpty) {
         throw const ContactValidationException('resolved_location_required');
       }
     }
@@ -279,6 +308,7 @@ final class ContactJournal {
         'resolved' => ResolvedContactLocation(
           placeName: row.placeName!,
           smallestRegionId: row.smallestRegionId!,
+          regionTreeVersion: row.regionTreeVersion!,
         ),
         'not_applicable' => const NotApplicableContactLocation(),
         'pending_resolution' => PendingContactLocation(
@@ -307,6 +337,20 @@ final class ContactJournal {
           },
       ],
     );
+  }
+
+  Future<void> _validateResolvedRegion(ContactLocation? location) async {
+    if (location is! ResolvedContactLocation) {
+      return;
+    }
+    try {
+      await _regionCatalog.requireAnalyzableRegion(
+        regionId: location.smallestRegionId,
+        treeVersion: location.regionTreeVersion,
+      );
+    } on RegionCatalogException catch (error) {
+      throw ContactValidationException(error.code);
+    }
   }
 
   /// 汇总当前用户在一个项目和 UTC 半开区间 `[fromUtc, untilUtc)` 的接触。

@@ -257,6 +257,33 @@ iOS 第一次 `signup_request` 对原测试邮箱返回 HTTP 200，导出的 Sup
 
 换成受控工作邮箱后，App 再次得到注册成功状态，收件箱实际收到 OTP，随后 `signup_confirm` 也通过。这一组对照足以让 iOS 注册合同继续验证，却仍不足以断言原邮箱究竟在哪一层拦截。测试记录因此分别写“API 200”和“邮件实际送达”，不把二者合成一个模糊的 success。
 
+### 6.12 失败与恢复测试：不能只证明顺利路径
+
+自动保存、定位和正式提交都依赖可能失败的边界。只测试成功路径，会漏掉更重要的问题：失败后页面是否误报“已保存”、输入是否丢失、使用者能否重试。
+
+接触表单先通过 `ContactEntryStore`、`DeviceTimeZoneProvider` 和 `ContactLocationCapture` 制造确定性失败。测试观察公开页面状态，确认失败不会清除输入，再把同一边界改为成功并执行重试。这个过程仍是 Red-Green，但合同包含两个阶段：
+
+```text
+第一次操作失败 → 显示可恢复状态，原输入仍在
+同一页面重试成功 → 保存或提交完成，没有重复事实
+```
+
+这种测试有时称为 failure-recovery test。它不是要求程序永不失败，而是要求失败可见、状态可信、恢复路径可执行。
+
+### 6.13 跨数据库合同测试：同一业务口径、两份可执行 SQL
+
+本机 Drift/SQLite 与云端 PostgreSQL 使用不同 SQL 方言，不能把同一段 SQL 原样复制到两端。但“哪些行属于当前用户和项目”“时间窗怎样闭合”“场次和触达人数各是什么单位”必须一致。
+
+项目因此让两端读取同一份 synthetic CSV。Drift 测试和 PostgreSQL fixture 分别执行正式查询，再核对场次、触达人数、兴趣分布、渠道分布和最近发生时间。共用的是输入与预期业务结果，不是数据库实现。
+
+这属于 contract test（合同测试）：两个实现只要满足同一公开合同，就允许各自使用最合适的查询。它能发现某一端忘记 project 条件、把闭区间写成半开区间，或把 `COUNT(*)` 和 `SUM(reach_count)` 混用。
+
+### 6.14 数据库 migration 为什么要做旧版本升级测试
+
+空库能按 v9 建成，只证明新安装可用，不能证明 v8 用户能安全升级。迁移测试先用保存的 v8 schema 建立旧库，写入 synthetic 草稿，再运行正式 migration，核对内容、默认隐私范围、revision、索引、外键和新约束。
+
+本轮曾出现一个典型 Red：新增列已经存在，但 SQLite 仍保留旧 `CHECK` 约束。仅执行 `ALTER TABLE ... ADD COLUMN` 无法更新整张表的约束。改用 Drift `TableMigration` 重建表后，同一 v8→v9 测试转绿。这个例子说明 migration 测试检查的是“旧数据经过升级后的数据库”，不是只比较当前 Dart 类或新建表。
+
 ## 7. 本轮测试证据表
 
 | 测试 | 为什么测试 | 通过标准 | 当前结果 |
@@ -284,10 +311,14 @@ iOS 第一次 `signup_request` 对原测试邮箱返回 HTTP 200，导出的 Sup
 | 同 ID 快照冲突 | 防止将不同内容静默当成幂等重放 | 保留本地事实，batch 与 cursor 回滚 | Red 后 Green，自动测试保留 |
 | 无效 cursor 错误分类 | 避免将客户端错误无限重试为 `503` | PostgreSQL `22023` 稳定转为 `400 invalid_cursor` | Red 后 Green，Backend 自动测试保留 |
 | Router 直达与返回 | 证明 URL、主导航和草稿保存共用同一页栈 | `/analysis` 直达，导航改 URL，返回前保存草稿 | Red 后 Green，parser 与 Widget 测试保留 |
+| 项目创建 HTTP 合同 | 防止 Backend `201 Created` 被 Flutter 当成失败 | adapter 接受 201 并解析可信上下文 | Red 后 Green，HTTP adapter 测试保留 |
+| 接触表单失败与恢复 | 防止保存、定位或提交失败后丢失输入 | 显示可恢复状态，重试后不重复事实 | Red 后 Green，Widget 测试保留 |
+| v8→v9 migration | 证明旧草稿升级后保留内容并采用新约束 | 草稿、默认隐私范围、revision、索引和外键正确 | Red 后 Green，Drift migration 测试保留 |
+| Drift/PostgreSQL 指标合同 | 防止两套 SQL 的 scope、区间或单位漂移 | 两端读取同一 synthetic CSV 并得到同一业务结果 | pass，共享 fixture 与两端测试保留 |
 | `dart analyze` | 发现类型和静态问题 | 0 issue | pass |
-| 全部 Flutter tests | 检查已有合同未被破坏 | 全部通过 | 98 tests pass |
-| Backend tests | 检查 JWT、可信上下文、上传、拉取和错误分类 | TypeScript 检查与全部测试通过 | 25 tests pass |
-| PostgreSQL 16 重建与恢复 | 证明 migration、最小权限、幂等、cursor 和备份可用 | 空库、重跑、fixture、`pg_dump`、`pg_restore` 全部通过 | pass |
+| 全部 Flutter tests | 检查已有合同未被破坏 | 全部通过 | 131 tests pass |
+| Backend tests | 检查 JWT、可信上下文、项目、上传、拉取和错误分类 | TypeScript 检查与全部测试通过 | 32 tests pass |
+| PostgreSQL 16 重建与恢复 | 证明 migration、最小权限、区域、私有草稿、指标和备份可用 | 空库、checksum 重跑、fixture、`pg_dump`、`pg_restore` 全部通过 | pass |
 | 本机 build smoke | 发现平台插件、编译和 Xcode／Gradle 接线问题 | Android debug、Web release、macOS debug、iOS debug no-codesign 构建 | pass；Linux 与 Windows 等待本分支 CI |
 | production boundary | 防止 test-only fake 进入正式代码 | 边界检查通过 | pass |
 | Markdown links | 防止说明书入口和链接失效 | 全部文档链接通过 | pass；127 files checked |

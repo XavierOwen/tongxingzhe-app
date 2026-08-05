@@ -63,9 +63,13 @@ sealed class SessionContextResult {
 }
 
 final class SessionContextSuccess extends SessionContextResult {
-  const SessionContextSuccess(this.context);
+  const SessionContextSuccess(
+    this.context, {
+    this.availableContexts = const [],
+  });
 
   final TrustedSessionContext context;
+  final List<TrustedSessionContext> availableContexts;
 }
 
 final class SessionContextRejected extends SessionContextResult {
@@ -78,6 +82,16 @@ final class SessionContextRejected extends SessionContextResult {
 abstract interface class SessionContextGateway {
   Future<SessionContextResult> resolve(IdentityAccessToken accessToken);
 
+  Future<SessionContextResult> selectProject(
+    IdentityAccessToken accessToken,
+    String projectId,
+  );
+
+  Future<SessionContextResult> createPersonalProject(
+    IdentityAccessToken accessToken,
+    String displayName,
+  );
+
   Future<void> close();
 }
 
@@ -89,5 +103,19 @@ final class UnavailableSessionContextGateway implements SessionContextGateway {
 
   @override
   Future<SessionContextResult> resolve(IdentityAccessToken accessToken) async =>
+      const SessionContextRejected(SessionContextFailureCode.notConfigured);
+
+  @override
+  Future<SessionContextResult> selectProject(
+    IdentityAccessToken accessToken,
+    String projectId,
+  ) async =>
+      const SessionContextRejected(SessionContextFailureCode.notConfigured);
+
+  @override
+  Future<SessionContextResult> createPersonalProject(
+    IdentityAccessToken accessToken,
+    String displayName,
+  ) async =>
       const SessionContextRejected(SessionContextFailureCode.notConfigured);
 }

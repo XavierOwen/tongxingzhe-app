@@ -358,6 +358,238 @@ void main() {
     expect(health.serverCursor, isNull);
     expect(health.lastFailureCode, 'invalid_remote_change');
   });
+
+  test('本人私有草稿通过同一持久队列上传并记录服务端 revision', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    await fixture.saveDraft();
+    final transport = _QueueSyncTransport([
+      const SyncPushAccepted(serverCursor: 'cursor-draft-1'),
+    ]);
+    final engine = fixture.engine(workerId: 'worker-1', transport: transport);
+
+    expect(await engine.drainOnce(), SyncDrainResult.completed);
+
+    expect(transport.commands, hasLength(1));
+    expect(transport.commands.single.commandType, 'draft.upsert.v1');
+    final draft = (await ContactJournal(
+      database: fixture.database,
+      clock: fixture.clock,
+      idGenerator: _SequenceIdGenerator(const []),
+    ).listDrafts(appUserId: _Fixture.scope.appUserId)).single;
+    expect(draft.serverRevision, 1);
+  });
+
+  test('pull 读到已确认的旧草稿 revision 时保留本机后续编辑', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    await fixture.saveDraft();
+    final transport = _QueueSyncTransport(
+      [const SyncPushAccepted(serverCursor: 'cursor-draft-1')],
+      pullReplies: [
+        SyncPullSucceeded(
+          SyncPullBatch(
+            changes: [
+              SyncRemoteChange(
+                changeType: 'draft.upserted',
+                revisionNumber: 1,
+                payload: _remoteDraftPayload(
+                  draftId: 'draft-1',
+                  channel: 'video_call',
+                  createdAtUtc: '2030-01-08T18:30:00.000Z',
+                  updatedAtUtc: '2030-01-08T18:30:00.000Z',
+                ),
+              ),
+            ],
+            nextCursor: 'cursor-draft-pull-1',
+          ),
+        ),
+      ],
+    );
+    final engine = fixture.engine(workerId: 'worker-1', transport: transport);
+    expect(await engine.drainOnce(), SyncDrainResult.completed);
+
+    final journal = ContactJournal(
+      database: fixture.database,
+      clock: fixture.clock,
+      idGenerator: _SequenceIdGenerator(const []),
+    );
+    final draft = (await journal.listDrafts(
+      appUserId: _Fixture.scope.appUserId,
+    )).single;
+    fixture.clock.advance(const Duration(minutes: 1));
+    await journal.saveDraft(
+      ContactDraftInput(
+        draftId: draft.draftId,
+        deviceId: 'device-1',
+        appUserId: draft.appUserId,
+        workspaceId: draft.workspaceId,
+        projectId: draft.projectId,
+        questionnaireVersionId: draft.questionnaireVersionId,
+        channel: ContactChannel.voiceCall,
+      ),
+    );
+
+    expect(await engine.pullOnce(), SyncPullApplyResult.applied);
+
+    final retained = (await journal.listDrafts(
+      appUserId: _Fixture.scope.appUserId,
+    )).single;
+    expect(retained.channel, ContactChannel.voiceCall);
+    expect(retained.serverRevision, 1);
+    expect(retained.isConflictCopy, isFalse);
+  });
+
+  test('已同步草稿切到仅本设备时删除远端副本但保留本机内容', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    await fixture.saveDraft();
+    final transport = _QueueSyncTransport(
+      [
+        SyncPushAccepted(serverCursor: 'cursor-draft-upsert-1'),
+        SyncPushAccepted(serverCursor: 'cursor-draft-delete-2'),
+      ],
+      pullReplies: [
+        const SyncPullSucceeded(
+          SyncPullBatch(
+            changes: [
+              SyncRemoteChange(
+                changeType: 'draft.deleted',
+                revisionNumber: 2,
+                payload: {
+                  'draftId': 'draft-1',
+                  'workspaceId': 'personal-workspace-1',
+                  'projectId': 'project-1',
+                  'serverRevision': 2,
+                  'sourceDeviceId': 'device-1',
+                },
+              ),
+            ],
+            nextCursor: 'cursor-draft-delete-2',
+          ),
+        ),
+      ],
+    );
+    final engine = fixture.engine(workerId: 'worker-1', transport: transport);
+    expect(await engine.drainOnce(), SyncDrainResult.completed);
+
+    final journal = ContactJournal(
+      database: fixture.database,
+      clock: fixture.clock,
+      idGenerator: _SequenceIdGenerator(const []),
+    );
+    final synced = (await journal.listDrafts(
+      appUserId: _Fixture.scope.appUserId,
+    )).single;
+    fixture.clock.advance(const Duration(minutes: 1));
+    await journal.saveDraft(
+      ContactDraftInput(
+        draftId: synced.draftId,
+        deviceId: 'device-1',
+        appUserId: synced.appUserId,
+        workspaceId: synced.workspaceId,
+        projectId: synced.projectId,
+        questionnaireVersionId: synced.questionnaireVersionId,
+        channel: synced.channel,
+        syncMode: ContactDraftSyncMode.deviceOnly,
+      ),
+    );
+
+    expect(await engine.drainOnce(), SyncDrainResult.completed);
+    expect(transport.commands.last.commandType, 'draft.delete.v1');
+    expect(transport.commands.last.baseRevision, 1);
+    expect(await engine.pullOnce(), SyncPullApplyResult.applied);
+
+    final retained = (await journal.listDrafts(
+      appUserId: _Fixture.scope.appUserId,
+    )).single;
+    expect(retained.syncMode, ContactDraftSyncMode.deviceOnly);
+    expect(retained.channel, ContactChannel.videoCall);
+    expect(retained.serverRevision, 2);
+  });
+
+  test('其他设备的私有草稿变化只恢复到同一创建者的草稿库', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    final transport = _QueueSyncTransport(
+      const [],
+      pullReplies: [
+        SyncPullSucceeded(
+          SyncPullBatch(
+            changes: [
+              SyncRemoteChange(
+                changeType: 'draft.upserted',
+                revisionNumber: 1,
+                payload: _remoteDraftPayload(
+                  draftId: 'remote-draft-1',
+                  channel: 'voice_call',
+                ),
+              ),
+            ],
+            nextCursor: 'cursor-remote-draft-1',
+          ),
+        ),
+      ],
+    );
+    final engine = fixture.engine(workerId: 'worker-1', transport: transport);
+
+    expect(await engine.pullOnce(), SyncPullApplyResult.applied);
+
+    final drafts = await ContactJournal(
+      database: fixture.database,
+      clock: fixture.clock,
+      idGenerator: _SequenceIdGenerator(const []),
+    ).listDrafts(appUserId: _Fixture.scope.appUserId);
+    expect(drafts, hasLength(1));
+    expect(drafts.single.draftId, 'remote-draft-1');
+    expect(drafts.single.channel, ContactChannel.voiceCall);
+    expect(drafts.single.serverRevision, 1);
+    expect(drafts.single.isConflictCopy, isFalse);
+  });
+
+  test('离线分叉的远端草稿保留本机冲突副本而不做最后写入胜出', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    await fixture.saveDraft();
+    final transport = _QueueSyncTransport(
+      const [],
+      pullReplies: [
+        SyncPullSucceeded(
+          SyncPullBatch(
+            changes: [
+              SyncRemoteChange(
+                changeType: 'draft.upserted',
+                revisionNumber: 1,
+                payload: _remoteDraftPayload(
+                  draftId: 'draft-1',
+                  channel: 'instant_text',
+                ),
+              ),
+            ],
+            nextCursor: 'cursor-conflicting-draft',
+          ),
+        ),
+      ],
+    );
+    final engine = fixture.engine(workerId: 'worker-1', transport: transport);
+
+    expect(await engine.pullOnce(), SyncPullApplyResult.applied);
+
+    final drafts = await ContactJournal(
+      database: fixture.database,
+      clock: fixture.clock,
+      idGenerator: _SequenceIdGenerator(const []),
+    ).listDrafts(appUserId: _Fixture.scope.appUserId);
+    expect(drafts, hasLength(2));
+    expect(
+      drafts.singleWhere((draft) => draft.draftId == 'draft-1').channel,
+      ContactChannel.instantText,
+    );
+    final conflict = drafts.singleWhere((draft) => draft.isConflictCopy);
+    expect(conflict.conflictOfDraftId, 'draft-1');
+    expect(conflict.channel, ContactChannel.videoCall);
+    expect(conflict.syncMode, ContactDraftSyncMode.deviceOnly);
+  });
 }
 
 final class _Fixture {
@@ -399,6 +631,24 @@ final class _Fixture {
         location: const NotApplicableContactLocation(),
         reachCount: 2,
         interestLevel: 3,
+      ),
+    );
+  }
+
+  Future<void> saveDraft() async {
+    final journal = ContactJournal(
+      database: database,
+      clock: clock,
+      idGenerator: _SequenceIdGenerator(['draft-1']),
+    );
+    await journal.saveDraft(
+      ContactDraftInput(
+        deviceId: 'device-1',
+        appUserId: scope.appUserId,
+        workspaceId: scope.workspaceId,
+        projectId: scope.projectId,
+        questionnaireVersionId: 'questionnaire-v1',
+        channel: ContactChannel.videoCall,
       ),
     );
   }
@@ -469,6 +719,32 @@ Map<String, Object?> _remotePayload({required String contactId}) {
     'reachCount': 2,
     'interestLevel': 3,
     'answers': <Object?>[],
+  };
+}
+
+Map<String, Object?> _remoteDraftPayload({
+  required String draftId,
+  required String channel,
+  String createdAtUtc = '2030-01-08T18:00:00.000Z',
+  String updatedAtUtc = '2030-01-08T18:30:00.000Z',
+}) {
+  return {
+    'draftId': draftId,
+    'workspaceId': _Fixture.scope.workspaceId,
+    'projectId': _Fixture.scope.projectId,
+    'questionnaireVersionId': 'questionnaire-v1',
+    'createdAtUtc': createdAtUtc,
+    'updatedAtUtc': updatedAtUtc,
+    'occurredAtUtc': null,
+    'occurredTimeZone': null,
+    'channel': channel,
+    'channelDetail': null,
+    'location': null,
+    'reachCount': null,
+    'interestLevel': null,
+    'answers': <Object?>[],
+    'serverRevision': 1,
+    'sourceDeviceId': 'device-other',
   };
 }
 

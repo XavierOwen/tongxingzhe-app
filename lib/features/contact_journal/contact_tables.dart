@@ -23,6 +23,7 @@ class DbContactDrafts extends Table {
   TextColumn get locationKind => text().nullable()();
   TextColumn get placeName => text().nullable()();
   TextColumn get smallestRegionId => text().nullable()();
+  TextColumn get regionTreeVersion => text().nullable()();
   RealColumn get latitude => real().nullable()();
   RealColumn get longitude => real().nullable()();
   RealColumn get locationAccuracyMeters => real().nullable()();
@@ -30,6 +31,9 @@ class DbContactDrafts extends Table {
   IntColumn get interestLevel => integer().nullable()();
   TextColumn get syncMode =>
       text().withDefault(const Constant('account_private'))();
+  IntColumn get localRevision => integer().withDefault(const Constant(1))();
+  IntColumn get serverRevision => integer().withDefault(const Constant(0))();
+  TextColumn get conflictOfDraftId => text().nullable()();
   DateTimeColumn get abandonedAtUtc => dateTime().nullable()();
   DateTimeColumn get undoUntilUtc => dateTime().nullable()();
 
@@ -50,23 +54,32 @@ class DbContactDrafts extends Table {
         "'video_call', 'instant_text', 'asynchronous_message', 'mixed', "
         "'other_direct'))",
     "CHECK ((location_kind IS NULL AND place_name IS NULL AND "
-        'smallest_region_id IS NULL AND latitude IS NULL AND '
+        'smallest_region_id IS NULL AND region_tree_version IS NULL AND '
+        'latitude IS NULL AND '
         'longitude IS NULL AND location_accuracy_meters IS NULL) OR '
         "(location_kind = 'resolved' AND place_name IS NOT NULL AND "
         'length(trim(place_name)) > 0 AND smallest_region_id IS NOT NULL '
-        'AND length(trim(smallest_region_id)) > 0 AND latitude IS NULL '
+        'AND length(trim(smallest_region_id)) > 0 '
+        'AND region_tree_version IS NOT NULL '
+        'AND length(trim(region_tree_version)) > 0 AND latitude IS NULL '
         'AND longitude IS NULL AND location_accuracy_meters IS NULL) OR '
         "(location_kind = 'not_applicable' AND place_name IS NULL AND "
-        'smallest_region_id IS NULL AND latitude IS NULL AND '
+        'smallest_region_id IS NULL AND region_tree_version IS NULL '
+        'AND latitude IS NULL AND '
         'longitude IS NULL AND location_accuracy_meters IS NULL) OR '
         "(location_kind = 'pending_resolution' AND place_name IS NULL AND "
-        'smallest_region_id IS NULL AND latitude BETWEEN -90 AND 90 AND '
+        'smallest_region_id IS NULL AND region_tree_version IS NULL '
+        'AND latitude BETWEEN -90 AND 90 AND '
         'longitude BETWEEN -180 AND 180 AND '
         '(location_accuracy_meters IS NULL OR '
         'location_accuracy_meters >= 0)))',
     'CHECK (reach_count IS NULL OR reach_count > 0)',
     'CHECK (interest_level IS NULL OR interest_level BETWEEN 0 AND 4)',
     "CHECK (sync_mode IN ('account_private', 'device_only'))",
+    'CHECK (local_revision > 0)',
+    'CHECK (server_revision >= 0)',
+    'CHECK (conflict_of_draft_id IS NULL OR '
+        'length(trim(conflict_of_draft_id)) > 0)',
     'CHECK ((abandoned_at_utc IS NULL AND undo_until_utc IS NULL) OR '
         '(abandoned_at_utc IS NOT NULL AND undo_until_utc IS NOT NULL AND '
         'undo_until_utc >= abandoned_at_utc))',
@@ -119,6 +132,7 @@ class DbContactRecords extends Table {
   TextColumn get locationKind => text()();
   TextColumn get placeName => text().nullable()();
   TextColumn get smallestRegionId => text().nullable()();
+  TextColumn get regionTreeVersion => text().nullable()();
   RealColumn get latitude => real().nullable()();
   RealColumn get longitude => real().nullable()();
   RealColumn get locationAccuracyMeters => real().nullable()();
@@ -135,12 +149,16 @@ class DbContactRecords extends Table {
     "CHECK ((location_kind = 'resolved' AND "
         'place_name IS NOT NULL AND length(trim(place_name)) > 0 AND '
         'smallest_region_id IS NOT NULL AND '
-        'length(trim(smallest_region_id)) > 0) OR '
+        'length(trim(smallest_region_id)) > 0 AND '
+        'region_tree_version IS NOT NULL AND '
+        'length(trim(region_tree_version)) > 0) OR '
         "(location_kind = 'not_applicable' AND place_name IS NULL AND "
-        'smallest_region_id IS NULL AND latitude IS NULL AND '
+        'smallest_region_id IS NULL AND region_tree_version IS NULL AND '
+        'latitude IS NULL AND '
         'longitude IS NULL AND location_accuracy_meters IS NULL) OR '
         "(location_kind = 'pending_resolution' AND "
-        'smallest_region_id IS NULL AND latitude BETWEEN -90 AND 90 AND '
+        'smallest_region_id IS NULL AND region_tree_version IS NULL AND '
+        'latitude BETWEEN -90 AND 90 AND '
         'longitude BETWEEN -180 AND 180 AND '
         '(location_accuracy_meters IS NULL OR '
         'location_accuracy_meters >= 0)))',
@@ -174,6 +192,7 @@ class DbContactRevisions extends Table {
   TextColumn get locationKind => text()();
   TextColumn get placeName => text().nullable()();
   TextColumn get smallestRegionId => text().nullable()();
+  TextColumn get regionTreeVersion => text().nullable()();
   RealColumn get latitude => real().nullable()();
   RealColumn get longitude => real().nullable()();
   RealColumn get locationAccuracyMeters => real().nullable()();
@@ -196,12 +215,16 @@ class DbContactRevisions extends Table {
     "CHECK ((location_kind = 'resolved' AND "
         'place_name IS NOT NULL AND length(trim(place_name)) > 0 AND '
         'smallest_region_id IS NOT NULL AND '
-        'length(trim(smallest_region_id)) > 0) OR '
+        'length(trim(smallest_region_id)) > 0 AND '
+        'region_tree_version IS NOT NULL AND '
+        'length(trim(region_tree_version)) > 0) OR '
         "(location_kind = 'not_applicable' AND place_name IS NULL AND "
-        'smallest_region_id IS NULL AND latitude IS NULL AND '
+        'smallest_region_id IS NULL AND region_tree_version IS NULL AND '
+        'latitude IS NULL AND '
         'longitude IS NULL AND location_accuracy_meters IS NULL) OR '
         "(location_kind = 'pending_resolution' AND "
-        'smallest_region_id IS NULL AND latitude BETWEEN -90 AND 90 AND '
+        'smallest_region_id IS NULL AND region_tree_version IS NULL AND '
+        'latitude BETWEEN -90 AND 90 AND '
         'longitude BETWEEN -180 AND 180 AND '
         '(location_accuracy_meters IS NULL OR '
         'location_accuracy_meters >= 0)))',
@@ -258,6 +281,9 @@ class DbSyncOutbox extends Table {
   TextColumn get commandType => text()();
   TextColumn get deviceId => text()();
   TextColumn get aggregateId => text()();
+  TextColumn get appUserId => text().nullable()();
+  TextColumn get workspaceId => text().nullable()();
+  TextColumn get projectId => text().nullable()();
   IntColumn get baseRevision => integer()();
   TextColumn get payloadJson => text()();
   DateTimeColumn get createdAtUtc => dateTime()();
@@ -278,5 +304,10 @@ class DbSyncOutbox extends Table {
         "'permanent_failure', 'completed'))",
     'CHECK (attempt_count >= 0)',
     'CHECK (protocol_version > 0 AND base_revision >= 0)',
+    'CHECK ((app_user_id IS NULL AND workspace_id IS NULL AND '
+        'project_id IS NULL) OR (app_user_id IS NOT NULL AND '
+        'length(trim(app_user_id)) > 0 AND workspace_id IS NOT NULL AND '
+        'length(trim(workspace_id)) > 0 AND project_id IS NOT NULL AND '
+        'length(trim(project_id)) > 0))',
   ];
 }

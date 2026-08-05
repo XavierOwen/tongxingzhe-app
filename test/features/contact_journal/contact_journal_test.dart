@@ -1,13 +1,46 @@
+import 'dart:io';
+
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_journal.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
+import 'package:tongxingzhe_app/regions/region_catalog.dart';
+import 'package:tongxingzhe_app/regions/region_models.dart';
 
 void main() {
   test('合法匿名接触提交后可立即读取并显示待同步', () async {
-    final journal = _journal(['contact-1', 'revision-1', 'command-1']);
+    final database = LocalDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    await RegionCatalog(database).installSnapshot(
+      const CanonicalRegionSnapshot(
+        version: 'regions-test-v1',
+        nodes: [
+          CanonicalRegionNode(
+            regionId: 'region-chicago',
+            canonicalName: 'Chicago',
+            kind: RegionKind.city,
+          ),
+          CanonicalRegionNode(
+            regionId: 'region-university-of-chicago',
+            parentRegionId: 'region-chicago',
+            canonicalName: 'University of Chicago',
+            kind: RegionKind.institution,
+            attributes: {'campus'},
+          ),
+        ],
+      ),
+    );
+    final journal = ContactJournal(
+      database: database,
+      clock: _FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
+      idGenerator: _SequenceIdGenerator([
+        'contact-1',
+        'revision-1',
+        'command-1',
+      ]),
+    );
 
     final receipt = await journal.submitAnonymousContact(
       AnonymousContactSubmission(
@@ -22,6 +55,7 @@ void main() {
         location: const ResolvedContactLocation(
           placeName: 'University of Chicago',
           smallestRegionId: 'region-university-of-chicago',
+          regionTreeVersion: 'regions-test-v1',
         ),
         reachCount: 3,
         interestLevel: 3,
@@ -44,6 +78,7 @@ void main() {
       const ResolvedContactLocation(
         placeName: 'University of Chicago',
         smallestRegionId: 'region-university-of-chicago',
+        regionTreeVersion: 'regions-test-v1',
       ),
     );
     expect(stored.syncState, LocalSyncState.pending);
@@ -343,48 +378,27 @@ void main() {
   });
 
   test('个人期间汇总按发生时间筛选并分开计算场次与触达人数', () async {
+    final fixture = await _loadPersonalContactMetricFixture();
     final journal = _journal([
-      for (var index = 0; index < 15; index++) 'metric-id-$index',
+      for (final row in fixture) ...[
+        row.contactId,
+        '${row.contactId}-revision',
+        '${row.contactId}-command',
+      ],
     ], now: DateTime.utc(2030, 1, 15, 18, 30));
 
-    await journal.submitAnonymousContact(
-      _submission(
-        occurredAtUtc: DateTime.utc(2030, 1, 10, 9),
-        reachCount: 3,
-        interestLevel: 0,
-      ),
-    );
-    await journal.submitAnonymousContact(
-      _submission(
-        occurredAtUtc: DateTime.utc(2030, 1, 14, 20),
-        channel: ContactChannel.voiceCall,
-        reachCount: 1,
-        interestLevel: 4,
-      ),
-    );
-    await journal.submitAnonymousContact(
-      _submission(
-        occurredAtUtc: DateTime.utc(2030, 1, 7, 23, 59),
-        reachCount: 9,
-        interestLevel: 2,
-      ),
-    );
-    await journal.submitAnonymousContact(
-      _submission(
-        appUserId: 'app-user-2',
-        occurredAtUtc: DateTime.utc(2030, 1, 12),
-        reachCount: 7,
-        interestLevel: 3,
-      ),
-    );
-    await journal.submitAnonymousContact(
-      _submission(
-        projectId: 'project-2',
-        occurredAtUtc: DateTime.utc(2030, 1, 13),
-        reachCount: 5,
-        interestLevel: 1,
-      ),
-    );
+    for (final row in fixture) {
+      await journal.submitAnonymousContact(
+        _submission(
+          appUserId: row.ownerKey == 'primary' ? 'app-user-1' : 'app-user-2',
+          projectId: row.projectKey == 'default' ? 'project-1' : 'project-2',
+          occurredAtUtc: row.occurredAtUtc,
+          channel: ContactChannel.fromStorage(row.channel),
+          reachCount: row.reachCount,
+          interestLevel: row.interestLevel,
+        ),
+      );
+    }
 
     final summary = await journal.summarizePersonalContacts(
       appUserId: 'app-user-1',
@@ -394,12 +408,29 @@ void main() {
       untilUtc: DateTime.utc(2030, 1, 15),
     );
 
-    expect(summary.contactSessionCount, 2);
-    expect(summary.reachCount, 4);
-    expect(summary.interestDistribution, [1, 0, 0, 0, 1]);
-    expect(summary.pendingSyncCount, 2);
-    expect(summary.channelDistribution, [0, 1, 1, 0, 0, 0, 0]);
-    expect(summary.latestOccurredAtUtc, DateTime.utc(2030, 1, 14, 20));
+    final expected = fixture
+        .where((row) => row.expectedInPrimaryScope)
+        .toList();
+    final expectedInterest = List<int>.filled(5, 0);
+    final expectedChannels = List<int>.filled(ContactChannel.values.length, 0);
+    for (final row in expected) {
+      expectedInterest[row.interestLevel]++;
+      expectedChannels[ContactChannel.fromStorage(row.channel).index]++;
+    }
+    expect(summary.contactSessionCount, expected.length);
+    expect(
+      summary.reachCount,
+      expected.fold(0, (total, row) => total + row.reachCount),
+    );
+    expect(summary.interestDistribution, expectedInterest);
+    expect(summary.pendingSyncCount, expected.length);
+    expect(summary.channelDistribution, expectedChannels);
+    expect(
+      summary.latestOccurredAtUtc,
+      expected
+          .map((row) => row.occurredAtUtc)
+          .reduce((first, second) => first.isAfter(second) ? first : second),
+    );
   });
 
   test('实际发生时刻必须是 UTC 并另外保存 IANA 时区', () async {
@@ -619,6 +650,7 @@ void main() {
           location: const ResolvedContactLocation(
             placeName: '   ',
             smallestRegionId: 'region-chicago',
+            regionTreeVersion: 'regions-test-v1',
           ),
           reachCount: 1,
           interestLevel: 2,
@@ -689,6 +721,57 @@ ContactJournal _journal(List<String> ids, {DateTime? now}) {
     clock: _FixedClock(now ?? DateTime.utc(2030, 1, 8, 18, 30)),
     idGenerator: _SequenceIdGenerator(ids),
   );
+}
+
+Future<List<_PersonalContactMetricFixtureRow>>
+_loadPersonalContactMetricFixture() async {
+  final lines = await File(
+    'backend/database/fixtures/shared/personal_contact_metrics_v1.csv',
+  ).readAsLines();
+  return [
+    for (final line in lines.skip(1))
+      if (line.trim().isNotEmpty)
+        _PersonalContactMetricFixtureRow.fromCsv(line),
+  ];
+}
+
+final class _PersonalContactMetricFixtureRow {
+  const _PersonalContactMetricFixtureRow({
+    required this.contactId,
+    required this.ownerKey,
+    required this.projectKey,
+    required this.occurredAtUtc,
+    required this.channel,
+    required this.reachCount,
+    required this.interestLevel,
+    required this.expectedInPrimaryScope,
+  });
+
+  factory _PersonalContactMetricFixtureRow.fromCsv(String line) {
+    final columns = line.split(',');
+    if (columns.length != 8) {
+      throw FormatException('invalid personal contact metric fixture', line);
+    }
+    return _PersonalContactMetricFixtureRow(
+      contactId: columns[0],
+      ownerKey: columns[1],
+      projectKey: columns[2],
+      occurredAtUtc: DateTime.parse(columns[3]).toUtc(),
+      channel: columns[4],
+      reachCount: int.parse(columns[5]),
+      interestLevel: int.parse(columns[6]),
+      expectedInPrimaryScope: bool.parse(columns[7]),
+    );
+  }
+
+  final String contactId;
+  final String ownerKey;
+  final String projectKey;
+  final DateTime occurredAtUtc;
+  final String channel;
+  final int reachCount;
+  final int interestLevel;
+  final bool expectedInPrimaryScope;
 }
 
 AnonymousContactSubmission _submission({

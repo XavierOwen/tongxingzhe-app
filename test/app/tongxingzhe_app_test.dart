@@ -6,6 +6,7 @@ import 'package:tongxingzhe_app/app/tongxingzhe_app.dart';
 import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
 import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/data/local_database_factory.dart';
+import 'package:tongxingzhe_app/device/device_time_zone.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/services/location_service.dart';
@@ -36,6 +37,7 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -49,6 +51,193 @@ void main() {
     expect(find.text('分析'), findsOneWidget);
     expect(find.text('记录接触'), findsOneWidget);
     expect(find.text('正式认证尚未配置'), findsNothing);
+  });
+
+  testWidgets('项目菜单切换可信项目并采用该项目的问卷上下文', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final contextGateway = FakeSessionContextGateway(
+      availableContexts: const [
+        syntheticSessionContext,
+        syntheticSecondSessionContext,
+      ],
+      selectedContexts: const {
+        '55555555-5555-4555-8555-555555555555': syntheticSecondSessionContext,
+      },
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: contextGateway,
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+    );
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+
+    await tester.tap(find.byKey(const ValueKey('project-context-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('校园推广').last);
+    await tester.pumpAndSettle();
+
+    expect(contextGateway.selectedProjectIds, [
+      syntheticSecondSessionContext.project.id,
+    ]);
+    expect(find.text('个人空间 → 校园推广'), findsOneWidget);
+
+    await tester.tap(find.text('记录接触'));
+    await tester.pumpAndSettle();
+    expect(find.text('问卷版本 2'), findsOneWidget);
+  });
+
+  testWidgets('项目菜单创建个人推广项目并立即切换', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final contextGateway = FakeSessionContextGateway(
+      createdContexts: const {'社区推广': syntheticSecondSessionContext},
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: contextGateway,
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+    );
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+
+    await tester.tap(find.byKey(const ValueKey('project-context-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('创建推广项目'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('new-project-name')),
+      '社区推广',
+    );
+    await tester.tap(find.text('创建'));
+    await tester.pumpAndSettle();
+
+    expect(contextGateway.createdProjectNames, ['社区推广']);
+    expect(find.text('个人空间 → 校园推广'), findsOneWidget);
+  });
+
+  testWidgets('跨项目草稿显示原项目名称并在打开前恢复原上下文', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final contextGateway = FakeSessionContextGateway(
+      availableContexts: const [
+        syntheticSessionContext,
+        syntheticSecondSessionContext,
+      ],
+      selectedContexts: const {
+        '33333333-3333-4333-8333-333333333333': syntheticSessionContext,
+        '55555555-5555-4555-8555-555555555555': syntheticSecondSessionContext,
+      },
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: contextGateway,
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+    );
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+
+    await tester.tap(find.text('记录接触'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('视频通话'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('project-context-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('校园推广').last);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('项目：我的推广项目'), findsOneWidget);
+    await tester.tap(find.text('视频通话'));
+    await tester.pumpAndSettle();
+
+    expect(contextGateway.selectedProjectIds, [
+      syntheticSecondSessionContext.project.id,
+      syntheticSessionContext.project.id,
+    ]);
+    expect(find.text('问卷版本 1'), findsOneWidget);
+  });
+
+  testWidgets('新接触显示设备 IANA 时区而不是固定 UTC', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+    );
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+
+    await tester.tap(find.text('记录接触'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('America/Chicago'), findsOneWidget);
+    expect(find.byKey(const ValueKey('edit-occurred-at')), findsOneWidget);
   });
 
   testWidgets('稳定地址可直达、跟随导航并保留表单返回语义', (tester) async {
@@ -73,6 +262,7 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(
@@ -144,6 +334,7 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(
@@ -173,6 +364,7 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -219,6 +411,7 @@ void main() {
         rejectWith: SessionContextFailureCode.unauthorized,
       ),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -253,6 +446,7 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -309,6 +503,7 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -355,6 +550,7 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -391,6 +587,7 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -427,6 +624,7 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -497,6 +695,7 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
       syncTransportBuilder: (_) => transport,
     );
 
@@ -574,6 +773,7 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
       syncTransportBuilder: (_) => transport,
     );
 
@@ -606,6 +806,7 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
       locationCapture: const _FakeLocationCapture(
         LocationSnapshot(
           latitude: 41.7897,
@@ -670,6 +871,7 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -721,6 +923,15 @@ final class _SequenceIdGenerator implements IdGenerator {
 
   @override
   String next() => 'test-${_next++}';
+}
+
+final class _FakeTimeZoneProvider implements DeviceTimeZoneProvider {
+  const _FakeTimeZoneProvider(this.value);
+
+  final String value;
+
+  @override
+  Future<String> currentIanaTimeZone() async => value;
 }
 
 final class _AcceptingSyncTransport implements SyncTransport {

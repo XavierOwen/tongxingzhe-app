@@ -33,6 +33,116 @@ test("HTTP context route requires bearer token and disables caching", async () =
   });
 });
 
+test("HTTP context selection returns the selected trusted project", async () => {
+  const selectedProjectId = "55555555-5555-4555-8555-555555555555";
+  const server = createBackendServer({
+    identityVerifier: {
+      verify: async () => ({
+        issuer: "https://synthetic.supabase.co/auth/v1",
+        subject: "synthetic-subject",
+      }),
+    },
+    contextStore: {
+      loadOrCreate: async () => {
+        throw new Error("bootstrap must not run while selecting a project");
+      },
+      selectProject: async (_identity, projectId) => ({
+        appUserId: "11111111-1111-4111-8111-111111111111",
+        current: {
+          workspace: {
+            id: "22222222-2222-4222-8222-222222222222",
+            kind: "personal",
+            name: "个人空间",
+          },
+          project: {id: projectId, name: "校园推广"},
+          questionnaireVersion: {
+            id: "66666666-6666-4666-8666-666666666666",
+            versionNumber: 1,
+          },
+        },
+        capabilities: ["record_contact"],
+      }),
+    },
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  test.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+
+  const response = await fetch(
+    `http://127.0.0.1:${address.port}/v1/session/context/select`,
+    {
+      method: "POST",
+      headers: {
+        authorization: "Bearer synthetic-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({project_id: selectedProjectId}),
+    },
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json() as {
+    current_context: {project: {project_id: string}};
+  };
+  assert.equal(body.current_context.project.project_id, selectedProjectId);
+});
+
+test("HTTP personal project creation returns the new trusted context", async () => {
+  const server = createBackendServer({
+    identityVerifier: {
+      verify: async () => ({
+        issuer: "https://synthetic.supabase.co/auth/v1",
+        subject: "synthetic-subject",
+      }),
+    },
+    contextStore: {
+      loadOrCreate: async () => {
+        throw new Error("bootstrap must not run while creating a project");
+      },
+      createPersonalProject: async (_identity, displayName) => ({
+        appUserId: "11111111-1111-4111-8111-111111111111",
+        current: {
+          workspace: {
+            id: "22222222-2222-4222-8222-222222222222",
+            kind: "personal",
+            name: "个人空间",
+          },
+          project: {
+            id: "55555555-5555-4555-8555-555555555555",
+            name: displayName,
+          },
+          questionnaireVersion: {
+            id: "66666666-6666-4666-8666-666666666666",
+            versionNumber: 1,
+          },
+        },
+        capabilities: ["record_contact"],
+      }),
+    },
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  test.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+
+  const response = await fetch(
+    `http://127.0.0.1:${address.port}/v1/session/projects`,
+    {
+      method: "POST",
+      headers: {
+        authorization: "Bearer synthetic-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({display_name: "校园推广"}),
+    },
+  );
+
+  assert.equal(response.status, 201);
+  const body = await response.json() as {
+    current_context: {project: {name: string}};
+  };
+  assert.equal(body.current_context.project.name, "校园推广");
+});
+
 test("unknown route returns a stable 404", async () => {
   const server = createBackendServer({
     identityVerifier: {

@@ -10,6 +10,7 @@ final class AppSessionSnapshot {
     required this.stage,
     this.identity,
     this.context,
+    this.availableContexts = const [],
     this.identityFailure,
     this.contextFailure,
   });
@@ -22,6 +23,7 @@ final class AppSessionSnapshot {
   final AppSessionStage stage;
   final IdentitySnapshot? identity;
   final TrustedSessionContext? context;
+  final List<TrustedSessionContext> availableContexts;
   final IdentityFailureCode? identityFailure;
   final SessionContextFailureCode? contextFailure;
 
@@ -92,6 +94,111 @@ final class AppSession {
     await _changes.close();
   }
 
+  /// 切换到本人有权使用的推广项目，并采用 Backend 返回的问卷与能力上下文。
+  Future<SessionContextResult> selectProject(String projectId) async {
+    if (_current.stage != AppSessionStage.ready || projectId.trim().isEmpty) {
+      return const SessionContextRejected(
+        SessionContextFailureCode.serverRejected,
+      );
+    }
+    final generation = ++_generation;
+    final identity = _current.identity!;
+    final tokenResult = await _identitySession.accessToken();
+    if (!_isCurrent(generation)) {
+      return const SessionContextRejected(
+        SessionContextFailureCode.unauthorized,
+      );
+    }
+    return switch (tokenResult) {
+      IdentityRejected<IdentityAccessToken>(:final failure) =>
+        SessionContextRejected(
+          failure.code == IdentityFailureCode.networkUnavailable
+              ? SessionContextFailureCode.networkUnavailable
+              : SessionContextFailureCode.unauthorized,
+        ),
+      IdentitySuccess<IdentityAccessToken>(:final value) =>
+        await _selectProject(generation, identity, value, projectId.trim()),
+    };
+  }
+
+  /// 在个人空间创建推广项目，并立即切换到 Backend 建立的可信上下文。
+  Future<SessionContextResult> createPersonalProject(String displayName) async {
+    final normalizedName = displayName.trim();
+    if (_current.stage != AppSessionStage.ready || normalizedName.isEmpty) {
+      return const SessionContextRejected(
+        SessionContextFailureCode.serverRejected,
+      );
+    }
+    final generation = ++_generation;
+    final identity = _current.identity!;
+    final tokenResult = await _identitySession.accessToken();
+    if (!_isCurrent(generation)) {
+      return const SessionContextRejected(
+        SessionContextFailureCode.unauthorized,
+      );
+    }
+    switch (tokenResult) {
+      case IdentityRejected<IdentityAccessToken>(:final failure):
+        return SessionContextRejected(
+          failure.code == IdentityFailureCode.networkUnavailable
+              ? SessionContextFailureCode.networkUnavailable
+              : SessionContextFailureCode.unauthorized,
+        );
+      case IdentitySuccess<IdentityAccessToken>(:final value):
+        final result = await _contextGateway.createPersonalProject(
+          value,
+          normalizedName,
+        );
+        if (!_isCurrent(generation)) {
+          return const SessionContextRejected(
+            SessionContextFailureCode.unauthorized,
+          );
+        }
+        switch (result) {
+          case SessionContextSuccess(:final context, :final availableContexts):
+            _publish(
+              AppSessionSnapshot(
+                stage: AppSessionStage.ready,
+                identity: identity,
+                context: context,
+                availableContexts: _withCurrent(context, availableContexts),
+              ),
+            );
+          case SessionContextRejected():
+            break;
+        }
+        return result;
+    }
+  }
+
+  Future<SessionContextResult> _selectProject(
+    int generation,
+    IdentitySnapshot identity,
+    IdentityAccessToken token,
+    String projectId,
+  ) async {
+    final result = await _contextGateway.selectProject(token, projectId);
+    if (!_isCurrent(generation)) {
+      return const SessionContextRejected(
+        SessionContextFailureCode.unauthorized,
+      );
+    }
+    switch (result) {
+      case SessionContextSuccess(:final context, :final availableContexts):
+        _publish(
+          AppSessionSnapshot(
+            stage: AppSessionStage.ready,
+            identity: identity,
+            context: context,
+            availableContexts: _withCurrent(context, availableContexts),
+          ),
+        );
+      case SessionContextRejected():
+        break;
+    }
+    return result;
+  }
+
   Future<void> _applyIdentity(IdentitySnapshot identity) async {
     if (_closed) {
       return;
@@ -153,12 +260,13 @@ final class AppSession {
           return;
         }
         switch (contextResult) {
-          case SessionContextSuccess(:final context):
+          case SessionContextSuccess(:final context, :final availableContexts):
             _publish(
               AppSessionSnapshot(
                 stage: AppSessionStage.ready,
                 identity: identity,
                 context: context,
+                availableContexts: _withCurrent(context, availableContexts),
               ),
             );
           case SessionContextRejected(:final code):
@@ -181,6 +289,16 @@ final class AppSession {
     }
     _current = next;
     _changes.add(next);
+  }
+
+  List<TrustedSessionContext> _withCurrent(
+    TrustedSessionContext current,
+    List<TrustedSessionContext> available,
+  ) {
+    if (available.any((item) => item.project.id == current.project.id)) {
+      return List.unmodifiable(available);
+    }
+    return List.unmodifiable([current, ...available]);
   }
 
   String _identityKey(IdentitySnapshot identity) {

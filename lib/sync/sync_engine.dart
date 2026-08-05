@@ -6,6 +6,7 @@ import 'package:drift/drift.dart';
 import '../data/local_database.dart';
 import '../features/contact_journal/contact_models.dart';
 import '../foundation/runtime_values.dart';
+import '../regions/region_catalog.dart';
 import 'sync_models.dart';
 import 'sync_transport.dart';
 
@@ -34,6 +35,7 @@ final class SyncEngine {
       transport,
       jitter,
       leaseDuration,
+      RegionCatalog(database),
     );
   }
 
@@ -45,6 +47,7 @@ final class SyncEngine {
     this._transport,
     this._jitter,
     this._leaseDuration,
+    this._regionCatalog,
   );
 
   static const _drainerLeaseName = 'sync.global.v1';
@@ -58,6 +61,7 @@ final class SyncEngine {
   final SyncTransport _transport;
   final SyncJitter _jitter;
   final Duration _leaseDuration;
+  final RegionCatalog _regionCatalog;
 
   Future<SyncDrainResult> drainOnce() async {
     final claim = await _claimReadyCommand();
@@ -158,7 +162,7 @@ final class SyncEngine {
         try {
           final parsed = [
             for (final change in succeeded.batch.changes)
-              _parseRemoteContact(change),
+              _parseRemoteChange(change),
           ];
           final nextCursor = succeeded.batch.nextCursor;
           if (parsed.isNotEmpty && (nextCursor == null || nextCursor.isEmpty)) {
@@ -166,8 +170,15 @@ final class SyncEngine {
           }
           final nowUtc = _clock.now().toUtc();
           await _database.transaction(() async {
-            for (final contact in parsed) {
-              await _applyRemoteContact(contact);
+            for (final change in parsed) {
+              switch (change) {
+                case final _RemoteContact contact:
+                  await _applyRemoteContact(contact);
+                case final _RemoteDraftUpsert draft:
+                  await _applyRemoteDraftUpsert(draft);
+                case final _RemoteDraftDelete draft:
+                  await _applyRemoteDraftDelete(draft);
+              }
             }
             await _writeScopeState(
               nowUtc: nowUtc,
@@ -295,6 +306,16 @@ final class SyncEngine {
         return SyncDrainResult.lostLease;
       }
 
+      if (result is SyncPushConflict &&
+          current.commandType == 'draft.upsert.v1') {
+        final draftQuery = _database.select(_database.dbContactDrafts)
+          ..where((row) => row.draftId.equals(current.aggregateId));
+        final draft = await draftQuery.getSingleOrNull();
+        if (draft != null) {
+          await _preserveLocalDraftAsConflict(draft);
+        }
+      }
+
       final outcome = switch (result) {
         final SyncPushAccepted accepted => await _completeCommand(
           current,
@@ -351,6 +372,28 @@ final class SyncEngine {
         completedAtUtc: Value(nowUtc),
       ),
     );
+    if (current.commandType == 'draft.upsert.v1') {
+      final acceptedRevision = current.baseRevision + 1;
+      await (_database.update(
+        _database.dbContactDrafts,
+      )..where((row) => row.draftId.equals(current.aggregateId))).write(
+        DbContactDraftsCompanion(serverRevision: Value(acceptedRevision)),
+      );
+      await (_database.update(_database.dbSyncOutbox)..where(
+            (row) =>
+                row.aggregateId.equals(current.aggregateId) &
+                row.commandType.equals('draft.upsert.v1') &
+                row.status.equals('pending'),
+          ))
+          .write(DbSyncOutboxCompanion(baseRevision: Value(acceptedRevision)));
+    } else if (current.commandType == 'draft.delete.v1') {
+      final acceptedRevision = current.baseRevision + 1;
+      await (_database.update(
+        _database.dbContactDrafts,
+      )..where((row) => row.draftId.equals(current.aggregateId))).write(
+        DbContactDraftsCompanion(serverRevision: Value(acceptedRevision)),
+      );
+    }
     await _writeScopeState(
       nowUtc: nowUtc,
       lastSuccessAtUtc: nowUtc,
@@ -467,6 +510,15 @@ final class SyncEngine {
     return trimmed.isEmpty ? 'unknown_sync_failure' : trimmed;
   }
 
+  _ParsedRemoteChange _parseRemoteChange(SyncRemoteChange change) {
+    return switch (change.changeType) {
+      'contact.submitted' => _parseRemoteContact(change),
+      'draft.upserted' => _parseRemoteDraftUpsert(change),
+      'draft.deleted' => _parseRemoteDraftDelete(change),
+      _ => throw const FormatException('unsupported remote change'),
+    };
+  }
+
   _RemoteContact _parseRemoteContact(SyncRemoteChange change) {
     if (change.changeType != 'contact.submitted' ||
         change.revisionNumber != 1) {
@@ -521,6 +573,87 @@ final class SyncEngine {
     );
   }
 
+  _RemoteDraftUpsert _parseRemoteDraftUpsert(SyncRemoteChange change) {
+    if (change.revisionNumber < 1) {
+      throw const FormatException('invalid remote draft revision');
+    }
+    final payload = change.payload;
+    _requireRemoteScope(payload);
+    final serverRevision = _integer(payload['serverRevision']);
+    if (serverRevision != change.revisionNumber) {
+      throw const FormatException('remote draft revision mismatch');
+    }
+    final occurredAtUtc = _optionalUtcDate(payload['occurredAtUtc']);
+    final occurredTimeZone = _optionalString(payload['occurredTimeZone']);
+    if ((occurredAtUtc == null) != (occurredTimeZone == null)) {
+      throw const FormatException('remote draft occurrence is incomplete');
+    }
+    final channelValue = payload['channel'];
+    final channel = channelValue == null
+        ? null
+        : _remoteChannel(_requiredString(channelValue));
+    final channelDetail = _optionalString(payload['channelDetail']);
+    final locationValue = payload['location'];
+    final location = locationValue == null
+        ? null
+        : _remoteLocation(locationValue);
+    final reachCount = _optionalInteger(payload['reachCount']);
+    final interestLevel = _optionalInteger(payload['interestLevel']);
+    if ((reachCount != null && reachCount < 1) ||
+        (interestLevel != null && (interestLevel < 0 || interestLevel > 4))) {
+      throw const FormatException('invalid remote draft metric');
+    }
+    final answerValues = payload['answers'];
+    if (answerValues is! List<Object?>) {
+      throw const FormatException('remote answers must be a list');
+    }
+    final answers = [for (final value in answerValues) _remoteAnswer(value)];
+    if (answers.map((answer) => answer.questionId).toSet().length !=
+        answers.length) {
+      throw const FormatException('remote answers contain duplicate IDs');
+    }
+    return _RemoteDraftUpsert(
+      draftId: _requiredString(payload['draftId']),
+      questionnaireVersionId: _requiredString(
+        payload['questionnaireVersionId'],
+      ),
+      createdAtUtc: _utcDate(payload['createdAtUtc']),
+      updatedAtUtc: _utcDate(payload['updatedAtUtc']),
+      occurredAtUtc: occurredAtUtc,
+      occurredTimeZone: occurredTimeZone,
+      channel: channel,
+      channelDetail: channelDetail,
+      location: location,
+      reachCount: reachCount,
+      interestLevel: interestLevel,
+      answers: answers,
+      serverRevision: serverRevision,
+      sourceDeviceId: _requiredString(payload['sourceDeviceId']),
+    );
+  }
+
+  _RemoteDraftDelete _parseRemoteDraftDelete(SyncRemoteChange change) {
+    if (change.revisionNumber < 1) {
+      throw const FormatException('invalid remote draft revision');
+    }
+    final payload = change.payload;
+    _requireRemoteScope(payload);
+    if (_integer(payload['serverRevision']) != change.revisionNumber) {
+      throw const FormatException('remote draft revision mismatch');
+    }
+    return _RemoteDraftDelete(
+      draftId: _requiredString(payload['draftId']),
+      serverRevision: change.revisionNumber,
+    );
+  }
+
+  void _requireRemoteScope(Map<String, Object?> payload) {
+    if (_requiredString(payload['workspaceId']) != _scope.workspaceId ||
+        _requiredString(payload['projectId']) != _scope.projectId) {
+      throw const FormatException('remote change scope mismatch');
+    }
+  }
+
   Future<void> _applyRemoteContact(_RemoteContact contact) async {
     final existingQuery = _database.select(_database.dbContactRecords)
       ..where((row) => row.contactId.equals(contact.contactId));
@@ -532,6 +665,12 @@ final class SyncEngine {
       throw const FormatException('remote contact conflicts with local fact');
     }
     final location = _remoteLocationColumns(contact.location);
+    if (contact.location case final ResolvedContactLocation resolved) {
+      await _regionCatalog.requireAnalyzableRegion(
+        regionId: resolved.smallestRegionId,
+        treeVersion: resolved.regionTreeVersion,
+      );
+    }
     await _database
         .into(_database.dbContactRecords)
         .insert(
@@ -549,6 +688,7 @@ final class SyncEngine {
             locationKind: location.kind,
             placeName: Value(location.placeName),
             smallestRegionId: Value(location.smallestRegionId),
+            regionTreeVersion: Value(location.regionTreeVersion),
             latitude: Value(location.latitude),
             longitude: Value(location.longitude),
             locationAccuracyMeters: Value(location.accuracyMeters),
@@ -558,6 +698,13 @@ final class SyncEngine {
             lifecycleStatus: 'active',
           ),
         );
+    if (contact.location case final ResolvedContactLocation resolved) {
+      await _regionCatalog.assignContact(
+        contactId: contact.contactId,
+        regionId: resolved.smallestRegionId,
+        treeVersion: resolved.regionTreeVersion,
+      );
+    }
     await _database
         .into(_database.dbContactRevisions)
         .insert(
@@ -574,6 +721,7 @@ final class SyncEngine {
             locationKind: location.kind,
             placeName: Value(location.placeName),
             smallestRegionId: Value(location.smallestRegionId),
+            regionTreeVersion: Value(location.regionTreeVersion),
             latitude: Value(location.latitude),
             longitude: Value(location.longitude),
             locationAccuracyMeters: Value(location.accuracyMeters),
@@ -597,6 +745,305 @@ final class SyncEngine {
     }
   }
 
+  Future<void> _applyRemoteDraftUpsert(_RemoteDraftUpsert draft) async {
+    if (draft.updatedAtUtc.isBefore(draft.createdAtUtc)) {
+      throw const FormatException('remote draft time order is invalid');
+    }
+    if (draft.location case final ResolvedContactLocation resolved) {
+      await _regionCatalog.requireAnalyzableRegion(
+        regionId: resolved.smallestRegionId,
+        treeVersion: resolved.regionTreeVersion,
+      );
+    }
+    final query = _database.select(_database.dbContactDrafts)
+      ..where(
+        (row) =>
+            row.draftId.equals(draft.draftId) &
+            row.appUserId.equals(_scope.appUserId),
+      );
+    final existing = await query.getSingleOrNull();
+    if (existing == null) {
+      await _writeRemoteDraft(draft);
+      return;
+    }
+    if (draft.serverRevision < existing.serverRevision) {
+      return;
+    }
+    if (await _existingDraftMatchesRemote(existing, draft)) {
+      await (_database.update(
+        _database.dbContactDrafts,
+      )..where((row) => row.draftId.equals(draft.draftId))).write(
+        DbContactDraftsCompanion(serverRevision: Value(draft.serverRevision)),
+      );
+      await _completePendingDraftCommands(draft.draftId);
+      return;
+    }
+    final hasPendingChanges = await _draftHasPendingChanges(draft.draftId);
+    if (draft.serverRevision == existing.serverRevision && hasPendingChanges) {
+      // push 与 pull 使用独立 cursor。本机可能已经确认这个 server revision，
+      // 又在它之上继续编辑；迟到的 feed 快照只是 base，不是并发分叉。
+      return;
+    }
+    if (draft.serverRevision == existing.serverRevision) {
+      throw const FormatException('stale remote draft conflicts with local');
+    }
+    if (hasPendingChanges) {
+      await _preserveLocalDraftAsConflict(existing);
+    } else {
+      await _deleteDraftRows(draft.draftId);
+    }
+    await _writeRemoteDraft(draft);
+  }
+
+  Future<void> _applyRemoteDraftDelete(_RemoteDraftDelete draft) async {
+    final query = _database.select(_database.dbContactDrafts)
+      ..where(
+        (row) =>
+            row.draftId.equals(draft.draftId) &
+            row.appUserId.equals(_scope.appUserId),
+      );
+    final existing = await query.getSingleOrNull();
+    if (existing == null) {
+      return;
+    }
+    if (existing.syncMode == ContactDraftSyncMode.deviceOnly.storageValue) {
+      if (draft.serverRevision > existing.serverRevision) {
+        await (_database.update(
+          _database.dbContactDrafts,
+        )..where((row) => row.draftId.equals(draft.draftId))).write(
+          DbContactDraftsCompanion(serverRevision: Value(draft.serverRevision)),
+        );
+      }
+      return;
+    }
+    if (draft.serverRevision <= existing.serverRevision &&
+        !await _draftHasPendingChanges(draft.draftId)) {
+      return;
+    }
+    if (await _draftHasPendingChanges(draft.draftId)) {
+      await _preserveLocalDraftAsConflict(existing);
+      return;
+    }
+    await _deleteDraftRows(draft.draftId);
+  }
+
+  Future<void> _writeRemoteDraft(_RemoteDraftUpsert draft) async {
+    final location = _optionalRemoteLocationColumns(draft.location);
+    await _database
+        .into(_database.dbContactDrafts)
+        .insert(
+          DbContactDraftsCompanion.insert(
+            draftId: draft.draftId,
+            appUserId: _scope.appUserId,
+            workspaceId: _scope.workspaceId,
+            projectId: _scope.projectId,
+            questionnaireVersionId: draft.questionnaireVersionId,
+            createdAtUtc: draft.createdAtUtc,
+            updatedAtUtc: draft.updatedAtUtc,
+            occurredAtUtc: Value(draft.occurredAtUtc),
+            occurredTimeZone: Value(draft.occurredTimeZone),
+            channel: Value(draft.channel?.storageValue),
+            channelDetail: Value(draft.channelDetail),
+            locationKind: Value(location.kind),
+            placeName: Value(location.placeName),
+            smallestRegionId: Value(location.smallestRegionId),
+            regionTreeVersion: Value(location.regionTreeVersion),
+            latitude: Value(location.latitude),
+            longitude: Value(location.longitude),
+            locationAccuracyMeters: Value(location.accuracyMeters),
+            reachCount: Value(draft.reachCount),
+            interestLevel: Value(draft.interestLevel),
+            syncMode: const Value('account_private'),
+            localRevision: Value(draft.serverRevision),
+            serverRevision: Value(draft.serverRevision),
+          ),
+        );
+    for (final answer in draft.answers) {
+      await _database
+          .into(_database.dbContactDraftAnswers)
+          .insert(
+            DbContactDraftAnswersCompanion.insert(
+              draftId: draft.draftId,
+              questionId: answer.questionId,
+              answerState: answer.state.storageValue,
+              answerType: 'boolean',
+              booleanValue: Value(answer.value),
+            ),
+          );
+    }
+    if (draft.location case final ResolvedContactLocation resolved) {
+      await _regionCatalog.assignDraft(
+        draftId: draft.draftId,
+        regionId: resolved.smallestRegionId,
+        treeVersion: resolved.regionTreeVersion,
+      );
+    }
+  }
+
+  Future<bool> _existingDraftMatchesRemote(
+    DbContactDraft existing,
+    _RemoteDraftUpsert draft,
+  ) async {
+    final location = _optionalRemoteLocationColumns(draft.location);
+    if (existing.workspaceId != _scope.workspaceId ||
+        existing.projectId != _scope.projectId ||
+        existing.questionnaireVersionId != draft.questionnaireVersionId ||
+        existing.createdAtUtc.toUtc() != draft.createdAtUtc ||
+        existing.updatedAtUtc.toUtc() != draft.updatedAtUtc ||
+        existing.occurredAtUtc?.toUtc() != draft.occurredAtUtc ||
+        existing.occurredTimeZone != draft.occurredTimeZone ||
+        existing.channel != draft.channel?.storageValue ||
+        existing.channelDetail != draft.channelDetail ||
+        existing.locationKind != location.kind ||
+        existing.placeName != location.placeName ||
+        existing.smallestRegionId != location.smallestRegionId ||
+        existing.regionTreeVersion != location.regionTreeVersion ||
+        existing.latitude != location.latitude ||
+        existing.longitude != location.longitude ||
+        existing.locationAccuracyMeters != location.accuracyMeters ||
+        existing.reachCount != draft.reachCount ||
+        existing.interestLevel != draft.interestLevel ||
+        existing.abandonedAtUtc != null) {
+      return false;
+    }
+    final stored = await (_database.select(
+      _database.dbContactDraftAnswers,
+    )..where((row) => row.draftId.equals(draft.draftId))).get();
+    if (stored.length != draft.answers.length) {
+      return false;
+    }
+    final remoteById = {
+      for (final answer in draft.answers) answer.questionId: answer,
+    };
+    return stored.every((answer) {
+      final remote = remoteById[answer.questionId];
+      return remote != null &&
+          answer.answerState == remote.state.storageValue &&
+          answer.answerType == 'boolean' &&
+          answer.booleanValue == remote.value;
+    });
+  }
+
+  Future<bool> _draftHasPendingChanges(String draftId) async {
+    final query = _database.select(_database.dbSyncOutbox)
+      ..where(
+        (row) =>
+            row.aggregateId.equals(draftId) &
+            row.commandType.equals('draft.upsert.v1') &
+            row.status.isNotValue('completed'),
+      );
+    return (await query.get()).isNotEmpty;
+  }
+
+  Future<void> _preserveLocalDraftAsConflict(DbContactDraft existing) async {
+    final conflictId =
+        '${existing.draftId}:conflict:'
+        '$_workerId:${existing.localRevision}';
+    final answers = await (_database.select(
+      _database.dbContactDraftAnswers,
+    )..where((row) => row.draftId.equals(existing.draftId))).get();
+    final assignment = await (_database.select(
+      _database.dbDraftRegionAssignments,
+    )..where((row) => row.draftId.equals(existing.draftId))).getSingleOrNull();
+    await _database
+        .into(_database.dbContactDrafts)
+        .insert(
+          DbContactDraftsCompanion.insert(
+            draftId: conflictId,
+            appUserId: existing.appUserId,
+            workspaceId: existing.workspaceId,
+            projectId: existing.projectId,
+            questionnaireVersionId: existing.questionnaireVersionId,
+            createdAtUtc: existing.createdAtUtc,
+            updatedAtUtc: existing.updatedAtUtc,
+            occurredAtUtc: Value(existing.occurredAtUtc),
+            occurredTimeZone: Value(existing.occurredTimeZone),
+            channel: Value(existing.channel),
+            channelDetail: Value(existing.channelDetail),
+            locationKind: Value(existing.locationKind),
+            placeName: Value(existing.placeName),
+            smallestRegionId: Value(existing.smallestRegionId),
+            regionTreeVersion: Value(existing.regionTreeVersion),
+            latitude: Value(existing.latitude),
+            longitude: Value(existing.longitude),
+            locationAccuracyMeters: Value(existing.locationAccuracyMeters),
+            reachCount: Value(existing.reachCount),
+            interestLevel: Value(existing.interestLevel),
+            syncMode: const Value('device_only'),
+            localRevision: Value(existing.localRevision),
+            serverRevision: const Value(0),
+            conflictOfDraftId: Value(existing.draftId),
+          ),
+        );
+    for (final answer in answers) {
+      await _database
+          .into(_database.dbContactDraftAnswers)
+          .insert(
+            DbContactDraftAnswersCompanion.insert(
+              draftId: conflictId,
+              questionId: answer.questionId,
+              answerState: answer.answerState,
+              answerType: answer.answerType,
+              booleanValue: Value(answer.booleanValue),
+            ),
+          );
+    }
+    if (assignment != null) {
+      await _database
+          .into(_database.dbDraftRegionAssignments)
+          .insert(
+            DbDraftRegionAssignmentsCompanion.insert(
+              draftId: conflictId,
+              regionVersionKey: assignment.regionVersionKey,
+            ),
+          );
+    }
+    await (_database.update(_database.dbSyncOutbox)..where(
+          (row) =>
+              row.aggregateId.equals(existing.draftId) &
+              row.commandType.equals('draft.upsert.v1') &
+              row.status.isNotValue('completed'),
+        ))
+        .write(
+          const DbSyncOutboxCompanion(
+            status: Value('needs_resolution'),
+            lastFailureCode: Value('draft_conflict_preserved'),
+            leaseOwner: Value(null),
+            leaseExpiresAtUtc: Value(null),
+          ),
+        );
+    await _deleteDraftRows(existing.draftId);
+  }
+
+  Future<void> _completePendingDraftCommands(String draftId) async {
+    final nowUtc = _clock.now().toUtc();
+    await (_database.update(_database.dbSyncOutbox)..where(
+          (row) =>
+              row.aggregateId.equals(draftId) &
+              row.commandType.equals('draft.upsert.v1') &
+              row.status.isNotValue('completed'),
+        ))
+        .write(
+          DbSyncOutboxCompanion(
+            status: const Value('completed'),
+            lastFailureCode: const Value(null),
+            leaseOwner: const Value(null),
+            leaseExpiresAtUtc: const Value(null),
+            completedAtUtc: Value(nowUtc),
+          ),
+        );
+  }
+
+  Future<void> _deleteDraftRows(String draftId) async {
+    await _regionCatalog.clearDraftAssignment(draftId);
+    await (_database.delete(
+      _database.dbContactDraftAnswers,
+    )..where((row) => row.draftId.equals(draftId))).go();
+    await (_database.delete(
+      _database.dbContactDrafts,
+    )..where((row) => row.draftId.equals(draftId))).go();
+  }
+
   /// 只有整个 revision 1 快照相同才是幂等重放。
   ///
   /// 只比较 ID、范围和 revision 会掩盖极小概率的 ID 碰撞，
@@ -618,6 +1065,7 @@ final class SyncEngine {
         existing.locationKind != location.kind ||
         existing.placeName != location.placeName ||
         existing.smallestRegionId != location.smallestRegionId ||
+        existing.regionTreeVersion != location.regionTreeVersion ||
         existing.latitude != location.latitude ||
         existing.longitude != location.longitude ||
         existing.locationAccuracyMeters != location.accuracyMeters ||
@@ -659,6 +1107,7 @@ final class SyncEngine {
       'resolved' => ResolvedContactLocation(
         placeName: _requiredString(value['placeName']),
         smallestRegionId: _requiredString(value['smallestRegionId']),
+        regionTreeVersion: _requiredString(value['regionTreeVersion']),
       ),
       'pending_resolution' => _pendingRemoteLocation(value),
       _ => throw const FormatException('unsupported remote location'),
@@ -722,6 +1171,7 @@ final class SyncEngine {
     String kind,
     String? placeName,
     String? smallestRegionId,
+    String? regionTreeVersion,
     double? latitude,
     double? longitude,
     double? accuracyMeters,
@@ -732,6 +1182,7 @@ final class SyncEngine {
         kind: 'resolved',
         placeName: resolved.placeName,
         smallestRegionId: resolved.smallestRegionId,
+        regionTreeVersion: resolved.regionTreeVersion,
         latitude: null,
         longitude: null,
         accuracyMeters: null,
@@ -740,6 +1191,7 @@ final class SyncEngine {
         kind: 'not_applicable',
         placeName: null,
         smallestRegionId: null,
+        regionTreeVersion: null,
         latitude: null,
         longitude: null,
         accuracyMeters: null,
@@ -748,11 +1200,45 @@ final class SyncEngine {
         kind: 'pending_resolution',
         placeName: null,
         smallestRegionId: null,
+        regionTreeVersion: null,
         latitude: pending.latitude,
         longitude: pending.longitude,
         accuracyMeters: pending.accuracyMeters,
       ),
     };
+  }
+
+  ({
+    String? kind,
+    String? placeName,
+    String? smallestRegionId,
+    String? regionTreeVersion,
+    double? latitude,
+    double? longitude,
+    double? accuracyMeters,
+  })
+  _optionalRemoteLocationColumns(ContactLocation? location) {
+    if (location == null) {
+      return (
+        kind: null,
+        placeName: null,
+        smallestRegionId: null,
+        regionTreeVersion: null,
+        latitude: null,
+        longitude: null,
+        accuracyMeters: null,
+      );
+    }
+    final resolved = _remoteLocationColumns(location);
+    return (
+      kind: resolved.kind,
+      placeName: resolved.placeName,
+      smallestRegionId: resolved.smallestRegionId,
+      regionTreeVersion: resolved.regionTreeVersion,
+      latitude: resolved.latitude,
+      longitude: resolved.longitude,
+      accuracyMeters: resolved.accuracyMeters,
+    );
   }
 
   DateTime _utcDate(Object? value) {
@@ -762,6 +1248,9 @@ final class SyncEngine {
     }
     return parsed;
   }
+
+  DateTime? _optionalUtcDate(Object? value) =>
+      value == null ? null : _utcDate(value);
 
   String _requiredString(Object? value) {
     if (value is! String || value.trim().isEmpty) {
@@ -784,6 +1273,9 @@ final class SyncEngine {
     return value;
   }
 
+  int? _optionalInteger(Object? value) =>
+      value == null ? null : _integer(value);
+
   double _number(Object? value) {
     if (value is! num || !value.isFinite) {
       throw const FormatException('remote number is required');
@@ -796,7 +1288,11 @@ final class SyncEngine {
   }
 }
 
-final class _RemoteContact {
+sealed class _ParsedRemoteChange {
+  const _ParsedRemoteChange();
+}
+
+final class _RemoteContact extends _ParsedRemoteChange {
   const _RemoteContact({
     required this.contactId,
     required this.questionnaireVersionId,
@@ -822,6 +1318,50 @@ final class _RemoteContact {
   final int reachCount;
   final int interestLevel;
   final List<BooleanQuestionnaireAnswer> answers;
+}
+
+final class _RemoteDraftUpsert extends _ParsedRemoteChange {
+  const _RemoteDraftUpsert({
+    required this.draftId,
+    required this.questionnaireVersionId,
+    required this.createdAtUtc,
+    required this.updatedAtUtc,
+    required this.occurredAtUtc,
+    required this.occurredTimeZone,
+    required this.channel,
+    required this.channelDetail,
+    required this.location,
+    required this.reachCount,
+    required this.interestLevel,
+    required this.answers,
+    required this.serverRevision,
+    required this.sourceDeviceId,
+  });
+
+  final String draftId;
+  final String questionnaireVersionId;
+  final DateTime createdAtUtc;
+  final DateTime updatedAtUtc;
+  final DateTime? occurredAtUtc;
+  final String? occurredTimeZone;
+  final ContactChannel? channel;
+  final String? channelDetail;
+  final ContactLocation? location;
+  final int? reachCount;
+  final int? interestLevel;
+  final List<BooleanQuestionnaireAnswer> answers;
+  final int serverRevision;
+  final String sourceDeviceId;
+}
+
+final class _RemoteDraftDelete extends _ParsedRemoteChange {
+  const _RemoteDraftDelete({
+    required this.draftId,
+    required this.serverRevision,
+  });
+
+  final String draftId;
+  final int serverRevision;
 }
 
 sealed class _ClaimResult {

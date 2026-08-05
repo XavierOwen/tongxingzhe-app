@@ -88,7 +88,72 @@ void main() {
     expect(session.current.stage, AppSessionStage.signedOut);
     expect(session.current.context, isNull);
   });
+
+  test('本人选择项目后取得该项目的可信问卷上下文', () async {
+    final identity = FakeIdentitySession(initial: _signedInIdentity());
+    final gateway = FakeSessionContextGateway(
+      availableContexts: const [syntheticSessionContext, _secondProject],
+      selectedContexts: const {
+        '55555555-5555-4555-8555-555555555555': _secondProject,
+      },
+    );
+    final session = AppSession(
+      identitySession: identity,
+      contextGateway: gateway,
+    );
+    addTearDown(session.close);
+    addTearDown(identity.close);
+    await session.start();
+
+    final result = await session.selectProject(_secondProject.project.id);
+
+    expect(result, isA<SessionContextSuccess>());
+    expect(session.current.context, same(_secondProject));
+    expect(session.current.availableContexts, [
+      syntheticSessionContext,
+      _secondProject,
+    ]);
+    expect(gateway.selectedProjectIds, [_secondProject.project.id]);
+  });
+
+  test('本人创建个人项目后立即采用新项目上下文', () async {
+    final identity = FakeIdentitySession(initial: _signedInIdentity());
+    final gateway = FakeSessionContextGateway(
+      createdContexts: const {'校园推广': _secondProject},
+    );
+    final session = AppSession(
+      identitySession: identity,
+      contextGateway: gateway,
+    );
+    addTearDown(session.close);
+    addTearDown(identity.close);
+    await session.start();
+
+    final result = await session.createPersonalProject('校园推广');
+
+    expect(result, isA<SessionContextSuccess>());
+    expect(session.current.context, same(_secondProject));
+    expect(gateway.createdProjectNames, ['校园推广']);
+  });
 }
+
+const _secondProject = TrustedSessionContext(
+  appUserId: '11111111-1111-4111-8111-111111111111',
+  workspace: WorkspaceContext(
+    id: '22222222-2222-4222-8222-222222222222',
+    kind: WorkspaceKind.personal,
+    name: '个人空间',
+  ),
+  project: ProjectContext(
+    id: '55555555-5555-4555-8555-555555555555',
+    name: '校园推广',
+  ),
+  questionnaireVersion: QuestionnaireVersionContext(
+    id: '66666666-6666-4666-8666-666666666666',
+    versionNumber: 1,
+  ),
+  capabilities: {'record_contact'},
+);
 
 IdentitySnapshot _signedInIdentity() {
   return IdentitySnapshot(
@@ -115,4 +180,18 @@ final class _DelayedGateway implements SessionContextGateway {
     requested.complete();
     return _result.future;
   }
+
+  @override
+  Future<SessionContextResult> selectProject(
+    IdentityAccessToken accessToken,
+    String projectId,
+  ) async =>
+      const SessionContextRejected(SessionContextFailureCode.serverRejected);
+
+  @override
+  Future<SessionContextResult> createPersonalProject(
+    IdentityAccessToken accessToken,
+    String displayName,
+  ) async =>
+      const SessionContextRejected(SessionContextFailureCode.serverRejected);
 }

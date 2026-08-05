@@ -4,6 +4,7 @@ import '../app_session/session_context_gateway.dart';
 import '../data/local_database.dart';
 import '../data/local_database_factory.dart';
 import '../device/device_identity_store.dart';
+import '../device/device_time_zone.dart';
 import '../features/contact_journal/contact_journal.dart';
 import '../foundation/runtime_values.dart';
 import '../identity/identity_session.dart';
@@ -28,6 +29,7 @@ final class AppDependencies {
     required this.identitySessionFactory,
     required this.sessionContextGateway,
     required this.platformCapabilitiesProvider,
+    this.timeZoneProvider = const FlutterDeviceTimeZoneProvider(),
     this.locationCapture = const LocationService(),
     this.syncTransportBuilder,
     this.legacyDemoAccess,
@@ -51,6 +53,7 @@ final class AppDependencies {
   final IdentitySessionFactory identitySessionFactory;
   final SessionContextGateway sessionContextGateway;
   final PlatformCapabilitiesProvider platformCapabilitiesProvider;
+  final DeviceTimeZoneProvider timeZoneProvider;
   final ContactLocationCapture locationCapture;
   final SyncTransport? Function(IdentitySession)? syncTransportBuilder;
 
@@ -127,6 +130,7 @@ final class AppDependencies {
       await appSession.start();
       return AppStartupReady(
         controller: controller,
+        clock: clock,
         contactJournal: contactJournal,
         deviceId: deviceId,
         syncEngineFactory: syncEngineFactory,
@@ -135,6 +139,7 @@ final class AppDependencies {
         platformCapabilities: platformCapabilities,
         platformPolicy: PlatformPolicy.from(platformCapabilities),
         locationCapture: locationCapture,
+        timeZoneProvider: timeZoneProvider,
       );
     } catch (error, stackTrace) {
       await database?.close();
@@ -162,6 +167,7 @@ sealed class AppStartupResult {
 final class AppStartupReady extends AppStartupResult {
   const AppStartupReady({
     required this.controller,
+    required this.clock,
     required this.contactJournal,
     required this.deviceId,
     required this.syncEngineFactory,
@@ -170,9 +176,11 @@ final class AppStartupReady extends AppStartupResult {
     required this.platformCapabilities,
     required this.platformPolicy,
     required this.locationCapture,
+    required this.timeZoneProvider,
   });
 
   final AppController controller;
+  final AppClock clock;
   final ContactJournal contactJournal;
   final String deviceId;
   final SyncEngineFactory? syncEngineFactory;
@@ -181,6 +189,7 @@ final class AppStartupReady extends AppStartupResult {
   final PlatformCapabilities platformCapabilities;
   final PlatformPolicy platformPolicy;
   final ContactLocationCapture locationCapture;
+  final DeviceTimeZoneProvider timeZoneProvider;
 }
 
 final class AppStartupFailed extends AppStartupResult {

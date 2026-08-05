@@ -6,9 +6,11 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../app_session/app_session.dart';
 import '../app_session/session_context_gateway.dart';
+import '../device/device_time_zone.dart';
 import '../features/contact_journal/contact_journal.dart';
 import '../features/contact_journal/contact_models.dart';
 import '../features/contact_entry/contact_entry_screen.dart';
+import '../foundation/runtime_values.dart';
 import '../identity/identity_session.dart';
 import '../l10n/app_strings.dart';
 import '../routing/app_route.dart';
@@ -98,21 +100,25 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
         return switch (snapshot.requireData) {
           AppStartupReady(
             :final controller,
+            :final clock,
             :final contactJournal,
             :final deviceId,
             :final syncEngineFactory,
             :final identitySession,
             :final appSession,
             :final locationCapture,
+            :final timeZoneProvider,
           ) =>
             _ReadyApp(
               controller: controller,
+              clock: clock,
               contactJournal: contactJournal,
               deviceId: deviceId,
               syncEngineFactory: syncEngineFactory,
               identitySession: identitySession,
               appSession: appSession,
               locationCapture: locationCapture,
+              timeZoneProvider: timeZoneProvider,
               signedOutScreenBuilder: widget.signedOutScreenBuilder,
               routeInformationProvider: widget.routeInformationProvider,
             ),
@@ -128,23 +134,27 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
 class _ReadyApp extends StatefulWidget {
   const _ReadyApp({
     required this.controller,
+    required this.clock,
     required this.contactJournal,
     required this.deviceId,
     required this.syncEngineFactory,
     required this.identitySession,
     required this.appSession,
     required this.locationCapture,
+    required this.timeZoneProvider,
     required this.signedOutScreenBuilder,
     required this.routeInformationProvider,
   });
 
   final AppController controller;
+  final AppClock clock;
   final ContactJournal contactJournal;
   final String deviceId;
   final SyncEngineFactory? syncEngineFactory;
   final IdentitySession identitySession;
   final AppSession appSession;
   final ContactLocationCapture locationCapture;
+  final DeviceTimeZoneProvider timeZoneProvider;
   final SignedOutScreenBuilder? signedOutScreenBuilder;
   final RouteInformationProvider? routeInformationProvider;
 
@@ -216,6 +226,7 @@ final class _ReadyAppState extends State<_ReadyApp> {
       appSession: widget.appSession,
       readyBuilder: (context, trustedContext) => ProductionHomeShell(
         controller: widget.controller,
+        appSession: widget.appSession,
         context: trustedContext,
         contactJournal: widget.contactJournal,
         deviceId: widget.deviceId,
@@ -245,10 +256,13 @@ final class _ReadyAppState extends State<_ReadyApp> {
       appSession: widget.appSession,
       readyBuilder: (context, trustedContext) => _ContactEntryRoute(
         controller: widget.controller,
+        clock: widget.clock,
+        appSession: widget.appSession,
         context: trustedContext,
         contactJournal: widget.contactJournal,
         deviceId: widget.deviceId,
         locationCapture: widget.locationCapture,
+        timeZoneProvider: widget.timeZoneProvider,
         draftId: draftId,
       ),
     );
@@ -304,18 +318,24 @@ final class _SessionRoute extends StatelessWidget {
 final class _ContactEntryRoute extends StatefulWidget {
   const _ContactEntryRoute({
     required this.controller,
+    required this.clock,
+    required this.appSession,
     required this.context,
     required this.contactJournal,
     required this.deviceId,
     required this.locationCapture,
+    required this.timeZoneProvider,
     required this.draftId,
   });
 
   final AppController controller;
+  final AppClock clock;
+  final AppSession appSession;
   final TrustedSessionContext context;
   final ContactJournal contactJournal;
   final String deviceId;
   final ContactLocationCapture locationCapture;
+  final DeviceTimeZoneProvider timeZoneProvider;
   final String? draftId;
 
   @override
@@ -370,11 +390,13 @@ final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
   Widget _screen(ContactDraft? draft) {
     return ContactEntryScreen(
       controller: widget.controller,
+      clock: widget.clock,
       context: widget.context,
       contactJournal: widget.contactJournal,
       deviceId: widget.deviceId,
       initialDraft: draft,
       locationCapture: widget.locationCapture,
+      timeZoneProvider: widget.timeZoneProvider,
     );
   }
 
@@ -383,19 +405,15 @@ final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
     if (draftId == null) {
       return null;
     }
-    final drafts = await widget.contactJournal.listDrafts(
+    final draft = await widget.contactJournal.draftByIdForOwner(
+      draftId: draftId,
       appUserId: widget.context.appUserId,
     );
-    for (final draft in drafts) {
-      if (draft.draftId == draftId &&
-          draft.workspaceId == widget.context.workspace.id &&
-          draft.projectId == widget.context.project.id &&
-          draft.questionnaireVersionId ==
-              widget.context.questionnaireVersion.id) {
-        return draft;
-      }
+    if (draft == null || draft.projectId == widget.context.project.id) {
+      return draft;
     }
-    return null;
+    final result = await widget.appSession.selectProject(draft.projectId);
+    return result is SessionContextSuccess ? draft : null;
   }
 }
 

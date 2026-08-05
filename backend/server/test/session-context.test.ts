@@ -58,3 +58,27 @@ test("invalid questionnaire version fails closed", async () => {
     /invalid questionnaire_version_number/,
   );
 });
+
+test("context load returns all personal projects and the saved selection", async () => {
+  const secondProject = {
+    ...validRow,
+    project_id: "55555555-5555-4555-8555-555555555555",
+    project_name: "校园推广",
+    questionnaire_version_id: "66666666-6666-4666-8666-666666666666",
+    is_current: true,
+  };
+  const store = new PostgresSessionContextStore(async (text) => {
+    if (text.includes("bootstrap_personal_context")) {
+      return {rows: [validRow]};
+    }
+    return {rows: [{...validRow, is_current: false}, secondProject]};
+  });
+
+  const context = await store.loadOrCreate(identity);
+
+  assert.equal(context.current.project.id, secondProject.project_id);
+  assert.deepEqual(
+    context.availableContexts?.map((item) => item.current.project.id),
+    [validRow.project_id, secondProject.project_id],
+  );
+});

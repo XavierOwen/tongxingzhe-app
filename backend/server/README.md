@@ -1,8 +1,8 @@
-# Backend 身份上下文与接触同步
+# Backend 身份上下文、项目与接触同步
 
-这个模块提供 `GET /v1/session/context`、`POST /v1/sync/commands` 和 `GET /v1/sync/changes`。三个端点都先验证 Supabase access token，再取得内部用户和当前项目。
+这个模块提供可信 session context、个人推广项目选择／创建、同步 command 和 change feed。所有端点都先验证 Supabase access token，再取得内部用户和允许访问的项目。同步协议同时处理已提交接触和账号私有草稿；设备专用草稿不会离开本机。
 
-客户端不能提交 `app_user_id`、role 或 capability。上传会把 payload 的 workspace 和 project 与可信上下文交叉核对。拉取也会核对 query 范围，并只接受属于同一范围的不透明 cursor。响应不返回外部 subject、email 或 token。
+客户端不能提交 `app_user_id`、role 或 capability。上传会把 payload 的 workspace 和 project 与可信上下文交叉核对。拉取也会核对 query 范围，并只接受属于同一范围的不透明 cursor。响应不返回外部 subject、email 或 token。三个 HTTP 入口共用严格的 bearer header 解析器，防止端点之间出现不同的认证规则。
 
 cursor 不存在或不属于当前用户、空间和项目时，端点返回 `400 invalid_cursor`。未分类的数据库失败返回 `503 sync_unavailable`，不把内部 SQL 错误文字暴露给客户端。
 
@@ -29,7 +29,7 @@ npm test
 npm run check
 ```
 
-测试使用临时 ES256 key 和 synthetic claims，不连接真实 Supabase 项目。身份 schema 见 [`0002_identity_context.sql`](../database/migrations/0002_identity_context.sql)。接触幂等写入和有序拉取见 [`0003_contact_sync.sql`](../database/migrations/0003_contact_sync.sql)。CI 使用 synthetic fixture 验证权限、重复 command、原子写入、cursor 和 dump／restore。
+测试使用临时 ES256 key 和 synthetic claims，不连接真实 Supabase 项目。身份 schema 见 [`0002_identity_context.sql`](../database/migrations/0002_identity_context.sql)，项目上下文见 [`0004_personal_project_contexts.sql`](../database/migrations/0004_personal_project_contexts.sql)，区域与私有草稿见 [`0005_regions_and_private_draft_sync.sql`](../database/migrations/0005_regions_and_private_draft_sync.sql)，个人指标见 [`0006_personal_contact_metrics.sql`](../database/migrations/0006_personal_contact_metrics.sql)。CI 使用 synthetic fixture 验证权限、重复 command、草稿版本冲突、跨用户隔离、区域树、指标口径、cursor 和 dump／restore。
 
 ## 运行
 

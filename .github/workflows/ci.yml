@@ -52,13 +52,13 @@ jobs:
       - name: Verify Markdown links
         run: dart run tool/check_markdown_links.dart
 
-      - name: Verify current Drift v8 schema snapshot
+      - name: Verify current Drift v9 schema snapshot
         run: |
           dart run drift_dev schema dump \
             lib/data/local_database.dart \
-            "${RUNNER_TEMP}/drift_schema_v8.json"
-          cmp drift_schemas/drift_schema_v8.json \
-            "${RUNNER_TEMP}/drift_schema_v8.json"
+            "${RUNNER_TEMP}/drift_schema_v9.json"
+          cmp drift_schemas/drift_schema_v9.json \
+            "${RUNNER_TEMP}/drift_schema_v9.json"
 
       - name: Verify Drift migration helpers are current
         run: |
@@ -114,6 +114,18 @@ jobs:
             --file backend/database/checks/verify_contact_sync.sql
           psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file backend/database/fixtures/0003_contact_sync.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_personal_project_contexts.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0004_personal_project_contexts.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_regions_and_private_drafts.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0005_regions_and_private_drafts.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_personal_contact_metrics.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0006_personal_contact_metrics.sql
 
       - name: Reject edited migration history
         run: |
@@ -147,6 +159,18 @@ jobs:
             --file backend/database/checks/verify_contact_sync.sql
           psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file backend/database/fixtures/0003_contact_sync.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_personal_project_contexts.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0004_personal_project_contexts.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_regions_and_private_drafts.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0005_regions_and_private_drafts.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_personal_contact_metrics.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0006_personal_contact_metrics.sql
 
   backend-server:
     name: Backend identity, context, and sync

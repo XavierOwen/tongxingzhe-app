@@ -84,6 +84,29 @@ void main() {
     );
   });
 
+  test('创建项目接受 Backend 的 201 并解析新的可信上下文', () async {
+    late http.Request captured;
+    final gateway = HttpSessionContextGateway(
+      baseUri: Uri.parse('https://api.example.test'),
+      client: MockClient((request) async {
+        captured = request;
+        return http.Response.bytes(
+          utf8.encode(_validResponse),
+          201,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }),
+    );
+    addTearDown(gateway.close);
+
+    final result = await gateway.createPersonalProject(accessToken, '社区推广');
+
+    expect(result, isA<SessionContextSuccess>());
+    expect(captured.method, 'POST');
+    expect(captured.url.path, '/v1/session/projects');
+    expect(jsonDecode(captured.body), {'display_name': '社区推广'});
+  });
+
   test('非本机 Backend 拒绝明文 HTTP', () {
     expect(
       () => HttpSessionContextGateway(

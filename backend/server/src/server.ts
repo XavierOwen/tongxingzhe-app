@@ -1,7 +1,9 @@
 import { createServer, type Server } from "node:http";
 
 import {
+  createPersonalProject,
   getSessionContext,
+  selectSessionProject,
   type SessionContextHttpDependencies,
 } from "./http-app.js";
 import { handleSyncChanges } from "./sync-changes.js";
@@ -42,6 +44,64 @@ export function createBackendServer(
             contextStore: dependencies.contextStore,
             commandStore: dependencies.commandStore,
           },
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        response.statusCode = error instanceof PayloadTooLargeError ? 413 : 400;
+        response.end(
+          JSON.stringify({
+            error: {
+              code:
+                error instanceof PayloadTooLargeError
+                  ? "payload_too_large"
+                  : "invalid_json",
+            },
+          }),
+        );
+      }
+      return;
+    }
+
+    if (
+      request.method === "POST" &&
+      request.url === "/v1/session/context/select"
+    ) {
+      try {
+        const body = await readJsonBody(request);
+        const result = await selectSessionProject(
+          request.headers.authorization,
+          body,
+          dependencies,
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        response.statusCode = error instanceof PayloadTooLargeError ? 413 : 400;
+        response.end(
+          JSON.stringify({
+            error: {
+              code:
+                error instanceof PayloadTooLargeError
+                  ? "payload_too_large"
+                  : "invalid_json",
+            },
+          }),
+        );
+      }
+      return;
+    }
+
+    if (
+      request.method === "POST" &&
+      request.url === "/v1/session/projects"
+    ) {
+      try {
+        const body = await readJsonBody(request);
+        const result = await createPersonalProject(
+          request.headers.authorization,
+          body,
+          dependencies,
         );
         response.statusCode = result.status;
         response.end(JSON.stringify(result.body));

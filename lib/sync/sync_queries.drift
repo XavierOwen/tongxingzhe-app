@@ -11,11 +11,11 @@ readReadySyncCommand(
 ):
 SELECT outbox.*
 FROM db_sync_outbox AS outbox
-JOIN db_contact_records AS contact
+LEFT JOIN db_contact_records AS contact
   ON contact.contact_id = outbox.aggregate_id
-WHERE contact.app_user_id = :app_user_id
-  AND contact.workspace_id = :workspace_id
-  AND contact.project_id = :project_id
+WHERE COALESCE(outbox.app_user_id, contact.app_user_id) = :app_user_id
+  AND COALESCE(outbox.workspace_id, contact.workspace_id) = :workspace_id
+  AND COALESCE(outbox.project_id, contact.project_id) = :project_id
   AND outbox.status = 'pending'
   AND outbox.next_attempt_at_utc <= :now_utc
   AND NOT EXISTS (

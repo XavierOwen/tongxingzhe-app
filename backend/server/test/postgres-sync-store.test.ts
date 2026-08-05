@@ -92,6 +92,48 @@ test("Postgres store parses stable conflict without exposing SQL error", async (
   });
 });
 
+test("Postgres store routes private draft commands to the draft function", async () => {
+  let text = "";
+  const store = new PostgresSyncCommandStore(async (queryText) => {
+    text = queryText;
+    return {
+      rows: [{
+        result_code: "accepted",
+        server_cursor: "opaque-draft-1",
+        failure_code: null,
+      }],
+    };
+  });
+  const draftCommand: SyncCommand = {
+    protocolVersion: 1,
+    commandId: "draft-command-1",
+    deviceId: "device-1",
+    aggregateId: "draft-1",
+    baseRevision: 0,
+    type: "draft.upsert.v1",
+    payload: {
+      draftId: "draft-1",
+      workspaceId: context.current.workspace.id,
+      projectId: context.current.project.id,
+      questionnaireVersionId: context.current.questionnaireVersion.id,
+      createdAtUtc: "2030-01-08T18:00:00.000Z",
+      updatedAtUtc: "2030-01-08T18:30:00.000Z",
+      occurredAtUtc: null,
+      occurredTimeZone: null,
+      channel: "video_call",
+      channelDetail: null,
+      location: null,
+      reachCount: null,
+      interestLevel: null,
+      answers: [],
+    },
+  };
+
+  await store.apply(context, draftCommand);
+
+  assert.match(text, /apply_draft_upsert/);
+});
+
 test("Postgres store passes trusted scope and opaque cursor to pull function", async () => {
   var text = "";
   var values: readonly unknown[] | undefined;
@@ -104,7 +146,7 @@ test("Postgres store passes trusted scope and opaque cursor to pull function", a
           server_cursor: "opaque-after",
           change_type: "contact.submitted",
           revision_number: 1,
-          contact_payload: { contactId: "contact-remote-1" },
+          typed_payload: { contactId: "contact-remote-1" },
         },
       ],
     };
@@ -112,7 +154,7 @@ test("Postgres store passes trusted scope and opaque cursor to pull function", a
 
   const result = await store.pull(context, "opaque-before", 25);
 
-  assert.match(text, /pull_contact_changes/);
+  assert.match(text, /pull_sync_changes/);
   assert.deepEqual(values, [
     context.appUserId,
     context.current.workspace.id,

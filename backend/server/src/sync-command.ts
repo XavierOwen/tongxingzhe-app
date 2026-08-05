@@ -2,6 +2,7 @@ import {
   IdentityVerificationError,
   type IdentityVerifier,
 } from "./identity.js";
+import { bearerToken } from "./authorization.js";
 import type {
   SessionContext,
   SessionContextStore,
@@ -11,6 +12,8 @@ import type {
   ContactChannel,
   ContactLocation,
   ContactSubmitPayload,
+  DraftDeletePayload,
+  DraftUpsertPayload,
   SyncCommand,
   SyncCommandResult,
   SyncCommandStore,
@@ -89,26 +92,122 @@ function parseSyncCommand(value: unknown): SyncCommand {
     throw new CommandValidationError("unsupported_protocol");
   }
   const type = string(root.type, "invalid_command_type");
-  if (type !== "contact.submit.v1") {
-    throw new CommandValidationError("unsupported_command_type");
-  }
   const baseRevision = integer(root.base_revision, "invalid_base_revision");
-  if (baseRevision !== 0) {
+  if (baseRevision < 0) {
     throw new CommandValidationError("invalid_base_revision");
   }
   const aggregateId = string(root.aggregate_id, "invalid_aggregate_id");
-  const payload = parseContactPayload(root.typed_payload);
-  if (payload.contactId !== aggregateId) {
-    throw new CommandValidationError("aggregate_id_mismatch");
-  }
-  return {
-    protocolVersion: 1,
+  const common = {
+    protocolVersion: 1 as const,
     commandId: string(root.command_id, "invalid_command_id"),
     deviceId: string(root.device_id, "invalid_device_id"),
     aggregateId,
-    baseRevision: 0,
-    type: "contact.submit.v1",
-    payload,
+  };
+  if (type === "contact.submit.v1") {
+    if (baseRevision !== 0) {
+      throw new CommandValidationError("invalid_base_revision");
+    }
+    const payload = parseContactPayload(root.typed_payload);
+    if (payload.contactId !== aggregateId) {
+      throw new CommandValidationError("aggregate_id_mismatch");
+    }
+    return {
+      ...common,
+      baseRevision: 0,
+      type,
+      payload,
+    };
+  }
+  if (type === "draft.upsert.v1") {
+    const payload = parseDraftUpsertPayload(root.typed_payload);
+    if (payload.draftId !== aggregateId) {
+      throw new CommandValidationError("aggregate_id_mismatch");
+    }
+    return { ...common, baseRevision, type, payload };
+  }
+  if (type === "draft.delete.v1") {
+    const payload = parseDraftDeletePayload(root.typed_payload);
+    if (payload.draftId !== aggregateId) {
+      throw new CommandValidationError("aggregate_id_mismatch");
+    }
+    return { ...common, baseRevision, type, payload };
+  }
+  throw new CommandValidationError("unsupported_command_type");
+}
+
+function parseDraftUpsertPayload(value: unknown): DraftUpsertPayload {
+  const payload = object(value, "invalid_draft_payload");
+  const createdAtUtc = utcDateString(
+    payload.created_at_utc,
+    "invalid_created_at",
+  );
+  const updatedAtUtc = utcDateString(
+    payload.updated_at_utc,
+    "invalid_updated_at",
+  );
+  if (Date.parse(updatedAtUtc) < Date.parse(createdAtUtc)) {
+    throw new CommandValidationError("invalid_draft_time_order");
+  }
+  const occurredAtUtc = nullableUtcDateString(payload.occurred_at_utc);
+  const occurredTimeZone = nullableString(payload.occurred_time_zone);
+  if ((occurredAtUtc === null) !== (occurredTimeZone === null)) {
+    throw new CommandValidationError("draft_occurrence_incomplete");
+  }
+  if (occurredTimeZone !== null) {
+    validateTimeZone(occurredTimeZone);
+  }
+  const rawChannel = payload.channel;
+  const channel = rawChannel === null || rawChannel === undefined
+    ? null
+    : contactChannel(rawChannel);
+  const location = payload.location === null || payload.location === undefined
+    ? null
+    : parseLocation(payload.location);
+  const reachCount = nullableInteger(payload.reach_count, "invalid_reach_count");
+  const interestLevel = nullableInteger(
+    payload.interest_level,
+    "invalid_interest_level",
+  );
+  if (reachCount !== null && reachCount < 1) {
+    throw new CommandValidationError("invalid_reach_count");
+  }
+  if (interestLevel !== null && (interestLevel < 0 || interestLevel > 4)) {
+    throw new CommandValidationError("invalid_interest_level");
+  }
+  if (!Array.isArray(payload.answers)) {
+    throw new CommandValidationError("invalid_answers");
+  }
+  const answers = payload.answers.map(parseAnswer);
+  if (new Set(answers.map((answer) => answer.questionId)).size !== answers.length) {
+    throw new CommandValidationError("duplicate_question_answer");
+  }
+  return {
+    draftId: string(payload.draft_id, "invalid_draft_id"),
+    workspaceId: uuid(payload.workspace_id, "invalid_workspace_id"),
+    projectId: uuid(payload.project_id, "invalid_project_id"),
+    questionnaireVersionId: uuid(
+      payload.questionnaire_version_id,
+      "invalid_questionnaire_version_id",
+    ),
+    createdAtUtc,
+    updatedAtUtc,
+    occurredAtUtc,
+    occurredTimeZone,
+    channel,
+    channelDetail: nullableString(payload.channel_detail),
+    location,
+    reachCount,
+    interestLevel,
+    answers,
+  };
+}
+
+function parseDraftDeletePayload(value: unknown): DraftDeletePayload {
+  const payload = object(value, "invalid_draft_payload");
+  return {
+    draftId: string(payload.draft_id, "invalid_draft_id"),
+    workspaceId: uuid(payload.workspace_id, "invalid_workspace_id"),
+    projectId: uuid(payload.project_id, "invalid_project_id"),
   };
 }
 
@@ -119,19 +218,15 @@ function parseContactPayload(value: unknown): ContactSubmitPayload {
   if (channel === "other_direct" && channelDetail === null) {
     throw new CommandValidationError("other_channel_detail_required");
   }
-  const occurredAtUtc = string(payload.occurred_at_utc, "invalid_occurred_at");
-  if (!occurredAtUtc.endsWith("Z") || Number.isNaN(Date.parse(occurredAtUtc))) {
-    throw new CommandValidationError("invalid_occurred_at");
-  }
+  const occurredAtUtc = utcDateString(
+    payload.occurred_at_utc,
+    "invalid_occurred_at",
+  );
   const occurredTimeZone = string(
     payload.occurred_time_zone,
     "invalid_occurred_time_zone",
   );
-  try {
-    new Intl.DateTimeFormat("en", { timeZone: occurredTimeZone }).format();
-  } catch {
-    throw new CommandValidationError("invalid_occurred_time_zone");
-  }
+  validateTimeZone(occurredTimeZone);
   const reachCount = integer(payload.reach_count, "invalid_reach_count");
   if (reachCount < 1) {
     throw new CommandValidationError("invalid_reach_count");
@@ -186,6 +281,10 @@ function parseLocation(value: unknown): ContactLocation {
       smallestRegionId: string(
         location.smallest_region_id,
         "invalid_region_id",
+      ),
+      regionTreeVersion: string(
+        location.region_tree_version,
+        "invalid_region_tree_version",
       ),
     };
   }
@@ -259,13 +358,6 @@ function serializeStoreResult(result: SyncCommandResult): SyncCommandHttpResult 
   return commandFailure(status, result.result, result.failureCode);
 }
 
-function bearerToken(authorization: string | undefined): string | null {
-  if (authorization === undefined) {
-    return null;
-  }
-  return /^Bearer ([^\s]+)$/i.exec(authorization.trim())?.[1] ?? null;
-}
-
 function failure(status: number, code: string): SyncCommandHttpResult {
   return { status, body: { error: { code } } };
 }
@@ -304,6 +396,32 @@ function integer(value: unknown, code: string): number {
     throw new CommandValidationError(code);
   }
   return value;
+}
+
+function nullableInteger(value: unknown, code: string): number | null {
+  return value === null || value === undefined ? null : integer(value, code);
+}
+
+function utcDateString(value: unknown, code: string): string {
+  const parsed = string(value, code);
+  if (!parsed.endsWith("Z") || Number.isNaN(Date.parse(parsed))) {
+    throw new CommandValidationError(code);
+  }
+  return parsed;
+}
+
+function nullableUtcDateString(value: unknown): string | null {
+  return value === null || value === undefined
+    ? null
+    : utcDateString(value, "invalid_occurred_at");
+}
+
+function validateTimeZone(value: string): void {
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: value }).format();
+  } catch {
+    throw new CommandValidationError("invalid_occurred_time_zone");
+  }
 }
 
 function finiteNumber(value: unknown, code: string): number {

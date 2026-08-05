@@ -1,6 +1,6 @@
 # 第 3 章：接触草稿如何在 SQLite 中保存、提交和统计
 
-本章解释 Slice 1 的本地数据模块。当前代码可以保存多份私有草稿，也可以把完整草稿原子提交为匿名接触。正式页面和已提交接触的 Backend 同步已接线；跨设备草稿同步仍未完成。
+本章解释 Slice 1 的本地数据模块。当前代码可以保存多份私有草稿、在本人设备间同步账号私有草稿、保留离线冲突副本，并把完整草稿原子提交为匿名接触。
 
 ## 1. `ContactJournal` 为什么是一个深模块
 
@@ -18,7 +18,7 @@
 
 模块接收真实 Drift 数据库、Clock 和 ID generator。测试使用真实 SQLite、固定时间和确定性 ID。测试可以稳定重现失败，不把测试条件带入正式代码。
 
-## 2. v8 的八张现代接触与同步表
+## 2. v9 的十一张现代接触、同步与区域表
 
 表结构定义在 [`contact_tables.dart`](../../lib/features/contact_journal/contact_tables.dart)。Drift 根据这些定义生成 SQLite schema 和类型安全的 Dart row。
 
@@ -32,6 +32,9 @@
 | `db_sync_outbox` | 命令、协议版本、状态和重试字段 | 身份令牌、日志用 PII |
 | `db_sync_drainer_leases` | 跨执行器互斥的全局租约 | 远端锁、用户身份 |
 | `db_sync_scopes` | 每个用户和项目的拉取 cursor、最后成功和失败 | command payload、token |
+| `db_canonical_region_versions` | 带版本、唯一父级的规范区域节点和属性 | 项目私有层级、接触事实 |
+| `db_contact_region_assignments` | 已提交接触到最小区域节点的真实外键 | 重复保存的上级区域路径 |
+| `db_draft_region_assignments` | 草稿到最小区域节点的真实外键 | 未经解析的坐标 |
 
 草稿答案与正式答案分表保存。统计 SQL 只查询 `db_contact_records`，因此草稿不会增加接触场次、触达人数或兴趣分布。
 
@@ -49,7 +52,9 @@
 
 这条规则防止仅打开页面就产生空草稿。创建后的每次保存会更新原草稿，不生成第二个 ID。创建时间保持不变，最后修改时间向前推进。
 
-草稿列表按创建者过滤，并按最后修改时间排序。同一用户可以保留不同项目和问卷版本的草稿。默认同步模式保存为 `account_private`，用户可以改为 `device_only`。当前版本只保存这项选择，跨设备发送尚未实现。
+草稿列表按创建者过滤，并按最后修改时间排序。同一用户可以保留不同项目和问卷版本的草稿。默认 `account_private` 会通过私有同步命令送到本人的其他设备；用户可以改为 `device_only`，此时未提交内容不离开本机。两种模式都不让管理员看到草稿。
+
+每次本地保存递增 `local_revision`，服务器接受后更新 `server_revision`。另一台设备的版本与本机尚未上传的修改同时出现时，SyncEngine 不采用“最后写入覆盖”。它安装服务器确认的原草稿，并把本机分叉保存为 `device_only` 的草稿冲突副本。冲突副本不能直接提交，使用者必须对照后手动合并需要的内容。
 
 Native Drift 读取日期时可能使用设备本地时区表示同一瞬间。`ContactJournal` 在返回草稿前统一调用 `toUtc()`。这样，调用者不会把时区表现差异误当成时间变化。
 
@@ -171,18 +176,21 @@ WHERE app_user_id = :app_user_id
 
 兴趣是有序等级。核心分析先返回五档分布，不计算平均值。若以后显示兴趣算术指数，页面必须说明它额外假设相邻等级距离相等。
 
-## 12. v5 和 v6 如何升级到 v8
+## 12. v5、v6 和 v8 如何升级到 v9
 
-v6 使用 expand-contract 新增已提交接触、revision、答案和 Outbox 表。v7 新增草稿和草稿答案表。v8 新增同步执行租约和按可信范围保存的 cursor。升级不删除五张 legacy 表，也不从旧宽表猜测现代接触。
+v6 使用 expand-contract 新增已提交接触、revision、答案和 Outbox 表。v7 新增草稿和草稿答案表。v8 新增同步执行租约和按可信范围保存的 cursor。v9 新增草稿同步版本、Outbox 可信范围和三张区域表。升级不删除五张 legacy 表，也不从旧宽表猜测现代接触或区域归属。
 
-[`local_database_migration_test.dart`](../../test/data/local_database_migration_test.dart) 保存三类证据：
+v9 的新列参与 `CHECK` 约束，不能只运行 SQLite `ADD COLUMN`。migration 使用 Drift `TableMigration` 重建受影响的表并复制旧数据。它先检查列是否已经存在，因此从 v5 或 v6 跨多版升级时，不会因较早步骤按当前定义建表而重复添加同名列。
 
-- 当前 v8 快照可以独立重建；
-- v6 的 synthetic 已提交接触升级后仍存在，新增草稿和同步协调表为空；
-- v5 的 synthetic 设置升级后仍存在，全部现代表为空。
+[`local_database_migration_test.dart`](../../test/data/local_database_migration_test.dart) 保存四类证据：
 
-机器可读快照位于 [`drift_schema_v8.json`](../../drift_schemas/drift_schema_v8.json)。CI 会重新导出当前 schema 并逐字比较，也会重新生成所有 migration 测试辅助代码。
+- 当前 v9 快照可以独立重建；
+- v8 的 synthetic 草稿升级后仍存在，并得到初始本机和服务器 revision；
+- v6 的 synthetic 已提交接触升级后仍存在；
+- v5 的 synthetic 设置升级后仍存在，无法证明的现代区域表保持为空。
+
+机器可读快照位于 [`drift_schema_v9.json`](../../drift_schemas/drift_schema_v9.json)。CI 会重新导出当前 schema 并逐字比较，也会重新生成所有 migration 测试辅助代码。
 
 ## 13. 当前边界
 
-v8 完成草稿、正式接触、本机同步状态和远端 cursor 的本地数据行为。草稿跨设备同步、冲突副本和本地数据库应用层加密仍属后续切片。同步状态机和 Backend SQL 见 [第 6 章](06-persistent-sync-and-backend-sql.md)。
+v9 完成草稿、正式接触、跨设备私有草稿、冲突副本、版本化区域外键、本机同步状态和远端 cursor 的本地数据行为。本地数据库应用层加密仍属后续切片。同步状态机和 Backend SQL 见 [第 6 章](06-persistent-sync-and-backend-sql.md)。
