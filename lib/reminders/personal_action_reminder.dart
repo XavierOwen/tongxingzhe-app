@@ -111,13 +111,23 @@ final class DeviceReminderScope {
   final String deviceId;
 }
 
+enum ReminderNotificationContentMode { generic, projectAndProgress }
+
 final class DeviceReminderPreference {
-  const DeviceReminderPreference({required this.systemNotificationsEnabled});
+  const DeviceReminderPreference({
+    required this.systemNotificationsEnabled,
+    this.contentMode = ReminderNotificationContentMode.generic,
+  }) : assert(
+         systemNotificationsEnabled ||
+             contentMode == ReminderNotificationContentMode.generic,
+       );
 
   const DeviceReminderPreference.disabled()
-    : systemNotificationsEnabled = false;
+    : systemNotificationsEnabled = false,
+      contentMode = ReminderNotificationContentMode.generic;
 
   final bool systemNotificationsEnabled;
+  final ReminderNotificationContentMode contentMode;
 }
 
 abstract interface class DeviceReminderPreferenceStore {
@@ -130,11 +140,13 @@ abstract interface class DeviceReminderPreferenceStore {
 }
 
 /// 系统通知只接收已经过隐私收缩的文本和预留的 Today payload。
+const personalActionReminderPayload = 'today:personal-action-reminder:v1';
+
 final class ReminderNotificationContent {
   const ReminderNotificationContent({
     required this.title,
     required this.body,
-    this.payload = 'today',
+    this.payload = personalActionReminderPayload,
   });
 
   final String title;
@@ -179,6 +191,9 @@ abstract interface class ReminderNotificationScheduler {
 
   Future<ReminderScheduleResult> cancel({required String scheduleKey});
 
+  /// 登出或可信上下文失效时取消本功能排入系统的全部通知。
+  Future<ReminderScheduleResult> cancelAll();
+
   Future<void> close();
 }
 
@@ -206,6 +221,10 @@ final class UnsupportedReminderNotificationScheduler
 
   @override
   Future<ReminderScheduleResult> cancel({required String scheduleKey}) async =>
+      const ReminderScheduleSucceeded();
+
+  @override
+  Future<ReminderScheduleResult> cancelAll() async =>
       const ReminderScheduleSucceeded();
 
   @override

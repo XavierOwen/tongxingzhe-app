@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../device/device_time_zone.dart';
 import '../../foundation/runtime_values.dart';
 import '../../l10n/app_strings.dart';
+import '../../plans/personal_action_plan.dart';
 import '../../reminders/personal_action_reminder.dart';
 
 /// “今日”页中的私人提醒卡片。
@@ -17,6 +18,8 @@ final class PersonalActionReminderPanel extends StatefulWidget {
     required this.text,
     required this.scope,
     required this.gateway,
+    required this.planGateway,
+    required this.projectName,
     required this.preferenceStore,
     required this.scheduler,
     required this.timeZoneProvider,
@@ -26,6 +29,8 @@ final class PersonalActionReminderPanel extends StatefulWidget {
   final AppStrings text;
   final DeviceReminderScope scope;
   final PersonalActionReminderGateway gateway;
+  final PersonalActionPlanGateway planGateway;
+  final String projectName;
   final DeviceReminderPreferenceStore preferenceStore;
   final ReminderNotificationScheduler scheduler;
   final DeviceTimeZoneProvider timeZoneProvider;
@@ -86,6 +91,8 @@ final class _PersonalActionReminderPanelState
     super.didUpdateWidget(oldWidget);
     if (!_sameScope(oldWidget.scope, widget.scope) ||
         oldWidget.gateway != widget.gateway ||
+        oldWidget.planGateway != widget.planGateway ||
+        oldWidget.projectName != widget.projectName ||
         oldWidget.preferenceStore != widget.preferenceStore ||
         oldWidget.scheduler != widget.scheduler) {
       _reminder = null;
@@ -159,7 +166,27 @@ final class _PersonalActionReminderPanelState
                     ? null
                     : _setDeviceEnabled,
               ),
-              Text(text.t('personalReminderGenericPrivacy')),
+              if (_preference.systemNotificationsEnabled)
+                SwitchListTile.adaptive(
+                  key: const ValueKey('device-reminder-details'),
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(text.t('personalReminderDetailToggle')),
+                  subtitle: Text(text.t('personalReminderDetailToggleHelp')),
+                  value:
+                      _preference.contentMode ==
+                      ReminderNotificationContentMode.projectAndProgress,
+                  onChanged: _saving || localTime == null
+                      ? null
+                      : _setDetailedContent,
+                ),
+              Text(
+                text.t(
+                  _preference.contentMode ==
+                          ReminderNotificationContentMode.projectAndProgress
+                      ? 'personalReminderDetailPrivacy'
+                      : 'personalReminderGenericPrivacy',
+                ),
+              ),
               if (localTime != null)
                 Align(
                   alignment: Alignment.centerLeft,
@@ -340,7 +367,11 @@ final class _PersonalActionReminderPanelState
       return;
     }
 
-    final result = await _schedule(localTime, requestPermission: true);
+    final result = await _schedule(
+      localTime,
+      requestPermission: true,
+      content: _genericContent,
+    );
     if (result is ReminderScheduleRejected) {
       if (mounted) {
         setState(() {
@@ -370,10 +401,164 @@ final class _PersonalActionReminderPanelState
     }
   }
 
+  Future<void> _setDetailedContent(bool enabled) async {
+    final localTime = _reminder?.localTime;
+    if (localTime == null || !_preference.systemNotificationsEnabled) return;
+    final operationScheduleKey = _scheduleKey;
+    final operationProjectName = widget.projectName;
+    final previous = _preference;
+    final candidate = DeviceReminderPreference(
+      systemNotificationsEnabled: true,
+      contentMode: enabled
+          ? ReminderNotificationContentMode.projectAndProgress
+          : ReminderNotificationContentMode.generic,
+    );
+    setState(() {
+      _saving = true;
+      _failure = null;
+    });
+
+    if (!enabled) {
+      final cancelled = await widget.scheduler.cancel(
+        scheduleKey: _scheduleKey,
+      );
+      try {
+        await widget.preferenceStore.save(widget.scope, candidate);
+      } on Object {
+        if (!mounted) return;
+        setState(() {
+          _saving = false;
+          _failure = _ReminderPanelFailure.scheduleUnavailable;
+        });
+        return;
+      }
+      if (!mounted) return;
+      setState(() => _preference = candidate);
+      if (cancelled is ReminderScheduleRejected) {
+        setState(() {
+          _saving = false;
+          _failure = _failureFor(cancelled.failure);
+        });
+        return;
+      }
+      final scheduled = await _schedule(
+        localTime,
+        requestPermission: false,
+        content: _genericContent,
+        cancelExisting: false,
+      );
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        if (scheduled is ReminderScheduleRejected) {
+          _failure = _failureFor(scheduled.failure);
+        }
+      });
+      return;
+    }
+
+    final content = await _contentFor(candidate);
+    if (content == null) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _failure = _ReminderPanelFailure.detailUnavailable;
+      });
+      return;
+    }
+    if (!mounted ||
+        operationScheduleKey != _scheduleKey ||
+        operationProjectName != widget.projectName) {
+      return;
+    }
+    setState(() => _saving = false);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(widget.text.t('personalReminderDetailConfirmTitle')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.text.t('personalReminderDetailConfirmHelp')),
+            const SizedBox(height: 12),
+            Text(content.title, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(content.body),
+          ],
+        ),
+        actions: [
+          TextButton(
+            key: const ValueKey('cancel-device-reminder-details'),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(widget.text.t('cancel')),
+          ),
+          FilledButton(
+            key: const ValueKey('confirm-device-reminder-details'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(widget.text.t('confirm')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true ||
+        !mounted ||
+        operationScheduleKey != _scheduleKey ||
+        operationProjectName != widget.projectName) {
+      return;
+    }
+    setState(() => _saving = true);
+    final scheduled = await _schedule(
+      localTime,
+      requestPermission: false,
+      content: content,
+    );
+    if (scheduled is ReminderScheduleRejected) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _failure = _failureFor(scheduled.failure);
+      });
+      return;
+    }
+    try {
+      await widget.preferenceStore.save(widget.scope, candidate);
+      if (!mounted) return;
+      setState(() {
+        _preference = candidate;
+        _saving = false;
+      });
+    } on Object {
+      await _schedule(
+        localTime,
+        requestPermission: false,
+        content: _genericContent,
+      );
+      if (!mounted) return;
+      setState(() {
+        _preference = previous;
+        _saving = false;
+        _failure = _ReminderPanelFailure.scheduleUnavailable;
+      });
+    }
+  }
+
   Future<void> _reconcile({required bool showFailure}) async {
     final localTime = _reminder?.localTime;
     if (localTime == null || !_preference.systemNotificationsEnabled) return;
-    final result = await _schedule(localTime, requestPermission: false);
+    final content = await _contentFor(_preference);
+    if (content == null) {
+      await _cancelScheduled(showFailure: false);
+      if (mounted && showFailure) {
+        setState(() => _failure = _ReminderPanelFailure.detailUnavailable);
+      }
+      return;
+    }
+    final result = await _schedule(
+      localTime,
+      requestPermission: false,
+      content: content,
+    );
     if (result is ReminderScheduleRejected && mounted && showFailure) {
       setState(() => _failure = _failureFor(result.failure));
     }
@@ -382,34 +567,67 @@ final class _PersonalActionReminderPanelState
   Future<ReminderScheduleResult> _schedule(
     LocalReminderTime localTime, {
     required bool requestPermission,
+    required ReminderNotificationContent content,
+    bool cancelExisting = true,
   }) async {
     try {
+      final scheduleKey = _scheduleKey;
       final deviceTimeZone = await widget.timeZoneProvider
           .currentIanaTimeZone();
-      if (!requestPermission) {
+      if (!requestPermission && cancelExisting) {
         final cancelled = await widget.scheduler.cancel(
-          scheduleKey: _scheduleKey,
+          scheduleKey: scheduleKey,
         );
         if (cancelled is ReminderScheduleRejected) return cancelled;
       }
       return requestPermission
           ? widget.scheduler.requestPermissionAndSchedule(
-              scheduleKey: _scheduleKey,
+              scheduleKey: scheduleKey,
               localTime: localTime,
               deviceTimeZone: deviceTimeZone,
-              content: _genericContent,
+              content: content,
             )
           : widget.scheduler.schedule(
-              scheduleKey: _scheduleKey,
+              scheduleKey: scheduleKey,
               localTime: localTime,
               deviceTimeZone: deviceTimeZone,
-              content: _genericContent,
+              content: content,
             );
     } on Object {
       return const ReminderScheduleRejected(
         ReminderScheduleFailure.temporarilyUnavailable,
       );
     }
+  }
+
+  Future<ReminderNotificationContent?> _contentFor(
+    DeviceReminderPreference preference,
+  ) async {
+    if (preference.contentMode == ReminderNotificationContentMode.generic) {
+      return _genericContent;
+    }
+    final projectName = widget.projectName.trim();
+    if (projectName.isEmpty) return null;
+    final result = await widget.planGateway.load();
+    return switch (result) {
+      PersonalActionPlanRejected<PersonalActionPlanSnapshot?>() => null,
+      PersonalActionPlanSuccess<PersonalActionPlanSnapshot?>(:final value) =>
+        ReminderNotificationContent(
+          title: '${widget.text.t('appTitle')} · $projectName',
+          body: _detailedBody(value),
+        ),
+    };
+  }
+
+  String _detailedBody(PersonalActionPlanSnapshot? plan) {
+    final target = plan?.current.weeklyContactTarget;
+    if (plan == null || target == null) {
+      return widget.text.t('personalReminderDetailNoTarget');
+    }
+    return widget.text
+        .t('personalReminderDetailProgress')
+        .replaceAll('{recorded}', '${plan.progress.recordedContactSessions}')
+        .replaceAll('{target}', '$target');
   }
 
   Future<void> _cancelScheduled({required bool showFailure}) async {
@@ -441,6 +659,7 @@ enum _ReminderPanelFailure {
   unsupported,
   permissionDenied,
   scheduleUnavailable,
+  detailUnavailable,
 }
 
 String _failureKey(_ReminderPanelFailure failure) => switch (failure) {
@@ -449,6 +668,8 @@ String _failureKey(_ReminderPanelFailure failure) => switch (failure) {
   _ReminderPanelFailure.unsupported => 'personalReminderUnsupported',
   _ReminderPanelFailure.permissionDenied => 'personalReminderPermissionDenied',
   _ReminderPanelFailure.scheduleUnavailable => 'personalReminderScheduleFailed',
+  _ReminderPanelFailure.detailUnavailable =>
+    'personalReminderDetailUnavailable',
 };
 
 bool _sameScope(DeviceReminderScope left, DeviceReminderScope right) =>

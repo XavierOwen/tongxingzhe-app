@@ -35,6 +35,7 @@ import '../targets/offline_promotion_target_gateway.dart';
 import '../targets/promotion_target.dart';
 import 'app_controller.dart';
 import 'legacy_demo_access.dart';
+import 'reminder_notification_privacy_guard.dart';
 
 /// App 唯一的 composition root。
 ///
@@ -128,6 +129,7 @@ final class AppDependencies {
     PersonalActionPlanGateway? personalActionPlanGateway;
     PersonalActionReminderGateway? personalActionReminderGateway;
     ReminderNotificationScheduler? reminderNotificationScheduler;
+    ReminderNotificationPrivacyGuard? reminderNotificationPrivacyGuard;
     OfflinePiiVault? offlinePiiVault;
     try {
       identitySession = await identitySessionFactory.open();
@@ -249,6 +251,11 @@ final class AppDependencies {
       reminderNotificationScheduler = reminderSchedulerBuilder(
         platformCapabilities.platform,
       );
+      reminderNotificationPrivacyGuard =
+          await ReminderNotificationPrivacyGuard.start(
+            appSession: appSession,
+            scheduler: reminderNotificationScheduler,
+          );
       return AppStartupReady(
         controller: controller,
         clock: clock,
@@ -271,6 +278,7 @@ final class AppDependencies {
           database,
         ),
         reminderNotificationScheduler: reminderNotificationScheduler,
+        reminderNotificationPrivacyGuard: reminderNotificationPrivacyGuard,
         idGenerator: idGenerator,
       );
     } catch (error, stackTrace) {
@@ -282,6 +290,7 @@ final class AppDependencies {
       await promotionTargetGateway?.close();
       await personalActionPlanGateway?.close();
       await personalActionReminderGateway?.close();
+      await reminderNotificationPrivacyGuard?.close();
       await reminderNotificationScheduler?.close();
       await appSession?.close();
       if (appSession == null) {
@@ -324,6 +333,7 @@ final class AppStartupReady extends AppStartupResult {
     required this.personalActionReminderGateway,
     required this.deviceReminderPreferenceStore,
     required this.reminderNotificationScheduler,
+    required this.reminderNotificationPrivacyGuard,
     required this.idGenerator,
   });
 
@@ -346,6 +356,7 @@ final class AppStartupReady extends AppStartupResult {
   final PersonalActionReminderGateway personalActionReminderGateway;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
   final ReminderNotificationScheduler reminderNotificationScheduler;
+  final ReminderNotificationPrivacyGuard reminderNotificationPrivacyGuard;
   final IdGenerator idGenerator;
 }
 

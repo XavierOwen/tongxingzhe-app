@@ -328,6 +328,16 @@ const Map<String, Map<String, String>> _strings = {
     'personalReminderDeviceOff': '新设备默认关闭。只有你在本设备明确开启后，系统才会申请通知权限。',
     'personalReminderGenericPrivacy': '锁屏通知只显示通用行动提醒，不含项目名、进度或推广对象资料。',
     'personalReminderGenericBody': '请为今天的行动留一点时间。打开同行者查看今日页面。',
+    'personalReminderDetailToggle': '显示项目名与个人进度',
+    'personalReminderDetailToggleHelp':
+        '只影响本设备。锁屏会显示当前项目名；设有周目标时，也显示上次安排提醒时的本周场次。',
+    'personalReminderDetailConfirmTitle': '允许锁屏显示这些内容？',
+    'personalReminderDetailConfirmHelp': '请检查下面的通知预览。启用后，拿到本设备的人可能看见这些信息。',
+    'personalReminderDetailPrivacy': '本设备已允许显示项目名和个人周进度。通知仍不会包含推广对象资料。',
+    'personalReminderDetailProgress':
+        '上次安排提醒时，本周已记录 {recorded} / {target} 场。打开同行者查看今日页面。',
+    'personalReminderDetailNoTarget': '本项目未设置周目标。打开同行者查看今日页面。',
+    'personalReminderDetailUnavailable': '个人进度暂时无法读取；本设备没有安排新的详细通知。',
     'personalReminderPermissionDenied': '系统没有授予通知权限；本设备仍保持关闭。',
     'personalReminderUnsupported': '此平台不能在 App 关闭时可靠安排重复通知。提醒时间仍会同步并在 App 内显示。',
     'personalReminderScheduleFailed': '系统通知未能安排；本设备的设置没有被误标为已启用。',
@@ -1033,6 +1043,21 @@ const Map<String, Map<String, String>> _strings = {
         'Lock-screen notifications use a generic action reminder. They contain no project, progress, or target data.',
     'personalReminderGenericBody':
         'Set aside a little time for today’s action. Open Tongxingzhe to view Today.',
+    'personalReminderDetailToggle': 'Show project and personal progress',
+    'personalReminderDetailToggleHelp':
+        'This affects only this device. The lock screen shows the project and, when a target exists, weekly sessions from the last scheduling update.',
+    'personalReminderDetailConfirmTitle':
+        'Allow this content on the lock screen?',
+    'personalReminderDetailConfirmHelp':
+        'Check the notification preview. Anyone with access to this device may see this information.',
+    'personalReminderDetailPrivacy':
+        'This device may show the project and your weekly progress. Notifications still contain no promotion target data.',
+    'personalReminderDetailProgress':
+        'At the last scheduling update, you had recorded {recorded} / {target} sessions this week. Open Tongxingzhe to view Today.',
+    'personalReminderDetailNoTarget':
+        'No weekly target is set for this project. Open Tongxingzhe to view Today.',
+    'personalReminderDetailUnavailable':
+        'Your personal progress is temporarily unavailable. No new detailed notification was scheduled.',
     'personalReminderPermissionDenied':
         'Notification permission was not granted. This device remains off.',
     'personalReminderUnsupported':

@@ -215,6 +215,7 @@ node --test backend/server/dist/test/personal-action-plans.test.js
 
 ```bash
 flutter test --no-pub \
+  test/app/reminder_notification_privacy_guard_test.dart \
   test/reminders/http_personal_action_reminder_gateway_test.dart \
   test/reminders/drift_device_reminder_preference_store_test.dart \
   test/reminders/reminder_schedule_math_test.dart \
@@ -226,7 +227,7 @@ node --test backend/server/dist/test/personal-action-reminders.test.js
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-第一条命令不启动手机模拟器。它在测试进程中检查：新设备默认关闭、权限拒绝不写假成功、不同项目通知不互相覆盖、旅行后按新设备时区计算，以及 Web／Linux／Windows 的明确降级。第二组命令检查 Backend 只使用可信当前上下文，客户端不能伪造用户、项目或设备字段。
+第一条命令不启动手机模拟器。它在测试进程中检查：新设备默认关闭、权限拒绝不写假成功、详细内容必须预览确认、旧版设置降级为通用通知、登出后取消私人提醒、不同项目通知不互相覆盖、旅行后按新设备时区计算，以及 Web／Linux／Windows 的明确降级。第二组命令检查 Backend 只使用可信当前上下文，客户端不能伪造用户、项目或设备字段。
 
 最后一条命令才启动 Docker。没有用过 Docker 也不需要先创建数据库：脚本会下载 PostgreSQL 16 镜像、启动临时容器、从 `0001` 运行到 `0022`、执行全部 check 和 fixture、导出并恢复数据库，然后删除容器。看到以下两行表示提醒数据库合同正在执行：
 
