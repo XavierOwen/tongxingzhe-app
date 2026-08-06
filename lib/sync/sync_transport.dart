@@ -18,6 +18,11 @@ abstract interface class SyncTransport {
   Future<void> close();
 }
 
+/// 可在一次请求中独立确认多条 command 的 Transport 能力。
+abstract interface class SyncBatchTransport {
+  Future<List<SyncCommandPushOutcome>> pushBatch(List<SyncCommand> commands);
+}
+
 abstract interface class SyncJitter {
   /// 返回 `[0, 1)` 的值，用于让多台设备的重试时刻分散。
   double nextUnitInterval();

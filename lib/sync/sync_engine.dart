@@ -12,8 +12,9 @@ import 'sync_transport.dart';
 
 /// 独占 Outbox 领取、租约、ACK、退避与健康状态的同步深模块。
 ///
-/// [drainOnce] 每次最多发送一条 command。调度器可以在前台重复调用，但页面
-/// 不能直接读写 Outbox。跨进程互斥由 SQLite 租约表提供。
+/// 前台调度器使用 [drainBatch]，一次只领取每个 aggregate 的最早
+/// command。[drainOnce] 保留为单条合同和测试入口。页面不能直接读写
+/// Outbox；跨进程互斥由 SQLite 租约表提供。
 final class SyncEngine {
   factory SyncEngine({
     required LocalDatabase database,
@@ -53,6 +54,7 @@ final class SyncEngine {
   static const _drainerLeaseName = 'sync.global.v1';
   static const _maximumRetryDelay = Duration(minutes: 5);
   static const _maximumRetryAfter = Duration(hours: 1);
+  static final _stableFailureCode = RegExp(r'^[a-z][a-z0-9_]{0,63}$');
 
   final LocalDatabase _database;
   final AppClock _clock;
@@ -75,21 +77,7 @@ final class SyncEngine {
 
     SyncPushResult result;
     try {
-      final decoded = jsonDecode(leased.payloadJson);
-      if (decoded is! Map<String, Object?>) {
-        throw const FormatException('sync payload must be an object');
-      }
-      result = await _transport.push(
-        SyncCommand(
-          protocolVersion: leased.protocolVersion,
-          commandId: leased.commandId,
-          deviceId: leased.deviceId,
-          aggregateId: leased.aggregateId,
-          baseRevision: leased.baseRevision,
-          commandType: leased.commandType,
-          payload: Map.unmodifiable(decoded),
-        ),
-      );
+      result = await _transport.push(_commandFromRow(leased));
     } on FormatException {
       result = const SyncPushPermanentFailure(
         failureCode: 'invalid_local_payload',
@@ -99,6 +87,80 @@ final class SyncEngine {
     }
 
     return _acknowledge(leased, result);
+  }
+
+  /// 一次领取不同 aggregate 的最多 [limit] 条 command。
+  ///
+  /// 旧的单条 Transport 自动退化为 [drainOnce]；生产 HTTP Adapter
+  /// 按 command ID 归位每条结果，不依赖服务端的返回顺序。
+  Future<SyncBatchDrainResult> drainBatch({int limit = 20}) async {
+    if (limit < 1 || limit > 20) {
+      throw ArgumentError.value(limit, 'limit', 'must be between 1 and 20');
+    }
+    final transport = _transport;
+    if (transport is! SyncBatchTransport) {
+      return switch (await drainOnce()) {
+        SyncDrainResult.idle => SyncBatchDrainResult.idle,
+        SyncDrainResult.busy => SyncBatchDrainResult.busy,
+        SyncDrainResult.lostLease => SyncBatchDrainResult.lostLease,
+        _ => SyncBatchDrainResult.processed,
+      };
+    }
+    final batchTransport = transport as SyncBatchTransport;
+
+    final claim = await _claimReadyCommands(limit);
+    if (claim case _BatchClaimBusy()) {
+      return SyncBatchDrainResult.busy;
+    }
+    if (claim case _BatchClaimIdle()) {
+      return SyncBatchDrainResult.idle;
+    }
+    final leased = (claim as _ClaimedCommands).rows;
+    final commands = <SyncCommand>[];
+    final resultsById = <String, SyncPushResult>{};
+    for (final row in leased) {
+      try {
+        commands.add(_commandFromRow(row));
+      } on FormatException {
+        resultsById[row.commandId] = const SyncPushPermanentFailure(
+          failureCode: 'invalid_local_payload',
+        );
+      }
+    }
+
+    if (commands.isNotEmpty) {
+      try {
+        final outcomes = await batchTransport.pushBatch(commands);
+        final expectedIds = {for (final command in commands) command.commandId};
+        final receivedIds = <String>{};
+        final validResponse =
+            outcomes.length == commands.length &&
+            outcomes.every(
+              (outcome) =>
+                  expectedIds.contains(outcome.commandId) &&
+                  receivedIds.add(outcome.commandId),
+            );
+        if (validResponse) {
+          for (final outcome in outcomes) {
+            resultsById[outcome.commandId] = outcome.result;
+          }
+        } else {
+          for (final command in commands) {
+            resultsById[command.commandId] = const SyncPushRetryable(
+              failureCode: 'invalid_server_response',
+            );
+          }
+        }
+      } catch (_) {
+        for (final command in commands) {
+          resultsById[command.commandId] = const SyncPushRetryable(
+            failureCode: 'network_unavailable',
+          );
+        }
+      }
+    }
+
+    return _acknowledgeBatch(leased, resultsById);
   }
 
   Future<SyncHealth> health() async {
@@ -210,88 +272,106 @@ final class SyncEngine {
     }
   }
 
-  Future<_ClaimResult> _claimReadyCommand() {
-    return _database.transaction(() async {
-      final nowUtc = _clock.now().toUtc();
-      final leaseQuery = _database.select(_database.dbSyncDrainerLeases)
-        ..where((row) => row.leaseName.equals(_drainerLeaseName));
-      final currentLease = await leaseQuery.getSingleOrNull();
-      if (currentLease != null &&
-          currentLease.leaseExpiresAtUtc.toUtc().isAfter(nowUtc)) {
-        return const _ClaimBusy();
-      }
+  Future<_ClaimResult> _claimReadyCommand() async {
+    final result = await _claimReadyCommands(1);
+    return switch (result) {
+      _BatchClaimBusy() => const _ClaimBusy(),
+      _BatchClaimIdle() => const _ClaimIdle(),
+      _ClaimedCommands(:final rows) => _ClaimedCommand(rows.single),
+    };
+  }
 
-      if (currentLease != null) {
-        await (_database.delete(
-          _database.dbSyncDrainerLeases,
-        )..where((row) => row.leaseName.equals(_drainerLeaseName))).go();
-      }
-      final leaseExpiresAtUtc = nowUtc.add(_leaseDuration);
-      await _database
-          .into(_database.dbSyncDrainerLeases)
-          .insert(
-            DbSyncDrainerLeasesCompanion.insert(
-              leaseName: _drainerLeaseName,
-              leaseOwner: _workerId,
-              leaseExpiresAtUtc: leaseExpiresAtUtc,
+  Future<_BatchClaimResult> _claimReadyCommands(int limit) async {
+    try {
+      return await _database.transaction(() async {
+        final nowUtc = _clock.now().toUtc();
+        final leaseQuery = _database.select(_database.dbSyncDrainerLeases)
+          ..where((row) => row.leaseName.equals(_drainerLeaseName));
+        final currentLease = await leaseQuery.getSingleOrNull();
+        if (currentLease != null &&
+            currentLease.leaseExpiresAtUtc.toUtc().isAfter(nowUtc)) {
+          return const _BatchClaimBusy();
+        }
+
+        if (currentLease != null) {
+          await (_database.delete(
+            _database.dbSyncDrainerLeases,
+          )..where((row) => row.leaseName.equals(_drainerLeaseName))).go();
+        }
+        final leaseExpiresAtUtc = nowUtc.add(_leaseDuration);
+        await _database
+            .into(_database.dbSyncDrainerLeases)
+            .insert(
+              DbSyncDrainerLeasesCompanion.insert(
+                leaseName: _drainerLeaseName,
+                leaseOwner: _workerId,
+                leaseExpiresAtUtc: leaseExpiresAtUtc,
+              ),
+            );
+
+        await (_database.update(_database.dbSyncOutbox)..where(
+              (row) =>
+                  row.status.equals('leased') &
+                  row.leaseExpiresAtUtc.isSmallerOrEqualValue(nowUtc),
+            ))
+            .write(
+              DbSyncOutboxCompanion(
+                status: const Value('pending'),
+                nextAttemptAtUtc: Value(nowUtc),
+                leaseOwner: const Value(null),
+                leaseExpiresAtUtc: const Value(null),
+                lastFailureCode: const Value('lease_expired'),
+              ),
+            );
+
+        final claimed = <DbSyncOutboxData>[];
+        for (var index = 0; index < limit; index++) {
+          final ready = await _database
+              .readReadySyncCommand(
+                _scope.appUserId,
+                _scope.workspaceId,
+                _scope.projectId,
+                nowUtc,
+              )
+              .getSingleOrNull();
+          if (ready == null) {
+            break;
+          }
+          final changed =
+              await (_database.update(_database.dbSyncOutbox)..where(
+                    (row) =>
+                        row.commandId.equals(ready.commandId) &
+                        row.status.equals('pending'),
+                  ))
+                  .write(
+                    DbSyncOutboxCompanion(
+                      status: const Value('leased'),
+                      attemptCount: Value(ready.attemptCount + 1),
+                      leaseOwner: Value(_workerId),
+                      leaseExpiresAtUtc: Value(leaseExpiresAtUtc),
+                    ),
+                  );
+          if (changed != 1) {
+            throw const _ClaimCollision();
+          }
+          claimed.add(
+            ready.copyWith(
+              status: 'leased',
+              attemptCount: ready.attemptCount + 1,
+              leaseOwner: Value(_workerId),
+              leaseExpiresAtUtc: Value(leaseExpiresAtUtc),
             ),
           );
-
-      await (_database.update(_database.dbSyncOutbox)..where(
-            (row) =>
-                row.status.equals('leased') &
-                row.leaseExpiresAtUtc.isSmallerOrEqualValue(nowUtc),
-          ))
-          .write(
-            DbSyncOutboxCompanion(
-              status: const Value('pending'),
-              nextAttemptAtUtc: Value(nowUtc),
-              leaseOwner: const Value(null),
-              leaseExpiresAtUtc: const Value(null),
-              lastFailureCode: const Value('lease_expired'),
-            ),
-          );
-
-      final ready = await _database
-          .readReadySyncCommand(
-            _scope.appUserId,
-            _scope.workspaceId,
-            _scope.projectId,
-            nowUtc,
-          )
-          .getSingleOrNull();
-      if (ready == null) {
-        await _releaseDrainerLease();
-        return const _ClaimIdle();
-      }
-
-      final changed =
-          await (_database.update(_database.dbSyncOutbox)..where(
-                (row) =>
-                    row.commandId.equals(ready.commandId) &
-                    row.status.equals('pending'),
-              ))
-              .write(
-                DbSyncOutboxCompanion(
-                  status: const Value('leased'),
-                  attemptCount: Value(ready.attemptCount + 1),
-                  leaseOwner: Value(_workerId),
-                  leaseExpiresAtUtc: Value(leaseExpiresAtUtc),
-                ),
-              );
-      if (changed != 1) {
-        await _releaseDrainerLease();
-        return const _ClaimBusy();
-      }
-      return _ClaimedCommand(
-        ready.copyWith(
-          status: 'leased',
-          attemptCount: ready.attemptCount + 1,
-          leaseOwner: Value(_workerId),
-          leaseExpiresAtUtc: Value(leaseExpiresAtUtc),
-        ),
-      );
-    });
+        }
+        if (claimed.isEmpty) {
+          await _releaseDrainerLease();
+          return const _BatchClaimIdle();
+        }
+        return _ClaimedCommands(List.unmodifiable(claimed));
+      });
+    } on _ClaimCollision {
+      return const _BatchClaimBusy();
+    }
   }
 
   Future<SyncDrainResult> _acknowledge(
@@ -310,45 +390,115 @@ final class SyncEngine {
         return SyncDrainResult.lostLease;
       }
 
-      if (result is SyncPushConflict &&
-          current.commandType == 'draft.upsert.v1') {
-        final draftQuery = _database.select(_database.dbContactDrafts)
-          ..where((row) => row.draftId.equals(current.aggregateId));
-        final draft = await draftQuery.getSingleOrNull();
-        if (draft != null) {
-          await _preserveLocalDraftAsConflict(draft);
-        }
-      }
-
-      final outcome = switch (result) {
-        final SyncPushAccepted accepted => await _completeCommand(
-          current,
-          accepted,
-          nowUtc,
-        ),
-        final SyncPushConflict conflict => await _stopCommand(
-          current,
-          status: 'needs_resolution',
-          failureCode: conflict.failureCode,
-          nowUtc: nowUtc,
-          outcome: SyncDrainResult.needsResolution,
-        ),
-        final SyncPushPermanentFailure failure => await _stopCommand(
-          current,
-          status: 'permanent_failure',
-          failureCode: failure.failureCode,
-          nowUtc: nowUtc,
-          outcome: SyncDrainResult.permanentFailure,
-        ),
-        final SyncPushRetryable retryable => await _retryCommand(
-          current,
-          retryable,
-          nowUtc,
-        ),
-      };
+      final outcome = await _applyAcknowledgement(current, result, nowUtc);
       await _releaseDrainerLease();
       return outcome;
     });
+  }
+
+  Future<SyncBatchDrainResult> _acknowledgeBatch(
+    List<DbSyncOutboxData> leased,
+    Map<String, SyncPushResult> resultsById,
+  ) {
+    return _database.transaction(() async {
+      final nowUtc = _clock.now().toUtc();
+      var lostLease = false;
+      String? lastFailureCode;
+      for (final claimed in leased) {
+        final commandQuery = _database.select(_database.dbSyncOutbox)
+          ..where((row) => row.commandId.equals(claimed.commandId));
+        final current = await commandQuery.getSingleOrNull();
+        if (current == null ||
+            current.status != 'leased' ||
+            current.leaseOwner != _workerId) {
+          lostLease = true;
+          continue;
+        }
+        final result = resultsById[claimed.commandId];
+        if (result == null) {
+          lostLease = true;
+          continue;
+        }
+        await _applyAcknowledgement(current, result, nowUtc);
+        lastFailureCode = switch (result) {
+          SyncPushAccepted() => lastFailureCode,
+          SyncPushConflict(:final failureCode) => _failureCode(failureCode),
+          SyncPushPermanentFailure(:final failureCode) => _failureCode(
+            failureCode,
+          ),
+          SyncPushRetryable(:final failureCode) => _failureCode(failureCode),
+        };
+      }
+      if (lastFailureCode != null) {
+        await _writeScopeState(
+          nowUtc: nowUtc,
+          lastFailureCode: lastFailureCode,
+        );
+      }
+      await _releaseDrainerLease();
+      return lostLease
+          ? SyncBatchDrainResult.lostLease
+          : SyncBatchDrainResult.processed;
+    });
+  }
+
+  Future<SyncDrainResult> _applyAcknowledgement(
+    DbSyncOutboxData current,
+    SyncPushResult result,
+    DateTime nowUtc,
+  ) async {
+    if (result is SyncPushConflict &&
+        current.commandType == 'draft.upsert.v1') {
+      final draftQuery = _database.select(_database.dbContactDrafts)
+        ..where((row) => row.draftId.equals(current.aggregateId));
+      final draft = await draftQuery.getSingleOrNull();
+      if (draft != null) {
+        await _preserveLocalDraftAsConflict(draft);
+      }
+    }
+
+    return switch (result) {
+      final SyncPushAccepted accepted => _completeCommand(
+        current,
+        accepted,
+        nowUtc,
+      ),
+      final SyncPushConflict conflict => _stopCommand(
+        current,
+        status: 'needs_resolution',
+        failureCode: conflict.failureCode,
+        nowUtc: nowUtc,
+        outcome: SyncDrainResult.needsResolution,
+      ),
+      final SyncPushPermanentFailure failure => _stopCommand(
+        current,
+        status: 'permanent_failure',
+        failureCode: failure.failureCode,
+        nowUtc: nowUtc,
+        outcome: SyncDrainResult.permanentFailure,
+      ),
+      final SyncPushRetryable retryable => _retryCommand(
+        current,
+        retryable,
+        nowUtc,
+      ),
+    };
+  }
+
+  SyncCommand _commandFromRow(DbSyncOutboxData row) {
+    final decoded = jsonDecode(row.payloadJson);
+    if (decoded is! Map<String, Object?>) {
+      throw const FormatException('sync payload must be an object');
+    }
+    return SyncCommand(
+      protocolVersion: row.protocolVersion,
+      commandId: row.commandId,
+      deviceId: row.deviceId,
+      aggregateId: row.aggregateId,
+      baseRevision: row.baseRevision,
+      commandType: row.commandType,
+      payload: Map.unmodifiable(decoded),
+    );
   }
 
   Future<SyncDrainResult> _completeCommand(
@@ -493,7 +643,7 @@ final class SyncEngine {
   }
 
   Duration _retryDelay(int attemptCount, Duration? retryAfter) {
-    final exponent = min(max(attemptCount - 1, 0), 7);
+    final exponent = min(max(attemptCount - 1, 0), 8);
     final baseSeconds = min(2 * pow(2, exponent).toInt(), 300);
     final jitterValue = _jitter.nextUnitInterval().clamp(0, 0.999999);
     final jitteredMicroseconds =
@@ -511,7 +661,9 @@ final class SyncEngine {
 
   String _failureCode(String value) {
     final trimmed = value.trim();
-    return trimmed.isEmpty ? 'unknown_sync_failure' : trimmed;
+    return _stableFailureCode.hasMatch(trimmed)
+        ? trimmed
+        : 'unknown_sync_failure';
   }
 
   _ParsedRemoteChange _parseRemoteChange(SyncRemoteChange change) {
@@ -1811,4 +1963,26 @@ final class _ClaimedCommand extends _ClaimResult {
   const _ClaimedCommand(this.row);
 
   final DbSyncOutboxData row;
+}
+
+sealed class _BatchClaimResult {
+  const _BatchClaimResult();
+}
+
+final class _BatchClaimIdle extends _BatchClaimResult {
+  const _BatchClaimIdle();
+}
+
+final class _BatchClaimBusy extends _BatchClaimResult {
+  const _BatchClaimBusy();
+}
+
+final class _ClaimedCommands extends _BatchClaimResult {
+  const _ClaimedCommands(this.rows);
+
+  final List<DbSyncOutboxData> rows;
+}
+
+final class _ClaimCollision implements Exception {
+  const _ClaimCollision();
 }

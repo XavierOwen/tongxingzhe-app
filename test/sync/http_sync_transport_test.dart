@@ -57,6 +57,110 @@ void main() {
     expect(result.retryAfter, const Duration(seconds: 45));
   });
 
+  test('过大 Retry-After 按本地一小时上限处理', () async {
+    final transport = HttpSyncTransport(
+      baseUri: Uri.parse('https://backend.example.test'),
+      identitySession: _signedInIdentity(),
+      client: MockClient(
+        (_) async => http.Response('{}', 429, headers: {'retry-after': '7200'}),
+      ),
+    );
+
+    final result = await transport.push(_command);
+
+    expect(result, isA<SyncPushRetryable>());
+    expect((result as SyncPushRetryable).retryAfter, const Duration(hours: 1));
+  });
+
+  test('批量结果保留 command ID，不依赖服务端返回顺序', () async {
+    final transport = HttpSyncTransport(
+      baseUri: Uri.parse('https://backend.example.test'),
+      identitySession: _signedInIdentity(),
+      client: MockClient((request) async {
+        expect(request.url.path, '/v1/sync/commands/batch');
+        final body = jsonDecode(request.body) as Map<String, Object?>;
+        expect(body['commands'], hasLength(2));
+        return http.Response(
+          jsonEncode({
+            'results': [
+              {
+                'command_id': 'command-2',
+                'result': 'accepted',
+                'server_cursor': 'opaque-2',
+              },
+              {
+                'command_id': 'command-1',
+                'result': 'conflict',
+                'error': {'code': 'stale_revision'},
+              },
+            ],
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final results = await transport.pushBatch([_command, _secondCommand]);
+
+    expect(results.map((outcome) => outcome.commandId), [
+      'command-2',
+      'command-1',
+    ]);
+    expect(results.first.result, isA<SyncPushAccepted>());
+    expect(results.last.result, isA<SyncPushConflict>());
+    expect(
+      (results.last.result as SyncPushConflict).failureCode,
+      'stale_revision',
+    );
+  });
+
+  test('无效 Retry-After 不覆盖本地指数退避', () async {
+    final transport = HttpSyncTransport(
+      baseUri: Uri.parse('https://backend.example.test'),
+      identitySession: _signedInIdentity(),
+      client: MockClient(
+        (_) async =>
+            http.Response('{}', 429, headers: {'retry-after': 'not-a-delay'}),
+      ),
+    );
+
+    final result = await transport.push(_command);
+
+    expect(result, isA<SyncPushRetryable>());
+    expect((result as SyncPushRetryable).retryAfter, isNull);
+  });
+
+  test('超时和 5xx 保留可重试分类', () async {
+    final timedOut = HttpSyncTransport(
+      baseUri: Uri.parse('https://backend.example.test'),
+      identitySession: _signedInIdentity(),
+      timeout: const Duration(milliseconds: 1),
+      client: MockClient((_) async {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        return http.Response('{}', 200);
+      }),
+    );
+    final unavailable = HttpSyncTransport(
+      baseUri: Uri.parse('https://backend.example.test'),
+      identitySession: _signedInIdentity(),
+      client: MockClient(
+        (_) async => http.Response('{}', 503, headers: {'retry-after': '7200'}),
+      ),
+    );
+
+    final timeoutResult = await timedOut.push(_command);
+    final unavailableResult = await unavailable.push(_command);
+
+    expect(timeoutResult, isA<SyncPushRetryable>());
+    expect((timeoutResult as SyncPushRetryable).failureCode, 'network_timeout');
+    expect(unavailableResult, isA<SyncPushRetryable>());
+    expect(
+      (unavailableResult as SyncPushRetryable).retryAfter,
+      const Duration(hours: 1),
+    );
+  });
+
   test('403 转成永久 forbidden，身份失败不发送 HTTP', () async {
     var requestCount = 0;
     final forbidden = HttpSyncTransport(
@@ -230,4 +334,14 @@ const _command = SyncCommand(
   baseRevision: 0,
   commandType: 'contact.submit.v1',
   payload: {'reach_count': 2},
+);
+
+const _secondCommand = SyncCommand(
+  protocolVersion: 1,
+  commandId: 'command-2',
+  deviceId: 'device-1',
+  aggregateId: 'contact-2',
+  baseRevision: 0,
+  commandType: 'contact.submit.v1',
+  payload: {'reach_count': 3},
 );

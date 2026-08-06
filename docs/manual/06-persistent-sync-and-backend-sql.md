@@ -26,7 +26,7 @@ Outbox 保存稳定 command ID、设备 ID、aggregate ID、基础 revision、pa
 
 ## claim、lease 和 ACK
 
-claim 是在 SQLite transaction 内选出一条已到重试时间的 command，并立即把它改为 `leased`。lease 是有期限的处理权。当前执行器在 30 秒内拥有这条 command，其他执行器不能同时发送它。
+claim 是在 SQLite transaction 内选出已到重试时间的 command，并立即把它们改为 `leased`。每批最多领取 20 条，同一 aggregate 只领取最早的一条。lease 是有期限的处理权。当前执行器在 30 秒内拥有这批 command，其他执行器不能同时发送它们。
 
 进程在网络请求中途退出时，lease 会过期。下一个执行器把命令改回 `pending` 并重试。迟到 ACK 只能由仍持有同一 lease 的 worker 接受；旧 worker 不能覆盖新 worker 的结果。
 
@@ -42,6 +42,29 @@ delay = base_seconds × (1 + 0.25 × random)
 ```
 
 `random` 在 `[0, 1)` 内。这个 jitter 使多台设备不会在同一秒内一起重试。Backend 可通过可信 `Retry-After` 要求更长等待，客户端最多接受一小时。永久拒绝和冲突不使用自动退避掩盖，而是进入稳定失败状态。
+
+## 批量结果如何独立确认
+
+`POST /v1/sync/commands/batch` 接收最多 20 条 command。Backend 为每条结果返回原 `command_id`。客户端按 ID 确认结果，不使用列表位置。因此，服务端可以乱序返回，也可以在同批中接受一条并重试另一条。已确认的 command 进入 `completed`，下一轮不再发送它。
+
+状态转换如下：
+
+- `accepted` 和 `duplicate` 进入 `completed`；
+- `conflict` 进入 `needs_resolution`；
+- `rejected` 和 `forbidden` 进入 `permanent_failure`；
+- 超时、`429`、`5xx` 和单条存储暂时失败回到 `pending`。
+
+批量响应如果缺少 ID、重复 ID 或带有未请求的 ID，客户端不猜测结果。未确认的 command 以 `invalid_server_response` 进入可重试状态。服务端幂等处理保护 ACK 丢失后的重发。
+
+## 用户如何判断与恢复失败
+
+首页把可重试失败显示为“等待重试”。App 在到达 `next_attempt_at` 后的下一次同步触发时自动再试，用户无需重新录入。“需要处理”表示冲突，必须保留本机事实并等待明确处理。“永久拒绝”表示服务端不会接受当前 command，自动重试不会解决问题。
+
+同步健康只返回各状态数量、最早等待时间、最后成功时间和稳定失败码。失败码只允许小写字母、数字和下划线。其他服务端文本改为 `unknown_sync_failure`，不写入 payload、邮箱或其他 PII。
+
+## 旧客户端如何保持兼容
+
+新批量端点不替换旧的 `POST /v1/sync/commands`。已发布客户端可继续发送 protocol v1 单条 command。Backend 测试直接读取 [`sync-contract-v1`](../../backend/server/test/fixtures/sync-contract-v1.ts) fixture，固定该合同。未支持的协议版本返回 `rejected` 和稳定错误码 `unsupported_protocol`，不进入存储层。
 
 ## 上传 cursor 和拉取 cursor 不是同一个事实
 
@@ -124,9 +147,9 @@ Flutter 的 [`HttpContactRegionResolver`](../../lib/regions/contact_region_resol
 
 ## 为什么这样测试
 
-Flutter 测试使用真实内存 SQLite 和可控 Transport。它们覆盖 ACK、指数退避、双 worker 租约、过期恢复、迟到 ACK、aggregate 顺序、永久失败隔离、远端 batch 原子性、cursor 区分和同 ID 内容冲突。HTTP Adapter 测试则固定 bearer header、路径、query、JSON 和错误分类。
+Flutter 测试使用真实内存 SQLite 和可控 Transport。它们覆盖 ACK、指数退避、jitter 上限、双 worker 租约、过期恢复、迟到 ACK、aggregate 顺序、永久失败隔离、批量部分成功、乱序结果、远端 batch 原子性、cursor 区分和同 ID 内容冲突。HTTP Adapter 测试固定 bearer header、路径、query、JSON、`Retry-After` 和错误分类。
 
-Backend 测试使用 synthetic 身份和上下文，证明伪造项目在 Store 调用前被拒绝，并证明 PostgreSQL 的无效 cursor 不会被误报成临时服务故障。PostgreSQL 16 验证从空库执行全部 migration，再次执行核对 checksum，运行 runtime 权限、接触修订、区域循环、草稿冲突、跨用户隔离和共用指标 fixture，最后执行 `pg_dump` 与 `pg_restore` 并重跑检查。
+Backend 测试使用 synthetic 身份和上下文。它们证明伪造项目在 Store 调用前被拒绝，固定 protocol v1 兼容 fixture，并验证批量单条失败。它们还证明 PostgreSQL 的无效 cursor 不会被误报成临时服务故障。PostgreSQL 16 验证从空库执行全部 migration，再次执行核对 checksum，运行 runtime 权限、接触修订、区域循环、草稿冲突、跨用户隔离和共用指标 fixture，最后执行 `pg_dump` 与 `pg_restore` 并重跑检查。
 
 这些测试分别回答不同问题。单元测试证明状态机，HTTP 测试证明协议转换，真实 PostgreSQL 证明 SQL 语法、权限、transaction 和恢复路径。某一类通过不能替代另一类。
 
@@ -134,4 +157,4 @@ Backend 测试使用 synthetic 身份和上下文，证明伪造项目在 Store 
 
 [`ProductionHomeViewModel`](../../lib/features/home/production_home_view_model.dart) 接收 App 启动、回到前台、提交或放弃草稿等意图。它调用内部的 [`ForegroundSyncCoordinator`](../../lib/sync/foreground_sync_coordinator.dart)，再刷新同一可信上下文的首页快照。Widget 不创建 worker，也不直接调用 `ContactJournal` 或 `SyncEngine`。
 
-同步运行中的重复信号会合并为一次串行补跑，不并发启动第二个 drainer，也不会漏掉运行中刚产生的 command。ViewModel 负责同步后的数据刷新和失败隔离；`ForegroundSyncCoordinator` 负责每轮上传、拉取和批次数上限。项目切换会创建使用新 scope 的 ViewModel。后台调度、两台设备并发更正的冲突合并页和运维监控属于后续切片。
+同步运行中的重复信号会合并为一次串行补跑，不并发启动第二个 drainer，也不会漏掉运行中刚产生的 command。ViewModel 负责同步后的数据刷新和失败隔离；`ForegroundSyncCoordinator` 负责每轮批量上传、拉取和批次数上限。项目切换会创建使用新 scope 的 ViewModel。后台调度、两台设备并发更正的冲突合并页和运维监控属于后续切片。

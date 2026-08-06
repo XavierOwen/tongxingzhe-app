@@ -277,6 +277,28 @@ test("HTTP sync route parses JSON and returns a stable accepted result", async (
     result: "accepted",
     server_cursor: "opaque-http-1",
   });
+
+  const batchResponse = await fetch(
+    `http://127.0.0.1:${address.port}/v1/sync/commands/batch`,
+    {
+      method: "POST",
+      headers: {
+        authorization: "Bearer synthetic-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ commands: [validCommandBody()] }),
+    },
+  );
+  assert.equal(batchResponse.status, 200);
+  assert.deepEqual(await batchResponse.json(), {
+    results: [
+      {
+        command_id: "command-1",
+        result: "accepted",
+        server_cursor: "opaque-http-1",
+      },
+    ],
+  });
 });
 
 test("HTTP sync changes route forwards its query and returns a batch", async () => {

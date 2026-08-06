@@ -773,6 +773,64 @@ void main() {
     expect(find.text('已同步 1'), findsOneWidget);
   });
 
+  testWidgets('首页区分等待重试、需要处理和永久拒绝', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final transport = _QueueingSyncTransport([
+      const SyncPushRetryable(failureCode: 'network_unavailable'),
+      const SyncPushConflict(failureCode: 'stale_revision'),
+      const SyncPushPermanentFailure(failureCode: 'forbidden'),
+    ]);
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      syncTransportBuilder: (_) => transport,
+    );
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+
+    Future<void> submitContact() async {
+      await tester.tap(find.text('记录接触'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('视频通话'));
+      await tester.enterText(
+        find.byKey(const ValueKey('contact-reach-count')),
+        '2',
+      );
+      await tester.drag(find.byType(ListView), const Offset(0, -180));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('3'));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('正式提交'));
+      await tester.pumpAndSettle();
+    }
+
+    await submitContact();
+    await submitContact();
+    await submitContact();
+
+    expect(find.text('等待重试 1'), findsOneWidget);
+    expect(find.text('需要处理 1'), findsOneWidget);
+    expect(find.text('永久拒绝 1'), findsOneWidget);
+  });
+
   testWidgets('启动时拉取其他设备的接触并刷新今日事实', (tester) async {
     final database = LocalDatabase(NativeDatabase.memory());
     final identity = FakeIdentitySession(
@@ -1063,6 +1121,28 @@ final class _AcceptingSyncTransport implements SyncTransport {
   Future<SyncPushResult> push(SyncCommand command) async {
     commands.add(command);
     return const SyncPushAccepted(serverCursor: 'test-cursor-1');
+  }
+}
+
+final class _QueueingSyncTransport implements SyncTransport {
+  _QueueingSyncTransport(this._replies);
+
+  final List<SyncPushResult> _replies;
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  Future<SyncPullResult> pull({
+    required SyncScope scope,
+    required String? cursor,
+    int limit = 100,
+  }) async =>
+      SyncPullSucceeded(SyncPullBatch(changes: const [], nextCursor: cursor));
+
+  @override
+  Future<SyncPushResult> push(SyncCommand command) async {
+    return _replies.removeAt(0);
   }
 }
 

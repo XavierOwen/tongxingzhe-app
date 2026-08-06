@@ -693,7 +693,10 @@ final class _ContactsPage extends StatelessWidget {
         if (health != null && health.retryingCount > 0)
           Text('${text.t('retryingSync')} ${health.retryingCount}'),
         if (health != null && health.permanentFailureCount > 0)
-          Text('${text.t('syncFailed')} ${health.permanentFailureCount}'),
+          Text(
+            '${text.t('syncPermanentlyRejected')} '
+            '${health.permanentFailureCount}',
+          ),
         if (health != null && health.needsResolutionCount > 0)
           Text(
             '${text.t('syncNeedsResolution')} '

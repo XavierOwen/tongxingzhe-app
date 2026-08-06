@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  handleSyncCommandBatch,
   handleSyncCommand,
   type SyncCommandHttpDependencies,
 } from "../src/sync-command.js";
+import { syncContractV1Fixture } from "./fixtures/sync-contract-v1.js";
 import type { VerifiedIdentity } from "../src/identity.js";
 import type { SessionContext } from "../src/session-context.js";
 import type {
@@ -264,6 +266,78 @@ test("contact void accepts only a positive base revision", async () => {
   assert.deepEqual(rejected.body, {
     result: "rejected",
     error: { code: "invalid_base_revision" },
+  });
+});
+
+test("legacy v1 fixture stays accepted and unsupported protocol is stable", async () => {
+  const unsupported: Record<string, unknown> = {
+    ...structuredClone(syncContractV1Fixture),
+  };
+  unsupported.command_id = "future-command-1";
+  unsupported.protocol_version = 2;
+
+  const accepted = await handleSyncCommand(
+    "Bearer synthetic-token",
+    syncContractV1Fixture,
+    fakeDependencies({
+      apply: async (_resolvedContext, command) => ({
+        result: "accepted",
+        serverCursor: `cursor-${command.commandId}`,
+      }),
+    }),
+  );
+  const rejected = await handleSyncCommand(
+    "Bearer synthetic-token",
+    unsupported,
+    fakeDependencies(),
+  );
+
+  assert.deepEqual(accepted.body, {
+    result: "accepted",
+    server_cursor: "cursor-legacy-command-1",
+  });
+  assert.deepEqual(rejected.body, {
+    result: "rejected",
+    error: { code: "unsupported_protocol" },
+  });
+});
+
+test("batch returns accepted and retryable results independently", async () => {
+  const second = {
+    ...structuredClone(syncContractV1Fixture),
+    command_id: "legacy-command-2",
+    aggregate_id: "legacy-contact-2",
+    typed_payload: {
+      ...structuredClone(syncContractV1Fixture.typed_payload as object),
+      contact_id: "legacy-contact-2",
+    },
+  };
+  const response = await handleSyncCommandBatch(
+    "Bearer synthetic-token",
+    { commands: [syncContractV1Fixture, second] },
+    fakeDependencies({
+      apply: async (_resolvedContext, command) => {
+        if (command.commandId === "legacy-command-2") {
+          throw new Error("synthetic store outage");
+        }
+        return { result: "accepted", serverCursor: "cursor-legacy-1" };
+      },
+    }),
+  );
+
+  assert.deepEqual(response.body, {
+    results: [
+      {
+        command_id: "legacy-command-1",
+        result: "accepted",
+        server_cursor: "cursor-legacy-1",
+      },
+      {
+        command_id: "legacy-command-2",
+        result: "retryable",
+        error: { code: "sync_unavailable" },
+      },
+    ],
   });
 });
 

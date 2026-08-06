@@ -5,7 +5,7 @@ import 'sync_models.dart';
 
 /// 前台同步调度只需要的三个 SyncEngine 操作。
 abstract interface class ForegroundSyncWorker {
-  Future<SyncDrainResult> drainOnce();
+  Future<SyncBatchDrainResult> drainBatch();
 
   Future<SyncPullApplyResult> pullOnce();
 
@@ -19,7 +19,7 @@ final class SyncEngineForegroundWorker implements ForegroundSyncWorker {
   final SyncEngine _engine;
 
   @override
-  Future<SyncDrainResult> drainOnce() => _engine.drainOnce();
+  Future<SyncBatchDrainResult> drainBatch() => _engine.drainBatch();
 
   @override
   Future<SyncHealth> health() => _engine.health();
@@ -99,9 +99,9 @@ final class ForegroundSyncCoordinator extends ChangeNotifier {
 
   Future<void> _run(ForegroundSyncWorker worker) async {
     for (var sent = 0; sent < _maximumBatches; sent++) {
-      final result = await worker.drainOnce();
+      final result = await worker.drainBatch();
       _notify();
-      if (result != SyncDrainResult.completed) {
+      if (result != SyncBatchDrainResult.processed) {
         break;
       }
     }

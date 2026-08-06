@@ -7,7 +7,10 @@ import {
   type SessionContextHttpDependencies,
 } from "./http-app.js";
 import { handleSyncChanges } from "./sync-changes.js";
-import { handleSyncCommand } from "./sync-command.js";
+import {
+  handleSyncCommand,
+  handleSyncCommandBatch,
+} from "./sync-command.js";
 import type { SyncCommandStore } from "./sync-store.js";
 import {
   resolveContactRegion,
@@ -71,7 +74,11 @@ export function createBackendServer(
       return;
     }
 
-    if (request.method === "POST" && request.url === "/v1/sync/commands") {
+    if (
+      request.method === "POST" &&
+      (request.url === "/v1/sync/commands" ||
+        request.url === "/v1/sync/commands/batch")
+    ) {
       if (dependencies.commandStore === undefined) {
         response.statusCode = 503;
         response.end(JSON.stringify({ error: { code: "sync_unavailable" } }));
@@ -79,15 +86,14 @@ export function createBackendServer(
       }
       try {
         const body = await readJsonBody(request);
-        const result = await handleSyncCommand(
-          request.headers.authorization,
-          body,
-          {
-            identityVerifier: dependencies.identityVerifier,
-            contextStore: dependencies.contextStore,
-            commandStore: dependencies.commandStore,
-          },
-        );
+        const handler = request.url === "/v1/sync/commands/batch"
+          ? handleSyncCommandBatch
+          : handleSyncCommand;
+        const result = await handler(request.headers.authorization, body, {
+          identityVerifier: dependencies.identityVerifier,
+          contextStore: dependencies.contextStore,
+          commandStore: dependencies.commandStore,
+        });
         response.statusCode = result.status;
         response.end(JSON.stringify(result.body));
       } catch (error) {

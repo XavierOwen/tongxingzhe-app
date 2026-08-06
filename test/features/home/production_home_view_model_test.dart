@@ -277,7 +277,7 @@ final class _FakeSyncWorker implements ForegroundSyncWorker {
   int maximumConcurrentDrains = 0;
 
   @override
-  Future<SyncDrainResult> drainOnce() async {
+  Future<SyncBatchDrainResult> drainBatch() async {
     drainCalls++;
     concurrentDrains++;
     maximumConcurrentDrains = maximumConcurrentDrains < concurrentDrains
@@ -285,7 +285,7 @@ final class _FakeSyncWorker implements ForegroundSyncWorker {
         : maximumConcurrentDrains;
     try {
       await gate?.future;
-      return SyncDrainResult.idle;
+      return SyncBatchDrainResult.idle;
     } finally {
       concurrentDrains--;
     }
