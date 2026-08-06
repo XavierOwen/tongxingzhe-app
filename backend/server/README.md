@@ -50,6 +50,15 @@ Backend 不接受客户端提供的用户、空间或项目范围。每次请求
 
 接触同步可以携带零到多条 `target_links`。非空关联要求 `view_assigned_target_pii`，只接受当前分配、同空间的对象；payload 保存对象 ID、类型、可选当次反应和后续联系同意，不携带姓名、电话或邮箱。机构反应还要求明确确认回应者代表机构。PostgreSQL v3 包装函数把对象校验、可选阶段 0 项目关系和接触 revision 原子提交。
 
+项目关系使用两个独立入口：
+
+| 方法与路径 | 行为 |
+| --- | --- |
+| `PATCH /v1/promotion-targets/:id/relationship` | 按 `expected_revision` 追加阶段、生命周期和共享备注修订 |
+| `PUT /v1/promotion-target-stage-aliases` | 配置当前项目五个阶段的可选显示名 |
+
+关系更新需要 `manage_assigned_target_follow_up` 和 `view_assigned_target_pii`，PostgreSQL 还会重验当前分配。旧 revision 先按 base revision 比较字段：不同字段自动合并，同字段返回 `409 promotion_target_relationship_conflict`、服务器当前值、持久化的拟提交值和冲突 ID。再次提交 `resolved_conflict_id` 会追加明确解决 revision。相同 `mutation_id` 的相同重试不增加 revision 或冲突。别名配置另需 `manage_analysis_definitions`。服务只存 `0–4`，响应中的 `display_stage` 由阶段乘二得到。
+
 ## 配置
 
 Backend 需要以下环境变量：
@@ -78,6 +87,8 @@ npm run check
 推广对象目录见 [`0016_promotion_target_directory.sql`](../database/migrations/0016_promotion_target_directory.sql)。对应 fixture 另外验证对象分配、PII 隔离、访问审计和恢复库权限。
 
 接触对象关联见 [`0017_contact_target_links.sql`](../database/migrations/0017_contact_target_links.sql)。对应 fixture 验证零到多关联、阶段 0 确认、跨空间与未分配拒绝、机构代表约束、幂等重放、revision 历史、冲突比较和 warehouse PII 隔离。
+
+项目关系审计见 [`0018_promotion_target_relationship_audit.sql`](../database/migrations/0018_promotion_target_relationship_audit.sql)。对应 fixture 验证双向阶段、独立生命周期、共享备注历史、结构化下降原因、mutation 重放、显式冲突、分配撤销、显示别名和 warehouse 文本隔离。
 
 ## 运行
 

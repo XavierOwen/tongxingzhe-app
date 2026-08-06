@@ -42,6 +42,30 @@ final class DeferredPromotionTargetGateway implements PromotionTargetGateway {
   );
 
   @override
+  Future<PromotionTargetResult<PromotionTargetRelationship>>
+  updateRelationship({
+    required String targetId,
+    required int expectedRevision,
+    required int stage,
+    required PromotionTargetRelationshipLifecycle lifecycleStatus,
+    required String? followUpNote,
+    required PromotionTargetRelationshipReason reason,
+    required String? reasonDetail,
+    required String mutationId,
+    required String? resolvedConflictId,
+  }) async => const PromotionTargetRejected(
+    PromotionTargetFailureCode.networkUnavailable,
+  );
+
+  @override
+  Future<PromotionTargetResult<List<PromotionTargetStageAlias>>>
+  configureStageAliases({
+    required List<PromotionTargetStageAlias> aliases,
+  }) async => const PromotionTargetRejected(
+    PromotionTargetFailureCode.networkUnavailable,
+  );
+
+  @override
   Future<void> close() async {}
 }
 
@@ -96,10 +120,67 @@ final class HttpPromotionTargetGateway implements PromotionTargetGateway {
     parse: (root) => _parseProfile(root['target']),
   );
 
+  @override
+  Future<PromotionTargetResult<PromotionTargetRelationship>>
+  updateRelationship({
+    required String targetId,
+    required int expectedRevision,
+    required int stage,
+    required PromotionTargetRelationshipLifecycle lifecycleStatus,
+    required String? followUpNote,
+    required PromotionTargetRelationshipReason reason,
+    required String? reasonDetail,
+    required String mutationId,
+    required String? resolvedConflictId,
+  }) => _request(
+    method: 'PATCH',
+    path: '/v1/promotion-targets/${Uri.encodeComponent(targetId)}/relationship',
+    body: {
+      'expected_revision': expectedRevision,
+      'stage': stage,
+      'lifecycle_status': lifecycleStatus.storageValue,
+      'follow_up_note': followUpNote,
+      'reason_code': reason.storageValue,
+      'reason_detail': reasonDetail,
+      'mutation_id': mutationId,
+      'resolved_conflict_id': resolvedConflictId,
+    },
+    parse: (root) => _parseRelationship(root['relationship']),
+    parseConflict: (root) => PromotionTargetConflict(
+      current: _parseRelationship(root['current']),
+      conflictId: _string(root['conflict_id']),
+      conflictingFields: _list(
+        root['conflicting_fields'],
+      ).map(_string).toList(),
+      proposed: _parseProposal(root['proposed']),
+    ),
+  );
+
+  @override
+  Future<PromotionTargetResult<List<PromotionTargetStageAlias>>>
+  configureStageAliases({required List<PromotionTargetStageAlias> aliases}) =>
+      _request(
+        method: 'PUT',
+        path: '/v1/promotion-target-stage-aliases',
+        body: {
+          'aliases': aliases
+              .map(
+                (alias) => {
+                  'stage': alias.stage,
+                  'display_name': alias.displayName,
+                },
+              )
+              .toList(),
+        },
+        parse: (root) => _list(root['aliases']).map(_parseStageAlias).toList(),
+      );
+
   Future<PromotionTargetResult<T>> _request<T>({
     required String method,
     required T Function(Map<String, Object?> root) parse,
+    String path = '/v1/promotion-targets',
     Map<String, Object?>? body,
+    PromotionTargetResult<T> Function(Map<String, Object?> root)? parseConflict,
   }) async {
     try {
       var token = await _identitySession.accessToken();
@@ -108,7 +189,7 @@ final class HttpPromotionTargetGateway implements PromotionTargetGateway {
           PromotionTargetFailureCode.unauthorized,
         );
       }
-      var response = await _send(method, token.value, body);
+      var response = await _send(method, path, token.value, body);
       if (response.statusCode == 401) {
         token = await _identitySession.accessToken(forceRefresh: true);
         if (token is! IdentitySuccess<IdentityAccessToken>) {
@@ -116,7 +197,14 @@ final class HttpPromotionTargetGateway implements PromotionTargetGateway {
             PromotionTargetFailureCode.unauthorized,
           );
         }
-        response = await _send(method, token.value, body);
+        response = await _send(method, path, token.value, body);
+      }
+      if (response.statusCode == 409 && parseConflict != null) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is! Map<String, Object?>) {
+          throw const FormatException('target conflict must be an object');
+        }
+        return parseConflict(decoded);
       }
       if (response.statusCode < 200 || response.statusCode >= 300) {
         return PromotionTargetRejected(_failure(response.statusCode));
@@ -143,11 +231,12 @@ final class HttpPromotionTargetGateway implements PromotionTargetGateway {
 
   Future<http.Response> _send(
     String method,
+    String path,
     IdentityAccessToken token,
     Map<String, Object?>? body,
   ) => _client
       .send(
-        http.Request(method, _baseUri.resolve('/v1/promotion-targets'))
+        http.Request(method, _baseUri.resolve(path))
           ..headers.addAll({
             'authorization': 'Bearer ${token.value}',
             'accept': 'application/json',
@@ -176,6 +265,80 @@ PromotionTargetProfile _parseProfile(Object? value) {
     hasCurrentProjectRelationship: _bool(
       root['has_current_project_relationship'] ?? false,
     ),
+    projectRelationship: root['project_relationship'] == null
+        ? null
+        : _parseRelationship(root['project_relationship']),
+  );
+}
+
+PromotionTargetRelationship _parseRelationship(Object? value) {
+  final root = _object(value);
+  return PromotionTargetRelationship(
+    targetId: _string(root['target_id']),
+    projectId: _string(root['project_id']),
+    stage: _integer(root['stage'], minimum: 0, maximum: 4),
+    displayStage: _integer(root['display_stage'], minimum: 0, maximum: 8),
+    lifecycleStatus: PromotionTargetRelationshipLifecycle.values.firstWhere(
+      (candidate) =>
+          candidate.storageValue == _string(root['lifecycle_status']),
+    ),
+    followUpNote: _nullableString(root['follow_up_note']),
+    revisionNumber: _integer(root['revision_number'], minimum: 1),
+    updatedAtUtc: DateTime.parse(_string(root['updated_at'])).toUtc(),
+    stageAliases: _list(root['stage_aliases']).map(_parseStageAlias).toList(),
+    history: _list(root['history']).map(_parseRevision).toList(),
+  );
+}
+
+PromotionTargetStageAlias _parseStageAlias(Object? value) {
+  final root = _object(value);
+  return PromotionTargetStageAlias(
+    stage: _integer(root['stage'], minimum: 0, maximum: 4),
+    displayStage: _integer(root['display_stage'], minimum: 0, maximum: 8),
+    displayName: _nullableString(root['display_name']),
+  );
+}
+
+PromotionTargetRelationshipRevision _parseRevision(Object? value) {
+  final root = _object(value);
+  return PromotionTargetRelationshipRevision(
+    revisionNumber: _integer(root['revision_number'], minimum: 1),
+    oldStage: _nullableInteger(root['old_stage'], minimum: 0, maximum: 4),
+    newStage: _integer(root['new_stage'], minimum: 0, maximum: 4),
+    oldLifecycleStatus: root['old_lifecycle_status'] == null
+        ? null
+        : PromotionTargetRelationshipLifecycle.values.firstWhere(
+            (candidate) =>
+                candidate.storageValue == _string(root['old_lifecycle_status']),
+          ),
+    newLifecycleStatus: PromotionTargetRelationshipLifecycle.values.firstWhere(
+      (candidate) =>
+          candidate.storageValue == _string(root['new_lifecycle_status']),
+    ),
+    followUpNote: _nullableString(root['follow_up_note']),
+    changedFields: _list(root['changed_fields']).map(_string).toList(),
+    reasonCode: _string(root['reason_code']),
+    reasonDetail: _nullableString(root['reason_detail']),
+    changedByAppUserId: _string(root['changed_by_app_user_id']),
+    changedAtUtc: DateTime.parse(_string(root['changed_at'])).toUtc(),
+  );
+}
+
+PromotionTargetRelationshipProposal _parseProposal(Object? value) {
+  final root = _object(value);
+  return PromotionTargetRelationshipProposal(
+    expectedRevision: _integer(root['expected_revision'], minimum: 1),
+    stage: _integer(root['stage'], minimum: 0, maximum: 4),
+    displayStage: _integer(root['display_stage'], minimum: 0, maximum: 8),
+    lifecycleStatus: PromotionTargetRelationshipLifecycle.values.firstWhere(
+      (candidate) =>
+          candidate.storageValue == _string(root['lifecycle_status']),
+    ),
+    followUpNote: _nullableString(root['follow_up_note']),
+    reason: PromotionTargetRelationshipReason.values.firstWhere(
+      (candidate) => candidate.storageValue == _string(root['reason_code']),
+    ),
+    reasonDetail: _nullableString(root['reason_detail']),
   );
 }
 
@@ -210,6 +373,18 @@ bool _bool(Object? value) {
   if (value is! bool) throw const FormatException('expected boolean');
   return value;
 }
+
+int _integer(Object? value, {required int minimum, int? maximum}) {
+  if (value is! int ||
+      value < minimum ||
+      (maximum != null && value > maximum)) {
+    throw const FormatException('expected bounded integer');
+  }
+  return value;
+}
+
+int? _nullableInteger(Object? value, {required int minimum, int? maximum}) =>
+    value == null ? null : _integer(value, minimum: minimum, maximum: maximum);
 
 String? _nullableString(Object? value) => value == null ? null : _string(value);
 

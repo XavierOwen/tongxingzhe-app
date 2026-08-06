@@ -173,6 +173,10 @@ jobs:
             --file backend/database/checks/verify_contact_target_links.sql
           psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file backend/database/fixtures/0017_contact_target_links.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_promotion_target_relationship_audit.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0018_promotion_target_relationship_audit.sql
 
       - name: Verify concurrent questionnaire publication
         run: |
@@ -267,6 +271,10 @@ jobs:
             --file backend/database/checks/verify_contact_target_links.sql
           psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file backend/database/fixtures/0017_contact_target_links.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_promotion_target_relationship_audit.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0018_promotion_target_relationship_audit.sql
 
   backend-server:
     name: Backend identity, context, and sync

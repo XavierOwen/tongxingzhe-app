@@ -986,11 +986,14 @@ final class _CorrectionDialogState extends State<_CorrectionDialog> {
     setState(() {
       _targetsLoading = false;
       _targetsLoaded = result is PromotionTargetSuccess;
-      _targetLoadFailed = result is PromotionTargetRejected;
+      _targetLoadFailed =
+          result is PromotionTargetRejected ||
+          result is PromotionTargetConflict;
       _assignedTargets = switch (result) {
         PromotionTargetSuccess<List<PromotionTargetProfile>>(:final value) =>
           List.unmodifiable(value),
         PromotionTargetRejected<List<PromotionTargetProfile>>() => const [],
+        PromotionTargetConflict<List<PromotionTargetProfile>>() => const [],
       };
     });
   }

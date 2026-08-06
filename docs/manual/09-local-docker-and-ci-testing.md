@@ -248,6 +248,18 @@ POSTGRES_TEST_IMAGE='postgres:16' \
 
 check 主要观察结构。fixture 会调用正式函数并核对结果。两者不能互相替代。
 
+### 7.1 用关系审计切片理解一次完整数据库测试
+
+`0018_promotion_target_relationship_audit.sql` 是一个可直接对照的例子：
+
+1. migration 给当前关系增加生命周期、备注和 revision，并建立只追加历史；
+2. `verify_promotion_target_relationship_audit.sql` 检查表、函数、触发器和 runtime 最小权限；
+3. 同名 `0018` fixture 建立 synthetic 对象，测试上升、阶段 4 下降、重放、冲突、别名、撤销分配和 warehouse 隔离；
+4. Docker wrapper 先从空库运行它，再在 dump／restore 后的第二个数据库重跑；
+5. GitHub Actions 使用同一 check 和 fixture，因此本地证据与远端 CI 证据可比较。
+
+看到 `fixture：0018_promotion_target_relationship_audit.sql` 后失败，表示 migration 已经成功，失败点在行为验证。看到 `已执行 0018_promotion_target_relationship_audit` 前失败，则先检查 migration SQL。不要为绕过失败而删除旧 migration 或修改已经发布版本；修复尚未发布的新 migration，或为已发布 schema 追加更高版本。
+
 ## 8. Drift v17 生成文件怎样检查
 
 当前本地 schema 版本是 v17。数据库结构变化后先重新生成：

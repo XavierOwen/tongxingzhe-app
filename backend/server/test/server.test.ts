@@ -239,6 +239,12 @@ test("HTTP promotion target route uses the trusted current context", async () =>
           createdAt: "2026-08-06T12:00:00.000Z",
         };
       },
+      updateRelationship: async () => {
+        throw new Error("relationship update is not expected in this test");
+      },
+      configureStageAliases: async () => {
+        throw new Error("stage alias update is not expected in this test");
+      },
     },
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -267,6 +273,114 @@ test("HTTP promotion target route uses the trusted current context", async () =>
   assert.equal(
     (await response.json() as {target: {target_id: string}}).target.target_id,
     "55555555-5555-4555-8555-555555555555",
+  );
+});
+
+test("HTTP relationship routes use trusted target and project context", async () => {
+  const aliases = Array.from({length: 5}, (_, stage) => ({
+    stage,
+    displayStage: stage * 2,
+    displayName: null,
+  }));
+  const server = createBackendServer({
+    identityVerifier: {
+      verify: async () => ({issuer: "issuer", subject: "subject"}),
+    },
+    contextStore: {
+      loadOrCreate: async () => ({
+        appUserId: "11111111-1111-4111-8111-111111111111",
+        current: {
+          workspace: {
+            id: "22222222-2222-4222-8222-222222222222",
+            kind: "personal",
+            name: "个人空间",
+          },
+          project: {
+            id: "33333333-3333-4333-8333-333333333333",
+            name: "校园推广",
+          },
+          questionnaireVersion: {
+            id: "44444444-4444-4444-8444-444444444444",
+            versionNumber: 1,
+          },
+        },
+        capabilities: [
+          "view_assigned_target_pii",
+          "manage_assigned_target_follow_up",
+          "manage_analysis_definitions",
+        ],
+      }),
+    },
+    promotionTargetStore: {
+      listAssigned: async () => [],
+      create: async () => {
+        throw new Error("target create is not expected in this test");
+      },
+      updateRelationship: async (context, targetId, input) => {
+        assert.equal(
+          context.current.project.id,
+          "33333333-3333-4333-8333-333333333333",
+        );
+        assert.equal(
+          targetId,
+          "55555555-5555-4555-8555-555555555555",
+        );
+        assert.equal(input.expectedRevision, 2);
+        return {
+          status: "accepted",
+          duplicate: false,
+          acceptedRevision: 3,
+          relationship: {
+            targetId,
+            projectId: context.current.project.id,
+            stage: input.stage,
+            displayStage: input.stage * 2,
+            lifecycleStatus: input.lifecycleStatus,
+            followUpNote: input.followUpNote,
+            revisionNumber: 3,
+            updatedAt: "2026-08-06T13:00:00.000Z",
+            stageAliases: aliases,
+            history: [],
+          },
+        };
+      },
+      configureStageAliases: async (_context, input) => input.map((alias) => ({
+        stage: alias.stage,
+        displayStage: alias.stage * 2,
+        displayName: alias.displayName,
+      })),
+    },
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  test.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+
+  const response = await fetch(
+    `http://127.0.0.1:${address.port}/v1/promotion-targets/55555555-5555-4555-8555-555555555555/relationship`,
+    {
+      method: "PATCH",
+      headers: {
+        authorization: "Bearer token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        expected_revision: 2,
+        stage: 3,
+        lifecycle_status: "active",
+        follow_up_note: "下周联系",
+        reason_code: "progress_update",
+        reason_detail: null,
+        mutation_id: "relationship-change-1",
+        resolved_conflict_id: null,
+      }),
+    },
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(
+    (await response.json() as {relationship: {display_stage: number}})
+      .relationship.display_stage,
+    6,
   );
 });
 

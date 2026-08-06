@@ -52,6 +52,82 @@ void main() {
     expect(gateway.requestId, 'request-1');
     expect(find.text('王小明'), findsOneWidget);
   });
+
+  testWidgets(
+    'current assignee can revise relationship stage and shared note',
+    (tester) async {
+      final gateway = _MemoryGateway()..targets.add(_targetWithRelationship());
+      await tester.pumpWidget(_app(gateway));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('关系阶段: 明确推进 (6)'), findsOneWidget);
+      expect(find.textContaining('共享跟进备注: 下周联系'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('promotion-target-target-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('target-relationship-stage')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('8 · 达成项目目标关系').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('target-follow-up-note')),
+        '已约定下次会面',
+      );
+      await tester.tap(find.byKey(const ValueKey('save-target-relationship')));
+      await tester.pumpAndSettle();
+
+      expect(gateway.updatedStage, 4);
+      expect(gateway.updatedNote, '已约定下次会面');
+      expect(gateway.expectedRevision, 2);
+      expect(find.textContaining('关系阶段: 达成项目目标关系 (8)'), findsOneWidget);
+    },
+  );
+
+  testWidgets('same-field conflict keeps proposal until assignee resolves it', (
+    tester,
+  ) async {
+    final gateway = _MemoryGateway()..targets.add(_targetWithRelationship());
+    gateway.conflictOnce = PromotionTargetConflict(
+      current: _relationship(stage: 2, revision: 3, note: '服务器备注'),
+      conflictId: 'conflict-1',
+      conflictingFields: const ['stage', 'follow_up_note'],
+      proposed: const PromotionTargetRelationshipProposal(
+        expectedRevision: 2,
+        stage: 4,
+        displayStage: 8,
+        lifecycleStatus: PromotionTargetRelationshipLifecycle.active,
+        followUpNote: '我的备注',
+        reason: PromotionTargetRelationshipReason.progressUpdate,
+        reasonDetail: null,
+      ),
+    );
+    await tester.pumpWidget(_app(gateway));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('promotion-target-target-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('target-relationship-stage')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('8 · 达成项目目标关系').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('target-follow-up-note')),
+      '我的备注',
+    );
+    await tester.tap(find.byKey(const ValueKey('save-target-relationship')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('需要选择关系版本'), findsOneWidget);
+    expect(find.textContaining('服务器备注'), findsWidgets);
+    expect(find.textContaining('我的备注'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('apply-proposed-relationship')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.resolvedConflictId, 'conflict-1');
+    expect(gateway.updatedStage, 4);
+    expect(find.textContaining('共享跟进备注: 我的备注'), findsOneWidget);
+  });
 }
 
 Widget _app(PromotionTargetGateway gateway) => MaterialApp(
@@ -61,19 +137,28 @@ Widget _app(PromotionTargetGateway gateway) => MaterialApp(
       gateway: gateway,
       idGenerator: _FixedIds(),
       canCreate: true,
+      canConfigureStageAliases: true,
+      canManageRelationship: true,
     ),
   ),
 );
 
 final class _FixedIds implements IdGenerator {
+  var _next = 0;
+
   @override
-  String next() => 'request-1';
+  String next() => 'request-${++_next}';
 }
 
 final class _MemoryGateway implements PromotionTargetGateway {
   final targets = <PromotionTargetProfile>[];
   String? createdName;
   String? requestId;
+  int? updatedStage;
+  int? expectedRevision;
+  String? updatedNote;
+  String? resolvedConflictId;
+  PromotionTargetConflict<PromotionTargetRelationship>? conflictOnce;
 
   @override
   Future<PromotionTargetResult<List<PromotionTargetProfile>>>
@@ -102,5 +187,110 @@ final class _MemoryGateway implements PromotionTargetGateway {
   }
 
   @override
+  Future<PromotionTargetResult<PromotionTargetRelationship>>
+  updateRelationship({
+    required String targetId,
+    required int expectedRevision,
+    required int stage,
+    required PromotionTargetRelationshipLifecycle lifecycleStatus,
+    required String? followUpNote,
+    required PromotionTargetRelationshipReason reason,
+    required String? reasonDetail,
+    required String mutationId,
+    required String? resolvedConflictId,
+  }) async {
+    final pendingConflict = conflictOnce;
+    if (pendingConflict != null && resolvedConflictId == null) {
+      conflictOnce = null;
+      return pendingConflict;
+    }
+    updatedStage = stage;
+    this.expectedRevision = expectedRevision;
+    updatedNote = followUpNote;
+    this.resolvedConflictId = resolvedConflictId;
+    final old = targets.single.projectRelationship!;
+    final updated = PromotionTargetRelationship(
+      targetId: targetId,
+      projectId: old.projectId,
+      stage: stage,
+      displayStage: stage * 2,
+      lifecycleStatus: lifecycleStatus,
+      followUpNote: followUpNote,
+      revisionNumber: expectedRevision + 1,
+      updatedAtUtc: DateTime.utc(2026, 8, 6, 13),
+      stageAliases: old.stageAliases,
+      history: old.history,
+    );
+    targets[0] = PromotionTargetProfile(
+      id: targets.single.id,
+      type: targets.single.type,
+      displayName: targets.single.displayName,
+      phone: targets.single.phone,
+      email: targets.single.email,
+      createdAtUtc: targets.single.createdAtUtc,
+      hasCurrentProjectRelationship: true,
+      projectRelationship: updated,
+    );
+    return PromotionTargetSuccess(updated);
+  }
+
+  @override
+  Future<PromotionTargetResult<List<PromotionTargetStageAlias>>>
+  configureStageAliases({
+    required List<PromotionTargetStageAlias> aliases,
+  }) async => PromotionTargetSuccess(aliases);
+
+  @override
   Future<void> close() async {}
 }
+
+PromotionTargetProfile _targetWithRelationship() => PromotionTargetProfile(
+  id: 'target-1',
+  type: PromotionTargetType.person,
+  displayName: '王小明',
+  phone: null,
+  email: null,
+  createdAtUtc: DateTime.utc(2026, 8, 6),
+  hasCurrentProjectRelationship: true,
+  projectRelationship: _relationship(stage: 3, revision: 2, note: '下周联系'),
+);
+
+PromotionTargetRelationship _relationship({
+  required int stage,
+  required int revision,
+  required String? note,
+}) => PromotionTargetRelationship(
+  targetId: 'target-1',
+  projectId: 'project-1',
+  stage: stage,
+  displayStage: stage * 2,
+  lifecycleStatus: PromotionTargetRelationshipLifecycle.active,
+  followUpNote: note,
+  revisionNumber: revision,
+  updatedAtUtc: DateTime.utc(2026, 8, 6, 12),
+  stageAliases: [
+    for (var value = 0; value <= 4; value++)
+      PromotionTargetStageAlias(
+        stage: value,
+        displayStage: value * 2,
+        displayName: null,
+      ),
+  ],
+  history: [
+    PromotionTargetRelationshipRevision(
+      revisionNumber: revision,
+      oldStage: stage == 0 ? null : stage - 1,
+      newStage: stage,
+      oldLifecycleStatus: stage == 0
+          ? null
+          : PromotionTargetRelationshipLifecycle.active,
+      newLifecycleStatus: PromotionTargetRelationshipLifecycle.active,
+      followUpNote: note,
+      changedFields: const ['stage', 'follow_up_note'],
+      reasonCode: 'progress_update',
+      reasonDetail: null,
+      changedByAppUserId: 'user-1',
+      changedAtUtc: DateTime.utc(2026, 8, 6, 12),
+    ),
+  ],
+);
