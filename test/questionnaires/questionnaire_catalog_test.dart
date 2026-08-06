@@ -75,6 +75,33 @@ void main() {
       ),
     );
   });
+
+  test('受限显示规则随不可变版本缓存并离线恢复', () async {
+    final visibilityFixture =
+        jsonDecode(
+              File(
+                'fixtures/questionnaire/questionnaire-visibility-contract-v1.json',
+              ).readAsStringSync(),
+            )
+            as Map<String, Object?>;
+    final visibilityVersion = QuestionnaireContract.parseVersion(
+      visibilityFixture['questionnaire'],
+    );
+    final database = LocalDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final catalog = QuestionnaireCatalog(database: database);
+
+    await catalog.installPublishedVersion(visibilityVersion);
+    final restored = await catalog.cachedVersion(
+      projectId: visibilityVersion.projectId,
+      versionId: visibilityVersion.id,
+    );
+
+    expect(
+      QuestionnaireContract.versionToJson(restored!),
+      visibilityFixture['questionnaire'],
+    );
+  });
 }
 
 final class _OneVersionRemote implements QuestionnaireRemoteSource {

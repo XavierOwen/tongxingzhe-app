@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +13,7 @@ import 'package:tongxingzhe_app/features/contact_entry/contact_entry_view_model.
 import 'package:tongxingzhe_app/features/contact_journal/contact_journal.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
+import 'package:tongxingzhe_app/questionnaires/questionnaire_contract.dart';
 import 'package:tongxingzhe_app/services/location_service.dart';
 
 void main() {
@@ -74,6 +78,106 @@ void main() {
     await tester.pumpAndSettle();
     expect(store.submitCalls, 2);
   });
+
+  testWidgets('隐藏已答问题前先确认，确认后可撤销', (tester) async {
+    final fixture =
+        jsonDecode(
+              File(
+                'fixtures/questionnaire/questionnaire-visibility-contract-v1.json',
+              ).readAsStringSync(),
+            )
+            as Map<String, Object?>;
+    final version = QuestionnaireContract.parseVersion(
+      fixture['questionnaire'],
+    );
+    final transitionCase = fixture['transition_case']! as Map<String, Object?>;
+    final answers =
+        (transitionCase['answers']! as List<Object?>)
+            .map(QuestionnaireContract.parseAnswer)
+            .toList()
+          ..addAll(const [
+            ShortTextQuestionnaireAnswer(questionId: 'note', value: '原说明'),
+            ShortTextQuestionnaireAnswer(
+              questionId: 'note_filled',
+              value: '原补充',
+            ),
+          ]);
+    final context = TrustedSessionContext(
+      appUserId: 'user-1',
+      workspace: _context.workspace,
+      project: ProjectContext(id: version.projectId, name: '推广项目'),
+      questionnaireVersion: QuestionnaireVersionContext(
+        id: version.id,
+        versionNumber: version.versionNumber,
+      ),
+      capabilities: const {'record_contact'},
+    );
+    final draft = ContactDraft(
+      draftId: 'draft-visibility',
+      appUserId: context.appUserId,
+      workspaceId: context.workspace.id,
+      projectId: context.project.id,
+      questionnaireVersionId: version.id,
+      createdAtUtc: DateTime.utc(2030, 1, 2, 3),
+      updatedAtUtc: DateTime.utc(2030, 1, 2, 4),
+      occurredAtUtc: DateTime.utc(2030, 1, 2, 3),
+      occurredTimeZone: 'America/Chicago',
+      channel: ContactChannel.videoCall,
+      channelDetail: null,
+      location: const NotApplicableContactLocation(),
+      reachCount: 2,
+      interestLevel: 3,
+      answers: answers,
+      syncMode: ContactDraftSyncMode.accountPrivate,
+      localRevision: 1,
+      serverRevision: 1,
+      conflictOfDraftId: null,
+    );
+    await _pumpEntry(
+      tester,
+      store: _FakeEntryStore(),
+      initialDraft: draft,
+      questionnaireVersion: version,
+      context: context,
+    );
+    final courses = find.byKey(const ValueKey('question-topics-courses'));
+    await tester.ensureVisible(courses);
+    await tester.pumpAndSettle();
+
+    await tester.tap(courses);
+    await tester.pumpAndSettle();
+
+    expect(find.text('这些答案将被清除'), findsOneWidget);
+    expect(find.text('• 未选课程说明'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, '取消'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('question-no_courses')), findsOneWidget);
+
+    await tester.tap(courses);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('confirm-questionnaire-clear')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('question-no_courses')), findsNothing);
+    expect(find.text('不再适用的问题答案已清除'), findsOneWidget);
+    await tester.tap(find.text('撤销'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('question-no_courses')), findsOneWidget);
+
+    final note = find.byKey(const ValueKey('question-value-note'));
+    await tester.ensureVisible(note);
+    await tester.pumpAndSettle();
+    await tester.enterText(note, '');
+    await tester.pumpAndSettle();
+    expect(find.text('• 已填写说明后的补充'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(TextButton, '取消'));
+    await tester.pumpAndSettle();
+
+    final restoredNote = tester.widget<TextField>(note);
+    expect(restoredNote.controller!.text, '原说明');
+  });
 }
 
 Future<void> _pumpEntry(
@@ -81,6 +185,8 @@ Future<void> _pumpEntry(
   required ContactEntryStore store,
   ContactLocationCapture locationCapture = const _QueuedLocationCapture([]),
   ContactDraft? initialDraft,
+  QuestionnaireVersion? questionnaireVersion,
+  TrustedSessionContext context = _context,
 }) async {
   tester.view.physicalSize = const Size(800, 1200);
   tester.view.devicePixelRatio = 1;
@@ -103,13 +209,14 @@ Future<void> _pumpEntry(
       home: ContactEntryScreen(
         controller: controller,
         clock: const _FixedClock(),
-        context: _context,
+        context: context,
         contactJournal: journal,
         deviceId: 'device-1',
         locationCapture: locationCapture,
         timeZoneProvider: const _FakeTimeZoneProvider(),
         initialDraft: initialDraft,
         entryStore: store,
+        questionnaireVersion: questionnaireVersion,
       ),
     ),
   );

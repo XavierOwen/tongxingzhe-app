@@ -10,15 +10,73 @@ import '../generated_migrations/schema_v9.dart' as v9;
 import '../generated_migrations/schema_v10.dart' as v10;
 import '../generated_migrations/schema_v11.dart' as v11;
 import '../generated_migrations/schema_v12.dart' as v12;
+import '../generated_migrations/schema_v13.dart' as v13;
 
 void main() {
-  test('保存的 schema v13 可以独立重建', () async {
+  test('保存的 schema v14 可以独立重建', () async {
     final verifier = SchemaVerifier(GeneratedHelper());
-    final connection = await verifier.startAt(13);
+    final connection = await verifier.startAt(14);
     final database = LocalDatabase(connection);
     addTearDown(database.close);
 
-    await verifier.migrateAndValidate(database, 13);
+    await verifier.migrateAndValidate(database, 14);
+  });
+
+  test('v13 升级到 v14 时保留答案并新增规则与跳题原因列', () async {
+    final verifier = SchemaVerifier(GeneratedHelper());
+    final schema = await verifier.schemaAt(13);
+    addTearDown(schema.close);
+
+    final oldDatabase = v13.DatabaseAtV13(schema.newConnection());
+    await oldDatabase.customStatement('''
+      INSERT INTO db_questionnaire_versions (
+        questionnaire_version_id, project_id, version_number,
+        status, installed_at_utc
+      ) VALUES ('questionnaire-v1', 'project-1', 1, 'published', 1894122000)
+    ''');
+    await oldDatabase.customStatement('''
+      INSERT INTO db_questionnaire_questions (
+        questionnaire_version_id, question_id, position, prompt,
+        question_type, is_required, allow_unknown, allow_refused,
+        allow_not_applicable
+      ) VALUES (
+        'questionnaire-v1', 'consent', 1, '是否同意？',
+        'boolean', 1, 0, 1, 0
+      )
+    ''');
+    await oldDatabase.customStatement('''
+      INSERT INTO db_contact_records (
+        contact_id, app_user_id, workspace_id, project_id,
+        questionnaire_version_id, occurred_at_utc, occurred_time_zone,
+        first_submitted_at_utc, channel, location_kind, reach_count,
+        interest_level, current_revision, lifecycle_status
+      ) VALUES (
+        'contact-before-v14', 'app-user-1', 'workspace-1', 'project-1',
+        'questionnaire-v1', 1894122000, 'America/Chicago', 1894123800,
+        'video_call', 'not_applicable', 1, 2, 1, 'active'
+      )
+    ''');
+    await oldDatabase.customStatement('''
+      INSERT INTO db_contact_answers (
+        contact_id, revision_number, question_id, answer_state,
+        answer_type, boolean_value
+      ) VALUES (
+        'contact-before-v14', 1, 'consent', 'answered', 'boolean', 1
+      )
+    ''');
+    await oldDatabase.close();
+
+    final database = LocalDatabase(schema.newConnection());
+    addTearDown(database.close);
+    await verifier.migrateAndValidate(database, 14);
+
+    final answer = await database.select(database.dbContactAnswers).getSingle();
+    expect(answer.booleanValue, isTrue);
+    expect(answer.answerStateReason, isNull);
+    final question = await database
+        .select(database.dbQuestionnaireQuestions)
+        .getSingle();
+    expect(question.displayRuleJson, isNull);
   });
 
   test('v12 升级到 v13 时保留 boolean 答案并新增空问卷定义表', () async {
@@ -81,7 +139,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 13);
+    await verifier.migrateAndValidate(database, 14);
 
     final submittedAnswer = await database
         .select(database.dbContactAnswers)
@@ -131,7 +189,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 13);
+    await verifier.migrateAndValidate(database, 14);
 
     expect(
       (await database.select(database.dbContactRecords).getSingle()).contactId,
@@ -176,7 +234,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 13);
+    await verifier.migrateAndValidate(database, 14);
 
     final revision = await database
         .select(database.dbContactRevisions)
@@ -223,7 +281,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 13);
+    await verifier.migrateAndValidate(database, 14);
 
     final draft = await database.select(database.dbContactDrafts).getSingle();
     expect(draft.draftId, 'draft-before-v10');
@@ -268,7 +326,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 13);
+    await verifier.migrateAndValidate(database, 14);
 
     final draft = await database.select(database.dbContactDrafts).getSingle();
     expect(draft.draftId, 'draft-before-v9');
@@ -341,7 +399,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 13);
+    await verifier.migrateAndValidate(database, 14);
 
     final contact = await database
         .select(database.dbContactRecords)
@@ -373,7 +431,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 13);
+    await verifier.migrateAndValidate(database, 14);
 
     final legacySetting = await (database.select(
       database.dbAppSettings,

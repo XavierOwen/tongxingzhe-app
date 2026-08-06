@@ -7,6 +7,7 @@ final class QuestionnaireAnswerColumns {
   const QuestionnaireAnswerColumns({
     required this.questionId,
     required this.state,
+    this.stateReason,
     required this.type,
     this.booleanValue,
     this.textValue,
@@ -16,6 +17,7 @@ final class QuestionnaireAnswerColumns {
 
   final String questionId;
   final String state;
+  final String? stateReason;
   final String type;
   final bool? booleanValue;
   final String? textValue;
@@ -34,6 +36,7 @@ final class QuestionnaireAnswerCodec {
     return QuestionnaireAnswerColumns(
       questionId: answer.questionId,
       state: answer.state.storageValue,
+      stateReason: answer.stateReason,
       type: answer.type.storageValue,
       booleanValue: answer.type == QuestionnaireQuestionType.boolean
           ? value as bool?
@@ -59,6 +62,7 @@ final class QuestionnaireAnswerCodec {
   static Map<String, Object?> toJson(QuestionnaireAnswer answer) => {
     'question_id': answer.questionId,
     'state': answer.state.storageValue,
+    if (answer.stateReason != null) 'state_reason': answer.stateReason,
     'type': answer.type.storageValue,
     'value': answer.state == QuestionnaireAnswerState.answered
         ? answer.value
@@ -68,6 +72,7 @@ final class QuestionnaireAnswerCodec {
   static QuestionnaireAnswer fromColumns({
     required String questionId,
     required String state,
+    String? stateReason,
     required String type,
     required bool? booleanValue,
     required String? textValue,
@@ -92,6 +97,7 @@ final class QuestionnaireAnswerCodec {
     return _typedAnswer(
       questionId: questionId,
       state: parsedState,
+      stateReason: stateReason,
       type: parsedType,
       value: value,
     );
@@ -108,9 +114,14 @@ final class QuestionnaireAnswerCodec {
     final type = QuestionnaireQuestionType.fromStorage(
       _string(raw['type'], 'type'),
     );
+    final stateReason = raw['state_reason'];
+    if (stateReason != null && stateReason is! String) {
+      throw const FormatException('state_reason must be a string');
+    }
     return _typedAnswer(
       questionId: questionId,
       state: state,
+      stateReason: stateReason as String?,
       type: type,
       value: raw['value'],
     );
@@ -119,9 +130,18 @@ final class QuestionnaireAnswerCodec {
   static QuestionnaireAnswer _typedAnswer({
     required String questionId,
     required QuestionnaireAnswerState state,
+    String? stateReason,
     required QuestionnaireQuestionType type,
     required Object? value,
   }) {
+    if (stateReason != null) {
+      if (state != QuestionnaireAnswerState.notApplicable ||
+          stateReason != questionnaireRuleSkippedReason ||
+          value != null) {
+        throw const FormatException('invalid questionnaire state reason');
+      }
+      return RuleSkippedQuestionnaireAnswer(questionId: questionId, type: type);
+    }
     if (state == QuestionnaireAnswerState.answered && value == null) {
       throw const FormatException('answered questionnaire value is missing');
     }

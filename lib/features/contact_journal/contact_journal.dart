@@ -306,6 +306,7 @@ final class ContactJournal {
               revisionNumber: 1,
               questionId: columns.questionId,
               answerState: columns.state,
+              answerStateReason: Value(columns.stateReason),
               answerType: columns.type,
               booleanValue: Value(columns.booleanValue),
               textValue: Value(columns.textValue),
@@ -882,6 +883,7 @@ final class ContactJournal {
               revisionNumber: revisionNumber,
               questionId: columns.questionId,
               answerState: columns.state,
+              answerStateReason: Value(columns.stateReason),
               answerType: columns.type,
               booleanValue: Value(columns.booleanValue),
               textValue: Value(columns.textValue),
@@ -908,6 +910,7 @@ final class ContactJournal {
         QuestionnaireAnswerCodec.fromColumns(
           questionId: row.questionId,
           state: row.answerState,
+          stateReason: row.answerStateReason,
           type: row.answerType,
           booleanValue: row.booleanValue,
           textValue: row.textValue,

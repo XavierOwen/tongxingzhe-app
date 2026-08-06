@@ -558,13 +558,25 @@ function parseAnswer(value: unknown): ContactAnswer {
     throw new CommandValidationError("invalid_answer_state");
   }
   const rawValue = answer.value;
+  const stateReason = answer.state_reason === undefined ||
+      answer.state_reason === null
+    ? null
+    : answer.state_reason === "rule_skipped"
+    ? "rule_skipped"
+    : (() => {
+      throw new CommandValidationError("invalid_answer_state_reason");
+    })();
   if (state !== "answered") {
-    if (rawValue !== null) {
+    if (
+      rawValue !== null ||
+      (stateReason !== null && state !== "not_applicable")
+    ) {
       throw new CommandValidationError("invalid_answer_value_shape");
     }
     return {
       questionId: string(answer.question_id, "invalid_question_id"),
       state,
+      stateReason,
       type,
       value: null,
     };
@@ -588,9 +600,13 @@ function parseAnswer(value: unknown): ContactAnswer {
   if (parsedValue === null) {
     throw new CommandValidationError("invalid_answer_value_shape");
   }
+  if (stateReason !== null) {
+    throw new CommandValidationError("invalid_answer_state_reason");
+  }
   return {
     questionId: string(answer.question_id, "invalid_question_id"),
     state,
+    stateReason,
     type,
     value: parsedValue,
   };

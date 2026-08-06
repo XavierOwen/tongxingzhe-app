@@ -124,6 +124,9 @@ Future<void> _pumpForm(
               version: version,
               answers: const [],
               errors: const [],
+              visibleQuestionIds: [
+                for (final question in version.questions) question.id,
+              ],
               onValueChanged: onValueChanged ?? (_, _) {},
               onStateChanged: onStateChanged ?? (_, _) {},
             ),

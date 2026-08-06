@@ -32,6 +32,7 @@ export interface ContactAnswer {
     | "refused"
     | "not_applicable"
     | "unanswered";
+  readonly stateReason: "rule_skipped" | null;
   readonly type:
     | "boolean"
     | "single_choice"

@@ -604,6 +604,7 @@ extension ContactDraftOperations on ContactJournal {
               draftId: draftId,
               questionId: columns.questionId,
               answerState: columns.state,
+              answerStateReason: Value(columns.stateReason),
               answerType: columns.type,
               booleanValue: Value(columns.booleanValue),
               textValue: Value(columns.textValue),
@@ -642,6 +643,7 @@ extension ContactDraftOperations on ContactJournal {
           QuestionnaireAnswerCodec.fromColumns(
             questionId: answer.questionId,
             state: answer.answerState,
+            stateReason: answer.answerStateReason,
             type: answer.answerType,
             booleanValue: answer.booleanValue,
             textValue: answer.textValue,

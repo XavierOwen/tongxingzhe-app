@@ -60,6 +60,8 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
   late final TextEditingController _channelDetailController;
   late final ContactEntryViewModel _viewModel;
   var _allowPop = false;
+  var _showingQuestionnaireClearDialog = false;
+  var _questionnaireFormGeneration = 0;
 
   @override
   void initState() {
@@ -293,12 +295,23 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
             if (entryState.questionnaireVersion case final version?) ...[
               const SizedBox(height: 24),
               QuestionnaireForm(
+                key: ValueKey(_questionnaireFormGeneration),
                 text: text,
                 version: version,
                 answers: entryState.answers,
                 errors: entryState.questionnaireEvaluation.errors,
-                onValueChanged: _viewModel.setQuestionnaireValue,
-                onStateChanged: _viewModel.setQuestionnaireState,
+                visibleQuestionIds:
+                    entryState.questionnaireEvaluation.visibleQuestionIds,
+                onValueChanged: (question, value) {
+                  if (_viewModel.setQuestionnaireValue(question, value)) {
+                    unawaited(_confirmQuestionnaireClear());
+                  }
+                },
+                onStateChanged: (question, answerState) {
+                  if (_viewModel.setQuestionnaireState(question, answerState)) {
+                    unawaited(_confirmQuestionnaireClear());
+                  }
+                },
               ),
               Text(
                 '${text.t('questionnaireCompletion')}：'
@@ -412,6 +425,75 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
         context,
       ).showSnackBar(SnackBar(content: Text(text.t(failureCode))));
     }
+  }
+
+  Future<void> _confirmQuestionnaireClear() async {
+    if (_showingQuestionnaireClearDialog || !mounted) {
+      return;
+    }
+    _showingQuestionnaireClearDialog = true;
+    final text = AppStrings(widget.controller.localeCode);
+    final pending = _viewModel.state.pendingQuestionnaireAnswersToClear;
+    final questions = {
+      for (final question
+          in widget.questionnaireVersion?.questions ??
+              const <QuestionnaireQuestion>[])
+        question.id: question,
+    };
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text(text.t('questionnaireClearTitle')),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(text.t('questionnaireClearMessage')),
+              const SizedBox(height: 8),
+              for (final answer in pending)
+                Text(
+                  '• ${questions[answer.questionId]?.prompt ?? answer.questionId}',
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(text.t('cancel')),
+          ),
+          FilledButton(
+            key: const ValueKey('confirm-questionnaire-clear'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(text.t('questionnaireClearConfirm')),
+          ),
+        ],
+      ),
+    );
+    _showingQuestionnaireClearDialog = false;
+    if (!mounted) {
+      return;
+    }
+    if (confirmed != true) {
+      _viewModel.cancelQuestionnaireClear();
+      setState(() => _questionnaireFormGeneration++);
+      return;
+    }
+    _viewModel.confirmQuestionnaireClear();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text.t('questionnaireAnswersCleared')),
+        action: SnackBarAction(
+          label: text.t('undo'),
+          onPressed: () {
+            _viewModel.undoQuestionnaireClear();
+            setState(() => _questionnaireFormGeneration++);
+          },
+        ),
+      ),
+    );
   }
 
   String _locationLabel(AppStrings text, ContactLocation? location) {

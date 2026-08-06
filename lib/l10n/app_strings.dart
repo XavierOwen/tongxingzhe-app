@@ -313,6 +313,10 @@ const Map<String, Map<String, String>> _strings = {
     'questionnaireAnswerAnswered': '已回答',
     'questionnaireAnswerState': '回答状态',
     'questionnaireCompletion': '问卷完成度',
+    'questionnaireClearTitle': '这些答案将被清除',
+    'questionnaireClearMessage': '前置答案改变后，下列问题不再适用。确认后会清除原答案。',
+    'questionnaireClearConfirm': '清除并继续',
+    'questionnaireAnswersCleared': '不再适用的问题答案已清除',
     'questionnairePrivacyHelp': '问卷文本只用于本次接触，不应用来代替推广对象姓名、联系方式或其他个人资料。',
     'questionnaireUnavailable': '当前问卷版本尚未保存在本机，并且暂时无法从服务器取得。联网后重试；已有离线草稿不会丢失。',
     'questionnaireNumberValue': '数值',
@@ -719,6 +723,11 @@ const Map<String, Map<String, String>> _strings = {
     'questionnaireAnswerAnswered': 'Answered',
     'questionnaireAnswerState': 'Answer state',
     'questionnaireCompletion': 'Questionnaire completion',
+    'questionnaireClearTitle': 'These answers will be cleared',
+    'questionnaireClearMessage':
+        'The following questions no longer apply. Confirm to clear their previous answers.',
+    'questionnaireClearConfirm': 'Clear and continue',
+    'questionnaireAnswersCleared': 'Answers for skipped questions were cleared',
     'questionnairePrivacyHelp':
         'Questionnaire text is for this contact only. Do not use it instead of a promotion target name, contact details, or other personal data.',
     'questionnaireUnavailable':
