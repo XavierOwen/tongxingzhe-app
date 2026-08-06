@@ -316,6 +316,23 @@ const Map<String, Map<String, String>> _strings = {
     'personalPlanConflict': '计划已在另一台设备更新，请重新载入。',
     'personalPlanInvalid': '请检查目标数、IANA 时区和周期起始日。',
     'personalPlanUnavailable': '私人计划暂时无法载入。',
+    'personalReminderTitle': '每日行动提醒',
+    'personalReminderPrivateHelp': '提醒时间在设备间同步；系统通知必须在每台设备单独开启。',
+    'personalReminderNotSet': '本项目尚未设置每日提醒时间。',
+    'personalReminderAt': '每天提醒',
+    'personalReminderLocalTime': '按本设备当地时间触发；旅行后仍使用所在地的相同钟点。',
+    'personalReminderSetTime': '设置提醒时间',
+    'personalReminderEditTime': '修改提醒时间',
+    'personalReminderClearTime': '清除提醒时间',
+    'personalReminderDeviceToggle': '在本设备发送系统通知',
+    'personalReminderDeviceOff': '新设备默认关闭。只有你在本设备明确开启后，系统才会申请通知权限。',
+    'personalReminderGenericPrivacy': '锁屏通知只显示通用行动提醒，不含项目名、进度或推广对象资料。',
+    'personalReminderGenericBody': '请为今天的行动留一点时间。打开同行者查看今日页面。',
+    'personalReminderPermissionDenied': '系统没有授予通知权限；本设备仍保持关闭。',
+    'personalReminderUnsupported': '此平台不能在 App 关闭时可靠安排重复通知。提醒时间仍会同步并在 App 内显示。',
+    'personalReminderScheduleFailed': '系统通知未能安排；本设备的设置没有被误标为已启用。',
+    'personalReminderUnavailable': '私人提醒暂时无法载入或保存。',
+    'personalReminderConflict': '提醒时间已在另一台设备更新，请重新载入。',
     'weekDay.1': '星期一',
     'weekDay.2': '星期二',
     'weekDay.3': '星期三',
@@ -999,6 +1016,33 @@ const Map<String, Map<String, String>> _strings = {
     'personalPlanInvalid':
         'Check the target, IANA time zone, and cycle start day.',
     'personalPlanUnavailable': 'Your private plan is temporarily unavailable.',
+    'personalReminderTitle': 'Daily action reminder',
+    'personalReminderPrivateHelp':
+        'The reminder time syncs across devices. System notifications must be enabled on each device.',
+    'personalReminderNotSet': 'No daily reminder time is set for this project.',
+    'personalReminderAt': 'Daily reminder',
+    'personalReminderLocalTime':
+        'Uses this device’s local time. The wall-clock time stays the same when you travel.',
+    'personalReminderSetTime': 'Set reminder time',
+    'personalReminderEditTime': 'Change reminder time',
+    'personalReminderClearTime': 'Clear reminder time',
+    'personalReminderDeviceToggle': 'Send system notifications on this device',
+    'personalReminderDeviceOff':
+        'New devices start off. The app requests permission only after you enable this device.',
+    'personalReminderGenericPrivacy':
+        'Lock-screen notifications use a generic action reminder. They contain no project, progress, or target data.',
+    'personalReminderGenericBody':
+        'Set aside a little time for today’s action. Open Tongxingzhe to view Today.',
+    'personalReminderPermissionDenied':
+        'Notification permission was not granted. This device remains off.',
+    'personalReminderUnsupported':
+        'This platform cannot reliably schedule repeating notifications while the app is closed. The reminder time still syncs and appears in the app.',
+    'personalReminderScheduleFailed':
+        'The system notification was not scheduled. This device was not marked as enabled.',
+    'personalReminderUnavailable':
+        'Your private reminder could not be loaded or saved.',
+    'personalReminderConflict':
+        'The reminder changed on another device. Reload it before saving again.',
     'weekDay.1': 'Monday',
     'weekDay.2': 'Tuesday',
     'weekDay.3': 'Wednesday',

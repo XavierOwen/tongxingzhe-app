@@ -22,6 +22,10 @@ import '../questionnaires/questionnaire_administration.dart';
 import '../questionnaires/questionnaire_administration_cache.dart';
 import '../questionnaires/questionnaire_contract.dart';
 import '../regions/contact_region_resolver.dart';
+import '../reminders/drift_device_reminder_preference_store.dart';
+import '../reminders/flutter_reminder_notification_scheduler.dart';
+import '../reminders/http_personal_action_reminder_gateway.dart';
+import '../reminders/personal_action_reminder.dart';
 import '../services/location_service.dart';
 import '../sync/http_sync_transport.dart';
 import '../sync/sync_engine_factory.dart';
@@ -52,6 +56,8 @@ final class AppDependencies {
     this.questionnaireAdministrationBuilder,
     this.promotionTargetGatewayBuilder,
     this.personalActionPlanGatewayBuilder,
+    this.personalActionReminderGatewayBuilder,
+    this.reminderSchedulerBuilder = productionReminderNotificationScheduler,
     this.offlinePiiSecureStore,
     this.legacyDemoAccess,
   });
@@ -76,6 +82,8 @@ final class AppDependencies {
       questionnaireAdministrationBuilder: productionQuestionnaireAdministration,
       promotionTargetGatewayBuilder: productionPromotionTargetGateway,
       personalActionPlanGatewayBuilder: productionPersonalActionPlanGateway,
+      personalActionReminderGatewayBuilder:
+          productionPersonalActionReminderGateway,
       offlinePiiSecureStore: secureStore,
     );
   }
@@ -99,6 +107,10 @@ final class AppDependencies {
   promotionTargetGatewayBuilder;
   final PersonalActionPlanGateway Function(IdentitySession)?
   personalActionPlanGatewayBuilder;
+  final PersonalActionReminderGateway Function(IdentitySession)?
+  personalActionReminderGatewayBuilder;
+  final ReminderNotificationScheduler Function(AppPlatform)
+  reminderSchedulerBuilder;
   final SecureValueStore? offlinePiiSecureStore;
 
   /// 临时兼容 legacy demo；正式 composition root 永远不提供此 Adapter。
@@ -114,6 +126,8 @@ final class AppDependencies {
     QuestionnaireAdministrationGateway? questionnaireAdministration;
     PromotionTargetGateway? promotionTargetGateway;
     PersonalActionPlanGateway? personalActionPlanGateway;
+    PersonalActionReminderGateway? personalActionReminderGateway;
+    ReminderNotificationScheduler? reminderNotificationScheduler;
     OfflinePiiVault? offlinePiiVault;
     try {
       identitySession = await identitySessionFactory.open();
@@ -229,6 +243,12 @@ final class AppDependencies {
       personalActionPlanGateway =
           personalActionPlanGatewayBuilder?.call(identitySession) ??
           const DeferredPersonalActionPlanGateway();
+      personalActionReminderGateway =
+          personalActionReminderGatewayBuilder?.call(identitySession) ??
+          const DeferredPersonalActionReminderGateway();
+      reminderNotificationScheduler = reminderSchedulerBuilder(
+        platformCapabilities.platform,
+      );
       return AppStartupReady(
         controller: controller,
         clock: clock,
@@ -246,6 +266,11 @@ final class AppDependencies {
         questionnaireAdministration: questionnaireAdministration,
         promotionTargetGateway: promotionTargetGateway,
         personalActionPlanGateway: personalActionPlanGateway,
+        personalActionReminderGateway: personalActionReminderGateway,
+        deviceReminderPreferenceStore: DriftDeviceReminderPreferenceStore(
+          database,
+        ),
+        reminderNotificationScheduler: reminderNotificationScheduler,
         idGenerator: idGenerator,
       );
     } catch (error, stackTrace) {
@@ -256,6 +281,8 @@ final class AppDependencies {
       await questionnaireAdministration?.close();
       await promotionTargetGateway?.close();
       await personalActionPlanGateway?.close();
+      await personalActionReminderGateway?.close();
+      await reminderNotificationScheduler?.close();
       await appSession?.close();
       if (appSession == null) {
         await sessionContextGateway.close();
@@ -294,6 +321,9 @@ final class AppStartupReady extends AppStartupResult {
     required this.questionnaireAdministration,
     required this.promotionTargetGateway,
     required this.personalActionPlanGateway,
+    required this.personalActionReminderGateway,
+    required this.deviceReminderPreferenceStore,
+    required this.reminderNotificationScheduler,
     required this.idGenerator,
   });
 
@@ -313,6 +343,9 @@ final class AppStartupReady extends AppStartupResult {
   final QuestionnaireAdministrationGateway questionnaireAdministration;
   final PromotionTargetGateway promotionTargetGateway;
   final PersonalActionPlanGateway personalActionPlanGateway;
+  final PersonalActionReminderGateway personalActionReminderGateway;
+  final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
+  final ReminderNotificationScheduler reminderNotificationScheduler;
   final IdGenerator idGenerator;
 }
 

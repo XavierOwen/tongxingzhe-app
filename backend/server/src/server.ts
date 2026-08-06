@@ -55,6 +55,11 @@ import {
   savePersonalActionPlan,
   type PersonalActionPlanStore,
 } from "./personal-action-plans.js";
+import {
+  readPersonalActionReminder,
+  savePersonalActionReminder,
+  type PersonalActionReminderStore,
+} from "./personal-action-reminders.js";
 
 export interface BackendServerDependencies
   extends SessionContextHttpDependencies {
@@ -69,6 +74,7 @@ export interface BackendServerDependencies
   readonly targetInstitutionRelationshipStore?:
     TargetInstitutionRelationshipStore;
   readonly personalActionPlanStore?: PersonalActionPlanStore;
+  readonly personalActionReminderStore?: PersonalActionReminderStore;
 }
 
 export function createBackendServer(
@@ -420,6 +426,45 @@ export function createBackendServer(
           request.headers.authorization,
           await readJsonBody(request),
           planDependencies,
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
+      }
+      return;
+    }
+
+    if (
+      requestUrl.pathname === "/v1/personal-action-reminder" &&
+      (request.method === "GET" || request.method === "PUT")
+    ) {
+      if (dependencies.personalActionReminderStore === undefined) {
+        response.statusCode = 503;
+        response.end(JSON.stringify({
+          error: {code: "personal_action_reminder_unavailable"},
+        }));
+        return;
+      }
+      const reminderDependencies = {
+        identityVerifier: dependencies.identityVerifier,
+        contextStore: dependencies.contextStore,
+        reminderStore: dependencies.personalActionReminderStore,
+      };
+      if (request.method === "GET") {
+        const result = await readPersonalActionReminder(
+          request.headers.authorization,
+          reminderDependencies,
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+        return;
+      }
+      try {
+        const result = await savePersonalActionReminder(
+          request.headers.authorization,
+          await readJsonBody(request),
+          reminderDependencies,
         );
         response.statusCode = result.status;
         response.end(JSON.stringify(result.body));

@@ -77,10 +77,14 @@ Backend 不接受客户端提供的用户、空间或项目范围。每次请求
 | --- | --- |
 | `GET /v1/personal-action-plan` | 返回本人当前版本、待生效版本和本周期接触场次 |
 | `PUT /v1/personal-action-plan` | 按 expected revision 追加新版本 |
+| `GET /v1/personal-action-reminder` | 返回本人当前项目的可选每日当地提醒钟点 |
+| `PUT /v1/personal-action-reminder` | 立即追加、修改或清除提醒钟点 |
 
 客户端只能提交可选周目标、固定 IANA 统计时区、ISO 周起始日、expected revision 和 mutation ID，不能提交用户、workspace、项目、进度或生效时间。Backend 使用服务端时间。首次设置立即采用当前自然周；后续设置从新配置定义的下一周期生效。
 
 读取和写入不要求管理 capability，也没有组织或管理员列表入口。PostgreSQL 只计算当前有效的已提交接触，按实际发生时间使用半开周期边界。版本冲突返回 `409 personal_action_plan_conflict`；已有待生效版本时返回 `409 personal_action_plan_pending_change`。
+
+提醒时间和周目标可独立使用。提醒 API 只接受 `0` 至 `1439` 的当地分钟、expected revision 和 mutation ID。它不接受设备 ID、设备权限或 UTC 触发时刻。系统通知 opt-in 只保存在各设备本地，新设备不会因同步提醒时间而自动启用。
 
 ## 配置
 
@@ -118,6 +122,8 @@ npm run check
 对象资料保留与匿名化见 [`0020_promotion_target_retention.sql`](../database/migrations/0020_promotion_target_retention.sql)。对应 fixture 和独立会话脚本验证十二个月上限、较短策略、通用复核任务、明确续期、到期清理、撤回、不可逆文本清除、接触事实保留、重放和并发。
 
 私人周计划见 [`0021_personal_action_plans.sql`](../database/migrations/0021_personal_action_plans.sql)。对应 fixture 验证固定 IANA 时区、任意周起始日、夏令时周期、下一周期版本、重放、revision 冲突、跨用户拒绝和恢复库权限。
+
+私人每日提醒见 [`0022_personal_action_reminders.sql`](../database/migrations/0022_personal_action_reminders.sql)。对应 fixture 验证提醒可独立创建、当地分钟边界、清除、幂等重放、revision 冲突、跨用户拒绝和恢复库权限。
 
 ## 运行
 
