@@ -13,6 +13,7 @@ import '../features/contact_entry/contact_entry_screen.dart';
 import '../foundation/runtime_values.dart';
 import '../identity/identity_session.dart';
 import '../l10n/app_strings.dart';
+import '../regions/contact_region_resolver.dart';
 import '../routing/app_route.dart';
 import '../routing/app_router.dart';
 import '../screens/auth_screen.dart';
@@ -53,6 +54,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
   IdentitySession? _identitySession;
   AppSession? _appSession;
   SyncEngineFactory? _syncEngineFactory;
+  ContactRegionResolver? _regionResolver;
 
   @override
   void initState() {
@@ -67,11 +69,13 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       :final identitySession,
       :final appSession,
       :final syncEngineFactory,
+      :final regionResolver,
     )) {
       _controller = controller;
       _identitySession = identitySession;
       _appSession = appSession;
       _syncEngineFactory = syncEngineFactory;
+      _regionResolver = regionResolver;
     }
     return result;
   }
@@ -81,6 +85,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
     unawaited(_appSession?.close());
     unawaited(_identitySession?.close());
     unawaited(_syncEngineFactory?.close());
+    unawaited(_regionResolver?.close());
     _controller?.dispose();
     super.dispose();
   }
@@ -108,6 +113,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
             :final appSession,
             :final locationCapture,
             :final timeZoneProvider,
+            :final regionResolver,
           ) =>
             _ReadyApp(
               controller: controller,
@@ -119,6 +125,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
               appSession: appSession,
               locationCapture: locationCapture,
               timeZoneProvider: timeZoneProvider,
+              regionResolver: regionResolver,
               signedOutScreenBuilder: widget.signedOutScreenBuilder,
               routeInformationProvider: widget.routeInformationProvider,
             ),
@@ -142,6 +149,7 @@ class _ReadyApp extends StatefulWidget {
     required this.appSession,
     required this.locationCapture,
     required this.timeZoneProvider,
+    required this.regionResolver,
     required this.signedOutScreenBuilder,
     required this.routeInformationProvider,
   });
@@ -155,6 +163,7 @@ class _ReadyApp extends StatefulWidget {
   final AppSession appSession;
   final ContactLocationCapture locationCapture;
   final DeviceTimeZoneProvider timeZoneProvider;
+  final ContactRegionResolver regionResolver;
   final SignedOutScreenBuilder? signedOutScreenBuilder;
   final RouteInformationProvider? routeInformationProvider;
 
@@ -212,7 +221,7 @@ final class _ReadyAppState extends State<_ReadyApp> {
   Widget _buildRootRoute(
     BuildContext context,
     AppRoute route,
-    ValueListenable<int> contactSubmissionEvents,
+    ValueListenable<ContactEntryClosedEvent> contactEntryClosedEvents,
   ) {
     final legacyBuilder = widget.signedOutScreenBuilder;
     if (legacyBuilder != null) {
@@ -233,7 +242,7 @@ final class _ReadyAppState extends State<_ReadyApp> {
         syncEngineFactory: widget.syncEngineFactory,
         locationCapture: widget.locationCapture,
         selectedIndex: route.primaryIndex,
-        contactSubmissionEvents: contactSubmissionEvents,
+        contactEntryClosedEvents: contactEntryClosedEvents,
         onDestinationSelected: (index) => _routerDelegate.go(switch (index) {
           0 => AppRoute.today,
           1 => AppRoute.contacts,
@@ -263,6 +272,7 @@ final class _ReadyAppState extends State<_ReadyApp> {
         deviceId: widget.deviceId,
         locationCapture: widget.locationCapture,
         timeZoneProvider: widget.timeZoneProvider,
+        regionResolver: widget.regionResolver,
         draftId: draftId,
       ),
     );
@@ -325,6 +335,7 @@ final class _ContactEntryRoute extends StatefulWidget {
     required this.deviceId,
     required this.locationCapture,
     required this.timeZoneProvider,
+    required this.regionResolver,
     required this.draftId,
   });
 
@@ -336,6 +347,7 @@ final class _ContactEntryRoute extends StatefulWidget {
   final String deviceId;
   final ContactLocationCapture locationCapture;
   final DeviceTimeZoneProvider timeZoneProvider;
+  final ContactRegionResolver regionResolver;
   final String? draftId;
 
   @override
@@ -397,6 +409,7 @@ final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
       initialDraft: draft,
       locationCapture: widget.locationCapture,
       timeZoneProvider: widget.timeZoneProvider,
+      regionResolver: widget.regionResolver,
     );
   }
 

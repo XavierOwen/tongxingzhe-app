@@ -10,6 +10,7 @@ import '../foundation/runtime_values.dart';
 import '../identity/identity_session.dart';
 import '../identity/supabase/supabase_identity_session.dart';
 import '../platform/platform_capabilities.dart';
+import '../regions/contact_region_resolver.dart';
 import '../services/location_service.dart';
 import '../sync/http_sync_transport.dart';
 import '../sync/sync_engine_factory.dart';
@@ -32,6 +33,7 @@ final class AppDependencies {
     this.timeZoneProvider = const FlutterDeviceTimeZoneProvider(),
     this.locationCapture = const LocationService(),
     this.syncTransportBuilder,
+    this.regionResolverBuilder,
     this.legacyDemoAccess,
   });
 
@@ -44,6 +46,7 @@ final class AppDependencies {
       sessionContextGateway: productionSessionContextGateway(),
       platformCapabilitiesProvider: const FlutterPlatformCapabilitiesProvider(),
       syncTransportBuilder: productionSyncTransport,
+      regionResolverBuilder: productionContactRegionResolver,
     );
   }
 
@@ -56,6 +59,8 @@ final class AppDependencies {
   final DeviceTimeZoneProvider timeZoneProvider;
   final ContactLocationCapture locationCapture;
   final SyncTransport? Function(IdentitySession)? syncTransportBuilder;
+  final ContactRegionResolver Function(IdentitySession, LocalDatabase)?
+  regionResolverBuilder;
 
   /// 临时兼容 legacy demo；正式 composition root 永远不提供此 Adapter。
   final LegacyDemoAccess? legacyDemoAccess;
@@ -65,6 +70,7 @@ final class AppDependencies {
     IdentitySession? identitySession;
     AppSession? appSession;
     SyncEngineFactory? syncEngineFactory;
+    ContactRegionResolver? regionResolver;
     try {
       identitySession = await identitySessionFactory.open();
     } catch (error, stackTrace) {
@@ -123,6 +129,9 @@ final class AppDependencies {
           jitter: SecureSyncJitter(),
         );
       }
+      regionResolver =
+          regionResolverBuilder?.call(identitySession, database) ??
+          const DeferredContactRegionResolver();
       appSession = AppSession(
         identitySession: identitySession,
         contextGateway: sessionContextGateway,
@@ -140,10 +149,12 @@ final class AppDependencies {
         platformPolicy: PlatformPolicy.from(platformCapabilities),
         locationCapture: locationCapture,
         timeZoneProvider: timeZoneProvider,
+        regionResolver: regionResolver,
       );
     } catch (error, stackTrace) {
       await database?.close();
       await syncEngineFactory?.close();
+      await regionResolver?.close();
       await appSession?.close();
       if (appSession == null) {
         await sessionContextGateway.close();
@@ -177,6 +188,7 @@ final class AppStartupReady extends AppStartupResult {
     required this.platformPolicy,
     required this.locationCapture,
     required this.timeZoneProvider,
+    required this.regionResolver,
   });
 
   final AppController controller;
@@ -190,6 +202,7 @@ final class AppStartupReady extends AppStartupResult {
   final PlatformPolicy platformPolicy;
   final ContactLocationCapture locationCapture;
   final DeviceTimeZoneProvider timeZoneProvider;
+  final ContactRegionResolver regionResolver;
 }
 
 final class AppStartupFailed extends AppStartupResult {

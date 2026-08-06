@@ -21,6 +21,7 @@ final class FakeIdentitySession implements IdentitySession {
       StreamController<IdentitySnapshot>.broadcast();
   IdentitySnapshot _current;
   IdentityFailure? rejectNextWith;
+  final List<bool> accessTokenForceRefreshValues = [];
   bool isClosed = false;
 
   @override
@@ -97,6 +98,7 @@ final class FakeIdentitySession implements IdentitySession {
   Future<IdentityResult<IdentityAccessToken>> accessToken({
     bool forceRefresh = false,
   }) async {
+    accessTokenForceRefreshValues.add(forceRefresh);
     final failure = _takeFailure();
     if (failure != null) {
       return IdentityRejected(failure);

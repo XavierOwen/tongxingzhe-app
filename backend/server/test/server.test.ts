@@ -143,6 +143,59 @@ test("HTTP personal project creation returns the new trusted context", async () 
   assert.equal(body.current_context.project.name, "校园推广");
 });
 
+test("HTTP region resolution returns a trusted canonical match", async () => {
+  const server = createBackendServer({
+    identityVerifier: {
+      verify: async () => ({
+        issuer: "https://synthetic.supabase.co/auth/v1",
+        subject: "synthetic-subject",
+      }),
+    },
+    contextStore: {
+      loadOrCreate: async () => {
+        throw new Error("context lookup must not run while resolving a region");
+      },
+    },
+    regionResolutionStore: {
+      resolve: async () => ({
+        regionId: "chicago",
+        treeVersion: "synthetic-v1",
+        canonicalName: "Chicago",
+        regionPath: [
+          {
+            regionId: "chicago",
+            parentRegionId: null,
+            canonicalName: "Chicago",
+            kind: "city",
+            attributes: [],
+          },
+        ],
+      }),
+    },
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  test.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+
+  const response = await fetch(
+    `http://127.0.0.1:${address.port}/v1/regions/resolve`,
+    {
+      method: "POST",
+      headers: {
+        authorization: "Bearer synthetic-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ latitude: 41.88, longitude: -87.63 }),
+    },
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json() as {
+    location: { smallest_region_id: string };
+  };
+  assert.equal(body.location.smallest_region_id, "chicago");
+});
+
 test("unknown route returns a stable 404", async () => {
   const server = createBackendServer({
     identityVerifier: {

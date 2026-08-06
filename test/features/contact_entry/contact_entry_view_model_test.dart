@@ -4,6 +4,7 @@ import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
 import 'package:tongxingzhe_app/features/contact_entry/contact_entry_view_model.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
+import 'package:tongxingzhe_app/regions/contact_region_resolver.dart';
 import 'package:tongxingzhe_app/services/location_service.dart';
 
 void main() {
@@ -95,11 +96,55 @@ void main() {
     expect(await viewModel.captureLocation(), isNull);
     expect(viewModel.state.location, isA<PendingContactLocation>());
   });
+
+  test('取得坐标后采用规范区域解析结果', () async {
+    final resolver = _FakeRegionResolver(
+      result: const ResolvedContactLocation(
+        placeName: '芝加哥大学',
+        smallestRegionId: 'institution-uchicago',
+        regionTreeVersion: 'test-regions-v1',
+      ),
+    );
+    final viewModel = _viewModel(
+      store: _FakeEntryStore(),
+      locationCapture: _FakeLocationCapture([
+        const LocationSnapshot(
+          latitude: 41.7897,
+          longitude: -87.5997,
+          accuracyMeters: 8.5,
+        ),
+      ]),
+      regionResolver: resolver,
+    );
+    await viewModel.initialize();
+    viewModel.setChannel(ContactChannel.faceToFace);
+
+    expect(await viewModel.captureLocation(), isNull);
+    expect(viewModel.state.location, isA<ResolvedContactLocation>());
+    expect(resolver.received, hasLength(1));
+    expect(resolver.received.single.latitude, 41.7897);
+  });
+
+  test('规范区域解析异常时保留坐标待后续匹配', () async {
+    final viewModel = _viewModel(
+      store: _FakeEntryStore(),
+      locationCapture: _FakeLocationCapture([
+        const LocationSnapshot(latitude: 41.7897, longitude: -87.5997),
+      ]),
+      regionResolver: _FakeRegionResolver(error: StateError('offline')),
+    );
+    await viewModel.initialize();
+    viewModel.setChannel(ContactChannel.faceToFace);
+
+    expect(await viewModel.captureLocation(), isNull);
+    expect(viewModel.state.location, isA<PendingContactLocation>());
+  });
 }
 
 ContactEntryViewModel _viewModel({
   required ContactEntryStore store,
   ContactLocationCapture locationCapture = const _FakeLocationCapture([]),
+  ContactRegionResolver regionResolver = const DeferredContactRegionResolver(),
 }) {
   return ContactEntryViewModel(
     clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
@@ -108,6 +153,7 @@ ContactEntryViewModel _viewModel({
     deviceId: 'device-1',
     store: store,
     locationCapture: locationCapture,
+    regionResolver: regionResolver,
     saveDelay: const Duration(days: 1),
   );
 }
@@ -153,6 +199,27 @@ final class _FakeLocationCapture implements ContactLocationCapture {
   @override
   Future<LocationSnapshot> captureCurrentPosition() async =>
       results.removeAt(0);
+}
+
+final class _FakeRegionResolver implements ContactRegionResolver {
+  _FakeRegionResolver({this.result, this.error});
+
+  final ContactLocation? result;
+  final Object? error;
+  final List<PendingContactLocation> received = [];
+
+  @override
+  Future<ContactLocation> resolve(PendingContactLocation location) async {
+    received.add(location);
+    final failure = error;
+    if (failure != null) {
+      throw failure;
+    }
+    return result ?? location;
+  }
+
+  @override
+  Future<void> close() async {}
 }
 
 final class _FakeEntryStore implements ContactEntryStore {

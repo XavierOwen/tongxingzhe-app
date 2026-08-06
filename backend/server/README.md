@@ -1,10 +1,22 @@
 # Backend 身份上下文、项目与接触同步
 
-这个模块提供可信 session context、个人推广项目选择／创建、同步 command 和 change feed。所有端点都先验证 Supabase access token，再取得内部用户和允许访问的项目。同步协议同时处理已提交接触和账号私有草稿；设备专用草稿不会离开本机。
+这个模块提供可信 session context、个人推广项目选择／创建、规范区域解析、同步 command 和 change feed。所有端点都先验证 Supabase access token，再取得内部用户和允许访问的项目。同步协议同时处理已提交接触和账号私有草稿；设备专用草稿不会离开本机。
 
 客户端不能提交 `app_user_id`、role 或 capability。上传会把 payload 的 workspace 和 project 与可信上下文交叉核对。拉取也会核对 query 范围，并只接受属于同一范围的不透明 cursor。响应不返回外部 subject、email 或 token。三个 HTTP 入口共用严格的 bearer header 解析器，防止端点之间出现不同的认证规则。
 
 cursor 不存在或不属于当前用户、空间和项目时，端点返回 `400 invalid_cursor`。未分类的数据库失败返回 `503 sync_unavailable`，不把内部 SQL 错误文字暴露给客户端。
+
+## 规范区域解析合同
+
+`POST /v1/regions/resolve` 接受 bearer token 与合法的 `latitude`、`longitude`。Backend 调用受限的 PostgreSQL 函数，只查询当前发布的区域树版本。
+
+- 命中时返回 `200`、最小规范区域和从根到该节点的父链；
+- 没有命中时返回 `202` 和 `pending`；
+- 坐标无效返回 `400 invalid_coordinates`；
+- 身份无效返回 `401 unauthenticated`；
+- 数据库或服务不可用返回 `503 region_resolution_unavailable`。
+
+响应不回显 token、外部 subject 或 email。Flutter 必须先原子安装返回的父链，再把地点改成已解析状态。任何失败都保留原坐标，不能改写成 `N/A`。
 
 ## 配置
 
@@ -29,7 +41,7 @@ npm test
 npm run check
 ```
 
-测试使用临时 ES256 key 和 synthetic claims，不连接真实 Supabase 项目。身份 schema 见 [`0002_identity_context.sql`](../database/migrations/0002_identity_context.sql)，项目上下文见 [`0004_personal_project_contexts.sql`](../database/migrations/0004_personal_project_contexts.sql)，区域与私有草稿见 [`0005_regions_and_private_draft_sync.sql`](../database/migrations/0005_regions_and_private_draft_sync.sql)，个人指标见 [`0006_personal_contact_metrics.sql`](../database/migrations/0006_personal_contact_metrics.sql)。CI 使用 synthetic fixture 验证权限、重复 command、草稿版本冲突、跨用户隔离、区域树、指标口径、cursor 和 dump／restore。
+测试使用临时 ES256 key 和 synthetic claims，不连接真实 Supabase 项目。身份 schema 见 [`0002_identity_context.sql`](../database/migrations/0002_identity_context.sql)，项目上下文见 [`0004_personal_project_contexts.sql`](../database/migrations/0004_personal_project_contexts.sql)，区域与私有草稿见 [`0005_regions_and_private_draft_sync.sql`](../database/migrations/0005_regions_and_private_draft_sync.sql)，个人指标见 [`0006_personal_contact_metrics.sql`](../database/migrations/0006_personal_contact_metrics.sql)，区域解析见 [`0007_canonical_region_resolution.sql`](../database/migrations/0007_canonical_region_resolution.sql)。CI 使用 synthetic fixture 验证权限、重复 command、草稿版本冲突、跨用户隔离、区域解析、指标口径、cursor 和 dump／restore。
 
 ## 运行
 

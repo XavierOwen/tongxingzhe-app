@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../../app_session/session_context_gateway.dart';
 import '../../device/device_time_zone.dart';
 import '../../foundation/runtime_values.dart';
+import '../../regions/contact_region_resolver.dart';
 import '../../services/location_service.dart';
 import '../contact_journal/contact_journal.dart';
 import '../contact_journal/contact_models.dart';
@@ -137,6 +138,8 @@ final class ContactEntryViewModel extends ChangeNotifier {
     required String deviceId,
     required ContactEntryStore store,
     required ContactLocationCapture locationCapture,
+    ContactRegionResolver regionResolver =
+        const DeferredContactRegionResolver(),
     Duration saveDelay = const Duration(milliseconds: 350),
   }) : this._(
          clock,
@@ -145,6 +148,7 @@ final class ContactEntryViewModel extends ChangeNotifier {
          deviceId,
          store,
          locationCapture,
+         regionResolver,
          saveDelay,
        );
 
@@ -155,6 +159,7 @@ final class ContactEntryViewModel extends ChangeNotifier {
     this._deviceId,
     this._store,
     this._locationCapture,
+    this._regionResolver,
     this._saveDelay,
   );
 
@@ -164,6 +169,7 @@ final class ContactEntryViewModel extends ChangeNotifier {
   final String _deviceId;
   final ContactEntryStore _store;
   final ContactLocationCapture _locationCapture;
+  final ContactRegionResolver _regionResolver;
   final Duration _saveDelay;
 
   Timer? _saveTimer;
@@ -311,11 +317,20 @@ final class ContactEntryViewModel extends ChangeNotifier {
       _notify();
       return snapshot.error ?? 'location_unavailable';
     }
-    _location = PendingContactLocation(
+    final pending = PendingContactLocation(
       latitude: snapshot.latitude!,
       longitude: snapshot.longitude!,
       accuracyMeters: snapshot.accuracyMeters,
     );
+    try {
+      final resolved = await _regionResolver.resolve(pending);
+      _location = resolved is ResolvedContactLocation ? resolved : pending;
+    } catch (_) {
+      _location = pending;
+    }
+    if (_disposed) {
+      return null;
+    }
     _markEdited();
     return null;
   }

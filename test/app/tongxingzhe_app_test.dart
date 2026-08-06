@@ -7,8 +7,12 @@ import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
 import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/data/local_database_factory.dart';
 import 'package:tongxingzhe_app/device/device_time_zone.dart';
+import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
+import 'package:tongxingzhe_app/regions/contact_region_resolver.dart';
+import 'package:tongxingzhe_app/regions/region_catalog.dart';
+import 'package:tongxingzhe_app/regions/region_models.dart';
 import 'package:tongxingzhe_app/services/location_service.dart';
 import 'package:tongxingzhe_app/sync/sync_models.dart';
 import 'package:tongxingzhe_app/sync/sync_transport.dart';
@@ -145,6 +149,49 @@ void main() {
 
     expect(contextGateway.createdProjectNames, ['社区推广']);
     expect(find.text('个人空间 → 校园推广'), findsOneWidget);
+  });
+
+  testWidgets('项目切换被拒绝时留在原项目并显示稳定提示', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final contextGateway = FakeSessionContextGateway(
+      availableContexts: const [
+        syntheticSessionContext,
+        syntheticSecondSessionContext,
+      ],
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: contextGateway,
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+    );
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+
+    // 启动后再拒绝，才能只覆盖用户发起的项目切换失败。
+    contextGateway.rejectWith = SessionContextFailureCode.serverRejected;
+    await tester.tap(find.byKey(const ValueKey('project-context-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('校园推广').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('个人空间 → 我的推广项目'), findsOneWidget);
+    expect(find.text('无法切换或创建推广项目，请重试。'), findsOneWidget);
   });
 
   testWidgets('跨项目草稿显示原项目名称并在打开前恢复原上下文', (tester) async {
@@ -799,6 +846,7 @@ void main() {
         expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
       ),
     );
+    final regionResolver = _ResolvedRegionResolver(database);
     final dependencies = AppDependencies(
       databaseFactory: _SingleDatabaseFactory(database),
       clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
@@ -814,6 +862,7 @@ void main() {
           accuracyMeters: 8.5,
         ),
       ),
+      regionResolverBuilder: (_, _) => regionResolver,
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -833,8 +882,10 @@ void main() {
     await tester.tap(find.text('获取当前坐标'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('41.789700, -87.599700'), findsOneWidget);
-    expect(find.textContaining('精度 8.5 m'), findsOneWidget);
+    expect(regionResolver.resolveCalls, 1);
+    expect(regionResolver.lastError, isNull);
+    expect(find.textContaining('芝加哥大学'), findsOneWidget);
+    expect(find.textContaining('待匹配规范区域'), findsNothing);
 
     await tester.enterText(
       find.byKey(const ValueKey('contact-reach-count')),
@@ -974,4 +1025,49 @@ final class _FakeLocationCapture implements ContactLocationCapture {
 
   @override
   Future<LocationSnapshot> captureCurrentPosition() async => snapshot;
+}
+
+final class _ResolvedRegionResolver implements ContactRegionResolver {
+  _ResolvedRegionResolver(LocalDatabase database)
+    : _catalog = RegionCatalog(database);
+
+  final RegionCatalog _catalog;
+  var resolveCalls = 0;
+  Object? lastError;
+
+  @override
+  Future<ContactLocation> resolve(PendingContactLocation location) async {
+    resolveCalls++;
+    try {
+      await _catalog.installSnapshot(
+        const CanonicalRegionSnapshot(
+          version: 'test-regions-v1',
+          nodes: [
+            CanonicalRegionNode(
+              regionId: 'city-chicago',
+              canonicalName: '芝加哥',
+              kind: RegionKind.city,
+            ),
+            CanonicalRegionNode(
+              regionId: 'institution-uchicago',
+              parentRegionId: 'city-chicago',
+              canonicalName: '芝加哥大学',
+              kind: RegionKind.institution,
+            ),
+          ],
+        ),
+      );
+    } catch (error) {
+      lastError = error;
+      rethrow;
+    }
+    return const ResolvedContactLocation(
+      placeName: '芝加哥大学',
+      smallestRegionId: 'institution-uchicago',
+      regionTreeVersion: 'test-regions-v1',
+    );
+  }
+
+  @override
+  Future<void> close() async {}
 }

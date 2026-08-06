@@ -9,10 +9,15 @@ import {
 import { handleSyncChanges } from "./sync-changes.js";
 import { handleSyncCommand } from "./sync-command.js";
 import type { SyncCommandStore } from "./sync-store.js";
+import {
+  resolveContactRegion,
+  type RegionResolutionStore,
+} from "./region-resolution.js";
 
 export interface BackendServerDependencies
   extends SessionContextHttpDependencies {
   readonly commandStore?: SyncCommandStore;
+  readonly regionResolutionStore?: RegionResolutionStore;
 }
 
 export function createBackendServer(
@@ -25,6 +30,44 @@ export function createBackendServer(
     if (request.method === "GET" && request.url === "/healthz") {
       response.statusCode = 200;
       response.end(JSON.stringify({ status: "ok" }));
+      return;
+    }
+
+    if (request.method === "POST" && request.url === "/v1/regions/resolve") {
+      if (dependencies.regionResolutionStore === undefined) {
+        response.statusCode = 503;
+        response.end(
+          JSON.stringify({
+            error: { code: "region_resolution_unavailable" },
+          }),
+        );
+        return;
+      }
+      try {
+        const body = await readJsonBody(request);
+        const result = await resolveContactRegion(
+          request.headers.authorization,
+          body,
+          {
+            identityVerifier: dependencies.identityVerifier,
+            regionResolutionStore: dependencies.regionResolutionStore,
+          },
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        response.statusCode = error instanceof PayloadTooLargeError ? 413 : 400;
+        response.end(
+          JSON.stringify({
+            error: {
+              code:
+                error instanceof PayloadTooLargeError
+                  ? "payload_too_large"
+                  : "invalid_json",
+            },
+          }),
+        );
+      }
       return;
     }
 

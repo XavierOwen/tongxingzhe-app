@@ -11,7 +11,9 @@ flowchart LR
   A["IdentitySession"] --> B["AppSession"]
   B --> C["可信当前上下文"]
   C --> D["ProductionHomeShell"]
+  D --> H["ProductionHomeViewModel"]
   D --> E["ContactEntryScreen"]
+  H --> F
   E --> F["ContactJournal"]
   F --> G["Drift / SQLite"]
 ```
@@ -41,7 +43,13 @@ URL 不包含权限。用户、空间、项目和问卷版本仍由 `AppSession`
 
 接触表单是真实的 Navigator page。AppBar 返回、系统返回和浏览器返回因此都会通过同一个 `PopScope`，在离开前保存最后输入。浏览器前进、后退与屏幕导航共用同一份 `AppRoute`，不会出现地址和页面各自变化的两套状态。
 
+路由在每次接触表单关闭后发布 `ContactEntryClosedEvent`。事件明确区分“已提交”和“只保存草稿”。首页两种情况都会刷新，只有正式提交才显示成功提示。
+
 稳定导航的价值不只在界面。后续切片可以替换一个目的地的内部页面，不必改登录路由或其他页面的入口。
+
+[`ProductionHomeViewModel`](../../lib/features/home/production_home_view_model.dart) 负责首页同步、项目切换与创建、跨项目草稿的可信上下文恢复、草稿放弃与撤销，以及“今日”“接触”“分析”需要的数据刷新。它向 Widget 发布不可变的 `ProductionHomeViewState`。项目菜单和草稿说明只读取其中的项目显示字段，不读取完整 `AppSessionSnapshot`。
+
+页面只渲染快照并发送启动、恢复、提交、项目和草稿操作意图。创建项目的对话框和页面导航仍属于 Widget；`ContactJournal`、`SyncEngine` 和 `AppSession` 的结果解释留在 ViewModel 的 Adapter 边界。同步运行时收到新的唤醒信号，ViewModel 会在当前轮结束后串行补跑一次。操作失败时保留上一次可用快照，并发布稳定提示类别。Widget 只把提示类别翻译成本地化 Snackbar。
 
 ## 表单逻辑为什么不放在 Widget 中
 
@@ -88,7 +96,9 @@ URL 不包含权限。用户、空间、项目和问卷版本仍由 `AppSession`
 
 纯线上渠道自动使用 `NotApplicableContactLocation`。它是一个明确领域类型，不是空值。面对面渠道不能使用这个类型。
 
-面对面接触必须先请求当前坐标。坐标和可选精度以 `PendingContactLocation` 保存，表示位置事实已存在，但还没有匹配到统一区域树。定位失败会保持地点未完成，不会自动改成 `N/A`。
+面对面接触必须先请求当前坐标。App 随后通过 [`ContactRegionResolver`](../../lib/regions/contact_region_resolver.dart) 把坐标发送给自有 Backend。Backend 命中当前发布边界后返回最小规范节点和完整父链；Flutter 先安装并验证父链，再显示已解析地点。
+
+断网、身份失效、响应无效或没有边界命中时，坐标和可选精度以 `PendingContactLocation` 保存，界面明确显示“待匹配规范区域”。定位失败会保持地点未完成。解析失败仍保留可提交的坐标事实，使用者可以再次获取坐标重试；系统不会自动改成 `N/A`。
 
 [`ContactLocationCapture`](../../lib/services/location_service.dart) 是系统定位的测试接缝。正式 App 装配 Geolocator；公开界面测试装配固定坐标，因此不会弹出系统权限对话框。“其他直接渠道”还必须填写渠道说明，否则不算完成渠道事实。
 
@@ -142,6 +152,8 @@ AND occurred_at_utc < :until_utc
 
 [`tongxingzhe_app_test.dart`](../../test/app/tongxingzhe_app_test.dart) 从公开的 `TongxingzheApp` 入口操作界面。测试使用假的身份和上下文网关，但使用真实的内存 SQLite 与正式 `ContactJournal`。
 
+[`production_home_view_model_test.dart`](../../test/features/home/production_home_view_model_test.dart) 通过首页模块接口验证同步、刷新、项目操作、跨项目草稿恢复、放弃、撤销和失败状态。测试使用假的同步 worker、会话 Adapter 与草稿 Adapter，不读取 Widget 内部字段。
+
 测试只观察用户可见行为：
 
 - 登录后出现可信项目和四个目的地；
@@ -154,7 +166,7 @@ AND occurred_at_utc < :until_utc
 - 立即返回或进入后台时先保存最后输入；
 - 放弃草稿后可在期限内撤销；
 - 完整纯线上接触提交后，草稿消失；
-- 面对面接触取得坐标后才能提交；
+- 面对面接触取得坐标后会解析并显示规范地点，失败时保留待解析坐标；
 - 可以修改实际发生时间，并保存系统提供的 IANA 时区；
 - 其他直接渠道必须保存渠道说明；
 - 保存、定位或提交失败会显示可恢复状态，重试后继续使用原输入；
@@ -166,9 +178,8 @@ AND occurred_at_utc < :until_utc
 
 ## 下一步仍缺什么
 
-本切片尚未完成以下发布条件：
+后续切片仍需完成以下功能：
 
-- 把已取得的经纬度自动解析到已经建立的统一区域树最小节点；区域版本、唯一父级、城市祖先和外键约束已经完成，但自动匹配服务尚未接入；
 - 从问卷版本载入并保存真实题目；
 - 正式注册、OTP 和密码恢复界面。
 

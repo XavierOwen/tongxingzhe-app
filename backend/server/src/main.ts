@@ -4,6 +4,7 @@ import { createProductionIdentityVerifier } from "./identity.js";
 import { createBackendServer } from "./server.js";
 import { PostgresSessionContextStore } from "./session-context.js";
 import { PostgresSyncCommandStore } from "./sync-store.js";
+import { PostgresRegionResolutionStore } from "./region-resolution.js";
 
 const databaseUrl = requireEnvironment("DATABASE_URL");
 const authIssuer = requireEnvironment("AUTH_ISSUER");
@@ -24,10 +25,14 @@ const contextStore = new PostgresSessionContextStore(async (text, values) => {
 const commandStore = new PostgresSyncCommandStore(async (text, values) => {
   return pool.query(text, [...values]);
 });
+const regionResolutionStore = new PostgresRegionResolutionStore(
+  async (text, values) => pool.query(text, [...values]),
+);
 const server = createBackendServer({
   identityVerifier,
   contextStore,
   commandStore,
+  regionResolutionStore,
 });
 
 server.listen(port, "0.0.0.0");

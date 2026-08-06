@@ -54,6 +54,7 @@ void main() {
     await tester.tap(locationButton);
     await tester.pumpAndSettle();
     expect(find.textContaining('41.790000, -87.600000'), findsOneWidget);
+    expect(find.textContaining('待匹配规范区域'), findsOneWidget);
   });
 
   testWidgets('提交失败保留可提交草稿，第二次提交可成功', (tester) async {

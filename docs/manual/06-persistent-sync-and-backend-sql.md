@@ -90,6 +90,10 @@ PostgreSQL 的草稿主键是 `(app_user_id, draft_id)`。即使两个用户提�
 
 本机 [`RegionCatalog`](../../lib/regions/region_catalog.dart) 在安装区域版本前检查重复 ID、缺失父级和循环。PostgreSQL 的自引用外键保证父级存在，触发器拒绝多节点循环。已解析接触必须引用一个真实版本节点，而且沿唯一父链至少能找到城市。两层规则相同，但各自保护自己的写入边界，不能假设所有数据永远来自当前 Flutter 页面。
 
+平台用 [`0007_canonical_region_resolution.sql`](../../backend/database/migrations/0007_canonical_region_resolution.sql) 发布唯一的当前区域树版本和边界。`resolve_canonical_region` 使用 PostgreSQL 内置 `point` 与 `polygon` 判断坐标归属，从所有命中项中选择层级最深的节点，并返回从根到该节点的父链。返回结果必须包含城市祖先；同层命中按稳定 ID 排序，避免相同数据产生不确定结果。
+
+Flutter 的 [`HttpContactRegionResolver`](../../lib/regions/contact_region_resolver.dart) 用 access token 调用 `POST /v1/regions/resolve`。`200` 表示已匹配；`202` 表示当前版本没有边界命中。超时、离线、认证失败、数据库不可用或无效父链都保持 `PendingContactLocation`。这个合同保留已经取得的位置事实，同时阻止客户端自行猜测区域。
+
 ## Drift 与 PostgreSQL 如何对账同一指标
 
 [`personal_contact_metrics_v1.csv`](../../backend/database/fixtures/shared/personal_contact_metrics_v1.csv) 是两端共用的 synthetic 输入。它包含同项目有效接触、时间窗外接触、另一用户接触和另一项目接触。Drift 测试与 PostgreSQL fixture 都从该文件读取，并分别核对：
@@ -112,4 +116,6 @@ Backend 测试使用 synthetic 身份和上下文，证明伪造项目在 Store 
 
 ## 当前运行边界
 
-[`ForegroundSyncCoordinator`](../../lib/sync/foreground_sync_coordinator.dart) 接收 App 启动、回到前台、提交或放弃草稿等唤醒信号。同步运行中的重复信号会合并为一次串行补跑，不并发启动第二个 drainer，也不会漏掉运行中刚产生的 command。项目切换时补跑使用新的 scope worker。协调器统一限制每轮上传和拉取数量；Widget 不再自己编排 SyncEngine 循环。后台调度、完整冲突合并页和运维监控属于后续切片。
+[`ProductionHomeViewModel`](../../lib/features/home/production_home_view_model.dart) 接收 App 启动、回到前台、提交或放弃草稿等意图。它调用内部的 [`ForegroundSyncCoordinator`](../../lib/sync/foreground_sync_coordinator.dart)，再刷新同一可信上下文的首页快照。Widget 不创建 worker，也不直接调用 `ContactJournal` 或 `SyncEngine`。
+
+同步运行中的重复信号会合并为一次串行补跑，不并发启动第二个 drainer，也不会漏掉运行中刚产生的 command。ViewModel 负责同步后的数据刷新和失败隔离；`ForegroundSyncCoordinator` 负责每轮上传、拉取和批次数上限。项目切换会创建使用新 scope 的 ViewModel。后台调度、完整冲突合并页和运维监控属于后续切片。

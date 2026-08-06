@@ -9,10 +9,11 @@ import '../app_session/session_context_gateway.dart';
 import '../features/contact_entry/contact_entry_screen.dart';
 import '../features/contact_journal/contact_journal.dart';
 import '../features/contact_journal/contact_models.dart';
+import '../features/home/production_home_view_model.dart';
 import '../features/contact_metrics/personal_contact_overview.dart';
 import '../l10n/app_strings.dart';
+import '../routing/app_router.dart';
 import '../services/location_service.dart';
-import '../sync/foreground_sync_coordinator.dart';
 import '../sync/sync_engine_factory.dart';
 
 /// 正式产品的四项主框架。
@@ -30,7 +31,7 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.syncEngineFactory,
     required this.locationCapture,
     required this.selectedIndex,
-    required this.contactSubmissionEvents,
+    required this.contactEntryClosedEvents,
     required this.onDestinationSelected,
     required this.onOpenContactEntry,
   });
@@ -43,7 +44,7 @@ final class ProductionHomeShell extends StatefulWidget {
   final SyncEngineFactory? syncEngineFactory;
   final ContactLocationCapture locationCapture;
   final int selectedIndex;
-  final ValueListenable<int> contactSubmissionEvents;
+  final ValueListenable<ContactEntryClosedEvent> contactEntryClosedEvents;
   final ValueChanged<int> onDestinationSelected;
   final ValueChanged<ContactDraft?> onOpenContactEntry;
 
@@ -53,30 +54,28 @@ final class ProductionHomeShell extends StatefulWidget {
 
 final class _ProductionHomeShellState extends State<ProductionHomeShell>
     with WidgetsBindingObserver {
-  late final ForegroundSyncCoordinator _syncCoordinator;
-  late PersonalContactOverviewRepository _overviewRepository;
-  late int _handledSubmissionEvent;
+  late ProductionHomeViewModel _viewModel;
+  late int _handledContactEntryEvent;
+  var _handledNoticeId = 0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _handledSubmissionEvent = widget.contactSubmissionEvents.value;
-    widget.contactSubmissionEvents.addListener(_contactSubmitted);
-    _syncCoordinator = ForegroundSyncCoordinator(worker: _createSyncWorker())
-      ..addListener(_syncStateChanged);
-    _overviewRepository = _createOverviewRepository();
+    _handledContactEntryEvent = widget.contactEntryClosedEvents.value.sequence;
+    widget.contactEntryClosedEvents.addListener(_contactEntryClosed);
+    _viewModel = _createViewModel()..addListener(_viewStateChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_syncCoordinator.synchronize());
+      unawaited(_viewModel.initialize());
     });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    widget.contactSubmissionEvents.removeListener(_contactSubmitted);
-    _syncCoordinator
-      ..removeListener(_syncStateChanged)
+    widget.contactEntryClosedEvents.removeListener(_contactEntryClosed);
+    _viewModel
+      ..removeListener(_viewStateChanged)
       ..dispose();
     super.dispose();
   }
@@ -84,34 +83,42 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      unawaited(_syncCoordinator.synchronize());
+      unawaited(_viewModel.appResumed());
     }
   }
 
   @override
   void didUpdateWidget(covariant ProductionHomeShell oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.contactSubmissionEvents != widget.contactSubmissionEvents) {
-      oldWidget.contactSubmissionEvents.removeListener(_contactSubmitted);
-      _handledSubmissionEvent = widget.contactSubmissionEvents.value;
-      widget.contactSubmissionEvents.addListener(_contactSubmitted);
+    if (oldWidget.contactEntryClosedEvents != widget.contactEntryClosedEvents) {
+      oldWidget.contactEntryClosedEvents.removeListener(_contactEntryClosed);
+      _handledContactEntryEvent =
+          widget.contactEntryClosedEvents.value.sequence;
+      widget.contactEntryClosedEvents.addListener(_contactEntryClosed);
     }
     if (oldWidget.syncEngineFactory != widget.syncEngineFactory ||
+        oldWidget.contactJournal != widget.contactJournal ||
+        oldWidget.controller != widget.controller ||
+        oldWidget.appSession != widget.appSession ||
+        oldWidget.deviceId != widget.deviceId ||
         !_sameScope(oldWidget.context, widget.context)) {
-      _syncCoordinator.replaceWorker(_createSyncWorker());
+      _viewModel
+        ..removeListener(_viewStateChanged)
+        ..dispose();
+      _viewModel = _createViewModel()..addListener(_viewStateChanged);
+      _handledNoticeId = 0;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        unawaited(_syncCoordinator.synchronize());
+        if (mounted) {
+          unawaited(_viewModel.initialize());
+        }
       });
-    }
-    if (oldWidget.contactJournal != widget.contactJournal ||
-        oldWidget.controller != widget.controller) {
-      _overviewRepository = _createOverviewRepository();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final strings = AppStrings(widget.controller.localeCode);
+    final homeState = _viewModel.state;
     final destinations = [
       _Destination(Icons.today_outlined, strings.t('today')),
       _Destination(Icons.forum_outlined, strings.t('navContacts')),
@@ -121,17 +128,21 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
     final pages = [
       _PersonalSummaryPage(
         controller: widget.controller,
-        context: widget.context,
-        repository: _overviewRepository,
         period: PersonalSummaryPeriod.today,
+        snapshot: homeState.today,
+        isLoading: homeState.isLoading,
+        loadFailed: homeState.loadFailed,
       ),
       _ContactsPage(
         controller: widget.controller,
-        context: widget.context,
-        availableContexts: widget.appSession.current.availableContexts,
-        repository: _overviewRepository,
+        projectOptions: homeState.projectOptions,
+        snapshot: homeState.contacts,
+        isLoading: homeState.isLoading,
+        loadFailed: homeState.loadFailed,
+        isSynchronizing: homeState.isSynchronizing,
+        syncFailed: homeState.syncFailed,
         onOpenDraft: _openContactEntry,
-        onAbandonDraft: _abandonDraft,
+        onAbandonDraft: (draft) => unawaited(_viewModel.abandonDraft(draft)),
       ),
       _PlaceholderPage(
         icon: Icons.people_outline,
@@ -140,9 +151,10 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
       ),
       _PersonalSummaryPage(
         controller: widget.controller,
-        context: widget.context,
-        repository: _overviewRepository,
         period: PersonalSummaryPeriod.recentSevenDays,
+        snapshot: homeState.recentSevenDays,
+        isLoading: homeState.isLoading,
+        loadFailed: homeState.loadFailed,
       ),
     ];
 
@@ -157,20 +169,19 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
             tooltip: strings.t('projectMenu'),
             onSelected: _handleProjectMenuSelection,
             itemBuilder: (context) => [
-              for (final available
-                  in widget.appSession.current.availableContexts)
+              for (final option in homeState.projectOptions)
                 PopupMenuItem<String>(
-                  value: available.project.id,
+                  value: option.id,
                   child: Row(
                     children: [
-                      if (available.project.id == widget.context.project.id)
+                      if (option.isSelected)
                         const Padding(
                           padding: EdgeInsets.only(right: 8),
                           child: Icon(Icons.check, size: 18),
                         )
                       else
                         const SizedBox(width: 26),
-                      Text(available.project.name),
+                      Text(option.name),
                     ],
                   ),
                 ),
@@ -249,14 +260,8 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
   }
 
   Future<void> _openContactEntry(ContactDraft? draft) async {
-    if (draft != null && draft.projectId != widget.context.project.id) {
-      final result = await widget.appSession.selectProject(draft.projectId);
-      if (result is SessionContextRejected) {
-        if (mounted) {
-          _showProjectFailure();
-        }
-        return;
-      }
+    if (draft != null && !await _viewModel.ensureDraftContext(draft)) {
+      return;
     }
     if (!mounted) {
       return;
@@ -269,13 +274,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
       await _createProject();
       return;
     }
-    if (value == widget.context.project.id) {
-      return;
-    }
-    final result = await widget.appSession.selectProject(value);
-    if (result is SessionContextRejected && mounted) {
-      _showProjectFailure();
-    }
+    await _viewModel.selectProject(value);
   }
 
   Future<void> _createProject() async {
@@ -287,111 +286,84 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
     if (name == null || !mounted) {
       return;
     }
-    final result = await widget.appSession.createPersonalProject(name);
-    if (result is SessionContextRejected && mounted) {
-      _showProjectFailure();
-    }
+    await _viewModel.createPersonalProject(name);
   }
 
-  void _showProjectFailure() {
-    final text = AppStrings(widget.controller.localeCode);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(text.t('projectChangeFailed'))));
-  }
-
-  void _contactSubmitted() {
-    final event = widget.contactSubmissionEvents.value;
-    if (event <= _handledSubmissionEvent) {
+  void _contactEntryClosed() {
+    final event = widget.contactEntryClosedEvents.value;
+    if (event.sequence <= _handledContactEntryEvent) {
       return;
     }
-    _handledSubmissionEvent = event;
+    _handledContactEntryEvent = event.sequence;
+    if (!mounted) {
+      return;
+    }
+    unawaited(_viewModel.contactEntryClosed(submitted: event.submitted));
+  }
+
+  ProductionHomeViewModel _createViewModel() {
+    return ProductionHomeViewModel.production(
+      appSession: widget.appSession,
+      context: widget.context,
+      contactJournal: widget.contactJournal,
+      deviceId: widget.deviceId,
+      syncEngineFactory: widget.syncEngineFactory,
+      now: widget.controller.now,
+    );
+  }
+
+  void _viewStateChanged() {
     if (!mounted) {
       return;
     }
     setState(() {});
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      final text = AppStrings(widget.controller.localeCode);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(text.t('contactSubmitted'))));
-      unawaited(_syncCoordinator.synchronize());
-    });
+    final notice = _viewModel.state.notice;
+    if (notice == null || notice.id <= _handledNoticeId) {
+      return;
+    }
+    _handledNoticeId = notice.id;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _showNotice(notice));
   }
 
-  Future<void> _abandonDraft(ContactDraft draft) async {
+  void _showNotice(ProductionHomeNotice notice) {
+    if (!mounted) {
+      return;
+    }
     final text = AppStrings(widget.controller.localeCode);
-    try {
-      await widget.contactJournal.abandonDraft(
-        draftId: draft.draftId,
-        appUserId: widget.context.appUserId,
-        deviceId: widget.deviceId,
-      );
-      if (!mounted) {
-        return;
-      }
-      setState(() {});
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(text.t('draftAbandoned')),
-          duration: const Duration(seconds: 10),
-          action: SnackBarAction(
-            label: text.t('undo'),
-            onPressed: () => unawaited(_undoAbandonDraft(draft)),
-          ),
-        ),
-      );
-      unawaited(_syncCoordinator.synchronize());
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(text.t('draftAbandonFailed'))));
-      }
+    final messenger = ScaffoldMessenger.of(context);
+    switch (notice.kind) {
+      case ProductionHomeNoticeKind.contactSubmitted:
+        messenger.showSnackBar(
+          SnackBar(content: Text(text.t('contactSubmitted'))),
+        );
+      case ProductionHomeNoticeKind.draftAbandoned:
+        final draft = notice.draft;
+        if (draft != null) {
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(text.t('draftAbandoned')),
+              duration: const Duration(seconds: 10),
+              action: SnackBarAction(
+                label: text.t('undo'),
+                onPressed: () => unawaited(_viewModel.undoAbandonDraft(draft)),
+              ),
+            ),
+          );
+        }
+      case ProductionHomeNoticeKind.draftAbandonFailed:
+        messenger.showSnackBar(
+          SnackBar(content: Text(text.t('draftAbandonFailed'))),
+        );
+      case ProductionHomeNoticeKind.draftUndoFailed:
+        messenger.showSnackBar(
+          SnackBar(content: Text(text.t('draftUndoFailed'))),
+        );
+      case ProductionHomeNoticeKind.projectChangeFailed:
+        messenger.showSnackBar(
+          SnackBar(content: Text(text.t('projectChangeFailed'))),
+        );
     }
-  }
-
-  Future<void> _undoAbandonDraft(ContactDraft draft) async {
-    final text = AppStrings(widget.controller.localeCode);
-    try {
-      await widget.contactJournal.undoAbandonDraft(
-        draftId: draft.draftId,
-        appUserId: widget.context.appUserId,
-        deviceId: widget.deviceId,
-      );
-      if (mounted) {
-        setState(() {});
-        unawaited(_syncCoordinator.synchronize());
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(text.t('draftUndoFailed'))));
-      }
-    }
-  }
-
-  ForegroundSyncWorker? _createSyncWorker() {
-    final engine = widget.syncEngineFactory?.create(widget.context);
-    return engine == null ? null : SyncEngineForegroundWorker(engine);
-  }
-
-  PersonalContactOverviewRepository _createOverviewRepository() {
-    return PersonalContactOverviewRepository(
-      source: ContactJournalOverviewSource(widget.contactJournal),
-      now: widget.controller.now,
-      loadSyncHealth: _syncCoordinator.health,
-    );
-  }
-
-  void _syncStateChanged() {
-    if (mounted) {
-      setState(() {});
-    }
+    _viewModel.clearNotice(notice.id);
   }
 
   bool _sameScope(TrustedSessionContext first, TrustedSessionContext second) {
@@ -462,104 +434,104 @@ final class _CreateProjectDialogState extends State<_CreateProjectDialog> {
 final class _PersonalSummaryPage extends StatelessWidget {
   const _PersonalSummaryPage({
     required this.controller,
-    required this.context,
-    required this.repository,
     required this.period,
+    required this.snapshot,
+    required this.isLoading,
+    required this.loadFailed,
   });
 
   final AppController controller;
-  final TrustedSessionContext context;
-  final PersonalContactOverviewRepository repository;
   final PersonalSummaryPeriod period;
+  final PersonalSummarySnapshot? snapshot;
+  final bool isLoading;
+  final bool loadFailed;
 
   @override
   Widget build(BuildContext context) {
     final text = AppStrings(controller.localeCode);
-    return FutureBuilder<PersonalSummarySnapshot>(
-      future: repository.loadSummary(context: this.context, period: period),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(child: Text(text.t('summaryLoadFailed')));
-        }
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final result = snapshot.requireData;
-        final summary = result.summary;
-        return ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
+    final result = snapshot;
+    if (result == null) {
+      if (loadFailed) {
+        return Center(child: Text(text.t('summaryLoadFailed')));
+      }
+      if (isLoading) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      return Center(child: Text(text.t('summaryLoadFailed')));
+    }
+    final summary = result.summary;
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text(
+          period == PersonalSummaryPeriod.today
+              ? text.t('today')
+              : text.t('recentSevenDays'),
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+        const SizedBox(height: 8),
+        Text(text.t('statisticsUseUtcDays')),
+        const SizedBox(height: 16),
+        _SummaryFactCard(
+          icon: Icons.forum_outlined,
+          label: period == PersonalSummaryPeriod.today
+              ? text.t('todayContactSessions')
+              : text.t('sevenDayContactSessions'),
+          value: summary.contactSessionCount,
+        ),
+        _SummaryFactCard(
+          icon: Icons.groups_outlined,
+          label: period == PersonalSummaryPeriod.today
+              ? text.t('todayReachCount')
+              : text.t('sevenDayReachCount'),
+          value: summary.reachCount,
+        ),
+        _SummaryFactCard(
+          icon: Icons.sync_outlined,
+          label: text.t('pendingSync'),
+          value: summary.pendingSyncCount,
+        ),
+        if (period == PersonalSummaryPeriod.recentSevenDays) ...[
+          const SizedBox(height: 8),
+          Text(
+            text.t('interestDistribution'),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          for (var level = 0; level <= 4; level++)
             Text(
-              period == PersonalSummaryPeriod.today
-                  ? text.t('today')
-                  : text.t('recentSevenDays'),
-              style: Theme.of(context).textTheme.headlineSmall,
+              '${text.t('interestLevel')} $level：'
+              '${summary.interestDistribution[level]} '
+              '${text.t('contactSessionUnit')}',
             ),
-            const SizedBox(height: 8),
-            Text(text.t('statisticsUseUtcDays')),
-            const SizedBox(height: 16),
-            _SummaryFactCard(
-              icon: Icons.forum_outlined,
-              label: period == PersonalSummaryPeriod.today
-                  ? text.t('todayContactSessions')
-                  : text.t('sevenDayContactSessions'),
-              value: summary.contactSessionCount,
-            ),
-            _SummaryFactCard(
-              icon: Icons.groups_outlined,
-              label: period == PersonalSummaryPeriod.today
-                  ? text.t('todayReachCount')
-                  : text.t('sevenDayReachCount'),
-              value: summary.reachCount,
-            ),
-            _SummaryFactCard(
-              icon: Icons.sync_outlined,
-              label: text.t('pendingSync'),
-              value: summary.pendingSyncCount,
-            ),
-            if (period == PersonalSummaryPeriod.recentSevenDays) ...[
-              const SizedBox(height: 8),
+          const SizedBox(height: 16),
+          Text(
+            text.t('channelSources'),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          for (final channel in ContactChannel.values)
+            if (summary.channelDistribution[channel.index] > 0)
               Text(
-                text.t('interestDistribution'),
-                style: Theme.of(context).textTheme.titleMedium,
+                '${contactChannelLabel(text, channel)}：'
+                '${summary.channelDistribution[channel.index]} '
+                '${text.t('contactSessionUnit')}',
               ),
-              const SizedBox(height: 8),
-              for (var level = 0; level <= 4; level++)
-                Text(
-                  '${text.t('interestLevel')} $level：'
-                  '${summary.interestDistribution[level]} '
-                  '${text.t('contactSessionUnit')}',
-                ),
-              const SizedBox(height: 16),
-              Text(
-                text.t('channelSources'),
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-              for (final channel in ContactChannel.values)
-                if (summary.channelDistribution[channel.index] > 0)
-                  Text(
-                    '${contactChannelLabel(text, channel)}：'
-                    '${summary.channelDistribution[channel.index]} '
-                    '${text.t('contactSessionUnit')}',
-                  ),
-              const SizedBox(height: 16),
-              Text(
-                summary.latestOccurredAtUtc == null
-                    ? text.t('noRecentContact')
-                    : '${text.t('latestContact')} '
-                          '${summary.latestOccurredAtUtc!.toIso8601String()}',
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${text.t('syncCoverage')} '
-                '${result.syncedContactSessionCount} / '
-                '${result.syncCoverageDenominator}',
-              ),
-            ],
-          ],
-        );
-      },
+          const SizedBox(height: 16),
+          Text(
+            summary.latestOccurredAtUtc == null
+                ? text.t('noRecentContact')
+                : '${text.t('latestContact')} '
+                      '${summary.latestOccurredAtUtc!.toIso8601String()}',
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${text.t('syncCoverage')} '
+            '${result.syncedContactSessionCount} / '
+            '${result.syncCoverageDenominator}',
+          ),
+        ],
+      ],
     );
   }
 }
@@ -624,99 +596,107 @@ final class _PlaceholderPage extends StatelessWidget {
 final class _ContactsPage extends StatelessWidget {
   const _ContactsPage({
     required this.controller,
-    required this.context,
-    required this.availableContexts,
-    required this.repository,
+    required this.projectOptions,
+    required this.snapshot,
+    required this.isLoading,
+    required this.loadFailed,
+    required this.isSynchronizing,
+    required this.syncFailed,
     required this.onOpenDraft,
     required this.onAbandonDraft,
   });
 
   final AppController controller;
-  final TrustedSessionContext context;
-  final List<TrustedSessionContext> availableContexts;
-  final PersonalContactOverviewRepository repository;
+  final List<ProductionHomeProjectOption> projectOptions;
+  final ContactOverviewSnapshot? snapshot;
+  final bool isLoading;
+  final bool loadFailed;
+  final bool isSynchronizing;
+  final bool syncFailed;
   final ValueChanged<ContactDraft?> onOpenDraft;
   final ValueChanged<ContactDraft> onAbandonDraft;
 
   @override
   Widget build(BuildContext context) {
     final text = AppStrings(controller.localeCode);
-    return FutureBuilder<ContactOverviewSnapshot>(
-      future: repository.loadContacts(context: this.context),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final result = snapshot.requireData;
-        final drafts = result.drafts;
-        final health = result.syncHealth;
-        final onlyOnDevice =
-            health?.onlyOnDeviceCount ?? result.todaySummary.pendingSyncCount;
-        return ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Text(
-              '${text.t('todayContactSessions')} '
-              '${result.todaySummary.contactSessionCount}',
-            ),
-            const SizedBox(height: 4),
-            Text('${text.t('onlyOnThisDevice')} $onlyOnDevice'),
-            if (health != null && health.syncingCount > 0)
-              Text('${text.t('syncing')} ${health.syncingCount}'),
-            if (health != null && health.retryingCount > 0)
-              Text('${text.t('retryingSync')} ${health.retryingCount}'),
-            if (health != null && health.permanentFailureCount > 0)
-              Text('${text.t('syncFailed')} ${health.permanentFailureCount}'),
-            if (health != null && health.needsResolutionCount > 0)
-              Text(
-                '${text.t('syncNeedsResolution')} '
-                '${health.needsResolutionCount}',
-              ),
-            if (health != null && health.completedCount > 0)
-              Text('${text.t('synced')} ${health.completedCount}'),
-            const SizedBox(height: 16),
-            Text(
-              '${text.t('drafts')} (${drafts.length})',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 12),
-            if (drafts.isEmpty)
-              Text(text.t('noDrafts'))
-            else
-              for (final draft in drafts)
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.edit_note_outlined),
-                    title: Text(
-                      draft.channel == null
-                          ? text.t('unfinishedDraft')
-                          : contactChannelLabel(text, draft.channel!),
-                    ),
-                    subtitle: Text(_draftDetails(text, draft)),
-                    trailing: IconButton(
-                      tooltip: text.t('abandonDraft'),
-                      onPressed: () => onAbandonDraft(draft),
-                      icon: const Icon(Icons.delete_outline),
-                    ),
-                    onTap: () => onOpenDraft(draft),
-                  ),
+    final result = snapshot;
+    if (result == null) {
+      if (loadFailed) {
+        return Center(child: Text(text.t('summaryLoadFailed')));
+      }
+      if (isLoading) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      return Center(child: Text(text.t('summaryLoadFailed')));
+    }
+    final drafts = result.drafts;
+    final health = result.syncHealth;
+    final onlyOnDevice =
+        health?.onlyOnDeviceCount ?? result.todaySummary.pendingSyncCount;
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text(
+          '${text.t('todayContactSessions')} '
+          '${result.todaySummary.contactSessionCount}',
+        ),
+        const SizedBox(height: 4),
+        Text('${text.t('onlyOnThisDevice')} $onlyOnDevice'),
+        if (isSynchronizing) Text(text.t('syncing')),
+        if (syncFailed) Text(text.t('syncFailed')),
+        if (health != null && health.syncingCount > 0)
+          Text('${text.t('syncing')} ${health.syncingCount}'),
+        if (health != null && health.retryingCount > 0)
+          Text('${text.t('retryingSync')} ${health.retryingCount}'),
+        if (health != null && health.permanentFailureCount > 0)
+          Text('${text.t('syncFailed')} ${health.permanentFailureCount}'),
+        if (health != null && health.needsResolutionCount > 0)
+          Text(
+            '${text.t('syncNeedsResolution')} '
+            '${health.needsResolutionCount}',
+          ),
+        if (health != null && health.completedCount > 0)
+          Text('${text.t('synced')} ${health.completedCount}'),
+        const SizedBox(height: 16),
+        Text(
+          '${text.t('drafts')} (${drafts.length})',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 12),
+        if (drafts.isEmpty)
+          Text(text.t('noDrafts'))
+        else
+          for (final draft in drafts)
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.edit_note_outlined),
+                title: Text(
+                  draft.channel == null
+                      ? text.t('unfinishedDraft')
+                      : contactChannelLabel(text, draft.channel!),
                 ),
-          ],
-        );
-      },
+                subtitle: Text(_draftDetails(text, draft)),
+                trailing: IconButton(
+                  tooltip: text.t('abandonDraft'),
+                  onPressed: () => onAbandonDraft(draft),
+                  icon: const Icon(Icons.delete_outline),
+                ),
+                onTap: () => onOpenDraft(draft),
+              ),
+            ),
+      ],
     );
   }
 
   String _draftDetails(AppStrings text, ContactDraft draft) {
-    final contextsByProjectId = {
-      for (final available in availableContexts)
-        available.project.id: available,
+    final optionsByProjectId = {
+      for (final option in projectOptions) option.id: option,
     };
-    final draftContext = contextsByProjectId[draft.projectId];
-    final project = draftContext?.project.name ?? draft.projectId;
+    final draftOption = optionsByProjectId[draft.projectId];
+    final project = draftOption?.name ?? draft.projectId;
     final questionnaire =
-        draftContext?.questionnaireVersion.id == draft.questionnaireVersionId
-        ? draftContext!.questionnaireVersion.versionNumber.toString()
+        draftOption?.questionnaireVersionId == draft.questionnaireVersionId
+        ? draftOption!.questionnaireVersionNumber.toString()
         : draft.questionnaireVersionId;
     return [
       '${text.t('draftProject')}：$project',

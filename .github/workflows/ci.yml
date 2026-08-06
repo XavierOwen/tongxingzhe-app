@@ -126,6 +126,10 @@ jobs:
             --file backend/database/checks/verify_personal_contact_metrics.sql
           psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file backend/database/fixtures/0006_personal_contact_metrics.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_region_resolution.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0007_canonical_region_resolution.sql
 
       - name: Reject edited migration history
         run: |
@@ -171,6 +175,10 @@ jobs:
             --file backend/database/checks/verify_personal_contact_metrics.sql
           psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file backend/database/fixtures/0006_personal_contact_metrics.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_region_resolution.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0007_canonical_region_resolution.sql
 
   backend-server:
     name: Backend identity, context, and sync

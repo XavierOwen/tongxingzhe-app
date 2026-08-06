@@ -7,11 +7,26 @@ typedef AppRootRouteBuilder =
     Widget Function(
       BuildContext context,
       AppRoute route,
-      ValueListenable<int> contactSubmissionEvents,
+      ValueListenable<ContactEntryClosedEvent> contactEntryClosedEvents,
     );
 
 typedef AppContactRouteBuilder =
     Widget Function(BuildContext context, String? draftId);
+
+/// 一次接触表单关闭后的路由结果。
+///
+/// 首页每次都刷新草稿。只有 [submitted] 为 `true` 时显示提交成功提示。
+final class ContactEntryClosedEvent {
+  const ContactEntryClosedEvent({
+    required this.sequence,
+    required this.submitted,
+  });
+
+  const ContactEntryClosedEvent.initial() : sequence = 0, submitted = false;
+
+  final int sequence;
+  final bool submitted;
+}
 
 /// 管理顶层地址、浏览器历史和接触表单页栈的路由模块。
 ///
@@ -23,7 +38,8 @@ final class AppRouterDelegate extends RouterDelegate<AppRoute>
 
   final AppRootRouteBuilder rootBuilder;
   final AppContactRouteBuilder contactBuilder;
-  final ValueNotifier<int> _contactSubmissionEvents = ValueNotifier(0);
+  final ValueNotifier<ContactEntryClosedEvent> _contactEntryClosedEvents =
+      ValueNotifier(const ContactEntryClosedEvent.initial());
 
   @override
   final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -76,7 +92,7 @@ final class AppRouterDelegate extends RouterDelegate<AppRoute>
         MaterialPage<void>(
           key: const ValueKey('app-root-route'),
           name: _rootLocation,
-          child: rootBuilder(context, _route, _contactSubmissionEvents),
+          child: rootBuilder(context, _route, _contactEntryClosedEvents),
         ),
         if (_route.isContactEntry)
           MaterialPage<bool>(
@@ -103,15 +119,16 @@ final class AppRouterDelegate extends RouterDelegate<AppRoute>
     }
     final destination = _routeAfterEntryPop ?? AppRoute.contacts;
     _routeAfterEntryPop = null;
-    if (submitted ?? false) {
-      _contactSubmissionEvents.value++;
-    }
+    _contactEntryClosedEvents.value = ContactEntryClosedEvent(
+      sequence: _contactEntryClosedEvents.value.sequence + 1,
+      submitted: submitted ?? false,
+    );
     go(destination);
   }
 
   @override
   void dispose() {
-    _contactSubmissionEvents.dispose();
+    _contactEntryClosedEvents.dispose();
     super.dispose();
   }
 }
