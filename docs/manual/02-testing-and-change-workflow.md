@@ -280,7 +280,7 @@ iOS 第一次 `signup_request` 对原测试邮箱返回 HTTP 200，导出的 Sup
 
 ### 6.14 数据库 migration 为什么要做旧版本升级测试
 
-空库能按 v10 建成，只证明新安装可用，不能证明 v9 或更早版本的用户能安全升级。迁移测试先用保存的旧 schema 建库并写入 synthetic 数据，再运行正式 migration，核对原内容、默认值、索引、外键和新约束。
+空库能按 v11 建成，只证明新安装可用，不能证明 v10 或更早版本的用户能安全升级。迁移测试先用保存的旧 schema 建库并写入 synthetic 数据，再运行正式 migration，核对原内容、默认值、索引、外键和新约束。
 
 本项目遇到过两类典型 Red。第一类是新增列已经存在，但 SQLite 仍保留旧 `CHECK` 约束。仅执行 `ALTER TABLE ... ADD COLUMN` 无法更新整张表的约束，必须用 Drift `TableMigration` 重建表。第二类发生在跨多个版本升级时：重建步骤使用当前表定义，如果旧版本缺少当前列，就必须把该列放进 `newColumns`；否则复制数据时会引用不存在的源列。迁移测试检查的是“旧数据经过升级后的数据库”，不是只比较当前 Dart 类或新建表。
 
@@ -313,11 +313,13 @@ iOS 第一次 `signup_request` 对原测试邮箱返回 HTTP 200，导出的 Sup
 | Router 直达与返回 | 证明 URL、主导航和草稿保存共用同一页栈 | `/analysis` 直达，导航改 URL，返回前保存草稿 | Red 后 Green，parser 与 Widget 测试保留 |
 | 项目创建 HTTP 合同 | 防止 Backend `201 Created` 被 Flutter 当成失败 | adapter 接受 201 并解析可信上下文 | Red 后 Green，HTTP adapter 测试保留 |
 | 接触表单失败与恢复 | 防止保存、定位或提交失败后丢失输入 | 显示可恢复状态，重试后不重复事实 | Red 后 Green，Widget 测试保留 |
-| v5／v6／v8／v9→v10 migration | 证明旧数据升级后保留内容并采用新约束 | 旧接触和草稿保留，尝试表与来源关联可用 | Red 后 Green，Drift migration 测试保留 |
+| 接触更正与作废 | 防止覆盖历史、错算发生期间或让作废事实继续计数 | 完整追加历史，原因必填，作废退出指标 | Red 后 Green，本地、Widget 与 PostgreSQL 测试保留 |
+| revision 历史重放 | 防止本机已到较新 revision 时拒绝服务端较早的已知历史 | 逐条核对已有快照，完整 batch 幂等落地并推进 cursor | Red 后 Green，同步回归测试保留 |
+| v5／v6／v8／v9／v10→v11 migration | 证明旧数据升级后保留内容并采用新约束 | 旧接触和草稿保留，修正／作废约束与来源关联可用 | Red 后 Green，Drift migration 测试保留 |
 | Drift/PostgreSQL 指标合同 | 防止两套 SQL 的 scope、区间或单位漂移 | 两端读取同一 synthetic CSV 并得到同一业务结果 | pass，共享 fixture 与两端测试保留 |
 | `dart analyze` | 发现类型和静态问题 | 0 issue | pass |
-| 全部 Flutter tests | 检查已有合同未被破坏 | 全部通过 | 157 tests pass |
-| Backend tests | 检查 JWT、可信上下文、项目、上传、拉取和错误分类 | TypeScript 检查与全部测试通过 | 41 tests pass |
+| 全部 Flutter tests | 检查已有合同未被破坏 | 全部通过 | 165 tests pass |
+| Backend tests | 检查 JWT、可信上下文、项目、上传、拉取和错误分类 | TypeScript 检查与全部测试通过 | 44 tests pass |
 | PostgreSQL 16 重建与恢复 | 证明 migration、最小权限、区域、私有草稿、指标和备份可用 | 空库、checksum 重跑、fixture、`pg_dump`、`pg_restore` 全部通过 | pass |
 | 本机 build smoke | 发现平台插件、编译和 Xcode／Gradle 接线问题 | Android debug、Web release、macOS debug、iOS debug no-codesign 构建 | pass；Linux 与 Windows 等待本分支 CI |
 | production boundary | 防止 test-only fake 进入正式代码 | 边界检查通过 | pass |

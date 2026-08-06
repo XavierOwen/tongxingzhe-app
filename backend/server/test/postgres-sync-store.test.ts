@@ -169,6 +169,62 @@ test("Postgres store routes contact attempts to the attempt function", async () 
   assert.match(text, /apply_contact_attempt_submit/);
 });
 
+test("Postgres store routes contact revision commands to distinct functions", async () => {
+  const queries: string[] = [];
+  const store = new PostgresSyncCommandStore(async (queryText) => {
+    queries.push(queryText);
+    return {
+      rows: [{
+        result_code: "accepted",
+        server_cursor: `opaque-${queries.length}`,
+        failure_code: null,
+      }],
+    };
+  });
+  const reviseCommand: SyncCommand = {
+    protocolVersion: 1,
+    commandId: "revision-command-2",
+    deviceId: "device-1",
+    aggregateId: "contact-1",
+    baseRevision: 1,
+    type: "contact.revise.v1",
+    payload: {
+      contactId: "contact-1",
+      workspaceId: context.current.workspace.id,
+      projectId: context.current.project.id,
+      reason: "修正人数",
+      occurredAtUtc: "2030-01-08T18:00:00.000Z",
+      occurredTimeZone: "America/Chicago",
+      channel: "video_call",
+      channelDetail: null,
+      location: { kind: "not_applicable" },
+      reachCount: 3,
+      interestLevel: 3,
+      answers: [],
+    },
+  };
+  const voidCommand: SyncCommand = {
+    protocolVersion: 1,
+    commandId: "void-command-3",
+    deviceId: "device-1",
+    aggregateId: "contact-1",
+    baseRevision: 2,
+    type: "contact.void.v1",
+    payload: {
+      contactId: "contact-1",
+      workspaceId: context.current.workspace.id,
+      projectId: context.current.project.id,
+      reason: "重复录入",
+    },
+  };
+
+  await store.apply(context, reviseCommand);
+  await store.apply(context, voidCommand);
+
+  assert.match(queries[0]!, /apply_contact_revise/);
+  assert.match(queries[1]!, /apply_contact_void/);
+});
+
 test("Postgres store passes trusted scope and opaque cursor to pull function", async () => {
   var text = "";
   var values: readonly unknown[] | undefined;

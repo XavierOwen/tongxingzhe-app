@@ -36,10 +36,11 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.clock,
     required this.timeZoneProvider,
     required this.selectedIndex,
-    required this.contactEntryClosedEvents,
+    required this.contactPageClosedEvents,
     required this.onDestinationSelected,
     required this.onOpenContactEntry,
     required this.onOpenContactFromAttempt,
+    required this.onOpenContactDetail,
   });
 
   final AppController controller;
@@ -52,10 +53,11 @@ final class ProductionHomeShell extends StatefulWidget {
   final AppClock clock;
   final DeviceTimeZoneProvider timeZoneProvider;
   final int selectedIndex;
-  final ValueListenable<ContactEntryClosedEvent> contactEntryClosedEvents;
+  final ValueListenable<ContactPageClosedEvent> contactPageClosedEvents;
   final ValueChanged<int> onDestinationSelected;
   final ValueChanged<ContactDraft?> onOpenContactEntry;
   final ValueChanged<ContactAttempt> onOpenContactFromAttempt;
+  final ValueChanged<ContactRecord> onOpenContactDetail;
 
   @override
   State<ProductionHomeShell> createState() => _ProductionHomeShellState();
@@ -64,15 +66,15 @@ final class ProductionHomeShell extends StatefulWidget {
 final class _ProductionHomeShellState extends State<ProductionHomeShell>
     with WidgetsBindingObserver {
   late ProductionHomeViewModel _viewModel;
-  late int _handledContactEntryEvent;
+  late int _handledContactPageEvent;
   var _handledNoticeId = 0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _handledContactEntryEvent = widget.contactEntryClosedEvents.value.sequence;
-    widget.contactEntryClosedEvents.addListener(_contactEntryClosed);
+    _handledContactPageEvent = widget.contactPageClosedEvents.value.sequence;
+    widget.contactPageClosedEvents.addListener(_contactPageClosed);
     _viewModel = _createViewModel()..addListener(_viewStateChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_viewModel.initialize());
@@ -82,7 +84,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    widget.contactEntryClosedEvents.removeListener(_contactEntryClosed);
+    widget.contactPageClosedEvents.removeListener(_contactPageClosed);
     _viewModel
       ..removeListener(_viewStateChanged)
       ..dispose();
@@ -99,11 +101,10 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
   @override
   void didUpdateWidget(covariant ProductionHomeShell oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.contactEntryClosedEvents != widget.contactEntryClosedEvents) {
-      oldWidget.contactEntryClosedEvents.removeListener(_contactEntryClosed);
-      _handledContactEntryEvent =
-          widget.contactEntryClosedEvents.value.sequence;
-      widget.contactEntryClosedEvents.addListener(_contactEntryClosed);
+    if (oldWidget.contactPageClosedEvents != widget.contactPageClosedEvents) {
+      oldWidget.contactPageClosedEvents.removeListener(_contactPageClosed);
+      _handledContactPageEvent = widget.contactPageClosedEvents.value.sequence;
+      widget.contactPageClosedEvents.addListener(_contactPageClosed);
     }
     if (oldWidget.syncEngineFactory != widget.syncEngineFactory ||
         oldWidget.contactJournal != widget.contactJournal ||
@@ -154,6 +155,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
         onAbandonDraft: (draft) => unawaited(_viewModel.abandonDraft(draft)),
         onRecordAttempt: _openContactAttemptEntry,
         onRecordResponse: widget.onOpenContactFromAttempt,
+        onOpenContact: widget.onOpenContactDetail,
       ),
       _PlaceholderPage(
         icon: Icons.people_outline,
@@ -319,16 +321,16 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
     await _viewModel.createPersonalProject(name);
   }
 
-  void _contactEntryClosed() {
-    final event = widget.contactEntryClosedEvents.value;
-    if (event.sequence <= _handledContactEntryEvent) {
+  void _contactPageClosed() {
+    final event = widget.contactPageClosedEvents.value;
+    if (event.sequence <= _handledContactPageEvent) {
       return;
     }
-    _handledContactEntryEvent = event.sequence;
+    _handledContactPageEvent = event.sequence;
     if (!mounted) {
       return;
     }
-    unawaited(_viewModel.contactEntryClosed(submitted: event.submitted));
+    unawaited(_viewModel.contactPageClosed(submitted: event.submitted));
   }
 
   ProductionHomeViewModel _createViewModel() {
@@ -640,6 +642,7 @@ final class _ContactsPage extends StatelessWidget {
     required this.onAbandonDraft,
     required this.onRecordAttempt,
     required this.onRecordResponse,
+    required this.onOpenContact,
   });
 
   final AppController controller;
@@ -653,6 +656,7 @@ final class _ContactsPage extends StatelessWidget {
   final ValueChanged<ContactDraft> onAbandonDraft;
   final VoidCallback onRecordAttempt;
   final ValueChanged<ContactAttempt> onRecordResponse;
+  final ValueChanged<ContactRecord> onOpenContact;
 
   @override
   Widget build(BuildContext context) {
@@ -669,6 +673,7 @@ final class _ContactsPage extends StatelessWidget {
     }
     final drafts = result.drafts;
     final attempts = result.attempts;
+    final contacts = result.contacts;
     final health = result.syncHealth;
     final onlyOnDevice =
         health?.onlyOnDeviceCount ?? result.todaySummary.pendingSyncCount;
@@ -696,6 +701,40 @@ final class _ContactsPage extends StatelessWidget {
           ),
         if (health != null && health.completedCount > 0)
           Text('${text.t('synced')} ${health.completedCount}'),
+        const SizedBox(height: 24),
+        Text(
+          '${text.t('submittedContacts')} (${contacts.length})',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 8),
+        Text(text.t('submittedContactsHelp')),
+        const SizedBox(height: 12),
+        if (contacts.isEmpty)
+          Text(text.t('noSubmittedContacts'))
+        else
+          for (final contact in contacts)
+            Card(
+              child: ListTile(
+                key: ValueKey('contact-record-${contact.contactId}'),
+                leading: Icon(
+                  contact.lifecycleStatus == ContactLifecycleStatus.active
+                      ? Icons.forum_outlined
+                      : Icons.block_outlined,
+                ),
+                title: Text(contactChannelLabel(text, contact.channel)),
+                subtitle: Text(
+                  '${contact.occurredAtUtc.toIso8601String()}\n'
+                  '${text.t('reachCount')} ${contact.reachCount} · '
+                  '${text.t('interestLevel')} ${contact.interestLevel} · '
+                  '${text.t('revision')} ${contact.revisionNumber}',
+                ),
+                trailing:
+                    contact.lifecycleStatus == ContactLifecycleStatus.voided
+                    ? Text(text.t('contactVoided'))
+                    : const Icon(Icons.chevron_right),
+                onTap: () => onOpenContact(contact),
+              ),
+            ),
         const SizedBox(height: 16),
         Row(
           children: [

@@ -7,6 +7,7 @@ enum AppRouteKind {
   targets,
   analysis,
   newContact,
+  contactDetail,
   contactDraft,
   contactFromAttempt,
 }
@@ -16,13 +17,21 @@ enum AppRouteKind {
 /// 路径只表达导航事实。它不携带可伪造的用户、空间或项目
 /// 权限；页面所用的这些值仍来自 [AppSession] 的可信上下文。
 final class AppRoute {
-  const AppRoute._(this.kind, [this.draftId, this.sourceAttemptId]);
+  const AppRoute._(
+    this.kind, [
+    this.draftId,
+    this.sourceAttemptId,
+    this.contactId,
+  ]);
 
   static const today = AppRoute._(AppRouteKind.today);
   static const contacts = AppRoute._(AppRouteKind.contacts);
   static const targets = AppRoute._(AppRouteKind.targets);
   static const analysis = AppRoute._(AppRouteKind.analysis);
   static const newContact = AppRoute._(AppRouteKind.newContact);
+
+  const AppRoute.contactDetail(String contactId)
+    : this._(AppRouteKind.contactDetail, null, null, contactId);
 
   const AppRoute.contactDraft(String draftId)
     : this._(AppRouteKind.contactDraft, draftId);
@@ -33,16 +42,22 @@ final class AppRoute {
   final AppRouteKind kind;
   final String? draftId;
   final String? sourceAttemptId;
+  final String? contactId;
 
   bool get isContactEntry =>
       kind == AppRouteKind.newContact ||
       kind == AppRouteKind.contactDraft ||
       kind == AppRouteKind.contactFromAttempt;
 
+  bool get isContactDetail => kind == AppRouteKind.contactDetail;
+
+  bool get isContactOverlay => isContactEntry || isContactDetail;
+
   int get primaryIndex => switch (kind) {
     AppRouteKind.today => 0,
     AppRouteKind.contacts ||
     AppRouteKind.newContact ||
+    AppRouteKind.contactDetail ||
     AppRouteKind.contactDraft => 1,
     AppRouteKind.contactFromAttempt => 1,
     AppRouteKind.targets => 2,
@@ -55,6 +70,8 @@ final class AppRoute {
     AppRouteKind.targets => '/targets',
     AppRouteKind.analysis => '/analysis',
     AppRouteKind.newContact => '/contacts/new',
+    AppRouteKind.contactDetail =>
+      '/contacts/${Uri.encodeComponent(contactId!)}',
     AppRouteKind.contactDraft =>
       '/contacts/drafts/${Uri.encodeComponent(draftId!)}',
     AppRouteKind.contactFromAttempt =>
@@ -66,10 +83,11 @@ final class AppRoute {
       other is AppRoute &&
       other.kind == kind &&
       other.draftId == draftId &&
-      other.sourceAttemptId == sourceAttemptId;
+      other.sourceAttemptId == sourceAttemptId &&
+      other.contactId == contactId;
 
   @override
-  int get hashCode => Object.hash(kind, draftId, sourceAttemptId);
+  int get hashCode => Object.hash(kind, draftId, sourceAttemptId, contactId);
 
   @override
   String toString() => 'AppRoute($location)';
@@ -92,6 +110,8 @@ final class AppRouteInformationParser extends RouteInformationParser<AppRoute> {
       ['contacts', 'attempts', final attemptId, 'contact']
           when attemptId.trim().isNotEmpty =>
         AppRoute.contactFromAttempt(attemptId),
+      ['contacts', final contactId] when contactId.trim().isNotEmpty =>
+        AppRoute.contactDetail(contactId),
       ['targets'] => AppRoute.targets,
       ['analysis'] => AppRoute.analysis,
       _ => AppRoute.today,

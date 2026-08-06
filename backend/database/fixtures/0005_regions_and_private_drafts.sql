@@ -317,11 +317,14 @@ SET location_kind = 'pending_resolution',
 WHERE contact_id = 'synthetic-region-revision-contact';
 
 INSERT INTO app_data.contact_revisions (
-  contact_id, revision_number, revised_by_app_user_id, snapshot
+  contact_id, revision_number, revision_kind, revised_by_app_user_id,
+  reason, snapshot
 ) VALUES (
   'synthetic-region-revision-contact',
   2,
+  'corrected',
   (SELECT app_user_id FROM draft_owner_context),
+  'Synthetic location correction',
   jsonb_build_object(
     'location', jsonb_build_object(
       'kind', 'pending_resolution',

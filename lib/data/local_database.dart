@@ -142,7 +142,7 @@ class LocalDatabase extends _$LocalDatabase {
       );
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -261,7 +261,13 @@ class LocalDatabase extends _$LocalDatabase {
         );
         final contactRevisionColumns = await _missingColumns(
           dbContactRevisions.actualTableName,
-          [dbContactRevisions.regionTreeVersion],
+          [
+            dbContactRevisions.regionTreeVersion,
+            // TableMigration uses the current table definition. Include
+            // columns introduced after v9 so a direct upgrade from v6-v8
+            // does not try to copy a column that the old table lacks.
+            dbContactRevisions.revisionKind,
+          ],
         );
         await migrator.alterTable(
           TableMigration(
@@ -311,6 +317,17 @@ class LocalDatabase extends _$LocalDatabase {
             TableMigration(dbContactDrafts, newColumns: draftColumns),
           );
         }
+      }
+      if (from < 11) {
+        // v11 把提交、更正和作废变成可约束的 revision 类型。该列参与
+        // CHECK，必须重建表；只用 ADD COLUMN 会保留旧约束。
+        final revisionColumns = await _missingColumns(
+          dbContactRevisions.actualTableName,
+          [dbContactRevisions.revisionKind],
+        );
+        await migrator.alterTable(
+          TableMigration(dbContactRevisions, newColumns: revisionColumns),
+        );
       }
     },
   );

@@ -224,6 +224,8 @@ class DbContactRevisions extends Table {
   TextColumn get revisionId => text()();
   TextColumn get contactId => text().references(DbContactRecords, #contactId)();
   IntColumn get revisionNumber => integer()();
+  TextColumn get revisionKind =>
+      text().withDefault(const Constant('submitted'))();
   TextColumn get revisedByAppUserId => text()();
   DateTimeColumn get revisedAtUtc => dateTime()();
   TextColumn get reason => text().nullable()();
@@ -252,6 +254,11 @@ class DbContactRevisions extends Table {
   @override
   List<String> get customConstraints => const [
     'CHECK (revision_number > 0)',
+    "CHECK (revision_kind IN ('submitted', 'corrected', 'voided'))",
+    "CHECK ((revision_number = 1 AND revision_kind = 'submitted' "
+        'AND reason IS NULL) OR (revision_number > 1 '
+        "AND revision_kind IN ('corrected', 'voided') "
+        'AND reason IS NOT NULL AND length(trim(reason)) > 0))',
     'CHECK (reach_count > 0)',
     'CHECK (interest_level BETWEEN 0 AND 4)',
     "CHECK ((location_kind = 'resolved' AND "

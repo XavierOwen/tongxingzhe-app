@@ -174,6 +174,8 @@ final class SyncEngine {
               switch (change) {
                 case final _RemoteContact contact:
                   await _applyRemoteContact(contact);
+                case final _RemoteContactRevision revision:
+                  await _applyRemoteContactRevision(revision);
                 case final _RemoteContactAttempt attempt:
                   await _applyRemoteContactAttempt(attempt);
                 case final _RemoteDraftUpsert draft:
@@ -515,6 +517,8 @@ final class SyncEngine {
   _ParsedRemoteChange _parseRemoteChange(SyncRemoteChange change) {
     return switch (change.changeType) {
       'contact.submitted' => _parseRemoteContact(change),
+      'contact.revised' ||
+      'contact.voided' => _parseRemoteContactRevision(change),
       'contact.attempt.submitted' => _parseRemoteContactAttempt(change),
       'draft.upserted' => _parseRemoteDraftUpsert(change),
       'draft.deleted' => _parseRemoteDraftDelete(change),
@@ -574,6 +578,68 @@ final class SyncEngine {
       interestLevel: interestLevel,
       answers: answers,
       sourceAttemptId: _optionalString(payload['sourceAttemptId']),
+    );
+  }
+
+  _RemoteContactRevision _parseRemoteContactRevision(SyncRemoteChange change) {
+    if (change.revisionNumber < 2) {
+      throw const FormatException('invalid remote contact revision');
+    }
+    final payload = change.payload;
+    _requireRemoteScope(payload);
+    final kind = switch (_requiredString(payload['revisionKind'])) {
+      'corrected' => ContactRevisionKind.corrected,
+      'voided' => ContactRevisionKind.voided,
+      _ => throw const FormatException('invalid remote revision kind'),
+    };
+    if ((change.changeType == 'contact.revised' &&
+            kind != ContactRevisionKind.corrected) ||
+        (change.changeType == 'contact.voided' &&
+            kind != ContactRevisionKind.voided)) {
+      throw const FormatException('remote revision kind mismatch');
+    }
+    final channel = _remoteChannel(_requiredString(payload['channel']));
+    final channelDetail = _optionalString(payload['channelDetail']);
+    if (channel == ContactChannel.otherDirect && channelDetail == null) {
+      throw const FormatException('remote channel detail is required');
+    }
+    final location = _remoteLocation(payload['location']);
+    if (channel == ContactChannel.faceToFace &&
+        location is NotApplicableContactLocation) {
+      throw const FormatException('invalid remote contact location');
+    }
+    final reachCount = _integer(payload['reachCount']);
+    final interestLevel = _integer(payload['interestLevel']);
+    if (reachCount < 1 || interestLevel < 0 || interestLevel > 4) {
+      throw const FormatException('invalid remote contact metric');
+    }
+    final answerValues = payload['answers'];
+    if (answerValues is! List<Object?>) {
+      throw const FormatException('remote answers must be a list');
+    }
+    final answers = [for (final value in answerValues) _remoteAnswer(value)];
+    if (answers.map((answer) => answer.questionId).toSet().length !=
+        answers.length) {
+      throw const FormatException('remote answers contain duplicate IDs');
+    }
+    return _RemoteContactRevision(
+      contactId: _requiredString(payload['contactId']),
+      revisionNumber: change.revisionNumber,
+      kind: kind,
+      questionnaireVersionId: _requiredString(
+        payload['questionnaireVersionId'],
+      ),
+      revisedAtUtc: _utcDate(payload['revisedAtUtc']),
+      reason: _requiredString(payload['reason']),
+      occurredAtUtc: _utcDate(payload['occurredAtUtc']),
+      occurredTimeZone: _requiredString(payload['occurredTimeZone']),
+      firstSubmittedAtUtc: _utcDate(payload['firstSubmittedAtUtc']),
+      channel: channel,
+      channelDetail: channelDetail,
+      location: location,
+      reachCount: reachCount,
+      interestLevel: interestLevel,
+      answers: answers,
     );
   }
 
@@ -741,6 +807,7 @@ final class SyncEngine {
             revisionId: '${contact.contactId}:remote:1',
             contactId: contact.contactId,
             revisionNumber: 1,
+            revisionKind: Value(ContactRevisionKind.submitted.storageValue),
             revisedByAppUserId: _scope.appUserId,
             revisedAtUtc: contact.firstSubmittedAtUtc,
             occurredAtUtc: contact.occurredAtUtc,
@@ -773,6 +840,128 @@ final class SyncEngine {
           );
     }
     await _linkRemoteSourceAttempt(contact);
+  }
+
+  Future<void> _applyRemoteContactRevision(
+    _RemoteContactRevision revision,
+  ) async {
+    final query = _database.select(_database.dbContactRecords)
+      ..where((row) => row.contactId.equals(revision.contactId));
+    final existing = await query.getSingleOrNull();
+    if (existing == null ||
+        existing.appUserId != _scope.appUserId ||
+        existing.workspaceId != _scope.workspaceId ||
+        existing.projectId != _scope.projectId ||
+        existing.questionnaireVersionId != revision.questionnaireVersionId) {
+      throw const FormatException('remote revision contact is unavailable');
+    }
+
+    if (existing.currentRevision >= revision.revisionNumber) {
+      if (!await _existingRevisionMatchesRemote(revision)) {
+        throw const FormatException(
+          'remote revision conflicts with local history',
+        );
+      }
+      if (existing.currentRevision == revision.revisionNumber &&
+          !_currentProjectionMatchesRevision(existing, revision)) {
+        throw const FormatException(
+          'remote revision conflicts with local projection',
+        );
+      }
+      return;
+    }
+    if (existing.currentRevision != revision.revisionNumber - 1) {
+      throw const FormatException('remote revision sequence is not contiguous');
+    }
+    if (revision.kind == ContactRevisionKind.voided &&
+        !_currentProjectionMatchesRevision(
+          existing,
+          revision,
+          ignoreLifecycle: true,
+        )) {
+      throw const FormatException('remote void snapshot differs from current');
+    }
+    if (revision.location case final ResolvedContactLocation resolved) {
+      await _regionCatalog.requireAnalyzableRegion(
+        regionId: resolved.smallestRegionId,
+        treeVersion: resolved.regionTreeVersion,
+      );
+    }
+
+    final location = _remoteLocationColumns(revision.location);
+    await _database
+        .into(_database.dbContactRevisions)
+        .insert(
+          DbContactRevisionsCompanion.insert(
+            revisionId:
+                '${revision.contactId}:remote:${revision.revisionNumber}',
+            contactId: revision.contactId,
+            revisionNumber: revision.revisionNumber,
+            revisionKind: Value(revision.kind.storageValue),
+            revisedByAppUserId: _scope.appUserId,
+            revisedAtUtc: revision.revisedAtUtc,
+            reason: Value(revision.reason),
+            occurredAtUtc: revision.occurredAtUtc,
+            occurredTimeZone: revision.occurredTimeZone,
+            channel: revision.channel.storageValue,
+            channelDetail: Value(revision.channelDetail),
+            locationKind: location.kind,
+            placeName: Value(location.placeName),
+            smallestRegionId: Value(location.smallestRegionId),
+            regionTreeVersion: Value(location.regionTreeVersion),
+            latitude: Value(location.latitude),
+            longitude: Value(location.longitude),
+            locationAccuracyMeters: Value(location.accuracyMeters),
+            reachCount: revision.reachCount,
+            interestLevel: revision.interestLevel,
+          ),
+        );
+    for (final answer in revision.answers) {
+      await _database
+          .into(_database.dbContactAnswers)
+          .insert(
+            DbContactAnswersCompanion.insert(
+              contactId: revision.contactId,
+              revisionNumber: revision.revisionNumber,
+              questionId: answer.questionId,
+              answerState: answer.state.storageValue,
+              answerType: 'boolean',
+              booleanValue: Value(answer.value),
+            ),
+          );
+    }
+    await (_database.update(
+      _database.dbContactRecords,
+    )..where((row) => row.contactId.equals(revision.contactId))).write(
+      DbContactRecordsCompanion(
+        occurredAtUtc: Value(revision.occurredAtUtc),
+        occurredTimeZone: Value(revision.occurredTimeZone),
+        channel: Value(revision.channel.storageValue),
+        channelDetail: Value(revision.channelDetail),
+        locationKind: Value(location.kind),
+        placeName: Value(location.placeName),
+        smallestRegionId: Value(location.smallestRegionId),
+        regionTreeVersion: Value(location.regionTreeVersion),
+        latitude: Value(location.latitude),
+        longitude: Value(location.longitude),
+        locationAccuracyMeters: Value(location.accuracyMeters),
+        reachCount: Value(revision.reachCount),
+        interestLevel: Value(revision.interestLevel),
+        currentRevision: Value(revision.revisionNumber),
+        lifecycleStatus: Value(
+          revision.kind == ContactRevisionKind.voided ? 'voided' : 'active',
+        ),
+      ),
+    );
+    if (revision.location case final ResolvedContactLocation resolved) {
+      await _regionCatalog.assignContact(
+        contactId: revision.contactId,
+        regionId: resolved.smallestRegionId,
+        treeVersion: resolved.regionTreeVersion,
+      );
+    } else {
+      await _regionCatalog.clearContactAssignment(revision.contactId);
+    }
   }
 
   Future<void> _applyRemoteContactAttempt(_RemoteContactAttempt attempt) async {
@@ -1151,23 +1340,34 @@ final class SyncEngine {
     if (existing.appUserId != _scope.appUserId ||
         existing.workspaceId != _scope.workspaceId ||
         existing.projectId != _scope.projectId ||
-        existing.questionnaireVersionId != contact.questionnaireVersionId ||
-        existing.occurredAtUtc.toUtc() != contact.occurredAtUtc ||
-        existing.occurredTimeZone != contact.occurredTimeZone ||
-        existing.firstSubmittedAtUtc.toUtc() != contact.firstSubmittedAtUtc ||
-        existing.channel != contact.channel.storageValue ||
-        existing.channelDetail != contact.channelDetail ||
-        existing.locationKind != location.kind ||
-        existing.placeName != location.placeName ||
-        existing.smallestRegionId != location.smallestRegionId ||
-        existing.regionTreeVersion != location.regionTreeVersion ||
-        existing.latitude != location.latitude ||
-        existing.longitude != location.longitude ||
-        existing.locationAccuracyMeters != location.accuracyMeters ||
-        existing.reachCount != contact.reachCount ||
-        existing.interestLevel != contact.interestLevel ||
-        existing.currentRevision != 1 ||
-        existing.lifecycleStatus != 'active') {
+        existing.questionnaireVersionId != contact.questionnaireVersionId) {
+      return false;
+    }
+
+    final revisionQuery = _database.select(_database.dbContactRevisions)
+      ..where(
+        (row) =>
+            row.contactId.equals(contact.contactId) &
+            row.revisionNumber.equals(1),
+      );
+    final storedRevision = await revisionQuery.getSingleOrNull();
+    if (storedRevision == null ||
+        storedRevision.revisionKind !=
+            ContactRevisionKind.submitted.storageValue ||
+        storedRevision.reason != null ||
+        storedRevision.occurredAtUtc.toUtc() != contact.occurredAtUtc ||
+        storedRevision.occurredTimeZone != contact.occurredTimeZone ||
+        storedRevision.channel != contact.channel.storageValue ||
+        storedRevision.channelDetail != contact.channelDetail ||
+        storedRevision.locationKind != location.kind ||
+        storedRevision.placeName != location.placeName ||
+        storedRevision.smallestRegionId != location.smallestRegionId ||
+        storedRevision.regionTreeVersion != location.regionTreeVersion ||
+        storedRevision.latitude != location.latitude ||
+        storedRevision.longitude != location.longitude ||
+        storedRevision.locationAccuracyMeters != location.accuracyMeters ||
+        storedRevision.reachCount != contact.reachCount ||
+        storedRevision.interestLevel != contact.interestLevel) {
       return false;
     }
 
@@ -1191,6 +1391,82 @@ final class SyncEngine {
           stored.answerState == remote.state.storageValue &&
           stored.booleanValue == remote.value;
     });
+  }
+
+  Future<bool> _existingRevisionMatchesRemote(
+    _RemoteContactRevision revision,
+  ) async {
+    final query = _database.select(_database.dbContactRevisions)
+      ..where(
+        (row) =>
+            row.contactId.equals(revision.contactId) &
+            row.revisionNumber.equals(revision.revisionNumber),
+      );
+    final stored = await query.getSingleOrNull();
+    final location = _remoteLocationColumns(revision.location);
+    if (stored == null ||
+        stored.revisionKind != revision.kind.storageValue ||
+        stored.reason != revision.reason ||
+        stored.occurredAtUtc.toUtc() != revision.occurredAtUtc ||
+        stored.occurredTimeZone != revision.occurredTimeZone ||
+        stored.channel != revision.channel.storageValue ||
+        stored.channelDetail != revision.channelDetail ||
+        stored.locationKind != location.kind ||
+        stored.placeName != location.placeName ||
+        stored.smallestRegionId != location.smallestRegionId ||
+        stored.regionTreeVersion != location.regionTreeVersion ||
+        stored.latitude != location.latitude ||
+        stored.longitude != location.longitude ||
+        stored.locationAccuracyMeters != location.accuracyMeters ||
+        stored.reachCount != revision.reachCount ||
+        stored.interestLevel != revision.interestLevel) {
+      return false;
+    }
+    final storedAnswers =
+        await (_database.select(_database.dbContactAnswers)..where(
+              (row) =>
+                  row.contactId.equals(revision.contactId) &
+                  row.revisionNumber.equals(revision.revisionNumber),
+            ))
+            .get();
+    if (storedAnswers.length != revision.answers.length) {
+      return false;
+    }
+    final remoteAnswers = {
+      for (final answer in revision.answers) answer.questionId: answer,
+    };
+    return storedAnswers.every((storedAnswer) {
+      final remote = remoteAnswers[storedAnswer.questionId];
+      return remote != null &&
+          storedAnswer.answerType == 'boolean' &&
+          storedAnswer.answerState == remote.state.storageValue &&
+          storedAnswer.booleanValue == remote.value;
+    });
+  }
+
+  bool _currentProjectionMatchesRevision(
+    DbContactRecord existing,
+    _RemoteContactRevision revision, {
+    bool ignoreLifecycle = false,
+  }) {
+    final location = _remoteLocationColumns(revision.location);
+    final expectedLifecycle = revision.kind == ContactRevisionKind.voided
+        ? 'voided'
+        : 'active';
+    return existing.occurredAtUtc.toUtc() == revision.occurredAtUtc &&
+        existing.occurredTimeZone == revision.occurredTimeZone &&
+        existing.channel == revision.channel.storageValue &&
+        existing.channelDetail == revision.channelDetail &&
+        existing.locationKind == location.kind &&
+        existing.placeName == location.placeName &&
+        existing.smallestRegionId == location.smallestRegionId &&
+        existing.regionTreeVersion == location.regionTreeVersion &&
+        existing.latitude == location.latitude &&
+        existing.longitude == location.longitude &&
+        existing.locationAccuracyMeters == location.accuracyMeters &&
+        existing.reachCount == revision.reachCount &&
+        existing.interestLevel == revision.interestLevel &&
+        (ignoreLifecycle || existing.lifecycleStatus == expectedLifecycle);
   }
 
   ContactLocation _remoteLocation(Object? value) {
@@ -1415,6 +1691,42 @@ final class _RemoteContact extends _ParsedRemoteChange {
   final int interestLevel;
   final List<BooleanQuestionnaireAnswer> answers;
   final String? sourceAttemptId;
+}
+
+final class _RemoteContactRevision extends _ParsedRemoteChange {
+  const _RemoteContactRevision({
+    required this.contactId,
+    required this.revisionNumber,
+    required this.kind,
+    required this.questionnaireVersionId,
+    required this.revisedAtUtc,
+    required this.reason,
+    required this.occurredAtUtc,
+    required this.occurredTimeZone,
+    required this.firstSubmittedAtUtc,
+    required this.channel,
+    required this.channelDetail,
+    required this.location,
+    required this.reachCount,
+    required this.interestLevel,
+    required this.answers,
+  });
+
+  final String contactId;
+  final int revisionNumber;
+  final ContactRevisionKind kind;
+  final String questionnaireVersionId;
+  final DateTime revisedAtUtc;
+  final String reason;
+  final DateTime occurredAtUtc;
+  final String occurredTimeZone;
+  final DateTime firstSubmittedAtUtc;
+  final ContactChannel channel;
+  final String? channelDetail;
+  final ContactLocation location;
+  final int reachCount;
+  final int interestLevel;
+  final List<BooleanQuestionnaireAnswer> answers;
 }
 
 final class _RemoteContactAttempt extends _ParsedRemoteChange {

@@ -10,6 +10,7 @@ import '../device/device_time_zone.dart';
 import '../features/contact_journal/contact_journal.dart';
 import '../features/contact_journal/contact_models.dart';
 import '../features/contact_entry/contact_entry_screen.dart';
+import '../features/contact_revision/contact_revision_screen.dart';
 import '../foundation/runtime_values.dart';
 import '../identity/identity_session.dart';
 import '../l10n/app_strings.dart';
@@ -180,6 +181,7 @@ final class _ReadyAppState extends State<_ReadyApp> {
     _routerDelegate = AppRouterDelegate(
       rootBuilder: _buildRootRoute,
       contactBuilder: _buildContactRoute,
+      contactDetailBuilder: _buildContactDetailRoute,
     );
   }
 
@@ -221,7 +223,7 @@ final class _ReadyAppState extends State<_ReadyApp> {
   Widget _buildRootRoute(
     BuildContext context,
     AppRoute route,
-    ValueListenable<ContactEntryClosedEvent> contactEntryClosedEvents,
+    ValueListenable<ContactPageClosedEvent> contactPageClosedEvents,
   ) {
     final legacyBuilder = widget.signedOutScreenBuilder;
     if (legacyBuilder != null) {
@@ -244,7 +246,7 @@ final class _ReadyAppState extends State<_ReadyApp> {
         clock: widget.clock,
         timeZoneProvider: widget.timeZoneProvider,
         selectedIndex: route.primaryIndex,
-        contactEntryClosedEvents: contactEntryClosedEvents,
+        contactPageClosedEvents: contactPageClosedEvents,
         onDestinationSelected: (index) => _routerDelegate.go(switch (index) {
           0 => AppRoute.today,
           1 => AppRoute.contacts,
@@ -258,6 +260,8 @@ final class _ReadyAppState extends State<_ReadyApp> {
         ),
         onOpenContactFromAttempt: (attempt) =>
             _routerDelegate.go(AppRoute.contactFromAttempt(attempt.attemptId)),
+        onOpenContactDetail: (contact) =>
+            _routerDelegate.go(AppRoute.contactDetail(contact.contactId)),
       ),
     );
   }
@@ -283,6 +287,24 @@ final class _ReadyAppState extends State<_ReadyApp> {
         regionResolver: widget.regionResolver,
         draftId: draftId,
         sourceAttemptId: sourceAttemptId,
+      ),
+    );
+  }
+
+  Widget _buildContactDetailRoute(BuildContext context, String contactId) {
+    return _SessionRoute(
+      controller: widget.controller,
+      identitySession: widget.identitySession,
+      appSession: widget.appSession,
+      readyBuilder: (context, trustedContext) => ContactRevisionScreen(
+        controller: widget.controller,
+        context: trustedContext,
+        contactId: contactId,
+        contactJournal: widget.contactJournal,
+        deviceId: widget.deviceId,
+        locationCapture: widget.locationCapture,
+        timeZoneProvider: widget.timeZoneProvider,
+        regionResolver: widget.regionResolver,
       ),
     );
   }

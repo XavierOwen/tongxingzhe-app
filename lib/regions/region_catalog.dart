@@ -110,6 +110,12 @@ final class RegionCatalog {
         );
   }
 
+  Future<void> clearContactAssignment(String contactId) async {
+    await (_database.delete(
+      _database.dbContactRegionAssignments,
+    )..where((row) => row.contactId.equals(contactId))).go();
+  }
+
   Future<void> assignDraft({
     required String draftId,
     required String regionId,

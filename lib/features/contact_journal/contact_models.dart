@@ -163,6 +163,39 @@ final class BooleanQuestionnaireAnswer extends QuestionnaireAnswer {
 /// 本地接触事实相对于远端的同步状态。
 enum LocalSyncState { pending }
 
+/// 接触当前是否仍参与正常统计。
+enum ContactLifecycleStatus {
+  active('active'),
+  voided('voided');
+
+  const ContactLifecycleStatus(this.storageValue);
+
+  final String storageValue;
+
+  static ContactLifecycleStatus fromStorage(String value) {
+    return ContactLifecycleStatus.values.singleWhere(
+      (status) => status.storageValue == value,
+    );
+  }
+}
+
+/// 一条追加历史所表达的动作。
+enum ContactRevisionKind {
+  submitted('submitted'),
+  corrected('corrected'),
+  voided('voided');
+
+  const ContactRevisionKind(this.storageValue);
+
+  final String storageValue;
+
+  static ContactRevisionKind fromStorage(String value) {
+    return ContactRevisionKind.values.singleWhere(
+      (kind) => kind.storageValue == value,
+    );
+  }
+}
+
 /// 提交输入违反稳定接触规则时抛出的可分类错误。
 ///
 /// UI 应依据 [code] 选择本地化提示，不解析 [toString] 的说明文字。
@@ -524,27 +557,156 @@ final class ContactSubmissionReceipt {
   final LocalSyncState syncState;
 }
 
-/// `ContactJournal` 向 UI 返回的当前有效接触视图。
-final class ContactRecord {
-  const ContactRecord({
+/// 更正已提交接触时提供的完整新快照。
+///
+/// [baseRevision] 是使用者开始编辑时看到的版本。它防止本机把已经变化的
+/// 当前投影静默覆盖；服务端会用同一值执行最终并发检查。
+final class ContactCorrectionSubmission {
+  const ContactCorrectionSubmission({
     required this.contactId,
-    required this.revisionNumber,
+    required this.appUserId,
+    required this.workspaceId,
+    required this.projectId,
+    required this.deviceId,
+    required this.baseRevision,
+    required this.reason,
+    required this.occurredAtUtc,
+    required this.occurredTimeZone,
     required this.channel,
-    required this.channelDetail,
+    this.channelDetail,
     required this.location,
     required this.reachCount,
     required this.interestLevel,
-    required this.syncState,
-    required this.answers,
+    this.answers = const [],
   });
 
   final String contactId;
-  final int revisionNumber;
+  final String appUserId;
+  final String workspaceId;
+  final String projectId;
+  final String deviceId;
+  final int baseRevision;
+  final String reason;
+  final DateTime occurredAtUtc;
+  final String occurredTimeZone;
   final ContactChannel channel;
   final String? channelDetail;
   final ContactLocation location;
   final int reachCount;
   final int interestLevel;
+  final List<QuestionnaireAnswer> answers;
+}
+
+/// 作废已提交接触所需的最小命令。
+final class ContactVoidSubmission {
+  const ContactVoidSubmission({
+    required this.contactId,
+    required this.appUserId,
+    required this.workspaceId,
+    required this.projectId,
+    required this.deviceId,
+    required this.baseRevision,
+    required this.reason,
+  });
+
+  final String contactId;
+  final String appUserId;
+  final String workspaceId;
+  final String projectId;
+  final String deviceId;
+  final int baseRevision;
+  final String reason;
+}
+
+/// 本地更正或作废事务成功后的回执。
+final class ContactRevisionReceipt {
+  const ContactRevisionReceipt({
+    required this.contactId,
+    required this.revisionNumber,
+    required this.kind,
+    required this.syncState,
+  });
+
+  final String contactId;
+  final int revisionNumber;
+  final ContactRevisionKind kind;
+  final LocalSyncState syncState;
+}
+
+/// 一条可审计的接触历史快照。
+final class ContactRevision {
+  const ContactRevision({
+    required this.revisionId,
+    required this.contactId,
+    required this.revisionNumber,
+    required this.kind,
+    required this.revisedByAppUserId,
+    required this.revisedAtUtc,
+    required this.reason,
+    required this.occurredAtUtc,
+    required this.occurredTimeZone,
+    required this.channel,
+    required this.channelDetail,
+    required this.location,
+    required this.reachCount,
+    required this.interestLevel,
+    required this.answers,
+  });
+
+  final String revisionId;
+  final String contactId;
+  final int revisionNumber;
+  final ContactRevisionKind kind;
+  final String revisedByAppUserId;
+  final DateTime revisedAtUtc;
+  final String? reason;
+  final DateTime occurredAtUtc;
+  final String occurredTimeZone;
+  final ContactChannel channel;
+  final String? channelDetail;
+  final ContactLocation location;
+  final int reachCount;
+  final int interestLevel;
+  final List<QuestionnaireAnswer> answers;
+}
+
+/// `ContactJournal` 向 UI 返回的当前有效接触视图。
+final class ContactRecord {
+  const ContactRecord({
+    required this.contactId,
+    required this.appUserId,
+    required this.workspaceId,
+    required this.projectId,
+    required this.questionnaireVersionId,
+    required this.revisionNumber,
+    required this.occurredAtUtc,
+    required this.occurredTimeZone,
+    required this.firstSubmittedAtUtc,
+    required this.channel,
+    required this.channelDetail,
+    required this.location,
+    required this.reachCount,
+    required this.interestLevel,
+    required this.lifecycleStatus,
+    required this.syncState,
+    required this.answers,
+  });
+
+  final String contactId;
+  final String appUserId;
+  final String workspaceId;
+  final String projectId;
+  final String questionnaireVersionId;
+  final int revisionNumber;
+  final DateTime occurredAtUtc;
+  final String occurredTimeZone;
+  final DateTime firstSubmittedAtUtc;
+  final ContactChannel channel;
+  final String? channelDetail;
+  final ContactLocation location;
+  final int reachCount;
+  final int interestLevel;
+  final ContactLifecycleStatus lifecycleStatus;
   final LocalSyncState syncState;
   final List<QuestionnaireAnswer> answers;
 }

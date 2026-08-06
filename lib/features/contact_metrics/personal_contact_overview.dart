@@ -37,12 +37,14 @@ final class PersonalSummarySnapshot {
 /// 接触列表页的一致读取快照。
 final class ContactOverviewSnapshot {
   const ContactOverviewSnapshot({
+    required this.contacts,
     required this.drafts,
     required this.attempts,
     required this.todaySummary,
     required this.syncHealth,
   });
 
+  final List<ContactRecord> contacts;
   final List<ContactDraft> drafts;
   final List<ContactAttempt> attempts;
   final PersonalContactSummary todaySummary;
@@ -51,6 +53,12 @@ final class ContactOverviewSnapshot {
 
 /// 指标编排层依赖的最小事实接口。
 abstract interface class PersonalContactOverviewSource {
+  Future<List<ContactRecord>> listContactRecords({
+    required String appUserId,
+    required String workspaceId,
+    required String projectId,
+  });
+
   Future<List<ContactDraft>> listDrafts({required String appUserId});
 
   Future<List<ContactAttempt>> listContactAttempts({
@@ -74,6 +82,17 @@ final class ContactJournalOverviewSource
   const ContactJournalOverviewSource(this._journal);
 
   final ContactJournal _journal;
+
+  @override
+  Future<List<ContactRecord>> listContactRecords({
+    required String appUserId,
+    required String workspaceId,
+    required String projectId,
+  }) => _journal.listContactRecords(
+    appUserId: appUserId,
+    workspaceId: workspaceId,
+    projectId: projectId,
+  );
 
   @override
   Future<List<ContactDraft>> listDrafts({required String appUserId}) =>
@@ -167,6 +186,11 @@ final class PersonalContactOverviewRepository {
   Future<ContactOverviewSnapshot> loadContacts({
     required TrustedSessionContext context,
   }) async {
+    final contacts = await _source.listContactRecords(
+      appUserId: context.appUserId,
+      workspaceId: context.workspace.id,
+      projectId: context.project.id,
+    );
     final drafts = await _source.listDrafts(appUserId: context.appUserId);
     final attempts = await _source.listContactAttempts(
       appUserId: context.appUserId,
@@ -179,6 +203,7 @@ final class PersonalContactOverviewRepository {
     );
     final health = await _loadSyncHealth?.call();
     return ContactOverviewSnapshot(
+      contacts: List.unmodifiable(contacts),
       drafts: List.unmodifiable(drafts),
       attempts: List.unmodifiable(attempts),
       todaySummary: today.summary,

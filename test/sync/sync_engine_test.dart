@@ -258,6 +258,206 @@ void main() {
     expect(health.serverCursor, 'cursor-from-other-device');
   });
 
+  test('远端更正按新发生时间归期，后续作废保留三条历史', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    final transport = _QueueSyncTransport(
+      const [],
+      pullReplies: [
+        SyncPullSucceeded(
+          SyncPullBatch(
+            nextCursor: 'cursor-revision-2',
+            changes: [
+              SyncRemoteChange(
+                changeType: 'contact.submitted',
+                revisionNumber: 1,
+                payload: _remotePayload(contactId: 'remote-revision-contact'),
+              ),
+              SyncRemoteChange(
+                changeType: 'contact.revised',
+                revisionNumber: 2,
+                payload: _remoteRevisionPayload(
+                  contactId: 'remote-revision-contact',
+                  revisionKind: 'corrected',
+                  reason: '修正发生日期和人数',
+                  occurredAtUtc: '2030-02-08T18:00:00.000Z',
+                  reachCount: 3,
+                ),
+              ),
+            ],
+          ),
+        ),
+        SyncPullSucceeded(
+          SyncPullBatch(
+            nextCursor: 'cursor-revision-3',
+            changes: [
+              SyncRemoteChange(
+                changeType: 'contact.voided',
+                revisionNumber: 3,
+                payload: _remoteRevisionPayload(
+                  contactId: 'remote-revision-contact',
+                  revisionKind: 'voided',
+                  reason: '重复录入',
+                  occurredAtUtc: '2030-02-08T18:00:00.000Z',
+                  reachCount: 3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    final engine = fixture.engine(workerId: 'worker-1', transport: transport);
+    final journal = ContactJournal(
+      database: fixture.database,
+      clock: fixture.clock,
+      idGenerator: _SequenceIdGenerator(const []),
+    );
+
+    expect(await engine.pullOnce(), SyncPullApplyResult.applied);
+    final january = await journal.summarizePersonalContacts(
+      appUserId: _Fixture.scope.appUserId,
+      workspaceId: _Fixture.scope.workspaceId,
+      projectId: _Fixture.scope.projectId,
+      fromUtc: DateTime.utc(2030, 1),
+      untilUtc: DateTime.utc(2030, 2),
+    );
+    final february = await journal.summarizePersonalContacts(
+      appUserId: _Fixture.scope.appUserId,
+      workspaceId: _Fixture.scope.workspaceId,
+      projectId: _Fixture.scope.projectId,
+      fromUtc: DateTime.utc(2030, 2),
+      untilUtc: DateTime.utc(2030, 3),
+    );
+    expect(january.contactSessionCount, 0);
+    expect(february.contactSessionCount, 1);
+    expect(february.reachCount, 3);
+    var history = await journal.listContactRevisions(
+      contactId: 'remote-revision-contact',
+      appUserId: _Fixture.scope.appUserId,
+    );
+    expect(history.map((revision) => revision.kind), [
+      ContactRevisionKind.corrected,
+      ContactRevisionKind.submitted,
+    ]);
+    expect(history.first.reason, '修正发生日期和人数');
+
+    expect(await engine.pullOnce(), SyncPullApplyResult.applied);
+    final afterVoid = await journal.summarizePersonalContacts(
+      appUserId: _Fixture.scope.appUserId,
+      workspaceId: _Fixture.scope.workspaceId,
+      projectId: _Fixture.scope.projectId,
+      fromUtc: DateTime.utc(2030, 2),
+      untilUtc: DateTime.utc(2030, 3),
+    );
+    expect(afterVoid.contactSessionCount, 0);
+    final current = await journal.contactById('remote-revision-contact');
+    expect(current!.lifecycleStatus, ContactLifecycleStatus.voided);
+    history = await journal.listContactRevisions(
+      contactId: 'remote-revision-contact',
+      appUserId: _Fixture.scope.appUserId,
+    );
+    expect(history.map((revision) => revision.kind), [
+      ContactRevisionKind.voided,
+      ContactRevisionKind.corrected,
+      ContactRevisionKind.submitted,
+    ]);
+    expect(history.first.reason, '重复录入');
+    expect((await engine.health()).serverCursor, 'cursor-revision-3');
+  });
+
+  test('本机已到 revision 3 时可幂等重放服务端完整历史', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    await fixture.submitContact();
+    final journal = ContactJournal(
+      database: fixture.database,
+      clock: fixture.clock,
+      idGenerator: _SequenceIdGenerator([
+        'local-revision-2',
+        'local-command-2',
+        'local-revision-3',
+        'local-command-3',
+      ]),
+    );
+    await journal.correctContact(
+      ContactCorrectionSubmission(
+        contactId: 'contact-1',
+        appUserId: _Fixture.scope.appUserId,
+        workspaceId: _Fixture.scope.workspaceId,
+        projectId: _Fixture.scope.projectId,
+        deviceId: 'device-1',
+        baseRevision: 1,
+        reason: '修正发生日期和人数',
+        occurredAtUtc: DateTime.utc(2030, 2, 8, 18),
+        occurredTimeZone: 'America/Chicago',
+        channel: ContactChannel.voiceCall,
+        location: const NotApplicableContactLocation(),
+        reachCount: 3,
+        interestLevel: 4,
+      ),
+    );
+    await journal.voidContact(
+      ContactVoidSubmission(
+        contactId: 'contact-1',
+        appUserId: _Fixture.scope.appUserId,
+        workspaceId: _Fixture.scope.workspaceId,
+        projectId: _Fixture.scope.projectId,
+        deviceId: 'device-1',
+        baseRevision: 2,
+        reason: '重复录入',
+      ),
+    );
+    final transport = _QueueSyncTransport(
+      const [],
+      pullReplies: [
+        SyncPullSucceeded(
+          SyncPullBatch(
+            nextCursor: 'cursor-replayed-revision-3',
+            changes: [
+              SyncRemoteChange(
+                changeType: 'contact.submitted',
+                revisionNumber: 1,
+                payload: _remotePayload(contactId: 'contact-1'),
+              ),
+              SyncRemoteChange(
+                changeType: 'contact.revised',
+                revisionNumber: 2,
+                payload: _remoteRevisionPayload(
+                  contactId: 'contact-1',
+                  revisionKind: 'corrected',
+                  reason: '修正发生日期和人数',
+                  occurredAtUtc: '2030-02-08T18:00:00.000Z',
+                  reachCount: 3,
+                ),
+              ),
+              SyncRemoteChange(
+                changeType: 'contact.voided',
+                revisionNumber: 3,
+                payload: _remoteRevisionPayload(
+                  contactId: 'contact-1',
+                  revisionKind: 'voided',
+                  reason: '重复录入',
+                  occurredAtUtc: '2030-02-08T18:00:00.000Z',
+                  reachCount: 3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    final engine = fixture.engine(workerId: 'worker-1', transport: transport);
+
+    expect(await engine.pullOnce(), SyncPullApplyResult.applied);
+    expect((await engine.health()).serverCursor, 'cursor-replayed-revision-3');
+    final history = await journal.listContactRevisions(
+      contactId: 'contact-1',
+      appUserId: _Fixture.scope.appUserId,
+    );
+    expect(history.map((revision) => revision.revisionNumber), [3, 2, 1]);
+  });
+
   test('远端尝试与后来回应保持两条事实并建立关联', () async {
     final fixture = _Fixture();
     addTearDown(fixture.close);
@@ -785,6 +985,35 @@ Map<String, Object?> _remotePayload({required String contactId}) {
     'location': {'kind': 'not_applicable'},
     'reachCount': 2,
     'interestLevel': 3,
+    'answers': <Object?>[],
+  };
+}
+
+Map<String, Object?> _remoteRevisionPayload({
+  required String contactId,
+  required String revisionKind,
+  required String reason,
+  required String occurredAtUtc,
+  required int reachCount,
+}) {
+  return {
+    'contactId': contactId,
+    'workspaceId': _Fixture.scope.workspaceId,
+    'projectId': _Fixture.scope.projectId,
+    'questionnaireVersionId': 'questionnaire-v1',
+    'occurredAtUtc': occurredAtUtc,
+    'occurredTimeZone': 'America/Chicago',
+    'firstSubmittedAtUtc': '2030-01-08T18:30:00.000Z',
+    'revisedAtUtc': revisionKind == 'voided'
+        ? '2030-02-09T18:30:00.000Z'
+        : '2030-02-08T18:30:00.000Z',
+    'revisionKind': revisionKind,
+    'reason': reason,
+    'channel': 'voice_call',
+    'channelDetail': null,
+    'location': {'kind': 'not_applicable'},
+    'reachCount': reachCount,
+    'interestLevel': 4,
     'answers': <Object?>[],
   };
 }

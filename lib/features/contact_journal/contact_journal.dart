@@ -276,6 +276,7 @@ final class ContactJournal {
             revisionId: revisionId,
             contactId: contactId,
             revisionNumber: 1,
+            revisionKind: Value(ContactRevisionKind.submitted.storageValue),
             revisedByAppUserId: submission.appUserId,
             revisedAtUtc: submittedAtUtc,
             occurredAtUtc: submission.occurredAtUtc,
@@ -364,6 +365,379 @@ final class ContactJournal {
         );
   }
 
+  /// 追加一个更正快照，并原子更新当前投影和 Outbox。
+  Future<ContactRevisionReceipt> correctContact(
+    ContactCorrectionSubmission submission,
+  ) async {
+    _validateCorrectionSubmission(submission);
+    await _validateResolvedRegion(submission.location);
+    final revisionId = _idGenerator.next();
+    final commandId = _idGenerator.next();
+    final revisedAtUtc = _clock.now().toUtc();
+    final reason = submission.reason.trim();
+
+    try {
+      final revisionNumber = await _database.transaction(() async {
+        final current = await _ownedContact(
+          contactId: submission.contactId,
+          appUserId: submission.appUserId,
+          workspaceId: submission.workspaceId,
+          projectId: submission.projectId,
+        );
+        if (current == null) {
+          throw const ContactValidationException('contact_not_found');
+        }
+        if (current.lifecycleStatus == 'voided') {
+          throw const ContactValidationException('contact_already_voided');
+        }
+        if (current.currentRevision != submission.baseRevision) {
+          throw const ContactValidationException('contact_revision_conflict');
+        }
+        final nextRevision = current.currentRevision + 1;
+        final location = _contactLocationColumns(submission.location);
+        await _database
+            .into(_database.dbContactRevisions)
+            .insert(
+              DbContactRevisionsCompanion.insert(
+                revisionId: revisionId,
+                contactId: current.contactId,
+                revisionNumber: nextRevision,
+                revisionKind: Value(ContactRevisionKind.corrected.storageValue),
+                revisedByAppUserId: submission.appUserId,
+                revisedAtUtc: revisedAtUtc,
+                reason: Value(reason),
+                occurredAtUtc: submission.occurredAtUtc,
+                occurredTimeZone: submission.occurredTimeZone,
+                channel: submission.channel.storageValue,
+                channelDetail: Value(submission.channelDetail),
+                locationKind: location.kind!,
+                placeName: Value(location.placeName),
+                smallestRegionId: Value(location.smallestRegionId),
+                regionTreeVersion: Value(location.regionTreeVersion),
+                latitude: Value(location.latitude),
+                longitude: Value(location.longitude),
+                locationAccuracyMeters: Value(location.accuracyMeters),
+                reachCount: submission.reachCount,
+                interestLevel: submission.interestLevel,
+              ),
+            );
+        await _insertAnswers(
+          contactId: current.contactId,
+          revisionNumber: nextRevision,
+          answers: submission.answers,
+        );
+        await (_database.update(
+          _database.dbContactRecords,
+        )..where((row) => row.contactId.equals(current.contactId))).write(
+          DbContactRecordsCompanion(
+            occurredAtUtc: Value(submission.occurredAtUtc),
+            occurredTimeZone: Value(submission.occurredTimeZone),
+            channel: Value(submission.channel.storageValue),
+            channelDetail: Value(submission.channelDetail),
+            locationKind: Value(location.kind!),
+            placeName: Value(location.placeName),
+            smallestRegionId: Value(location.smallestRegionId),
+            regionTreeVersion: Value(location.regionTreeVersion),
+            latitude: Value(location.latitude),
+            longitude: Value(location.longitude),
+            locationAccuracyMeters: Value(location.accuracyMeters),
+            reachCount: Value(submission.reachCount),
+            interestLevel: Value(submission.interestLevel),
+            currentRevision: Value(nextRevision),
+          ),
+        );
+        await _updateContactRegion(
+          contactId: current.contactId,
+          location: submission.location,
+        );
+        final payload = jsonEncode({
+          'contact_id': current.contactId,
+          'workspace_id': submission.workspaceId,
+          'project_id': submission.projectId,
+          'reason': reason,
+          'occurred_at_utc': submission.occurredAtUtc.toIso8601String(),
+          'occurred_time_zone': submission.occurredTimeZone,
+          'channel': submission.channel.storageValue,
+          'channel_detail': submission.channelDetail,
+          'location': {
+            'kind': location.kind,
+            'place_name': location.placeName,
+            'smallest_region_id': location.smallestRegionId,
+            'region_tree_version': location.regionTreeVersion,
+            'latitude': location.latitude,
+            'longitude': location.longitude,
+            'accuracy_meters': location.accuracyMeters,
+          },
+          'reach_count': submission.reachCount,
+          'interest_level': submission.interestLevel,
+          'answers': _answerPayload(submission.answers),
+        });
+        await _insertOutboxCommand(
+          commandId: commandId,
+          commandType: 'contact.revise.v1',
+          deviceId: submission.deviceId,
+          aggregateId: current.contactId,
+          appUserId: submission.appUserId,
+          workspaceId: submission.workspaceId,
+          projectId: submission.projectId,
+          baseRevision: current.currentRevision,
+          payload: payload,
+          createdAtUtc: revisedAtUtc,
+        );
+        return nextRevision;
+      });
+      return ContactRevisionReceipt(
+        contactId: submission.contactId,
+        revisionNumber: revisionNumber,
+        kind: ContactRevisionKind.corrected,
+        syncState: LocalSyncState.pending,
+      );
+    } on ContactValidationException {
+      rethrow;
+    } catch (error, stackTrace) {
+      throw ContactPersistenceException(
+        code: 'contact_correction_failed',
+        cause: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  /// 追加作废 revision，并让当前投影退出正常统计。
+  Future<ContactRevisionReceipt> voidContact(
+    ContactVoidSubmission submission,
+  ) async {
+    _validateVoidSubmission(submission);
+    final revisionId = _idGenerator.next();
+    final commandId = _idGenerator.next();
+    final revisedAtUtc = _clock.now().toUtc();
+    final reason = submission.reason.trim();
+
+    try {
+      final revisionNumber = await _database.transaction(() async {
+        final current = await _ownedContact(
+          contactId: submission.contactId,
+          appUserId: submission.appUserId,
+          workspaceId: submission.workspaceId,
+          projectId: submission.projectId,
+        );
+        if (current == null) {
+          throw const ContactValidationException('contact_not_found');
+        }
+        if (current.lifecycleStatus == 'voided') {
+          throw const ContactValidationException('contact_already_voided');
+        }
+        if (current.currentRevision != submission.baseRevision) {
+          throw const ContactValidationException('contact_revision_conflict');
+        }
+        final nextRevision = current.currentRevision + 1;
+        await _database
+            .into(_database.dbContactRevisions)
+            .insert(
+              DbContactRevisionsCompanion.insert(
+                revisionId: revisionId,
+                contactId: current.contactId,
+                revisionNumber: nextRevision,
+                revisionKind: Value(ContactRevisionKind.voided.storageValue),
+                revisedByAppUserId: submission.appUserId,
+                revisedAtUtc: revisedAtUtc,
+                reason: Value(reason),
+                occurredAtUtc: current.occurredAtUtc,
+                occurredTimeZone: current.occurredTimeZone,
+                channel: current.channel,
+                channelDetail: Value(current.channelDetail),
+                locationKind: current.locationKind,
+                placeName: Value(current.placeName),
+                smallestRegionId: Value(current.smallestRegionId),
+                regionTreeVersion: Value(current.regionTreeVersion),
+                latitude: Value(current.latitude),
+                longitude: Value(current.longitude),
+                locationAccuracyMeters: Value(current.locationAccuracyMeters),
+                reachCount: current.reachCount,
+                interestLevel: current.interestLevel,
+              ),
+            );
+        final currentAnswers = await _answersForRevision(
+          current.contactId,
+          current.currentRevision,
+        );
+        await _insertAnswers(
+          contactId: current.contactId,
+          revisionNumber: nextRevision,
+          answers: currentAnswers,
+        );
+        await (_database.update(
+          _database.dbContactRecords,
+        )..where((row) => row.contactId.equals(current.contactId))).write(
+          DbContactRecordsCompanion(
+            currentRevision: Value(nextRevision),
+            lifecycleStatus: const Value('voided'),
+          ),
+        );
+        final payload = jsonEncode({
+          'contact_id': current.contactId,
+          'workspace_id': submission.workspaceId,
+          'project_id': submission.projectId,
+          'reason': reason,
+        });
+        await _insertOutboxCommand(
+          commandId: commandId,
+          commandType: 'contact.void.v1',
+          deviceId: submission.deviceId,
+          aggregateId: current.contactId,
+          appUserId: submission.appUserId,
+          workspaceId: submission.workspaceId,
+          projectId: submission.projectId,
+          baseRevision: current.currentRevision,
+          payload: payload,
+          createdAtUtc: revisedAtUtc,
+        );
+        return nextRevision;
+      });
+      return ContactRevisionReceipt(
+        contactId: submission.contactId,
+        revisionNumber: revisionNumber,
+        kind: ContactRevisionKind.voided,
+        syncState: LocalSyncState.pending,
+      );
+    } on ContactValidationException {
+      rethrow;
+    } catch (error, stackTrace) {
+      throw ContactPersistenceException(
+        code: 'contact_void_failed',
+        cause: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<void> _insertOutboxCommand({
+    required String commandId,
+    required String commandType,
+    required String deviceId,
+    required String aggregateId,
+    required String appUserId,
+    required String workspaceId,
+    required String projectId,
+    required int baseRevision,
+    required String payload,
+    required DateTime createdAtUtc,
+  }) async {
+    await _database
+        .into(_database.dbSyncOutbox)
+        .insert(
+          DbSyncOutboxCompanion.insert(
+            commandId: commandId,
+            protocolVersion: 1,
+            commandType: commandType,
+            deviceId: deviceId,
+            aggregateId: aggregateId,
+            appUserId: Value(appUserId),
+            workspaceId: Value(workspaceId),
+            projectId: Value(projectId),
+            baseRevision: baseRevision,
+            payloadJson: payload,
+            createdAtUtc: createdAtUtc,
+            status: 'pending',
+            nextAttemptAtUtc: createdAtUtc,
+          ),
+        );
+  }
+
+  Future<void> _insertAnswers({
+    required String contactId,
+    required int revisionNumber,
+    required List<QuestionnaireAnswer> answers,
+  }) async {
+    for (final answer in answers) {
+      final booleanAnswer = answer as BooleanQuestionnaireAnswer;
+      await _database
+          .into(_database.dbContactAnswers)
+          .insert(
+            DbContactAnswersCompanion.insert(
+              contactId: contactId,
+              revisionNumber: revisionNumber,
+              questionId: booleanAnswer.questionId,
+              answerState: booleanAnswer.state.storageValue,
+              answerType: 'boolean',
+              booleanValue: Value(booleanAnswer.value),
+            ),
+          );
+    }
+  }
+
+  Future<List<QuestionnaireAnswer>> _answersForRevision(
+    String contactId,
+    int revisionNumber,
+  ) async {
+    final query = _database.select(_database.dbContactAnswers)
+      ..where(
+        (row) =>
+            row.contactId.equals(contactId) &
+            row.revisionNumber.equals(revisionNumber),
+      )
+      ..orderBy([(row) => OrderingTerm.asc(row.questionId)]);
+    return [
+      for (final row in await query.get())
+        switch (row.answerType) {
+          'boolean' => _booleanAnswerFromRow(
+            questionId: row.questionId,
+            state: row.answerState,
+            value: row.booleanValue,
+          ),
+          final unsupported => throw StateError(
+            'unsupported_questionnaire_answer_type:$unsupported',
+          ),
+        },
+    ];
+  }
+
+  List<Map<String, Object?>> _answerPayload(
+    List<QuestionnaireAnswer> answers,
+  ) => [
+    for (final answer in answers)
+      switch (answer) {
+        final BooleanQuestionnaireAnswer booleanAnswer => {
+          'question_id': booleanAnswer.questionId,
+          'state': booleanAnswer.state.storageValue,
+          'type': 'boolean',
+          'value': booleanAnswer.value,
+        },
+      },
+  ];
+
+  Future<DbContactRecord?> _ownedContact({
+    required String contactId,
+    required String appUserId,
+    required String workspaceId,
+    required String projectId,
+  }) {
+    final query = _database.select(_database.dbContactRecords)
+      ..where(
+        (row) =>
+            row.contactId.equals(contactId) &
+            row.appUserId.equals(appUserId) &
+            row.workspaceId.equals(workspaceId) &
+            row.projectId.equals(projectId),
+      );
+    return query.getSingleOrNull();
+  }
+
+  Future<void> _updateContactRegion({
+    required String contactId,
+    required ContactLocation location,
+  }) async {
+    if (location case final ResolvedContactLocation resolved) {
+      await _regionCatalog.assignContact(
+        contactId: contactId,
+        regionId: resolved.smallestRegionId,
+        treeVersion: resolved.regionTreeVersion,
+      );
+    } else {
+      await _regionCatalog.clearContactAssignment(contactId);
+    }
+  }
+
   void _validateSubmission(AnonymousContactSubmission submission) {
     if (submission.appUserId.trim().isEmpty ||
         submission.workspaceId.trim().isEmpty ||
@@ -429,6 +803,91 @@ final class ContactJournal {
     }
   }
 
+  void _validateCorrectionSubmission(ContactCorrectionSubmission submission) {
+    if (submission.contactId.trim().isEmpty ||
+        submission.appUserId.trim().isEmpty ||
+        submission.workspaceId.trim().isEmpty ||
+        submission.projectId.trim().isEmpty) {
+      throw const ContactValidationException('contact_context_required');
+    }
+    if (submission.deviceId.trim().isEmpty) {
+      throw const ContactValidationException('contact_device_required');
+    }
+    if (submission.baseRevision < 1) {
+      throw const ContactValidationException('contact_revision_invalid');
+    }
+    if (submission.reason.trim().isEmpty) {
+      throw const ContactValidationException('contact_reason_required');
+    }
+    if (!submission.occurredAtUtc.isUtc) {
+      throw const ContactValidationException('occurred_at_must_be_utc');
+    }
+    if (submission.occurredTimeZone.trim().isEmpty) {
+      throw const ContactValidationException('occurred_time_zone_required');
+    }
+    if (submission.reachCount < 1) {
+      throw const ContactValidationException('reach_count_must_be_positive');
+    }
+    if (submission.interestLevel < 0 || submission.interestLevel > 4) {
+      throw const ContactValidationException('interest_level_out_of_range');
+    }
+    if (submission.channel == ContactChannel.otherDirect &&
+        (submission.channelDetail == null ||
+            submission.channelDetail!.trim().isEmpty)) {
+      throw const ContactValidationException('other_channel_detail_required');
+    }
+    final questionIds = <String>{};
+    for (final answer in submission.answers) {
+      if (answer.questionId.trim().isEmpty) {
+        throw const ContactValidationException('question_id_required');
+      }
+      if (!questionIds.add(answer.questionId)) {
+        throw const ContactValidationException('duplicate_question_answer');
+      }
+    }
+    if (submission.location case final PendingContactLocation pending) {
+      final accuracy = pending.accuracyMeters;
+      if (!pending.latitude.isFinite ||
+          pending.latitude < -90 ||
+          pending.latitude > 90 ||
+          !pending.longitude.isFinite ||
+          pending.longitude < -180 ||
+          pending.longitude > 180 ||
+          (accuracy != null && (!accuracy.isFinite || accuracy < 0))) {
+        throw const ContactValidationException('invalid_pending_location');
+      }
+    }
+    if (submission.location case final ResolvedContactLocation resolved) {
+      if (resolved.placeName.trim().isEmpty ||
+          resolved.smallestRegionId.trim().isEmpty ||
+          resolved.regionTreeVersion.trim().isEmpty) {
+        throw const ContactValidationException('resolved_location_required');
+      }
+    }
+    if (submission.channel == ContactChannel.faceToFace &&
+        submission.location is NotApplicableContactLocation) {
+      throw const ContactValidationException('face_to_face_location_required');
+    }
+  }
+
+  void _validateVoidSubmission(ContactVoidSubmission submission) {
+    if (submission.contactId.trim().isEmpty ||
+        submission.appUserId.trim().isEmpty ||
+        submission.workspaceId.trim().isEmpty ||
+        submission.projectId.trim().isEmpty) {
+      throw const ContactValidationException('contact_context_required');
+    }
+    if (submission.deviceId.trim().isEmpty) {
+      throw const ContactValidationException('contact_device_required');
+    }
+    if (submission.baseRevision < 1) {
+      throw const ContactValidationException('contact_revision_invalid');
+    }
+    if (submission.reason.trim().isEmpty) {
+      throw const ContactValidationException('contact_reason_required');
+    }
+  }
+
   void _validateAttemptSubmission(ContactAttemptSubmission submission) {
     if (submission.appUserId.trim().isEmpty ||
         submission.workspaceId.trim().isEmpty ||
@@ -488,54 +947,143 @@ final class ContactJournal {
       return null;
     }
 
-    final answerQuery = _database.select(_database.dbContactAnswers)
-      ..where(
-        (answer) =>
-            answer.contactId.equals(contactId) &
-            answer.revisionNumber.equals(row.currentRevision),
-      )
-      ..orderBy([(answer) => OrderingTerm.asc(answer.questionId)]);
-    final answerRows = await answerQuery.get();
+    return _contactRecordFromRow(row);
+  }
 
+  Future<ContactRecord?> contactByIdForOwner({
+    required String contactId,
+    required String appUserId,
+  }) async {
+    final query = _database.select(_database.dbContactRecords)
+      ..where(
+        (row) =>
+            row.contactId.equals(contactId) & row.appUserId.equals(appUserId),
+      );
+    final row = await query.getSingleOrNull();
+    return row == null ? null : _contactRecordFromRow(row);
+  }
+
+  /// 列出当前项目的已提交接触，包括已作废历史。
+  Future<List<ContactRecord>> listContactRecords({
+    required String appUserId,
+    required String workspaceId,
+    required String projectId,
+  }) async {
+    final query = _database.select(_database.dbContactRecords)
+      ..where(
+        (row) =>
+            row.appUserId.equals(appUserId) &
+            row.workspaceId.equals(workspaceId) &
+            row.projectId.equals(projectId),
+      )
+      ..orderBy([
+        (row) => OrderingTerm.desc(row.occurredAtUtc),
+        (row) => OrderingTerm.asc(row.contactId),
+      ]);
+    return [
+      for (final row in await query.get()) await _contactRecordFromRow(row),
+    ];
+  }
+
+  /// 返回一条本人接触的全部 revision，最新一条排在前面。
+  Future<List<ContactRevision>> listContactRevisions({
+    required String contactId,
+    required String appUserId,
+  }) async {
+    final contact = await contactByIdForOwner(
+      contactId: contactId,
+      appUserId: appUserId,
+    );
+    if (contact == null) {
+      return const [];
+    }
+    final query = _database.select(_database.dbContactRevisions)
+      ..where((row) => row.contactId.equals(contactId))
+      ..orderBy([(row) => OrderingTerm.desc(row.revisionNumber)]);
+    return [
+      for (final row in await query.get())
+        ContactRevision(
+          revisionId: row.revisionId,
+          contactId: row.contactId,
+          revisionNumber: row.revisionNumber,
+          kind: ContactRevisionKind.fromStorage(row.revisionKind),
+          revisedByAppUserId: row.revisedByAppUserId,
+          revisedAtUtc: row.revisedAtUtc.toUtc(),
+          reason: row.reason,
+          occurredAtUtc: row.occurredAtUtc.toUtc(),
+          occurredTimeZone: row.occurredTimeZone,
+          channel: ContactChannel.fromStorage(row.channel),
+          channelDetail: row.channelDetail,
+          location: _locationFromColumns(
+            kind: row.locationKind,
+            placeName: row.placeName,
+            smallestRegionId: row.smallestRegionId,
+            regionTreeVersion: row.regionTreeVersion,
+            latitude: row.latitude,
+            longitude: row.longitude,
+            accuracyMeters: row.locationAccuracyMeters,
+          ),
+          reachCount: row.reachCount,
+          interestLevel: row.interestLevel,
+          answers: await _answersForRevision(row.contactId, row.revisionNumber),
+        ),
+    ];
+  }
+
+  Future<ContactRecord> _contactRecordFromRow(DbContactRecord row) async {
     return ContactRecord(
       contactId: row.contactId,
+      appUserId: row.appUserId,
+      workspaceId: row.workspaceId,
+      projectId: row.projectId,
+      questionnaireVersionId: row.questionnaireVersionId,
       revisionNumber: row.currentRevision,
+      occurredAtUtc: row.occurredAtUtc.toUtc(),
+      occurredTimeZone: row.occurredTimeZone,
+      firstSubmittedAtUtc: row.firstSubmittedAtUtc.toUtc(),
       channel: ContactChannel.fromStorage(row.channel),
       channelDetail: row.channelDetail,
-      location: switch (row.locationKind) {
-        'resolved' => ResolvedContactLocation(
-          placeName: row.placeName!,
-          smallestRegionId: row.smallestRegionId!,
-          regionTreeVersion: row.regionTreeVersion!,
-        ),
-        'not_applicable' => const NotApplicableContactLocation(),
-        'pending_resolution' => PendingContactLocation(
-          latitude: row.latitude!,
-          longitude: row.longitude!,
-          accuracyMeters: row.locationAccuracyMeters,
-        ),
-        final unsupported => throw StateError(
-          'unsupported_contact_location_kind:$unsupported',
-        ),
-      },
+      location: _locationFromColumns(
+        kind: row.locationKind,
+        placeName: row.placeName,
+        smallestRegionId: row.smallestRegionId,
+        regionTreeVersion: row.regionTreeVersion,
+        latitude: row.latitude,
+        longitude: row.longitude,
+        accuracyMeters: row.locationAccuracyMeters,
+      ),
       reachCount: row.reachCount,
       interestLevel: row.interestLevel,
+      lifecycleStatus: ContactLifecycleStatus.fromStorage(row.lifecycleStatus),
       syncState: LocalSyncState.pending,
-      answers: [
-        for (final answer in answerRows)
-          switch (answer.answerType) {
-            'boolean' => _booleanAnswerFromRow(
-              questionId: answer.questionId,
-              state: answer.answerState,
-              value: answer.booleanValue,
-            ),
-            final unsupported => throw StateError(
-              'unsupported_questionnaire_answer_type:$unsupported',
-            ),
-          },
-      ],
+      answers: await _answersForRevision(row.contactId, row.currentRevision),
     );
   }
+
+  ContactLocation _locationFromColumns({
+    required String kind,
+    required String? placeName,
+    required String? smallestRegionId,
+    required String? regionTreeVersion,
+    required double? latitude,
+    required double? longitude,
+    required double? accuracyMeters,
+  }) => switch (kind) {
+    'resolved' => ResolvedContactLocation(
+      placeName: placeName!,
+      smallestRegionId: smallestRegionId!,
+      regionTreeVersion: regionTreeVersion!,
+    ),
+    'not_applicable' => const NotApplicableContactLocation(),
+    'pending_resolution' => PendingContactLocation(
+      latitude: latitude!,
+      longitude: longitude!,
+      accuracyMeters: accuracyMeters,
+    ),
+    final unsupported => throw StateError(
+      'unsupported_contact_location_kind:$unsupported',
+    ),
+  };
 
   Future<void> _validateResolvedRegion(ContactLocation? location) async {
     if (location is! ResolvedContactLocation) {

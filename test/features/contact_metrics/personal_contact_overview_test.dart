@@ -39,6 +39,7 @@ void main() {
 
     final result = await repository.loadContacts(context: _context);
 
+    expect(result.contacts, isEmpty);
     expect(result.drafts, isEmpty);
     expect(result.todaySummary.contactSessionCount, 5);
     expect(result.syncHealth, same(_health));
@@ -83,6 +84,13 @@ const _health = SyncHealth(
 
 final class _FakeOverviewSource implements PersonalContactOverviewSource {
   String? lastAppUserId;
+
+  @override
+  Future<List<ContactRecord>> listContactRecords({
+    required String appUserId,
+    required String workspaceId,
+    required String projectId,
+  }) async => const [];
 
   @override
   Future<List<ContactDraft>> listDrafts({required String appUserId}) async {
