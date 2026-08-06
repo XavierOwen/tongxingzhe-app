@@ -240,9 +240,17 @@ sealed class PromotionTargetResult<T> {
 }
 
 final class PromotionTargetSuccess<T> extends PromotionTargetResult<T> {
-  const PromotionTargetSuccess(this.value);
+  const PromotionTargetSuccess(
+    this.value, {
+    this.authorizedAtUtc,
+    this.expiresAtUtc,
+    this.fromOfflineCache = false,
+  });
 
   final T value;
+  final DateTime? authorizedAtUtc;
+  final DateTime? expiresAtUtc;
+  final bool fromOfflineCache;
 }
 
 final class PromotionTargetRejected<T> extends PromotionTargetResult<T> {

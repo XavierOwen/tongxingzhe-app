@@ -78,11 +78,17 @@ abstract interface class PlatformCapabilitiesProvider {
   Future<PlatformCapabilities> load();
 }
 
+abstract interface class SecureStorageCapabilityProbe {
+  Future<bool> probe();
+}
+
 /// 这是当前 App 已接线能力的保守起点。它不代表某个平台已通过发布验收；
 /// runtimeProbeRequired 必须由后续 Adapter 在当前设备实测后才能升级。
 final class FlutterPlatformCapabilitiesProvider
     implements PlatformCapabilitiesProvider {
-  const FlutterPlatformCapabilitiesProvider();
+  const FlutterPlatformCapabilitiesProvider({this.secureStorageProbe});
+
+  final SecureStorageCapabilityProbe? secureStorageProbe;
 
   @override
   Future<PlatformCapabilities> load() async {
@@ -93,6 +99,9 @@ final class FlutterPlatformCapabilitiesProvider
         platform == AppPlatform.android || platform == AppPlatform.ios;
     final locationImplemented =
         platform != AppPlatform.linux && platform != AppPlatform.unknown;
+    final secureStorage = await _secureStorageAvailability(
+      supported: native || platform == AppPlatform.web,
+    );
 
     return PlatformCapabilities(
       platform: platform,
@@ -102,10 +111,7 @@ final class FlutterPlatformCapabilitiesProvider
             : native
             ? CapabilityAvailability.available
             : CapabilityAvailability.unavailable,
-        PlatformCapability.secureSessionStorage:
-            native || platform == AppPlatform.web
-            ? CapabilityAvailability.runtimeProbeRequired
-            : CapabilityAvailability.unavailable,
+        PlatformCapability.secureSessionStorage: secureStorage,
         PlatformCapability.location: locationImplemented
             ? CapabilityAvailability.runtimeProbeRequired
             : CapabilityAvailability.unavailable,
@@ -120,6 +126,21 @@ final class FlutterPlatformCapabilitiesProvider
             : CapabilityAvailability.unavailable,
       },
     );
+  }
+
+  Future<CapabilityAvailability> _secureStorageAvailability({
+    required bool supported,
+  }) async {
+    if (!supported) return CapabilityAvailability.unavailable;
+    final probe = secureStorageProbe;
+    if (probe == null) return CapabilityAvailability.runtimeProbeRequired;
+    try {
+      return await probe.probe()
+          ? CapabilityAvailability.available
+          : CapabilityAvailability.temporarilyUnavailable;
+    } on Object {
+      return CapabilityAvailability.temporarilyUnavailable;
+    }
   }
 
   AppPlatform _currentPlatform() {

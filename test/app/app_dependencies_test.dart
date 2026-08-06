@@ -3,8 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/app/app_dependencies.dart';
 import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/data/local_database_factory.dart';
+import 'package:tongxingzhe_app/device/device_identity_store.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
+import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/legacy_demo/legacy_demo_dependencies.dart';
+import 'package:tongxingzhe_app/privacy/drift_offline_pii_lock_store.dart';
+import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
+import 'package:tongxingzhe_app/targets/promotion_target.dart';
 
 import '../support/fake_identity_session.dart';
 import '../support/fake_platform_capabilities.dart';
@@ -81,6 +86,64 @@ void main() {
     expect(identity.isClosed, isTrue);
   });
 
+  test('能力通过时 composition root 装配离线对象 gateway', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final clock = _FixedClock(DateTime.utc(2030, 1, 2, 13));
+    final ids = _SequenceIdGenerator();
+    final installationId = await DeviceIdentityStore(
+      database,
+      ids,
+    ).loadOrCreate();
+    final secureStore = _MemorySecureValueStore();
+    final vault = OfflinePiiVault(
+      secureStore: secureStore,
+      lockStore: DriftOfflinePiiLockStore(database),
+      clock: clock,
+      installationId: installationId,
+    );
+    await vault.replace(
+      externalSubject: 'external-subject-not-an-app-user-id',
+      context: syntheticSessionContext,
+      assignedTargets: [_target],
+      authorizedAtUtc: DateTime.utc(2030, 1, 2, 12),
+    );
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 3),
+      ),
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: clock,
+      idGenerator: ids,
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      offlinePiiSecureStore: secureStore,
+    );
+
+    final startup = await dependencies.start();
+    expect(startup, isA<AppStartupReady>());
+    final ready = startup as AppStartupReady;
+    addTearDown(ready.promotionTargetGateway.close);
+    addTearDown(ready.identitySession.close);
+    addTearDown(ready.appSession.close);
+    addTearDown(ready.controller.dispose);
+
+    final result = await ready.promotionTargetGateway.loadAssigned();
+
+    expect(result, isA<PromotionTargetSuccess<List<PromotionTargetProfile>>>());
+    final success =
+        result as PromotionTargetSuccess<List<PromotionTargetProfile>>;
+    expect(success.fromOfflineCache, isTrue);
+    expect(success.value.single.displayName, '王小明');
+  });
+
   test('legacy demo 只能通过独立 composition root 显式启用', () async {
     final database = LocalDatabase(NativeDatabase.memory());
     final dependencies = LegacyDemoDependencies.create(
@@ -135,4 +198,26 @@ final class _SequenceIdGenerator implements IdGenerator {
 
   @override
   String next() => 'test-${_next++}';
+}
+
+final _target = PromotionTargetProfile(
+  id: 'target-1',
+  type: PromotionTargetType.person,
+  displayName: '王小明',
+  phone: null,
+  email: null,
+  createdAtUtc: DateTime.utc(2030, 1, 1),
+);
+
+final class _MemorySecureValueStore implements SecureValueStore {
+  final values = <String, String>{};
+
+  @override
+  Future<void> delete(String key) async => values.remove(key);
+
+  @override
+  Future<String?> read(String key) async => values[key];
+
+  @override
+  Future<void> write(String key, String value) async => values[key] = value;
 }

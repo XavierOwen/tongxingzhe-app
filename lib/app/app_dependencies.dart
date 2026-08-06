@@ -10,6 +10,10 @@ import '../foundation/runtime_values.dart';
 import '../identity/identity_session.dart';
 import '../identity/supabase/supabase_identity_session.dart';
 import '../platform/platform_capabilities.dart';
+import '../privacy/drift_offline_pii_lock_store.dart';
+import '../privacy/flutter_secure_value_store.dart';
+import '../privacy/offline_pii_vault.dart';
+import '../privacy/secure_value_store_capability_probe.dart';
 import '../questionnaires/http_questionnaire_remote_source.dart';
 import '../questionnaires/http_questionnaire_administration_gateway.dart';
 import '../questionnaires/questionnaire_administration.dart';
@@ -21,6 +25,7 @@ import '../sync/http_sync_transport.dart';
 import '../sync/sync_engine_factory.dart';
 import '../sync/sync_transport.dart';
 import '../targets/http_promotion_target_gateway.dart';
+import '../targets/offline_promotion_target_gateway.dart';
 import '../targets/promotion_target.dart';
 import 'app_controller.dart';
 import 'legacy_demo_access.dart';
@@ -44,22 +49,30 @@ final class AppDependencies {
     this.questionnaireRemoteSourceBuilder,
     this.questionnaireAdministrationBuilder,
     this.promotionTargetGatewayBuilder,
+    this.offlinePiiSecureStore,
     this.legacyDemoAccess,
   });
 
   factory AppDependencies.production() {
+    final secureStore = FlutterSecureValueStore();
     return AppDependencies(
       databaseFactory: const DriftLocalDatabaseFactory(),
       clock: const SystemClock(),
       idGenerator: SecureIdGenerator(),
       identitySessionFactory: productionIdentitySessionFactory(),
       sessionContextGateway: productionSessionContextGateway(),
-      platformCapabilitiesProvider: const FlutterPlatformCapabilitiesProvider(),
+      platformCapabilitiesProvider: FlutterPlatformCapabilitiesProvider(
+        secureStorageProbe: SecureValueStoreCapabilityProbe(
+          store: secureStore,
+          idGenerator: SecureIdGenerator(),
+        ),
+      ),
       syncTransportBuilder: productionSyncTransport,
       regionResolverBuilder: productionContactRegionResolver,
       questionnaireRemoteSourceBuilder: productionQuestionnaireRemoteSource,
       questionnaireAdministrationBuilder: productionQuestionnaireAdministration,
       promotionTargetGatewayBuilder: productionPromotionTargetGateway,
+      offlinePiiSecureStore: secureStore,
     );
   }
 
@@ -80,6 +93,7 @@ final class AppDependencies {
   questionnaireAdministrationBuilder;
   final PromotionTargetGateway Function(IdentitySession)?
   promotionTargetGatewayBuilder;
+  final SecureValueStore? offlinePiiSecureStore;
 
   /// 临时兼容 legacy demo；正式 composition root 永远不提供此 Adapter。
   final LegacyDemoAccess? legacyDemoAccess;
@@ -93,6 +107,7 @@ final class AppDependencies {
     QuestionnaireCatalog? questionnaireCatalog;
     QuestionnaireAdministrationGateway? questionnaireAdministration;
     PromotionTargetGateway? promotionTargetGateway;
+    OfflinePiiVault? offlinePiiVault;
     try {
       identitySession = await identitySessionFactory.open();
     } catch (error, stackTrace) {
@@ -141,6 +156,16 @@ final class AppDependencies {
         database,
         idGenerator,
       ).loadOrCreate();
+      final platformPolicy = PlatformPolicy.from(platformCapabilities);
+      final secureStore = offlinePiiSecureStore;
+      if (platformPolicy.canPersistSensitiveTargets && secureStore != null) {
+        offlinePiiVault = OfflinePiiVault(
+          secureStore: secureStore,
+          lockStore: DriftOfflinePiiLockStore(database),
+          clock: clock,
+          installationId: deviceId,
+        );
+      }
       final syncTransport = syncTransportBuilder?.call(identitySession);
       if (syncTransport != null) {
         syncEngineFactory = SyncEngineFactory(
@@ -164,14 +189,36 @@ final class AppDependencies {
             questionnaireAdministrationBuilder?.call(identitySession) ??
             const DeferredQuestionnaireAdministrationGateway(),
       );
-      promotionTargetGateway =
-          promotionTargetGatewayBuilder?.call(identitySession) ??
-          const DeferredPromotionTargetGateway();
       appSession = AppSession(
         identitySession: identitySession,
         contextGateway: sessionContextGateway,
+        offlinePiiVault: offlinePiiVault,
       );
       await appSession.start();
+      final remoteTargetGateway =
+          promotionTargetGatewayBuilder?.call(identitySession) ??
+          const DeferredPromotionTargetGateway();
+      promotionTargetGateway = offlinePiiVault == null
+          ? remoteTargetGateway
+          : OfflinePromotionTargetGateway(
+              remote: remoteTargetGateway,
+              vault: offlinePiiVault,
+              externalSubject: () {
+                final subject =
+                    identitySession!.current.principal?.externalSubject;
+                if (subject == null) {
+                  throw StateError('offline_pii_identity_missing');
+                }
+                return subject;
+              },
+              currentContext: () {
+                final context = appSession!.current.context;
+                if (context == null) {
+                  throw StateError('offline_pii_context_missing');
+                }
+                return context;
+              },
+            );
       return AppStartupReady(
         controller: controller,
         clock: clock,
@@ -181,7 +228,7 @@ final class AppDependencies {
         identitySession: identitySession,
         appSession: appSession,
         platformCapabilities: platformCapabilities,
-        platformPolicy: PlatformPolicy.from(platformCapabilities),
+        platformPolicy: platformPolicy,
         locationCapture: locationCapture,
         timeZoneProvider: timeZoneProvider,
         regionResolver: regionResolver,

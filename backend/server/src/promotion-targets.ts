@@ -127,6 +127,7 @@ export interface PromotionTargetDependencies {
   readonly identityVerifier: IdentityVerifier;
   readonly contextStore: SessionContextStore;
   readonly targetStore: PromotionTargetStore;
+  readonly now?: () => Date;
 }
 
 export interface PromotionTargetHttpResult {
@@ -146,7 +147,13 @@ export async function listAssignedPromotionTargets(
   if (!(context instanceof AuthorizedContext)) return context;
   try {
     const targets = await dependencies.targetStore.listAssigned(context.value);
-    return {status: 200, body: {targets: targets.map(serializeTarget)}};
+    return {
+      status: 200,
+      body: {
+        authorized_at: (dependencies.now?.() ?? new Date()).toISOString(),
+        targets: targets.map(serializeTarget),
+      },
+    };
   } catch (error) {
     return storeFailure(error);
   }

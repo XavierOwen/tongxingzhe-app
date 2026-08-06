@@ -126,6 +126,7 @@ final class HttpPromotionTargetGateway implements PromotionTargetGateway {
   Future<PromotionTargetResult<List<PromotionTargetProfile>>> loadAssigned() =>
       _request(
         method: 'GET',
+        capturesAuthorizationTime: true,
         parse: (root) => _list(root['targets']).map(_parseProfile).toList(),
       );
 
@@ -255,6 +256,7 @@ final class HttpPromotionTargetGateway implements PromotionTargetGateway {
     String path = '/v1/promotion-targets',
     Map<String, Object?>? body,
     PromotionTargetResult<T> Function(Map<String, Object?> root)? parseConflict,
+    bool capturesAuthorizationTime = false,
   }) async {
     try {
       var token = await _identitySession.accessToken();
@@ -287,7 +289,12 @@ final class HttpPromotionTargetGateway implements PromotionTargetGateway {
       if (decoded is! Map<String, Object?>) {
         throw const FormatException('target response must be an object');
       }
-      return PromotionTargetSuccess(parse(decoded));
+      return PromotionTargetSuccess(
+        parse(decoded),
+        authorizedAtUtc: capturesAuthorizationTime
+            ? DateTime.parse(_string(decoded['authorized_at'])).toUtc()
+            : null,
+      );
     } on TimeoutException {
       return const PromotionTargetRejected(
         PromotionTargetFailureCode.networkUnavailable,

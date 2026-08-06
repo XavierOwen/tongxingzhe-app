@@ -13,6 +13,19 @@ void main() {
     );
   });
 
+  test('真实安全存储读写删除探针成功后才标为可用', () async {
+    final provider = FlutterPlatformCapabilitiesProvider(
+      secureStorageProbe: _SecureProbe(true),
+    );
+
+    final capabilities = await provider.load();
+
+    expect(
+      capabilities.availabilityOf(PlatformCapability.secureSessionStorage),
+      CapabilityAvailability.available,
+    );
+  });
+
   test('未通过 runtime probe 时不缓存敏感对象且只前台同步', () {
     const capabilities = PlatformCapabilities(
       platform: AppPlatform.linux,
@@ -95,4 +108,13 @@ void main() {
     expect(policy.syncOnlyWhileForeground, isFalse);
     expect(policy.canScheduleSystemNotifications, isTrue);
   });
+}
+
+final class _SecureProbe implements SecureStorageCapabilityProbe {
+  const _SecureProbe(this.result);
+
+  final bool result;
+
+  @override
+  Future<bool> probe() async => result;
 }

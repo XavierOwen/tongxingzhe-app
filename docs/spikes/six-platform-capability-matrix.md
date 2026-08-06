@@ -1,6 +1,6 @@
 # 六平台能力证据矩阵
 
-状态：**持续更新；截至 2026-08-03，只确认六平台 build 和 iOS／Web／macOS 认证运行时证据，不代表六平台产品已可发布。**
+状态：**持续更新；截至 2026-08-06，只确认六平台 build 和 iOS／Web／macOS 认证运行时证据。离线 PII 尚无平台运行时通过结论。**
 
 适用需求：`GOAL-006`、`AUTH-004`、`PLATFORM-001` 至 `PLATFORM-007`、`TEST-006`
 
@@ -17,22 +17,24 @@
 
 ## 当前矩阵
 
-| 平台 | Build | Auth／session runtime | 本地数据库／migration runtime | 离线／恢复 | 同步 | 现代响应式 UI | 当前结论 |
+| 平台 | Build | Auth／session runtime | 本地数据库／migration runtime | 匿名离线／同步恢复 | 加密离线 PII | 现代响应式 UI | 当前结论 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Android | CI pass；本机 debug APK pass | 待测；安全存储待测 | 只有共享 migration 自动测试，平台持久化待测 | 待 Slice 1 | 未实现 | 未验收 | build only |
-| iOS | CI pass；签名真机安装 pass | pass；Keychain、OTP、刷新、跨进程恢复均有证据 | 只有共享 migration 自动测试，平台持久化待测 | 待 Slice 1 | 未实现 | 未验收 | auth runtime pass |
-| Web | CI／release build pass | pass；localhost 安全存储、OTP、刷新、跨浏览器进程恢复均有证据 | Web 持久化、刷新、崩溃和双标签待测 | 待 Slice 1 | 未实现 | 未验收 | auth runtime pass |
-| macOS | CI pass；签名 debug pass | pass；Keychain、OTP、刷新、跨进程恢复均有证据 | 只有共享 migration 自动测试，平台持久化待测 | 待 Slice 1 | 未实现 | 未验收 | auth runtime pass |
-| Windows | CI pass | 待测；安全存储待测 | 只有共享 migration 自动测试，平台持久化待测 | 待 Slice 1 | 未实现 | 未验收 | build only |
-| Linux | CI pass | 待测；libsecret／keyring 待测 | 只有共享 migration 自动测试，平台持久化待测 | 待 Slice 1 | 未实现 | 未验收 | build only |
+| Android | CI pass；本机 debug APK pass | 待测；安全存储待测 | 只有共享 migration 自动测试，平台持久化待测 | 共享自动测试通过；设备重启恢复待测 | 实现和启动探针已接线；真机读写、重启、到期和撤权待测 | 未验收 | build only |
+| iOS | CI pass；签名真机安装 pass | pass；Keychain、OTP、刷新、跨进程恢复均有证据 | 只有共享 migration 自动测试，平台持久化待测 | 共享自动测试通过；设备重启恢复待测 | 实现和启动探针已接线；离线 PII 专用流程待测 | 未验收 | auth runtime pass |
+| Web | CI／release build pass | pass；localhost 安全存储、OTP、刷新、跨浏览器进程恢复均有证据 | Web 持久化、刷新、崩溃和双标签待测 | 共享自动测试通过；浏览器持久化恢复待测 | 当前禁用；durable database 仍为 `runtimeProbeRequired`，不会装配 PII vault | 未验收 | auth runtime pass |
+| macOS | CI pass；签名 debug pass | pass；Keychain、OTP、刷新、跨进程恢复均有证据 | 只有共享 migration 自动测试，平台持久化待测 | 共享自动测试通过；设备重启恢复待测 | 实现和启动探针已接线；离线 PII 专用流程待测 | 未验收 | auth runtime pass |
+| Windows | CI pass | 待测；安全存储待测 | 只有共享 migration 自动测试，平台持久化待测 | 共享自动测试通过；设备重启恢复待测 | 实现和启动探针已接线；Credential Store 运行时待测 | 未验收 | build only |
+| Linux | CI pass | 待测；libsecret／keyring 待测 | 只有共享 migration 自动测试，平台持久化待测 | 共享自动测试通过；设备重启恢复待测 | 实现和启动探针已接线；libsecret／keyring 运行时待测 | 未验收 | build only |
 
-认证逐步证据和测试环境见 [Supabase Auth 六平台 Spike](./supabase-auth-six-platform.md)。共享 Drift schema 和 migration 测试证明代码路径可重建旧库，但在每个平台完成关闭进程、重新打开和持久化探针前，不能把“测试通过”扩大为平台 runtime 通过。
+认证逐步证据和测试环境见 [Supabase Auth 六平台 Spike](./supabase-auth-six-platform.md)。离线对象资料的信任边界和残余风险见[威胁模型](../security/offline-pii-threat-model.md)。共享 Drift schema 和 migration 测试证明代码路径可重建旧库，但在每个平台完成关闭进程、重新打开和持久化探针前，不能把“测试通过”扩大为平台 runtime 通过。
 
 ## 公开发布前必须补齐
 
 - Android、Windows、Linux 的注册、OTP、恢复、刷新、登出和跨进程安全 session 恢复；
 - 六平台本地数据库初始化、migration、进程重启后的持久化和失败恢复；
-- Slice 1 和 2 的断网记录、Outbox 租约恢复、重复请求和同步恢复；
+- 六平台断网记录、Outbox 租约恢复、重复请求和同步恢复；
+- 原生五平台的离线 PII 写入、跨进程只读恢复、到期、撤权和清除失败重试；
+- Web durable database 探针和隔离策略；通过前保持离线 PII 禁用；
 - 稳定主导航、关键宽度、键盘／鼠标／触摸和可访问状态；
 - 每项证据的 App commit、设备或浏览器、OS、日期、测试数据类型和 pass／pending／failed 结论。
 
