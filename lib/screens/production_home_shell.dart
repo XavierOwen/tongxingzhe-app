@@ -167,6 +167,13 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
         personalPlanPanel: Column(
           children: [
             PersonalActionReminderPanel(
+              key: ValueKey(
+                'personal-reminder/'
+                '${widget.context.appUserId}/'
+                '${widget.context.workspace.id}/'
+                '${widget.context.project.id}/'
+                '${widget.deviceId}',
+              ),
               text: strings,
               scope: DeviceReminderScope(
                 appUserId: widget.context.appUserId,
@@ -175,6 +182,8 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
                 deviceId: widget.deviceId,
               ),
               gateway: widget.personalActionReminderGateway,
+              planGateway: widget.personalActionPlanGateway,
+              projectName: widget.context.project.name,
               preferenceStore: widget.deviceReminderPreferenceStore,
               scheduler: widget.reminderNotificationScheduler,
               timeZoneProvider: widget.timeZoneProvider,

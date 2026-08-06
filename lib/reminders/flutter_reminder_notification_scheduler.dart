@@ -158,6 +158,29 @@ final class FlutterReminderNotificationScheduler
     }
   }
 
+  @override
+  Future<ReminderScheduleResult> cancelAll() async {
+    if (!await _initialize()) {
+      return const ReminderScheduleRejected(
+        ReminderScheduleFailure.temporarilyUnavailable,
+      );
+    }
+    try {
+      final pending = await _plugin.pendingNotificationRequests();
+      for (final request in pending) {
+        if (request.payload == personalActionReminderPayload ||
+            request.payload == 'today') {
+          await _plugin.cancel(id: request.id);
+        }
+      }
+      return const ReminderScheduleSucceeded();
+    } on Object {
+      return const ReminderScheduleRejected(
+        ReminderScheduleFailure.temporarilyUnavailable,
+      );
+    }
+  }
+
   Future<bool> _initialize() => _initialization ??= _initializeOnce();
 
   Future<bool> _initializeOnce() async {

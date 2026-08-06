@@ -4,6 +4,7 @@ import 'package:tongxingzhe_app/device/device_time_zone.dart';
 import 'package:tongxingzhe_app/features/reminders/personal_action_reminder_panel.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/l10n/app_strings.dart';
+import 'package:tongxingzhe_app/plans/personal_action_plan.dart';
 import 'package:tongxingzhe_app/reminders/personal_action_reminder.dart';
 
 void main() {
@@ -37,7 +38,7 @@ void main() {
 
     expect(scheduler.permissionRequestCount, 1);
     expect(scheduler.lastTimeZone, 'America/Chicago');
-    expect(scheduler.lastContent?.payload, 'today');
+    expect(scheduler.lastContent?.payload, personalActionReminderPayload);
     expect(scheduler.lastContent?.title, '同行者');
     expect(scheduler.lastContent?.body, isNot(contains('校园推广')));
     expect(scheduler.lastContent?.body, isNot(contains('王小明')));
@@ -112,12 +113,151 @@ void main() {
     expect(scheduler.cancelKeys.single, contains('project-1'));
     expect(find.textContaining('尚未设置'), findsOneWidget);
   });
+
+  testWidgets('本人明确选择后才把项目名和个人周进度写入本设备通知', (tester) async {
+    final store = _MemoryPreferenceStore(
+      const DeviceReminderPreference(systemNotificationsEnabled: true),
+    );
+    final scheduler = _FakeScheduler();
+    await tester.pumpWidget(_app(store: store, scheduler: scheduler));
+    await tester.pumpAndSettle();
+    scheduler.cancelKeys.clear();
+
+    await tester.tap(find.byKey(const ValueKey('device-reminder-details')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('校园推广'), findsOneWidget);
+    expect(find.textContaining('3 / 5'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('confirm-device-reminder-details')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      store.value.contentMode,
+      ReminderNotificationContentMode.projectAndProgress,
+    );
+    expect(scheduler.lastContent?.title, contains('校园推广'));
+    expect(scheduler.lastContent?.body, contains('3'));
+    expect(scheduler.lastContent?.body, contains('5'));
+    expect(scheduler.cancelKeys, hasLength(1));
+  });
+
+  testWidgets('取消详细通知预览时不改变本机设置或系统调度', (tester) async {
+    final store = _MemoryPreferenceStore(
+      const DeviceReminderPreference(systemNotificationsEnabled: true),
+    );
+    final scheduler = _FakeScheduler();
+    await tester.pumpWidget(_app(store: store, scheduler: scheduler));
+    await tester.pumpAndSettle();
+    scheduler.cancelKeys.clear();
+
+    await tester.tap(find.byKey(const ValueKey('device-reminder-details')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('cancel-device-reminder-details')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(store.value.contentMode, ReminderNotificationContentMode.generic);
+    expect(store.saveCount, 0);
+    expect(scheduler.cancelKeys, isEmpty);
+  });
+
+  testWidgets('没有周目标时详细预览不伪造零目标或差额', (tester) async {
+    final store = _MemoryPreferenceStore(
+      const DeviceReminderPreference(systemNotificationsEnabled: true),
+    );
+    final scheduler = _FakeScheduler();
+    await tester.pumpWidget(
+      _app(
+        store: store,
+        scheduler: scheduler,
+        planGateway: _FakePlanGateway(noPlan: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('device-reminder-details')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('未设置周目标'), findsOneWidget);
+    expect(find.textContaining('0 / 0'), findsNothing);
+  });
+
+  testWidgets('个人计划读取失败时保留原通用通知且不写详细 opt-in', (tester) async {
+    final store = _MemoryPreferenceStore(
+      const DeviceReminderPreference(systemNotificationsEnabled: true),
+    );
+    final scheduler = _FakeScheduler();
+    await tester.pumpWidget(
+      _app(
+        store: store,
+        scheduler: scheduler,
+        planGateway: _FakePlanGateway(rejectLoad: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+    scheduler.cancelKeys.clear();
+
+    await tester.tap(find.byKey(const ValueKey('device-reminder-details')));
+    await tester.pumpAndSettle();
+
+    expect(store.value.contentMode, ReminderNotificationContentMode.generic);
+    expect(store.saveCount, 0);
+    expect(scheduler.cancelKeys, isEmpty);
+    expect(find.textContaining('个人进度暂时无法读取'), findsOneWidget);
+  });
+
+  testWidgets('关闭详细显示时先替换为通用通知再保存设置', (tester) async {
+    final store = _MemoryPreferenceStore(
+      const DeviceReminderPreference(
+        systemNotificationsEnabled: true,
+        contentMode: ReminderNotificationContentMode.projectAndProgress,
+      ),
+    );
+    final scheduler = _FakeScheduler();
+    await tester.pumpWidget(_app(store: store, scheduler: scheduler));
+    await tester.pumpAndSettle();
+    scheduler.cancelKeys.clear();
+
+    await tester.tap(find.byKey(const ValueKey('device-reminder-details')));
+    await tester.pumpAndSettle();
+
+    expect(store.value.contentMode, ReminderNotificationContentMode.generic);
+    expect(scheduler.lastContent?.title, '同行者');
+    expect(scheduler.lastContent?.body, isNot(contains('校园推广')));
+    expect(scheduler.cancelKeys, hasLength(1));
+  });
+
+  testWidgets('详细设置落盘失败时取消详细调度并恢复通用通知', (tester) async {
+    final store = _MemoryPreferenceStore.withSaveError(
+      const DeviceReminderPreference(systemNotificationsEnabled: true),
+      StateError('synthetic save failure'),
+    );
+    final scheduler = _FakeScheduler();
+    await tester.pumpWidget(_app(store: store, scheduler: scheduler));
+    await tester.pumpAndSettle();
+    scheduler.cancelKeys.clear();
+
+    await tester.tap(find.byKey(const ValueKey('device-reminder-details')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('confirm-device-reminder-details')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(store.value.contentMode, ReminderNotificationContentMode.generic);
+    expect(scheduler.lastContent?.title, '同行者');
+    expect(scheduler.lastContent?.body, isNot(contains('校园推广')));
+    expect(scheduler.cancelKeys, hasLength(2));
+  });
 }
 
 Widget _app({
   required _MemoryPreferenceStore store,
   required _FakeScheduler scheduler,
   _FakeGateway? gateway,
+  _FakePlanGateway? planGateway,
 }) => MaterialApp(
   home: Scaffold(
     body: PersonalActionReminderPanel(
@@ -129,6 +269,8 @@ Widget _app({
         deviceId: 'device-1',
       ),
       gateway: gateway ?? _FakeGateway(),
+      planGateway: planGateway ?? _FakePlanGateway(),
+      projectName: '校园推广',
       preferenceStore: store,
       scheduler: scheduler,
       timeZoneProvider: const _TimeZoneProvider(),
@@ -176,12 +318,62 @@ final class _FakeGateway implements PersonalActionReminderGateway {
   Future<void> close() async {}
 }
 
+final class _FakePlanGateway implements PersonalActionPlanGateway {
+  _FakePlanGateway({this.rejectLoad = false, this.noPlan = false});
+
+  final bool rejectLoad;
+  final bool noPlan;
+
+  @override
+  Future<PersonalActionPlanResult<PersonalActionPlanSnapshot?>> load() async =>
+      rejectLoad
+      ? const PersonalActionPlanRejected(
+          PersonalActionPlanFailureCode.networkUnavailable,
+        )
+      : PersonalActionPlanSuccess(noPlan ? null : _plan);
+
+  @override
+  Future<PersonalActionPlanResult<PersonalActionPlanMutation>> save({
+    required int expectedRevision,
+    required int? weeklyContactTarget,
+    required String statisticsTimeZone,
+    required int weekStartIsoDay,
+    required String mutationId,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<void> close() async {}
+}
+
+final _plan = PersonalActionPlanSnapshot(
+  planId: 'plan-1',
+  revision: 1,
+  current: PersonalActionPlanVersion(
+    revision: 1,
+    weeklyContactTarget: 5,
+    statisticsTimeZone: 'America/Chicago',
+    weekStartIsoDay: DateTime.monday,
+    effectiveFromUtc: DateTime.utc(2030, 3, 4),
+  ),
+  pending: null,
+  progress: PersonalActionPlanProgress(
+    cycleStartUtc: DateTime.utc(2030, 3, 4),
+    cycleUntilUtc: DateTime.utc(2030, 3, 11),
+    recordedContactSessions: 3,
+    remainingContactSessions: 2,
+    asOfUtc: DateTime.utc(2030, 3, 9),
+  ),
+);
+
 final class _MemoryPreferenceStore implements DeviceReminderPreferenceStore {
   _MemoryPreferenceStore([
     this.value = const DeviceReminderPreference.disabled(),
-  ]);
+  ]) : saveError = null;
+
+  _MemoryPreferenceStore.withSaveError(this.value, this.saveError);
 
   DeviceReminderPreference value;
+  final Object? saveError;
   var saveCount = 0;
 
   @override
@@ -194,6 +386,7 @@ final class _MemoryPreferenceStore implements DeviceReminderPreferenceStore {
     DeviceReminderPreference preference,
   ) async {
     saveCount++;
+    if (saveError case final error?) throw error;
     value = preference;
   }
 }
@@ -207,6 +400,7 @@ final class _FakeScheduler implements ReminderNotificationScheduler {
   String? lastTimeZone;
   ReminderNotificationContent? lastContent;
   final cancelKeys = <String>[];
+  var cancelAllCount = 0;
 
   @override
   Future<ReminderScheduleResult> requestPermissionAndSchedule({
@@ -237,6 +431,12 @@ final class _FakeScheduler implements ReminderNotificationScheduler {
   @override
   Future<ReminderScheduleResult> cancel({required String scheduleKey}) async {
     cancelKeys.add(scheduleKey);
+    return const ReminderScheduleSucceeded();
+  }
+
+  @override
+  Future<ReminderScheduleResult> cancelAll() async {
+    cancelAllCount++;
     return const ReminderScheduleSucceeded();
   }
 

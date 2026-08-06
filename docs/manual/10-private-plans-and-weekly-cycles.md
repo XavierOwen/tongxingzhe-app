@@ -2,7 +2,7 @@
 
 私人行动计划帮助使用者回顾自己的行动，不是组织考核。每个推广项目可以有一份只属于本人的计划。使用者可以不设周目标；启用后，App 只比较计划的接触场次数与当周有效接触场次数。
 
-当前实现包含周目标、固定统计时区、周期起始日、版本历史、每日当地提醒、逐设备系统通知 opt-in、本人 HTTP API 和“今日”页卡片。计划与提醒仍未加入离线缓存。Web、Linux 和 Windows 也不能在 App 关闭后可靠运行每日重复调度。
+当前实现包含周目标、固定统计时区、周期起始日、版本历史、每日当地提醒、逐设备系统通知 opt-in、可选详细通知、本人 HTTP API 和“今日”页卡片。计划与提醒仍未加入离线缓存。Web、Linux 和 Windows 也不能在 App 关闭后可靠运行每日重复调度。
 
 ## 先分清三种时间
 
@@ -83,7 +83,13 @@ Backend 只同步提醒钟点。它不接收设备 ID、通知权限或 UTC 触�
 
 用户在本设备打开开关后，App 才请求系统权限。权限拒绝或调度失败时，设置不会写成已启用。用户关闭开关时，App 先取消该项目的通知，再保存关闭状态。不同项目使用稳定且不同的通知 ID，不会互相覆盖。
 
-系统通知默认只使用通用标题、通用行动文案和预留的 `today` payload。调度接口不接收推广对象资料。当前 UI 也不提供显示项目名或个人进度的扩展开关。
+系统通知默认只使用通用标题、通用行动文案和带类型标记的 `today` payload。调度接口不接收推广对象资料。
+
+本设备已启用通知后，用户可以选择同时显示项目名与个人周进度。App 先读取本人当前计划，并显示最终标题和正文预览；用户再次确认后才替换系统调度并保存本机选择。没有周目标时，详细通知只说明未设置目标，不伪造 `0 / 0` 或差额。进度只读 `PersonalActionPlanSnapshot.current` 和服务端计算结果，不提前采用 pending 版本，也不按设备提醒时区重算。
+
+详细选择保存在独立的 `personal-reminder-content-v1` 设置键。原 `personal-reminder-v1` 仍只保存系统通知开关。旧版 App 因此仍能读取开关，并会用同一通知 ID 把详细文案替换为通用文案。损坏或缺失的详细设置也按通用模式读取。
+
+详细正文明确写“上次安排提醒时”。重复通知保存的是安排时的文字，不是实时计数器。App 回到前台时会重新读取提醒和计划，再更新通知。接触修订、作废、跨周或计划变更后，用户在 App 内看到的当前值仍以服务端页面为准。
 
 ## 当地提醒怎样处理旅行与平台差异
 
@@ -102,6 +108,8 @@ Backend 只同步提醒钟点。它不接收设备 ID、通知权限或 UTC 触�
 
 “已接 Adapter”不等于真机发布验收已经完成。Android 厂商后台限制、Apple 权限状态和时区旅行仍需真机矩阵验证。
 
+[`ReminderNotificationPrivacyGuard`](../../lib/app/reminder_notification_privacy_guard.dart) 监听可信 App session。登出、启动时未登录或 session 失败后，它会取消带私人提醒 payload 的待发通知。当前项目的提醒或计划读取失去授权时，面板也会取消该项目的旧调度。App 长期关闭期间无法立即得知远端撤权；这是本地重复调度的残余限制。
+
 ## 怎样运行这条切片的测试
 
 先运行快速测试：
@@ -111,6 +119,7 @@ flutter test --no-pub \
   test/features/plans/personal_action_plan_panel_test.dart \
   test/plans/http_personal_action_plan_gateway_test.dart \
   test/features/reminders/personal_action_reminder_panel_test.dart \
+  test/app/reminder_notification_privacy_guard_test.dart \
   test/reminders
 
 npm --prefix backend/server run build
@@ -133,7 +142,6 @@ node --test \
 
 - 断网查看或修改计划；
 - 多设备离线合并计划；
-- 在通知中主动显示项目名或个人进度；
 - 记录每次系统通知的实际触发时区；
 - App 长期未打开时，旅行后的首个通知立即改用新时区；
 - Web、Linux 或 Windows 的 App 关闭后重复提醒；
