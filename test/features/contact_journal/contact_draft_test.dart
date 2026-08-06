@@ -261,6 +261,56 @@ void main() {
     expect(restored.hasCompleteCoreFacts, isTrue);
   });
 
+  test('草稿按受控值列恢复八题型和非回答状态', () async {
+    final journal = _journal(['draft-eight-types']);
+    final answers = <QuestionnaireAnswer>[
+      const BooleanQuestionnaireAnswer(
+        questionId: 'boolean-question',
+        value: true,
+      ),
+      const SingleChoiceQuestionnaireAnswer(
+        questionId: 'single-question',
+        value: 'option-a',
+      ),
+      const OrdinalChoiceQuestionnaireAnswer(
+        questionId: 'ordinal-question',
+        value: 'high',
+      ),
+      MultiChoiceQuestionnaireAnswer(
+        questionId: 'multi-question',
+        value: const ['option-a', 'option-b'],
+      ),
+      const NumberQuestionnaireAnswer(
+        questionId: 'number-question',
+        value: 2.5,
+      ),
+      const DateQuestionnaireAnswer(
+        questionId: 'date-question',
+        value: '2030-02-28',
+      ),
+      const ShortTextQuestionnaireAnswer(
+        questionId: 'short-question',
+        value: '简短备注',
+      ),
+      const LongTextQuestionnaireAnswer.refused(questionId: 'long-question'),
+    ];
+
+    await journal.saveDraft(
+      ContactDraftInput(
+        deviceId: 'device-1',
+        appUserId: 'app-user-1',
+        workspaceId: 'personal-workspace-1',
+        projectId: 'project-1',
+        questionnaireVersionId: 'questionnaire-v1',
+        answers: answers,
+        syncMode: ContactDraftSyncMode.deviceOnly,
+      ),
+    );
+
+    final restored = (await journal.listDrafts(appUserId: 'app-user-1')).single;
+    expect(restored.answers, unorderedEquals(answers));
+  });
+
   test('草稿完成度不把缺少必要明细的其他渠道算作完成', () {
     final draft = ContactDraft(
       draftId: 'draft-progress',

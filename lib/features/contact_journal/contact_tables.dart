@@ -99,6 +99,9 @@ class DbContactDraftAnswers extends Table {
   TextColumn get answerState => text()();
   TextColumn get answerType => text()();
   BoolColumn get booleanValue => boolean().nullable()();
+  TextColumn get textValue => text().nullable()();
+  RealColumn get numberValue => real().nullable()();
+  TextColumn get multiChoiceValueJson => text().nullable()();
 
   @override
   Set<Column<Object>> get primaryKey => {draftId, questionId};
@@ -106,10 +109,23 @@ class DbContactDraftAnswers extends Table {
   @override
   List<String> get customConstraints => const [
     'CHECK (length(trim(question_id)) > 0)',
-    "CHECK (answer_type = 'boolean' AND "
-        "((answer_state = 'answered' AND boolean_value IS NOT NULL) OR "
-        "(answer_state IN ('unknown', 'refused', 'not_applicable', "
-        "'unanswered') AND boolean_value IS NULL)))",
+    "CHECK ((answer_state IN ('unknown', 'refused', 'not_applicable', "
+        "'unanswered') AND boolean_value IS NULL AND text_value IS NULL AND "
+        'number_value IS NULL AND multi_choice_value_json IS NULL) OR '
+        "(answer_state = 'answered' AND ((answer_type = 'boolean' AND "
+        'boolean_value IS NOT NULL AND text_value IS NULL AND '
+        'number_value IS NULL AND multi_choice_value_json IS NULL) OR '
+        "(answer_type IN ('single_choice', 'ordinal_choice', 'date', "
+        "'short_text', 'long_text') AND boolean_value IS NULL AND "
+        'text_value IS NOT NULL AND length(text_value) > 0 AND '
+        'number_value IS NULL AND multi_choice_value_json IS NULL) OR '
+        "(answer_type = 'number' AND boolean_value IS NULL AND "
+        'text_value IS NULL AND number_value IS NOT NULL AND '
+        'multi_choice_value_json IS NULL) OR '
+        "(answer_type = 'multi_choice' AND boolean_value IS NULL AND "
+        'text_value IS NULL AND number_value IS NULL AND '
+        'json_valid(multi_choice_value_json) AND '
+        "json_type(multi_choice_value_json) = 'array'))))",
   ];
 }
 
@@ -288,8 +304,8 @@ class DbContactRevisions extends Table {
 
 /// 某个接触 revision 对场景问卷的类型化回答。
 ///
-/// Slice 1A 先实现是／否题；后续题型通过独立值列和 CHECK 扩展，不改变既有
-/// 布尔答案的语义。
+/// 每种题型使用确定的值列；多选列只保存受控 option ID 数组，不承载规则、
+/// 公式或其他业务语义。
 class DbContactAnswers extends Table {
   TextColumn get contactId => text().references(DbContactRecords, #contactId)();
   IntColumn get revisionNumber => integer()();
@@ -297,6 +313,9 @@ class DbContactAnswers extends Table {
   TextColumn get answerState => text()();
   TextColumn get answerType => text()();
   BoolColumn get booleanValue => boolean().nullable()();
+  TextColumn get textValue => text().nullable()();
+  RealColumn get numberValue => real().nullable()();
+  TextColumn get multiChoiceValueJson => text().nullable()();
 
   @override
   Set<Column<Object>> get primaryKey => {contactId, revisionNumber, questionId};
@@ -305,10 +324,23 @@ class DbContactAnswers extends Table {
   List<String> get customConstraints => const [
     'CHECK (revision_number > 0)',
     'CHECK (length(trim(question_id)) > 0)',
-    "CHECK (answer_type = 'boolean' AND "
-        "((answer_state = 'answered' AND boolean_value IS NOT NULL) OR "
-        "(answer_state IN ('unknown', 'refused', 'not_applicable', "
-        "'unanswered') AND boolean_value IS NULL)))",
+    "CHECK ((answer_state IN ('unknown', 'refused', 'not_applicable', "
+        "'unanswered') AND boolean_value IS NULL AND text_value IS NULL AND "
+        'number_value IS NULL AND multi_choice_value_json IS NULL) OR '
+        "(answer_state = 'answered' AND ((answer_type = 'boolean' AND "
+        'boolean_value IS NOT NULL AND text_value IS NULL AND '
+        'number_value IS NULL AND multi_choice_value_json IS NULL) OR '
+        "(answer_type IN ('single_choice', 'ordinal_choice', 'date', "
+        "'short_text', 'long_text') AND boolean_value IS NULL AND "
+        'text_value IS NOT NULL AND length(text_value) > 0 AND '
+        'number_value IS NULL AND multi_choice_value_json IS NULL) OR '
+        "(answer_type = 'number' AND boolean_value IS NULL AND "
+        'text_value IS NULL AND number_value IS NOT NULL AND '
+        'multi_choice_value_json IS NULL) OR '
+        "(answer_type = 'multi_choice' AND boolean_value IS NULL AND "
+        'text_value IS NULL AND number_value IS NULL AND '
+        'json_valid(multi_choice_value_json) AND '
+        "json_type(multi_choice_value_json) = 'array'))))",
   ];
 }
 

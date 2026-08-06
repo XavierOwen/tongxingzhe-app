@@ -470,14 +470,7 @@ extension ContactDraftOperations on ContactJournal {
       'interest_level': input.interestLevel,
       'answers': [
         for (final answer in input.answers)
-          switch (answer) {
-            final BooleanQuestionnaireAnswer booleanAnswer => {
-              'question_id': booleanAnswer.questionId,
-              'state': booleanAnswer.state.storageValue,
-              'type': 'boolean',
-              'value': booleanAnswer.value,
-            },
-          },
+          QuestionnaireAnswerCodec.toJson(answer),
       ],
     });
     await _database
@@ -603,16 +596,19 @@ extension ContactDraftOperations on ContactJournal {
       _database.dbContactDraftAnswers,
     )..where((row) => row.draftId.equals(draftId))).go();
     for (final answer in answers) {
-      final booleanAnswer = answer as BooleanQuestionnaireAnswer;
+      final columns = QuestionnaireAnswerCodec.toColumns(answer);
       await _database
           .into(_database.dbContactDraftAnswers)
           .insert(
             DbContactDraftAnswersCompanion.insert(
               draftId: draftId,
-              questionId: booleanAnswer.questionId,
-              answerState: booleanAnswer.state.storageValue,
-              answerType: 'boolean',
-              booleanValue: Value(booleanAnswer.value),
+              questionId: columns.questionId,
+              answerState: columns.state,
+              answerType: columns.type,
+              booleanValue: Value(columns.booleanValue),
+              textValue: Value(columns.textValue),
+              numberValue: Value(columns.numberValue),
+              multiChoiceValueJson: Value(columns.multiChoiceValueJson),
             ),
           );
     }
@@ -643,16 +639,15 @@ extension ContactDraftOperations on ContactJournal {
       interestLevel: row.interestLevel,
       answers: [
         for (final answer in answerRows)
-          switch (answer.answerType) {
-            'boolean' => _booleanAnswerFromRow(
-              questionId: answer.questionId,
-              state: answer.answerState,
-              value: answer.booleanValue,
-            ),
-            final unsupported => throw StateError(
-              'unsupported_questionnaire_answer_type:$unsupported',
-            ),
-          },
+          QuestionnaireAnswerCodec.fromColumns(
+            questionId: answer.questionId,
+            state: answer.answerState,
+            type: answer.answerType,
+            booleanValue: answer.booleanValue,
+            textValue: answer.textValue,
+            numberValue: answer.numberValue,
+            multiChoiceValueJson: answer.multiChoiceValueJson,
+          ),
       ],
       syncMode: ContactDraftSyncMode.fromStorage(row.syncMode),
       localRevision: row.localRevision,

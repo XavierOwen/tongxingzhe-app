@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../features/contact_journal/contact_models.dart';
 import '../identity/identity_session.dart';
+import '../questionnaires/questionnaire_answer_codec.dart';
 import 'sync_models.dart';
 import 'sync_transport.dart';
 
@@ -442,25 +443,15 @@ final class HttpSyncTransport implements SyncTransport, SyncBatchTransport {
   }
 
   QuestionnaireAnswer _conflictAnswer(Object? value) {
-    if (value is! Map<String, Object?> || value['type'] != 'boolean') {
+    if (value is! Map<String, Object?>) {
       throw const FormatException('conflict answer is invalid');
     }
-    final questionId = _nonEmptyString(value['questionId']);
-    return switch (value['state']) {
-      'answered' when value['value'] is bool => BooleanQuestionnaireAnswer(
-        questionId: questionId,
-        value: value['value']! as bool,
-      ),
-      'unknown' when value['value'] == null =>
-        BooleanQuestionnaireAnswer.unknown(questionId: questionId),
-      'refused' when value['value'] == null =>
-        BooleanQuestionnaireAnswer.refused(questionId: questionId),
-      'not_applicable' when value['value'] == null =>
-        BooleanQuestionnaireAnswer.notApplicable(questionId: questionId),
-      'unanswered' when value['value'] == null =>
-        BooleanQuestionnaireAnswer.unanswered(questionId: questionId),
-      _ => throw const FormatException('conflict answer state is invalid'),
-    };
+    return QuestionnaireAnswerCodec.fromJson({
+      'question_id': value['questionId'],
+      'state': value['state'],
+      'type': value['type'],
+      'value': value['value'],
+    });
   }
 
   ContactLocation _conflictLocation(Object? value) {

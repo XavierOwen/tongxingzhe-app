@@ -52,13 +52,13 @@ jobs:
       - name: Verify Markdown links
         run: dart run tool/check_markdown_links.dart
 
-      - name: Verify current Drift v12 schema snapshot
+      - name: Verify current Drift v13 schema snapshot
         run: |
           dart run drift_dev schema dump \
             lib/data/local_database.dart \
-            "${RUNNER_TEMP}/drift_schema_v12.json"
-          cmp drift_schemas/drift_schema_v12.json \
-            "${RUNNER_TEMP}/drift_schema_v12.json"
+            "${RUNNER_TEMP}/drift_schema_v13.json"
+          cmp drift_schemas/drift_schema_v13.json \
+            "${RUNNER_TEMP}/drift_schema_v13.json"
 
       - name: Verify Drift migration helpers are current
         run: |
@@ -142,6 +142,10 @@ jobs:
             --file backend/database/checks/verify_contact_revision_conflicts.sql
           psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file backend/database/fixtures/0010_contact_revision_conflicts.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_questionnaire_execution.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0011_questionnaire_execution.sql
 
       - name: Reject edited migration history
         run: |
@@ -203,6 +207,10 @@ jobs:
             --file backend/database/checks/verify_contact_revision_conflicts.sql
           psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file backend/database/fixtures/0010_contact_revision_conflicts.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_questionnaire_execution.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0011_questionnaire_execution.sql
 
   backend-server:
     name: Backend identity, context, and sync

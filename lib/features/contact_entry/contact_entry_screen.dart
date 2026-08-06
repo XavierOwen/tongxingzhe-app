@@ -7,12 +7,14 @@ import '../../app_session/session_context_gateway.dart';
 import '../../device/device_time_zone.dart';
 import '../../foundation/runtime_values.dart';
 import '../../l10n/app_strings.dart';
+import '../../questionnaires/questionnaire_contract.dart';
 import '../../regions/contact_region_resolver.dart';
 import '../../services/location_service.dart';
 import '../contact_journal/contact_journal.dart';
 import '../contact_journal/contact_models.dart';
 import 'contact_channel_label.dart';
 import 'contact_entry_view_model.dart';
+import 'questionnaire_form.dart';
 
 /// 正式接触表单的首个渐进式切片。
 ///
@@ -32,6 +34,7 @@ final class ContactEntryScreen extends StatefulWidget {
     this.entryStore,
     this.regionResolver = const DeferredContactRegionResolver(),
     this.sourceAttempt,
+    this.questionnaireVersion,
   });
 
   final AppController controller;
@@ -45,6 +48,7 @@ final class ContactEntryScreen extends StatefulWidget {
   final ContactEntryStore? entryStore;
   final ContactRegionResolver regionResolver;
   final ContactAttempt? sourceAttempt;
+  final QuestionnaireVersion? questionnaireVersion;
 
   @override
   State<ContactEntryScreen> createState() => _ContactEntryScreenState();
@@ -78,6 +82,7 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
       regionResolver: widget.regionResolver,
       sourceAttemptId: widget.sourceAttempt?.attemptId,
       initialChannel: widget.sourceAttempt?.channel,
+      questionnaireVersion: widget.questionnaireVersion,
     )..addListener(_onViewStateChanged);
     unawaited(_viewModel.initialize(draft: widget.initialDraft));
   }
@@ -285,6 +290,23 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
               '${entryState.requiredCoreFactCount}',
               textAlign: TextAlign.end,
             ),
+            if (entryState.questionnaireVersion case final version?) ...[
+              const SizedBox(height: 24),
+              QuestionnaireForm(
+                text: text,
+                version: version,
+                answers: entryState.answers,
+                errors: entryState.questionnaireEvaluation.errors,
+                onValueChanged: _viewModel.setQuestionnaireValue,
+                onStateChanged: _viewModel.setQuestionnaireState,
+              ),
+              Text(
+                '${text.t('questionnaireCompletion')}：'
+                '${entryState.completedQuestionCount} / '
+                '${entryState.questionCount}',
+                textAlign: TextAlign.end,
+              ),
+            ],
           ],
         ),
         bottomNavigationBar: SafeArea(

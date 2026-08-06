@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 
 import '../../data/local_database.dart';
 import '../../foundation/runtime_values.dart';
+import '../../questionnaires/questionnaire_answer_codec.dart';
 import '../../regions/region_catalog.dart';
 import '../../regions/region_models.dart';
 import 'contact_models.dart';
@@ -296,17 +297,20 @@ final class ContactJournal {
         );
 
     for (final answer in submission.answers) {
-      final booleanAnswer = answer as BooleanQuestionnaireAnswer;
+      final columns = QuestionnaireAnswerCodec.toColumns(answer);
       await _database
           .into(_database.dbContactAnswers)
           .insert(
             DbContactAnswersCompanion.insert(
               contactId: contactId,
               revisionNumber: 1,
-              questionId: booleanAnswer.questionId,
-              answerState: booleanAnswer.state.storageValue,
-              answerType: 'boolean',
-              booleanValue: Value(booleanAnswer.value),
+              questionId: columns.questionId,
+              answerState: columns.state,
+              answerType: columns.type,
+              booleanValue: Value(columns.booleanValue),
+              textValue: Value(columns.textValue),
+              numberValue: Value(columns.numberValue),
+              multiChoiceValueJson: Value(columns.multiChoiceValueJson),
             ),
           );
     }
@@ -334,14 +338,7 @@ final class ContactJournal {
       'interest_level': submission.interestLevel,
       'answers': [
         for (final answer in submission.answers)
-          switch (answer) {
-            final BooleanQuestionnaireAnswer booleanAnswer => {
-              'question_id': booleanAnswer.questionId,
-              'state': booleanAnswer.state.storageValue,
-              'type': 'boolean',
-              'value': booleanAnswer.value,
-            },
-          },
+          QuestionnaireAnswerCodec.toJson(answer),
       ],
     });
     await _database
@@ -876,17 +873,20 @@ final class ContactJournal {
     required List<QuestionnaireAnswer> answers,
   }) async {
     for (final answer in answers) {
-      final booleanAnswer = answer as BooleanQuestionnaireAnswer;
+      final columns = QuestionnaireAnswerCodec.toColumns(answer);
       await _database
           .into(_database.dbContactAnswers)
           .insert(
             DbContactAnswersCompanion.insert(
               contactId: contactId,
               revisionNumber: revisionNumber,
-              questionId: booleanAnswer.questionId,
-              answerState: booleanAnswer.state.storageValue,
-              answerType: 'boolean',
-              booleanValue: Value(booleanAnswer.value),
+              questionId: columns.questionId,
+              answerState: columns.state,
+              answerType: columns.type,
+              booleanValue: Value(columns.booleanValue),
+              textValue: Value(columns.textValue),
+              numberValue: Value(columns.numberValue),
+              multiChoiceValueJson: Value(columns.multiChoiceValueJson),
             ),
           );
     }
@@ -905,32 +905,21 @@ final class ContactJournal {
       ..orderBy([(row) => OrderingTerm.asc(row.questionId)]);
     return [
       for (final row in await query.get())
-        switch (row.answerType) {
-          'boolean' => _booleanAnswerFromRow(
-            questionId: row.questionId,
-            state: row.answerState,
-            value: row.booleanValue,
-          ),
-          final unsupported => throw StateError(
-            'unsupported_questionnaire_answer_type:$unsupported',
-          ),
-        },
+        QuestionnaireAnswerCodec.fromColumns(
+          questionId: row.questionId,
+          state: row.answerState,
+          type: row.answerType,
+          booleanValue: row.booleanValue,
+          textValue: row.textValue,
+          numberValue: row.numberValue,
+          multiChoiceValueJson: row.multiChoiceValueJson,
+        ),
     ];
   }
 
   List<Map<String, Object?>> _answerPayload(
     List<QuestionnaireAnswer> answers,
-  ) => [
-    for (final answer in answers)
-      switch (answer) {
-        final BooleanQuestionnaireAnswer booleanAnswer => {
-          'question_id': booleanAnswer.questionId,
-          'state': booleanAnswer.state.storageValue,
-          'type': 'boolean',
-          'value': booleanAnswer.value,
-        },
-      },
-  ];
+  ) => [for (final answer in answers) QuestionnaireAnswerCodec.toJson(answer)];
 
   ContactRevisionConflict _conflictFromRow(DbContactRevisionConflict row) {
     final rawFields = jsonDecode(row.conflictingFieldsJson);
@@ -1031,25 +1020,15 @@ final class ContactJournal {
   }
 
   QuestionnaireAnswer _storedConflictAnswer(Object? value) {
-    if (value is! Map<String, Object?> || value['type'] != 'boolean') {
+    if (value is! Map<String, Object?>) {
       throw const FormatException('invalid stored conflict answer');
     }
-    final questionId = value['questionId']! as String;
-    return switch (value['state']) {
-      'answered' => BooleanQuestionnaireAnswer(
-        questionId: questionId,
-        value: value['value']! as bool,
-      ),
-      'unknown' => BooleanQuestionnaireAnswer.unknown(questionId: questionId),
-      'refused' => BooleanQuestionnaireAnswer.refused(questionId: questionId),
-      'not_applicable' => BooleanQuestionnaireAnswer.notApplicable(
-        questionId: questionId,
-      ),
-      'unanswered' => BooleanQuestionnaireAnswer.unanswered(
-        questionId: questionId,
-      ),
-      _ => throw const FormatException('invalid stored conflict answer state'),
-    };
+    return QuestionnaireAnswerCodec.fromJson({
+      'question_id': value['questionId'],
+      'state': value['state'],
+      'type': value['type'],
+      'value': value['value'],
+    });
   }
 
   Future<DbContactRecord?> _ownedContact({
@@ -1504,28 +1483,5 @@ final class ContactJournal {
       channelDistribution: channelDistribution,
       latestOccurredAtUtc: row.latestOccurredAtUtc?.toUtc(),
     );
-  }
-
-  BooleanQuestionnaireAnswer _booleanAnswerFromRow({
-    required String questionId,
-    required String state,
-    required bool? value,
-  }) {
-    return switch (QuestionnaireAnswerState.fromStorage(state)) {
-      QuestionnaireAnswerState.answered => BooleanQuestionnaireAnswer(
-        questionId: questionId,
-        value: value!,
-      ),
-      QuestionnaireAnswerState.unknown => BooleanQuestionnaireAnswer.unknown(
-        questionId: questionId,
-      ),
-      QuestionnaireAnswerState.refused => BooleanQuestionnaireAnswer.refused(
-        questionId: questionId,
-      ),
-      QuestionnaireAnswerState.notApplicable =>
-        BooleanQuestionnaireAnswer.notApplicable(questionId: questionId),
-      QuestionnaireAnswerState.unanswered =>
-        BooleanQuestionnaireAnswer.unanswered(questionId: questionId),
-    };
   }
 }

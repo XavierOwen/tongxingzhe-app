@@ -1,3 +1,18 @@
+import '../../questionnaires/questionnaire_contract.dart';
+
+export '../../questionnaires/questionnaire_contract.dart'
+    show
+        BooleanQuestionnaireAnswer,
+        DateQuestionnaireAnswer,
+        LongTextQuestionnaireAnswer,
+        MultiChoiceQuestionnaireAnswer,
+        NumberQuestionnaireAnswer,
+        OrdinalChoiceQuestionnaireAnswer,
+        QuestionnaireAnswer,
+        QuestionnaireAnswerState,
+        ShortTextQuestionnaireAnswer,
+        SingleChoiceQuestionnaireAnswer;
+
 /// 接触使用的全平台稳定渠道分类。
 ///
 /// 这些枚举值是领域含义；数据库和同步协议使用 [storageValue]，避免把会变化的
@@ -91,73 +106,6 @@ final class PendingContactLocation extends ContactLocation {
 
   @override
   int get hashCode => Object.hash(latitude, longitude, accuracyMeters);
-}
-
-/// 场景问卷答案的类型化领域基类。
-///
-/// 问题 ID 属于接触所引用的固定问卷版本；具体子类型决定数据库使用哪一种值
-/// 列，避免把布尔值、数字和文字全部压成无法约束的任意 JSON。
-sealed class QuestionnaireAnswer {
-  const QuestionnaireAnswer({required this.questionId});
-
-  final String questionId;
-}
-
-/// 问卷回答的五种明确状态。
-enum QuestionnaireAnswerState {
-  answered('answered'),
-  unknown('unknown'),
-  refused('refused'),
-  notApplicable('not_applicable'),
-  unanswered('unanswered');
-
-  const QuestionnaireAnswerState(this.storageValue);
-
-  final String storageValue;
-
-  static QuestionnaireAnswerState fromStorage(String value) {
-    return QuestionnaireAnswerState.values.singleWhere(
-      (state) => state.storageValue == value,
-    );
-  }
-}
-
-/// 已回答的是／否题。
-final class BooleanQuestionnaireAnswer extends QuestionnaireAnswer {
-  const BooleanQuestionnaireAnswer({
-    required super.questionId,
-    required bool this.value,
-  }) : state = QuestionnaireAnswerState.answered;
-
-  const BooleanQuestionnaireAnswer.unknown({required super.questionId})
-    : state = QuestionnaireAnswerState.unknown,
-      value = null;
-
-  const BooleanQuestionnaireAnswer.refused({required super.questionId})
-    : state = QuestionnaireAnswerState.refused,
-      value = null;
-
-  const BooleanQuestionnaireAnswer.notApplicable({required super.questionId})
-    : state = QuestionnaireAnswerState.notApplicable,
-      value = null;
-
-  const BooleanQuestionnaireAnswer.unanswered({required super.questionId})
-    : state = QuestionnaireAnswerState.unanswered,
-      value = null;
-
-  final QuestionnaireAnswerState state;
-  final bool? value;
-
-  @override
-  bool operator ==(Object other) {
-    return other is BooleanQuestionnaireAnswer &&
-        other.questionId == questionId &&
-        other.state == state &&
-        other.value == value;
-  }
-
-  @override
-  int get hashCode => Object.hash(questionId, state, value);
 }
 
 /// 本地接触事实相对于远端的同步状态。

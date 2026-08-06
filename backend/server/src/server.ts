@@ -16,11 +16,16 @@ import {
   resolveContactRegion,
   type RegionResolutionStore,
 } from "./region-resolution.js";
+import {
+  readPublishedQuestionnaire,
+  type QuestionnaireStore,
+} from "./questionnaire-catalog.js";
 
 export interface BackendServerDependencies
   extends SessionContextHttpDependencies {
   readonly commandStore?: SyncCommandStore;
   readonly regionResolutionStore?: RegionResolutionStore;
+  readonly questionnaireStore?: QuestionnaireStore;
 }
 
 export function createBackendServer(
@@ -171,6 +176,35 @@ export function createBackendServer(
     }
 
     const requestUrl = new URL(request.url ?? "/", "http://localhost");
+    const questionnaireMatch = /^\/v1\/questionnaire-versions\/([^/]+)$/
+      .exec(requestUrl.pathname);
+    if (request.method === "GET" && questionnaireMatch !== null) {
+      if (dependencies.questionnaireStore === undefined) {
+        response.statusCode = 503;
+        response.end(
+          JSON.stringify({ error: { code: "questionnaire_unavailable" } }),
+        );
+        return;
+      }
+      const versionId = questionnaireMatch[1];
+      if (versionId === undefined) {
+        response.statusCode = 404;
+        response.end(JSON.stringify({ error: { code: "not_found" } }));
+        return;
+      }
+      const result = await readPublishedQuestionnaire(
+        request.headers.authorization,
+        versionId,
+        {
+          identityVerifier: dependencies.identityVerifier,
+          contextStore: dependencies.contextStore,
+          questionnaireStore: dependencies.questionnaireStore,
+        },
+      );
+      response.statusCode = result.status;
+      response.end(JSON.stringify(result.body));
+      return;
+    }
     if (
       request.method === "GET" &&
       requestUrl.pathname === "/v1/sync/changes"

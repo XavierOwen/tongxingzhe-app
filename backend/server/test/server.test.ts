@@ -219,6 +219,39 @@ test("unknown route returns a stable 404", async () => {
   assert.deepEqual(await response.json(), { error: { code: "not_found" } });
 });
 
+test("malformed questionnaire path returns a stable validation error", async () => {
+  const server = createBackendServer({
+    identityVerifier: {
+      verify: async () => {
+        throw new Error("invalid version must fail before identity lookup");
+      },
+    },
+    contextStore: {
+      loadOrCreate: async () => {
+        throw new Error("invalid version must fail before context lookup");
+      },
+    },
+    questionnaireStore: {
+      readPublishedVersion: async () => {
+        throw new Error("invalid version must fail before database lookup");
+      },
+    },
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  test.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+
+  const response = await fetch(
+    `http://127.0.0.1:${address.port}/v1/questionnaire-versions/%E0%A4%A`,
+    { headers: { authorization: "Bearer synthetic-token" } },
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    error: { code: "invalid_questionnaire_version_id" },
+  });
+});
+
 test("HTTP sync route parses JSON and returns a stable accepted result", async () => {
   const server = createBackendServer({
     identityVerifier: {

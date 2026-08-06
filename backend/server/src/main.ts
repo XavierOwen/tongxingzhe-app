@@ -5,6 +5,7 @@ import { createBackendServer } from "./server.js";
 import { PostgresSessionContextStore } from "./session-context.js";
 import { PostgresSyncCommandStore } from "./sync-store.js";
 import { PostgresRegionResolutionStore } from "./region-resolution.js";
+import { PostgresQuestionnaireStore } from "./questionnaire-catalog.js";
 
 const databaseUrl = requireEnvironment("DATABASE_URL");
 const authIssuer = requireEnvironment("AUTH_ISSUER");
@@ -28,11 +29,15 @@ const commandStore = new PostgresSyncCommandStore(async (text, values) => {
 const regionResolutionStore = new PostgresRegionResolutionStore(
   async (text, values) => pool.query(text, [...values]),
 );
+const questionnaireStore = new PostgresQuestionnaireStore(
+  async (text, values) => pool.query(text, [...values]),
+);
 const server = createBackendServer({
   identityVerifier,
   contextStore,
   commandStore,
   regionResolutionStore,
+  questionnaireStore,
 });
 
 server.listen(port, "0.0.0.0");
