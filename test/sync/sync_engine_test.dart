@@ -246,6 +246,366 @@ void main() {
     ]);
   });
 
+  test('一个 aggregate 的冲突不阻塞其他 aggregate', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    await fixture.submitContact();
+    await fixture.submitContact(suffix: '2');
+    final transport = _QueueSyncTransport([
+      const SyncPushConflict(),
+      const SyncPushAccepted(serverCursor: 'cursor-contact-2'),
+    ]);
+    final engine = fixture.engine(workerId: 'worker-1', transport: transport);
+
+    expect(await engine.drainOnce(), SyncDrainResult.needsResolution);
+    expect(await engine.drainOnce(), SyncDrainResult.completed);
+    expect(transport.commands.map((command) => command.commandId), [
+      'command-1',
+      'command-2',
+    ]);
+    final health = await engine.health();
+    expect(health.needsResolutionCount, 1);
+    expect(health.completedCount, 1);
+  });
+
+  test('修订冲突持久保留双方快照，解决后追加新 revision', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    await fixture.submitContact();
+    final transport = _QueueSyncTransport([
+      const SyncPushAccepted(serverCursor: 'cursor-submit'),
+      SyncPushConflict(
+        failureCode: 'contact_revision_conflict',
+        conflict: SyncContactRevisionConflict(
+          conflictId: 'conflict-1',
+          contactId: 'contact-1',
+          baseRevision: 1,
+          currentRevision: 2,
+          conflictingFields: ['reachCount'],
+          questionnaireVersionId: 'questionnaire-v1',
+          currentRevisionKind: ContactRevisionKind.corrected,
+          currentRevisedAtUtc: DateTime.utc(2030, 1, 8, 19),
+          currentReason: '另一台设备修正人数',
+          currentSnapshot: _conflictSnapshot(reachCount: 4),
+          proposedSnapshot: _conflictSnapshot(reachCount: 3),
+        ),
+      ),
+      const SyncPushAccepted(serverCursor: 'cursor-resolution'),
+    ]);
+    final engine = fixture.engine(workerId: 'worker-1', transport: transport);
+    expect(await engine.drainOnce(), SyncDrainResult.completed);
+
+    final correctionJournal = ContactJournal(
+      database: fixture.database,
+      clock: fixture.clock,
+      idGenerator: _SequenceIdGenerator([
+        'revision-correction',
+        'command-correction',
+      ]),
+    );
+    await correctionJournal.correctContact(
+      ContactCorrectionSubmission(
+        contactId: 'contact-1',
+        appUserId: _Fixture.scope.appUserId,
+        workspaceId: _Fixture.scope.workspaceId,
+        projectId: _Fixture.scope.projectId,
+        deviceId: 'device-2',
+        baseRevision: 1,
+        reason: '本机修正人数',
+        occurredAtUtc: DateTime.utc(2030, 1, 8, 18),
+        occurredTimeZone: 'America/Chicago',
+        channel: ContactChannel.videoCall,
+        location: const NotApplicableContactLocation(),
+        reachCount: 3,
+        interestLevel: 3,
+      ),
+    );
+
+    expect(await engine.drainOnce(), SyncDrainResult.needsResolution);
+    var contact = await correctionJournal.contactByIdForOwner(
+      contactId: 'contact-1',
+      appUserId: _Fixture.scope.appUserId,
+    );
+    expect(contact?.revisionNumber, 2);
+    expect(contact?.reachCount, 4);
+    final conflicts = await correctionJournal.listContactRevisionConflicts(
+      contactId: 'contact-1',
+      appUserId: _Fixture.scope.appUserId,
+    );
+    expect(conflicts, hasLength(1));
+    expect(conflicts.single.proposedSnapshot.reachCount, 3);
+
+    final blockedJournal = ContactJournal(
+      database: fixture.database,
+      clock: fixture.clock,
+      idGenerator: _SequenceIdGenerator([
+        'blocked-revision',
+        'blocked-command',
+        'blocked-void-revision',
+        'blocked-void-command',
+      ]),
+    );
+    await expectLater(
+      blockedJournal.correctContact(
+        ContactCorrectionSubmission(
+          contactId: 'contact-1',
+          appUserId: _Fixture.scope.appUserId,
+          workspaceId: _Fixture.scope.workspaceId,
+          projectId: _Fixture.scope.projectId,
+          deviceId: 'device-2',
+          baseRevision: 2,
+          reason: '冲突未解决时不应普通修订',
+          occurredAtUtc: DateTime.utc(2030, 1, 8, 18),
+          occurredTimeZone: 'America/Chicago',
+          channel: ContactChannel.videoCall,
+          location: const NotApplicableContactLocation(),
+          reachCount: 5,
+          interestLevel: 3,
+        ),
+      ),
+      throwsA(
+        isA<ContactValidationException>().having(
+          (error) => error.code,
+          'code',
+          'contact_conflict_requires_resolution',
+        ),
+      ),
+    );
+
+    final resolutionJournal = ContactJournal(
+      database: fixture.database,
+      clock: fixture.clock,
+      idGenerator: _SequenceIdGenerator([
+        'revision-resolution',
+        'command-resolution',
+      ]),
+    );
+    await resolutionJournal.resolveContactRevisionConflict(
+      ContactConflictResolutionSubmission(
+        conflictId: 'conflict-1',
+        appUserId: _Fixture.scope.appUserId,
+        workspaceId: _Fixture.scope.workspaceId,
+        projectId: _Fixture.scope.projectId,
+        deviceId: 'device-2',
+        reason: '采用本机修改',
+        snapshot: conflicts.single.proposedSnapshot,
+      ),
+    );
+
+    contact = await resolutionJournal.contactByIdForOwner(
+      contactId: 'contact-1',
+      appUserId: _Fixture.scope.appUserId,
+    );
+    expect(contact?.revisionNumber, 3);
+    expect(contact?.reachCount, 3);
+    await expectLater(
+      blockedJournal.voidContact(
+        ContactVoidSubmission(
+          contactId: 'contact-1',
+          appUserId: _Fixture.scope.appUserId,
+          workspaceId: _Fixture.scope.workspaceId,
+          projectId: _Fixture.scope.projectId,
+          deviceId: 'device-2',
+          baseRevision: 3,
+          reason: '冲突解决等待同步时不应作废',
+        ),
+      ),
+      throwsA(
+        isA<ContactValidationException>().having(
+          (error) => error.code,
+          'code',
+          'contact_conflict_already_resolving',
+        ),
+      ),
+    );
+    expect(await engine.drainOnce(), SyncDrainResult.completed);
+    expect(transport.commands.last.commandType, 'contact.resolve.v1');
+    expect(
+      await resolutionJournal.listContactRevisionConflicts(
+        contactId: 'contact-1',
+        appUserId: _Fixture.scope.appUserId,
+      ),
+      isEmpty,
+    );
+  });
+
+  test('自动合并的远端历史替换已确认的本机乐观 revision', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    await fixture.submitContact();
+    final transport = _QueueSyncTransport(
+      [
+        const SyncPushAccepted(serverCursor: 'cursor-submit'),
+        const SyncPushAccepted(serverCursor: 'cursor-auto-merge'),
+      ],
+      pullReplies: [
+        SyncPullSucceeded(
+          SyncPullBatch(
+            nextCursor: 'cursor-auto-merge',
+            changes: [
+              SyncRemoteChange(
+                changeType: 'contact.submitted',
+                revisionNumber: 1,
+                payload: _remotePayload(contactId: 'contact-1'),
+              ),
+              SyncRemoteChange(
+                changeType: 'contact.revised',
+                revisionNumber: 2,
+                payload: {
+                  ..._remoteRevisionPayload(
+                    contactId: 'contact-1',
+                    revisionKind: 'corrected',
+                    reason: '另一台设备修正兴趣',
+                    occurredAtUtc: '2030-01-08T18:00:00.000Z',
+                    reachCount: 2,
+                  ),
+                  'channel': 'video_call',
+                  'revisedAtUtc': '2030-01-08T18:31:00.000Z',
+                },
+              ),
+              SyncRemoteChange(
+                changeType: 'contact.revised',
+                revisionNumber: 3,
+                payload: {
+                  ..._remoteRevisionPayload(
+                    contactId: 'contact-1',
+                    revisionKind: 'corrected',
+                    reason: '本机修正人数',
+                    occurredAtUtc: '2030-01-08T18:00:00.000Z',
+                    reachCount: 3,
+                  ),
+                  'channel': 'video_call',
+                  'revisedAtUtc': '2030-01-08T18:32:00.000Z',
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    final engine = fixture.engine(workerId: 'worker-1', transport: transport);
+    expect(await engine.drainOnce(), SyncDrainResult.completed);
+
+    final journal = ContactJournal(
+      database: fixture.database,
+      clock: fixture.clock,
+      idGenerator: _SequenceIdGenerator([
+        'revision-correction',
+        'command-correction',
+      ]),
+    );
+    await journal.correctContact(
+      ContactCorrectionSubmission(
+        contactId: 'contact-1',
+        appUserId: _Fixture.scope.appUserId,
+        workspaceId: _Fixture.scope.workspaceId,
+        projectId: _Fixture.scope.projectId,
+        deviceId: 'device-1',
+        baseRevision: 1,
+        reason: '本机修正人数',
+        occurredAtUtc: DateTime.utc(2030, 1, 8, 18),
+        occurredTimeZone: 'America/Chicago',
+        channel: ContactChannel.videoCall,
+        location: const NotApplicableContactLocation(),
+        reachCount: 3,
+        interestLevel: 3,
+      ),
+    );
+    expect(await engine.drainOnce(), SyncDrainResult.completed);
+
+    expect(await engine.pullOnce(), SyncPullApplyResult.applied);
+    final contact = await journal.contactByIdForOwner(
+      contactId: 'contact-1',
+      appUserId: _Fixture.scope.appUserId,
+    );
+    expect(contact?.revisionNumber, 3);
+    expect(contact?.reachCount, 3);
+    expect(contact?.interestLevel, 4);
+    final history = await journal.listContactRevisions(
+      contactId: 'contact-1',
+      appUserId: _Fixture.scope.appUserId,
+    );
+    expect(history.map((revision) => revision.revisionNumber), [3, 2, 1]);
+    expect(history[1].reason, '另一台设备修正兴趣');
+    expect(history[1].revisedAtUtc, DateTime.utc(2030, 1, 8, 18, 31));
+    expect((await engine.health()).serverCursor, 'cursor-auto-merge');
+  });
+
+  test('未确认的本机乐观 revision 不能被远端同编号覆盖', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    await fixture.submitContact();
+    final journal = ContactJournal(
+      database: fixture.database,
+      clock: fixture.clock,
+      idGenerator: _SequenceIdGenerator([
+        'revision-correction',
+        'command-correction',
+      ]),
+    );
+    await journal.correctContact(
+      ContactCorrectionSubmission(
+        contactId: 'contact-1',
+        appUserId: _Fixture.scope.appUserId,
+        workspaceId: _Fixture.scope.workspaceId,
+        projectId: _Fixture.scope.projectId,
+        deviceId: 'device-1',
+        baseRevision: 1,
+        reason: '本机修正人数',
+        occurredAtUtc: DateTime.utc(2030, 1, 8, 18),
+        occurredTimeZone: 'America/Chicago',
+        channel: ContactChannel.videoCall,
+        location: const NotApplicableContactLocation(),
+        reachCount: 3,
+        interestLevel: 3,
+      ),
+    );
+    final transport = _QueueSyncTransport(
+      const [],
+      pullReplies: [
+        SyncPullSucceeded(
+          SyncPullBatch(
+            nextCursor: 'cursor-must-roll-back',
+            changes: [
+              SyncRemoteChange(
+                changeType: 'contact.submitted',
+                revisionNumber: 1,
+                payload: _remotePayload(contactId: 'contact-1'),
+              ),
+              SyncRemoteChange(
+                changeType: 'contact.revised',
+                revisionNumber: 2,
+                payload: {
+                  ..._remoteRevisionPayload(
+                    contactId: 'contact-1',
+                    revisionKind: 'corrected',
+                    reason: '另一台设备修正兴趣',
+                    occurredAtUtc: '2030-01-08T18:00:00.000Z',
+                    reachCount: 2,
+                  ),
+                  'channel': 'video_call',
+                  'revisedAtUtc': '2030-01-08T18:31:00.000Z',
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    final engine = fixture.engine(workerId: 'worker-1', transport: transport);
+
+    expect(await engine.pullOnce(), SyncPullApplyResult.permanentFailure);
+    final contact = await journal.contactByIdForOwner(
+      contactId: 'contact-1',
+      appUserId: _Fixture.scope.appUserId,
+    );
+    expect(contact?.revisionNumber, 2);
+    expect(contact?.reachCount, 3);
+    final health = await engine.health();
+    expect(health.serverCursor, isNull);
+    expect(health.lastFailureCode, 'invalid_remote_change');
+  });
+
   test('一个 aggregate 的永久失败不阻塞其他 aggregate', () async {
     final fixture = _Fixture();
     addTearDown(fixture.close);
@@ -1102,6 +1462,18 @@ Map<String, Object?> _remotePayload({required String contactId}) {
     'answers': <Object?>[],
   };
 }
+
+ContactConflictSnapshot _conflictSnapshot({required int reachCount}) =>
+    ContactConflictSnapshot(
+      occurredAtUtc: DateTime.utc(2030, 1, 8, 18),
+      occurredTimeZone: 'America/Chicago',
+      channel: ContactChannel.videoCall,
+      channelDetail: null,
+      location: const NotApplicableContactLocation(),
+      reachCount: reachCount,
+      interestLevel: 3,
+      answers: const [],
+    );
 
 Map<String, Object?> _remoteRevisionPayload({
   required String contactId,

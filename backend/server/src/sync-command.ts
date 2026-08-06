@@ -11,6 +11,7 @@ import type {
   ContactAnswer,
   ContactAttemptSubmitPayload,
   ContactChannel,
+  ContactConflictResolutionPayload,
   ContactLocation,
   ContactRevisionPayload,
   ContactSubmitPayload,
@@ -222,6 +223,16 @@ function parseSyncCommand(value: unknown): SyncCommand {
     }
     return { ...common, baseRevision, type, payload };
   }
+  if (type === "contact.resolve.v1") {
+    if (baseRevision < 1) {
+      throw new CommandValidationError("invalid_base_revision");
+    }
+    const payload = parseContactConflictResolutionPayload(root.typed_payload);
+    if (payload.contactId !== aggregateId) {
+      throw new CommandValidationError("aggregate_id_mismatch");
+    }
+    return { ...common, baseRevision, type, payload };
+  }
   if (type === "contact.void.v1") {
     if (baseRevision < 1) {
       throw new CommandValidationError("invalid_base_revision");
@@ -419,6 +430,16 @@ function parseContactRevisionPayload(value: unknown): ContactRevisionPayload {
   };
 }
 
+function parseContactConflictResolutionPayload(
+  value: unknown,
+): ContactConflictResolutionPayload {
+  const payload = object(value, "invalid_contact_resolution_payload");
+  return {
+    ...parseContactRevisionPayload(payload),
+    conflictId: uuid(payload.conflict_id, "invalid_conflict_id"),
+  };
+}
+
 function parseContactVoidPayload(value: unknown): ContactVoidPayload {
   const payload = object(value, "invalid_contact_void_payload");
   return {
@@ -552,7 +573,29 @@ function serializeStoreResult(result: SyncCommandResult): SyncCommandHttpResult 
     };
   }
   const status = result.result === "conflict" ? 409 : result.result === "forbidden" ? 403 : 422;
-  return commandFailure(status, result.result, result.failureCode);
+  const serialized = commandFailure(status, result.result, result.failureCode);
+  if (result.result !== "conflict" || result.conflict === undefined) {
+    return serialized;
+  }
+  return {
+    status,
+    body: {
+      ...serialized.body,
+      conflict: {
+        conflict_id: result.conflict.conflictId,
+        contact_id: result.conflict.contactId,
+        base_revision: result.conflict.baseRevision,
+        current_revision: result.conflict.currentRevision,
+        conflicting_fields: result.conflict.conflictingFields,
+        questionnaire_version_id: result.conflict.questionnaireVersionId,
+        current_revision_kind: result.conflict.currentRevisionKind,
+        current_revised_at_utc: result.conflict.currentRevisedAtUtc,
+        current_reason: result.conflict.currentReason,
+        current_snapshot: result.conflict.currentSnapshot,
+        proposed_snapshot: result.conflict.proposedSnapshot,
+      },
+    },
+  };
 }
 
 function failure(status: number, code: string): SyncCommandHttpResult {

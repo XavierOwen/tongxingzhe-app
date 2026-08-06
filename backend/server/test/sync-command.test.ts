@@ -237,6 +237,96 @@ test("contact revision requires a reason and keeps its base revision", async () 
   });
 });
 
+test("same-field conflict returns only the authorized comparison contract", async () => {
+  const conflict = {
+    conflictId: "55555555-5555-4555-8555-555555555555",
+    contactId: "contact-1",
+    baseRevision: 1,
+    currentRevision: 2,
+    conflictingFields: ["reachCount"],
+    questionnaireVersionId: context.current.questionnaireVersion.id,
+    currentRevisionKind: "corrected" as const,
+    currentRevisedAtUtc: "2030-01-08T19:00:00.000Z",
+    currentReason: "另一台设备修正人数",
+    currentSnapshot: {
+      occurredAtUtc: "2030-01-08T18:00:00.000Z",
+      occurredTimeZone: "America/Chicago",
+      channel: "video_call" as const,
+      channelDetail: null,
+      location: { kind: "not_applicable" as const },
+      reachCount: 4,
+      interestLevel: 3,
+      answers: [],
+    },
+    proposedSnapshot: {
+      occurredAtUtc: "2030-01-08T18:00:00.000Z",
+      occurredTimeZone: "America/Chicago",
+      channel: "video_call" as const,
+      channelDetail: null,
+      location: { kind: "not_applicable" as const },
+      reachCount: 3,
+      interestLevel: 3,
+      answers: [],
+    },
+  };
+  const response = await handleSyncCommand(
+    "Bearer synthetic-token",
+    validRevisionCommandBody(),
+    fakeDependencies({
+      apply: async () => ({
+        result: "conflict",
+        failureCode: "contact_revision_conflict",
+        conflict,
+      }),
+    }),
+  );
+
+  assert.equal(response.status, 409);
+  assert.deepEqual(response.body, {
+    result: "conflict",
+    error: { code: "contact_revision_conflict" },
+    conflict: {
+      conflict_id: conflict.conflictId,
+      contact_id: "contact-1",
+      base_revision: 1,
+      current_revision: 2,
+      conflicting_fields: ["reachCount"],
+      questionnaire_version_id: context.current.questionnaireVersion.id,
+      current_revision_kind: "corrected",
+      current_revised_at_utc: "2030-01-08T19:00:00.000Z",
+      current_reason: "另一台设备修正人数",
+      current_snapshot: conflict.currentSnapshot,
+      proposed_snapshot: conflict.proposedSnapshot,
+    },
+  });
+  assert.equal(JSON.stringify(response.body).includes("app_user_id"), false);
+});
+
+test("conflict resolution is a new typed revision command", async () => {
+  let storedCommand: SyncCommand | undefined;
+  const response = await handleSyncCommand(
+    "Bearer synthetic-token",
+    validResolutionCommandBody(),
+    fakeDependencies({
+      apply: async (_resolvedContext, command) => {
+        storedCommand = command;
+        return { result: "accepted", serverCursor: "opaque-resolution-3" };
+      },
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(storedCommand?.type, "contact.resolve.v1");
+  assert.equal(storedCommand?.baseRevision, 2);
+  if (storedCommand?.type === "contact.resolve.v1") {
+    assert.equal(
+      storedCommand.payload.conflictId,
+      "55555555-5555-4555-8555-555555555555",
+    );
+    assert.equal(storedCommand.payload.reachCount, 3);
+  }
+});
+
 test("contact void accepts only a positive base revision", async () => {
   let storedCommand: SyncCommand | undefined;
   const response = await handleSyncCommand(
@@ -447,6 +537,17 @@ function validVoidCommandBody(): Record<string, unknown> {
       reason: "重复录入",
     },
   };
+}
+
+function validResolutionCommandBody(): Record<string, unknown> {
+  const body = validRevisionCommandBody();
+  body.command_id = "resolution-command-3";
+  body.base_revision = 2;
+  body.type = "contact.resolve.v1";
+  const payload = body.typed_payload as Record<string, unknown>;
+  payload.conflict_id = "55555555-5555-4555-8555-555555555555";
+  payload.reason = "解决跨设备冲突";
+  return body;
 }
 
 function fakeDependencies(options?: {

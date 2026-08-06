@@ -5422,6 +5422,1173 @@ class DbContactAnswersCompanion extends UpdateCompanion<DbContactAnswer> {
   }
 }
 
+class $DbContactRevisionConflictsTable extends DbContactRevisionConflicts
+    with
+        TableInfo<$DbContactRevisionConflictsTable, DbContactRevisionConflict> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DbContactRevisionConflictsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _conflictIdMeta = const VerificationMeta(
+    'conflictId',
+  );
+  @override
+  late final GeneratedColumn<String> conflictId = GeneratedColumn<String>(
+    'conflict_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _commandIdMeta = const VerificationMeta(
+    'commandId',
+  );
+  @override
+  late final GeneratedColumn<String> commandId = GeneratedColumn<String>(
+    'command_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _contactIdMeta = const VerificationMeta(
+    'contactId',
+  );
+  @override
+  late final GeneratedColumn<String> contactId = GeneratedColumn<String>(
+    'contact_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES db_contact_records (contact_id)',
+    ),
+  );
+  static const VerificationMeta _appUserIdMeta = const VerificationMeta(
+    'appUserId',
+  );
+  @override
+  late final GeneratedColumn<String> appUserId = GeneratedColumn<String>(
+    'app_user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _workspaceIdMeta = const VerificationMeta(
+    'workspaceId',
+  );
+  @override
+  late final GeneratedColumn<String> workspaceId = GeneratedColumn<String>(
+    'workspace_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<String> projectId = GeneratedColumn<String>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _baseRevisionMeta = const VerificationMeta(
+    'baseRevision',
+  );
+  @override
+  late final GeneratedColumn<int> baseRevision = GeneratedColumn<int>(
+    'base_revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _currentRevisionMeta = const VerificationMeta(
+    'currentRevision',
+  );
+  @override
+  late final GeneratedColumn<int> currentRevision = GeneratedColumn<int>(
+    'current_revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _conflictingFieldsJsonMeta =
+      const VerificationMeta('conflictingFieldsJson');
+  @override
+  late final GeneratedColumn<String> conflictingFieldsJson =
+      GeneratedColumn<String>(
+        'conflicting_fields_json',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _questionnaireVersionIdMeta =
+      const VerificationMeta('questionnaireVersionId');
+  @override
+  late final GeneratedColumn<String> questionnaireVersionId =
+      GeneratedColumn<String>(
+        'questionnaire_version_id',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _currentRevisionKindMeta =
+      const VerificationMeta('currentRevisionKind');
+  @override
+  late final GeneratedColumn<String> currentRevisionKind =
+      GeneratedColumn<String>(
+        'current_revision_kind',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _currentRevisedAtUtcMeta =
+      const VerificationMeta('currentRevisedAtUtc');
+  @override
+  late final GeneratedColumn<DateTime> currentRevisedAtUtc =
+      GeneratedColumn<DateTime>(
+        'current_revised_at_utc',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _currentReasonMeta = const VerificationMeta(
+    'currentReason',
+  );
+  @override
+  late final GeneratedColumn<String> currentReason = GeneratedColumn<String>(
+    'current_reason',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _currentSnapshotJsonMeta =
+      const VerificationMeta('currentSnapshotJson');
+  @override
+  late final GeneratedColumn<String> currentSnapshotJson =
+      GeneratedColumn<String>(
+        'current_snapshot_json',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _proposedSnapshotJsonMeta =
+      const VerificationMeta('proposedSnapshotJson');
+  @override
+  late final GeneratedColumn<String> proposedSnapshotJson =
+      GeneratedColumn<String>(
+        'proposed_snapshot_json',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('pending'),
+  );
+  static const VerificationMeta _resolutionCommandIdMeta =
+      const VerificationMeta('resolutionCommandId');
+  @override
+  late final GeneratedColumn<String> resolutionCommandId =
+      GeneratedColumn<String>(
+        'resolution_command_id',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _createdAtUtcMeta = const VerificationMeta(
+    'createdAtUtc',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAtUtc = GeneratedColumn<DateTime>(
+    'created_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _resolvedAtUtcMeta = const VerificationMeta(
+    'resolvedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<DateTime> resolvedAtUtc =
+      GeneratedColumn<DateTime>(
+        'resolved_at_utc',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  @override
+  List<GeneratedColumn> get $columns => [
+    conflictId,
+    commandId,
+    contactId,
+    appUserId,
+    workspaceId,
+    projectId,
+    baseRevision,
+    currentRevision,
+    conflictingFieldsJson,
+    questionnaireVersionId,
+    currentRevisionKind,
+    currentRevisedAtUtc,
+    currentReason,
+    currentSnapshotJson,
+    proposedSnapshotJson,
+    status,
+    resolutionCommandId,
+    createdAtUtc,
+    resolvedAtUtc,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'db_contact_revision_conflicts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DbContactRevisionConflict> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('conflict_id')) {
+      context.handle(
+        _conflictIdMeta,
+        conflictId.isAcceptableOrUnknown(data['conflict_id']!, _conflictIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_conflictIdMeta);
+    }
+    if (data.containsKey('command_id')) {
+      context.handle(
+        _commandIdMeta,
+        commandId.isAcceptableOrUnknown(data['command_id']!, _commandIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_commandIdMeta);
+    }
+    if (data.containsKey('contact_id')) {
+      context.handle(
+        _contactIdMeta,
+        contactId.isAcceptableOrUnknown(data['contact_id']!, _contactIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_contactIdMeta);
+    }
+    if (data.containsKey('app_user_id')) {
+      context.handle(
+        _appUserIdMeta,
+        appUserId.isAcceptableOrUnknown(data['app_user_id']!, _appUserIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_appUserIdMeta);
+    }
+    if (data.containsKey('workspace_id')) {
+      context.handle(
+        _workspaceIdMeta,
+        workspaceId.isAcceptableOrUnknown(
+          data['workspace_id']!,
+          _workspaceIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_workspaceIdMeta);
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('base_revision')) {
+      context.handle(
+        _baseRevisionMeta,
+        baseRevision.isAcceptableOrUnknown(
+          data['base_revision']!,
+          _baseRevisionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_baseRevisionMeta);
+    }
+    if (data.containsKey('current_revision')) {
+      context.handle(
+        _currentRevisionMeta,
+        currentRevision.isAcceptableOrUnknown(
+          data['current_revision']!,
+          _currentRevisionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_currentRevisionMeta);
+    }
+    if (data.containsKey('conflicting_fields_json')) {
+      context.handle(
+        _conflictingFieldsJsonMeta,
+        conflictingFieldsJson.isAcceptableOrUnknown(
+          data['conflicting_fields_json']!,
+          _conflictingFieldsJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_conflictingFieldsJsonMeta);
+    }
+    if (data.containsKey('questionnaire_version_id')) {
+      context.handle(
+        _questionnaireVersionIdMeta,
+        questionnaireVersionId.isAcceptableOrUnknown(
+          data['questionnaire_version_id']!,
+          _questionnaireVersionIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_questionnaireVersionIdMeta);
+    }
+    if (data.containsKey('current_revision_kind')) {
+      context.handle(
+        _currentRevisionKindMeta,
+        currentRevisionKind.isAcceptableOrUnknown(
+          data['current_revision_kind']!,
+          _currentRevisionKindMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_currentRevisionKindMeta);
+    }
+    if (data.containsKey('current_revised_at_utc')) {
+      context.handle(
+        _currentRevisedAtUtcMeta,
+        currentRevisedAtUtc.isAcceptableOrUnknown(
+          data['current_revised_at_utc']!,
+          _currentRevisedAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_currentRevisedAtUtcMeta);
+    }
+    if (data.containsKey('current_reason')) {
+      context.handle(
+        _currentReasonMeta,
+        currentReason.isAcceptableOrUnknown(
+          data['current_reason']!,
+          _currentReasonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_currentReasonMeta);
+    }
+    if (data.containsKey('current_snapshot_json')) {
+      context.handle(
+        _currentSnapshotJsonMeta,
+        currentSnapshotJson.isAcceptableOrUnknown(
+          data['current_snapshot_json']!,
+          _currentSnapshotJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_currentSnapshotJsonMeta);
+    }
+    if (data.containsKey('proposed_snapshot_json')) {
+      context.handle(
+        _proposedSnapshotJsonMeta,
+        proposedSnapshotJson.isAcceptableOrUnknown(
+          data['proposed_snapshot_json']!,
+          _proposedSnapshotJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_proposedSnapshotJsonMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    }
+    if (data.containsKey('resolution_command_id')) {
+      context.handle(
+        _resolutionCommandIdMeta,
+        resolutionCommandId.isAcceptableOrUnknown(
+          data['resolution_command_id']!,
+          _resolutionCommandIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at_utc')) {
+      context.handle(
+        _createdAtUtcMeta,
+        createdAtUtc.isAcceptableOrUnknown(
+          data['created_at_utc']!,
+          _createdAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtUtcMeta);
+    }
+    if (data.containsKey('resolved_at_utc')) {
+      context.handle(
+        _resolvedAtUtcMeta,
+        resolvedAtUtc.isAcceptableOrUnknown(
+          data['resolved_at_utc']!,
+          _resolvedAtUtcMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {conflictId};
+  @override
+  DbContactRevisionConflict map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DbContactRevisionConflict(
+      conflictId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}conflict_id'],
+      )!,
+      commandId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}command_id'],
+      )!,
+      contactId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}contact_id'],
+      )!,
+      appUserId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}app_user_id'],
+      )!,
+      workspaceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}workspace_id'],
+      )!,
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}project_id'],
+      )!,
+      baseRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}base_revision'],
+      )!,
+      currentRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}current_revision'],
+      )!,
+      conflictingFieldsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}conflicting_fields_json'],
+      )!,
+      questionnaireVersionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}questionnaire_version_id'],
+      )!,
+      currentRevisionKind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}current_revision_kind'],
+      )!,
+      currentRevisedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}current_revised_at_utc'],
+      )!,
+      currentReason: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}current_reason'],
+      )!,
+      currentSnapshotJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}current_snapshot_json'],
+      )!,
+      proposedSnapshotJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}proposed_snapshot_json'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      resolutionCommandId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}resolution_command_id'],
+      ),
+      createdAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at_utc'],
+      )!,
+      resolvedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}resolved_at_utc'],
+      ),
+    );
+  }
+
+  @override
+  $DbContactRevisionConflictsTable createAlias(String alias) {
+    return $DbContactRevisionConflictsTable(attachedDatabase, alias);
+  }
+}
+
+class DbContactRevisionConflict extends DataClass
+    implements Insertable<DbContactRevisionConflict> {
+  final String conflictId;
+  final String commandId;
+  final String contactId;
+  final String appUserId;
+  final String workspaceId;
+  final String projectId;
+  final int baseRevision;
+  final int currentRevision;
+  final String conflictingFieldsJson;
+  final String questionnaireVersionId;
+  final String currentRevisionKind;
+  final DateTime currentRevisedAtUtc;
+  final String currentReason;
+  final String currentSnapshotJson;
+  final String proposedSnapshotJson;
+  final String status;
+  final String? resolutionCommandId;
+  final DateTime createdAtUtc;
+  final DateTime? resolvedAtUtc;
+  const DbContactRevisionConflict({
+    required this.conflictId,
+    required this.commandId,
+    required this.contactId,
+    required this.appUserId,
+    required this.workspaceId,
+    required this.projectId,
+    required this.baseRevision,
+    required this.currentRevision,
+    required this.conflictingFieldsJson,
+    required this.questionnaireVersionId,
+    required this.currentRevisionKind,
+    required this.currentRevisedAtUtc,
+    required this.currentReason,
+    required this.currentSnapshotJson,
+    required this.proposedSnapshotJson,
+    required this.status,
+    this.resolutionCommandId,
+    required this.createdAtUtc,
+    this.resolvedAtUtc,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['conflict_id'] = Variable<String>(conflictId);
+    map['command_id'] = Variable<String>(commandId);
+    map['contact_id'] = Variable<String>(contactId);
+    map['app_user_id'] = Variable<String>(appUserId);
+    map['workspace_id'] = Variable<String>(workspaceId);
+    map['project_id'] = Variable<String>(projectId);
+    map['base_revision'] = Variable<int>(baseRevision);
+    map['current_revision'] = Variable<int>(currentRevision);
+    map['conflicting_fields_json'] = Variable<String>(conflictingFieldsJson);
+    map['questionnaire_version_id'] = Variable<String>(questionnaireVersionId);
+    map['current_revision_kind'] = Variable<String>(currentRevisionKind);
+    map['current_revised_at_utc'] = Variable<DateTime>(currentRevisedAtUtc);
+    map['current_reason'] = Variable<String>(currentReason);
+    map['current_snapshot_json'] = Variable<String>(currentSnapshotJson);
+    map['proposed_snapshot_json'] = Variable<String>(proposedSnapshotJson);
+    map['status'] = Variable<String>(status);
+    if (!nullToAbsent || resolutionCommandId != null) {
+      map['resolution_command_id'] = Variable<String>(resolutionCommandId);
+    }
+    map['created_at_utc'] = Variable<DateTime>(createdAtUtc);
+    if (!nullToAbsent || resolvedAtUtc != null) {
+      map['resolved_at_utc'] = Variable<DateTime>(resolvedAtUtc);
+    }
+    return map;
+  }
+
+  DbContactRevisionConflictsCompanion toCompanion(bool nullToAbsent) {
+    return DbContactRevisionConflictsCompanion(
+      conflictId: Value(conflictId),
+      commandId: Value(commandId),
+      contactId: Value(contactId),
+      appUserId: Value(appUserId),
+      workspaceId: Value(workspaceId),
+      projectId: Value(projectId),
+      baseRevision: Value(baseRevision),
+      currentRevision: Value(currentRevision),
+      conflictingFieldsJson: Value(conflictingFieldsJson),
+      questionnaireVersionId: Value(questionnaireVersionId),
+      currentRevisionKind: Value(currentRevisionKind),
+      currentRevisedAtUtc: Value(currentRevisedAtUtc),
+      currentReason: Value(currentReason),
+      currentSnapshotJson: Value(currentSnapshotJson),
+      proposedSnapshotJson: Value(proposedSnapshotJson),
+      status: Value(status),
+      resolutionCommandId: resolutionCommandId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(resolutionCommandId),
+      createdAtUtc: Value(createdAtUtc),
+      resolvedAtUtc: resolvedAtUtc == null && nullToAbsent
+          ? const Value.absent()
+          : Value(resolvedAtUtc),
+    );
+  }
+
+  factory DbContactRevisionConflict.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DbContactRevisionConflict(
+      conflictId: serializer.fromJson<String>(json['conflictId']),
+      commandId: serializer.fromJson<String>(json['commandId']),
+      contactId: serializer.fromJson<String>(json['contactId']),
+      appUserId: serializer.fromJson<String>(json['appUserId']),
+      workspaceId: serializer.fromJson<String>(json['workspaceId']),
+      projectId: serializer.fromJson<String>(json['projectId']),
+      baseRevision: serializer.fromJson<int>(json['baseRevision']),
+      currentRevision: serializer.fromJson<int>(json['currentRevision']),
+      conflictingFieldsJson: serializer.fromJson<String>(
+        json['conflictingFieldsJson'],
+      ),
+      questionnaireVersionId: serializer.fromJson<String>(
+        json['questionnaireVersionId'],
+      ),
+      currentRevisionKind: serializer.fromJson<String>(
+        json['currentRevisionKind'],
+      ),
+      currentRevisedAtUtc: serializer.fromJson<DateTime>(
+        json['currentRevisedAtUtc'],
+      ),
+      currentReason: serializer.fromJson<String>(json['currentReason']),
+      currentSnapshotJson: serializer.fromJson<String>(
+        json['currentSnapshotJson'],
+      ),
+      proposedSnapshotJson: serializer.fromJson<String>(
+        json['proposedSnapshotJson'],
+      ),
+      status: serializer.fromJson<String>(json['status']),
+      resolutionCommandId: serializer.fromJson<String?>(
+        json['resolutionCommandId'],
+      ),
+      createdAtUtc: serializer.fromJson<DateTime>(json['createdAtUtc']),
+      resolvedAtUtc: serializer.fromJson<DateTime?>(json['resolvedAtUtc']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'conflictId': serializer.toJson<String>(conflictId),
+      'commandId': serializer.toJson<String>(commandId),
+      'contactId': serializer.toJson<String>(contactId),
+      'appUserId': serializer.toJson<String>(appUserId),
+      'workspaceId': serializer.toJson<String>(workspaceId),
+      'projectId': serializer.toJson<String>(projectId),
+      'baseRevision': serializer.toJson<int>(baseRevision),
+      'currentRevision': serializer.toJson<int>(currentRevision),
+      'conflictingFieldsJson': serializer.toJson<String>(conflictingFieldsJson),
+      'questionnaireVersionId': serializer.toJson<String>(
+        questionnaireVersionId,
+      ),
+      'currentRevisionKind': serializer.toJson<String>(currentRevisionKind),
+      'currentRevisedAtUtc': serializer.toJson<DateTime>(currentRevisedAtUtc),
+      'currentReason': serializer.toJson<String>(currentReason),
+      'currentSnapshotJson': serializer.toJson<String>(currentSnapshotJson),
+      'proposedSnapshotJson': serializer.toJson<String>(proposedSnapshotJson),
+      'status': serializer.toJson<String>(status),
+      'resolutionCommandId': serializer.toJson<String?>(resolutionCommandId),
+      'createdAtUtc': serializer.toJson<DateTime>(createdAtUtc),
+      'resolvedAtUtc': serializer.toJson<DateTime?>(resolvedAtUtc),
+    };
+  }
+
+  DbContactRevisionConflict copyWith({
+    String? conflictId,
+    String? commandId,
+    String? contactId,
+    String? appUserId,
+    String? workspaceId,
+    String? projectId,
+    int? baseRevision,
+    int? currentRevision,
+    String? conflictingFieldsJson,
+    String? questionnaireVersionId,
+    String? currentRevisionKind,
+    DateTime? currentRevisedAtUtc,
+    String? currentReason,
+    String? currentSnapshotJson,
+    String? proposedSnapshotJson,
+    String? status,
+    Value<String?> resolutionCommandId = const Value.absent(),
+    DateTime? createdAtUtc,
+    Value<DateTime?> resolvedAtUtc = const Value.absent(),
+  }) => DbContactRevisionConflict(
+    conflictId: conflictId ?? this.conflictId,
+    commandId: commandId ?? this.commandId,
+    contactId: contactId ?? this.contactId,
+    appUserId: appUserId ?? this.appUserId,
+    workspaceId: workspaceId ?? this.workspaceId,
+    projectId: projectId ?? this.projectId,
+    baseRevision: baseRevision ?? this.baseRevision,
+    currentRevision: currentRevision ?? this.currentRevision,
+    conflictingFieldsJson: conflictingFieldsJson ?? this.conflictingFieldsJson,
+    questionnaireVersionId:
+        questionnaireVersionId ?? this.questionnaireVersionId,
+    currentRevisionKind: currentRevisionKind ?? this.currentRevisionKind,
+    currentRevisedAtUtc: currentRevisedAtUtc ?? this.currentRevisedAtUtc,
+    currentReason: currentReason ?? this.currentReason,
+    currentSnapshotJson: currentSnapshotJson ?? this.currentSnapshotJson,
+    proposedSnapshotJson: proposedSnapshotJson ?? this.proposedSnapshotJson,
+    status: status ?? this.status,
+    resolutionCommandId: resolutionCommandId.present
+        ? resolutionCommandId.value
+        : this.resolutionCommandId,
+    createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+    resolvedAtUtc: resolvedAtUtc.present
+        ? resolvedAtUtc.value
+        : this.resolvedAtUtc,
+  );
+  DbContactRevisionConflict copyWithCompanion(
+    DbContactRevisionConflictsCompanion data,
+  ) {
+    return DbContactRevisionConflict(
+      conflictId: data.conflictId.present
+          ? data.conflictId.value
+          : this.conflictId,
+      commandId: data.commandId.present ? data.commandId.value : this.commandId,
+      contactId: data.contactId.present ? data.contactId.value : this.contactId,
+      appUserId: data.appUserId.present ? data.appUserId.value : this.appUserId,
+      workspaceId: data.workspaceId.present
+          ? data.workspaceId.value
+          : this.workspaceId,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      baseRevision: data.baseRevision.present
+          ? data.baseRevision.value
+          : this.baseRevision,
+      currentRevision: data.currentRevision.present
+          ? data.currentRevision.value
+          : this.currentRevision,
+      conflictingFieldsJson: data.conflictingFieldsJson.present
+          ? data.conflictingFieldsJson.value
+          : this.conflictingFieldsJson,
+      questionnaireVersionId: data.questionnaireVersionId.present
+          ? data.questionnaireVersionId.value
+          : this.questionnaireVersionId,
+      currentRevisionKind: data.currentRevisionKind.present
+          ? data.currentRevisionKind.value
+          : this.currentRevisionKind,
+      currentRevisedAtUtc: data.currentRevisedAtUtc.present
+          ? data.currentRevisedAtUtc.value
+          : this.currentRevisedAtUtc,
+      currentReason: data.currentReason.present
+          ? data.currentReason.value
+          : this.currentReason,
+      currentSnapshotJson: data.currentSnapshotJson.present
+          ? data.currentSnapshotJson.value
+          : this.currentSnapshotJson,
+      proposedSnapshotJson: data.proposedSnapshotJson.present
+          ? data.proposedSnapshotJson.value
+          : this.proposedSnapshotJson,
+      status: data.status.present ? data.status.value : this.status,
+      resolutionCommandId: data.resolutionCommandId.present
+          ? data.resolutionCommandId.value
+          : this.resolutionCommandId,
+      createdAtUtc: data.createdAtUtc.present
+          ? data.createdAtUtc.value
+          : this.createdAtUtc,
+      resolvedAtUtc: data.resolvedAtUtc.present
+          ? data.resolvedAtUtc.value
+          : this.resolvedAtUtc,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbContactRevisionConflict(')
+          ..write('conflictId: $conflictId, ')
+          ..write('commandId: $commandId, ')
+          ..write('contactId: $contactId, ')
+          ..write('appUserId: $appUserId, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('projectId: $projectId, ')
+          ..write('baseRevision: $baseRevision, ')
+          ..write('currentRevision: $currentRevision, ')
+          ..write('conflictingFieldsJson: $conflictingFieldsJson, ')
+          ..write('questionnaireVersionId: $questionnaireVersionId, ')
+          ..write('currentRevisionKind: $currentRevisionKind, ')
+          ..write('currentRevisedAtUtc: $currentRevisedAtUtc, ')
+          ..write('currentReason: $currentReason, ')
+          ..write('currentSnapshotJson: $currentSnapshotJson, ')
+          ..write('proposedSnapshotJson: $proposedSnapshotJson, ')
+          ..write('status: $status, ')
+          ..write('resolutionCommandId: $resolutionCommandId, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('resolvedAtUtc: $resolvedAtUtc')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    conflictId,
+    commandId,
+    contactId,
+    appUserId,
+    workspaceId,
+    projectId,
+    baseRevision,
+    currentRevision,
+    conflictingFieldsJson,
+    questionnaireVersionId,
+    currentRevisionKind,
+    currentRevisedAtUtc,
+    currentReason,
+    currentSnapshotJson,
+    proposedSnapshotJson,
+    status,
+    resolutionCommandId,
+    createdAtUtc,
+    resolvedAtUtc,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DbContactRevisionConflict &&
+          other.conflictId == this.conflictId &&
+          other.commandId == this.commandId &&
+          other.contactId == this.contactId &&
+          other.appUserId == this.appUserId &&
+          other.workspaceId == this.workspaceId &&
+          other.projectId == this.projectId &&
+          other.baseRevision == this.baseRevision &&
+          other.currentRevision == this.currentRevision &&
+          other.conflictingFieldsJson == this.conflictingFieldsJson &&
+          other.questionnaireVersionId == this.questionnaireVersionId &&
+          other.currentRevisionKind == this.currentRevisionKind &&
+          other.currentRevisedAtUtc == this.currentRevisedAtUtc &&
+          other.currentReason == this.currentReason &&
+          other.currentSnapshotJson == this.currentSnapshotJson &&
+          other.proposedSnapshotJson == this.proposedSnapshotJson &&
+          other.status == this.status &&
+          other.resolutionCommandId == this.resolutionCommandId &&
+          other.createdAtUtc == this.createdAtUtc &&
+          other.resolvedAtUtc == this.resolvedAtUtc);
+}
+
+class DbContactRevisionConflictsCompanion
+    extends UpdateCompanion<DbContactRevisionConflict> {
+  final Value<String> conflictId;
+  final Value<String> commandId;
+  final Value<String> contactId;
+  final Value<String> appUserId;
+  final Value<String> workspaceId;
+  final Value<String> projectId;
+  final Value<int> baseRevision;
+  final Value<int> currentRevision;
+  final Value<String> conflictingFieldsJson;
+  final Value<String> questionnaireVersionId;
+  final Value<String> currentRevisionKind;
+  final Value<DateTime> currentRevisedAtUtc;
+  final Value<String> currentReason;
+  final Value<String> currentSnapshotJson;
+  final Value<String> proposedSnapshotJson;
+  final Value<String> status;
+  final Value<String?> resolutionCommandId;
+  final Value<DateTime> createdAtUtc;
+  final Value<DateTime?> resolvedAtUtc;
+  final Value<int> rowid;
+  const DbContactRevisionConflictsCompanion({
+    this.conflictId = const Value.absent(),
+    this.commandId = const Value.absent(),
+    this.contactId = const Value.absent(),
+    this.appUserId = const Value.absent(),
+    this.workspaceId = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.baseRevision = const Value.absent(),
+    this.currentRevision = const Value.absent(),
+    this.conflictingFieldsJson = const Value.absent(),
+    this.questionnaireVersionId = const Value.absent(),
+    this.currentRevisionKind = const Value.absent(),
+    this.currentRevisedAtUtc = const Value.absent(),
+    this.currentReason = const Value.absent(),
+    this.currentSnapshotJson = const Value.absent(),
+    this.proposedSnapshotJson = const Value.absent(),
+    this.status = const Value.absent(),
+    this.resolutionCommandId = const Value.absent(),
+    this.createdAtUtc = const Value.absent(),
+    this.resolvedAtUtc = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DbContactRevisionConflictsCompanion.insert({
+    required String conflictId,
+    required String commandId,
+    required String contactId,
+    required String appUserId,
+    required String workspaceId,
+    required String projectId,
+    required int baseRevision,
+    required int currentRevision,
+    required String conflictingFieldsJson,
+    required String questionnaireVersionId,
+    required String currentRevisionKind,
+    required DateTime currentRevisedAtUtc,
+    required String currentReason,
+    required String currentSnapshotJson,
+    required String proposedSnapshotJson,
+    this.status = const Value.absent(),
+    this.resolutionCommandId = const Value.absent(),
+    required DateTime createdAtUtc,
+    this.resolvedAtUtc = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : conflictId = Value(conflictId),
+       commandId = Value(commandId),
+       contactId = Value(contactId),
+       appUserId = Value(appUserId),
+       workspaceId = Value(workspaceId),
+       projectId = Value(projectId),
+       baseRevision = Value(baseRevision),
+       currentRevision = Value(currentRevision),
+       conflictingFieldsJson = Value(conflictingFieldsJson),
+       questionnaireVersionId = Value(questionnaireVersionId),
+       currentRevisionKind = Value(currentRevisionKind),
+       currentRevisedAtUtc = Value(currentRevisedAtUtc),
+       currentReason = Value(currentReason),
+       currentSnapshotJson = Value(currentSnapshotJson),
+       proposedSnapshotJson = Value(proposedSnapshotJson),
+       createdAtUtc = Value(createdAtUtc);
+  static Insertable<DbContactRevisionConflict> custom({
+    Expression<String>? conflictId,
+    Expression<String>? commandId,
+    Expression<String>? contactId,
+    Expression<String>? appUserId,
+    Expression<String>? workspaceId,
+    Expression<String>? projectId,
+    Expression<int>? baseRevision,
+    Expression<int>? currentRevision,
+    Expression<String>? conflictingFieldsJson,
+    Expression<String>? questionnaireVersionId,
+    Expression<String>? currentRevisionKind,
+    Expression<DateTime>? currentRevisedAtUtc,
+    Expression<String>? currentReason,
+    Expression<String>? currentSnapshotJson,
+    Expression<String>? proposedSnapshotJson,
+    Expression<String>? status,
+    Expression<String>? resolutionCommandId,
+    Expression<DateTime>? createdAtUtc,
+    Expression<DateTime>? resolvedAtUtc,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (conflictId != null) 'conflict_id': conflictId,
+      if (commandId != null) 'command_id': commandId,
+      if (contactId != null) 'contact_id': contactId,
+      if (appUserId != null) 'app_user_id': appUserId,
+      if (workspaceId != null) 'workspace_id': workspaceId,
+      if (projectId != null) 'project_id': projectId,
+      if (baseRevision != null) 'base_revision': baseRevision,
+      if (currentRevision != null) 'current_revision': currentRevision,
+      if (conflictingFieldsJson != null)
+        'conflicting_fields_json': conflictingFieldsJson,
+      if (questionnaireVersionId != null)
+        'questionnaire_version_id': questionnaireVersionId,
+      if (currentRevisionKind != null)
+        'current_revision_kind': currentRevisionKind,
+      if (currentRevisedAtUtc != null)
+        'current_revised_at_utc': currentRevisedAtUtc,
+      if (currentReason != null) 'current_reason': currentReason,
+      if (currentSnapshotJson != null)
+        'current_snapshot_json': currentSnapshotJson,
+      if (proposedSnapshotJson != null)
+        'proposed_snapshot_json': proposedSnapshotJson,
+      if (status != null) 'status': status,
+      if (resolutionCommandId != null)
+        'resolution_command_id': resolutionCommandId,
+      if (createdAtUtc != null) 'created_at_utc': createdAtUtc,
+      if (resolvedAtUtc != null) 'resolved_at_utc': resolvedAtUtc,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DbContactRevisionConflictsCompanion copyWith({
+    Value<String>? conflictId,
+    Value<String>? commandId,
+    Value<String>? contactId,
+    Value<String>? appUserId,
+    Value<String>? workspaceId,
+    Value<String>? projectId,
+    Value<int>? baseRevision,
+    Value<int>? currentRevision,
+    Value<String>? conflictingFieldsJson,
+    Value<String>? questionnaireVersionId,
+    Value<String>? currentRevisionKind,
+    Value<DateTime>? currentRevisedAtUtc,
+    Value<String>? currentReason,
+    Value<String>? currentSnapshotJson,
+    Value<String>? proposedSnapshotJson,
+    Value<String>? status,
+    Value<String?>? resolutionCommandId,
+    Value<DateTime>? createdAtUtc,
+    Value<DateTime?>? resolvedAtUtc,
+    Value<int>? rowid,
+  }) {
+    return DbContactRevisionConflictsCompanion(
+      conflictId: conflictId ?? this.conflictId,
+      commandId: commandId ?? this.commandId,
+      contactId: contactId ?? this.contactId,
+      appUserId: appUserId ?? this.appUserId,
+      workspaceId: workspaceId ?? this.workspaceId,
+      projectId: projectId ?? this.projectId,
+      baseRevision: baseRevision ?? this.baseRevision,
+      currentRevision: currentRevision ?? this.currentRevision,
+      conflictingFieldsJson:
+          conflictingFieldsJson ?? this.conflictingFieldsJson,
+      questionnaireVersionId:
+          questionnaireVersionId ?? this.questionnaireVersionId,
+      currentRevisionKind: currentRevisionKind ?? this.currentRevisionKind,
+      currentRevisedAtUtc: currentRevisedAtUtc ?? this.currentRevisedAtUtc,
+      currentReason: currentReason ?? this.currentReason,
+      currentSnapshotJson: currentSnapshotJson ?? this.currentSnapshotJson,
+      proposedSnapshotJson: proposedSnapshotJson ?? this.proposedSnapshotJson,
+      status: status ?? this.status,
+      resolutionCommandId: resolutionCommandId ?? this.resolutionCommandId,
+      createdAtUtc: createdAtUtc ?? this.createdAtUtc,
+      resolvedAtUtc: resolvedAtUtc ?? this.resolvedAtUtc,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (conflictId.present) {
+      map['conflict_id'] = Variable<String>(conflictId.value);
+    }
+    if (commandId.present) {
+      map['command_id'] = Variable<String>(commandId.value);
+    }
+    if (contactId.present) {
+      map['contact_id'] = Variable<String>(contactId.value);
+    }
+    if (appUserId.present) {
+      map['app_user_id'] = Variable<String>(appUserId.value);
+    }
+    if (workspaceId.present) {
+      map['workspace_id'] = Variable<String>(workspaceId.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<String>(projectId.value);
+    }
+    if (baseRevision.present) {
+      map['base_revision'] = Variable<int>(baseRevision.value);
+    }
+    if (currentRevision.present) {
+      map['current_revision'] = Variable<int>(currentRevision.value);
+    }
+    if (conflictingFieldsJson.present) {
+      map['conflicting_fields_json'] = Variable<String>(
+        conflictingFieldsJson.value,
+      );
+    }
+    if (questionnaireVersionId.present) {
+      map['questionnaire_version_id'] = Variable<String>(
+        questionnaireVersionId.value,
+      );
+    }
+    if (currentRevisionKind.present) {
+      map['current_revision_kind'] = Variable<String>(
+        currentRevisionKind.value,
+      );
+    }
+    if (currentRevisedAtUtc.present) {
+      map['current_revised_at_utc'] = Variable<DateTime>(
+        currentRevisedAtUtc.value,
+      );
+    }
+    if (currentReason.present) {
+      map['current_reason'] = Variable<String>(currentReason.value);
+    }
+    if (currentSnapshotJson.present) {
+      map['current_snapshot_json'] = Variable<String>(
+        currentSnapshotJson.value,
+      );
+    }
+    if (proposedSnapshotJson.present) {
+      map['proposed_snapshot_json'] = Variable<String>(
+        proposedSnapshotJson.value,
+      );
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (resolutionCommandId.present) {
+      map['resolution_command_id'] = Variable<String>(
+        resolutionCommandId.value,
+      );
+    }
+    if (createdAtUtc.present) {
+      map['created_at_utc'] = Variable<DateTime>(createdAtUtc.value);
+    }
+    if (resolvedAtUtc.present) {
+      map['resolved_at_utc'] = Variable<DateTime>(resolvedAtUtc.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbContactRevisionConflictsCompanion(')
+          ..write('conflictId: $conflictId, ')
+          ..write('commandId: $commandId, ')
+          ..write('contactId: $contactId, ')
+          ..write('appUserId: $appUserId, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('projectId: $projectId, ')
+          ..write('baseRevision: $baseRevision, ')
+          ..write('currentRevision: $currentRevision, ')
+          ..write('conflictingFieldsJson: $conflictingFieldsJson, ')
+          ..write('questionnaireVersionId: $questionnaireVersionId, ')
+          ..write('currentRevisionKind: $currentRevisionKind, ')
+          ..write('currentRevisedAtUtc: $currentRevisedAtUtc, ')
+          ..write('currentReason: $currentReason, ')
+          ..write('currentSnapshotJson: $currentSnapshotJson, ')
+          ..write('proposedSnapshotJson: $proposedSnapshotJson, ')
+          ..write('status: $status, ')
+          ..write('resolutionCommandId: $resolutionCommandId, ')
+          ..write('createdAtUtc: $createdAtUtc, ')
+          ..write('resolvedAtUtc: $resolvedAtUtc, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $DbContactDraftsTable extends DbContactDrafts
     with TableInfo<$DbContactDraftsTable, DbContactDraft> {
   @override
@@ -11979,6 +13146,8 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
   late final $DbContactAnswersTable dbContactAnswers = $DbContactAnswersTable(
     this,
   );
+  late final $DbContactRevisionConflictsTable dbContactRevisionConflicts =
+      $DbContactRevisionConflictsTable(this);
   late final $DbContactDraftsTable dbContactDrafts = $DbContactDraftsTable(
     this,
   );
@@ -12003,6 +13172,10 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
   late final Index syncOutboxAggregateOrder = Index(
     'sync_outbox_aggregate_order',
     'CREATE INDEX sync_outbox_aggregate_order ON db_sync_outbox (aggregate_id, created_at_utc)',
+  );
+  late final Index contactRevisionConflictsOwnerContact = Index(
+    'contact_revision_conflicts_owner_contact',
+    'CREATE INDEX contact_revision_conflicts_owner_contact ON db_contact_revision_conflicts (app_user_id, contact_id, status)',
   );
   late final $DbUsersTable dbUsers = $DbUsersTable(this);
   late final $DbConversationRecordsTable dbConversationRecords =
@@ -12136,6 +13309,7 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
     dbContactAttempts,
     dbContactRevisions,
     dbContactAnswers,
+    dbContactRevisionConflicts,
     dbContactDrafts,
     dbContactDraftAnswers,
     contactDraftsOwnerUpdated,
@@ -12143,6 +13317,7 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
     contactAttemptsPersonalPeriod,
     syncOutboxReady,
     syncOutboxAggregateOrder,
+    contactRevisionConflictsOwnerContact,
     dbUsers,
     dbConversationRecords,
     dbRecordContacts,
@@ -12775,6 +13950,38 @@ final class $$DbContactRecordsTableReferences
   }
 
   static MultiTypedResultKey<
+    $DbContactRevisionConflictsTable,
+    List<DbContactRevisionConflict>
+  >
+  _dbContactRevisionConflictsRefsTable(
+    _$LocalDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.dbContactRevisionConflicts,
+    aliasName:
+        'db_contact_records__contact_id__db_contact_revision_conflicts__contact_id',
+  );
+
+  $$DbContactRevisionConflictsTableProcessedTableManager
+  get dbContactRevisionConflictsRefs {
+    final manager =
+        $$DbContactRevisionConflictsTableTableManager(
+          $_db,
+          $_db.dbContactRevisionConflicts,
+        ).filter(
+          (f) => f.contactId.contactId.sqlEquals(
+            $_itemColumn<String>('contact_id')!,
+          ),
+        );
+
+    final cache = $_typedResult.readTableOrNull(
+      _dbContactRevisionConflictsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<
     $DbContactRegionAssignmentsTable,
     List<DbContactRegionAssignment>
   >
@@ -12993,6 +14200,33 @@ class $$DbContactRecordsTableFilterComposer
                 $removeJoinBuilderFromRootComposer,
           ),
     );
+    return f(composer);
+  }
+
+  Expression<bool> dbContactRevisionConflictsRefs(
+    Expression<bool> Function($$DbContactRevisionConflictsTableFilterComposer f)
+    f,
+  ) {
+    final $$DbContactRevisionConflictsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.contactId,
+          referencedTable: $db.dbContactRevisionConflicts,
+          getReferencedColumn: (t) => t.contactId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbContactRevisionConflictsTableFilterComposer(
+                $db: $db,
+                $table: $db.dbContactRevisionConflicts,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
     return f(composer);
   }
 
@@ -13316,6 +14550,35 @@ class $$DbContactRecordsTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> dbContactRevisionConflictsRefs<T extends Object>(
+    Expression<T> Function(
+      $$DbContactRevisionConflictsTableAnnotationComposer a,
+    )
+    f,
+  ) {
+    final $$DbContactRevisionConflictsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.contactId,
+          referencedTable: $db.dbContactRevisionConflicts,
+          getReferencedColumn: (t) => t.contactId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbContactRevisionConflictsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.dbContactRevisionConflicts,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+
   Expression<T> dbContactRegionAssignmentsRefs<T extends Object>(
     Expression<T> Function(
       $$DbContactRegionAssignmentsTableAnnotationComposer a,
@@ -13363,6 +14626,7 @@ class $$DbContactRecordsTableTableManager
             bool dbContactAttemptsRefs,
             bool dbContactRevisionsRefs,
             bool dbContactAnswersRefs,
+            bool dbContactRevisionConflictsRefs,
             bool dbContactRegionAssignmentsRefs,
           })
         > {
@@ -13488,6 +14752,7 @@ class $$DbContactRecordsTableTableManager
                 dbContactAttemptsRefs = false,
                 dbContactRevisionsRefs = false,
                 dbContactAnswersRefs = false,
+                dbContactRevisionConflictsRefs = false,
                 dbContactRegionAssignmentsRefs = false,
               }) {
                 return PrefetchHooks(
@@ -13496,6 +14761,8 @@ class $$DbContactRecordsTableTableManager
                     if (dbContactAttemptsRefs) db.dbContactAttempts,
                     if (dbContactRevisionsRefs) db.dbContactRevisions,
                     if (dbContactAnswersRefs) db.dbContactAnswers,
+                    if (dbContactRevisionConflictsRefs)
+                      db.dbContactRevisionConflicts,
                     if (dbContactRegionAssignmentsRefs)
                       db.dbContactRegionAssignments,
                   ],
@@ -13565,6 +14832,27 @@ class $$DbContactRecordsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (dbContactRevisionConflictsRefs)
+                        await $_getPrefetchedData<
+                          DbContactRecord,
+                          $DbContactRecordsTable,
+                          DbContactRevisionConflict
+                        >(
+                          currentTable: table,
+                          referencedTable: $$DbContactRecordsTableReferences
+                              ._dbContactRevisionConflictsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$DbContactRecordsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).dbContactRevisionConflictsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.contactId == item.contactId,
+                              ),
+                          typedResults: items,
+                        ),
                       if (dbContactRegionAssignmentsRefs)
                         await $_getPrefetchedData<
                           DbContactRecord,
@@ -13610,6 +14898,7 @@ typedef $$DbContactRecordsTableProcessedTableManager =
         bool dbContactAttemptsRefs,
         bool dbContactRevisionsRefs,
         bool dbContactAnswersRefs,
+        bool dbContactRevisionConflictsRefs,
         bool dbContactRegionAssignmentsRefs,
       })
     >;
@@ -15491,6 +16780,645 @@ typedef $$DbContactAnswersTableProcessedTableManager =
       $$DbContactAnswersTableUpdateCompanionBuilder,
       (DbContactAnswer, $$DbContactAnswersTableReferences),
       DbContactAnswer,
+      PrefetchHooks Function({bool contactId})
+    >;
+typedef $$DbContactRevisionConflictsTableCreateCompanionBuilder =
+    DbContactRevisionConflictsCompanion Function({
+      required String conflictId,
+      required String commandId,
+      required String contactId,
+      required String appUserId,
+      required String workspaceId,
+      required String projectId,
+      required int baseRevision,
+      required int currentRevision,
+      required String conflictingFieldsJson,
+      required String questionnaireVersionId,
+      required String currentRevisionKind,
+      required DateTime currentRevisedAtUtc,
+      required String currentReason,
+      required String currentSnapshotJson,
+      required String proposedSnapshotJson,
+      Value<String> status,
+      Value<String?> resolutionCommandId,
+      required DateTime createdAtUtc,
+      Value<DateTime?> resolvedAtUtc,
+      Value<int> rowid,
+    });
+typedef $$DbContactRevisionConflictsTableUpdateCompanionBuilder =
+    DbContactRevisionConflictsCompanion Function({
+      Value<String> conflictId,
+      Value<String> commandId,
+      Value<String> contactId,
+      Value<String> appUserId,
+      Value<String> workspaceId,
+      Value<String> projectId,
+      Value<int> baseRevision,
+      Value<int> currentRevision,
+      Value<String> conflictingFieldsJson,
+      Value<String> questionnaireVersionId,
+      Value<String> currentRevisionKind,
+      Value<DateTime> currentRevisedAtUtc,
+      Value<String> currentReason,
+      Value<String> currentSnapshotJson,
+      Value<String> proposedSnapshotJson,
+      Value<String> status,
+      Value<String?> resolutionCommandId,
+      Value<DateTime> createdAtUtc,
+      Value<DateTime?> resolvedAtUtc,
+      Value<int> rowid,
+    });
+
+final class $$DbContactRevisionConflictsTableReferences
+    extends
+        BaseReferences<
+          _$LocalDatabase,
+          $DbContactRevisionConflictsTable,
+          DbContactRevisionConflict
+        > {
+  $$DbContactRevisionConflictsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $DbContactRecordsTable _contactIdTable(
+    _$LocalDatabase db,
+  ) => db.dbContactRecords.createAlias(
+    'db_contact_revision_conflicts__contact_id__db_contact_records__contact_id',
+  );
+
+  $$DbContactRecordsTableProcessedTableManager get contactId {
+    final $_column = $_itemColumn<String>('contact_id')!;
+
+    final manager = $$DbContactRecordsTableTableManager(
+      $_db,
+      $_db.dbContactRecords,
+    ).filter((f) => f.contactId.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_contactIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$DbContactRevisionConflictsTableFilterComposer
+    extends Composer<_$LocalDatabase, $DbContactRevisionConflictsTable> {
+  $$DbContactRevisionConflictsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get conflictId => $composableBuilder(
+    column: $table.conflictId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get commandId => $composableBuilder(
+    column: $table.commandId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get appUserId => $composableBuilder(
+    column: $table.appUserId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get projectId => $composableBuilder(
+    column: $table.projectId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get baseRevision => $composableBuilder(
+    column: $table.baseRevision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get currentRevision => $composableBuilder(
+    column: $table.currentRevision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get conflictingFieldsJson => $composableBuilder(
+    column: $table.conflictingFieldsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get questionnaireVersionId => $composableBuilder(
+    column: $table.questionnaireVersionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get currentRevisionKind => $composableBuilder(
+    column: $table.currentRevisionKind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get currentRevisedAtUtc => $composableBuilder(
+    column: $table.currentRevisedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get currentReason => $composableBuilder(
+    column: $table.currentReason,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get currentSnapshotJson => $composableBuilder(
+    column: $table.currentSnapshotJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get proposedSnapshotJson => $composableBuilder(
+    column: $table.proposedSnapshotJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get resolutionCommandId => $composableBuilder(
+    column: $table.resolutionCommandId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get resolvedAtUtc => $composableBuilder(
+    column: $table.resolvedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$DbContactRecordsTableFilterComposer get contactId {
+    final $$DbContactRecordsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.contactId,
+      referencedTable: $db.dbContactRecords,
+      getReferencedColumn: (t) => t.contactId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbContactRecordsTableFilterComposer(
+            $db: $db,
+            $table: $db.dbContactRecords,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DbContactRevisionConflictsTableOrderingComposer
+    extends Composer<_$LocalDatabase, $DbContactRevisionConflictsTable> {
+  $$DbContactRevisionConflictsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get conflictId => $composableBuilder(
+    column: $table.conflictId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get commandId => $composableBuilder(
+    column: $table.commandId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get appUserId => $composableBuilder(
+    column: $table.appUserId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get projectId => $composableBuilder(
+    column: $table.projectId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get baseRevision => $composableBuilder(
+    column: $table.baseRevision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get currentRevision => $composableBuilder(
+    column: $table.currentRevision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get conflictingFieldsJson => $composableBuilder(
+    column: $table.conflictingFieldsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get questionnaireVersionId => $composableBuilder(
+    column: $table.questionnaireVersionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get currentRevisionKind => $composableBuilder(
+    column: $table.currentRevisionKind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get currentRevisedAtUtc => $composableBuilder(
+    column: $table.currentRevisedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get currentReason => $composableBuilder(
+    column: $table.currentReason,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get currentSnapshotJson => $composableBuilder(
+    column: $table.currentSnapshotJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get proposedSnapshotJson => $composableBuilder(
+    column: $table.proposedSnapshotJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get resolutionCommandId => $composableBuilder(
+    column: $table.resolutionCommandId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get resolvedAtUtc => $composableBuilder(
+    column: $table.resolvedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$DbContactRecordsTableOrderingComposer get contactId {
+    final $$DbContactRecordsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.contactId,
+      referencedTable: $db.dbContactRecords,
+      getReferencedColumn: (t) => t.contactId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbContactRecordsTableOrderingComposer(
+            $db: $db,
+            $table: $db.dbContactRecords,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DbContactRevisionConflictsTableAnnotationComposer
+    extends Composer<_$LocalDatabase, $DbContactRevisionConflictsTable> {
+  $$DbContactRevisionConflictsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get conflictId => $composableBuilder(
+    column: $table.conflictId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get commandId =>
+      $composableBuilder(column: $table.commandId, builder: (column) => column);
+
+  GeneratedColumn<String> get appUserId =>
+      $composableBuilder(column: $table.appUserId, builder: (column) => column);
+
+  GeneratedColumn<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get projectId =>
+      $composableBuilder(column: $table.projectId, builder: (column) => column);
+
+  GeneratedColumn<int> get baseRevision => $composableBuilder(
+    column: $table.baseRevision,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get currentRevision => $composableBuilder(
+    column: $table.currentRevision,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get conflictingFieldsJson => $composableBuilder(
+    column: $table.conflictingFieldsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get questionnaireVersionId => $composableBuilder(
+    column: $table.questionnaireVersionId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get currentRevisionKind => $composableBuilder(
+    column: $table.currentRevisionKind,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get currentRevisedAtUtc => $composableBuilder(
+    column: $table.currentRevisedAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get currentReason => $composableBuilder(
+    column: $table.currentReason,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get currentSnapshotJson => $composableBuilder(
+    column: $table.currentSnapshotJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get proposedSnapshotJson => $composableBuilder(
+    column: $table.proposedSnapshotJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<String> get resolutionCommandId => $composableBuilder(
+    column: $table.resolutionCommandId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAtUtc => $composableBuilder(
+    column: $table.createdAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get resolvedAtUtc => $composableBuilder(
+    column: $table.resolvedAtUtc,
+    builder: (column) => column,
+  );
+
+  $$DbContactRecordsTableAnnotationComposer get contactId {
+    final $$DbContactRecordsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.contactId,
+      referencedTable: $db.dbContactRecords,
+      getReferencedColumn: (t) => t.contactId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbContactRecordsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.dbContactRecords,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DbContactRevisionConflictsTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $DbContactRevisionConflictsTable,
+          DbContactRevisionConflict,
+          $$DbContactRevisionConflictsTableFilterComposer,
+          $$DbContactRevisionConflictsTableOrderingComposer,
+          $$DbContactRevisionConflictsTableAnnotationComposer,
+          $$DbContactRevisionConflictsTableCreateCompanionBuilder,
+          $$DbContactRevisionConflictsTableUpdateCompanionBuilder,
+          (
+            DbContactRevisionConflict,
+            $$DbContactRevisionConflictsTableReferences,
+          ),
+          DbContactRevisionConflict,
+          PrefetchHooks Function({bool contactId})
+        > {
+  $$DbContactRevisionConflictsTableTableManager(
+    _$LocalDatabase db,
+    $DbContactRevisionConflictsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DbContactRevisionConflictsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$DbContactRevisionConflictsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$DbContactRevisionConflictsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> conflictId = const Value.absent(),
+                Value<String> commandId = const Value.absent(),
+                Value<String> contactId = const Value.absent(),
+                Value<String> appUserId = const Value.absent(),
+                Value<String> workspaceId = const Value.absent(),
+                Value<String> projectId = const Value.absent(),
+                Value<int> baseRevision = const Value.absent(),
+                Value<int> currentRevision = const Value.absent(),
+                Value<String> conflictingFieldsJson = const Value.absent(),
+                Value<String> questionnaireVersionId = const Value.absent(),
+                Value<String> currentRevisionKind = const Value.absent(),
+                Value<DateTime> currentRevisedAtUtc = const Value.absent(),
+                Value<String> currentReason = const Value.absent(),
+                Value<String> currentSnapshotJson = const Value.absent(),
+                Value<String> proposedSnapshotJson = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<String?> resolutionCommandId = const Value.absent(),
+                Value<DateTime> createdAtUtc = const Value.absent(),
+                Value<DateTime?> resolvedAtUtc = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbContactRevisionConflictsCompanion(
+                conflictId: conflictId,
+                commandId: commandId,
+                contactId: contactId,
+                appUserId: appUserId,
+                workspaceId: workspaceId,
+                projectId: projectId,
+                baseRevision: baseRevision,
+                currentRevision: currentRevision,
+                conflictingFieldsJson: conflictingFieldsJson,
+                questionnaireVersionId: questionnaireVersionId,
+                currentRevisionKind: currentRevisionKind,
+                currentRevisedAtUtc: currentRevisedAtUtc,
+                currentReason: currentReason,
+                currentSnapshotJson: currentSnapshotJson,
+                proposedSnapshotJson: proposedSnapshotJson,
+                status: status,
+                resolutionCommandId: resolutionCommandId,
+                createdAtUtc: createdAtUtc,
+                resolvedAtUtc: resolvedAtUtc,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String conflictId,
+                required String commandId,
+                required String contactId,
+                required String appUserId,
+                required String workspaceId,
+                required String projectId,
+                required int baseRevision,
+                required int currentRevision,
+                required String conflictingFieldsJson,
+                required String questionnaireVersionId,
+                required String currentRevisionKind,
+                required DateTime currentRevisedAtUtc,
+                required String currentReason,
+                required String currentSnapshotJson,
+                required String proposedSnapshotJson,
+                Value<String> status = const Value.absent(),
+                Value<String?> resolutionCommandId = const Value.absent(),
+                required DateTime createdAtUtc,
+                Value<DateTime?> resolvedAtUtc = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbContactRevisionConflictsCompanion.insert(
+                conflictId: conflictId,
+                commandId: commandId,
+                contactId: contactId,
+                appUserId: appUserId,
+                workspaceId: workspaceId,
+                projectId: projectId,
+                baseRevision: baseRevision,
+                currentRevision: currentRevision,
+                conflictingFieldsJson: conflictingFieldsJson,
+                questionnaireVersionId: questionnaireVersionId,
+                currentRevisionKind: currentRevisionKind,
+                currentRevisedAtUtc: currentRevisedAtUtc,
+                currentReason: currentReason,
+                currentSnapshotJson: currentSnapshotJson,
+                proposedSnapshotJson: proposedSnapshotJson,
+                status: status,
+                resolutionCommandId: resolutionCommandId,
+                createdAtUtc: createdAtUtc,
+                resolvedAtUtc: resolvedAtUtc,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$DbContactRevisionConflictsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({contactId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (contactId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.contactId,
+                                referencedTable:
+                                    $$DbContactRevisionConflictsTableReferences
+                                        ._contactIdTable(db),
+                                referencedColumn:
+                                    $$DbContactRevisionConflictsTableReferences
+                                        ._contactIdTable(db)
+                                        .contactId,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$DbContactRevisionConflictsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $DbContactRevisionConflictsTable,
+      DbContactRevisionConflict,
+      $$DbContactRevisionConflictsTableFilterComposer,
+      $$DbContactRevisionConflictsTableOrderingComposer,
+      $$DbContactRevisionConflictsTableAnnotationComposer,
+      $$DbContactRevisionConflictsTableCreateCompanionBuilder,
+      $$DbContactRevisionConflictsTableUpdateCompanionBuilder,
+      (DbContactRevisionConflict, $$DbContactRevisionConflictsTableReferences),
+      DbContactRevisionConflict,
       PrefetchHooks Function({bool contactId})
     >;
 typedef $$DbContactDraftsTableCreateCompanionBuilder =
@@ -19868,6 +21796,12 @@ class $LocalDatabaseManager {
       $$DbContactRevisionsTableTableManager(_db, _db.dbContactRevisions);
   $$DbContactAnswersTableTableManager get dbContactAnswers =>
       $$DbContactAnswersTableTableManager(_db, _db.dbContactAnswers);
+  $$DbContactRevisionConflictsTableTableManager
+  get dbContactRevisionConflicts =>
+      $$DbContactRevisionConflictsTableTableManager(
+        _db,
+        _db.dbContactRevisionConflicts,
+      );
   $$DbContactDraftsTableTableManager get dbContactDrafts =>
       $$DbContactDraftsTableTableManager(_db, _db.dbContactDrafts);
   $$DbContactDraftAnswersTableTableManager get dbContactDraftAnswers =>

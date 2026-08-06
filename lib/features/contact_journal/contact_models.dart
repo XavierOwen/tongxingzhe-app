@@ -670,6 +670,106 @@ final class ContactRevision {
   final List<QuestionnaireAnswer> answers;
 }
 
+/// 跨设备冲突中一方提交的完整核心事实。
+///
+/// 身份、权限和同步状态不属于比较快照，不能由服务端冲突 payload 反向覆盖。
+final class ContactConflictSnapshot {
+  const ContactConflictSnapshot({
+    required this.occurredAtUtc,
+    required this.occurredTimeZone,
+    required this.channel,
+    required this.channelDetail,
+    required this.location,
+    required this.reachCount,
+    required this.interestLevel,
+    required this.answers,
+  });
+
+  final DateTime occurredAtUtc;
+  final String occurredTimeZone;
+  final ContactChannel channel;
+  final String? channelDetail;
+  final ContactLocation location;
+  final int reachCount;
+  final int interestLevel;
+  final List<QuestionnaireAnswer> answers;
+}
+
+enum ContactRevisionConflictStatus {
+  pending('pending'),
+  resolutionPending('resolution_pending'),
+  resolved('resolved');
+
+  const ContactRevisionConflictStatus(this.storageValue);
+
+  final String storageValue;
+
+  static ContactRevisionConflictStatus fromStorage(String value) =>
+      ContactRevisionConflictStatus.values.singleWhere(
+        (status) => status.storageValue == value,
+      );
+}
+
+/// 一次同字段跨设备分叉。服务器版本与本机提议都持久保留。
+final class ContactRevisionConflict {
+  const ContactRevisionConflict({
+    required this.conflictId,
+    required this.commandId,
+    required this.contactId,
+    required this.appUserId,
+    required this.workspaceId,
+    required this.projectId,
+    required this.baseRevision,
+    required this.currentRevision,
+    required this.conflictingFields,
+    required this.questionnaireVersionId,
+    required this.currentRevisionKind,
+    required this.currentRevisedAtUtc,
+    required this.currentReason,
+    required this.currentSnapshot,
+    required this.proposedSnapshot,
+    required this.status,
+  });
+
+  final String conflictId;
+  final String commandId;
+  final String contactId;
+  final String appUserId;
+  final String workspaceId;
+  final String projectId;
+  final int baseRevision;
+  final int currentRevision;
+  final List<String> conflictingFields;
+  final String questionnaireVersionId;
+  final ContactRevisionKind currentRevisionKind;
+  final DateTime currentRevisedAtUtc;
+  final String currentReason;
+  final ContactConflictSnapshot currentSnapshot;
+  final ContactConflictSnapshot proposedSnapshot;
+  final ContactRevisionConflictStatus status;
+}
+
+/// 使用者对一条持久冲突提交的明确选择或合并结果。
+final class ContactConflictResolutionSubmission {
+  const ContactConflictResolutionSubmission({
+    required this.conflictId,
+    required this.appUserId,
+    required this.workspaceId,
+    required this.projectId,
+    required this.deviceId,
+    required this.reason,
+    required this.snapshot,
+  });
+
+  final String conflictId;
+  final String appUserId;
+  final String workspaceId;
+  final String projectId;
+  final String deviceId;
+  final String reason;
+  final ContactConflictSnapshot snapshot;
+}
+
 /// `ContactJournal` 向 UI 返回的当前有效接触视图。
 final class ContactRecord {
   const ContactRecord({

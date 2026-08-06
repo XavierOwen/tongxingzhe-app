@@ -92,6 +92,89 @@ test("Postgres store parses stable conflict without exposing SQL error", async (
   });
 });
 
+test("Postgres store loads the authorized conflict after a revision collision", async () => {
+  const queries: string[] = [];
+  const reviseCommand: SyncCommand = {
+    protocolVersion: 1,
+    commandId: "revision-conflict-command",
+    deviceId: "device-2",
+    aggregateId: "contact-1",
+    baseRevision: 1,
+    type: "contact.revise.v1",
+    payload: {
+      contactId: "contact-1",
+      workspaceId: context.current.workspace.id,
+      projectId: context.current.project.id,
+      reason: "修正人数",
+      occurredAtUtc: "2030-01-08T18:00:00.000Z",
+      occurredTimeZone: "America/Chicago",
+      channel: "video_call",
+      channelDetail: null,
+      location: { kind: "not_applicable" },
+      reachCount: 3,
+      interestLevel: 3,
+      answers: [],
+    },
+  };
+  const store = new PostgresSyncCommandStore(async (queryText) => {
+    queries.push(queryText);
+    if (queryText.includes("read_contact_revision_conflict")) {
+      return {
+        rows: [{
+          conflict_payload: {
+            conflictId: "55555555-5555-4555-8555-555555555555",
+            contactId: "contact-1",
+            baseRevision: 1,
+            currentRevision: 2,
+            conflictingFields: ["reachCount"],
+            questionnaireVersionId: context.current.questionnaireVersion.id,
+            currentRevisionKind: "corrected",
+            currentRevisedAtUtc: "2030-01-08T19:00:00.000Z",
+            currentReason: "另一台设备修正人数",
+            currentSnapshot: {
+              occurredAtUtc: "2030-01-08T18:00:00.000Z",
+              occurredTimeZone: "America/Chicago",
+              channel: "video_call",
+              channelDetail: null,
+              location: { kind: "not_applicable" },
+              reachCount: 4,
+              interestLevel: 3,
+              answers: [],
+            },
+            proposedSnapshot: {
+              occurredAtUtc: "2030-01-08T18:00:00.000Z",
+              occurredTimeZone: "America/Chicago",
+              channel: "video_call",
+              channelDetail: null,
+              location: { kind: "not_applicable" },
+              reachCount: 3,
+              interestLevel: 3,
+              answers: [],
+            },
+          },
+        }],
+      };
+    }
+    return {
+      rows: [{
+        result_code: "conflict",
+        server_cursor: null,
+        failure_code: "contact_revision_conflict",
+      }],
+    };
+  });
+
+  const result = await store.apply(context, reviseCommand);
+
+  assert.equal(result.result, "conflict");
+  if (result.result === "conflict") {
+    assert.equal(result.conflict?.currentSnapshot.reachCount, 4);
+    assert.deepEqual(result.conflict?.conflictingFields, ["reachCount"]);
+  }
+  assert.equal(queries.length, 2);
+  assert.match(queries[1]!, /read_contact_revision_conflict/);
+});
+
 test("Postgres store routes private draft commands to the draft function", async () => {
   let text = "";
   const store = new PostgresSyncCommandStore(async (queryText) => {
@@ -217,12 +300,37 @@ test("Postgres store routes contact revision commands to distinct functions", as
       reason: "重复录入",
     },
   };
+  const resolveCommand: SyncCommand = {
+    protocolVersion: 1,
+    commandId: "resolution-command-4",
+    deviceId: "device-1",
+    aggregateId: "contact-1",
+    baseRevision: 2,
+    type: "contact.resolve.v1",
+    payload: {
+      conflictId: "00000000-0000-4000-8000-000000000099",
+      contactId: "contact-1",
+      workspaceId: context.current.workspace.id,
+      projectId: context.current.project.id,
+      reason: "确认两台设备的结果",
+      occurredAtUtc: "2030-01-08T18:00:00.000Z",
+      occurredTimeZone: "America/Chicago",
+      channel: "video_call",
+      channelDetail: null,
+      location: { kind: "not_applicable" },
+      reachCount: 3,
+      interestLevel: 3,
+      answers: [],
+    },
+  };
 
   await store.apply(context, reviseCommand);
   await store.apply(context, voidCommand);
+  await store.apply(context, resolveCommand);
 
   assert.match(queries[0]!, /apply_contact_revise/);
   assert.match(queries[1]!, /apply_contact_void/);
+  assert.match(queries[2]!, /apply_contact_conflict_resolution/);
 });
 
 test("Postgres store passes trusted scope and opaque cursor to pull function", async () => {

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../features/contact_journal/contact_models.dart';
 import '../identity/identity_session.dart';
 import 'sync_models.dart';
 import 'sync_transport.dart';
@@ -231,7 +232,17 @@ final class HttpSyncTransport implements SyncTransport, SyncBatchTransport {
       return const SyncPushPermanentFailure(failureCode: 'forbidden');
     }
     if (response.statusCode == 409) {
-      return const SyncPushConflict();
+      try {
+        final body = jsonDecode(response.body);
+        if (body is Map<String, Object?>) {
+          return _mapPushBody(body);
+        }
+      } on FormatException {
+        // 旧 Backend 可能只返回 409。保留稳定冲突分类，但不伪造详情。
+      }
+      return SyncPushConflict(
+        failureCode: _responseFailureCode(response, 'conflict'),
+      );
     }
     if (response.statusCode == 422) {
       return SyncPushPermanentFailure(
@@ -351,6 +362,7 @@ final class HttpSyncTransport implements SyncTransport, SyncBatchTransport {
       ),
       'conflict' => SyncPushConflict(
         failureCode: _optionalFailureCode(body, 'conflict'),
+        conflict: _optionalConflict(body['conflict']),
       ),
       'rejected' => SyncPushPermanentFailure(
         failureCode: _optionalFailureCode(body, 'rejected'),
@@ -364,6 +376,164 @@ final class HttpSyncTransport implements SyncTransport, SyncBatchTransport {
       ),
       _ => throw const FormatException('unsupported sync result'),
     };
+  }
+
+  SyncContactRevisionConflict? _optionalConflict(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is! Map<String, Object?>) {
+      throw const FormatException('conflict must be an object');
+    }
+    final rawFields = value['conflicting_fields'];
+    if (rawFields is! List<Object?> || rawFields.isEmpty) {
+      throw const FormatException('conflicting fields are required');
+    }
+    final fields = [for (final field in rawFields) _nonEmptyString(field)];
+    final kind = value['current_revision_kind'];
+    if (kind != 'corrected') {
+      throw const FormatException('current revision kind is invalid');
+    }
+    return SyncContactRevisionConflict(
+      conflictId: _nonEmptyString(value['conflict_id']),
+      contactId: _nonEmptyString(value['contact_id']),
+      baseRevision: _positiveInteger(value['base_revision']),
+      currentRevision: _positiveInteger(value['current_revision']),
+      conflictingFields: List.unmodifiable(fields),
+      questionnaireVersionId: _nonEmptyString(
+        value['questionnaire_version_id'],
+      ),
+      currentRevisionKind: ContactRevisionKind.corrected,
+      currentRevisedAtUtc: _utcDate(value['current_revised_at_utc']),
+      currentReason: _nonEmptyString(value['current_reason']),
+      currentSnapshot: _conflictSnapshot(value['current_snapshot']),
+      proposedSnapshot: _conflictSnapshot(value['proposed_snapshot']),
+    );
+  }
+
+  ContactConflictSnapshot _conflictSnapshot(Object? value) {
+    if (value is! Map<String, Object?>) {
+      throw const FormatException('conflict snapshot must be an object');
+    }
+    final reachCount = _positiveInteger(value['reachCount']);
+    final interestLevel = value['interestLevel'];
+    if (interestLevel is! int || interestLevel < 0 || interestLevel > 4) {
+      throw const FormatException('conflict interest is invalid');
+    }
+    final rawAnswers = value['answers'];
+    if (rawAnswers is! List<Object?>) {
+      throw const FormatException('conflict answers must be a list');
+    }
+    final answers = [for (final answer in rawAnswers) _conflictAnswer(answer)];
+    if (answers.map((answer) => answer.questionId).toSet().length !=
+        answers.length) {
+      throw const FormatException('conflict answers contain duplicate IDs');
+    }
+    return ContactConflictSnapshot(
+      occurredAtUtc: _utcDate(value['occurredAtUtc']),
+      occurredTimeZone: _nonEmptyString(value['occurredTimeZone']),
+      channel: _conflictChannel(value['channel']),
+      channelDetail: _nullableString(value['channelDetail']),
+      location: _conflictLocation(value['location']),
+      reachCount: reachCount,
+      interestLevel: interestLevel,
+      answers: List.unmodifiable(answers),
+    );
+  }
+
+  QuestionnaireAnswer _conflictAnswer(Object? value) {
+    if (value is! Map<String, Object?> || value['type'] != 'boolean') {
+      throw const FormatException('conflict answer is invalid');
+    }
+    final questionId = _nonEmptyString(value['questionId']);
+    return switch (value['state']) {
+      'answered' when value['value'] is bool => BooleanQuestionnaireAnswer(
+        questionId: questionId,
+        value: value['value']! as bool,
+      ),
+      'unknown' when value['value'] == null =>
+        BooleanQuestionnaireAnswer.unknown(questionId: questionId),
+      'refused' when value['value'] == null =>
+        BooleanQuestionnaireAnswer.refused(questionId: questionId),
+      'not_applicable' when value['value'] == null =>
+        BooleanQuestionnaireAnswer.notApplicable(questionId: questionId),
+      'unanswered' when value['value'] == null =>
+        BooleanQuestionnaireAnswer.unanswered(questionId: questionId),
+      _ => throw const FormatException('conflict answer state is invalid'),
+    };
+  }
+
+  ContactLocation _conflictLocation(Object? value) {
+    if (value is! Map<String, Object?>) {
+      throw const FormatException('conflict location must be an object');
+    }
+    return switch (value['kind']) {
+      'not_applicable' => const NotApplicableContactLocation(),
+      'resolved' => ResolvedContactLocation(
+        placeName: _nonEmptyString(value['placeName']),
+        smallestRegionId: _nonEmptyString(value['smallestRegionId']),
+        regionTreeVersion: _nonEmptyString(value['regionTreeVersion']),
+      ),
+      'pending_resolution' => PendingContactLocation(
+        latitude: _boundedDouble(value['latitude'], -90, 90),
+        longitude: _boundedDouble(value['longitude'], -180, 180),
+        accuracyMeters: _nullableNonNegativeDouble(value['accuracyMeters']),
+      ),
+      _ => throw const FormatException('conflict location kind is invalid'),
+    };
+  }
+
+  ContactChannel _conflictChannel(Object? value) => switch (value) {
+    'face_to_face' => ContactChannel.faceToFace,
+    'voice_call' => ContactChannel.voiceCall,
+    'video_call' => ContactChannel.videoCall,
+    'instant_text' => ContactChannel.instantText,
+    'asynchronous_message' => ContactChannel.asynchronousMessage,
+    'mixed' => ContactChannel.mixed,
+    'other_direct' => ContactChannel.otherDirect,
+    _ => throw const FormatException('conflict channel is invalid'),
+  };
+
+  DateTime _utcDate(Object? value) {
+    final raw = _nonEmptyString(value);
+    final parsed = DateTime.tryParse(raw);
+    if (!raw.endsWith('Z') || parsed == null) {
+      throw const FormatException('conflict date must be UTC');
+    }
+    return parsed.toUtc();
+  }
+
+  int _positiveInteger(Object? value) {
+    if (value is! int || value < 1) {
+      throw const FormatException('positive integer is required');
+    }
+    return value;
+  }
+
+  String? _nullableString(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    return _nonEmptyString(value);
+  }
+
+  double _boundedDouble(Object? value, double minimum, double maximum) {
+    if (value is! num || !value.isFinite) {
+      throw const FormatException('finite number is required');
+    }
+    final parsed = value.toDouble();
+    if (parsed < minimum || parsed > maximum) {
+      throw const FormatException('number is outside its bounds');
+    }
+    return parsed;
+  }
+
+  double? _nullableNonNegativeDouble(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    final parsed = _boundedDouble(value, 0, double.maxFinite);
+    return parsed;
   }
 
   List<SyncCommandPushOutcome> _sameBatchResult(

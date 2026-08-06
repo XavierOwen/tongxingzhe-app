@@ -57,6 +57,45 @@ void main() {
     expect(result.retryAfter, const Duration(seconds: 45));
   });
 
+  test('409 解析经过授权的跨设备冲突详情', () async {
+    final transport = HttpSyncTransport(
+      baseUri: Uri.parse('https://backend.example.test'),
+      identitySession: _signedInIdentity(),
+      client: MockClient(
+        (_) async => http.Response(
+          jsonEncode({
+            'result': 'conflict',
+            'error': {'code': 'contact_revision_conflict'},
+            'conflict': {
+              'conflict_id': 'conflict-1',
+              'contact_id': 'contact-1',
+              'base_revision': 1,
+              'current_revision': 2,
+              'conflicting_fields': ['reachCount'],
+              'questionnaire_version_id': 'questionnaire-v1',
+              'current_revision_kind': 'corrected',
+              'current_revised_at_utc': '2030-01-08T19:00:00.000Z',
+              'current_reason': '另一台设备修正人数',
+              'current_snapshot': _conflictSnapshot(reachCount: 4),
+              'proposed_snapshot': _conflictSnapshot(reachCount: 3),
+            },
+          }),
+          409,
+          headers: {'content-type': 'application/json'},
+        ),
+      ),
+    );
+
+    final result = await transport.push(_command);
+
+    expect(result, isA<SyncPushConflict>());
+    final conflict = (result as SyncPushConflict).conflict!;
+    expect(result.failureCode, 'contact_revision_conflict');
+    expect(conflict.conflictingFields, ['reachCount']);
+    expect(conflict.currentSnapshot.reachCount, 4);
+    expect(conflict.proposedSnapshot.reachCount, 3);
+  });
+
   test('过大 Retry-After 按本地一小时上限处理', () async {
     final transport = HttpSyncTransport(
       baseUri: Uri.parse('https://backend.example.test'),
@@ -345,3 +384,14 @@ const _secondCommand = SyncCommand(
   commandType: 'contact.submit.v1',
   payload: {'reach_count': 3},
 );
+
+Map<String, Object?> _conflictSnapshot({required int reachCount}) => {
+  'occurredAtUtc': '2030-01-08T18:00:00.000Z',
+  'occurredTimeZone': 'America/Chicago',
+  'channel': 'video_call',
+  'channelDetail': null,
+  'location': {'kind': 'not_applicable'},
+  'reachCount': reachCount,
+  'interestLevel': 3,
+  'answers': <Object?>[],
+};
