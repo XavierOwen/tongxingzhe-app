@@ -949,6 +949,51 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('3 / 5'), findsOneWidget);
   });
+
+  testWidgets('未接通尝试与后来真实接触使用两条清楚路径', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+    );
+    addTearDown(database.close);
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('接触'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('record-contact-attempt')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('不计触达'), findsWidgets);
+    await tester.tap(find.text('语音通话'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('保存接触尝试'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('接触尝试 (1)'), findsOneWidget);
+    expect(find.textContaining('触达人数 0'), findsOneWidget);
+    await tester.tap(find.text('记录后来回应'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('这条接触来自一次较早的未接通尝试'), findsOneWidget);
+    expect(find.textContaining('不会把尝试改写成接触'), findsOneWidget);
+  });
 }
 
 final class _SingleDatabaseFactory implements LocalDatabaseFactory {

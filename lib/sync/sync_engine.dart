@@ -174,6 +174,8 @@ final class SyncEngine {
               switch (change) {
                 case final _RemoteContact contact:
                   await _applyRemoteContact(contact);
+                case final _RemoteContactAttempt attempt:
+                  await _applyRemoteContactAttempt(attempt);
                 case final _RemoteDraftUpsert draft:
                   await _applyRemoteDraftUpsert(draft);
                 case final _RemoteDraftDelete draft:
@@ -513,6 +515,7 @@ final class SyncEngine {
   _ParsedRemoteChange _parseRemoteChange(SyncRemoteChange change) {
     return switch (change.changeType) {
       'contact.submitted' => _parseRemoteContact(change),
+      'contact.attempt.submitted' => _parseRemoteContactAttempt(change),
       'draft.upserted' => _parseRemoteDraftUpsert(change),
       'draft.deleted' => _parseRemoteDraftDelete(change),
       _ => throw const FormatException('unsupported remote change'),
@@ -570,6 +573,30 @@ final class SyncEngine {
       reachCount: reachCount,
       interestLevel: interestLevel,
       answers: answers,
+      sourceAttemptId: _optionalString(payload['sourceAttemptId']),
+    );
+  }
+
+  _RemoteContactAttempt _parseRemoteContactAttempt(SyncRemoteChange change) {
+    if (change.changeType != 'contact.attempt.submitted' ||
+        change.revisionNumber != 1) {
+      throw const FormatException('unsupported remote contact attempt');
+    }
+    final payload = change.payload;
+    _requireRemoteScope(payload);
+    final channel = _remoteChannel(_requiredString(payload['channel']));
+    final channelDetail = _optionalString(payload['channelDetail']);
+    if (channel == ContactChannel.otherDirect && channelDetail == null) {
+      throw const FormatException('remote channel detail is required');
+    }
+    return _RemoteContactAttempt(
+      attemptId: _requiredString(payload['attemptId']),
+      occurredAtUtc: _utcDate(payload['occurredAtUtc']),
+      occurredTimeZone: _requiredString(payload['occurredTimeZone']),
+      firstSubmittedAtUtc: _utcDate(payload['firstSubmittedAtUtc']),
+      channel: channel,
+      channelDetail: channelDetail,
+      linkedContactId: _optionalString(payload['linkedContactId']),
     );
   }
 
@@ -629,6 +656,7 @@ final class SyncEngine {
       answers: answers,
       serverRevision: serverRevision,
       sourceDeviceId: _requiredString(payload['sourceDeviceId']),
+      sourceAttemptId: _optionalString(payload['sourceAttemptId']),
     );
   }
 
@@ -660,6 +688,7 @@ final class SyncEngine {
     final existing = await existingQuery.getSingleOrNull();
     if (existing != null) {
       if (await _existingContactMatchesRemote(existing, contact)) {
+        await _linkRemoteSourceAttempt(contact);
         return;
       }
       throw const FormatException('remote contact conflicts with local fact');
@@ -742,6 +771,69 @@ final class SyncEngine {
               booleanValue: Value(answer.value),
             ),
           );
+    }
+    await _linkRemoteSourceAttempt(contact);
+  }
+
+  Future<void> _applyRemoteContactAttempt(_RemoteContactAttempt attempt) async {
+    final query = _database.select(_database.dbContactAttempts)
+      ..where((row) => row.attemptId.equals(attempt.attemptId));
+    final existing = await query.getSingleOrNull();
+    if (existing != null) {
+      if (existing.appUserId == _scope.appUserId &&
+          existing.workspaceId == _scope.workspaceId &&
+          existing.projectId == _scope.projectId &&
+          existing.occurredAtUtc.toUtc() == attempt.occurredAtUtc &&
+          existing.occurredTimeZone == attempt.occurredTimeZone &&
+          existing.channel == attempt.channel.storageValue &&
+          existing.channelDetail == attempt.channelDetail &&
+          existing.linkedContactId == attempt.linkedContactId) {
+        return;
+      }
+      throw const FormatException(
+        'remote contact attempt conflicts with local',
+      );
+    }
+    await _database
+        .into(_database.dbContactAttempts)
+        .insert(
+          DbContactAttemptsCompanion.insert(
+            attemptId: attempt.attemptId,
+            appUserId: _scope.appUserId,
+            workspaceId: _scope.workspaceId,
+            projectId: _scope.projectId,
+            occurredAtUtc: attempt.occurredAtUtc,
+            occurredTimeZone: attempt.occurredTimeZone,
+            firstSubmittedAtUtc: attempt.firstSubmittedAtUtc,
+            channel: attempt.channel.storageValue,
+            channelDetail: Value(attempt.channelDetail),
+            linkedContactId: Value(attempt.linkedContactId),
+          ),
+        );
+  }
+
+  Future<void> _linkRemoteSourceAttempt(_RemoteContact contact) async {
+    final attemptId = contact.sourceAttemptId;
+    if (attemptId == null) {
+      return;
+    }
+    final changed =
+        await (_database.update(_database.dbContactAttempts)..where(
+              (row) =>
+                  row.attemptId.equals(attemptId) &
+                  row.appUserId.equals(_scope.appUserId) &
+                  row.workspaceId.equals(_scope.workspaceId) &
+                  row.projectId.equals(_scope.projectId) &
+                  (row.linkedContactId.isNull() |
+                      row.linkedContactId.equals(contact.contactId)),
+            ))
+            .write(
+              DbContactAttemptsCompanion(
+                linkedContactId: Value(contact.contactId),
+              ),
+            );
+    if (changed != 1) {
+      throw const FormatException('remote source attempt is unavailable');
     }
   }
 
@@ -856,6 +948,7 @@ final class SyncEngine {
             syncMode: const Value('account_private'),
             localRevision: Value(draft.serverRevision),
             serverRevision: Value(draft.serverRevision),
+            sourceAttemptId: Value(draft.sourceAttemptId),
           ),
         );
     for (final answer in draft.answers) {
@@ -903,6 +996,7 @@ final class SyncEngine {
         existing.locationAccuracyMeters != location.accuracyMeters ||
         existing.reachCount != draft.reachCount ||
         existing.interestLevel != draft.interestLevel ||
+        existing.sourceAttemptId != draft.sourceAttemptId ||
         existing.abandonedAtUtc != null) {
       return false;
     }
@@ -973,6 +1067,7 @@ final class SyncEngine {
             localRevision: Value(existing.localRevision),
             serverRevision: const Value(0),
             conflictOfDraftId: Value(existing.draftId),
+            sourceAttemptId: Value(existing.sourceAttemptId),
           ),
         );
     for (final answer in answers) {
@@ -1305,6 +1400,7 @@ final class _RemoteContact extends _ParsedRemoteChange {
     required this.reachCount,
     required this.interestLevel,
     required this.answers,
+    required this.sourceAttemptId,
   });
 
   final String contactId;
@@ -1318,6 +1414,27 @@ final class _RemoteContact extends _ParsedRemoteChange {
   final int reachCount;
   final int interestLevel;
   final List<BooleanQuestionnaireAnswer> answers;
+  final String? sourceAttemptId;
+}
+
+final class _RemoteContactAttempt extends _ParsedRemoteChange {
+  const _RemoteContactAttempt({
+    required this.attemptId,
+    required this.occurredAtUtc,
+    required this.occurredTimeZone,
+    required this.firstSubmittedAtUtc,
+    required this.channel,
+    required this.channelDetail,
+    required this.linkedContactId,
+  });
+
+  final String attemptId;
+  final DateTime occurredAtUtc;
+  final String occurredTimeZone;
+  final DateTime firstSubmittedAtUtc;
+  final ContactChannel channel;
+  final String? channelDetail;
+  final String? linkedContactId;
 }
 
 final class _RemoteDraftUpsert extends _ParsedRemoteChange {
@@ -1336,6 +1453,7 @@ final class _RemoteDraftUpsert extends _ParsedRemoteChange {
     required this.answers,
     required this.serverRevision,
     required this.sourceDeviceId,
+    required this.sourceAttemptId,
   });
 
   final String draftId;
@@ -1352,6 +1470,7 @@ final class _RemoteDraftUpsert extends _ParsedRemoteChange {
   final List<BooleanQuestionnaireAnswer> answers;
   final int serverRevision;
   final String sourceDeviceId;
+  final String? sourceAttemptId;
 }
 
 final class _RemoteDraftDelete extends _ParsedRemoteChange {

@@ -241,6 +241,8 @@ final class _ReadyAppState extends State<_ReadyApp> {
         deviceId: widget.deviceId,
         syncEngineFactory: widget.syncEngineFactory,
         locationCapture: widget.locationCapture,
+        clock: widget.clock,
+        timeZoneProvider: widget.timeZoneProvider,
         selectedIndex: route.primaryIndex,
         contactEntryClosedEvents: contactEntryClosedEvents,
         onDestinationSelected: (index) => _routerDelegate.go(switch (index) {
@@ -254,11 +256,17 @@ final class _ReadyAppState extends State<_ReadyApp> {
               ? AppRoute.newContact
               : AppRoute.contactDraft(draft.draftId),
         ),
+        onOpenContactFromAttempt: (attempt) =>
+            _routerDelegate.go(AppRoute.contactFromAttempt(attempt.attemptId)),
       ),
     );
   }
 
-  Widget _buildContactRoute(BuildContext context, String? draftId) {
+  Widget _buildContactRoute(
+    BuildContext context,
+    String? draftId,
+    String? sourceAttemptId,
+  ) {
     return _SessionRoute(
       controller: widget.controller,
       identitySession: widget.identitySession,
@@ -274,6 +282,7 @@ final class _ReadyAppState extends State<_ReadyApp> {
         timeZoneProvider: widget.timeZoneProvider,
         regionResolver: widget.regionResolver,
         draftId: draftId,
+        sourceAttemptId: sourceAttemptId,
       ),
     );
   }
@@ -337,6 +346,7 @@ final class _ContactEntryRoute extends StatefulWidget {
     required this.timeZoneProvider,
     required this.regionResolver,
     required this.draftId,
+    required this.sourceAttemptId,
   });
 
   final AppController controller;
@@ -349,6 +359,7 @@ final class _ContactEntryRoute extends StatefulWidget {
   final DeviceTimeZoneProvider timeZoneProvider;
   final ContactRegionResolver regionResolver;
   final String? draftId;
+  final String? sourceAttemptId;
 
   @override
   State<_ContactEntryRoute> createState() => _ContactEntryRouteState();
@@ -356,27 +367,52 @@ final class _ContactEntryRoute extends StatefulWidget {
 
 final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
   late Future<ContactDraft?> _draft;
+  late Future<ContactAttempt?> _sourceAttempt;
 
   @override
   void initState() {
     super.initState();
     _draft = _loadDraft();
+    _sourceAttempt = _loadSourceAttempt();
   }
 
   @override
   void didUpdateWidget(covariant _ContactEntryRoute oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.draftId != widget.draftId ||
+        oldWidget.sourceAttemptId != widget.sourceAttemptId ||
         oldWidget.context.appUserId != widget.context.appUserId ||
         oldWidget.context.project.id != widget.context.project.id) {
       _draft = _loadDraft();
+      _sourceAttempt = _loadSourceAttempt();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     if (widget.draftId == null) {
-      return _screen(null);
+      if (widget.sourceAttemptId == null) {
+        return _screen(null, null);
+      }
+      return FutureBuilder<ContactAttempt?>(
+        future: _sourceAttempt,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+          final attempt = snapshot.data;
+          if (attempt == null || attempt.linkedContactId != null) {
+            final text = AppStrings(widget.controller.localeCode);
+            return Scaffold(
+              appBar: AppBar(title: Text(text.t('recordContact'))),
+              body: Center(child: Text(text.t('contactAttemptNotAvailable'))),
+            );
+          }
+          return _screen(null, attempt);
+        },
+      );
     }
     return FutureBuilder<ContactDraft?>(
       future: _draft,
@@ -394,12 +430,12 @@ final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
             body: Center(child: Text(text.t('draftNotFound'))),
           );
         }
-        return _screen(draft);
+        return _screen(draft, null);
       },
     );
   }
 
-  Widget _screen(ContactDraft? draft) {
+  Widget _screen(ContactDraft? draft, ContactAttempt? sourceAttempt) {
     return ContactEntryScreen(
       controller: widget.controller,
       clock: widget.clock,
@@ -410,6 +446,7 @@ final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
       locationCapture: widget.locationCapture,
       timeZoneProvider: widget.timeZoneProvider,
       regionResolver: widget.regionResolver,
+      sourceAttempt: sourceAttempt,
     );
   }
 
@@ -427,6 +464,22 @@ final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
     }
     final result = await widget.appSession.selectProject(draft.projectId);
     return result is SessionContextSuccess ? draft : null;
+  }
+
+  Future<ContactAttempt?> _loadSourceAttempt() async {
+    final attemptId = widget.sourceAttemptId;
+    if (attemptId == null) {
+      return null;
+    }
+    final attempt = await widget.contactJournal.contactAttemptByIdForOwner(
+      attemptId: attemptId,
+      appUserId: widget.context.appUserId,
+    );
+    if (attempt == null || attempt.projectId == widget.context.project.id) {
+      return attempt;
+    }
+    final result = await widget.appSession.selectProject(attempt.projectId);
+    return result is SessionContextSuccess ? attempt : null;
   }
 }
 

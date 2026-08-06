@@ -1,6 +1,6 @@
-# 第 3 章：接触草稿如何在 SQLite 中保存、提交和统计
+# 第 3 章：接触和未获回应尝试如何在 SQLite 中分开保存
 
-本章解释 Slice 1 的本地数据模块。当前代码可以保存多份私有草稿、在本人设备间同步账号私有草稿、保留离线冲突副本，并把完整草稿原子提交为匿名接触。
+本章解释 Slice 1 与 Slice 2A 的本地数据模块。当前代码可以保存私有草稿、提交匿名接触，也可以把未获回应的直接联络保存为独立尝试。尝试不会进入已发生互动的统计。
 
 ## 1. `ContactJournal` 为什么是一个深模块
 
@@ -12,21 +12,23 @@
 - 列出本人尚未放弃的草稿；
 - 放弃草稿，或在期限内撤销放弃；
 - 把完整草稿正式提交；
+- 保存未获回应的接触尝试，并在后来回应时建立关联；
 - 读取已提交接触和个人期间汇总。
 
 公开入口保留在 `contact_journal.dart`。草稿生命周期的实现放在 [`contact_draft_operations.dart`](../../lib/features/contact_journal/contact_draft_operations.dart)，并通过 Dart 的 `part` 属于同一个 library。这样可以缩短单个文件，同时让草稿代码继续访问模块私有实现；它没有增加第二套数据库接口。
 
 模块接收真实 Drift 数据库、Clock 和 ID generator。测试使用真实 SQLite、固定时间和确定性 ID。测试可以稳定重现失败，不把测试条件带入正式代码。
 
-## 2. v9 的十一张现代接触、同步与区域表
+## 2. v10 的十二张现代接触、同步与区域表
 
 表结构定义在 [`contact_tables.dart`](../../lib/features/contact_journal/contact_tables.dart)。Drift 根据这些定义生成 SQLite schema 和类型安全的 Dart row。
 
 | 表 | 保存的事实 | 不保存的内容 |
 | --- | --- | --- |
-| `db_contact_drafts` | 创建者、项目、问卷版本、未完成核心字段、同步模式、放弃期限 | 姓名、电话、邮箱 |
+| `db_contact_drafts` | 创建者、项目、问卷版本、未完成核心字段、可选来源尝试、同步模式、放弃期限 | 姓名、电话、邮箱 |
 | `db_contact_draft_answers` | 草稿中的类型化问卷答案 | 已提交接触答案 |
 | `db_contact_records` | 当前有效核心事实、归属、当前 revision | 草稿、PII、私人备注 |
+| `db_contact_attempts` | 未获回应的直接渠道、发生时间、首次提交时间、可选后来接触 | 触达人数、兴趣、问卷答案、关系阶段 |
 | `db_contact_revisions` | 每次提交或更正的完整核心快照 | 被覆盖后消失的历史 |
 | `db_contact_answers` | 问题 ID、回答状态、答案类型和值 | 含义不明的任意 JSON |
 | `db_sync_outbox` | 命令、协议版本、状态和重试字段 | 身份令牌、日志用 PII |
@@ -36,7 +38,13 @@
 | `db_contact_region_assignments` | 已提交接触到最小区域节点的真实外键 | 重复保存的上级区域路径 |
 | `db_draft_region_assignments` | 草稿到最小区域节点的真实外键 | 未经解析的坐标 |
 
-草稿答案与正式答案分表保存。统计 SQL 只查询 `db_contact_records`，因此草稿不会增加接触场次、触达人数或兴趣分布。
+草稿答案与正式答案分表保存。统计 SQL 只查询 `db_contact_records`，因此草稿和尝试都不会增加接触场次、触达人数或兴趣分布。
+
+### 2.1 为什么尝试不是一种接触状态
+
+接触表示实际发生了互动。尝试只表示发起过一次直接联络，但没有得到回应。若把尝试写成 `reach_count = 0` 的接触，后续查询很容易把它计入场次、渠道或转化率。
+
+`db_contact_attempts` 因此不含触达人数、兴趣、问卷答案和关系阶段列。后来得到回应时，App 新建一条正常接触，并用 `source_attempt_id` 建立关联；原尝试仍保留自己的发生时间和首次提交时间。两条记录表达两个先后发生的事实，不互相改写。
 
 ## 3. 空白页和草稿的区别
 
@@ -180,21 +188,22 @@ WHERE app_user_id = :app_user_id
 
 兴趣是有序等级。核心分析先返回五档分布，不计算平均值。若以后显示兴趣算术指数，页面必须说明它额外假设相邻等级距离相等。
 
-## 12. v5、v6 和 v8 如何升级到 v9
+## 12. v5、v6、v8 和 v9 如何升级到 v10
 
-v6 使用 expand-contract 新增已提交接触、revision、答案和 Outbox 表。v7 新增草稿和草稿答案表。v8 新增同步执行租约和按可信范围保存的 cursor。v9 新增草稿同步版本、Outbox 可信范围和三张区域表。升级不删除五张 legacy 表，也不从旧宽表猜测现代接触或区域归属。
+v6 使用 expand-contract 新增已提交接触、revision、答案和 Outbox 表。v7 新增草稿和草稿答案表。v8 新增同步执行租约和按可信范围保存的 cursor。v9 新增草稿同步版本、Outbox 可信范围和三张区域表。v10 新增独立尝试表，并给草稿加入可选来源尝试。升级不删除五张 legacy 表，也不从旧宽表猜测现代接触、尝试或区域归属。
 
-v9 的新列参与 `CHECK` 约束，不能只运行 SQLite `ADD COLUMN`。migration 使用 Drift `TableMigration` 重建受影响的表并复制旧数据。它先检查列是否已经存在，因此从 v5 或 v6 跨多版升级时，不会因较早步骤按当前定义建表而重复添加同名列。
+当新列参与 `CHECK` 约束时，不能只运行 SQLite `ADD COLUMN`。migration 使用 Drift `TableMigration` 重建受影响的表并复制旧数据。跨多个版本升级时，重建步骤按当前表定义复制数据；旧版本缺少的每一列都必须通过 `newColumns` 提供默认表达式。否则 SQL 会引用旧表中不存在的列。
 
 [`local_database_migration_test.dart`](../../test/data/local_database_migration_test.dart) 保存四类证据：
 
-- 当前 v9 快照可以独立重建；
+- 当前 v10 快照可以独立重建；
+- v9 的 synthetic 草稿升级后仍存在，并可保存来源尝试；
 - v8 的 synthetic 草稿升级后仍存在，并得到初始本机和服务器 revision；
 - v6 的 synthetic 已提交接触升级后仍存在；
 - v5 的 synthetic 设置升级后仍存在，无法证明的现代区域表保持为空。
 
-机器可读快照位于 [`drift_schema_v9.json`](../../drift_schemas/drift_schema_v9.json)。CI 会重新导出当前 schema 并逐字比较，也会重新生成所有 migration 测试辅助代码。
+机器可读快照位于 [`drift_schema_v10.json`](../../drift_schemas/drift_schema_v10.json)。CI 会重新导出当前 schema 并逐字比较，也会重新生成所有 migration 测试辅助代码。
 
 ## 13. 当前边界
 
-v9 完成草稿、正式接触、跨设备私有草稿、冲突副本、版本化区域外键、本机同步状态和远端 cursor 的本地数据行为。本地数据库应用层加密仍属后续切片。同步状态机和 Backend SQL 见 [第 6 章](06-persistent-sync-and-backend-sql.md)。
+v10 完成草稿、正式接触、独立接触尝试、跨设备私有草稿、冲突副本、版本化区域外键、本机同步状态和远端 cursor 的本地数据行为。接触修订、作废和多设备冲突解决仍属 Slice 2 后续单元。本地数据库应用层加密也仍属后续切片。同步状态机和 Backend SQL 见 [第 6 章](06-persistent-sync-and-backend-sql.md)。

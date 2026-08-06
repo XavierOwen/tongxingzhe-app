@@ -53,6 +53,7 @@ extension ContactDraftOperations on ContactJournal {
                 syncMode: Value(input.syncMode.storageValue),
                 localRevision: const Value(localRevision),
                 serverRevision: const Value(serverRevision),
+                sourceAttemptId: Value(input.sourceAttemptId),
               ),
             );
         await _replaceDraftAnswers(draftId, input.answers);
@@ -96,6 +97,7 @@ extension ContactDraftOperations on ContactJournal {
       localRevision: localRevision,
       serverRevision: serverRevision,
       conflictOfDraftId: null,
+      sourceAttemptId: input.sourceAttemptId,
     );
   }
 
@@ -119,7 +121,8 @@ extension ContactDraftOperations on ContactJournal {
         }
         if (existing.workspaceId != input.workspaceId ||
             existing.projectId != input.projectId ||
-            existing.questionnaireVersionId != input.questionnaireVersionId) {
+            existing.questionnaireVersionId != input.questionnaireVersionId ||
+            existing.sourceAttemptId != input.sourceAttemptId) {
           throw const ContactValidationException(
             'contact_draft_context_immutable',
           );
@@ -193,6 +196,7 @@ extension ContactDraftOperations on ContactJournal {
           localRevision: localRevision,
           serverRevision: existing.serverRevision,
           conflictOfDraftId: existing.conflictOfDraftId,
+          sourceAttemptId: existing.sourceAttemptId,
         );
       });
     } on ContactValidationException {
@@ -385,6 +389,10 @@ extension ContactDraftOperations on ContactJournal {
     if (input.deviceId.trim().isEmpty) {
       throw const ContactValidationException('contact_device_required');
     }
+    if (input.sourceAttemptId != null &&
+        input.sourceAttemptId!.trim().isEmpty) {
+      throw const ContactValidationException('source_attempt_id_invalid');
+    }
     if (input.occurredAtUtc != null && !input.occurredAtUtc!.isUtc) {
       throw const ContactValidationException('occurred_at_must_be_utc');
     }
@@ -413,7 +421,8 @@ extension ContactDraftOperations on ContactJournal {
   }
 
   bool _hasMeaningfulDraftContent(ContactDraftInput input) {
-    return input.occurredAtUtc != null ||
+    return input.sourceAttemptId != null ||
+        input.occurredAtUtc != null ||
         input.channel != null ||
         (input.channelDetail?.trim().isNotEmpty ?? false) ||
         input.location != null ||
@@ -439,6 +448,7 @@ extension ContactDraftOperations on ContactJournal {
       'workspace_id': input.workspaceId,
       'project_id': input.projectId,
       'questionnaire_version_id': input.questionnaireVersionId,
+      'source_attempt_id': input.sourceAttemptId,
       'created_at_utc': draftCreatedAtUtc.toIso8601String(),
       'updated_at_utc': createdAtUtc.toIso8601String(),
       'occurred_at_utc': input.occurredAtUtc?.toIso8601String(),
@@ -572,6 +582,7 @@ extension ContactDraftOperations on ContactJournal {
       workspaceId: draft.workspaceId,
       projectId: draft.projectId,
       questionnaireVersionId: draft.questionnaireVersionId,
+      sourceAttemptId: draft.sourceAttemptId,
       occurredAtUtc: draft.occurredAtUtc,
       occurredTimeZone: draft.occurredTimeZone,
       channel: draft.channel,
@@ -647,6 +658,7 @@ extension ContactDraftOperations on ContactJournal {
       localRevision: row.localRevision,
       serverRevision: row.serverRevision,
       conflictOfDraftId: row.conflictOfDraftId,
+      sourceAttemptId: row.sourceAttemptId,
     );
   }
 
@@ -795,6 +807,7 @@ extension ContactDraftOperations on ContactJournal {
           reachCount: draft.reachCount!,
           interestLevel: draft.interestLevel!,
           answers: draft.answers,
+          sourceAttemptId: draft.sourceAttemptId,
         );
         _validateSubmission(submission);
         await _validateResolvedRegion(submission.location);

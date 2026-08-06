@@ -61,7 +61,10 @@ test("verified command uses internal context and returns accepted cursor", async
   });
   assert.equal(storedContext, context);
   assert.equal(storedCommand?.commandId, "command-1");
-  assert.equal(storedCommand?.payload.reachCount, 2);
+  assert.equal(storedCommand?.type, "contact.submit.v1");
+  if (storedCommand?.type === "contact.submit.v1") {
+    assert.equal(storedCommand.payload.reachCount, 2);
+  }
   assert.equal("appUserId" in (storedCommand ?? {}), false);
 });
 
@@ -156,6 +159,48 @@ test("private draft upsert keeps trusted owner outside the client payload", asyn
   assert.equal("appUserId" in (storedCommand?.payload ?? {}), false);
 });
 
+test("contact attempt has no reach, interest, or questionnaire facts", async () => {
+  let storedCommand: SyncCommand | undefined;
+  const response = await handleSyncCommand(
+    "Bearer synthetic-token",
+    validAttemptCommandBody(),
+    fakeDependencies({
+      apply: async (_resolvedContext, command) => {
+        storedCommand = command;
+        return { result: "accepted", serverCursor: "opaque-attempt-1" };
+      },
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(storedCommand?.type, "contact.attempt.submit.v1");
+  assert.deepEqual(storedCommand?.payload, {
+    attemptId: "attempt-1",
+    workspaceId: context.current.workspace.id,
+    projectId: context.current.project.id,
+    occurredAtUtc: "2030-01-08T18:00:00.000Z",
+    occurredTimeZone: "America/Chicago",
+    channel: "voice_call",
+    channelDetail: null,
+  });
+});
+
+test("contact attempt rejects contact metric fields", async () => {
+  const body = validAttemptCommandBody();
+  (body.typed_payload as Record<string, unknown>).reach_count = 0;
+
+  const response = await handleSyncCommand(
+    "Bearer synthetic-token",
+    body,
+    fakeDependencies(),
+  );
+
+  assert.deepEqual(response.body, {
+    result: "rejected",
+    error: { code: "contact_attempt_forbidden_field" },
+  });
+});
+
 function validCommandBody(): Record<string, unknown> {
   return {
     protocol_version: 1,
@@ -211,6 +256,26 @@ function validDraftCommandBody(): Record<string, unknown> {
       reach_count: null,
       interest_level: null,
       answers: [],
+    },
+  };
+}
+
+function validAttemptCommandBody(): Record<string, unknown> {
+  return {
+    protocol_version: 1,
+    command_id: "attempt-command-1",
+    device_id: "device-1",
+    aggregate_id: "attempt-1",
+    base_revision: 0,
+    type: "contact.attempt.submit.v1",
+    typed_payload: {
+      attempt_id: "attempt-1",
+      workspace_id: context.current.workspace.id,
+      project_id: context.current.project.id,
+      occurred_at_utc: "2030-01-08T18:00:00.000Z",
+      occurred_time_zone: "America/Chicago",
+      channel: "voice_call",
+      channel_detail: null,
     },
   };
 }

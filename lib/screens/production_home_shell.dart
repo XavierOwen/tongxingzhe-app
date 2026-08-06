@@ -6,7 +6,10 @@ import 'package:flutter/material.dart';
 import '../app/app_controller.dart';
 import '../app_session/app_session.dart';
 import '../app_session/session_context_gateway.dart';
-import '../features/contact_entry/contact_entry_screen.dart';
+import '../device/device_time_zone.dart';
+import '../foundation/runtime_values.dart';
+import '../features/contact_attempt/contact_attempt_entry_screen.dart';
+import '../features/contact_entry/contact_channel_label.dart';
 import '../features/contact_journal/contact_journal.dart';
 import '../features/contact_journal/contact_models.dart';
 import '../features/home/production_home_view_model.dart';
@@ -30,10 +33,13 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.deviceId,
     required this.syncEngineFactory,
     required this.locationCapture,
+    required this.clock,
+    required this.timeZoneProvider,
     required this.selectedIndex,
     required this.contactEntryClosedEvents,
     required this.onDestinationSelected,
     required this.onOpenContactEntry,
+    required this.onOpenContactFromAttempt,
   });
 
   final AppController controller;
@@ -43,10 +49,13 @@ final class ProductionHomeShell extends StatefulWidget {
   final String deviceId;
   final SyncEngineFactory? syncEngineFactory;
   final ContactLocationCapture locationCapture;
+  final AppClock clock;
+  final DeviceTimeZoneProvider timeZoneProvider;
   final int selectedIndex;
   final ValueListenable<ContactEntryClosedEvent> contactEntryClosedEvents;
   final ValueChanged<int> onDestinationSelected;
   final ValueChanged<ContactDraft?> onOpenContactEntry;
+  final ValueChanged<ContactAttempt> onOpenContactFromAttempt;
 
   @override
   State<ProductionHomeShell> createState() => _ProductionHomeShellState();
@@ -143,6 +152,8 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
         syncFailed: homeState.syncFailed,
         onOpenDraft: _openContactEntry,
         onAbandonDraft: (draft) => unawaited(_viewModel.abandonDraft(draft)),
+        onRecordAttempt: _openContactAttemptEntry,
+        onRecordResponse: widget.onOpenContactFromAttempt,
       ),
       _PlaceholderPage(
         icon: Icons.people_outline,
@@ -269,6 +280,25 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
     widget.onOpenContactEntry(draft);
   }
 
+  Future<void> _openContactAttemptEntry() async {
+    final recorded = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => Dialog.fullscreen(
+        child: ContactAttemptEntryScreen(
+          controller: widget.controller,
+          clock: widget.clock,
+          timeZoneProvider: widget.timeZoneProvider,
+          context: widget.context,
+          contactJournal: widget.contactJournal,
+          deviceId: widget.deviceId,
+        ),
+      ),
+    );
+    if (recorded == true && mounted) {
+      await _viewModel.contactAttemptRecorded();
+    }
+  }
+
   Future<void> _handleProjectMenuSelection(String value) async {
     if (value == _createProjectMenuValue) {
       await _createProject();
@@ -335,6 +365,10 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
       case ProductionHomeNoticeKind.contactSubmitted:
         messenger.showSnackBar(
           SnackBar(content: Text(text.t('contactSubmitted'))),
+        );
+      case ProductionHomeNoticeKind.contactAttemptRecorded:
+        messenger.showSnackBar(
+          SnackBar(content: Text(text.t('contactAttemptSaved'))),
         );
       case ProductionHomeNoticeKind.draftAbandoned:
         final draft = notice.draft;
@@ -604,6 +638,8 @@ final class _ContactsPage extends StatelessWidget {
     required this.syncFailed,
     required this.onOpenDraft,
     required this.onAbandonDraft,
+    required this.onRecordAttempt,
+    required this.onRecordResponse,
   });
 
   final AppController controller;
@@ -615,6 +651,8 @@ final class _ContactsPage extends StatelessWidget {
   final bool syncFailed;
   final ValueChanged<ContactDraft?> onOpenDraft;
   final ValueChanged<ContactDraft> onAbandonDraft;
+  final VoidCallback onRecordAttempt;
+  final ValueChanged<ContactAttempt> onRecordResponse;
 
   @override
   Widget build(BuildContext context) {
@@ -630,6 +668,7 @@ final class _ContactsPage extends StatelessWidget {
       return Center(child: Text(text.t('summaryLoadFailed')));
     }
     final drafts = result.drafts;
+    final attempts = result.attempts;
     final health = result.syncHealth;
     final onlyOnDevice =
         health?.onlyOnDeviceCount ?? result.todaySummary.pendingSyncCount;
@@ -658,6 +697,46 @@ final class _ContactsPage extends StatelessWidget {
         if (health != null && health.completedCount > 0)
           Text('${text.t('synced')} ${health.completedCount}'),
         const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '${text.t('contactAttempts')} (${attempts.length})',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            OutlinedButton.icon(
+              key: const ValueKey('record-contact-attempt'),
+              onPressed: onRecordAttempt,
+              icon: const Icon(Icons.phone_missed_outlined),
+              label: Text(text.t('recordContactAttempt')),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(text.t('contactAttemptMetricsHelp')),
+        const SizedBox(height: 12),
+        if (attempts.isEmpty)
+          Text(text.t('noContactAttempts'))
+        else
+          for (final attempt in attempts)
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.phone_missed_outlined),
+                title: Text(contactChannelLabel(text, attempt.channel)),
+                subtitle: Text(
+                  '${attempt.occurredAtUtc.toIso8601String()}\n'
+                  '${text.t('attemptReachedNobody')}',
+                ),
+                trailing: attempt.linkedContactId == null
+                    ? TextButton(
+                        onPressed: () => onRecordResponse(attempt),
+                        child: Text(text.t('recordResponseContact')),
+                      )
+                    : Text(text.t('attemptLinkedToContact')),
+              ),
+            ),
+        const SizedBox(height: 24),
         Text(
           '${text.t('drafts')} (${drafts.length})',
           style: Theme.of(context).textTheme.titleLarge,

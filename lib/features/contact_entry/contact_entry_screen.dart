@@ -11,6 +11,7 @@ import '../../regions/contact_region_resolver.dart';
 import '../../services/location_service.dart';
 import '../contact_journal/contact_journal.dart';
 import '../contact_journal/contact_models.dart';
+import 'contact_channel_label.dart';
 import 'contact_entry_view_model.dart';
 
 /// 正式接触表单的首个渐进式切片。
@@ -30,6 +31,7 @@ final class ContactEntryScreen extends StatefulWidget {
     this.initialDraft,
     this.entryStore,
     this.regionResolver = const DeferredContactRegionResolver(),
+    this.sourceAttempt,
   });
 
   final AppController controller;
@@ -42,6 +44,7 @@ final class ContactEntryScreen extends StatefulWidget {
   final ContactDraft? initialDraft;
   final ContactEntryStore? entryStore;
   final ContactRegionResolver regionResolver;
+  final ContactAttempt? sourceAttempt;
 
   @override
   State<ContactEntryScreen> createState() => _ContactEntryScreenState();
@@ -73,6 +76,8 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
           widget.entryStore ?? ContactJournalEntryStore(widget.contactJournal),
       locationCapture: widget.locationCapture,
       regionResolver: widget.regionResolver,
+      sourceAttemptId: widget.sourceAttempt?.attemptId,
+      initialChannel: widget.sourceAttempt?.channel,
     )..addListener(_onViewStateChanged);
     unawaited(_viewModel.initialize(draft: widget.initialDraft));
   }
@@ -123,6 +128,16 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
           children: [
             _ContextCard(context: widget.context, text: text),
+            if (entryState.sourceAttemptId != null) ...[
+              const SizedBox(height: 12),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.reply_outlined),
+                  title: Text(text.t('contactFromAttempt')),
+                  subtitle: Text(text.t('contactFromAttemptHelp')),
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
             if (entryState.isConflictCopy)
               _ConflictDraftCard(text: text)
@@ -493,16 +508,4 @@ final class _FactRow extends StatelessWidget {
       ],
     );
   }
-}
-
-String contactChannelLabel(AppStrings text, ContactChannel channel) {
-  return switch (channel) {
-    ContactChannel.faceToFace => text.t('channel.faceToFace'),
-    ContactChannel.voiceCall => text.t('channel.voiceCall'),
-    ContactChannel.videoCall => text.t('channel.videoCall'),
-    ContactChannel.instantText => text.t('channel.instantText'),
-    ContactChannel.asynchronousMessage => text.t('channel.asynchronousMessage'),
-    ContactChannel.mixed => text.t('channel.mixed'),
-    ContactChannel.otherDirect => text.t('channel.otherDirect'),
-  };
 }

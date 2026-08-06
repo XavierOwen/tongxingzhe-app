@@ -3116,6 +3116,665 @@ class DbSyncScopesCompanion extends UpdateCompanion<DbSyncScope> {
   }
 }
 
+class $DbContactAttemptsTable extends DbContactAttempts
+    with TableInfo<$DbContactAttemptsTable, DbContactAttempt> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DbContactAttemptsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _attemptIdMeta = const VerificationMeta(
+    'attemptId',
+  );
+  @override
+  late final GeneratedColumn<String> attemptId = GeneratedColumn<String>(
+    'attempt_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _appUserIdMeta = const VerificationMeta(
+    'appUserId',
+  );
+  @override
+  late final GeneratedColumn<String> appUserId = GeneratedColumn<String>(
+    'app_user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _workspaceIdMeta = const VerificationMeta(
+    'workspaceId',
+  );
+  @override
+  late final GeneratedColumn<String> workspaceId = GeneratedColumn<String>(
+    'workspace_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<String> projectId = GeneratedColumn<String>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _occurredAtUtcMeta = const VerificationMeta(
+    'occurredAtUtc',
+  );
+  @override
+  late final GeneratedColumn<DateTime> occurredAtUtc =
+      GeneratedColumn<DateTime>(
+        'occurred_at_utc',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _occurredTimeZoneMeta = const VerificationMeta(
+    'occurredTimeZone',
+  );
+  @override
+  late final GeneratedColumn<String> occurredTimeZone = GeneratedColumn<String>(
+    'occurred_time_zone',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _firstSubmittedAtUtcMeta =
+      const VerificationMeta('firstSubmittedAtUtc');
+  @override
+  late final GeneratedColumn<DateTime> firstSubmittedAtUtc =
+      GeneratedColumn<DateTime>(
+        'first_submitted_at_utc',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _channelMeta = const VerificationMeta(
+    'channel',
+  );
+  @override
+  late final GeneratedColumn<String> channel = GeneratedColumn<String>(
+    'channel',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _channelDetailMeta = const VerificationMeta(
+    'channelDetail',
+  );
+  @override
+  late final GeneratedColumn<String> channelDetail = GeneratedColumn<String>(
+    'channel_detail',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _linkedContactIdMeta = const VerificationMeta(
+    'linkedContactId',
+  );
+  @override
+  late final GeneratedColumn<String> linkedContactId = GeneratedColumn<String>(
+    'linked_contact_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES db_contact_records (contact_id)',
+    ),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    attemptId,
+    appUserId,
+    workspaceId,
+    projectId,
+    occurredAtUtc,
+    occurredTimeZone,
+    firstSubmittedAtUtc,
+    channel,
+    channelDetail,
+    linkedContactId,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'db_contact_attempts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DbContactAttempt> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('attempt_id')) {
+      context.handle(
+        _attemptIdMeta,
+        attemptId.isAcceptableOrUnknown(data['attempt_id']!, _attemptIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_attemptIdMeta);
+    }
+    if (data.containsKey('app_user_id')) {
+      context.handle(
+        _appUserIdMeta,
+        appUserId.isAcceptableOrUnknown(data['app_user_id']!, _appUserIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_appUserIdMeta);
+    }
+    if (data.containsKey('workspace_id')) {
+      context.handle(
+        _workspaceIdMeta,
+        workspaceId.isAcceptableOrUnknown(
+          data['workspace_id']!,
+          _workspaceIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_workspaceIdMeta);
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('occurred_at_utc')) {
+      context.handle(
+        _occurredAtUtcMeta,
+        occurredAtUtc.isAcceptableOrUnknown(
+          data['occurred_at_utc']!,
+          _occurredAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_occurredAtUtcMeta);
+    }
+    if (data.containsKey('occurred_time_zone')) {
+      context.handle(
+        _occurredTimeZoneMeta,
+        occurredTimeZone.isAcceptableOrUnknown(
+          data['occurred_time_zone']!,
+          _occurredTimeZoneMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_occurredTimeZoneMeta);
+    }
+    if (data.containsKey('first_submitted_at_utc')) {
+      context.handle(
+        _firstSubmittedAtUtcMeta,
+        firstSubmittedAtUtc.isAcceptableOrUnknown(
+          data['first_submitted_at_utc']!,
+          _firstSubmittedAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_firstSubmittedAtUtcMeta);
+    }
+    if (data.containsKey('channel')) {
+      context.handle(
+        _channelMeta,
+        channel.isAcceptableOrUnknown(data['channel']!, _channelMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_channelMeta);
+    }
+    if (data.containsKey('channel_detail')) {
+      context.handle(
+        _channelDetailMeta,
+        channelDetail.isAcceptableOrUnknown(
+          data['channel_detail']!,
+          _channelDetailMeta,
+        ),
+      );
+    }
+    if (data.containsKey('linked_contact_id')) {
+      context.handle(
+        _linkedContactIdMeta,
+        linkedContactId.isAcceptableOrUnknown(
+          data['linked_contact_id']!,
+          _linkedContactIdMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {attemptId};
+  @override
+  DbContactAttempt map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DbContactAttempt(
+      attemptId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}attempt_id'],
+      )!,
+      appUserId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}app_user_id'],
+      )!,
+      workspaceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}workspace_id'],
+      )!,
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}project_id'],
+      )!,
+      occurredAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}occurred_at_utc'],
+      )!,
+      occurredTimeZone: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}occurred_time_zone'],
+      )!,
+      firstSubmittedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}first_submitted_at_utc'],
+      )!,
+      channel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}channel'],
+      )!,
+      channelDetail: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}channel_detail'],
+      ),
+      linkedContactId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}linked_contact_id'],
+      ),
+    );
+  }
+
+  @override
+  $DbContactAttemptsTable createAlias(String alias) {
+    return $DbContactAttemptsTable(attachedDatabase, alias);
+  }
+}
+
+class DbContactAttempt extends DataClass
+    implements Insertable<DbContactAttempt> {
+  final String attemptId;
+  final String appUserId;
+  final String workspaceId;
+  final String projectId;
+  final DateTime occurredAtUtc;
+  final String occurredTimeZone;
+  final DateTime firstSubmittedAtUtc;
+  final String channel;
+  final String? channelDetail;
+  final String? linkedContactId;
+  const DbContactAttempt({
+    required this.attemptId,
+    required this.appUserId,
+    required this.workspaceId,
+    required this.projectId,
+    required this.occurredAtUtc,
+    required this.occurredTimeZone,
+    required this.firstSubmittedAtUtc,
+    required this.channel,
+    this.channelDetail,
+    this.linkedContactId,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['attempt_id'] = Variable<String>(attemptId);
+    map['app_user_id'] = Variable<String>(appUserId);
+    map['workspace_id'] = Variable<String>(workspaceId);
+    map['project_id'] = Variable<String>(projectId);
+    map['occurred_at_utc'] = Variable<DateTime>(occurredAtUtc);
+    map['occurred_time_zone'] = Variable<String>(occurredTimeZone);
+    map['first_submitted_at_utc'] = Variable<DateTime>(firstSubmittedAtUtc);
+    map['channel'] = Variable<String>(channel);
+    if (!nullToAbsent || channelDetail != null) {
+      map['channel_detail'] = Variable<String>(channelDetail);
+    }
+    if (!nullToAbsent || linkedContactId != null) {
+      map['linked_contact_id'] = Variable<String>(linkedContactId);
+    }
+    return map;
+  }
+
+  DbContactAttemptsCompanion toCompanion(bool nullToAbsent) {
+    return DbContactAttemptsCompanion(
+      attemptId: Value(attemptId),
+      appUserId: Value(appUserId),
+      workspaceId: Value(workspaceId),
+      projectId: Value(projectId),
+      occurredAtUtc: Value(occurredAtUtc),
+      occurredTimeZone: Value(occurredTimeZone),
+      firstSubmittedAtUtc: Value(firstSubmittedAtUtc),
+      channel: Value(channel),
+      channelDetail: channelDetail == null && nullToAbsent
+          ? const Value.absent()
+          : Value(channelDetail),
+      linkedContactId: linkedContactId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(linkedContactId),
+    );
+  }
+
+  factory DbContactAttempt.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DbContactAttempt(
+      attemptId: serializer.fromJson<String>(json['attemptId']),
+      appUserId: serializer.fromJson<String>(json['appUserId']),
+      workspaceId: serializer.fromJson<String>(json['workspaceId']),
+      projectId: serializer.fromJson<String>(json['projectId']),
+      occurredAtUtc: serializer.fromJson<DateTime>(json['occurredAtUtc']),
+      occurredTimeZone: serializer.fromJson<String>(json['occurredTimeZone']),
+      firstSubmittedAtUtc: serializer.fromJson<DateTime>(
+        json['firstSubmittedAtUtc'],
+      ),
+      channel: serializer.fromJson<String>(json['channel']),
+      channelDetail: serializer.fromJson<String?>(json['channelDetail']),
+      linkedContactId: serializer.fromJson<String?>(json['linkedContactId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'attemptId': serializer.toJson<String>(attemptId),
+      'appUserId': serializer.toJson<String>(appUserId),
+      'workspaceId': serializer.toJson<String>(workspaceId),
+      'projectId': serializer.toJson<String>(projectId),
+      'occurredAtUtc': serializer.toJson<DateTime>(occurredAtUtc),
+      'occurredTimeZone': serializer.toJson<String>(occurredTimeZone),
+      'firstSubmittedAtUtc': serializer.toJson<DateTime>(firstSubmittedAtUtc),
+      'channel': serializer.toJson<String>(channel),
+      'channelDetail': serializer.toJson<String?>(channelDetail),
+      'linkedContactId': serializer.toJson<String?>(linkedContactId),
+    };
+  }
+
+  DbContactAttempt copyWith({
+    String? attemptId,
+    String? appUserId,
+    String? workspaceId,
+    String? projectId,
+    DateTime? occurredAtUtc,
+    String? occurredTimeZone,
+    DateTime? firstSubmittedAtUtc,
+    String? channel,
+    Value<String?> channelDetail = const Value.absent(),
+    Value<String?> linkedContactId = const Value.absent(),
+  }) => DbContactAttempt(
+    attemptId: attemptId ?? this.attemptId,
+    appUserId: appUserId ?? this.appUserId,
+    workspaceId: workspaceId ?? this.workspaceId,
+    projectId: projectId ?? this.projectId,
+    occurredAtUtc: occurredAtUtc ?? this.occurredAtUtc,
+    occurredTimeZone: occurredTimeZone ?? this.occurredTimeZone,
+    firstSubmittedAtUtc: firstSubmittedAtUtc ?? this.firstSubmittedAtUtc,
+    channel: channel ?? this.channel,
+    channelDetail: channelDetail.present
+        ? channelDetail.value
+        : this.channelDetail,
+    linkedContactId: linkedContactId.present
+        ? linkedContactId.value
+        : this.linkedContactId,
+  );
+  DbContactAttempt copyWithCompanion(DbContactAttemptsCompanion data) {
+    return DbContactAttempt(
+      attemptId: data.attemptId.present ? data.attemptId.value : this.attemptId,
+      appUserId: data.appUserId.present ? data.appUserId.value : this.appUserId,
+      workspaceId: data.workspaceId.present
+          ? data.workspaceId.value
+          : this.workspaceId,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      occurredAtUtc: data.occurredAtUtc.present
+          ? data.occurredAtUtc.value
+          : this.occurredAtUtc,
+      occurredTimeZone: data.occurredTimeZone.present
+          ? data.occurredTimeZone.value
+          : this.occurredTimeZone,
+      firstSubmittedAtUtc: data.firstSubmittedAtUtc.present
+          ? data.firstSubmittedAtUtc.value
+          : this.firstSubmittedAtUtc,
+      channel: data.channel.present ? data.channel.value : this.channel,
+      channelDetail: data.channelDetail.present
+          ? data.channelDetail.value
+          : this.channelDetail,
+      linkedContactId: data.linkedContactId.present
+          ? data.linkedContactId.value
+          : this.linkedContactId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbContactAttempt(')
+          ..write('attemptId: $attemptId, ')
+          ..write('appUserId: $appUserId, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('projectId: $projectId, ')
+          ..write('occurredAtUtc: $occurredAtUtc, ')
+          ..write('occurredTimeZone: $occurredTimeZone, ')
+          ..write('firstSubmittedAtUtc: $firstSubmittedAtUtc, ')
+          ..write('channel: $channel, ')
+          ..write('channelDetail: $channelDetail, ')
+          ..write('linkedContactId: $linkedContactId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    attemptId,
+    appUserId,
+    workspaceId,
+    projectId,
+    occurredAtUtc,
+    occurredTimeZone,
+    firstSubmittedAtUtc,
+    channel,
+    channelDetail,
+    linkedContactId,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DbContactAttempt &&
+          other.attemptId == this.attemptId &&
+          other.appUserId == this.appUserId &&
+          other.workspaceId == this.workspaceId &&
+          other.projectId == this.projectId &&
+          other.occurredAtUtc == this.occurredAtUtc &&
+          other.occurredTimeZone == this.occurredTimeZone &&
+          other.firstSubmittedAtUtc == this.firstSubmittedAtUtc &&
+          other.channel == this.channel &&
+          other.channelDetail == this.channelDetail &&
+          other.linkedContactId == this.linkedContactId);
+}
+
+class DbContactAttemptsCompanion extends UpdateCompanion<DbContactAttempt> {
+  final Value<String> attemptId;
+  final Value<String> appUserId;
+  final Value<String> workspaceId;
+  final Value<String> projectId;
+  final Value<DateTime> occurredAtUtc;
+  final Value<String> occurredTimeZone;
+  final Value<DateTime> firstSubmittedAtUtc;
+  final Value<String> channel;
+  final Value<String?> channelDetail;
+  final Value<String?> linkedContactId;
+  final Value<int> rowid;
+  const DbContactAttemptsCompanion({
+    this.attemptId = const Value.absent(),
+    this.appUserId = const Value.absent(),
+    this.workspaceId = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.occurredAtUtc = const Value.absent(),
+    this.occurredTimeZone = const Value.absent(),
+    this.firstSubmittedAtUtc = const Value.absent(),
+    this.channel = const Value.absent(),
+    this.channelDetail = const Value.absent(),
+    this.linkedContactId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DbContactAttemptsCompanion.insert({
+    required String attemptId,
+    required String appUserId,
+    required String workspaceId,
+    required String projectId,
+    required DateTime occurredAtUtc,
+    required String occurredTimeZone,
+    required DateTime firstSubmittedAtUtc,
+    required String channel,
+    this.channelDetail = const Value.absent(),
+    this.linkedContactId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : attemptId = Value(attemptId),
+       appUserId = Value(appUserId),
+       workspaceId = Value(workspaceId),
+       projectId = Value(projectId),
+       occurredAtUtc = Value(occurredAtUtc),
+       occurredTimeZone = Value(occurredTimeZone),
+       firstSubmittedAtUtc = Value(firstSubmittedAtUtc),
+       channel = Value(channel);
+  static Insertable<DbContactAttempt> custom({
+    Expression<String>? attemptId,
+    Expression<String>? appUserId,
+    Expression<String>? workspaceId,
+    Expression<String>? projectId,
+    Expression<DateTime>? occurredAtUtc,
+    Expression<String>? occurredTimeZone,
+    Expression<DateTime>? firstSubmittedAtUtc,
+    Expression<String>? channel,
+    Expression<String>? channelDetail,
+    Expression<String>? linkedContactId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (attemptId != null) 'attempt_id': attemptId,
+      if (appUserId != null) 'app_user_id': appUserId,
+      if (workspaceId != null) 'workspace_id': workspaceId,
+      if (projectId != null) 'project_id': projectId,
+      if (occurredAtUtc != null) 'occurred_at_utc': occurredAtUtc,
+      if (occurredTimeZone != null) 'occurred_time_zone': occurredTimeZone,
+      if (firstSubmittedAtUtc != null)
+        'first_submitted_at_utc': firstSubmittedAtUtc,
+      if (channel != null) 'channel': channel,
+      if (channelDetail != null) 'channel_detail': channelDetail,
+      if (linkedContactId != null) 'linked_contact_id': linkedContactId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DbContactAttemptsCompanion copyWith({
+    Value<String>? attemptId,
+    Value<String>? appUserId,
+    Value<String>? workspaceId,
+    Value<String>? projectId,
+    Value<DateTime>? occurredAtUtc,
+    Value<String>? occurredTimeZone,
+    Value<DateTime>? firstSubmittedAtUtc,
+    Value<String>? channel,
+    Value<String?>? channelDetail,
+    Value<String?>? linkedContactId,
+    Value<int>? rowid,
+  }) {
+    return DbContactAttemptsCompanion(
+      attemptId: attemptId ?? this.attemptId,
+      appUserId: appUserId ?? this.appUserId,
+      workspaceId: workspaceId ?? this.workspaceId,
+      projectId: projectId ?? this.projectId,
+      occurredAtUtc: occurredAtUtc ?? this.occurredAtUtc,
+      occurredTimeZone: occurredTimeZone ?? this.occurredTimeZone,
+      firstSubmittedAtUtc: firstSubmittedAtUtc ?? this.firstSubmittedAtUtc,
+      channel: channel ?? this.channel,
+      channelDetail: channelDetail ?? this.channelDetail,
+      linkedContactId: linkedContactId ?? this.linkedContactId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (attemptId.present) {
+      map['attempt_id'] = Variable<String>(attemptId.value);
+    }
+    if (appUserId.present) {
+      map['app_user_id'] = Variable<String>(appUserId.value);
+    }
+    if (workspaceId.present) {
+      map['workspace_id'] = Variable<String>(workspaceId.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<String>(projectId.value);
+    }
+    if (occurredAtUtc.present) {
+      map['occurred_at_utc'] = Variable<DateTime>(occurredAtUtc.value);
+    }
+    if (occurredTimeZone.present) {
+      map['occurred_time_zone'] = Variable<String>(occurredTimeZone.value);
+    }
+    if (firstSubmittedAtUtc.present) {
+      map['first_submitted_at_utc'] = Variable<DateTime>(
+        firstSubmittedAtUtc.value,
+      );
+    }
+    if (channel.present) {
+      map['channel'] = Variable<String>(channel.value);
+    }
+    if (channelDetail.present) {
+      map['channel_detail'] = Variable<String>(channelDetail.value);
+    }
+    if (linkedContactId.present) {
+      map['linked_contact_id'] = Variable<String>(linkedContactId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbContactAttemptsCompanion(')
+          ..write('attemptId: $attemptId, ')
+          ..write('appUserId: $appUserId, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('projectId: $projectId, ')
+          ..write('occurredAtUtc: $occurredAtUtc, ')
+          ..write('occurredTimeZone: $occurredTimeZone, ')
+          ..write('firstSubmittedAtUtc: $firstSubmittedAtUtc, ')
+          ..write('channel: $channel, ')
+          ..write('channelDetail: $channelDetail, ')
+          ..write('linkedContactId: $linkedContactId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $DbContactRevisionsTable extends DbContactRevisions
     with TableInfo<$DbContactRevisionsTable, DbContactRevision> {
   @override
@@ -4976,6 +5635,17 @@ class $DbContactDraftsTable extends DbContactDrafts
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _sourceAttemptIdMeta = const VerificationMeta(
+    'sourceAttemptId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceAttemptId = GeneratedColumn<String>(
+    'source_attempt_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _conflictOfDraftIdMeta = const VerificationMeta(
     'conflictOfDraftId',
   );
@@ -5036,6 +5706,7 @@ class $DbContactDraftsTable extends DbContactDrafts
     syncMode,
     localRevision,
     serverRevision,
+    sourceAttemptId,
     conflictOfDraftId,
     abandonedAtUtc,
     undoUntilUtc,
@@ -5246,6 +5917,15 @@ class $DbContactDraftsTable extends DbContactDrafts
         ),
       );
     }
+    if (data.containsKey('source_attempt_id')) {
+      context.handle(
+        _sourceAttemptIdMeta,
+        sourceAttemptId.isAcceptableOrUnknown(
+          data['source_attempt_id']!,
+          _sourceAttemptIdMeta,
+        ),
+      );
+    }
     if (data.containsKey('conflict_of_draft_id')) {
       context.handle(
         _conflictOfDraftIdMeta,
@@ -5374,6 +6054,10 @@ class $DbContactDraftsTable extends DbContactDrafts
         DriftSqlType.int,
         data['${effectivePrefix}server_revision'],
       )!,
+      sourceAttemptId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_attempt_id'],
+      ),
       conflictOfDraftId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}conflict_of_draft_id'],
@@ -5419,6 +6103,7 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
   final String syncMode;
   final int localRevision;
   final int serverRevision;
+  final String? sourceAttemptId;
   final String? conflictOfDraftId;
   final DateTime? abandonedAtUtc;
   final DateTime? undoUntilUtc;
@@ -5446,6 +6131,7 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
     required this.syncMode,
     required this.localRevision,
     required this.serverRevision,
+    this.sourceAttemptId,
     this.conflictOfDraftId,
     this.abandonedAtUtc,
     this.undoUntilUtc,
@@ -5504,6 +6190,9 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
     map['sync_mode'] = Variable<String>(syncMode);
     map['local_revision'] = Variable<int>(localRevision);
     map['server_revision'] = Variable<int>(serverRevision);
+    if (!nullToAbsent || sourceAttemptId != null) {
+      map['source_attempt_id'] = Variable<String>(sourceAttemptId);
+    }
     if (!nullToAbsent || conflictOfDraftId != null) {
       map['conflict_of_draft_id'] = Variable<String>(conflictOfDraftId);
     }
@@ -5567,6 +6256,9 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
       syncMode: Value(syncMode),
       localRevision: Value(localRevision),
       serverRevision: Value(serverRevision),
+      sourceAttemptId: sourceAttemptId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceAttemptId),
       conflictOfDraftId: conflictOfDraftId == null && nullToAbsent
           ? const Value.absent()
           : Value(conflictOfDraftId),
@@ -5614,6 +6306,7 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
       syncMode: serializer.fromJson<String>(json['syncMode']),
       localRevision: serializer.fromJson<int>(json['localRevision']),
       serverRevision: serializer.fromJson<int>(json['serverRevision']),
+      sourceAttemptId: serializer.fromJson<String?>(json['sourceAttemptId']),
       conflictOfDraftId: serializer.fromJson<String?>(
         json['conflictOfDraftId'],
       ),
@@ -5652,6 +6345,7 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
       'syncMode': serializer.toJson<String>(syncMode),
       'localRevision': serializer.toJson<int>(localRevision),
       'serverRevision': serializer.toJson<int>(serverRevision),
+      'sourceAttemptId': serializer.toJson<String?>(sourceAttemptId),
       'conflictOfDraftId': serializer.toJson<String?>(conflictOfDraftId),
       'abandonedAtUtc': serializer.toJson<DateTime?>(abandonedAtUtc),
       'undoUntilUtc': serializer.toJson<DateTime?>(undoUntilUtc),
@@ -5682,6 +6376,7 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
     String? syncMode,
     int? localRevision,
     int? serverRevision,
+    Value<String?> sourceAttemptId = const Value.absent(),
     Value<String?> conflictOfDraftId = const Value.absent(),
     Value<DateTime?> abandonedAtUtc = const Value.absent(),
     Value<DateTime?> undoUntilUtc = const Value.absent(),
@@ -5724,6 +6419,9 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
     syncMode: syncMode ?? this.syncMode,
     localRevision: localRevision ?? this.localRevision,
     serverRevision: serverRevision ?? this.serverRevision,
+    sourceAttemptId: sourceAttemptId.present
+        ? sourceAttemptId.value
+        : this.sourceAttemptId,
     conflictOfDraftId: conflictOfDraftId.present
         ? conflictOfDraftId.value
         : this.conflictOfDraftId,
@@ -5787,6 +6485,9 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
       serverRevision: data.serverRevision.present
           ? data.serverRevision.value
           : this.serverRevision,
+      sourceAttemptId: data.sourceAttemptId.present
+          ? data.sourceAttemptId.value
+          : this.sourceAttemptId,
       conflictOfDraftId: data.conflictOfDraftId.present
           ? data.conflictOfDraftId.value
           : this.conflictOfDraftId,
@@ -5825,6 +6526,7 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
           ..write('syncMode: $syncMode, ')
           ..write('localRevision: $localRevision, ')
           ..write('serverRevision: $serverRevision, ')
+          ..write('sourceAttemptId: $sourceAttemptId, ')
           ..write('conflictOfDraftId: $conflictOfDraftId, ')
           ..write('abandonedAtUtc: $abandonedAtUtc, ')
           ..write('undoUntilUtc: $undoUntilUtc')
@@ -5857,6 +6559,7 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
     syncMode,
     localRevision,
     serverRevision,
+    sourceAttemptId,
     conflictOfDraftId,
     abandonedAtUtc,
     undoUntilUtc,
@@ -5888,6 +6591,7 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
           other.syncMode == this.syncMode &&
           other.localRevision == this.localRevision &&
           other.serverRevision == this.serverRevision &&
+          other.sourceAttemptId == this.sourceAttemptId &&
           other.conflictOfDraftId == this.conflictOfDraftId &&
           other.abandonedAtUtc == this.abandonedAtUtc &&
           other.undoUntilUtc == this.undoUntilUtc);
@@ -5917,6 +6621,7 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
   final Value<String> syncMode;
   final Value<int> localRevision;
   final Value<int> serverRevision;
+  final Value<String?> sourceAttemptId;
   final Value<String?> conflictOfDraftId;
   final Value<DateTime?> abandonedAtUtc;
   final Value<DateTime?> undoUntilUtc;
@@ -5945,6 +6650,7 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
     this.syncMode = const Value.absent(),
     this.localRevision = const Value.absent(),
     this.serverRevision = const Value.absent(),
+    this.sourceAttemptId = const Value.absent(),
     this.conflictOfDraftId = const Value.absent(),
     this.abandonedAtUtc = const Value.absent(),
     this.undoUntilUtc = const Value.absent(),
@@ -5974,6 +6680,7 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
     this.syncMode = const Value.absent(),
     this.localRevision = const Value.absent(),
     this.serverRevision = const Value.absent(),
+    this.sourceAttemptId = const Value.absent(),
     this.conflictOfDraftId = const Value.absent(),
     this.abandonedAtUtc = const Value.absent(),
     this.undoUntilUtc = const Value.absent(),
@@ -6009,6 +6716,7 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
     Expression<String>? syncMode,
     Expression<int>? localRevision,
     Expression<int>? serverRevision,
+    Expression<String>? sourceAttemptId,
     Expression<String>? conflictOfDraftId,
     Expression<DateTime>? abandonedAtUtc,
     Expression<DateTime>? undoUntilUtc,
@@ -6040,6 +6748,7 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
       if (syncMode != null) 'sync_mode': syncMode,
       if (localRevision != null) 'local_revision': localRevision,
       if (serverRevision != null) 'server_revision': serverRevision,
+      if (sourceAttemptId != null) 'source_attempt_id': sourceAttemptId,
       if (conflictOfDraftId != null) 'conflict_of_draft_id': conflictOfDraftId,
       if (abandonedAtUtc != null) 'abandoned_at_utc': abandonedAtUtc,
       if (undoUntilUtc != null) 'undo_until_utc': undoUntilUtc,
@@ -6071,6 +6780,7 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
     Value<String>? syncMode,
     Value<int>? localRevision,
     Value<int>? serverRevision,
+    Value<String?>? sourceAttemptId,
     Value<String?>? conflictOfDraftId,
     Value<DateTime?>? abandonedAtUtc,
     Value<DateTime?>? undoUntilUtc,
@@ -6102,6 +6812,7 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
       syncMode: syncMode ?? this.syncMode,
       localRevision: localRevision ?? this.localRevision,
       serverRevision: serverRevision ?? this.serverRevision,
+      sourceAttemptId: sourceAttemptId ?? this.sourceAttemptId,
       conflictOfDraftId: conflictOfDraftId ?? this.conflictOfDraftId,
       abandonedAtUtc: abandonedAtUtc ?? this.abandonedAtUtc,
       undoUntilUtc: undoUntilUtc ?? this.undoUntilUtc,
@@ -6185,6 +6896,9 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
     if (serverRevision.present) {
       map['server_revision'] = Variable<int>(serverRevision.value);
     }
+    if (sourceAttemptId.present) {
+      map['source_attempt_id'] = Variable<String>(sourceAttemptId.value);
+    }
     if (conflictOfDraftId.present) {
       map['conflict_of_draft_id'] = Variable<String>(conflictOfDraftId.value);
     }
@@ -6226,6 +6940,7 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
           ..write('syncMode: $syncMode, ')
           ..write('localRevision: $localRevision, ')
           ..write('serverRevision: $serverRevision, ')
+          ..write('sourceAttemptId: $sourceAttemptId, ')
           ..write('conflictOfDraftId: $conflictOfDraftId, ')
           ..write('abandonedAtUtc: $abandonedAtUtc, ')
           ..write('undoUntilUtc: $undoUntilUtc, ')
@@ -11206,6 +11921,8 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
   late final $DbSyncDrainerLeasesTable dbSyncDrainerLeases =
       $DbSyncDrainerLeasesTable(this);
   late final $DbSyncScopesTable dbSyncScopes = $DbSyncScopesTable(this);
+  late final $DbContactAttemptsTable dbContactAttempts =
+      $DbContactAttemptsTable(this);
   late final $DbContactRevisionsTable dbContactRevisions =
       $DbContactRevisionsTable(this);
   late final $DbContactAnswersTable dbContactAnswers = $DbContactAnswersTable(
@@ -11223,6 +11940,10 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
   late final Index contactRecordsPersonalPeriod = Index(
     'contact_records_personal_period',
     'CREATE INDEX contact_records_personal_period ON db_contact_records (app_user_id, workspace_id, project_id, occurred_at_utc)',
+  );
+  late final Index contactAttemptsPersonalPeriod = Index(
+    'contact_attempts_personal_period',
+    'CREATE INDEX contact_attempts_personal_period ON db_contact_attempts (app_user_id, workspace_id, project_id, occurred_at_utc)',
   );
   late final Index syncOutboxReady = Index(
     'sync_outbox_ready',
@@ -11361,12 +12082,14 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
     dbContactRecords,
     dbSyncDrainerLeases,
     dbSyncScopes,
+    dbContactAttempts,
     dbContactRevisions,
     dbContactAnswers,
     dbContactDrafts,
     dbContactDraftAnswers,
     contactDraftsOwnerUpdated,
     contactRecordsPersonalPeriod,
+    contactAttemptsPersonalPeriod,
     syncOutboxReady,
     syncOutboxAggregateOrder,
     dbUsers,
@@ -11921,6 +12644,34 @@ final class $$DbContactRecordsTableReferences
     super.$_typedResult,
   );
 
+  static MultiTypedResultKey<$DbContactAttemptsTable, List<DbContactAttempt>>
+  _dbContactAttemptsRefsTable(
+    _$LocalDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.dbContactAttempts,
+    aliasName:
+        'db_contact_records__contact_id__db_contact_attempts__linked_contact_id',
+  );
+
+  $$DbContactAttemptsTableProcessedTableManager get dbContactAttemptsRefs {
+    final manager =
+        $$DbContactAttemptsTableTableManager(
+          $_db,
+          $_db.dbContactAttempts,
+        ).filter(
+          (f) => f.linkedContactId.contactId.sqlEquals(
+            $_itemColumn<String>('contact_id')!,
+          ),
+        );
+
+    final cache = $_typedResult.readTableOrNull(
+      _dbContactAttemptsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
   static MultiTypedResultKey<$DbContactRevisionsTable, List<DbContactRevision>>
   _dbContactRevisionsRefsTable(_$LocalDatabase db) =>
       MultiTypedResultKey.fromTable(
@@ -12118,6 +12869,31 @@ class $$DbContactRecordsTableFilterComposer
     column: $table.lifecycleStatus,
     builder: (column) => ColumnFilters(column),
   );
+
+  Expression<bool> dbContactAttemptsRefs(
+    Expression<bool> Function($$DbContactAttemptsTableFilterComposer f) f,
+  ) {
+    final $$DbContactAttemptsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.contactId,
+      referencedTable: $db.dbContactAttempts,
+      getReferencedColumn: (t) => t.linkedContactId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbContactAttemptsTableFilterComposer(
+            $db: $db,
+            $table: $db.dbContactAttempts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 
   Expression<bool> dbContactRevisionsRefs(
     Expression<bool> Function($$DbContactRevisionsTableFilterComposer f) f,
@@ -12412,6 +13188,32 @@ class $$DbContactRecordsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  Expression<T> dbContactAttemptsRefs<T extends Object>(
+    Expression<T> Function($$DbContactAttemptsTableAnnotationComposer a) f,
+  ) {
+    final $$DbContactAttemptsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.contactId,
+          referencedTable: $db.dbContactAttempts,
+          getReferencedColumn: (t) => t.linkedContactId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbContactAttemptsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.dbContactAttempts,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+
   Expression<T> dbContactRevisionsRefs<T extends Object>(
     Expression<T> Function($$DbContactRevisionsTableAnnotationComposer a) f,
   ) {
@@ -12507,6 +13309,7 @@ class $$DbContactRecordsTableTableManager
           (DbContactRecord, $$DbContactRecordsTableReferences),
           DbContactRecord,
           PrefetchHooks Function({
+            bool dbContactAttemptsRefs,
             bool dbContactRevisionsRefs,
             bool dbContactAnswersRefs,
             bool dbContactRegionAssignmentsRefs,
@@ -12631,6 +13434,7 @@ class $$DbContactRecordsTableTableManager
               .toList(),
           prefetchHooksCallback:
               ({
+                dbContactAttemptsRefs = false,
                 dbContactRevisionsRefs = false,
                 dbContactAnswersRefs = false,
                 dbContactRegionAssignmentsRefs = false,
@@ -12638,6 +13442,7 @@ class $$DbContactRecordsTableTableManager
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
+                    if (dbContactAttemptsRefs) db.dbContactAttempts,
                     if (dbContactRevisionsRefs) db.dbContactRevisions,
                     if (dbContactAnswersRefs) db.dbContactAnswers,
                     if (dbContactRegionAssignmentsRefs)
@@ -12646,6 +13451,27 @@ class $$DbContactRecordsTableTableManager
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
                     return [
+                      if (dbContactAttemptsRefs)
+                        await $_getPrefetchedData<
+                          DbContactRecord,
+                          $DbContactRecordsTable,
+                          DbContactAttempt
+                        >(
+                          currentTable: table,
+                          referencedTable: $$DbContactRecordsTableReferences
+                              ._dbContactAttemptsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$DbContactRecordsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).dbContactAttemptsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.linkedContactId == item.contactId,
+                              ),
+                          typedResults: items,
+                        ),
                       if (dbContactRevisionsRefs)
                         await $_getPrefetchedData<
                           DbContactRecord,
@@ -12730,6 +13556,7 @@ typedef $$DbContactRecordsTableProcessedTableManager =
       (DbContactRecord, $$DbContactRecordsTableReferences),
       DbContactRecord,
       PrefetchHooks Function({
+        bool dbContactAttemptsRefs,
         bool dbContactRevisionsRefs,
         bool dbContactAnswersRefs,
         bool dbContactRegionAssignmentsRefs,
@@ -13164,6 +13991,447 @@ typedef $$DbSyncScopesTableProcessedTableManager =
       ),
       DbSyncScope,
       PrefetchHooks Function()
+    >;
+typedef $$DbContactAttemptsTableCreateCompanionBuilder =
+    DbContactAttemptsCompanion Function({
+      required String attemptId,
+      required String appUserId,
+      required String workspaceId,
+      required String projectId,
+      required DateTime occurredAtUtc,
+      required String occurredTimeZone,
+      required DateTime firstSubmittedAtUtc,
+      required String channel,
+      Value<String?> channelDetail,
+      Value<String?> linkedContactId,
+      Value<int> rowid,
+    });
+typedef $$DbContactAttemptsTableUpdateCompanionBuilder =
+    DbContactAttemptsCompanion Function({
+      Value<String> attemptId,
+      Value<String> appUserId,
+      Value<String> workspaceId,
+      Value<String> projectId,
+      Value<DateTime> occurredAtUtc,
+      Value<String> occurredTimeZone,
+      Value<DateTime> firstSubmittedAtUtc,
+      Value<String> channel,
+      Value<String?> channelDetail,
+      Value<String?> linkedContactId,
+      Value<int> rowid,
+    });
+
+final class $$DbContactAttemptsTableReferences
+    extends
+        BaseReferences<
+          _$LocalDatabase,
+          $DbContactAttemptsTable,
+          DbContactAttempt
+        > {
+  $$DbContactAttemptsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $DbContactRecordsTable _linkedContactIdTable(
+    _$LocalDatabase db,
+  ) => db.dbContactRecords.createAlias(
+    'db_contact_attempts__linked_contact_id__db_contact_records__contact_id',
+  );
+
+  $$DbContactRecordsTableProcessedTableManager? get linkedContactId {
+    final $_column = $_itemColumn<String>('linked_contact_id');
+    if ($_column == null) return null;
+    final manager = $$DbContactRecordsTableTableManager(
+      $_db,
+      $_db.dbContactRecords,
+    ).filter((f) => f.contactId.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_linkedContactIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$DbContactAttemptsTableFilterComposer
+    extends Composer<_$LocalDatabase, $DbContactAttemptsTable> {
+  $$DbContactAttemptsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get attemptId => $composableBuilder(
+    column: $table.attemptId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get appUserId => $composableBuilder(
+    column: $table.appUserId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get projectId => $composableBuilder(
+    column: $table.projectId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get occurredAtUtc => $composableBuilder(
+    column: $table.occurredAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get occurredTimeZone => $composableBuilder(
+    column: $table.occurredTimeZone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get firstSubmittedAtUtc => $composableBuilder(
+    column: $table.firstSubmittedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get channel => $composableBuilder(
+    column: $table.channel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get channelDetail => $composableBuilder(
+    column: $table.channelDetail,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$DbContactRecordsTableFilterComposer get linkedContactId {
+    final $$DbContactRecordsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.linkedContactId,
+      referencedTable: $db.dbContactRecords,
+      getReferencedColumn: (t) => t.contactId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbContactRecordsTableFilterComposer(
+            $db: $db,
+            $table: $db.dbContactRecords,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DbContactAttemptsTableOrderingComposer
+    extends Composer<_$LocalDatabase, $DbContactAttemptsTable> {
+  $$DbContactAttemptsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get attemptId => $composableBuilder(
+    column: $table.attemptId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get appUserId => $composableBuilder(
+    column: $table.appUserId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get projectId => $composableBuilder(
+    column: $table.projectId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get occurredAtUtc => $composableBuilder(
+    column: $table.occurredAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get occurredTimeZone => $composableBuilder(
+    column: $table.occurredTimeZone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get firstSubmittedAtUtc => $composableBuilder(
+    column: $table.firstSubmittedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get channel => $composableBuilder(
+    column: $table.channel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get channelDetail => $composableBuilder(
+    column: $table.channelDetail,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$DbContactRecordsTableOrderingComposer get linkedContactId {
+    final $$DbContactRecordsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.linkedContactId,
+      referencedTable: $db.dbContactRecords,
+      getReferencedColumn: (t) => t.contactId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbContactRecordsTableOrderingComposer(
+            $db: $db,
+            $table: $db.dbContactRecords,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DbContactAttemptsTableAnnotationComposer
+    extends Composer<_$LocalDatabase, $DbContactAttemptsTable> {
+  $$DbContactAttemptsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get attemptId =>
+      $composableBuilder(column: $table.attemptId, builder: (column) => column);
+
+  GeneratedColumn<String> get appUserId =>
+      $composableBuilder(column: $table.appUserId, builder: (column) => column);
+
+  GeneratedColumn<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get projectId =>
+      $composableBuilder(column: $table.projectId, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get occurredAtUtc => $composableBuilder(
+    column: $table.occurredAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get occurredTimeZone => $composableBuilder(
+    column: $table.occurredTimeZone,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get firstSubmittedAtUtc => $composableBuilder(
+    column: $table.firstSubmittedAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get channel =>
+      $composableBuilder(column: $table.channel, builder: (column) => column);
+
+  GeneratedColumn<String> get channelDetail => $composableBuilder(
+    column: $table.channelDetail,
+    builder: (column) => column,
+  );
+
+  $$DbContactRecordsTableAnnotationComposer get linkedContactId {
+    final $$DbContactRecordsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.linkedContactId,
+      referencedTable: $db.dbContactRecords,
+      getReferencedColumn: (t) => t.contactId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbContactRecordsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.dbContactRecords,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DbContactAttemptsTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $DbContactAttemptsTable,
+          DbContactAttempt,
+          $$DbContactAttemptsTableFilterComposer,
+          $$DbContactAttemptsTableOrderingComposer,
+          $$DbContactAttemptsTableAnnotationComposer,
+          $$DbContactAttemptsTableCreateCompanionBuilder,
+          $$DbContactAttemptsTableUpdateCompanionBuilder,
+          (DbContactAttempt, $$DbContactAttemptsTableReferences),
+          DbContactAttempt,
+          PrefetchHooks Function({bool linkedContactId})
+        > {
+  $$DbContactAttemptsTableTableManager(
+    _$LocalDatabase db,
+    $DbContactAttemptsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DbContactAttemptsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DbContactAttemptsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DbContactAttemptsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> attemptId = const Value.absent(),
+                Value<String> appUserId = const Value.absent(),
+                Value<String> workspaceId = const Value.absent(),
+                Value<String> projectId = const Value.absent(),
+                Value<DateTime> occurredAtUtc = const Value.absent(),
+                Value<String> occurredTimeZone = const Value.absent(),
+                Value<DateTime> firstSubmittedAtUtc = const Value.absent(),
+                Value<String> channel = const Value.absent(),
+                Value<String?> channelDetail = const Value.absent(),
+                Value<String?> linkedContactId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbContactAttemptsCompanion(
+                attemptId: attemptId,
+                appUserId: appUserId,
+                workspaceId: workspaceId,
+                projectId: projectId,
+                occurredAtUtc: occurredAtUtc,
+                occurredTimeZone: occurredTimeZone,
+                firstSubmittedAtUtc: firstSubmittedAtUtc,
+                channel: channel,
+                channelDetail: channelDetail,
+                linkedContactId: linkedContactId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String attemptId,
+                required String appUserId,
+                required String workspaceId,
+                required String projectId,
+                required DateTime occurredAtUtc,
+                required String occurredTimeZone,
+                required DateTime firstSubmittedAtUtc,
+                required String channel,
+                Value<String?> channelDetail = const Value.absent(),
+                Value<String?> linkedContactId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbContactAttemptsCompanion.insert(
+                attemptId: attemptId,
+                appUserId: appUserId,
+                workspaceId: workspaceId,
+                projectId: projectId,
+                occurredAtUtc: occurredAtUtc,
+                occurredTimeZone: occurredTimeZone,
+                firstSubmittedAtUtc: firstSubmittedAtUtc,
+                channel: channel,
+                channelDetail: channelDetail,
+                linkedContactId: linkedContactId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$DbContactAttemptsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({linkedContactId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (linkedContactId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.linkedContactId,
+                                referencedTable:
+                                    $$DbContactAttemptsTableReferences
+                                        ._linkedContactIdTable(db),
+                                referencedColumn:
+                                    $$DbContactAttemptsTableReferences
+                                        ._linkedContactIdTable(db)
+                                        .contactId,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$DbContactAttemptsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $DbContactAttemptsTable,
+      DbContactAttempt,
+      $$DbContactAttemptsTableFilterComposer,
+      $$DbContactAttemptsTableOrderingComposer,
+      $$DbContactAttemptsTableAnnotationComposer,
+      $$DbContactAttemptsTableCreateCompanionBuilder,
+      $$DbContactAttemptsTableUpdateCompanionBuilder,
+      (DbContactAttempt, $$DbContactAttemptsTableReferences),
+      DbContactAttempt,
+      PrefetchHooks Function({bool linkedContactId})
     >;
 typedef $$DbContactRevisionsTableCreateCompanionBuilder =
     DbContactRevisionsCompanion Function({
@@ -14178,6 +15446,7 @@ typedef $$DbContactDraftsTableCreateCompanionBuilder =
       Value<String> syncMode,
       Value<int> localRevision,
       Value<int> serverRevision,
+      Value<String?> sourceAttemptId,
       Value<String?> conflictOfDraftId,
       Value<DateTime?> abandonedAtUtc,
       Value<DateTime?> undoUntilUtc,
@@ -14208,6 +15477,7 @@ typedef $$DbContactDraftsTableUpdateCompanionBuilder =
       Value<String> syncMode,
       Value<int> localRevision,
       Value<int> serverRevision,
+      Value<String?> sourceAttemptId,
       Value<String?> conflictOfDraftId,
       Value<DateTime?> abandonedAtUtc,
       Value<DateTime?> undoUntilUtc,
@@ -14407,6 +15677,11 @@ class $$DbContactDraftsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get sourceAttemptId => $composableBuilder(
+    column: $table.sourceAttemptId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get conflictOfDraftId => $composableBuilder(
     column: $table.conflictOfDraftId,
     builder: (column) => ColumnFilters(column),
@@ -14600,6 +15875,11 @@ class $$DbContactDraftsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get sourceAttemptId => $composableBuilder(
+    column: $table.sourceAttemptId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get conflictOfDraftId => $composableBuilder(
     column: $table.conflictOfDraftId,
     builder: (column) => ColumnOrderings(column),
@@ -14721,6 +16001,11 @@ class $$DbContactDraftsTableAnnotationComposer
 
   GeneratedColumn<int> get serverRevision => $composableBuilder(
     column: $table.serverRevision,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sourceAttemptId => $composableBuilder(
+    column: $table.sourceAttemptId,
     builder: (column) => column,
   );
 
@@ -14849,6 +16134,7 @@ class $$DbContactDraftsTableTableManager
                 Value<String> syncMode = const Value.absent(),
                 Value<int> localRevision = const Value.absent(),
                 Value<int> serverRevision = const Value.absent(),
+                Value<String?> sourceAttemptId = const Value.absent(),
                 Value<String?> conflictOfDraftId = const Value.absent(),
                 Value<DateTime?> abandonedAtUtc = const Value.absent(),
                 Value<DateTime?> undoUntilUtc = const Value.absent(),
@@ -14877,6 +16163,7 @@ class $$DbContactDraftsTableTableManager
                 syncMode: syncMode,
                 localRevision: localRevision,
                 serverRevision: serverRevision,
+                sourceAttemptId: sourceAttemptId,
                 conflictOfDraftId: conflictOfDraftId,
                 abandonedAtUtc: abandonedAtUtc,
                 undoUntilUtc: undoUntilUtc,
@@ -14907,6 +16194,7 @@ class $$DbContactDraftsTableTableManager
                 Value<String> syncMode = const Value.absent(),
                 Value<int> localRevision = const Value.absent(),
                 Value<int> serverRevision = const Value.absent(),
+                Value<String?> sourceAttemptId = const Value.absent(),
                 Value<String?> conflictOfDraftId = const Value.absent(),
                 Value<DateTime?> abandonedAtUtc = const Value.absent(),
                 Value<DateTime?> undoUntilUtc = const Value.absent(),
@@ -14935,6 +16223,7 @@ class $$DbContactDraftsTableTableManager
                 syncMode: syncMode,
                 localRevision: localRevision,
                 serverRevision: serverRevision,
+                sourceAttemptId: sourceAttemptId,
                 conflictOfDraftId: conflictOfDraftId,
                 abandonedAtUtc: abandonedAtUtc,
                 undoUntilUtc: undoUntilUtc,
@@ -18501,6 +19790,8 @@ class $LocalDatabaseManager {
       $$DbSyncDrainerLeasesTableTableManager(_db, _db.dbSyncDrainerLeases);
   $$DbSyncScopesTableTableManager get dbSyncScopes =>
       $$DbSyncScopesTableTableManager(_db, _db.dbSyncScopes);
+  $$DbContactAttemptsTableTableManager get dbContactAttempts =>
+      $$DbContactAttemptsTableTableManager(_db, _db.dbContactAttempts);
   $$DbContactRevisionsTableTableManager get dbContactRevisions =>
       $$DbContactRevisionsTableTableManager(_db, _db.dbContactRevisions);
   $$DbContactAnswersTableTableManager get dbContactAnswers =>

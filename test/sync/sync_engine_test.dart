@@ -258,6 +258,73 @@ void main() {
     expect(health.serverCursor, 'cursor-from-other-device');
   });
 
+  test('远端尝试与后来回应保持两条事实并建立关联', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    final transport = _QueueSyncTransport(
+      const [],
+      pullReplies: [
+        SyncPullSucceeded(
+          SyncPullBatch(
+            nextCursor: 'cursor-after-response',
+            changes: [
+              SyncRemoteChange(
+                changeType: 'contact.attempt.submitted',
+                revisionNumber: 1,
+                payload: {
+                  'attemptId': 'remote-attempt-1',
+                  'workspaceId': _Fixture.scope.workspaceId,
+                  'projectId': _Fixture.scope.projectId,
+                  'occurredAtUtc': '2030-01-08T17:00:00.000Z',
+                  'occurredTimeZone': 'America/Chicago',
+                  'firstSubmittedAtUtc': '2030-01-08T17:30:00.000Z',
+                  'channel': 'voice_call',
+                  'channelDetail': null,
+                  'linkedContactId': null,
+                },
+              ),
+              SyncRemoteChange(
+                changeType: 'contact.submitted',
+                revisionNumber: 1,
+                payload: {
+                  ..._remotePayload(contactId: 'remote-response-1'),
+                  'sourceAttemptId': 'remote-attempt-1',
+                  'channel': 'voice_call',
+                  'reachCount': 1,
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    final engine = fixture.engine(workerId: 'worker-1', transport: transport);
+
+    expect(await engine.pullOnce(), SyncPullApplyResult.applied);
+
+    final journal = ContactJournal(
+      database: fixture.database,
+      clock: fixture.clock,
+      idGenerator: _SequenceIdGenerator(const []),
+    );
+    final attempts = await journal.listContactAttempts(
+      appUserId: _Fixture.scope.appUserId,
+      workspaceId: _Fixture.scope.workspaceId,
+      projectId: _Fixture.scope.projectId,
+    );
+    expect(attempts, hasLength(1));
+    expect(attempts.single.linkedContactId, 'remote-response-1');
+    final summary = await journal.summarizePersonalContacts(
+      appUserId: _Fixture.scope.appUserId,
+      workspaceId: _Fixture.scope.workspaceId,
+      projectId: _Fixture.scope.projectId,
+      fromUtc: DateTime.utc(2030, 1, 8),
+      untilUtc: DateTime.utc(2030, 1, 9),
+    );
+    expect(summary.contactSessionCount, 1);
+    expect(summary.reachCount, 1);
+  });
+
   test('远端 batch 中一条无效变化会回滚全部事实和 cursor', () async {
     final fixture = _Fixture();
     addTearDown(fixture.close);

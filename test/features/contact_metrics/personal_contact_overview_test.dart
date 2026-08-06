@@ -91,6 +91,13 @@ final class _FakeOverviewSource implements PersonalContactOverviewSource {
   }
 
   @override
+  Future<List<ContactAttempt>> listContactAttempts({
+    required String appUserId,
+    required String workspaceId,
+    required String projectId,
+  }) async => const [];
+
+  @override
   Future<PersonalContactSummary> summarizePersonalContacts({
     required String appUserId,
     required String workspaceId,
