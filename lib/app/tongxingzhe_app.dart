@@ -15,6 +15,7 @@ import '../foundation/runtime_values.dart';
 import '../identity/identity_session.dart';
 import '../l10n/app_strings.dart';
 import '../questionnaires/questionnaire_contract.dart';
+import '../questionnaires/questionnaire_administration.dart';
 import '../regions/contact_region_resolver.dart';
 import '../routing/app_route.dart';
 import '../routing/app_router.dart';
@@ -58,6 +59,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
   SyncEngineFactory? _syncEngineFactory;
   ContactRegionResolver? _regionResolver;
   QuestionnaireCatalog? _questionnaireCatalog;
+  QuestionnaireAdministrationGateway? _questionnaireAdministration;
 
   @override
   void initState() {
@@ -74,6 +76,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       :final syncEngineFactory,
       :final regionResolver,
       :final questionnaireCatalog,
+      :final questionnaireAdministration,
     )) {
       _controller = controller;
       _identitySession = identitySession;
@@ -81,6 +84,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       _syncEngineFactory = syncEngineFactory;
       _regionResolver = regionResolver;
       _questionnaireCatalog = questionnaireCatalog;
+      _questionnaireAdministration = questionnaireAdministration;
     }
     return result;
   }
@@ -92,6 +96,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
     unawaited(_syncEngineFactory?.close());
     unawaited(_regionResolver?.close());
     unawaited(_questionnaireCatalog?.close());
+    unawaited(_questionnaireAdministration?.close());
     _controller?.dispose();
     super.dispose();
   }
@@ -121,6 +126,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
             :final timeZoneProvider,
             :final regionResolver,
             :final questionnaireCatalog,
+            :final questionnaireAdministration,
+            :final idGenerator,
           ) =>
             _ReadyApp(
               controller: controller,
@@ -134,6 +141,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
               timeZoneProvider: timeZoneProvider,
               regionResolver: regionResolver,
               questionnaireCatalog: questionnaireCatalog,
+              questionnaireAdministration: questionnaireAdministration,
+              idGenerator: idGenerator,
               signedOutScreenBuilder: widget.signedOutScreenBuilder,
               routeInformationProvider: widget.routeInformationProvider,
             ),
@@ -159,6 +168,8 @@ class _ReadyApp extends StatefulWidget {
     required this.timeZoneProvider,
     required this.regionResolver,
     required this.questionnaireCatalog,
+    required this.questionnaireAdministration,
+    required this.idGenerator,
     required this.signedOutScreenBuilder,
     required this.routeInformationProvider,
   });
@@ -174,6 +185,8 @@ class _ReadyApp extends StatefulWidget {
   final DeviceTimeZoneProvider timeZoneProvider;
   final ContactRegionResolver regionResolver;
   final QuestionnaireCatalog questionnaireCatalog;
+  final QuestionnaireAdministrationGateway questionnaireAdministration;
+  final IdGenerator idGenerator;
   final SignedOutScreenBuilder? signedOutScreenBuilder;
   final RouteInformationProvider? routeInformationProvider;
 
@@ -256,6 +269,8 @@ final class _ReadyAppState extends State<_ReadyApp> {
         timeZoneProvider: widget.timeZoneProvider,
         selectedIndex: route.primaryIndex,
         contactPageClosedEvents: contactPageClosedEvents,
+        questionnaireAdministration: widget.questionnaireAdministration,
+        idGenerator: widget.idGenerator,
         onDestinationSelected: (index) => _routerDelegate.go(switch (index) {
           0 => AppRoute.today,
           1 => AppRoute.contacts,

@@ -65,6 +65,11 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/checks/verify_questionnaire_visibility.sql
 psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/fixtures/0012_questionnaire_visibility.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_questionnaire_publishing.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0013_questionnaire_publishing.sql
+./tool/verify_questionnaire_publish_concurrency.sh
 ```
 
 第二次执行不是重复建库，而是验证已经记录的 checksum。若历史文件被修改，脚本会拒绝继续。
@@ -99,3 +104,7 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 `0011_questionnaire_execution.sql` 加入八种受控题型、五种回答状态、已发布定义读取和 v2 写入入口。客户端可以离线预验，但 PostgreSQL 仍会按可信项目与精确问卷版本复验每个答案。
 
 `0012_questionnaire_visibility.sql` 给问题定义加入受限显示规则，并给答案加入 `rule_skipped` 原因。服务端按问题顺序重算可见性：可见必填题不能遗漏，隐藏题不能夹带旧值，也不能伪造普通“不适用”。
+
+`0013_questionnaire_publishing.sql` 保存管理草稿、发布者、发布说明和幂等请求。发布函数取得项目级 transaction lock，严格验证 JSON 定义，并在同一 transaction 中建立新版本、写入问题和选项、切换唯一 current 版本。管理端已发布定义受触发器保护，不能追加、修改或删除；回退只能复制旧版本并发布新版本。
+
+普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。`verify_questionnaire_publish_concurrency.sh` 必须另行运行，因为它会启动两个独立 `psql` 会话，同时发布同一项目的不同草稿。检查脚本只使用 synthetic 个人空间，并要求显式 `DATABASE_URL`。

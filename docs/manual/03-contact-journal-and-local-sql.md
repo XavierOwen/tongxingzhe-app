@@ -21,7 +21,7 @@
 
 模块接收真实 Drift 数据库、Clock 和 ID generator。测试使用真实 SQLite、固定时间和确定性 ID。测试可以稳定重现失败，不把测试条件带入正式代码。
 
-## 2. v14 的十六张现代接触、问卷、同步与区域表
+## 2. v15 的十七张现代接触、问卷、同步与区域表
 
 表结构定义在 [`contact_tables.dart`](../../lib/features/contact_journal/contact_tables.dart) 和 [`questionnaire_tables.dart`](../../lib/questionnaires/questionnaire_tables.dart)。Drift 根据这些定义生成 SQLite schema 和类型安全的 Dart row。
 
@@ -37,6 +37,7 @@
 | `db_questionnaire_versions` | 已发布版本 ID、项目、版本号和安装时间 | 可变问卷草稿、任意配置 JSON |
 | `db_questionnaire_questions` | 八种受控题型、状态许可、选项或数值约束和受限显示规则 | 脚本、公式、SQL、上传定义 |
 | `db_questionnaire_options` | 单选、有序单选和多选的稳定选项 ID、顺序和标签 | 回答值、跨版本兼容判断 |
+| `db_questionnaire_draft_working_copies` | 管理者显式保存前的定义、服务器 base revision 和本机修改标记 | 发布成功、current 版本、授权凭据 |
 | `db_sync_outbox` | 命令、协议版本、状态和重试字段 | 身份令牌、日志用 PII |
 | `db_sync_drainer_leases` | 跨执行器互斥的全局租约 | 远端锁、用户身份 |
 | `db_sync_scopes` | 每个用户和项目的拉取 cursor、最后成功和失败 | command payload、token |
@@ -220,15 +221,16 @@ WHERE app_user_id = :app_user_id
 
 兴趣是有序等级。核心分析先返回五档分布，不计算平均值。若以后显示兴趣算术指数，页面必须说明它额外假设相邻等级距离相等。
 
-## 13. v5 到 v13 如何升级到 v14
+## 13. v5 至 v15 如何安全升级
 
-v6 使用 expand-contract 新增已提交接触、revision、答案和 Outbox 表。v7 新增草稿和草稿答案表。v8 新增同步执行租约和按可信范围保存的 cursor。v9 新增草稿同步版本、Outbox 可信范围和三张区域表。v10 新增独立尝试表，并给草稿加入可选来源尝试。v11 给 revision 增加受约束的 `submitted`、`corrected`、`voided` 类型。v12 新增只属于当前用户与项目的接触修订冲突表。v13 扩展八种问卷题型的互斥值列，并加入不可变定义缓存。v14 给问题定义加入受限显示规则，并给两张答案表加入受约束的跳过原因。升级不删除五张 legacy 表，也不从旧宽表猜测现代接触、尝试、冲突、区域归属或问卷定义。
+v6 使用 expand-contract 新增已提交接触、revision、答案和 Outbox 表。v7 新增草稿和草稿答案表。v8 新增同步执行租约和按可信范围保存的 cursor。v9 新增草稿同步版本、Outbox 可信范围和三张区域表。v10 新增独立尝试表，并给草稿加入可选来源尝试。v11 给 revision 增加受约束的 `submitted`、`corrected`、`voided` 类型。v12 新增只属于当前用户与项目的接触修订冲突表。v13 扩展八种问卷题型的互斥值列，并加入不可变定义缓存。v14 给问题定义加入受限显示规则，并给两张答案表加入受约束的跳过原因。v15 加入管理端问卷工作副本；它只用于恢复尚未得到服务器确认的编辑，不是发布凭据。升级不删除五张 legacy 表，也不从旧宽表猜测现代接触、尝试、冲突、区域归属或问卷定义。
 
 当新列参与 `CHECK` 约束时，不能只运行 SQLite `ADD COLUMN`。migration 使用 Drift `TableMigration` 重建受影响的表并复制旧数据。跨多个版本升级时，重建步骤按当前表定义复制数据；旧版本缺少的每一列都必须通过 `newColumns` 提供默认表达式。否则 SQL 会引用旧表中不存在的列。
 
 [`local_database_migration_test.dart`](../../test/data/local_database_migration_test.dart) 保存四类证据：
 
-- 当前 v14 快照可以独立重建；
+- 当前 v15 快照可以独立重建；
+- v14 的设置升级后保留，新的问卷工作副本表为空；
 - v13 的已提交答案与问卷定义升级后保留，新的显示规则和跳过原因为空；
 - v12 的 boolean 正式答案和草稿答案升级后保留，新定义表保持为空；
 - v11 的接触历史升级后保留，并可以保存受约束的修订冲突；
@@ -238,8 +240,8 @@ v6 使用 expand-contract 新增已提交接触、revision、答案和 Outbox �
 - v6 的 synthetic 已提交接触升级后仍存在；
 - v5 的 synthetic 设置升级后仍存在，无法证明的现代区域表保持为空。
 
-机器可读快照位于 [`drift_schema_v14.json`](../../drift_schemas/drift_schema_v14.json)。CI 会重新导出当前 schema 并逐字比较，也会重新生成所有 migration 测试辅助代码。
+机器可读快照位于 [`drift_schema_v15.json`](../../drift_schemas/drift_schema_v15.json)。CI 会重新导出当前 schema 并逐字比较，也会重新生成所有 migration 测试辅助代码。
 
 ## 14. 当前边界
 
-v14 完成草稿、正式接触、独立接触尝试、追加更正、带原因作废、跨设备私有草稿、草稿冲突副本、接触修订的自动合并与显式冲突解决、版本化区域外键、八题型问卷答案、受限显示规则、本机同步状态和远端 cursor。本地数据库应用层加密仍属后续切片。同步状态机和 Backend SQL 见[第 6 章](06-persistent-sync-and-backend-sql.md)，问卷执行见[第 7 章](07-versioned-questionnaire-execution.md)。
+v15 完成草稿、正式接触、独立接触尝试、追加更正、带原因作废、跨设备私有草稿、草稿冲突副本、接触修订的自动合并与显式冲突解决、版本化区域外键、八题型问卷答案、受限显示规则、管理端问卷工作副本、本机同步状态和远端 cursor。本地数据库应用层加密仍属后续切片。同步状态机和 Backend SQL 见[第 6 章](06-persistent-sync-and-backend-sql.md)，问卷设计与执行见[第 7 章](07-versioned-questionnaire-execution.md)。

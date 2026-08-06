@@ -1,8 +1,8 @@
-# 第 7 章：版本化问卷如何离线执行并由服务端复验
+# 第 7 章：版本化问卷如何设计、发布、离线执行并由服务端复验
 
-场景问卷可以随推广项目变化，但接触的时间、渠道、地点、触达人数和单次兴趣不能随问卷改写。本章说明已发布问卷的执行路径：按精确版本读取和缓存定义，离线填写八种题型，按受限规则动态显示问题，再保存草稿或正式提交。Backend 和 PostgreSQL 会按同一版本重算，不信任客户端宣称的可见性。
+场景问卷可以随推广项目变化，但接触的时间、渠道、地点、触达人数和单次兴趣不能随问卷改写。本章说明问卷的完整路径：管理者建立草稿、模拟并发布新版本；使用者按精确版本读取和缓存定义，离线填写八种题型，按受限规则动态显示问题，再保存草稿或正式提交。Backend 和 PostgreSQL 会按同一版本重算，不信任客户端宣称的权限、定义或可见性。
 
-本章不包含问卷编辑、发布审批和旧草稿升级。这些能力属于后续切片。
+旧接触草稿是否升级到新问卷版本，仍属于后续切片。本轮不会静默改写旧草稿的版本。
 
 ## 一条问卷从服务器到草稿的路径
 
@@ -24,6 +24,31 @@ flowchart LR
 已安装版本不可被同 ID 的不同内容覆盖。如果服务器返回另一项目的版本，或同一已发布版本后来改变内容，目录会失败关闭。旧草稿仍绑定创建时的版本；新草稿使用可信当前上下文给出的版本。
 
 首次离线且本机没有该版本时，App 不显示一个猜测的空问卷，也不允许绕过问卷提交。页面会说明当前版本不可用，并保留重试入口。
+
+## 管理草稿如何成为新的不可变版本
+
+只有可信上下文含 `manage_analysis_definitions` capability 时，项目菜单才显示问卷管理入口。隐藏按钮不是授权。列表、建立草稿、读取、保存和发布的每个 HTTP 请求都会重新验证 access token，再重新取得当前用户、空间、项目和 capability。PostgreSQL 函数还会独立检查活动用户、个人空间所有权和活动项目。
+
+```mermaid
+flowchart LR
+  A["空白草稿或复制任一已发布版本"] --> B["编辑受控题型与显示条件"]
+  B --> C["模拟回答与可见性"]
+  C --> D["与当前版本比较"]
+  D --> E["显式保存草稿"]
+  E --> F["POST publish + request ID"]
+  F --> G["PostgreSQL 项目级事务锁"]
+  G --> H["新不可变版本成为 current"]
+```
+
+管理界面不会直接编辑已发布行。它可以建立空白草稿，或复制该项目的任一已发布版本。问题编辑器只提供八种受控题型、五种回答状态许可、固定范围和一层 `all`／`any` 显示条件；每个条件仍只能引用更早的问题。重排会保留仍然合法的规则，只移除已变成向后引用的整条规则。
+
+模拟预览复用正式 `QuestionnaireCatalog` evaluator。模拟答案只存在于页面状态，不会成为接触或草稿事实。发布页把变化分为新增、删除和修改，并进一步标出问题定义、选项、值域、回答模式和显示规则。比较对象始终是发布时的当前版本，不是管理者最初复制的版本。
+
+服务端草稿使用递增 revision。保存时必须提交预期 revision；旧 revision 返回冲突，不做最后写入覆盖。Flutter 在发起保存前把工作副本写入 Drift v15。断网后可以恢复这份未确认编辑，但本机缓存不能伪造服务器保存或发布成功。服务器 revision 已变化时，本机副本也不会覆盖新服务器草稿。
+
+发布需要非空说明和稳定 request ID。PostgreSQL 在一个 transaction 中取得项目级 advisory lock，重读草稿与 revision，严格验证完整定义，建立新版本及问题和选项，记录发布者与说明，再切换唯一 current 版本。相同 request ID 重试返回原结果；同一已发布草稿换 request ID 重试也不会产生第二个版本。两个会话同时发布不同草稿时会串行完成，最后仍只有一个 current 版本。
+
+发布函数只在 transaction 内部的 `publishing` 阶段写入问题和选项，随后才把版本改为 `published`。触发器拒绝对管理端已发布版本追加、修改或删除问题和选项，也拒绝改写版本号、发布者、时间和说明。回退因此不是修改旧行，而是复制旧版本形成新草稿，再发布一个更高版本。
 
 ## 八种题型不是八种随意 JSON
 
@@ -79,7 +104,7 @@ flowchart LR
 
 `QuestionnaireAnswerCodec` 集中负责 SQLite 列与同步 JSON 的转换。草稿、提交、修订和冲突同步不各自维护一套格式。
 
-schema v13 的 migration 会重建两张答案表，以替换旧版“只能是 boolean”的 `CHECK`。schema v14 再重建这两张表并扩展问题缓存，保存 `rule_skipped` 原因和显示规则。已有答案和已缓存定义原样复制，新列默认为空，不猜测历史显示状态。
+schema v13 的 migration 会重建两张答案表，以替换旧版“只能是 boolean”的 `CHECK`。schema v14 再重建这两张表并扩展问题缓存，保存 `rule_skipped` 原因和显示规则。schema v15 加入管理端草稿工作副本表。已有答案和已缓存定义原样复制，新列默认为空，不猜测历史显示状态。
 
 ## 为什么客户端验证以后服务端还要再验证
 
@@ -98,6 +123,8 @@ Flutter evaluator 用于即时提示和离线提交判断。客户端设备不�
 
 [`0012_questionnaire_visibility.sql`](../../backend/database/migrations/0012_questionnaire_visibility.sql) 保存发布定义中的显示规则，并在 PostgreSQL 写入边界按顺序重算可见问题。完整提交和不完整草稿都不能夹带隐藏值；隐藏题必须使用受控跳过标记，可见必填题则仍必须完成。
 
+[`0013_questionnaire_publishing.sql`](../../backend/database/migrations/0013_questionnaire_publishing.sql) 保存管理草稿、发布元数据、幂等请求和不可变触发器。它不授予组织管理权限；当前只让个人空间所有者管理自己的活动项目。组织成员角色和能力将在组织切片建立。
+
 runtime role 可以执行公开入口，但不能直接读取定义表，也不能执行私有 validator 或答案写入 helper。读取定义同样经过 `SECURITY DEFINER` 函数，并按可信用户、空间和项目过滤。
 
 ## 文本答案为什么不进入 warehouse
@@ -112,6 +139,8 @@ runtime role 可以执行公开入口，但不能直接读取定义表，也不�
 
 [`questionnaire-visibility-contract-v1.json`](../../fixtures/questionnaire/questionnaire-visibility-contract-v1.json) 专门覆盖两种条件组合、各题型的允许操作符、前置问题隐藏、必填题跳过，以及一次答案变更应清除的稳定问题集。Flutter 和 Backend 直接读取该 fixture。PostgreSQL 使用同等 synthetic 定义验证读取、提交、草稿、作废和失败回滚。
 
+[`questionnaire-design-contract-v1.json`](../../fixtures/questionnaire/questionnaire-design-contract-v1.json) 给出当前版本、候选版本和预期差异分类。Flutter 用它验证差异合同；Backend 用同一对定义验证复制、编辑和发布路径。
+
 PostgreSQL fixture 另用同样的题型和状态建立真实发布定义。它证明：
 
 - 当前项目可以读取定义，另一项目不能读取；
@@ -121,10 +150,12 @@ PostgreSQL fixture 另用同样的题型和状态建立真实发布定义。它�
 - 作废 revision 保留类型化答案；
 - 问卷文本不进入 warehouse。
 
-Drift migration 测试从保存的 v12 schema 写入 boolean 正式答案和草稿答案，再升级到 v14。独立的 v13 升级用例还核对旧答案和问卷定义保留，新的跳过原因和显示规则为空。
+`0013_questionnaire_publishing.sql` 的 fixture 还证明空定义、缺失必填键、无选项选择题、非法日历日期、跨用户管理和发布后插入／修改／删除都会失败。独立 shell 检查在两个 PostgreSQL 会话中同时发布不同草稿，核对两个不可变版本、两个幂等请求和唯一 current 版本。CI 在 `pg_dump`／`pg_restore` 后重跑发布检查。
+
+Drift migration 测试从保存的 v12 schema 写入 boolean 正式答案和草稿答案，再升级到 v15。独立的 v13 与 v14 升级用例还核对旧答案、问卷定义和设置保留；新的跳过原因、显示规则和管理工作副本不做猜测回填。
 
 ## 当前边界
 
-当前实现完成已发布版本授权读取、本地不可变缓存、八题型 UI、五状态、受限显示规则、隐藏答案确认与撤销、离线草稿、Flutter evaluator、Backend validator、PostgreSQL 复验和文本 warehouse 隔离。
+当前实现完成管理草稿、受控编辑、模拟预览、版本差异、事务发布、并发与幂等保护、已发布版本授权读取、本地不可变缓存、八题型 UI、五状态、受限显示规则、隐藏答案确认与撤销、离线接触草稿、Flutter evaluator、Backend validator、PostgreSQL 复验和文本 warehouse 隔离。
 
-以下能力尚未实现：管理端问卷草稿与发布预览、已发布版本差异、旧草稿明确升级，以及跨版本指标兼容决定。没有这些能力时，不应把同 ID 版本改写，也不应把旧版本答案自动解释成新版本答案。
+以下能力尚未实现：旧接触草稿明确升级，以及跨版本指标兼容决定。在这些决定形成前，不应把同 ID 版本改写，也不应把旧版本答案自动解释成新版本答案。

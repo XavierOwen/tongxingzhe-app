@@ -155,6 +155,16 @@ void main() {
     expect(fixture.viewModel.state.notice, isNull);
   });
 
+  test('发布问卷后刷新当前项目并重新解析可信上下文', () async {
+    final fixture = _Fixture();
+
+    final succeeded = await fixture.viewModel.refreshCurrentProject();
+
+    expect(succeeded, isTrue);
+    expect(fixture.sessionActions.selectedProjectIds, ['project-1']);
+    expect(fixture.viewModel.state.notice, isNull);
+  });
+
   test('选择其他项目成功时只转发用户意图', () async {
     final fixture = _Fixture();
 

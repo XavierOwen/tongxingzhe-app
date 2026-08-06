@@ -130,6 +130,7 @@ class DbSecurityEvents extends Table {
     DbQuestionnaireVersions,
     DbQuestionnaireQuestions,
     DbQuestionnaireOptions,
+    DbQuestionnaireDraftWorkingCopies,
   ],
 )
 class LocalDatabase extends _$LocalDatabase {
@@ -147,7 +148,7 @@ class LocalDatabase extends _$LocalDatabase {
       );
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -398,6 +399,11 @@ class LocalDatabase extends _$LocalDatabase {
         await migrator.alterTable(
           TableMigration(dbQuestionnaireQuestions, newColumns: questionColumns),
         );
+      }
+      if (from < 15) {
+        // v15 只缓存管理者主动保存的问卷工作副本。它不是发布凭据，不能
+        // 改变当前版本；Backend 成功发布后会删除对应本机副本。
+        await migrator.createTable(dbQuestionnaireDraftWorkingCopies);
       }
     },
   );
