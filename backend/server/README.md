@@ -102,6 +102,8 @@ npm run check
 
 个人与机构历史关系见 [`0019_person_institution_relationships.sql`](../database/migrations/0019_person_institution_relationships.sql)。对应 fixture 和独立会话脚本验证六类性质、两端授权、同空间与异类型约束、不同性质并存、同种活动关系唯一、结束历史、重放、并发和 warehouse 隔离。
 
+对象资料保留与匿名化见 [`0020_promotion_target_retention.sql`](../database/migrations/0020_promotion_target_retention.sql)。对应 fixture 和独立会话脚本验证十二个月上限、较短策略、通用复核任务、明确续期、到期清理、撤回、不可逆文本清除、接触事实保留、重放和并发。
+
 ## 运行
 
 先执行数据库 migration，再启动进程：

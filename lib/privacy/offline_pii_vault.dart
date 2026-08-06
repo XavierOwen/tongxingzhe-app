@@ -31,6 +31,7 @@ enum OfflinePiiLockReason {
   installationChanged,
   corrupt,
   storageFailure,
+  targetAnonymized,
 }
 
 final class OfflinePiiLock {

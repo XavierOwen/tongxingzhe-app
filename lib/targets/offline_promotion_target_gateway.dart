@@ -9,7 +9,8 @@ typedef OfflineIdentitySubject = String Function();
 typedef CurrentTargetContext = TrustedSessionContext Function();
 
 /// 只在明确的网络失败时使用未过期密文；服务器拒绝会先锁定并清除。
-final class OfflinePromotionTargetGateway implements PromotionTargetGateway {
+final class OfflinePromotionTargetGateway
+    implements PromotionTargetGateway, PromotionTargetRetentionGateway {
   const OfflinePromotionTargetGateway({
     required PromotionTargetGateway remote,
     required OfflinePiiVault vault,
@@ -83,6 +84,62 @@ final class OfflinePromotionTargetGateway implements PromotionTargetGateway {
     email: email,
     requestId: requestId,
   );
+
+  @override
+  Future<PromotionTargetResult<List<PromotionTargetRetentionTask>>>
+  loadRetentionTasks() {
+    final remote = _remote;
+    if (remote is! PromotionTargetRetentionGateway) {
+      return Future.value(
+        const PromotionTargetRejected(
+          PromotionTargetFailureCode.networkUnavailable,
+        ),
+      );
+    }
+    return (remote as PromotionTargetRetentionGateway).loadRetentionTasks();
+  }
+
+  @override
+  Future<PromotionTargetResult<PromotionTargetRetentionOutcome>>
+  applyRetentionAction({
+    required String targetId,
+    required PromotionTargetRetentionAction action,
+    required PromotionTargetRetentionReason reason,
+    required String mutationId,
+  }) async {
+    final remote = _remote;
+    if (remote is! PromotionTargetRetentionGateway) {
+      return const PromotionTargetRejected(
+        PromotionTargetFailureCode.networkUnavailable,
+      );
+    }
+    final result = await (remote as PromotionTargetRetentionGateway)
+        .applyRetentionAction(
+          targetId: targetId,
+          action: action,
+          reason: reason,
+          mutationId: mutationId,
+        );
+    switch (result) {
+      case PromotionTargetSuccess(:final value)
+          when value.status == PromotionTargetRetentionStatus.anonymized:
+        await _vault.revoke(
+          _externalSubject(),
+          OfflinePiiLockReason.targetAnonymized,
+        );
+      case PromotionTargetRejected(:final code)
+          when code == PromotionTargetFailureCode.unauthorized ||
+              code == PromotionTargetFailureCode.forbidden:
+        await _vault.revoke(
+          _externalSubject(),
+          OfflinePiiLockReason.unauthorized,
+        );
+      case PromotionTargetSuccess():
+      case PromotionTargetRejected():
+      case PromotionTargetConflict():
+    }
+    return result;
+  }
 
   @override
   Future<PromotionTargetResult<PromotionTargetRelationship>>

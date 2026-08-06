@@ -97,7 +97,8 @@ final class DeferredPromotionTargetGateway implements PromotionTargetGateway {
   Future<void> close() async {}
 }
 
-final class HttpPromotionTargetGateway implements PromotionTargetGateway {
+final class HttpPromotionTargetGateway
+    implements PromotionTargetGateway, PromotionTargetRetentionGateway {
   factory HttpPromotionTargetGateway({
     required Uri baseUri,
     required IdentitySession identitySession,
@@ -147,6 +148,32 @@ final class HttpPromotionTargetGateway implements PromotionTargetGateway {
       'request_id': requestId,
     },
     parse: (root) => _parseProfile(root['target']),
+  );
+
+  @override
+  Future<PromotionTargetResult<List<PromotionTargetRetentionTask>>>
+  loadRetentionTasks() => _request(
+    method: 'GET',
+    path: '/v1/promotion-target-retention-tasks',
+    parse: (root) => _list(root['tasks']).map(_parseRetentionTask).toList(),
+  );
+
+  @override
+  Future<PromotionTargetResult<PromotionTargetRetentionOutcome>>
+  applyRetentionAction({
+    required String targetId,
+    required PromotionTargetRetentionAction action,
+    required PromotionTargetRetentionReason reason,
+    required String mutationId,
+  }) => _request(
+    method: 'POST',
+    path: '/v1/promotion-targets/${Uri.encodeComponent(targetId)}/retention',
+    body: {
+      'action': action.storageValue,
+      'reason': reason.storageValue,
+      'mutation_id': mutationId,
+    },
+    parse: _parseRetentionOutcome,
   );
 
   @override
@@ -351,6 +378,27 @@ PromotionTargetProfile _parseProfile(Object? value) {
         : _parseRelationship(root['project_relationship']),
   );
 }
+
+PromotionTargetRetentionTask _parseRetentionTask(Object? value) {
+  final root = _object(value);
+  return PromotionTargetRetentionTask(
+    targetId: _string(root['target_id']),
+    reviewDueAtUtc: DateTime.parse(_string(root['review_due_at'])).toUtc(),
+  );
+}
+
+PromotionTargetRetentionOutcome _parseRetentionOutcome(
+  Map<String, Object?> root,
+) => PromotionTargetRetentionOutcome(
+  targetId: _string(root['target_id']),
+  status: PromotionTargetRetentionStatus.values.firstWhere(
+    (candidate) => candidate.storageValue == _string(root['status']),
+  ),
+  duplicate: _bool(root['duplicate']),
+  reviewDueAtUtc: root['review_due_at'] == null
+      ? null
+      : DateTime.parse(_string(root['review_due_at'])).toUtc(),
+);
 
 PromotionTargetRelationship _parseRelationship(Object? value) {
   final root = _object(value);

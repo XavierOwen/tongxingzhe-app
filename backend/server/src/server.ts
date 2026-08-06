@@ -35,10 +35,13 @@ import {
   type QuestionnaireMetricCompatibilityStore,
 } from "./questionnaire-metric-compatibility.js";
 import {
+  applyPromotionTargetRetentionAction,
   configurePromotionTargetStageAliases,
   createPromotionTarget,
   listAssignedPromotionTargets,
+  listPromotionTargetRetentionTasks,
   updatePromotionTargetRelationship,
+  type PromotionTargetRetentionStore,
   type PromotionTargetStore,
 } from "./promotion-targets.js";
 import {
@@ -57,6 +60,7 @@ export interface BackendServerDependencies
   readonly questionnaireMetricCompatibilityStore?:
     QuestionnaireMetricCompatibilityStore;
   readonly promotionTargetStore?: PromotionTargetStore;
+  readonly promotionTargetRetentionStore?: PromotionTargetRetentionStore;
   readonly targetInstitutionRelationshipStore?:
     TargetInstitutionRelationshipStore;
 }
@@ -325,6 +329,61 @@ export function createBackendServer(
     const relationshipMatch = requestUrl.pathname.match(
       /^\/v1\/promotion-targets\/([^/]+)\/relationship$/,
     );
+
+    if (
+      request.method === "GET" &&
+      requestUrl.pathname === "/v1/promotion-target-retention-tasks"
+    ) {
+      if (dependencies.promotionTargetRetentionStore === undefined) {
+        response.statusCode = 503;
+        response.end(JSON.stringify({
+          error: {code: "promotion_target_retention_unavailable"},
+        }));
+        return;
+      }
+      const result = await listPromotionTargetRetentionTasks(
+        request.headers.authorization,
+        {
+          identityVerifier: dependencies.identityVerifier,
+          contextStore: dependencies.contextStore,
+          targetStore: dependencies.promotionTargetRetentionStore,
+        },
+      );
+      response.statusCode = result.status;
+      response.end(JSON.stringify(result.body));
+      return;
+    }
+
+    const retentionMatch = requestUrl.pathname.match(
+      /^\/v1\/promotion-targets\/([^/]+)\/retention$/,
+    );
+    if (request.method === "POST" && retentionMatch !== null) {
+      if (dependencies.promotionTargetRetentionStore === undefined) {
+        response.statusCode = 503;
+        response.end(JSON.stringify({
+          error: {code: "promotion_target_retention_unavailable"},
+        }));
+        return;
+      }
+      try {
+        const result = await applyPromotionTargetRetentionAction(
+          request.headers.authorization,
+          retentionMatch[1] ?? "",
+          await readJsonBody(request),
+          {
+            identityVerifier: dependencies.identityVerifier,
+            contextStore: dependencies.contextStore,
+            targetStore: dependencies.promotionTargetRetentionStore,
+          },
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
+      }
+      return;
+    }
+
     if (request.method === "PATCH" && relationshipMatch !== null) {
       if (dependencies.promotionTargetStore === undefined) {
         response.statusCode = 503;
