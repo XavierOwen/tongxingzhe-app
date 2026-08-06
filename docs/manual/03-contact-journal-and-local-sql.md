@@ -1,6 +1,6 @@
 # 第 3 章：接触和未获回应尝试如何在 SQLite 中分开保存
 
-本章解释 Slice 1 与 Slice 2A 的本地数据模块。当前代码可以保存私有草稿、提交匿名接触，也可以把未获回应的直接联络保存为独立尝试。尝试不会进入已发生互动的统计。
+本章解释 Slice 1、Slice 2A 与 Slice 2B 的本地数据模块。当前代码可以保存私有草稿、提交匿名接触、追加更正和作废，也可以把未获回应的直接联络保存为独立尝试。尝试和已作废接触不会进入有效接触统计。
 
 ## 1. `ContactJournal` 为什么是一个深模块
 
@@ -13,13 +13,14 @@
 - 放弃草稿，或在期限内撤销放弃；
 - 把完整草稿正式提交；
 - 保存未获回应的接触尝试，并在后来回应时建立关联；
-- 读取已提交接触和个人期间汇总。
+- 带原因更正或作废本人接触；
+- 读取当前投影、完整 revision 历史和个人期间汇总。
 
 公开入口保留在 `contact_journal.dart`。草稿生命周期的实现放在 [`contact_draft_operations.dart`](../../lib/features/contact_journal/contact_draft_operations.dart)，并通过 Dart 的 `part` 属于同一个 library。这样可以缩短单个文件，同时让草稿代码继续访问模块私有实现；它没有增加第二套数据库接口。
 
 模块接收真实 Drift 数据库、Clock 和 ID generator。测试使用真实 SQLite、固定时间和确定性 ID。测试可以稳定重现失败，不把测试条件带入正式代码。
 
-## 2. v10 的十二张现代接触、同步与区域表
+## 2. v11 的十二张现代接触、同步与区域表
 
 表结构定义在 [`contact_tables.dart`](../../lib/features/contact_journal/contact_tables.dart)。Drift 根据这些定义生成 SQLite schema 和类型安全的 Dart row。
 
@@ -29,7 +30,7 @@
 | `db_contact_draft_answers` | 草稿中的类型化问卷答案 | 已提交接触答案 |
 | `db_contact_records` | 当前有效核心事实、归属、当前 revision | 草稿、PII、私人备注 |
 | `db_contact_attempts` | 未获回应的直接渠道、发生时间、首次提交时间、可选后来接触 | 触达人数、兴趣、问卷答案、关系阶段 |
-| `db_contact_revisions` | 每次提交或更正的完整核心快照 | 被覆盖后消失的历史 |
+| `db_contact_revisions` | 每次提交、更正或作废的类型、原因、操作者、时间和完整核心快照 | 被覆盖后消失的历史 |
 | `db_contact_answers` | 问题 ID、回答状态、答案类型和值 | 含义不明的任意 JSON |
 | `db_sync_outbox` | 命令、协议版本、状态和重试字段 | 身份令牌、日志用 PII |
 | `db_sync_drainer_leases` | 跨执行器互斥的全局租约 | 远端锁、用户身份 |
@@ -119,7 +120,25 @@ Native Drift 读取日期时可能使用设备本地时区表示同一瞬间。`
 
 这就是原子性：接触事实、revision、答案、同步命令和草稿状态只有两种结果，全部成功或全部不变。
 
-## 8. 红-绿回归测试在这里做了什么
+## 8. 更正和作废为何也必须追加 revision
+
+提交后的事实不能用 `UPDATE` 覆盖历史，也不能用 `DELETE` 清除证据。`correctContact` 和 `voidContact` 都要求调用者提供当前 `baseRevision` 和非空原因。
+
+更正在一个 transaction 内执行以下操作：
+
+1. 核对创建者、空间、项目、活动状态和当前 revision；
+2. 追加 `corrected` revision 和该版本答案；
+3. 更新 `db_contact_records` 当前投影；
+4. 更新或清除规范区域外键；
+5. 写入 `contact.revise.v1` Outbox command。
+
+作废追加 `voided` revision，并复制作废前的完整快照和答案。当前投影只把 `lifecycle_status` 改为 `voided`。接触行和历史都保留，统计 SQL 因 `active` 条件自动排除它。
+
+如果发生时间被更正，当前投影会进入新的统计期间。旧 revision 仍保存原时间，因此审计历史和当前分析不会混用。
+
+旧 `baseRevision` 返回稳定冲突，不会留下半条 revision 或半个 Outbox command。其他用户或不同 scope 使用相同 contact ID 时，公开接口按“找不到”处理，不暴露归属信息。
+
+## 9. 红-绿回归测试在这里做了什么
 
 每个新行为先写公开接口测试。测试第一次运行时因接口缺失或行为不完整而失败，这一步叫红色阶段。随后只加入满足该行为的实现，测试通过后进入绿色阶段。
 
@@ -134,10 +153,14 @@ Native Drift 读取日期时可能使用设备本地时区表示同一瞬间。`
 - Outbox 失败时保留草稿并回滚正式表；
 - 放弃、期限内撤销和过期拒绝；
 - 不完整草稿不进入个人统计。
+- 更正保留前后完整快照并按新发生时间重新归期；
+- 空原因和旧 base revision 不产生部分写入；
+- 作废保留接触与历史，但退出个人指标；
+- 其他用户不能读取或修改接触历史。
 
 测试只经过 `ContactJournal` 公开接口。测试不直接查询私有表来证明业务结果，因此表名或内部写入顺序变化时，行为测试仍然有效。第 2 章解释完整的红-绿流程和回归测试。
 
-## 9. 地点不是一个 nullable 字段
+## 10. 地点不是一个 nullable 字段
 
 正式接触地点使用三个互斥类型：
 
@@ -153,13 +176,13 @@ Native Drift 读取日期时可能使用设备本地时区表示同一瞬间。`
 
 本地数据库只保存规范节点和接触／草稿的最小节点外键，不复制 PostgreSQL 的边界多边形。边界由平台统一发布和查询；Flutter 收到经过 Backend 限定的父链后，仍在自己的写入边界重新验证树结构。
 
-## 10. 问卷状态和值为何分开
+## 11. 问卷状态和值为何分开
 
 当前版本先实现布尔题，并保存五种回答状态：已回答、未知、拒绝回答、不适用和未回答。只有“已回答”可以携带 `true` 或 `false`。其他状态必须没有布尔值。
 
 因此，“不知道”不会被误算成“否”。`NULL` 也不会同时表示四种原因。同一草稿或 revision 对同一道题只能有一行答案。
 
-## 11. 个人期间汇总 SQL
+## 12. 个人期间汇总 SQL
 
 正式查询位于 [`contact_queries.drift`](../../lib/features/contact_journal/contact_queries.drift)。Drift 在构建时检查表名、列名、参数类型和返回类型。查询使用 UTC 半开区间 `[fromUtc, untilUtc)`。相邻两周共用一个边界时，同一接触不会被计算两次。
 
@@ -188,22 +211,23 @@ WHERE app_user_id = :app_user_id
 
 兴趣是有序等级。核心分析先返回五档分布，不计算平均值。若以后显示兴趣算术指数，页面必须说明它额外假设相邻等级距离相等。
 
-## 12. v5、v6、v8 和 v9 如何升级到 v10
+## 13. v5 到 v10 如何升级到 v11
 
-v6 使用 expand-contract 新增已提交接触、revision、答案和 Outbox 表。v7 新增草稿和草稿答案表。v8 新增同步执行租约和按可信范围保存的 cursor。v9 新增草稿同步版本、Outbox 可信范围和三张区域表。v10 新增独立尝试表，并给草稿加入可选来源尝试。升级不删除五张 legacy 表，也不从旧宽表猜测现代接触、尝试或区域归属。
+v6 使用 expand-contract 新增已提交接触、revision、答案和 Outbox 表。v7 新增草稿和草稿答案表。v8 新增同步执行租约和按可信范围保存的 cursor。v9 新增草稿同步版本、Outbox 可信范围和三张区域表。v10 新增独立尝试表，并给草稿加入可选来源尝试。v11 给 revision 增加受约束的 `submitted`、`corrected`、`voided` 类型。升级不删除五张 legacy 表，也不从旧宽表猜测现代接触、尝试或区域归属。
 
 当新列参与 `CHECK` 约束时，不能只运行 SQLite `ADD COLUMN`。migration 使用 Drift `TableMigration` 重建受影响的表并复制旧数据。跨多个版本升级时，重建步骤按当前表定义复制数据；旧版本缺少的每一列都必须通过 `newColumns` 提供默认表达式。否则 SQL 会引用旧表中不存在的列。
 
 [`local_database_migration_test.dart`](../../test/data/local_database_migration_test.dart) 保存四类证据：
 
-- 当前 v10 快照可以独立重建；
+- 当前 v11 快照可以独立重建；
+- v10 的初次提交 revision 升级后得到 `submitted` 类型；
 - v9 的 synthetic 草稿升级后仍存在，并可保存来源尝试；
 - v8 的 synthetic 草稿升级后仍存在，并得到初始本机和服务器 revision；
 - v6 的 synthetic 已提交接触升级后仍存在；
 - v5 的 synthetic 设置升级后仍存在，无法证明的现代区域表保持为空。
 
-机器可读快照位于 [`drift_schema_v10.json`](../../drift_schemas/drift_schema_v10.json)。CI 会重新导出当前 schema 并逐字比较，也会重新生成所有 migration 测试辅助代码。
+机器可读快照位于 [`drift_schema_v11.json`](../../drift_schemas/drift_schema_v11.json)。CI 会重新导出当前 schema 并逐字比较，也会重新生成所有 migration 测试辅助代码。
 
-## 13. 当前边界
+## 14. 当前边界
 
-v10 完成草稿、正式接触、独立接触尝试、跨设备私有草稿、冲突副本、版本化区域外键、本机同步状态和远端 cursor 的本地数据行为。接触修订、作废和多设备冲突解决仍属 Slice 2 后续单元。本地数据库应用层加密也仍属后续切片。同步状态机和 Backend SQL 见 [第 6 章](06-persistent-sync-and-backend-sql.md)。
+v11 完成草稿、正式接触、独立接触尝试、追加更正、带原因作废、跨设备私有草稿、冲突副本、版本化区域外键、本机同步状态和远端 cursor。多设备接触冲突解决和本地数据库应用层加密仍属后续切片。同步状态机和 Backend SQL 见 [第 6 章](06-persistent-sync-and-backend-sql.md)。

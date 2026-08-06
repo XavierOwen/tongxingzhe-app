@@ -565,7 +565,10 @@ void main() {
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('放弃草稿'));
+    final discardDraftButton = find.byTooltip('放弃草稿');
+    await tester.ensureVisible(discardDraftButton);
+    await tester.pumpAndSettle();
+    await tester.tap(discardDraftButton);
     await tester.pumpAndSettle();
 
     expect(find.text('草稿 (0)'), findsOneWidget);

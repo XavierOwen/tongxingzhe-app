@@ -12,7 +12,9 @@ import type {
   ContactAttemptSubmitPayload,
   ContactChannel,
   ContactLocation,
+  ContactRevisionPayload,
   ContactSubmitPayload,
+  ContactVoidPayload,
   DraftDeletePayload,
   DraftUpsertPayload,
   SyncCommand,
@@ -118,6 +120,26 @@ function parseSyncCommand(value: unknown): SyncCommand {
       type,
       payload,
     };
+  }
+  if (type === "contact.revise.v1") {
+    if (baseRevision < 1) {
+      throw new CommandValidationError("invalid_base_revision");
+    }
+    const payload = parseContactRevisionPayload(root.typed_payload);
+    if (payload.contactId !== aggregateId) {
+      throw new CommandValidationError("aggregate_id_mismatch");
+    }
+    return { ...common, baseRevision, type, payload };
+  }
+  if (type === "contact.void.v1") {
+    if (baseRevision < 1) {
+      throw new CommandValidationError("invalid_base_revision");
+    }
+    const payload = parseContactVoidPayload(root.typed_payload);
+    if (payload.contactId !== aggregateId) {
+      throw new CommandValidationError("aggregate_id_mismatch");
+    }
+    return { ...common, baseRevision, type, payload };
   }
   if (type === "contact.attempt.submit.v1") {
     if (baseRevision !== 0) {
@@ -225,6 +247,26 @@ function parseDraftDeletePayload(value: unknown): DraftDeletePayload {
 
 function parseContactPayload(value: unknown): ContactSubmitPayload {
   const payload = object(value, "invalid_contact_payload");
+  const facts = parseContactFacts(payload);
+  return {
+    contactId: string(payload.contact_id, "invalid_contact_id"),
+    workspaceId: uuid(payload.workspace_id, "invalid_workspace_id"),
+    projectId: uuid(payload.project_id, "invalid_project_id"),
+    questionnaireVersionId: uuid(
+      payload.questionnaire_version_id,
+      "invalid_questionnaire_version_id",
+    ),
+    ...facts,
+    sourceAttemptId: nullableString(payload.source_attempt_id),
+  };
+}
+
+function parseContactFacts(
+  payload: Record<string, unknown>,
+): Omit<
+  ContactRevisionPayload,
+  "contactId" | "workspaceId" | "projectId" | "reason"
+> {
   const channel = contactChannel(payload.channel);
   const channelDetail = nullableString(payload.channel_detail);
   if (channel === "other_direct" && channelDetail === null) {
@@ -263,13 +305,6 @@ function parseContactPayload(value: unknown): ContactSubmitPayload {
   }
 
   return {
-    contactId: string(payload.contact_id, "invalid_contact_id"),
-    workspaceId: uuid(payload.workspace_id, "invalid_workspace_id"),
-    projectId: uuid(payload.project_id, "invalid_project_id"),
-    questionnaireVersionId: uuid(
-      payload.questionnaire_version_id,
-      "invalid_questionnaire_version_id",
-    ),
     occurredAtUtc,
     occurredTimeZone,
     channel,
@@ -278,7 +313,28 @@ function parseContactPayload(value: unknown): ContactSubmitPayload {
     reachCount,
     interestLevel,
     answers,
-    sourceAttemptId: nullableString(payload.source_attempt_id),
+  };
+}
+
+function parseContactRevisionPayload(value: unknown): ContactRevisionPayload {
+  const payload = object(value, "invalid_contact_revision_payload");
+  const facts = parseContactFacts(payload);
+  return {
+    contactId: string(payload.contact_id, "invalid_contact_id"),
+    workspaceId: uuid(payload.workspace_id, "invalid_workspace_id"),
+    projectId: uuid(payload.project_id, "invalid_project_id"),
+    reason: string(payload.reason, "contact_reason_required"),
+    ...facts,
+  };
+}
+
+function parseContactVoidPayload(value: unknown): ContactVoidPayload {
+  const payload = object(value, "invalid_contact_void_payload");
+  return {
+    contactId: string(payload.contact_id, "invalid_contact_id"),
+    workspaceId: uuid(payload.workspace_id, "invalid_workspace_id"),
+    projectId: uuid(payload.project_id, "invalid_project_id"),
+    reason: string(payload.reason, "contact_reason_required"),
   };
 }
 

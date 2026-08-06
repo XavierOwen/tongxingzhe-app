@@ -64,7 +64,7 @@ void main() {
     await fixture.viewModel.initialize();
     fixture.source.summary = _summary(contactSessionCount: 6);
 
-    await fixture.viewModel.contactEntryClosed(submitted: true);
+    await fixture.viewModel.contactPageClosed(submitted: true);
 
     expect(fixture.worker.drainCalls, 2);
     expect(fixture.viewModel.state.today?.summary.contactSessionCount, 6);
@@ -79,7 +79,7 @@ void main() {
     await fixture.viewModel.initialize();
     fixture.source.summary = _summary(contactSessionCount: 7);
 
-    await fixture.viewModel.contactEntryClosed(submitted: false);
+    await fixture.viewModel.contactPageClosed(submitted: false);
 
     expect(fixture.worker.drainCalls, 2);
     expect(fixture.viewModel.state.today?.summary.contactSessionCount, 7);
@@ -304,6 +304,13 @@ final class _FakeSyncWorker implements ForegroundSyncWorker {
 final class _FakeOverviewSource implements PersonalContactOverviewSource {
   PersonalContactSummary summary = _summary();
   int summaryCalls = 0;
+
+  @override
+  Future<List<ContactRecord>> listContactRecords({
+    required String appUserId,
+    required String workspaceId,
+    required String projectId,
+  }) async => const [];
 
   @override
   Future<List<ContactDraft>> listDrafts({required String appUserId}) async {

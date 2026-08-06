@@ -1,6 +1,6 @@
 # Backend 身份上下文、项目与接触同步
 
-这个模块提供可信 session context、个人推广项目选择／创建、规范区域解析、同步 command 和 change feed。所有端点都先验证 Supabase access token，再取得内部用户和允许访问的项目。同步协议处理已提交接触、未获回应尝试和账号私有草稿；设备专用草稿不会离开本机。
+这个模块提供可信 session context、个人推广项目选择／创建、规范区域解析、同步 command 和 change feed。所有端点都先验证 Supabase access token，再取得内部用户和允许访问的项目。同步协议处理已提交接触、追加更正、带原因作废、未获回应尝试和账号私有草稿；设备专用草稿不会离开本机。
 
 客户端不能提交 `app_user_id`、role 或 capability。上传会把 payload 的 workspace 和 project 与可信上下文交叉核对。拉取也会核对 query 范围，并只接受属于同一范围的不透明 cursor。响应不返回外部 subject、email 或 token。三个 HTTP 入口共用严格的 bearer header 解析器，防止端点之间出现不同的认证规则。
 
@@ -41,7 +41,7 @@ npm test
 npm run check
 ```
 
-测试使用临时 ES256 key 和 synthetic claims，不连接真实 Supabase 项目。身份 schema 见 [`0002_identity_context.sql`](../database/migrations/0002_identity_context.sql)，项目上下文见 [`0004_personal_project_contexts.sql`](../database/migrations/0004_personal_project_contexts.sql)，区域与私有草稿见 [`0005_regions_and_private_draft_sync.sql`](../database/migrations/0005_regions_and_private_draft_sync.sql)，个人指标见 [`0006_personal_contact_metrics.sql`](../database/migrations/0006_personal_contact_metrics.sql)，区域解析见 [`0007_canonical_region_resolution.sql`](../database/migrations/0007_canonical_region_resolution.sql)，独立接触尝试见 [`0008_contact_attempts.sql`](../database/migrations/0008_contact_attempts.sql)。CI 使用 synthetic fixture 验证权限、重复 command、尝试字段边界、草稿版本冲突、跨用户隔离、区域解析、指标口径、cursor 和 dump／restore。
+测试使用临时 ES256 key 和 synthetic claims，不连接真实 Supabase 项目。身份 schema 见 [`0002_identity_context.sql`](../database/migrations/0002_identity_context.sql)，项目上下文见 [`0004_personal_project_contexts.sql`](../database/migrations/0004_personal_project_contexts.sql)，区域与私有草稿见 [`0005_regions_and_private_draft_sync.sql`](../database/migrations/0005_regions_and_private_draft_sync.sql)，个人指标见 [`0006_personal_contact_metrics.sql`](../database/migrations/0006_personal_contact_metrics.sql)，区域解析见 [`0007_canonical_region_resolution.sql`](../database/migrations/0007_canonical_region_resolution.sql)，独立接触尝试见 [`0008_contact_attempts.sql`](../database/migrations/0008_contact_attempts.sql)，接触更正与作废见 [`0009_contact_revisions.sql`](../database/migrations/0009_contact_revisions.sql)。CI 使用 synthetic fixture 验证权限、重复 command、修订版本冲突、作废指标排除、尝试字段边界、草稿版本冲突、跨用户隔离、区域解析、cursor 和 dump／restore。
 
 ## 运行
 

@@ -52,6 +52,28 @@ export interface ContactSubmitPayload {
   readonly sourceAttemptId?: string | null;
 }
 
+export interface ContactRevisionPayload {
+  readonly contactId: string;
+  readonly workspaceId: string;
+  readonly projectId: string;
+  readonly reason: string;
+  readonly occurredAtUtc: string;
+  readonly occurredTimeZone: string;
+  readonly channel: ContactChannel;
+  readonly channelDetail: string | null;
+  readonly location: ContactLocation;
+  readonly reachCount: number;
+  readonly interestLevel: number;
+  readonly answers: readonly ContactAnswer[];
+}
+
+export interface ContactVoidPayload {
+  readonly contactId: string;
+  readonly workspaceId: string;
+  readonly projectId: string;
+  readonly reason: string;
+}
+
 export interface ContactAttemptSubmitPayload {
   readonly attemptId: string;
   readonly workspaceId: string;
@@ -107,6 +129,16 @@ export interface ContactAttemptSubmitCommand extends SyncCommandEnvelope {
   readonly payload: ContactAttemptSubmitPayload;
 }
 
+export interface ContactReviseCommand extends SyncCommandEnvelope {
+  readonly type: "contact.revise.v1";
+  readonly payload: ContactRevisionPayload;
+}
+
+export interface ContactVoidCommand extends SyncCommandEnvelope {
+  readonly type: "contact.void.v1";
+  readonly payload: ContactVoidPayload;
+}
+
 export interface DraftUpsertCommand extends SyncCommandEnvelope {
   readonly type: "draft.upsert.v1";
   readonly payload: DraftUpsertPayload;
@@ -120,6 +152,8 @@ export interface DraftDeleteCommand extends SyncCommandEnvelope {
 export type SyncCommand =
   | ContactSubmitCommand
   | ContactAttemptSubmitCommand
+  | ContactReviseCommand
+  | ContactVoidCommand
   | DraftUpsertCommand
   | DraftDeleteCommand;
 
@@ -191,6 +225,10 @@ export class PostgresSyncCommandStore implements SyncCommandStore {
       ? "apply_contact_submit"
       : command.type === "contact.attempt.submit.v1"
       ? "apply_contact_attempt_submit"
+      : command.type === "contact.revise.v1"
+      ? "apply_contact_revise"
+      : command.type === "contact.void.v1"
+      ? "apply_contact_void"
       : command.type === "draft.upsert.v1"
       ? "apply_draft_upsert"
       : "apply_draft_delete";

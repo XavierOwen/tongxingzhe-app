@@ -10,6 +10,7 @@ void main() {
       '/today': AppRoute.today,
       '/contacts': AppRoute.contacts,
       '/contacts/new': AppRoute.newContact,
+      '/contacts/contact%20one': const AppRoute.contactDetail('contact one'),
       '/contacts/drafts/draft%20one': const AppRoute.contactDraft('draft one'),
       '/contacts/attempts/attempt%20one/contact':
           const AppRoute.contactFromAttempt('attempt one'),

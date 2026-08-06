@@ -1,6 +1,6 @@
-# 第 5 章：正式接触与尝试入口如何连接 Flutter 与 SQL
+# 第 5 章：接触提交、修订与尝试入口如何连接 Flutter 与 SQL
 
-本章解释正式接触与未获回应尝试的用户入口。用户登录后取得可信项目上下文，可以填写匿名接触草稿，也可以单独保存一次未获回应的直接联络。只有真实接触会进入“今日”和最近七日个人分析。
+本章解释正式接触、追加修订与未获回应尝试的用户入口。用户登录后取得可信项目上下文，可以填写匿名接触草稿、修订本人已提交接触，也可以单独保存一次未获回应的直接联络。只有当前有效接触会进入“今日”和最近七日个人分析。
 
 ## 从登录到接触记录
 
@@ -13,8 +13,10 @@ flowchart LR
   C --> D["ProductionHomeShell"]
   D --> H["ProductionHomeViewModel"]
   D --> E["ContactEntryScreen"]
+  D --> I["ContactRevisionScreen"]
   H --> F
   E --> F["ContactJournal"]
+  I --> F
   F --> G["Drift / SQLite"]
 ```
 
@@ -26,7 +28,7 @@ flowchart LR
 
 主框架固定包含“今日”“接触”“对象”“分析”。手机使用底部导航，宽屏使用侧边导航。两种布局使用相同的目的地顺序和页面状态。
 
-“对象”目前明确显示尚未开放。“今日”和“分析”读取当前项目的正式接触事实。“接触”显示本人所有项目的草稿、今日有效场次和本机待同步数量。点击另一项目的草稿时，App 先向 Backend 恢复该项目的可信上下文，再打开草稿；不能只在客户端替换 project ID。
+“对象”目前明确显示尚未开放。“今日”和“分析”读取当前项目的正式接触事实。“接触”显示当前项目的已提交接触和尝试，也显示本人的私有草稿、今日有效场次和同步状态。点击已提交接触会打开当前投影和完整 revision 历史。点击另一项目的草稿时，App 先向 Backend 恢复该项目的可信上下文，再打开草稿；不能只在客户端替换 project ID。
 
 正式入口使用 `MaterialApp.router`。[`AppRouteInformationParser`](../../lib/routing/app_route.dart) 将 URL 转换成类型化地址，[`AppRouterDelegate`](../../lib/routing/app_router.dart) 管理 Navigator page 栈。当前稳定地址是：
 
@@ -34,17 +36,18 @@ flowchart LR
 | --- | --- |
 | `/today` | 今日个人反馈 |
 | `/contacts` | 草稿和接触状态 |
+| `/contacts/{contactId}` | 本人当前项目的接触详情与 revision 历史 |
 | `/contacts/new` | 新建接触草稿 |
 | `/contacts/drafts/{draftId}` | 恢复本人当前项目的指定草稿 |
 | `/contacts/attempts/{attemptId}/contact` | 为一次较早尝试记录后来回应 |
 | `/targets` | 对象的真实未开放页 |
 | `/analysis` | 最近七日个人分析 |
 
-URL 不包含权限。用户、空间、项目和问卷版本仍由 `AppSession` 提供。直接打开别人或另一项目的草稿 ID，不会绕过创建者和当前项目检查。草稿不存在时，页面显示可返回的错误，不会永久显示加载状态。
+URL 不包含权限。用户、空间、项目和问卷版本仍由 `AppSession` 提供。直接打开别人或另一项目的 contact ID 或 draft ID，不会绕过创建者和当前项目检查。记录不存在时，页面显示可返回的错误，不会永久显示加载状态。
 
 接触表单是真实的 Navigator page。AppBar 返回、系统返回和浏览器返回因此都会通过同一个 `PopScope`，在离开前保存最后输入。浏览器前进、后退与屏幕导航共用同一份 `AppRoute`，不会出现地址和页面各自变化的两套状态。
 
-路由在每次接触表单关闭后发布 `ContactEntryClosedEvent`。事件明确区分“已提交”和“只保存草稿”。首页两种情况都会刷新，只有正式提交才显示成功提示。
+路由在接触表单或详情页关闭后发布 `ContactEntryClosedEvent`。事件明确区分“已提交”和普通刷新。首页两种情况都会刷新，只有正式提交才显示提交成功提示。详情页完成更正或作废后返回时，列表和个人指标会读取新的当前投影。
 
 稳定导航的价值不只在界面。后续切片可以替换一个目的地的内部页面，不必改登录路由或其他页面的入口。
 
@@ -113,6 +116,16 @@ URL 不包含权限。用户、空间、项目和问卷版本仍由 `AppSession`
 
 正式提交调用 [`ContactJournal.submitDraft`](../../lib/features/contact_journal/contact_draft_operations.dart)。一个 Drift transaction 完成接触当前投影、首个 revision、类型化答案和唯一 Outbox command，然后删除草稿。任何一步失败时，transaction 回滚，草稿继续存在。
 
+## 已提交接触如何更正和作废
+
+“接触”页列出当前项目的有效和已作废接触。详情页显示当前事实，并按 revision 倒序显示动作类型、操作者时间、原因和完整快照。
+
+更正对话框从当前投影开始。使用者可以修改发生时间、渠道、地点、触达人数和兴趣，并必须填写原因。页面把打开时看到的 revision 作为 `baseRevision` 交给 `ContactJournal.correctContact`。如果记录已被另一条命令推进，领域层返回稳定冲突，页面不会覆盖新版本。
+
+作废对话框只要求原因。`ContactJournal.voidContact` 追加一条作废 revision，并把当前投影标记为 `voided`。列表继续显示该记录和历史，但个人指标立即排除它。界面没有物理删除已提交接触的入口。
+
+面对面更正仍使用正式定位和区域解析边界。定位或解析失败时保留待解析坐标。线上渠道明确使用 `N/A`，不能把定位失败改写成不适用。
+
 ## 设备 ID 的用途
 
 Outbox command 需要一个安装级设备 ID。它由 [`DeviceIdentityStore`](../../lib/device/device_identity_store.dart) 生成，并保存在 SQLite 的 App 设置表中。
@@ -173,6 +186,9 @@ AND occurred_at_utc < :until_utc
 - 立即返回或进入后台时先保存最后输入；
 - 放弃草稿后可在期限内撤销；
 - 完整纯线上接触提交后，草稿消失；
+- 已提交接触可打开当前投影和完整历史；
+- 更正必须有原因，并追加新 revision；
+- 作废必须有原因，保留历史并退出个人指标；
 - 未获回应尝试单独显示，不增加场次、触达人数或兴趣分布；
 - 后来回应会新建接触并保留原尝试；
 - 面对面接触取得坐标后会解析并显示规范地点，失败时保留待解析坐标；
@@ -190,6 +206,7 @@ AND occurred_at_utc < :until_utc
 后续切片仍需完成以下功能：
 
 - 从问卷版本载入并保存真实题目；
+- 处理两台设备基于同一 revision 提交不同更正的冲突合并；
 - 正式注册、OTP 和密码恢复界面。
 
 这些缺口会继续沿用本章的公开入口测试和深模块边界。新功能不能绕过 `AppSession`、`ContactJournal` 或自有 HTTPS Backend。

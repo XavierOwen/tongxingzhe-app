@@ -201,6 +201,72 @@ test("contact attempt rejects contact metric fields", async () => {
   });
 });
 
+test("contact revision requires a reason and keeps its base revision", async () => {
+  let storedCommand: SyncCommand | undefined;
+  const response = await handleSyncCommand(
+    "Bearer synthetic-token",
+    validRevisionCommandBody(),
+    fakeDependencies({
+      apply: async (_resolvedContext, command) => {
+        storedCommand = command;
+        return { result: "accepted", serverCursor: "opaque-revision-2" };
+      },
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(storedCommand?.type, "contact.revise.v1");
+  assert.equal(storedCommand?.baseRevision, 1);
+  if (storedCommand?.type === "contact.revise.v1") {
+    assert.equal(storedCommand.payload.reason, "修正发生日期");
+    assert.equal(storedCommand.payload.reachCount, 3);
+  }
+
+  const withoutReason = validRevisionCommandBody();
+  (withoutReason.typed_payload as Record<string, unknown>).reason = "   ";
+  const rejected = await handleSyncCommand(
+    "Bearer synthetic-token",
+    withoutReason,
+    fakeDependencies(),
+  );
+  assert.deepEqual(rejected.body, {
+    result: "rejected",
+    error: { code: "contact_reason_required" },
+  });
+});
+
+test("contact void accepts only a positive base revision", async () => {
+  let storedCommand: SyncCommand | undefined;
+  const response = await handleSyncCommand(
+    "Bearer synthetic-token",
+    validVoidCommandBody(),
+    fakeDependencies({
+      apply: async (_resolvedContext, command) => {
+        storedCommand = command;
+        return { result: "accepted", serverCursor: "opaque-void-2" };
+      },
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(storedCommand?.type, "contact.void.v1");
+  if (storedCommand?.type === "contact.void.v1") {
+    assert.equal(storedCommand.payload.reason, "重复录入");
+  }
+
+  const invalidBase = validVoidCommandBody();
+  invalidBase.base_revision = 0;
+  const rejected = await handleSyncCommand(
+    "Bearer synthetic-token",
+    invalidBase,
+    fakeDependencies(),
+  );
+  assert.deepEqual(rejected.body, {
+    result: "rejected",
+    error: { code: "invalid_base_revision" },
+  });
+});
+
 function validCommandBody(): Record<string, unknown> {
   return {
     protocol_version: 1,
@@ -276,6 +342,35 @@ function validAttemptCommandBody(): Record<string, unknown> {
       occurred_time_zone: "America/Chicago",
       channel: "voice_call",
       channel_detail: null,
+    },
+  };
+}
+
+function validRevisionCommandBody(): Record<string, unknown> {
+  const body = validCommandBody();
+  body.command_id = "revision-command-2";
+  body.base_revision = 1;
+  body.type = "contact.revise.v1";
+  const payload = body.typed_payload as Record<string, unknown>;
+  delete payload.questionnaire_version_id;
+  payload.reason = "修正发生日期";
+  payload.reach_count = 3;
+  return body;
+}
+
+function validVoidCommandBody(): Record<string, unknown> {
+  return {
+    protocol_version: 1,
+    command_id: "void-command-2",
+    device_id: "device-1",
+    aggregate_id: "contact-1",
+    base_revision: 1,
+    type: "contact.void.v1",
+    typed_payload: {
+      contact_id: "contact-1",
+      workspace_id: context.current.workspace.id,
+      project_id: context.current.project.id,
+      reason: "重复录入",
     },
   };
 }

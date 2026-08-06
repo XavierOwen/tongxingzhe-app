@@ -1,6 +1,6 @@
-# 第 6 章：持久同步与 Backend SQL 如何保护接触事实
+# 第 6 章：持久同步与 Backend SQL 如何保护追加历史
 
-本章解释已提交接触、未获回应尝试和账号私有草稿如何在本机 SQLite、Backend 与 PostgreSQL 之间移动。这不是上传整个 SQLite 文件，而是传送有版本的 command 和有顺序的 change。
+本章解释已提交接触、追加修订、未获回应尝试和账号私有草稿如何在本机 SQLite、Backend 与 PostgreSQL 之间移动。App 不上传整个 SQLite 文件，只传送有版本的 command 和有顺序的 change。
 
 ## 同步链路
 
@@ -20,7 +20,7 @@ HTTP 层的 context、command 和 pull 端点共用 [`bearerToken`](../../backen
 
 ## Outbox 为什么和接触在同一 transaction
 
-`ContactJournal.submitDraft` 在同一 SQLite transaction 内写入接触、revision、答案和 `contact.submit.v1` command。`recordContactAttempt` 同样原子写入尝试和 `contact.attempt.submit.v1` command。如果只写本机事实，随后 App 崩溃，同步引擎就不知道它需要上传。如果只写 command，本机又会出现无事实可显示的幽灵命令。
+`ContactJournal.submitDraft` 在同一 SQLite transaction 内写入接触、revision、答案和 `contact.submit.v1` command。更正和作废分别写入 `contact.revise.v1` 与 `contact.void.v1`。`recordContactAttempt` 同样原子写入尝试和 `contact.attempt.submit.v1` command。如果只写本机事实，随后 App 崩溃，同步引擎就不知道它需要上传。如果只写 command，本机又会出现无事实可显示的幽灵命令。
 
 Outbox 保存稳定 command ID、设备 ID、aggregate ID、基础 revision、payload、尝试次数和失败状态。它不保存 access token。token 每次发送前从 `IdentitySession` 取得。
 
@@ -52,7 +52,7 @@ Backend 接受 command 后返回 change feed cursor。这个回执只能证明�
 - push ACK 只把本机 command 改为 `completed`；
 - 只有 pull batch 的全部事实已在 SQLite transaction 中成功应用，才推进 `server_cursor`。
 
-拉取遇到已在本机存在的同一 revision 时，只有完整快照和类型化答案都相同才幂等跳过。如果 contact ID 相同但触达人数、渠道、地点或答案不同，客户端把它当成无效远端变化，不会静默覆盖本地事实。一个 batch 中任何变化无效时，该 batch 的接触和 cursor 全部回滚。
+拉取遇到已在本机存在的同一 revision 时，只有动作类型、原因、完整快照和类型化答案都相同才幂等跳过。迟到的 revision 1 会与本机保存的 revision 1 比较，不会拿已经更正过的当前投影误判冲突。如果 contact ID 和 revision 相同，但触达人数、渠道、地点、原因或答案不同，客户端把它当成无效远端变化，不会静默覆盖本地事实。一个 batch 中任何变化无效时，该 batch 的接触和 cursor 全部回滚。
 
 ## Backend 如何幂等写入 PostgreSQL
 
@@ -71,6 +71,18 @@ Backend 接受 command 后返回 change feed cursor。这个回执只能证明�
 [`apply_contact_attempt_submit`](../../backend/database/migrations/0008_contact_attempts.sql) 对尝试使用相同的 command 幂等边界，但只写尝试、处理结果、change feed 和审计事件。它不写 warehouse Outbox，因为未获回应不属于接触或转化事实。Backend parser 还会拒绝在尝试 payload 中夹带触达人数、兴趣、问卷答案或关系阶段。
 
 后来回应仍通过 `apply_contact_submit` 提交普通接触。该函数核对来源尝试属于同一用户、空间和项目，并且尚未关联其他接触；接触成功后才锁定并关联尝试。任一步失败时，整个 transaction 回滚。
+
+## PostgreSQL 如何追加更正和作废
+
+[`0009_contact_revisions.sql`](../../backend/database/migrations/0009_contact_revisions.sql) 给 `contact_revisions` 增加受约束的动作类型和原因。revision 1 只能是 `submitted` 且没有原因。后续 revision 只能是 `corrected` 或 `voided`，并必须有非空原因。
+
+`apply_contact_revise` 和 `apply_contact_void` 是 runtime role 可以执行的 `SECURITY DEFINER` 包装函数。私有 helper 负责同一组事务规则，runtime role 不能直接执行该 helper，也不能直接读写事实表。
+
+每条命令先核对可信用户、个人空间、活动项目、接触归属和 `base_revision`。更正随后追加完整 snapshot 和答案，更新当前投影，并写入 change feed、审计事件和 warehouse Outbox。作废复制当前完整 snapshot 和答案，追加作废 revision，再把当前投影标为 `voided`。任何一步失败时，整个 transaction 回滚。
+
+同一 `(app_user_id, command_id)` 重放返回原 cursor。新的 command 如果仍使用旧 base revision，则返回 `contact_revision_conflict`。其他用户即使知道 contact ID，也只得到稳定的 `contact_forbidden`，不能通过错误差异探测归属。
+
+更正发生时间后，SQLite 和 PostgreSQL 的个人指标都使用新的当前投影重新归期。作废后，两端都因 `lifecycle_status = 'active'` 条件排除该记录。revision 历史、审计事件和 warehouse 作废事件仍保留。
 
 ## change feed 如何拉取
 
@@ -114,7 +126,7 @@ Flutter 的 [`HttpContactRegionResolver`](../../lib/regions/contact_region_resol
 
 Flutter 测试使用真实内存 SQLite 和可控 Transport。它们覆盖 ACK、指数退避、双 worker 租约、过期恢复、迟到 ACK、aggregate 顺序、永久失败隔离、远端 batch 原子性、cursor 区分和同 ID 内容冲突。HTTP Adapter 测试则固定 bearer header、路径、query、JSON 和错误分类。
 
-Backend 测试使用 synthetic 身份和上下文，证明伪造项目在 Store 调用前被拒绝，并证明 PostgreSQL 的无效 cursor 不会被误报成临时服务故障。PostgreSQL 16 验证从空库执行全部 migration，再次执行核对 checksum，运行 runtime 权限、区域循环、草稿冲突、跨用户隔离和共用指标 fixture，最后执行 `pg_dump` 与 `pg_restore` 并重跑检查。
+Backend 测试使用 synthetic 身份和上下文，证明伪造项目在 Store 调用前被拒绝，并证明 PostgreSQL 的无效 cursor 不会被误报成临时服务故障。PostgreSQL 16 验证从空库执行全部 migration，再次执行核对 checksum，运行 runtime 权限、接触修订、区域循环、草稿冲突、跨用户隔离和共用指标 fixture，最后执行 `pg_dump` 与 `pg_restore` 并重跑检查。
 
 这些测试分别回答不同问题。单元测试证明状态机，HTTP 测试证明协议转换，真实 PostgreSQL 证明 SQL 语法、权限、transaction 和恢复路径。某一类通过不能替代另一类。
 
@@ -122,4 +134,4 @@ Backend 测试使用 synthetic 身份和上下文，证明伪造项目在 Store 
 
 [`ProductionHomeViewModel`](../../lib/features/home/production_home_view_model.dart) 接收 App 启动、回到前台、提交或放弃草稿等意图。它调用内部的 [`ForegroundSyncCoordinator`](../../lib/sync/foreground_sync_coordinator.dart)，再刷新同一可信上下文的首页快照。Widget 不创建 worker，也不直接调用 `ContactJournal` 或 `SyncEngine`。
 
-同步运行中的重复信号会合并为一次串行补跑，不并发启动第二个 drainer，也不会漏掉运行中刚产生的 command。ViewModel 负责同步后的数据刷新和失败隔离；`ForegroundSyncCoordinator` 负责每轮上传、拉取和批次数上限。项目切换会创建使用新 scope 的 ViewModel。后台调度、完整冲突合并页和运维监控属于后续切片。
+同步运行中的重复信号会合并为一次串行补跑，不并发启动第二个 drainer，也不会漏掉运行中刚产生的 command。ViewModel 负责同步后的数据刷新和失败隔离；`ForegroundSyncCoordinator` 负责每轮上传、拉取和批次数上限。项目切换会创建使用新 scope 的 ViewModel。后台调度、两台设备并发更正的冲突合并页和运维监控属于后续切片。

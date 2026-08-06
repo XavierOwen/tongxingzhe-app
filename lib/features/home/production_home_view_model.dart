@@ -260,7 +260,7 @@ final class ProductionHomeViewModel extends ChangeNotifier {
 
   Future<void> appResumed() => _synchronizeAndRefresh();
 
-  Future<void> contactEntryClosed({required bool submitted}) {
+  Future<void> contactPageClosed({required bool submitted}) {
     if (submitted) {
       _publishNotice(ProductionHomeNoticeKind.contactSubmitted);
     }

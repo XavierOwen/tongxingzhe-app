@@ -3817,6 +3817,18 @@ class $DbContactRevisionsTable extends DbContactRevisions
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _revisionKindMeta = const VerificationMeta(
+    'revisionKind',
+  );
+  @override
+  late final GeneratedColumn<String> revisionKind = GeneratedColumn<String>(
+    'revision_kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('submitted'),
+  );
   static const VerificationMeta _revisedByAppUserIdMeta =
       const VerificationMeta('revisedByAppUserId');
   @override
@@ -3998,6 +4010,7 @@ class $DbContactRevisionsTable extends DbContactRevisions
     revisionId,
     contactId,
     revisionNumber,
+    revisionKind,
     revisedByAppUserId,
     revisedAtUtc,
     reason,
@@ -4053,6 +4066,15 @@ class $DbContactRevisionsTable extends DbContactRevisions
       );
     } else if (isInserting) {
       context.missing(_revisionNumberMeta);
+    }
+    if (data.containsKey('revision_kind')) {
+      context.handle(
+        _revisionKindMeta,
+        revisionKind.isAcceptableOrUnknown(
+          data['revision_kind']!,
+          _revisionKindMeta,
+        ),
+      );
     }
     if (data.containsKey('revised_by_app_user_id')) {
       context.handle(
@@ -4221,6 +4243,10 @@ class $DbContactRevisionsTable extends DbContactRevisions
         DriftSqlType.int,
         data['${effectivePrefix}revision_number'],
       )!,
+      revisionKind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}revision_kind'],
+      )!,
       revisedByAppUserId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}revised_by_app_user_id'],
@@ -4299,6 +4325,7 @@ class DbContactRevision extends DataClass
   final String revisionId;
   final String contactId;
   final int revisionNumber;
+  final String revisionKind;
   final String revisedByAppUserId;
   final DateTime revisedAtUtc;
   final String? reason;
@@ -4319,6 +4346,7 @@ class DbContactRevision extends DataClass
     required this.revisionId,
     required this.contactId,
     required this.revisionNumber,
+    required this.revisionKind,
     required this.revisedByAppUserId,
     required this.revisedAtUtc,
     this.reason,
@@ -4342,6 +4370,7 @@ class DbContactRevision extends DataClass
     map['revision_id'] = Variable<String>(revisionId);
     map['contact_id'] = Variable<String>(contactId);
     map['revision_number'] = Variable<int>(revisionNumber);
+    map['revision_kind'] = Variable<String>(revisionKind);
     map['revised_by_app_user_id'] = Variable<String>(revisedByAppUserId);
     map['revised_at_utc'] = Variable<DateTime>(revisedAtUtc);
     if (!nullToAbsent || reason != null) {
@@ -4384,6 +4413,7 @@ class DbContactRevision extends DataClass
       revisionId: Value(revisionId),
       contactId: Value(contactId),
       revisionNumber: Value(revisionNumber),
+      revisionKind: Value(revisionKind),
       revisedByAppUserId: Value(revisedByAppUserId),
       revisedAtUtc: Value(revisedAtUtc),
       reason: reason == null && nullToAbsent
@@ -4428,6 +4458,7 @@ class DbContactRevision extends DataClass
       revisionId: serializer.fromJson<String>(json['revisionId']),
       contactId: serializer.fromJson<String>(json['contactId']),
       revisionNumber: serializer.fromJson<int>(json['revisionNumber']),
+      revisionKind: serializer.fromJson<String>(json['revisionKind']),
       revisedByAppUserId: serializer.fromJson<String>(
         json['revisedByAppUserId'],
       ),
@@ -4459,6 +4490,7 @@ class DbContactRevision extends DataClass
       'revisionId': serializer.toJson<String>(revisionId),
       'contactId': serializer.toJson<String>(contactId),
       'revisionNumber': serializer.toJson<int>(revisionNumber),
+      'revisionKind': serializer.toJson<String>(revisionKind),
       'revisedByAppUserId': serializer.toJson<String>(revisedByAppUserId),
       'revisedAtUtc': serializer.toJson<DateTime>(revisedAtUtc),
       'reason': serializer.toJson<String?>(reason),
@@ -4484,6 +4516,7 @@ class DbContactRevision extends DataClass
     String? revisionId,
     String? contactId,
     int? revisionNumber,
+    String? revisionKind,
     String? revisedByAppUserId,
     DateTime? revisedAtUtc,
     Value<String?> reason = const Value.absent(),
@@ -4504,6 +4537,7 @@ class DbContactRevision extends DataClass
     revisionId: revisionId ?? this.revisionId,
     contactId: contactId ?? this.contactId,
     revisionNumber: revisionNumber ?? this.revisionNumber,
+    revisionKind: revisionKind ?? this.revisionKind,
     revisedByAppUserId: revisedByAppUserId ?? this.revisedByAppUserId,
     revisedAtUtc: revisedAtUtc ?? this.revisedAtUtc,
     reason: reason.present ? reason.value : this.reason,
@@ -4538,6 +4572,9 @@ class DbContactRevision extends DataClass
       revisionNumber: data.revisionNumber.present
           ? data.revisionNumber.value
           : this.revisionNumber,
+      revisionKind: data.revisionKind.present
+          ? data.revisionKind.value
+          : this.revisionKind,
       revisedByAppUserId: data.revisedByAppUserId.present
           ? data.revisedByAppUserId.value
           : this.revisedByAppUserId,
@@ -4585,6 +4622,7 @@ class DbContactRevision extends DataClass
           ..write('revisionId: $revisionId, ')
           ..write('contactId: $contactId, ')
           ..write('revisionNumber: $revisionNumber, ')
+          ..write('revisionKind: $revisionKind, ')
           ..write('revisedByAppUserId: $revisedByAppUserId, ')
           ..write('revisedAtUtc: $revisedAtUtc, ')
           ..write('reason: $reason, ')
@@ -4610,6 +4648,7 @@ class DbContactRevision extends DataClass
     revisionId,
     contactId,
     revisionNumber,
+    revisionKind,
     revisedByAppUserId,
     revisedAtUtc,
     reason,
@@ -4634,6 +4673,7 @@ class DbContactRevision extends DataClass
           other.revisionId == this.revisionId &&
           other.contactId == this.contactId &&
           other.revisionNumber == this.revisionNumber &&
+          other.revisionKind == this.revisionKind &&
           other.revisedByAppUserId == this.revisedByAppUserId &&
           other.revisedAtUtc == this.revisedAtUtc &&
           other.reason == this.reason &&
@@ -4656,6 +4696,7 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
   final Value<String> revisionId;
   final Value<String> contactId;
   final Value<int> revisionNumber;
+  final Value<String> revisionKind;
   final Value<String> revisedByAppUserId;
   final Value<DateTime> revisedAtUtc;
   final Value<String?> reason;
@@ -4677,6 +4718,7 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
     this.revisionId = const Value.absent(),
     this.contactId = const Value.absent(),
     this.revisionNumber = const Value.absent(),
+    this.revisionKind = const Value.absent(),
     this.revisedByAppUserId = const Value.absent(),
     this.revisedAtUtc = const Value.absent(),
     this.reason = const Value.absent(),
@@ -4699,6 +4741,7 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
     required String revisionId,
     required String contactId,
     required int revisionNumber,
+    this.revisionKind = const Value.absent(),
     required String revisedByAppUserId,
     required DateTime revisedAtUtc,
     this.reason = const Value.absent(),
@@ -4731,6 +4774,7 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
     Expression<String>? revisionId,
     Expression<String>? contactId,
     Expression<int>? revisionNumber,
+    Expression<String>? revisionKind,
     Expression<String>? revisedByAppUserId,
     Expression<DateTime>? revisedAtUtc,
     Expression<String>? reason,
@@ -4753,6 +4797,7 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
       if (revisionId != null) 'revision_id': revisionId,
       if (contactId != null) 'contact_id': contactId,
       if (revisionNumber != null) 'revision_number': revisionNumber,
+      if (revisionKind != null) 'revision_kind': revisionKind,
       if (revisedByAppUserId != null)
         'revised_by_app_user_id': revisedByAppUserId,
       if (revisedAtUtc != null) 'revised_at_utc': revisedAtUtc,
@@ -4779,6 +4824,7 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
     Value<String>? revisionId,
     Value<String>? contactId,
     Value<int>? revisionNumber,
+    Value<String>? revisionKind,
     Value<String>? revisedByAppUserId,
     Value<DateTime>? revisedAtUtc,
     Value<String?>? reason,
@@ -4801,6 +4847,7 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
       revisionId: revisionId ?? this.revisionId,
       contactId: contactId ?? this.contactId,
       revisionNumber: revisionNumber ?? this.revisionNumber,
+      revisionKind: revisionKind ?? this.revisionKind,
       revisedByAppUserId: revisedByAppUserId ?? this.revisedByAppUserId,
       revisedAtUtc: revisedAtUtc ?? this.revisedAtUtc,
       reason: reason ?? this.reason,
@@ -4833,6 +4880,9 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
     }
     if (revisionNumber.present) {
       map['revision_number'] = Variable<int>(revisionNumber.value);
+    }
+    if (revisionKind.present) {
+      map['revision_kind'] = Variable<String>(revisionKind.value);
     }
     if (revisedByAppUserId.present) {
       map['revised_by_app_user_id'] = Variable<String>(
@@ -4898,6 +4948,7 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
           ..write('revisionId: $revisionId, ')
           ..write('contactId: $contactId, ')
           ..write('revisionNumber: $revisionNumber, ')
+          ..write('revisionKind: $revisionKind, ')
           ..write('revisedByAppUserId: $revisedByAppUserId, ')
           ..write('revisedAtUtc: $revisedAtUtc, ')
           ..write('reason: $reason, ')
@@ -14438,6 +14489,7 @@ typedef $$DbContactRevisionsTableCreateCompanionBuilder =
       required String revisionId,
       required String contactId,
       required int revisionNumber,
+      Value<String> revisionKind,
       required String revisedByAppUserId,
       required DateTime revisedAtUtc,
       Value<String?> reason,
@@ -14461,6 +14513,7 @@ typedef $$DbContactRevisionsTableUpdateCompanionBuilder =
       Value<String> revisionId,
       Value<String> contactId,
       Value<int> revisionNumber,
+      Value<String> revisionKind,
       Value<String> revisedByAppUserId,
       Value<DateTime> revisedAtUtc,
       Value<String?> reason,
@@ -14529,6 +14582,11 @@ class $$DbContactRevisionsTableFilterComposer
 
   ColumnFilters<int> get revisionNumber => $composableBuilder(
     column: $table.revisionNumber,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get revisionKind => $composableBuilder(
+    column: $table.revisionKind,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -14655,6 +14713,11 @@ class $$DbContactRevisionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get revisionKind => $composableBuilder(
+    column: $table.revisionKind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get revisedByAppUserId => $composableBuilder(
     column: $table.revisedByAppUserId,
     builder: (column) => ColumnOrderings(column),
@@ -14775,6 +14838,11 @@ class $$DbContactRevisionsTableAnnotationComposer
 
   GeneratedColumn<int> get revisionNumber => $composableBuilder(
     column: $table.revisionNumber,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get revisionKind => $composableBuilder(
+    column: $table.revisionKind,
     builder: (column) => column,
   );
 
@@ -14908,6 +14976,7 @@ class $$DbContactRevisionsTableTableManager
                 Value<String> revisionId = const Value.absent(),
                 Value<String> contactId = const Value.absent(),
                 Value<int> revisionNumber = const Value.absent(),
+                Value<String> revisionKind = const Value.absent(),
                 Value<String> revisedByAppUserId = const Value.absent(),
                 Value<DateTime> revisedAtUtc = const Value.absent(),
                 Value<String?> reason = const Value.absent(),
@@ -14929,6 +14998,7 @@ class $$DbContactRevisionsTableTableManager
                 revisionId: revisionId,
                 contactId: contactId,
                 revisionNumber: revisionNumber,
+                revisionKind: revisionKind,
                 revisedByAppUserId: revisedByAppUserId,
                 revisedAtUtc: revisedAtUtc,
                 reason: reason,
@@ -14952,6 +15022,7 @@ class $$DbContactRevisionsTableTableManager
                 required String revisionId,
                 required String contactId,
                 required int revisionNumber,
+                Value<String> revisionKind = const Value.absent(),
                 required String revisedByAppUserId,
                 required DateTime revisedAtUtc,
                 Value<String?> reason = const Value.absent(),
@@ -14973,6 +15044,7 @@ class $$DbContactRevisionsTableTableManager
                 revisionId: revisionId,
                 contactId: contactId,
                 revisionNumber: revisionNumber,
+                revisionKind: revisionKind,
                 revisedByAppUserId: revisedByAppUserId,
                 revisedAtUtc: revisedAtUtc,
                 reason: reason,
