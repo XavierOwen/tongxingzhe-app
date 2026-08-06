@@ -1,6 +1,6 @@
-# 第 8 章：推广对象目录、项目关系与共享跟进备注
+# 第 8 章：推广对象目录、项目关系与个人机构关系
 
-推广对象是为了持续跟进而建立的资料，不是每次接触的必填主体。使用者可以继续离线记录匿名接触；只有确有跟进需要、并且对方愿意留下资料时，才建立个人或机构对象。本章说明在线对象路径：建立对象、取得初始分配、关联接触，以及维护对象在当前项目中的关系阶段、生命周期和共享跟进备注。
+推广对象是为了持续跟进而建立的资料，不是每次接触的必填主体。使用者可以继续离线记录匿名接触；只有确有跟进需要、并且对方愿意留下资料时，才建立个人或机构对象。本章说明在线对象路径：建立对象、取得初始分配、关联接触、维护项目关系，以及明确记录个人与机构之间的历史联系。
 
 ## 匿名接触为何仍是默认入口
 
@@ -59,6 +59,16 @@ PostgreSQL 生成对象 UUID。客户端无需先猜测或保留对象 ID。相�
 
 共享跟进备注属于“对象 × 项目”的关系，只对当前跟进者可见。它不是个人反思。个人反思仍只属于记录者本人，两类文本都不进入匿名分析或 warehouse。
 
+## 个人与机构关系为何不属于项目阶段
+
+个人与机构关系说明两个 workspace 级对象之间已经明确存在的联系。它可在多个推广项目中复用，因此不保存 `project_id`，也不使用关系阶段。每条关系只选择一种固定性质：任职／代表、所有／治理、学习／参与、成员／归属、合作／服务或其他。“其他”必须填写角色说明；其余性质也可填写具体职务或身份。
+
+同一个人与同一机构可以同时有多种不同性质。例如，一个人可以同时是机构所有者和志愿顾问。同一种活动关系不能重复。关系结束后保留原关系和建立、结束 revision；以后再次发生同种联系时建立新关系，不恢复或覆盖旧记录。
+
+建立关系要求使用者当前同时获分配个人和机构两端。读取也使用同一边界；只保留一端分配时，关系不会继续返回。关系本身不会授予另一端对象资料、建立 App 组织成员、关联接触、改变对象反应或改变项目关系阶段。App 不根据邮箱域、名称或共同出现在一次接触中自动推断关系。
+
+关系建立和结束只在线进行。Flutter 发送两端对象 ID、固定关系性质、可选角色说明、当前 revision 和 mutation ID；Backend 提供服务器开始或结束时间。普通 Drift 表、Outbox、日志、通知和 warehouse 不保存这项关系或角色说明。
+
 ## 为什么修改需要 revision 和 mutation ID
 
 Flutter 提交关系修改时发送当前看到的 `expected_revision` 和一次性的 `mutation_id`。Backend 从 token 重取用户、空间和项目；PostgreSQL 再检查对象仍在当前分配中。
@@ -75,6 +85,9 @@ Flutter 提交关系修改时发送当前看到的 `expected_revision` 和一次
 | `POST /v1/promotion-targets` | 建立对象和初始分配 | `create_target` + 查看能力 |
 | `PATCH /v1/promotion-targets/:id/relationship` | 追加关系修订或明确解决冲突 | `manage_assigned_target_follow_up` + 查看能力，且数据库仍有当前分配 |
 | `PUT /v1/promotion-target-stage-aliases` | 配置当前项目的阶段显示名 | `manage_analysis_definitions`；不授予或读取对象 PII |
+| `GET /v1/promotion-target-institution-relationships` | 返回同时获分配两端的个人—机构历史关系 | `view_assigned_target_pii`，且数据库重验两端分配 |
+| `POST /v1/promotion-target-institution-relationships` | 明确建立一种关系性质 | `manage_assigned_target_relations` + 查看能力 |
+| `POST /v1/promotion-target-institution-relationships/:id/end` | 结束关系并追加 revision | `manage_assigned_target_relations` + 查看能力 |
 
 Flutter 不提交 workspace、project 或操作者 ID。路径中的对象 ID 也不能单独授权；数据库要求它属于可信 workspace、当前项目已有关系，并且调用者仍有活动分配。
 
@@ -84,6 +97,7 @@ Backend 每次列表或建立操作都重新检查 capability：
 
 - `create_target` 允许建立对象；
 - `view_assigned_target_pii` 允许读取当前分配对象的资料。
+- `manage_assigned_target_relations` 允许在仍可查看两端时建立或结束个人与机构关系。
 
 界面隐藏按钮只改善操作体验，不是授权。即使攻击者直接调用 HTTP，Backend 仍会拒绝缺少 capability 的上下文。即使 Backend 传入错误上下文，[`0016_promotion_target_directory.sql`](../../backend/database/migrations/0016_promotion_target_directory.sql) 也会重新检查活动用户、个人空间所有权和活动项目。
 
@@ -113,8 +127,18 @@ PostgreSQL 检查与 synthetic fixture 证明：
 - 显示别名和双倍刻度不改变数据库的 `0–4`；
 - 姓名和备注不会进入 warehouse payload。
 
+个人与机构关系测试另外证明：
+
+- 只允许同一 workspace 内个人与机构两种不同对象相连；
+- 六类性质固定，“其他”必须填写角色说明；
+- 同一对对象可同时有不同性质，同一种活动关系不能重复；
+- 建立和结束追加 revision，精确重放幂等，改写重放发生冲突；
+- 两个独立数据库会话并发建立时只有一个成功；
+- 撤销任一端分配后不可读取或结束关系；
+- 关系不增加对象分配、不建立接触关联，也不写 warehouse。
+
 CI 从空库执行全部 migration 两次，再运行检查和 fixture。随后执行 `pg_dump`／`pg_restore`，并在恢复库中重跑同一组验证。没有用过 Docker 的读者可以按[第 9 章](09-local-docker-and-ci-testing.md)从安装、启动到读取成功输出逐步执行；关系审计由 `verify_promotion_target_relationship_audit.sql` 和 `0018_promotion_target_relationship_audit.sql` fixture 覆盖。
 
 ## 当前边界
 
-当前实现完成在线对象目录、个人或机构资料建立、初始分配、当前分配读取、接触关联、对象当次反应、项目关系阶段、独立生命周期、共享备注历史、显式冲突和阶段显示别名。加密限时离线对象资料、匿名化执行，以及个人与机构之间的六类关系仍属于后续切片。
+当前实现完成在线对象目录、个人或机构资料建立、初始分配、当前分配读取、接触关联、对象当次反应、项目关系阶段、独立生命周期、共享备注历史、显式冲突、阶段显示别名，以及个人与机构的六类历史关系。加密限时离线对象资料和匿名化执行仍属于后续切片。

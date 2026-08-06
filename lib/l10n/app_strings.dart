@@ -227,6 +227,28 @@ const Map<String, Map<String, String>> _strings = {
     'targetsStage.2': '持续互动',
     'targetsStage.3': '明确推进',
     'targetsStage.4': '达成项目目标关系',
+    'targetInstitutionRelationshipsTitle': '个人与机构关系',
+    'targetInstitutionRelationshipsHelp':
+        '关系只说明两端对象之间的明确联系，不授予资料权限、不建立 App 成员，也不自动关联接触。',
+    'targetInstitutionRelationshipsEmpty': '尚未建立个人与机构关系',
+    'targetInstitutionRelationshipsFailed': '无法载入或修改个人与机构关系，请重试。',
+    'targetInstitutionRelationshipsCreate': '建立个人与机构关系',
+    'targetInstitutionRelationshipPerson': '个人对象',
+    'targetInstitutionRelationshipInstitution': '机构对象',
+    'targetInstitutionRelationshipKind': '关系性质',
+    'targetInstitutionRelationshipKind.employment_representative': '任职／代表',
+    'targetInstitutionRelationshipKind.ownership_governance': '所有／治理',
+    'targetInstitutionRelationshipKind.learning_participation': '学习／参与',
+    'targetInstitutionRelationshipKind.membership_affiliation': '成员／归属',
+    'targetInstitutionRelationshipKind.partnership_service': '合作／服务',
+    'targetInstitutionRelationshipKind.other': '其他',
+    'targetInstitutionRelationshipRole': '角色说明',
+    'targetInstitutionRelationshipRoleHelp': '“其他”性质必须填写；其余性质可选。',
+    'targetInstitutionRelationshipStarted': '开始',
+    'targetInstitutionRelationshipEnded': '结束',
+    'targetInstitutionRelationshipHistory': '历史事件',
+    'targetInstitutionRelationshipEnd': '结束关系',
+    'targetInstitutionRelationshipEndHelp': '结束会保留原关系和历史。以后再次发生同种关系时，请新建一条关系。',
     'targetsLifecycle.active': '跟进中',
     'targetsLifecycle.paused': '暂停跟进',
     'targetsLifecycle.ended': '结束跟进',
@@ -821,6 +843,39 @@ const Map<String, Map<String, String>> _strings = {
     'targetsStage.2': 'Ongoing interaction',
     'targetsStage.3': 'Clear progress',
     'targetsStage.4': 'Project goal relationship reached',
+    'targetInstitutionRelationshipsTitle':
+        'Person and institution relationships',
+    'targetInstitutionRelationshipsHelp':
+        'A relationship records an explicit link. It grants no profile access, creates no App membership, and links no contact automatically.',
+    'targetInstitutionRelationshipsEmpty':
+        'No person and institution relationships',
+    'targetInstitutionRelationshipsFailed':
+        'Could not load or change person and institution relationships.',
+    'targetInstitutionRelationshipsCreate':
+        'Create person and institution relationship',
+    'targetInstitutionRelationshipPerson': 'Person target',
+    'targetInstitutionRelationshipInstitution': 'Institution target',
+    'targetInstitutionRelationshipKind': 'Relationship kind',
+    'targetInstitutionRelationshipKind.employment_representative':
+        'Employment or representation',
+    'targetInstitutionRelationshipKind.ownership_governance':
+        'Ownership or governance',
+    'targetInstitutionRelationshipKind.learning_participation':
+        'Learning or participation',
+    'targetInstitutionRelationshipKind.membership_affiliation':
+        'Membership or affiliation',
+    'targetInstitutionRelationshipKind.partnership_service':
+        'Partnership or service',
+    'targetInstitutionRelationshipKind.other': 'Other',
+    'targetInstitutionRelationshipRole': 'Role description',
+    'targetInstitutionRelationshipRoleHelp':
+        'Required for Other. Optional for every fixed kind.',
+    'targetInstitutionRelationshipStarted': 'Started',
+    'targetInstitutionRelationshipEnded': 'Ended',
+    'targetInstitutionRelationshipHistory': 'History events',
+    'targetInstitutionRelationshipEnd': 'End relationship',
+    'targetInstitutionRelationshipEndHelp':
+        'Ending preserves this relationship and its history. Create a new relationship if the same link starts again.',
     'targetsLifecycle.active': 'Active',
     'targetsLifecycle.paused': 'Paused',
     'targetsLifecycle.ended': 'Ended',

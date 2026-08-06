@@ -591,5 +591,30 @@ final class _FakeTargetGateway implements PromotionTargetGateway {
       const PromotionTargetRejected(PromotionTargetFailureCode.serverRejected);
 
   @override
+  Future<PromotionTargetResult<List<TargetInstitutionRelationship>>>
+  loadInstitutionRelationships() async =>
+      const PromotionTargetRejected(PromotionTargetFailureCode.serverRejected);
+
+  @override
+  Future<PromotionTargetResult<TargetInstitutionRelationship>>
+  createInstitutionRelationship({
+    required String personTargetId,
+    required String institutionTargetId,
+    required TargetInstitutionRelationshipKind kind,
+    required String? roleDescription,
+    required String mutationId,
+  }) async =>
+      const PromotionTargetRejected(PromotionTargetFailureCode.serverRejected);
+
+  @override
+  Future<PromotionTargetResult<TargetInstitutionRelationship>>
+  endInstitutionRelationship({
+    required String relationshipId,
+    required int expectedRevision,
+    required String mutationId,
+  }) async =>
+      const PromotionTargetRejected(PromotionTargetFailureCode.serverRejected);
+
+  @override
   Future<void> close() async {}
 }

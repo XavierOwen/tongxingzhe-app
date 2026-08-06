@@ -384,6 +384,96 @@ test("HTTP relationship routes use trusted target and project context", async ()
   );
 });
 
+test("HTTP person-to-institution route uses trusted workspace assignments", async () => {
+  const relationshipId = "77777777-7777-4777-8777-777777777777";
+  const personTargetId = "55555555-5555-4555-8555-555555555555";
+  const institutionTargetId = "66666666-6666-4666-8666-666666666666";
+  const relationship = {
+    id: relationshipId,
+    personTargetId,
+    institutionTargetId,
+    kind: "employment_representative" as const,
+    roleDescription: "项目协调员",
+    startedAt: "2026-08-06T12:00:00.000Z",
+    endedAt: null,
+    status: "active" as const,
+    revisionNumber: 1,
+    history: [],
+  };
+  const server = createBackendServer({
+    identityVerifier: {
+      verify: async () => ({issuer: "issuer", subject: "subject"}),
+    },
+    contextStore: {
+      loadOrCreate: async () => ({
+        appUserId: "11111111-1111-4111-8111-111111111111",
+        current: {
+          workspace: {
+            id: "22222222-2222-4222-8222-222222222222",
+            kind: "personal",
+            name: "个人空间",
+          },
+          project: {
+            id: "33333333-3333-4333-8333-333333333333",
+            name: "校园推广",
+          },
+          questionnaireVersion: {
+            id: "44444444-4444-4444-8444-444444444444",
+            versionNumber: 1,
+          },
+        },
+        capabilities: [
+          "view_assigned_target_pii",
+          "manage_assigned_target_relations",
+        ],
+      }),
+    },
+    targetInstitutionRelationshipStore: {
+      list: async () => [],
+      create: async (context, input) => {
+        assert.equal(
+          context.current.workspace.id,
+          "22222222-2222-4222-8222-222222222222",
+        );
+        assert.equal(input.personTargetId, personTargetId);
+        assert.equal(input.institutionTargetId, institutionTargetId);
+        return {duplicate: false, relationship};
+      },
+      end: async () => {
+        throw new Error("end is not expected in this test");
+      },
+    },
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  test.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+
+  const response = await fetch(
+    `http://127.0.0.1:${address.port}/v1/promotion-target-institution-relationships`,
+    {
+      method: "POST",
+      headers: {
+        authorization: "Bearer token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        person_target_id: personTargetId,
+        institution_target_id: institutionTargetId,
+        relationship_kind: "employment_representative",
+        role_description: "项目协调员",
+        mutation_id: "institution-relation-create-1",
+      }),
+    },
+  );
+
+  assert.equal(response.status, 201);
+  assert.equal(
+    (await response.json() as {relationship: {relationship_id: string}})
+      .relationship.relationship_id,
+    relationshipId,
+  );
+});
+
 test("unknown route returns a stable 404", async () => {
   const server = createBackendServer({
     identityVerifier: {

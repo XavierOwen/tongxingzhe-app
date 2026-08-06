@@ -128,6 +128,62 @@ void main() {
     expect(gateway.updatedStage, 4);
     expect(find.textContaining('共享跟进备注: 我的备注'), findsOneWidget);
   });
+
+  testWidgets(
+    'assigned user creates and ends an explicit institution relation',
+    (tester) async {
+      final gateway = _MemoryGateway()
+        ..targets.addAll([
+          _plainTarget(
+            id: 'person-1',
+            type: PromotionTargetType.person,
+            name: '王小明',
+          ),
+          _plainTarget(
+            id: 'institution-1',
+            type: PromotionTargetType.institution,
+            name: '社区中心',
+          ),
+        ]);
+      await tester.pumpWidget(_app(gateway));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('create-target-institution-relationship')),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('institution-relationship-role')),
+        '项目协调员',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('save-target-institution-relationship')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        gateway.createdInstitutionKind,
+        TargetInstitutionRelationshipKind.employmentRepresentative,
+      );
+      expect(find.text('王小明 ↔ 社区中心'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey('end-target-institution-institution-relation-1'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(
+          const ValueKey('confirm-end-target-institution-relationship'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(gateway.endedInstitutionRelationshipId, 'institution-relation-1');
+      expect(find.textContaining('结束: 2026-08-07'), findsOneWidget);
+    },
+  );
 }
 
 Widget _app(PromotionTargetGateway gateway) => MaterialApp(
@@ -139,6 +195,7 @@ Widget _app(PromotionTargetGateway gateway) => MaterialApp(
       canCreate: true,
       canConfigureStageAliases: true,
       canManageRelationship: true,
+      canManageInstitutionRelationships: true,
     ),
   ),
 );
@@ -159,6 +216,9 @@ final class _MemoryGateway implements PromotionTargetGateway {
   String? updatedNote;
   String? resolvedConflictId;
   PromotionTargetConflict<PromotionTargetRelationship>? conflictOnce;
+  final institutionRelationships = <TargetInstitutionRelationship>[];
+  TargetInstitutionRelationshipKind? createdInstitutionKind;
+  String? endedInstitutionRelationshipId;
 
   @override
   Future<PromotionTargetResult<List<PromotionTargetProfile>>>
@@ -241,8 +301,87 @@ final class _MemoryGateway implements PromotionTargetGateway {
   }) async => PromotionTargetSuccess(aliases);
 
   @override
+  Future<PromotionTargetResult<List<TargetInstitutionRelationship>>>
+  loadInstitutionRelationships() async =>
+      PromotionTargetSuccess(List.of(institutionRelationships));
+
+  @override
+  Future<PromotionTargetResult<TargetInstitutionRelationship>>
+  createInstitutionRelationship({
+    required String personTargetId,
+    required String institutionTargetId,
+    required TargetInstitutionRelationshipKind kind,
+    required String? roleDescription,
+    required String mutationId,
+  }) async {
+    createdInstitutionKind = kind;
+    final relationship = TargetInstitutionRelationship(
+      id: 'institution-relation-1',
+      personTargetId: personTargetId,
+      institutionTargetId: institutionTargetId,
+      kind: kind,
+      roleDescription: roleDescription,
+      startedAtUtc: DateTime.utc(2026, 8, 6),
+      endedAtUtc: null,
+      status: TargetInstitutionRelationshipStatus.active,
+      revisionNumber: 1,
+      history: [
+        TargetInstitutionRelationshipRevision(
+          revisionNumber: 1,
+          event: TargetInstitutionRelationshipEvent.created,
+          oldStatus: null,
+          newStatus: TargetInstitutionRelationshipStatus.active,
+          endedAtUtc: null,
+          changedByAppUserId: 'user-1',
+          changedAtUtc: DateTime.utc(2026, 8, 6),
+        ),
+      ],
+    );
+    institutionRelationships.insert(0, relationship);
+    return PromotionTargetSuccess(relationship);
+  }
+
+  @override
+  Future<PromotionTargetResult<TargetInstitutionRelationship>>
+  endInstitutionRelationship({
+    required String relationshipId,
+    required int expectedRevision,
+    required String mutationId,
+  }) async {
+    endedInstitutionRelationshipId = relationshipId;
+    final current = institutionRelationships.single;
+    final ended = TargetInstitutionRelationship(
+      id: current.id,
+      personTargetId: current.personTargetId,
+      institutionTargetId: current.institutionTargetId,
+      kind: current.kind,
+      roleDescription: current.roleDescription,
+      startedAtUtc: current.startedAtUtc,
+      endedAtUtc: DateTime.utc(2026, 8, 7),
+      status: TargetInstitutionRelationshipStatus.ended,
+      revisionNumber: expectedRevision + 1,
+      history: current.history,
+    );
+    institutionRelationships[0] = ended;
+    return PromotionTargetSuccess(ended);
+  }
+
+  @override
   Future<void> close() async {}
 }
+
+PromotionTargetProfile _plainTarget({
+  required String id,
+  required PromotionTargetType type,
+  required String name,
+}) => PromotionTargetProfile(
+  id: id,
+  type: type,
+  displayName: name,
+  phone: null,
+  email: null,
+  createdAtUtc: DateTime.utc(2026, 8, 6),
+);
 
 PromotionTargetProfile _targetWithRelationship() => PromotionTargetProfile(
   id: 'target-1',

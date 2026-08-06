@@ -9,6 +9,7 @@ import { PostgresQuestionnaireStore } from "./questionnaire-catalog.js";
 import { PostgresQuestionnaireAdministrationStore } from "./questionnaire-administration.js";
 import { PostgresQuestionnaireMetricCompatibilityStore } from "./questionnaire-metric-compatibility.js";
 import { PostgresPromotionTargetStore } from "./promotion-targets.js";
+import { PostgresTargetInstitutionRelationshipStore } from "./target-institution-relationships.js";
 
 const databaseUrl = requireEnvironment("DATABASE_URL");
 const authIssuer = requireEnvironment("AUTH_ISSUER");
@@ -46,6 +47,10 @@ const questionnaireMetricCompatibilityStore =
 const promotionTargetStore = new PostgresPromotionTargetStore(
   async (text, values) => pool.query(text, [...values]),
 );
+const targetInstitutionRelationshipStore =
+  new PostgresTargetInstitutionRelationshipStore(
+    async (text, values) => pool.query(text, [...values]),
+  );
 const server = createBackendServer({
   identityVerifier,
   contextStore,
@@ -55,6 +60,7 @@ const server = createBackendServer({
   questionnaireAdministrationStore,
   questionnaireMetricCompatibilityStore,
   promotionTargetStore,
+  targetInstitutionRelationshipStore,
 });
 
 server.listen(port, "0.0.0.0");

@@ -200,6 +200,85 @@ void main() {
       );
     },
   );
+
+  test('creates and ends a person-to-institution relationship', () async {
+    var requestNumber = 0;
+    final gateway = HttpPromotionTargetGateway(
+      baseUri: Uri.parse('https://backend.example.test'),
+      identitySession: _signedInIdentity(),
+      client: MockClient((request) async {
+        requestNumber += 1;
+        if (requestNumber == 1) {
+          expect(request.method, 'POST');
+          expect(
+            request.url.path,
+            '/v1/promotion-target-institution-relationships',
+          );
+          expect(jsonDecode(request.body), {
+            'person_target_id': '44444444-4444-4444-8444-444444444444',
+            'institution_target_id': '55555555-5555-4555-8555-555555555555',
+            'relationship_kind': 'employment_representative',
+            'role_description': '项目协调员',
+            'mutation_id': 'institution-create-1',
+          });
+          return http.Response.bytes(
+            utf8.encode(
+              jsonEncode({
+                'duplicate': false,
+                'relationship': _institutionRelationshipDocument(),
+              }),
+            ),
+            201,
+          );
+        }
+        expect(request.method, 'POST');
+        expect(
+          request.url.path,
+          '/v1/promotion-target-institution-relationships/'
+          '77777777-7777-4777-8777-777777777777/end',
+        );
+        expect(jsonDecode(request.body), {
+          'expected_revision': 1,
+          'mutation_id': 'institution-end-1',
+        });
+        return http.Response.bytes(
+          utf8.encode(
+            jsonEncode({
+              'duplicate': false,
+              'relationship': _institutionRelationshipDocument(ended: true),
+            }),
+          ),
+          200,
+        );
+      }),
+    );
+
+    final created = await gateway.createInstitutionRelationship(
+      personTargetId: '44444444-4444-4444-8444-444444444444',
+      institutionTargetId: '55555555-5555-4555-8555-555555555555',
+      kind: TargetInstitutionRelationshipKind.employmentRepresentative,
+      roleDescription: '项目协调员',
+      mutationId: 'institution-create-1',
+    );
+    final ended = await gateway.endInstitutionRelationship(
+      relationshipId: '77777777-7777-4777-8777-777777777777',
+      expectedRevision: 1,
+      mutationId: 'institution-end-1',
+    );
+
+    expect(
+      (created as PromotionTargetSuccess<TargetInstitutionRelationship>)
+          .value
+          .kind,
+      TargetInstitutionRelationshipKind.employmentRepresentative,
+    );
+    expect(
+      (ended as PromotionTargetSuccess<TargetInstitutionRelationship>)
+          .value
+          .status,
+      TargetInstitutionRelationshipStatus.ended,
+    );
+  });
 }
 
 Map<String, Object?> _relationshipDocument({
@@ -231,6 +310,39 @@ Map<String, Object?> _relationshipDocument({
       'reason_detail': null,
       'changed_by_app_user_id': 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       'changed_at': '2026-08-06T13:00:00Z',
+    },
+  ],
+};
+
+Map<String, Object?> _institutionRelationshipDocument({bool ended = false}) => {
+  'relationship_id': '77777777-7777-4777-8777-777777777777',
+  'person_target_id': '44444444-4444-4444-8444-444444444444',
+  'institution_target_id': '55555555-5555-4555-8555-555555555555',
+  'relationship_kind': 'employment_representative',
+  'role_description': '项目协调员',
+  'started_at': '2026-08-06T12:00:00Z',
+  'ended_at': ended ? '2026-08-07T12:00:00Z' : null,
+  'status': ended ? 'ended' : 'active',
+  'revision_number': ended ? 2 : 1,
+  'history': [
+    if (ended)
+      {
+        'revision_number': 2,
+        'event_type': 'ended',
+        'old_status': 'active',
+        'new_status': 'ended',
+        'ended_at': '2026-08-07T12:00:00Z',
+        'changed_by_app_user_id': 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        'changed_at': '2026-08-07T12:00:00Z',
+      },
+    {
+      'revision_number': 1,
+      'event_type': 'created',
+      'old_status': null,
+      'new_status': 'active',
+      'ended_at': null,
+      'changed_by_app_user_id': 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      'changed_at': '2026-08-06T12:00:00Z',
     },
   ],
 };

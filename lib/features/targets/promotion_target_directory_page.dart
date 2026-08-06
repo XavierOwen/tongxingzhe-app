@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../foundation/runtime_values.dart';
 import '../../l10n/app_strings.dart';
 import '../../targets/promotion_target.dart';
+import 'target_institution_relationship_panel.dart';
 
 final class PromotionTargetDirectoryPage extends StatefulWidget {
   const PromotionTargetDirectoryPage({
@@ -15,6 +16,7 @@ final class PromotionTargetDirectoryPage extends StatefulWidget {
     required this.canCreate,
     required this.canConfigureStageAliases,
     required this.canManageRelationship,
+    required this.canManageInstitutionRelationships,
   });
 
   final AppStrings text;
@@ -23,6 +25,7 @@ final class PromotionTargetDirectoryPage extends StatefulWidget {
   final bool canCreate;
   final bool canConfigureStageAliases;
   final bool canManageRelationship;
+  final bool canManageInstitutionRelationships;
 
   @override
   State<PromotionTargetDirectoryPage> createState() =>
@@ -89,6 +92,14 @@ final class _PromotionTargetDirectoryPageState
           )
         else
           for (final target in _targets!) _targetCard(text, target),
+        if (_targets != null)
+          TargetInstitutionRelationshipPanel(
+            text: text,
+            gateway: widget.gateway,
+            idGenerator: widget.idGenerator,
+            targets: _targets!,
+            canManage: widget.canManageInstitutionRelationships,
+          ),
         if (_failure != null && _targets != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),

@@ -99,8 +99,13 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/checks/verify_promotion_target_relationship_audit.sql
 psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/fixtures/0018_promotion_target_relationship_audit.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_person_institution_relationships.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0019_person_institution_relationships.sql
 ./tool/verify_questionnaire_publish_concurrency.sh
 ./tool/verify_questionnaire_metric_concurrency.sh
+./tool/verify_person_institution_relationship_concurrency.sh
 ```
 
 第二次执行不是重复建库，而是验证已经记录的 checksum。若历史文件被修改，脚本会拒绝继续。
@@ -148,4 +153,6 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 `0018_promotion_target_relationship_audit.sql` 把项目关系扩展为当前投影和追加 revision 历史。阶段仍固定为 `0–4`，生命周期独立保存；阶段、生命周期和共享跟进备注的每次修改都保留操作者、时间、原因和 mutation ID。旧 revision 通过 base snapshot 做字段级三方比较：不同字段自动合并，同字段把拟提交内容写入受保护冲突表，等待当前跟进者明确解决。阶段下降要求结构化原因。项目别名只覆盖显示名，双倍刻度只在响应中派生。runtime role 不能直接读取备注、冲突或历史表。
 
-普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。两个 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，分别并发发布问卷，以及确认和撤销同一兼容关系。检查脚本只使用 synthetic 个人空间，并要求显式 `DATABASE_URL`。
+`0019_person_institution_relationships.sql` 保存 workspace 内明确建立的个人与机构关系。六类性质固定；同一对对象可同时有不同性质，但同一种活动关系只允许一条。建立和结束都追加 revision 并使用 mutation ID。列表和写入都要求调用者仍同时获分配两端对象；关系本身不增加分配、成员资格、接触关联或 warehouse 事实。
+
+普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。三个 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，验证问卷发布、指标兼容和个人与机构活动关系的并发不变量。检查脚本只使用 synthetic 个人空间，并要求显式 `DATABASE_URL`。

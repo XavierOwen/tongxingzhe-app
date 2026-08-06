@@ -41,6 +41,12 @@ import {
   updatePromotionTargetRelationship,
   type PromotionTargetStore,
 } from "./promotion-targets.js";
+import {
+  createTargetInstitutionRelationship,
+  endTargetInstitutionRelationship,
+  listTargetInstitutionRelationships,
+  type TargetInstitutionRelationshipStore,
+} from "./target-institution-relationships.js";
 
 export interface BackendServerDependencies
   extends SessionContextHttpDependencies {
@@ -51,6 +57,8 @@ export interface BackendServerDependencies
   readonly questionnaireMetricCompatibilityStore?:
     QuestionnaireMetricCompatibilityStore;
   readonly promotionTargetStore?: PromotionTargetStore;
+  readonly targetInstitutionRelationshipStore?:
+    TargetInstitutionRelationshipStore;
 }
 
 export function createBackendServer(
@@ -197,6 +205,80 @@ export function createBackendServer(
             },
           }),
         );
+      }
+      return;
+    }
+
+    if (
+      requestUrl.pathname ===
+        "/v1/promotion-target-institution-relationships" &&
+      (request.method === "GET" || request.method === "POST")
+    ) {
+      if (dependencies.targetInstitutionRelationshipStore === undefined) {
+        response.statusCode = 503;
+        response.end(JSON.stringify({
+          error: {code: "target_institution_relationships_unavailable"},
+        }));
+        return;
+      }
+      const relationshipDependencies = {
+        identityVerifier: dependencies.identityVerifier,
+        contextStore: dependencies.contextStore,
+        relationshipStore: dependencies.targetInstitutionRelationshipStore,
+      };
+      if (request.method === "GET") {
+        const result = await listTargetInstitutionRelationships(
+          request.headers.authorization,
+          relationshipDependencies,
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+        return;
+      }
+      try {
+        const result = await createTargetInstitutionRelationship(
+          request.headers.authorization,
+          await readJsonBody(request),
+          relationshipDependencies,
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
+      }
+      return;
+    }
+
+    const institutionRelationshipEndMatch = requestUrl.pathname.match(
+      /^\/v1\/promotion-target-institution-relationships\/([^/]+)\/end$/,
+    );
+    if (
+      request.method === "POST" &&
+      institutionRelationshipEndMatch !== null
+    ) {
+      if (dependencies.targetInstitutionRelationshipStore === undefined) {
+        response.statusCode = 503;
+        response.end(JSON.stringify({
+          error: {code: "target_institution_relationships_unavailable"},
+        }));
+        return;
+      }
+      try {
+        const result = await endTargetInstitutionRelationship(
+          request.headers.authorization,
+          institutionRelationshipEndMatch[1] ?? "",
+          await readJsonBody(request),
+          {
+            identityVerifier: dependencies.identityVerifier,
+            contextStore: dependencies.contextStore,
+            relationshipStore:
+              dependencies.targetInstitutionRelationshipStore,
+          },
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
       }
       return;
     }

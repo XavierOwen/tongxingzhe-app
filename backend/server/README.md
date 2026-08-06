@@ -59,6 +59,16 @@ Backend 不接受客户端提供的用户、空间或项目范围。每次请求
 
 关系更新需要 `manage_assigned_target_follow_up` 和 `view_assigned_target_pii`，PostgreSQL 还会重验当前分配。旧 revision 先按 base revision 比较字段：不同字段自动合并，同字段返回 `409 promotion_target_relationship_conflict`、服务器当前值、持久化的拟提交值和冲突 ID。再次提交 `resolved_conflict_id` 会追加明确解决 revision。相同 `mutation_id` 的相同重试不增加 revision 或冲突。别名配置另需 `manage_analysis_definitions`。服务只存 `0–4`，响应中的 `display_stage` 由阶段乘二得到。
 
+个人与机构关系归 workspace，不归当前项目：
+
+| 方法与路径 | 行为 |
+| --- | --- |
+| `GET /v1/promotion-target-institution-relationships` | 返回调用者仍同时获分配两端对象的当前及历史关系 |
+| `POST /v1/promotion-target-institution-relationships` | 明确建立一种个人—机构关系 |
+| `POST /v1/promotion-target-institution-relationships/:id/end` | 按 `expected_revision` 结束关系并保留历史 |
+
+读取需要 `view_assigned_target_pii`；建立和结束另需 `manage_assigned_target_relations`。Backend 不接受 workspace、project、操作者、开始或结束时间。PostgreSQL 用可信服务器时间，检查一端是个人、另一端是机构、两端属于同一 workspace，且调用者当前同时获分配两端。相同 mutation 精确重放不会增加历史；改写重放、活动关系重复和并发失败返回 `409`。
+
 ## 配置
 
 Backend 需要以下环境变量：
@@ -89,6 +99,8 @@ npm run check
 接触对象关联见 [`0017_contact_target_links.sql`](../database/migrations/0017_contact_target_links.sql)。对应 fixture 验证零到多关联、阶段 0 确认、跨空间与未分配拒绝、机构代表约束、幂等重放、revision 历史、冲突比较和 warehouse PII 隔离。
 
 项目关系审计见 [`0018_promotion_target_relationship_audit.sql`](../database/migrations/0018_promotion_target_relationship_audit.sql)。对应 fixture 验证双向阶段、独立生命周期、共享备注历史、结构化下降原因、mutation 重放、显式冲突、分配撤销、显示别名和 warehouse 文本隔离。
+
+个人与机构历史关系见 [`0019_person_institution_relationships.sql`](../database/migrations/0019_person_institution_relationships.sql)。对应 fixture 和独立会话脚本验证六类性质、两端授权、同空间与异类型约束、不同性质并存、同种活动关系唯一、结束历史、重放、并发和 warehouse 隔离。
 
 ## 运行
 

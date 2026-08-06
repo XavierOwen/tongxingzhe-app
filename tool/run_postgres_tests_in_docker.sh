@@ -92,7 +92,8 @@ docker cp \
 for tool_file in \
   postgres_migrate.sh \
   verify_questionnaire_publish_concurrency.sh \
-  verify_questionnaire_metric_concurrency.sh; do
+  verify_questionnaire_metric_concurrency.sh \
+  verify_person_institution_relationship_concurrency.sh; do
   docker cp \
     "${repository_root}/tool/${tool_file}" \
     "${container_name}:/workspace/tool/${tool_file}"
@@ -175,6 +176,10 @@ docker exec \
   --env DATABASE_URL="${database_url}" \
   "${container_name}" \
   bash /workspace/tool/verify_questionnaire_metric_concurrency.sh
+docker exec \
+  --env DATABASE_URL="${database_url}" \
+  "${container_name}" \
+  bash /workspace/tool/verify_person_institution_relationship_concurrency.sh
 
 echo '确认 migration runner 会拒绝被改写的历史文件。'
 docker exec "${container_name}" bash -lc \

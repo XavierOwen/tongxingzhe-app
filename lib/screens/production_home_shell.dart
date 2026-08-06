@@ -178,6 +178,9 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
         canManageRelationship: widget.context.capabilities.contains(
           'manage_assigned_target_follow_up',
         ),
+        canManageInstitutionRelationships: widget.context.capabilities.contains(
+          'manage_assigned_target_relations',
+        ),
       ),
       _PersonalSummaryPage(
         controller: widget.controller,

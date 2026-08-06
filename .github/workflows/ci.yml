@@ -177,11 +177,16 @@ jobs:
             --file backend/database/checks/verify_promotion_target_relationship_audit.sql
           psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file backend/database/fixtures/0018_promotion_target_relationship_audit.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_person_institution_relationships.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0019_person_institution_relationships.sql
 
       - name: Verify concurrent questionnaire publication
         run: |
           ./tool/verify_questionnaire_publish_concurrency.sh
           ./tool/verify_questionnaire_metric_concurrency.sh
+          ./tool/verify_person_institution_relationship_concurrency.sh
 
       - name: Reject edited migration history
         run: |
@@ -275,6 +280,10 @@ jobs:
             --file backend/database/checks/verify_promotion_target_relationship_audit.sql
           psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file backend/database/fixtures/0018_promotion_target_relationship_audit.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_person_institution_relationships.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0019_person_institution_relationships.sql
 
   backend-server:
     name: Backend identity, context, and sync
