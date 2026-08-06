@@ -15,6 +15,7 @@ import '../foundation/runtime_values.dart';
 import '../identity/identity_session.dart';
 import '../l10n/app_strings.dart';
 import '../plans/personal_action_plan.dart';
+import '../reminders/personal_action_reminder.dart';
 import '../questionnaires/questionnaire_contract.dart';
 import '../questionnaires/questionnaire_administration.dart';
 import '../questionnaires/questionnaire_draft_upgrade.dart';
@@ -66,6 +67,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
   QuestionnaireAdministrationGateway? _questionnaireAdministration;
   PromotionTargetGateway? _promotionTargetGateway;
   PersonalActionPlanGateway? _personalActionPlanGateway;
+  PersonalActionReminderGateway? _personalActionReminderGateway;
+  ReminderNotificationScheduler? _reminderNotificationScheduler;
 
   @override
   void initState() {
@@ -85,6 +88,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       :final questionnaireAdministration,
       :final promotionTargetGateway,
       :final personalActionPlanGateway,
+      :final personalActionReminderGateway,
+      :final reminderNotificationScheduler,
     )) {
       _controller = controller;
       _identitySession = identitySession;
@@ -95,6 +100,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       _questionnaireAdministration = questionnaireAdministration;
       _promotionTargetGateway = promotionTargetGateway;
       _personalActionPlanGateway = personalActionPlanGateway;
+      _personalActionReminderGateway = personalActionReminderGateway;
+      _reminderNotificationScheduler = reminderNotificationScheduler;
     }
     return result;
   }
@@ -109,6 +116,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
     unawaited(_questionnaireAdministration?.close());
     unawaited(_promotionTargetGateway?.close());
     unawaited(_personalActionPlanGateway?.close());
+    unawaited(_personalActionReminderGateway?.close());
+    unawaited(_reminderNotificationScheduler?.close());
     _controller?.dispose();
     super.dispose();
   }
@@ -141,6 +150,9 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
             :final questionnaireAdministration,
             :final promotionTargetGateway,
             :final personalActionPlanGateway,
+            :final personalActionReminderGateway,
+            :final deviceReminderPreferenceStore,
+            :final reminderNotificationScheduler,
             :final idGenerator,
           ) =>
             _ReadyApp(
@@ -158,6 +170,9 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
               questionnaireAdministration: questionnaireAdministration,
               promotionTargetGateway: promotionTargetGateway,
               personalActionPlanGateway: personalActionPlanGateway,
+              personalActionReminderGateway: personalActionReminderGateway,
+              deviceReminderPreferenceStore: deviceReminderPreferenceStore,
+              reminderNotificationScheduler: reminderNotificationScheduler,
               idGenerator: idGenerator,
               signedOutScreenBuilder: widget.signedOutScreenBuilder,
               routeInformationProvider: widget.routeInformationProvider,
@@ -187,6 +202,9 @@ class _ReadyApp extends StatefulWidget {
     required this.questionnaireAdministration,
     required this.promotionTargetGateway,
     required this.personalActionPlanGateway,
+    required this.personalActionReminderGateway,
+    required this.deviceReminderPreferenceStore,
+    required this.reminderNotificationScheduler,
     required this.idGenerator,
     required this.signedOutScreenBuilder,
     required this.routeInformationProvider,
@@ -206,6 +224,9 @@ class _ReadyApp extends StatefulWidget {
   final QuestionnaireAdministrationGateway questionnaireAdministration;
   final PromotionTargetGateway promotionTargetGateway;
   final PersonalActionPlanGateway personalActionPlanGateway;
+  final PersonalActionReminderGateway personalActionReminderGateway;
+  final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
+  final ReminderNotificationScheduler reminderNotificationScheduler;
   final IdGenerator idGenerator;
   final SignedOutScreenBuilder? signedOutScreenBuilder;
   final RouteInformationProvider? routeInformationProvider;
@@ -292,6 +313,9 @@ final class _ReadyAppState extends State<_ReadyApp> {
         questionnaireAdministration: widget.questionnaireAdministration,
         promotionTargetGateway: widget.promotionTargetGateway,
         personalActionPlanGateway: widget.personalActionPlanGateway,
+        personalActionReminderGateway: widget.personalActionReminderGateway,
+        deviceReminderPreferenceStore: widget.deviceReminderPreferenceStore,
+        reminderNotificationScheduler: widget.reminderNotificationScheduler,
         idGenerator: widget.idGenerator,
         onDestinationSelected: (index) => _routerDelegate.go(switch (index) {
           0 => AppRoute.today,

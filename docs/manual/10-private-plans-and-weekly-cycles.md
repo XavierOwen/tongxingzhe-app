@@ -1,8 +1,8 @@
-# 第 10 章：私人计划如何划分每周周期
+# 第 10 章：私人计划、当地提醒与每周周期
 
 私人行动计划帮助使用者回顾自己的行动，不是组织考核。每个推广项目可以有一份只属于本人的计划。使用者可以不设周目标；启用后，App 只比较计划的接触场次数与当周有效接触场次数。
 
-当前切片完成周目标、固定统计时区、周期起始日、版本历史、本人 HTTP API 和“今日”页卡片。自由提醒、逐设备系统通知和计划离线缓存尚未完成。它们使用不同的当地时间与设备权限合同，将在后续切片加入。
+当前实现包含周目标、固定统计时区、周期起始日、版本历史、每日当地提醒、逐设备系统通知 opt-in、本人 HTTP API 和“今日”页卡片。计划与提醒仍未加入离线缓存。Web、Linux 和 Windows 也不能在 App 关闭后可靠运行每日重复调度。
 
 ## 先分清三种时间
 
@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | 接触实际发生 UTC 时刻 | 决定一条接触属于哪个周期 | 不变 |
 | 计划统计时区 | 把 UTC 时刻划入当地七天周期 | 固定到计划版本 |
-| 设备当地提醒时间 | 决定某台设备几点提醒 | 后续实现，会随设备所在地变化 |
+| 设备当地提醒时间 | 决定某台设备几点提醒 | 会随设备所在地变化 |
 
 统计时区使用 IANA 名称，例如 `America/Chicago` 或 `Asia/Shanghai`。`CST` 不是合格输入，因为它可能表示不同地区。旅行不会自动修改计划统计时区。
 
@@ -75,6 +75,33 @@
 
 文案不要求解释未完成原因，不产生连续打卡、排名或管理员通知。没有周目标时，页面仍保留计划入口，但不伪造差额。
 
+## 提醒时间与设备开关为何分开
+
+[`0022_personal_action_reminders.sql`](../../backend/database/migrations/0022_personal_action_reminders.sql) 保存一个可选的每日当地分钟。`0` 表示 `00:00`，`1439` 表示 `23:59`。提醒可在没有周目标时单独使用。提醒版本只追加，并使用 expected revision 与 mutation ID 处理多设备更新和安全重试。
+
+Backend 只同步提醒钟点。它不接收设备 ID、通知权限或 UTC 触发时刻。Flutter 的 [`DriftDeviceReminderPreferenceStore`](../../lib/reminders/drift_device_reminder_preference_store.dart) 把 opt-in 写入本机已有的非敏感设置表。设置键同时包含设备、用户、workspace 和项目。另一台设备或另一个项目没有对应行时，默认值是关闭。
+
+用户在本设备打开开关后，App 才请求系统权限。权限拒绝或调度失败时，设置不会写成已启用。用户关闭开关时，App 先取消该项目的通知，再保存关闭状态。不同项目使用稳定且不同的通知 ID，不会互相覆盖。
+
+系统通知默认只使用通用标题、通用行动文案和预留的 `today` payload。调度接口不接收推广对象资料。当前 UI 也不提供显示项目名或个人进度的扩展开关。
+
+## 当地提醒怎样处理旅行与平台差异
+
+[`FlutterReminderNotificationScheduler`](../../lib/reminders/flutter_reminder_notification_scheduler.dart) 每次安排通知前读取设备当前 IANA 时区，再在该地区的当地日历中计算下一次钟点。App 恢复到前台时会重新核对已启用提醒。因此，从芝加哥到上海后，`19:00` 仍表示上海当地 `19:00`，不是原来的 UTC 时刻。
+
+当前平台边界如下：
+
+| 平台 | App 关闭后的每日重复通知 |
+| --- | --- |
+| Android | 已接 Adapter；使用不精确的 idle-safe 调度，不申请 exact alarm |
+| iOS | 已接 Adapter；只在用户打开本设备开关后申请权限 |
+| macOS | 已接 Adapter；只在用户打开本设备开关后申请权限 |
+| Web | 浏览器没有后台 scheduled/repeating notification，明确降级 |
+| Linux | 桌面通知协议没有 scheduler API，明确降级 |
+| Windows | 当前插件不支持重复通知，明确降级 |
+
+“已接 Adapter”不等于真机发布验收已经完成。Android 厂商后台限制、Apple 权限状态和时区旅行仍需真机矩阵验证。
+
 ## 怎样运行这条切片的测试
 
 先运行快速测试：
@@ -82,10 +109,14 @@
 ```bash
 flutter test --no-pub \
   test/features/plans/personal_action_plan_panel_test.dart \
-  test/plans/http_personal_action_plan_gateway_test.dart
+  test/plans/http_personal_action_plan_gateway_test.dart \
+  test/features/reminders/personal_action_reminder_panel_test.dart \
+  test/reminders
 
 npm --prefix backend/server run build
-node --test backend/server/dist/test/personal-action-plans.test.js
+node --test \
+  backend/server/dist/test/personal-action-plans.test.js \
+  backend/server/dist/test/personal-action-reminders.test.js
 ```
 
 再运行真实 PostgreSQL 16 套件：
@@ -94,7 +125,7 @@ node --test backend/server/dist/test/personal-action-plans.test.js
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-没有用过 Docker 时，从[第 9 章](09-local-docker-and-ci-testing.md)第 2 节开始。脚本会自己建立临时数据库、运行 `0021` check 和 fixture、执行备份恢复，再删除容器。不要手工连接 production 验证这条功能。
+没有用过 Docker 时，从[第 9 章](09-local-docker-and-ci-testing.md)第 2 节开始。脚本会自己建立临时数据库、运行 `0021` 和 `0022` 的 check 与 fixture、执行备份恢复，再删除容器。不要手工连接 production 验证这条功能。
 
 ## 当前边界
 
@@ -102,9 +133,10 @@ node --test backend/server/dist/test/personal-action-plans.test.js
 
 - 断网查看或修改计划；
 - 多设备离线合并计划；
-- 自由提醒时间；
-- 新设备默认关闭系统通知；
-- 锁屏通用文案和可选项目／进度显示；
-- 六个平台的系统通知权限与实际触发。
+- 在通知中主动显示项目名或个人进度；
+- 记录每次系统通知的实际触发时区；
+- App 长期未打开时，旅行后的首个通知立即改用新时区；
+- Web、Linux 或 Windows 的 App 关闭后重复提醒；
+- 六个平台的系统通知真机权限与实际触发验收。
 
-这些事项仍属于 Slice 5。实现时应继续保持计划统计时区与设备提醒当地时间分离。
+这些事项仍属于 Slice 5。实现时必须继续保持计划统计时区与设备提醒当地时间分离。

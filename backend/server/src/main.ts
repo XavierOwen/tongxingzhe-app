@@ -11,6 +11,7 @@ import { PostgresQuestionnaireMetricCompatibilityStore } from "./questionnaire-m
 import { PostgresPromotionTargetStore } from "./promotion-targets.js";
 import { PostgresTargetInstitutionRelationshipStore } from "./target-institution-relationships.js";
 import { PostgresPersonalActionPlanStore } from "./personal-action-plans.js";
+import { PostgresPersonalActionReminderStore } from "./personal-action-reminders.js";
 
 const databaseUrl = requireEnvironment("DATABASE_URL");
 const authIssuer = requireEnvironment("AUTH_ISSUER");
@@ -55,6 +56,9 @@ const targetInstitutionRelationshipStore =
 const personalActionPlanStore = new PostgresPersonalActionPlanStore(
   async (text, values) => pool.query(text, [...values]),
 );
+const personalActionReminderStore = new PostgresPersonalActionReminderStore(
+  async (text, values) => pool.query(text, [...values]),
+);
 const server = createBackendServer({
   identityVerifier,
   contextStore,
@@ -67,6 +71,7 @@ const server = createBackendServer({
   promotionTargetRetentionStore: promotionTargetStore,
   targetInstitutionRelationshipStore,
   personalActionPlanStore,
+  personalActionReminderStore,
 });
 
 server.listen(port, "0.0.0.0");

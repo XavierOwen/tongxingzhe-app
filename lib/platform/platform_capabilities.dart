@@ -115,9 +115,12 @@ final class FlutterPlatformCapabilitiesProvider
         PlatformCapability.location: locationImplemented
             ? CapabilityAvailability.runtimeProbeRequired
             : CapabilityAvailability.unavailable,
-        // Slice 0 尚未接通知 Adapter，所以不能把 OS 理论能力写成可用。
         PlatformCapability.systemNotifications:
-            CapabilityAvailability.unavailable,
+            platform == AppPlatform.android ||
+                platform == AppPlatform.ios ||
+                platform == AppPlatform.macos
+            ? CapabilityAvailability.runtimeProbeRequired
+            : CapabilityAvailability.unavailable,
         PlatformCapability.backgroundSync: mobile
             ? CapabilityAvailability.runtimeProbeRequired
             : CapabilityAvailability.unavailable,

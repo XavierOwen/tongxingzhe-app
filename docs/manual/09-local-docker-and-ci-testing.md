@@ -207,7 +207,35 @@ node --test backend/server/dist/test/personal-action-plans.test.js
 
 看到 `fixture：0021_personal_action_plans.sql` 表示脚本正在检查私人计划。该 fixture 会验证美国夏令时切换周只有 167 小时、后续设置在下一周期生效、边界采用半开区间、mutation 可安全重放，以及另一位用户不能读取计划。Docker 脚本还会在恢复库再次运行相同 fixture。
 
-这条切片没有修改 Drift schema，因此不需要生成新的 Drift snapshot。计划的离线缓存和逐设备系统提醒属于后续切片；不要把当前 HTTP／Widget 测试写成离线提醒已经完成。
+这条切片没有修改 Drift schema，因此不需要生成新的 Drift snapshot。计划的离线缓存仍属于后续切片；不要把当前 HTTP／Widget 测试写成离线计划已经完成。
+
+### 5.4 验证同步提醒和逐设备通知开关
+
+提醒测试分四层。第一次接触项目时，可以按以下顺序运行：
+
+```bash
+flutter test --no-pub \
+  test/reminders/http_personal_action_reminder_gateway_test.dart \
+  test/reminders/drift_device_reminder_preference_store_test.dart \
+  test/reminders/reminder_schedule_math_test.dart \
+  test/features/reminders/personal_action_reminder_panel_test.dart
+
+npm --prefix backend/server run build
+node --test backend/server/dist/test/personal-action-reminders.test.js
+
+./tool/run_postgres_tests_in_docker.sh
+```
+
+第一条命令不启动手机模拟器。它在测试进程中检查：新设备默认关闭、权限拒绝不写假成功、不同项目通知不互相覆盖、旅行后按新设备时区计算，以及 Web／Linux／Windows 的明确降级。第二组命令检查 Backend 只使用可信当前上下文，客户端不能伪造用户、项目或设备字段。
+
+最后一条命令才启动 Docker。没有用过 Docker 也不需要先创建数据库：脚本会下载 PostgreSQL 16 镜像、启动临时容器、从 `0001` 运行到 `0022`、执行全部 check 和 fixture、导出并恢复数据库，然后删除容器。看到以下两行表示提醒数据库合同正在执行：
+
+```text
+check：verify_personal_action_reminders.sql
+fixture：0022_personal_action_reminders.sql
+```
+
+`0022` fixture 会创建、读取、清除和重放提醒，并验证越界分钟、旧 revision 和跨用户读取都被拒绝。它不测试手机锁屏。系统权限弹窗、App 被终止后的实际触发、旅行换时区和 Android 厂商后台限制仍需真机测试。
 
 ## 6. Docker PostgreSQL 套件怎样运行
 
@@ -341,6 +369,8 @@ export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_t
 ```
 
 `0021_personal_action_plans.sql` 展示另一类时间边界测试。计划保存固定 IANA 时区和 ISO 周起始日；SQL 先在当地日历中找周期边界，再转换为 UTC。这样夏令时切换周可以是 167 或 169 小时，而不是错误地固定成 168 小时。`verify_personal_action_plans.sql` 检查函数和最小权限，`0021` fixture 检查版本、重放、跨用户拒绝和下一周期生效。它不需要独立并发脚本，因为第一次创建用 scope advisory lock 串行化，fixture 与函数约束已覆盖本切片的写入合同。
+
+`0022_personal_action_reminders.sql` 保存可选的每日当地分钟，不保存 UTC 触发时刻。`verify_personal_action_reminders.sql` 检查 runtime role 不能直接读表，也不能调用内部 document 函数。`0022` fixture 检查提醒可以独立于周目标使用、清除写成新版本、mutation 可重放、旧 revision 被拒绝，且另一位用户不能读取。设备 opt-in 不进入 PostgreSQL；它由 Flutter 测试覆盖。
 
 ## 8. Drift v17 生成文件怎样检查
 

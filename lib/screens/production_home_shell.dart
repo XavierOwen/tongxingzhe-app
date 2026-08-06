@@ -14,11 +14,13 @@ import '../features/contact_journal/contact_journal.dart';
 import '../features/contact_journal/contact_models.dart';
 import '../features/home/production_home_view_model.dart';
 import '../features/plans/personal_action_plan_panel.dart';
+import '../features/reminders/personal_action_reminder_panel.dart';
 import '../features/questionnaire_admin/questionnaire_admin_screen.dart';
 import '../features/targets/promotion_target_directory_page.dart';
 import '../features/contact_metrics/personal_contact_overview.dart';
 import '../l10n/app_strings.dart';
 import '../plans/personal_action_plan.dart';
+import '../reminders/personal_action_reminder.dart';
 import '../questionnaires/questionnaire_administration.dart';
 import '../routing/app_router.dart';
 import '../services/location_service.dart';
@@ -46,6 +48,9 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.questionnaireAdministration,
     required this.promotionTargetGateway,
     required this.personalActionPlanGateway,
+    required this.personalActionReminderGateway,
+    required this.deviceReminderPreferenceStore,
+    required this.reminderNotificationScheduler,
     required this.idGenerator,
     required this.onDestinationSelected,
     required this.onOpenContactEntry,
@@ -67,6 +72,9 @@ final class ProductionHomeShell extends StatefulWidget {
   final QuestionnaireAdministrationGateway questionnaireAdministration;
   final PromotionTargetGateway promotionTargetGateway;
   final PersonalActionPlanGateway personalActionPlanGateway;
+  final PersonalActionReminderGateway personalActionReminderGateway;
+  final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
+  final ReminderNotificationScheduler reminderNotificationScheduler;
   final IdGenerator idGenerator;
   final ValueChanged<int> onDestinationSelected;
   final ValueChanged<ContactDraft?> onOpenContactEntry;
@@ -156,15 +164,34 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
         snapshot: homeState.today,
         isLoading: homeState.isLoading,
         loadFailed: homeState.loadFailed,
-        personalPlanPanel: PersonalActionPlanPanel(
-          text: strings,
-          scopeKey:
-              '${widget.context.appUserId}/'
-              '${widget.context.workspace.id}/'
-              '${widget.context.project.id}',
-          gateway: widget.personalActionPlanGateway,
-          timeZoneProvider: widget.timeZoneProvider,
-          idGenerator: widget.idGenerator,
+        personalPlanPanel: Column(
+          children: [
+            PersonalActionReminderPanel(
+              text: strings,
+              scope: DeviceReminderScope(
+                appUserId: widget.context.appUserId,
+                workspaceId: widget.context.workspace.id,
+                projectId: widget.context.project.id,
+                deviceId: widget.deviceId,
+              ),
+              gateway: widget.personalActionReminderGateway,
+              preferenceStore: widget.deviceReminderPreferenceStore,
+              scheduler: widget.reminderNotificationScheduler,
+              timeZoneProvider: widget.timeZoneProvider,
+              idGenerator: widget.idGenerator,
+            ),
+            const SizedBox(height: 16),
+            PersonalActionPlanPanel(
+              text: strings,
+              scopeKey:
+                  '${widget.context.appUserId}/'
+                  '${widget.context.workspace.id}/'
+                  '${widget.context.project.id}',
+              gateway: widget.personalActionPlanGateway,
+              timeZoneProvider: widget.timeZoneProvider,
+              idGenerator: widget.idGenerator,
+            ),
+          ],
         ),
       ),
       _ContactsPage(
@@ -574,10 +601,6 @@ final class _PersonalSummaryPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        if (personalPlanPanel != null) ...[
-          personalPlanPanel!,
-          const SizedBox(height: 16),
-        ],
         Text(
           period == PersonalSummaryPeriod.today
               ? text.t('today')
@@ -606,6 +629,11 @@ final class _PersonalSummaryPage extends StatelessWidget {
           label: text.t('pendingSync'),
           value: summary.pendingSyncCount,
         ),
+        if (personalPlanPanel != null) ...[
+          const SizedBox(height: 8),
+          personalPlanPanel!,
+          const SizedBox(height: 16),
+        ],
         if (period == PersonalSummaryPeriod.recentSevenDays) ...[
           const SizedBox(height: 8),
           Text(

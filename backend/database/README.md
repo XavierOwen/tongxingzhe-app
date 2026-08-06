@@ -111,6 +111,10 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/checks/verify_personal_action_plans.sql
 psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/fixtures/0021_personal_action_plans.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_personal_action_reminders.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0022_personal_action_reminders.sql
 ./tool/verify_questionnaire_publish_concurrency.sh
 ./tool/verify_questionnaire_metric_concurrency.sh
 ./tool/verify_person_institution_relationship_concurrency.sh
@@ -167,5 +171,7 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 `0020_promotion_target_retention.sql` 保存一至十二个月的 workspace 保留策略和不含 PII 的续期／匿名化审计。期限基准取对象建立、最近有效接触和最近明确续期中的最新时间。到期目录读取先匿名化；明确撤回立即匿名化。一个 transaction 会清除对象 PII 和历史敏感文本、结束活动分配与关系，同时保留接触和去标识统计。
 
 `0021_personal_action_plans.sql` 保存每位用户、每个项目的一份私人计划和追加式版本。首次设置采用当前自然周；后续目标、IANA 统计时区或周期起始日修改从下一周期生效。进度只计算当前有效、已提交且实际发生在周期内的接触。runtime role 只能用可信当前上下文读取或修改本人计划，不能直接读表，也没有管理员列表函数。
+
+`0022_personal_action_reminders.sql` 独立保存每位用户、每个项目的可选每日当地提醒钟点。版本只追加，提醒可在没有周目标时单独使用。服务端不会保存或开启设备通知权限；每台设备的 opt-in 只留在本机。runtime role 同样只能通过可信当前上下文读写本人提醒。
 
 普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。四个 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，验证问卷发布、指标兼容、个人与机构活动关系和对象匿名化的并发不变量。检查脚本只使用 synthetic 个人空间，并要求显式 `DATABASE_URL`。
