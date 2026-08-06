@@ -42,6 +42,7 @@ final class ContactRevisionScreen extends StatefulWidget {
 final class _ContactRevisionScreenState extends State<ContactRevisionScreen> {
   ContactRecord? _contact;
   List<ContactRevision> _history = const [];
+  List<ContactRevisionConflict> _conflicts = const [];
   Object? _loadError;
   var _loading = true;
   var _saving = false;
@@ -64,12 +65,19 @@ final class _ContactRevisionScreenState extends State<ContactRevisionScreen> {
               contactId: widget.contactId,
               appUserId: widget.context.appUserId,
             );
+      final conflicts = contact == null
+          ? const <ContactRevisionConflict>[]
+          : await widget.contactJournal.listContactRevisionConflicts(
+              contactId: widget.contactId,
+              appUserId: widget.context.appUserId,
+            );
       if (!mounted) {
         return;
       }
       setState(() {
         _contact = contact;
         _history = history;
+        _conflicts = conflicts;
         _loadError = null;
         _loading = false;
       });
@@ -107,6 +115,10 @@ final class _ContactRevisionScreenState extends State<ContactRevisionScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        for (final conflict in _conflicts) ...[
+          _conflictCard(text, contact, conflict),
+          const SizedBox(height: 12),
+        ],
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -132,8 +144,8 @@ final class _ContactRevisionScreenState extends State<ContactRevisionScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(_factSummary(text, contact)),
-                if (contact.lifecycleStatus ==
-                    ContactLifecycleStatus.active) ...[
+                if (contact.lifecycleStatus == ContactLifecycleStatus.active &&
+                    _conflicts.isEmpty) ...[
                   const SizedBox(height: 16),
                   Wrap(
                     spacing: 8,
@@ -189,6 +201,185 @@ final class _ContactRevisionScreenState extends State<ContactRevisionScreen> {
     );
   }
 
+  Widget _conflictCard(
+    AppStrings text,
+    ContactRecord contact,
+    ContactRevisionConflict conflict,
+  ) {
+    return Card(
+      key: ValueKey('contact-conflict-${conflict.conflictId}'),
+      color: Theme.of(context).colorScheme.errorContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              text.t('contactConflictTitle'),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              text.t(
+                conflict.status == ContactRevisionConflictStatus.pending
+                    ? 'contactConflictHelp'
+                    : 'contactConflictResolutionPending',
+              ),
+            ),
+            const SizedBox(height: 12),
+            for (final field in conflict.conflictingFields) ...[
+              Text(
+                _conflictDifference(text, conflict, field),
+                key: ValueKey('contact-conflict-${conflict.conflictId}-$field'),
+              ),
+              const SizedBox(height: 8),
+            ],
+            if (conflict.status == ContactRevisionConflictStatus.pending)
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton(
+                    key: ValueKey('use-current-${conflict.conflictId}'),
+                    onPressed: _saving
+                        ? null
+                        : () => _resolveConflict(
+                            conflict,
+                            conflict.currentSnapshot,
+                            text.t('contactConflictUseCurrentReason'),
+                          ),
+                    child: Text(text.t('contactConflictUseCurrent')),
+                  ),
+                  FilledButton(
+                    key: ValueKey('use-proposed-${conflict.conflictId}'),
+                    onPressed: _saving
+                        ? null
+                        : () => _resolveConflict(
+                            conflict,
+                            conflict.proposedSnapshot,
+                            text.t('contactConflictUseProposedReason'),
+                          ),
+                    child: Text(text.t('contactConflictUseProposed')),
+                  ),
+                  TextButton(
+                    key: ValueKey('merge-conflict-${conflict.conflictId}'),
+                    onPressed: _saving
+                        ? null
+                        : () => _mergeConflict(contact, conflict),
+                    child: Text(text.t('contactConflictMerge')),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _conflictDifference(
+    AppStrings text,
+    ContactRevisionConflict conflict,
+    String field,
+  ) {
+    final label = switch (field) {
+      'occurredAt' => text.t('occurredAt'),
+      'channel' => text.t('contactChannel'),
+      'location' => text.t('location'),
+      'reachCount' => text.t('reachCount'),
+      'interestLevel' => text.t('interestLevel'),
+      'answers' => text.t('questionnaireAnswers'),
+      _ => field,
+    };
+    return [
+      label,
+      '${text.t('contactConflictCurrent')}：${_conflictValue(text, conflict.currentSnapshot, field)}',
+      '${text.t('contactConflictProposed')}：${_conflictValue(text, conflict.proposedSnapshot, field)}',
+    ].join('\n');
+  }
+
+  String _conflictValue(
+    AppStrings text,
+    ContactConflictSnapshot snapshot,
+    String field,
+  ) => switch (field) {
+    'occurredAt' =>
+      '${snapshot.occurredAtUtc.toIso8601String()} (${snapshot.occurredTimeZone})',
+    'channel' => contactChannelLabel(text, snapshot.channel),
+    'location' => _locationLabel(text, snapshot.location),
+    'reachCount' => '${snapshot.reachCount}',
+    'interestLevel' => '${snapshot.interestLevel}',
+    'answers' => _questionnaireAnswerSummary(text, snapshot.answers),
+    _ => text.t('unknownValue'),
+  };
+
+  Future<void> _resolveConflict(
+    ContactRevisionConflict conflict,
+    ContactConflictSnapshot snapshot,
+    String reason,
+  ) async {
+    setState(() => _saving = true);
+    try {
+      await widget.contactJournal.resolveContactRevisionConflict(
+        ContactConflictResolutionSubmission(
+          conflictId: conflict.conflictId,
+          appUserId: widget.context.appUserId,
+          workspaceId: widget.context.workspace.id,
+          projectId: widget.context.project.id,
+          deviceId: widget.deviceId,
+          reason: reason,
+          snapshot: snapshot,
+        ),
+      );
+      await _load();
+      _showMessage('contactConflictResolved');
+    } on ContactValidationException catch (error) {
+      _showMessage(error.code);
+    } catch (_) {
+      _showMessage('contactConflictResolutionFailed');
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  Future<void> _mergeConflict(
+    ContactRecord contact,
+    ContactRevisionConflict conflict,
+  ) async {
+    final values = await showDialog<_CorrectionValues>(
+      context: context,
+      builder: (dialogContext) => _CorrectionDialog(
+        text: AppStrings(widget.controller.localeCode),
+        contact: contact,
+        locationCapture: widget.locationCapture,
+        timeZoneProvider: widget.timeZoneProvider,
+        regionResolver: widget.regionResolver,
+        titleKey: 'contactConflictMerge',
+        proposedAnswers: conflict.conflictingFields.contains('answers')
+            ? conflict.proposedSnapshot.answers
+            : null,
+      ),
+    );
+    if (values == null || !mounted) {
+      return;
+    }
+    await _resolveConflict(
+      conflict,
+      ContactConflictSnapshot(
+        occurredAtUtc: values.occurredAtUtc,
+        occurredTimeZone: values.occurredTimeZone,
+        channel: values.channel,
+        channelDetail: values.channelDetail,
+        location: values.location,
+        reachCount: values.reachCount,
+        interestLevel: values.interestLevel,
+        answers: values.answers,
+      ),
+      values.reason,
+    );
+  }
+
   Future<void> _correct(ContactRecord contact) async {
     final values = await showDialog<_CorrectionValues>(
       context: context,
@@ -221,7 +412,7 @@ final class _ContactRevisionScreenState extends State<ContactRevisionScreen> {
           location: values.location,
           reachCount: values.reachCount,
           interestLevel: values.interestLevel,
-          answers: contact.answers,
+          answers: values.answers,
         ),
       );
       await _load();
@@ -361,6 +552,8 @@ final class _CorrectionDialog extends StatefulWidget {
     required this.locationCapture,
     required this.timeZoneProvider,
     required this.regionResolver,
+    this.titleKey = 'correctContact',
+    this.proposedAnswers,
   });
 
   final AppStrings text;
@@ -368,6 +561,8 @@ final class _CorrectionDialog extends StatefulWidget {
   final ContactLocationCapture locationCapture;
   final DeviceTimeZoneProvider timeZoneProvider;
   final ContactRegionResolver regionResolver;
+  final String titleKey;
+  final List<QuestionnaireAnswer>? proposedAnswers;
 
   @override
   State<_CorrectionDialog> createState() => _CorrectionDialogState();
@@ -382,6 +577,7 @@ final class _CorrectionDialogState extends State<_CorrectionDialog> {
   late ContactChannel _channel;
   late ContactLocation _location;
   late int _interestLevel;
+  var _useProposedAnswers = false;
   var _capturingLocation = false;
   String? _error;
 
@@ -413,7 +609,7 @@ final class _CorrectionDialogState extends State<_CorrectionDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.text.t('correctContact')),
+      title: Text(widget.text.t(widget.titleKey)),
       content: SizedBox(
         width: 520,
         child: SingleChildScrollView(
@@ -509,6 +705,42 @@ final class _CorrectionDialogState extends State<_CorrectionDialog> {
                   setState(() => _interestLevel = selection.single);
                 },
               ),
+              if (widget.proposedAnswers != null) ...[
+                const SizedBox(height: 12),
+                Text(widget.text.t('questionnaireAnswers')),
+                SegmentedButton<bool>(
+                  key: const ValueKey('conflict-answer-source'),
+                  segments: [
+                    ButtonSegment(
+                      value: false,
+                      label: Text(
+                        widget.text.t('contactConflictCurrent'),
+                        key: const ValueKey('use-current-answers'),
+                      ),
+                    ),
+                    ButtonSegment(
+                      value: true,
+                      label: Text(
+                        widget.text.t('contactConflictProposed'),
+                        key: const ValueKey('use-proposed-answers'),
+                      ),
+                    ),
+                  ],
+                  selected: {_useProposedAnswers},
+                  onSelectionChanged: (selection) {
+                    setState(() => _useProposedAnswers = selection.single);
+                  },
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _questionnaireAnswerSummary(
+                    widget.text,
+                    _useProposedAnswers
+                        ? widget.proposedAnswers!
+                        : widget.contact.answers,
+                  ),
+                ),
+              ],
               if (_error != null) ...[
                 const SizedBox(height: 12),
                 Text(
@@ -654,6 +886,9 @@ final class _CorrectionDialogState extends State<_CorrectionDialog> {
         location: _location,
         reachCount: reachCount,
         interestLevel: _interestLevel,
+        answers: _useProposedAnswers
+            ? widget.proposedAnswers!
+            : widget.contact.answers,
       ),
     );
   }
@@ -669,6 +904,7 @@ final class _CorrectionValues {
     required this.location,
     required this.reachCount,
     required this.interestLevel,
+    required this.answers,
   });
 
   final String reason;
@@ -679,6 +915,7 @@ final class _CorrectionValues {
   final ContactLocation location;
   final int reachCount;
   final int interestLevel;
+  final List<QuestionnaireAnswer> answers;
 }
 
 bool _usesAutomaticNotApplicableLocation(ContactChannel channel) =>
@@ -698,3 +935,38 @@ String _locationLabel(AppStrings text, ContactLocation location) =>
             '(${text.t('locationPendingResolution')})',
       final ResolvedContactLocation resolved => resolved.placeName,
     };
+
+String _questionnaireAnswerSummary(
+  AppStrings text,
+  List<QuestionnaireAnswer> answers,
+) {
+  if (answers.isEmpty) {
+    return text.t('questionnaireAnswersEmpty');
+  }
+  final sorted = [...answers]
+    ..sort((left, right) => left.questionId.compareTo(right.questionId));
+  return sorted
+      .map((answer) {
+        final booleanAnswer = answer as BooleanQuestionnaireAnswer;
+        final value = switch (booleanAnswer.state) {
+          QuestionnaireAnswerState.answered =>
+            booleanAnswer.value!
+                ? text.t('questionnaireAnswerYes')
+                : text.t('questionnaireAnswerNo'),
+          QuestionnaireAnswerState.unknown => text.t(
+            'questionnaireAnswerUnknown',
+          ),
+          QuestionnaireAnswerState.refused => text.t(
+            'questionnaireAnswerRefused',
+          ),
+          QuestionnaireAnswerState.notApplicable => text.t(
+            'questionnaireAnswerNotApplicable',
+          ),
+          QuestionnaireAnswerState.unanswered => text.t(
+            'questionnaireAnswerUnanswered',
+          ),
+        };
+        return '${booleanAnswer.questionId}: $value';
+      })
+      .join('，');
+}

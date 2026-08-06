@@ -118,6 +118,7 @@ class DbSecurityEvents extends Table {
     DbContactRevisions,
     DbContactAnswers,
     DbSyncOutbox,
+    DbContactRevisionConflicts,
     DbContactDrafts,
     DbContactDraftAnswers,
     DbSyncDrainerLeases,
@@ -142,7 +143,7 @@ class LocalDatabase extends _$LocalDatabase {
       );
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -328,6 +329,12 @@ class LocalDatabase extends _$LocalDatabase {
         await migrator.alterTable(
           TableMigration(dbContactRevisions, newColumns: revisionColumns),
         );
+      }
+      if (from < 12) {
+        // v12 保存服务端授权返回的跨设备冲突比较资料。旧数据没有双方快照，
+        // 因而不能安全推测或回填。
+        await migrator.createTable(dbContactRevisionConflicts);
+        await migrator.createIndex(contactRevisionConflictsOwnerContact);
       }
     },
   );

@@ -67,6 +67,30 @@ export interface ContactRevisionPayload {
   readonly answers: readonly ContactAnswer[];
 }
 
+export interface ContactConflictResolutionPayload
+  extends ContactRevisionPayload {
+  readonly conflictId: string;
+}
+
+export type ContactConflictSnapshot = Omit<
+  ContactRevisionPayload,
+  "contactId" | "workspaceId" | "projectId" | "reason"
+>;
+
+export interface ContactRevisionConflict {
+  readonly conflictId: string;
+  readonly contactId: string;
+  readonly baseRevision: number;
+  readonly currentRevision: number;
+  readonly conflictingFields: readonly string[];
+  readonly questionnaireVersionId: string;
+  readonly currentRevisionKind: "corrected";
+  readonly currentRevisedAtUtc: string;
+  readonly currentReason: string;
+  readonly currentSnapshot: ContactConflictSnapshot;
+  readonly proposedSnapshot: ContactConflictSnapshot;
+}
+
 export interface ContactVoidPayload {
   readonly contactId: string;
   readonly workspaceId: string;
@@ -139,6 +163,11 @@ export interface ContactVoidCommand extends SyncCommandEnvelope {
   readonly payload: ContactVoidPayload;
 }
 
+export interface ContactConflictResolutionCommand extends SyncCommandEnvelope {
+  readonly type: "contact.resolve.v1";
+  readonly payload: ContactConflictResolutionPayload;
+}
+
 export interface DraftUpsertCommand extends SyncCommandEnvelope {
   readonly type: "draft.upsert.v1";
   readonly payload: DraftUpsertPayload;
@@ -153,6 +182,7 @@ export type SyncCommand =
   | ContactSubmitCommand
   | ContactAttemptSubmitCommand
   | ContactReviseCommand
+  | ContactConflictResolutionCommand
   | ContactVoidCommand
   | DraftUpsertCommand
   | DraftDeleteCommand;
@@ -160,7 +190,11 @@ export type SyncCommand =
 export type SyncCommandResult =
   | { readonly result: "accepted"; readonly serverCursor: string }
   | { readonly result: "duplicate"; readonly serverCursor: string }
-  | { readonly result: "conflict"; readonly failureCode: string }
+  | {
+      readonly result: "conflict";
+      readonly failureCode: string;
+      readonly conflict?: ContactRevisionConflict;
+    }
   | { readonly result: "rejected"; readonly failureCode: string }
   | { readonly result: "forbidden"; readonly failureCode: string };
 
@@ -229,6 +263,8 @@ export class PostgresSyncCommandStore implements SyncCommandStore {
       ? "apply_contact_revise"
       : command.type === "contact.void.v1"
       ? "apply_contact_void"
+      : command.type === "contact.resolve.v1"
+      ? "apply_contact_conflict_resolution"
       : command.type === "draft.upsert.v1"
       ? "apply_draft_upsert"
       : "apply_draft_delete";
@@ -258,7 +294,36 @@ export class PostgresSyncCommandStore implements SyncCommandStore {
     if (result.rows.length !== 1) {
       throw new Error("Sync command function must return exactly one row");
     }
-    return parseResultRow(result.rows[0]);
+    const parsed = parseResultRow(result.rows[0]);
+    if (
+      parsed.result !== "conflict" ||
+      command.type !== "contact.revise.v1" ||
+      parsed.failureCode !== "contact_revision_conflict"
+    ) {
+      return parsed;
+    }
+    const conflictResult = await this.query(
+      `SELECT conflict_payload
+       FROM app_data.read_contact_revision_conflict(
+         $1::uuid,
+         $2::uuid,
+         $3::uuid,
+         $4::text
+       )`,
+      [
+        context.appUserId,
+        context.current.workspace.id,
+        context.current.project.id,
+        command.commandId,
+      ],
+    );
+    if (conflictResult.rows.length !== 1) {
+      throw new Error("Revision conflict must return one authorized record");
+    }
+    return {
+      ...parsed,
+      conflict: parseConflictPayload(conflictResult.rows[0]),
+    };
   }
 
   async pull(
@@ -302,6 +367,135 @@ export class PostgresSyncCommandStore implements SyncCommandStore {
         : (lastRow as SyncChangeRow).server_cursor as string,
     };
   }
+}
+
+function parseConflictPayload(value: unknown): ContactRevisionConflict {
+  const row = record(value, "Revision conflict query returned a non-object row");
+  const payload = record(
+    row.conflict_payload,
+    "Revision conflict payload is missing",
+  );
+  const fields = payload.conflictingFields;
+  if (
+    !Array.isArray(fields) ||
+    fields.length === 0 ||
+    fields.some((field) => typeof field !== "string" || field.length === 0)
+  ) {
+    throw new Error("Revision conflict fields are invalid");
+  }
+  return {
+    conflictId: requiredString(payload.conflictId, "conflict ID"),
+    contactId: requiredString(payload.contactId, "conflict contact ID"),
+    baseRevision: positiveInteger(payload.baseRevision, "base revision"),
+    currentRevision: positiveInteger(
+      payload.currentRevision,
+      "current revision",
+    ),
+    conflictingFields: fields as string[],
+    questionnaireVersionId: requiredString(
+      payload.questionnaireVersionId,
+      "questionnaire version ID",
+    ),
+    currentRevisionKind: correctedRevisionKind(payload.currentRevisionKind),
+    currentRevisedAtUtc: requiredString(
+      payload.currentRevisedAtUtc,
+      "current revised at",
+    ),
+    currentReason: requiredString(payload.currentReason, "current reason"),
+    currentSnapshot: parseConflictSnapshot(payload.currentSnapshot),
+    proposedSnapshot: parseConflictSnapshot(payload.proposedSnapshot),
+  };
+}
+
+function correctedRevisionKind(value: unknown): "corrected" {
+  if (value !== "corrected") {
+    throw new Error("Revision conflict current kind is invalid");
+  }
+  return value;
+}
+
+function parseConflictSnapshot(value: unknown): ContactConflictSnapshot {
+  const snapshot = record(value, "Revision conflict snapshot is invalid");
+  const channel = snapshot.channel;
+  const location = snapshot.location;
+  const answers = snapshot.answers;
+  if (
+    !isContactChannel(channel) ||
+    typeof location !== "object" ||
+    location === null ||
+    Array.isArray(location) ||
+    !Array.isArray(answers)
+  ) {
+    throw new Error("Revision conflict snapshot facts are invalid");
+  }
+  return {
+    occurredAtUtc: requiredString(snapshot.occurredAtUtc, "occurred at"),
+    occurredTimeZone: requiredString(
+      snapshot.occurredTimeZone,
+      "occurred time zone",
+    ),
+    channel,
+    channelDetail: nullableResultString(snapshot.channelDetail),
+    location: location as ContactLocation,
+    reachCount: positiveInteger(snapshot.reachCount, "reach count"),
+    interestLevel: boundedInteger(snapshot.interestLevel, 0, 4, "interest"),
+    answers: answers as ContactAnswer[],
+  };
+}
+
+function record(value: unknown, message: string): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(message);
+  }
+  return value as Record<string, unknown>;
+}
+
+function requiredString(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`Revision conflict ${label} is invalid`);
+  }
+  return value;
+}
+
+function nullableResultString(value: unknown): string | null {
+  if (value === null) {
+    return null;
+  }
+  return requiredString(value, "optional string");
+}
+
+function positiveInteger(value: unknown, label: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+    throw new Error(`Revision conflict ${label} is invalid`);
+  }
+  return value;
+}
+
+function boundedInteger(
+  value: unknown,
+  minimum: number,
+  maximum: number,
+  label: string,
+): number {
+  if (
+    typeof value !== "number" ||
+    !Number.isInteger(value) ||
+    value < minimum ||
+    value > maximum
+  ) {
+    throw new Error(`Revision conflict ${label} is invalid`);
+  }
+  return value;
+}
+
+function isContactChannel(value: unknown): value is ContactChannel {
+  return value === "face_to_face" ||
+    value === "voice_call" ||
+    value === "video_call" ||
+    value === "instant_text" ||
+    value === "asynchronous_message" ||
+    value === "mixed" ||
+    value === "other_direct";
 }
 
 function postgresErrorCode(error: unknown): string | null {

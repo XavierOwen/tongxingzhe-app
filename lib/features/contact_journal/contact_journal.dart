@@ -390,6 +390,12 @@ final class ContactJournal {
         if (current.lifecycleStatus == 'voided') {
           throw const ContactValidationException('contact_already_voided');
         }
+        await _rejectUnresolvedContactConflict(
+          contactId: current.contactId,
+          appUserId: submission.appUserId,
+          workspaceId: submission.workspaceId,
+          projectId: submission.projectId,
+        );
         if (current.currentRevision != submission.baseRevision) {
           throw const ContactValidationException('contact_revision_conflict');
         }
@@ -527,6 +533,12 @@ final class ContactJournal {
         if (current.lifecycleStatus == 'voided') {
           throw const ContactValidationException('contact_already_voided');
         }
+        await _rejectUnresolvedContactConflict(
+          contactId: current.contactId,
+          appUserId: submission.appUserId,
+          workspaceId: submission.workspaceId,
+          projectId: submission.projectId,
+        );
         if (current.currentRevision != submission.baseRevision) {
           throw const ContactValidationException('contact_revision_conflict');
         }
@@ -605,6 +617,220 @@ final class ContactJournal {
     } catch (error, stackTrace) {
       throw ContactPersistenceException(
         code: 'contact_void_failed',
+        cause: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  /// 列出本人对一条接触仍需明确处理的跨设备冲突。
+  Future<List<ContactRevisionConflict>> listContactRevisionConflicts({
+    required String contactId,
+    required String appUserId,
+  }) async {
+    final contact = await contactByIdForOwner(
+      contactId: contactId,
+      appUserId: appUserId,
+    );
+    if (contact == null) {
+      return const [];
+    }
+    final query = _database.select(_database.dbContactRevisionConflicts)
+      ..where(
+        (row) =>
+            row.contactId.equals(contactId) &
+            row.appUserId.equals(appUserId) &
+            row.status.isNotValue('resolved'),
+      )
+      ..orderBy([(row) => OrderingTerm.asc(row.createdAtUtc)]);
+    return [for (final row in await query.get()) _conflictFromRow(row)];
+  }
+
+  /// 把使用者明确选择的冲突结果追加为新 revision。
+  ///
+  /// 同一 SQLite transaction 会完成 revision、当前投影、解决 command、原冲突
+  /// command 状态和冲突状态；任一步失败时双方快照仍保持待处理。
+  Future<ContactRevisionReceipt> resolveContactRevisionConflict(
+    ContactConflictResolutionSubmission submission,
+  ) async {
+    final conflictQuery = _database.select(_database.dbContactRevisionConflicts)
+      ..where((row) => row.conflictId.equals(submission.conflictId));
+    final storedConflict = await conflictQuery.getSingleOrNull();
+    if (storedConflict == null ||
+        storedConflict.appUserId != submission.appUserId ||
+        storedConflict.workspaceId != submission.workspaceId ||
+        storedConflict.projectId != submission.projectId) {
+      throw const ContactValidationException('contact_conflict_not_found');
+    }
+    if (storedConflict.status != 'pending') {
+      throw const ContactValidationException(
+        'contact_conflict_already_resolving',
+      );
+    }
+    final snapshot = submission.snapshot;
+    final correction = ContactCorrectionSubmission(
+      contactId: storedConflict.contactId,
+      appUserId: submission.appUserId,
+      workspaceId: submission.workspaceId,
+      projectId: submission.projectId,
+      deviceId: submission.deviceId,
+      baseRevision: storedConflict.currentRevision,
+      reason: submission.reason,
+      occurredAtUtc: snapshot.occurredAtUtc,
+      occurredTimeZone: snapshot.occurredTimeZone,
+      channel: snapshot.channel,
+      channelDetail: snapshot.channelDetail,
+      location: snapshot.location,
+      reachCount: snapshot.reachCount,
+      interestLevel: snapshot.interestLevel,
+      answers: snapshot.answers,
+    );
+    _validateCorrectionSubmission(correction);
+    await _validateResolvedRegion(snapshot.location);
+
+    final revisionId = _idGenerator.next();
+    final commandId = _idGenerator.next();
+    final nowUtc = _clock.now().toUtc();
+    final reason = submission.reason.trim();
+    try {
+      final revisionNumber = await _database.transaction(() async {
+        final current = await _ownedContact(
+          contactId: storedConflict.contactId,
+          appUserId: submission.appUserId,
+          workspaceId: submission.workspaceId,
+          projectId: submission.projectId,
+        );
+        if (current == null) {
+          throw const ContactValidationException('contact_not_found');
+        }
+        if (current.lifecycleStatus == 'voided') {
+          throw const ContactValidationException('contact_already_voided');
+        }
+        if (current.currentRevision != storedConflict.currentRevision) {
+          throw const ContactValidationException('contact_revision_conflict');
+        }
+        final nextRevision = current.currentRevision + 1;
+        final location = _contactLocationColumns(snapshot.location);
+        await _database
+            .into(_database.dbContactRevisions)
+            .insert(
+              DbContactRevisionsCompanion.insert(
+                revisionId: revisionId,
+                contactId: current.contactId,
+                revisionNumber: nextRevision,
+                revisionKind: Value(ContactRevisionKind.corrected.storageValue),
+                revisedByAppUserId: submission.appUserId,
+                revisedAtUtc: nowUtc,
+                reason: Value(reason),
+                occurredAtUtc: snapshot.occurredAtUtc,
+                occurredTimeZone: snapshot.occurredTimeZone,
+                channel: snapshot.channel.storageValue,
+                channelDetail: Value(snapshot.channelDetail),
+                locationKind: location.kind!,
+                placeName: Value(location.placeName),
+                smallestRegionId: Value(location.smallestRegionId),
+                regionTreeVersion: Value(location.regionTreeVersion),
+                latitude: Value(location.latitude),
+                longitude: Value(location.longitude),
+                locationAccuracyMeters: Value(location.accuracyMeters),
+                reachCount: snapshot.reachCount,
+                interestLevel: snapshot.interestLevel,
+              ),
+            );
+        await _insertAnswers(
+          contactId: current.contactId,
+          revisionNumber: nextRevision,
+          answers: snapshot.answers,
+        );
+        await (_database.update(
+          _database.dbContactRecords,
+        )..where((row) => row.contactId.equals(current.contactId))).write(
+          DbContactRecordsCompanion(
+            occurredAtUtc: Value(snapshot.occurredAtUtc),
+            occurredTimeZone: Value(snapshot.occurredTimeZone),
+            channel: Value(snapshot.channel.storageValue),
+            channelDetail: Value(snapshot.channelDetail),
+            locationKind: Value(location.kind!),
+            placeName: Value(location.placeName),
+            smallestRegionId: Value(location.smallestRegionId),
+            regionTreeVersion: Value(location.regionTreeVersion),
+            latitude: Value(location.latitude),
+            longitude: Value(location.longitude),
+            locationAccuracyMeters: Value(location.accuracyMeters),
+            reachCount: Value(snapshot.reachCount),
+            interestLevel: Value(snapshot.interestLevel),
+            currentRevision: Value(nextRevision),
+          ),
+        );
+        await _updateContactRegion(
+          contactId: current.contactId,
+          location: snapshot.location,
+        );
+        await (_database.update(_database.dbSyncOutbox)
+              ..where((row) => row.commandId.equals(storedConflict.commandId)))
+            .write(
+              DbSyncOutboxCompanion(
+                status: const Value('completed'),
+                lastFailureCode: const Value(null),
+                completedAtUtc: Value(nowUtc),
+              ),
+            );
+        await (_database.update(
+              _database.dbContactRevisionConflicts,
+            )..where((row) => row.conflictId.equals(storedConflict.conflictId)))
+            .write(
+              DbContactRevisionConflictsCompanion(
+                status: const Value('resolution_pending'),
+                resolutionCommandId: Value(commandId),
+              ),
+            );
+        await _insertOutboxCommand(
+          commandId: commandId,
+          commandType: 'contact.resolve.v1',
+          deviceId: submission.deviceId,
+          aggregateId: current.contactId,
+          appUserId: submission.appUserId,
+          workspaceId: submission.workspaceId,
+          projectId: submission.projectId,
+          baseRevision: current.currentRevision,
+          payload: jsonEncode({
+            'conflict_id': storedConflict.conflictId,
+            'contact_id': current.contactId,
+            'workspace_id': submission.workspaceId,
+            'project_id': submission.projectId,
+            'reason': reason,
+            'occurred_at_utc': snapshot.occurredAtUtc.toIso8601String(),
+            'occurred_time_zone': snapshot.occurredTimeZone,
+            'channel': snapshot.channel.storageValue,
+            'channel_detail': snapshot.channelDetail,
+            'location': {
+              'kind': location.kind,
+              'place_name': location.placeName,
+              'smallest_region_id': location.smallestRegionId,
+              'region_tree_version': location.regionTreeVersion,
+              'latitude': location.latitude,
+              'longitude': location.longitude,
+              'accuracy_meters': location.accuracyMeters,
+            },
+            'reach_count': snapshot.reachCount,
+            'interest_level': snapshot.interestLevel,
+            'answers': _answerPayload(snapshot.answers),
+          }),
+          createdAtUtc: nowUtc,
+        );
+        return nextRevision;
+      });
+      return ContactRevisionReceipt(
+        contactId: storedConflict.contactId,
+        revisionNumber: revisionNumber,
+        kind: ContactRevisionKind.corrected,
+        syncState: LocalSyncState.pending,
+      );
+    } on ContactValidationException {
+      rethrow;
+    } catch (error, stackTrace) {
+      throw ContactPersistenceException(
+        code: 'contact_conflict_resolution_failed',
         cause: error,
         stackTrace: stackTrace,
       );
@@ -705,6 +931,126 @@ final class ContactJournal {
         },
       },
   ];
+
+  ContactRevisionConflict _conflictFromRow(DbContactRevisionConflict row) {
+    final rawFields = jsonDecode(row.conflictingFieldsJson);
+    if (rawFields is! List<Object?> ||
+        rawFields.any((field) => field is! String)) {
+      throw const FormatException('invalid stored conflict fields');
+    }
+    return ContactRevisionConflict(
+      conflictId: row.conflictId,
+      commandId: row.commandId,
+      contactId: row.contactId,
+      appUserId: row.appUserId,
+      workspaceId: row.workspaceId,
+      projectId: row.projectId,
+      baseRevision: row.baseRevision,
+      currentRevision: row.currentRevision,
+      conflictingFields: List.unmodifiable(rawFields.cast<String>()),
+      questionnaireVersionId: row.questionnaireVersionId,
+      currentRevisionKind: ContactRevisionKind.fromStorage(
+        row.currentRevisionKind,
+      ),
+      currentRevisedAtUtc: row.currentRevisedAtUtc.toUtc(),
+      currentReason: row.currentReason,
+      currentSnapshot: _storedConflictSnapshot(row.currentSnapshotJson),
+      proposedSnapshot: _storedConflictSnapshot(row.proposedSnapshotJson),
+      status: ContactRevisionConflictStatus.fromStorage(row.status),
+    );
+  }
+
+  Future<void> _rejectUnresolvedContactConflict({
+    required String contactId,
+    required String appUserId,
+    required String workspaceId,
+    required String projectId,
+  }) async {
+    final query = _database.select(_database.dbContactRevisionConflicts)
+      ..where(
+        (row) =>
+            row.contactId.equals(contactId) &
+            row.appUserId.equals(appUserId) &
+            row.workspaceId.equals(workspaceId) &
+            row.projectId.equals(projectId) &
+            row.status.isNotValue('resolved'),
+      )
+      ..limit(1);
+    final conflict = await query.getSingleOrNull();
+    if (conflict == null) {
+      return;
+    }
+    throw ContactValidationException(
+      conflict.status == 'pending'
+          ? 'contact_conflict_requires_resolution'
+          : 'contact_conflict_already_resolving',
+    );
+  }
+
+  ContactConflictSnapshot _storedConflictSnapshot(String encoded) {
+    final decoded = jsonDecode(encoded);
+    if (decoded is! Map<String, Object?>) {
+      throw const FormatException('invalid stored conflict snapshot');
+    }
+    final rawAnswers = decoded['answers'];
+    if (rawAnswers is! List<Object?>) {
+      throw const FormatException('invalid stored conflict answers');
+    }
+    return ContactConflictSnapshot(
+      occurredAtUtc: DateTime.parse(
+        decoded['occurredAtUtc']! as String,
+      ).toUtc(),
+      occurredTimeZone: decoded['occurredTimeZone']! as String,
+      channel: ContactChannel.fromStorage(decoded['channel']! as String),
+      channelDetail: decoded['channelDetail'] as String?,
+      location: _storedConflictLocation(decoded['location']),
+      reachCount: decoded['reachCount']! as int,
+      interestLevel: decoded['interestLevel']! as int,
+      answers: [for (final answer in rawAnswers) _storedConflictAnswer(answer)],
+    );
+  }
+
+  ContactLocation _storedConflictLocation(Object? value) {
+    if (value is! Map<String, Object?>) {
+      throw const FormatException('invalid stored conflict location');
+    }
+    return switch (value['kind']) {
+      'not_applicable' => const NotApplicableContactLocation(),
+      'resolved' => ResolvedContactLocation(
+        placeName: value['placeName']! as String,
+        smallestRegionId: value['smallestRegionId']! as String,
+        regionTreeVersion: value['regionTreeVersion']! as String,
+      ),
+      'pending_resolution' => PendingContactLocation(
+        latitude: (value['latitude']! as num).toDouble(),
+        longitude: (value['longitude']! as num).toDouble(),
+        accuracyMeters: (value['accuracyMeters'] as num?)?.toDouble(),
+      ),
+      _ => throw const FormatException('invalid stored conflict location kind'),
+    };
+  }
+
+  QuestionnaireAnswer _storedConflictAnswer(Object? value) {
+    if (value is! Map<String, Object?> || value['type'] != 'boolean') {
+      throw const FormatException('invalid stored conflict answer');
+    }
+    final questionId = value['questionId']! as String;
+    return switch (value['state']) {
+      'answered' => BooleanQuestionnaireAnswer(
+        questionId: questionId,
+        value: value['value']! as bool,
+      ),
+      'unknown' => BooleanQuestionnaireAnswer.unknown(questionId: questionId),
+      'refused' => BooleanQuestionnaireAnswer.refused(questionId: questionId),
+      'not_applicable' => BooleanQuestionnaireAnswer.notApplicable(
+        questionId: questionId,
+      ),
+      'unanswered' => BooleanQuestionnaireAnswer.unanswered(
+        questionId: questionId,
+      ),
+      _ => throw const FormatException('invalid stored conflict answer state'),
+    };
+  }
 
   Future<DbContactRecord?> _ownedContact({
     required String contactId,

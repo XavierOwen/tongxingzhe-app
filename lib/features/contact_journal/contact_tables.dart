@@ -360,3 +360,48 @@ class DbSyncOutbox extends Table {
         'length(trim(project_id)) > 0))',
   ];
 }
+
+/// 同字段跨设备修订的本机持久比较资料。
+///
+/// 健康状态只从 Outbox 读取数量和错误码，不读取这里的业务快照。
+@TableIndex(
+  name: 'contact_revision_conflicts_owner_contact',
+  columns: {#appUserId, #contactId, #status},
+)
+class DbContactRevisionConflicts extends Table {
+  TextColumn get conflictId => text()();
+  TextColumn get commandId => text().unique()();
+  TextColumn get contactId => text().references(DbContactRecords, #contactId)();
+  TextColumn get appUserId => text()();
+  TextColumn get workspaceId => text()();
+  TextColumn get projectId => text()();
+  IntColumn get baseRevision => integer()();
+  IntColumn get currentRevision => integer()();
+  TextColumn get conflictingFieldsJson => text()();
+  TextColumn get questionnaireVersionId => text()();
+  TextColumn get currentRevisionKind => text()();
+  DateTimeColumn get currentRevisedAtUtc => dateTime()();
+  TextColumn get currentReason => text()();
+  TextColumn get currentSnapshotJson => text()();
+  TextColumn get proposedSnapshotJson => text()();
+  TextColumn get status => text().withDefault(const Constant('pending'))();
+  TextColumn get resolutionCommandId => text().nullable()();
+  DateTimeColumn get createdAtUtc => dateTime()();
+  DateTimeColumn get resolvedAtUtc => dateTime().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {conflictId};
+
+  @override
+  List<String> get customConstraints => const [
+    'CHECK (base_revision > 0 AND current_revision > base_revision)',
+    "CHECK (current_revision_kind = 'corrected')",
+    "CHECK (status IN ('pending', 'resolution_pending', 'resolved'))",
+    "CHECK ((status = 'pending' AND resolution_command_id IS NULL "
+        'AND resolved_at_utc IS NULL) OR '
+        "(status = 'resolution_pending' AND resolution_command_id IS NOT NULL "
+        'AND resolved_at_utc IS NULL) OR '
+        "(status = 'resolved' AND resolution_command_id IS NOT NULL "
+        'AND resolved_at_utc IS NOT NULL))',
+  ];
+}

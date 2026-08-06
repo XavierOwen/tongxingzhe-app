@@ -456,6 +456,11 @@ final class SyncEngine {
         await _preserveLocalDraftAsConflict(draft);
       }
     }
+    if (result case SyncPushConflict(:final conflict?)) {
+      if (current.commandType == 'contact.revise.v1') {
+        await _installContactRevisionConflict(current, conflict, nowUtc);
+      }
+    }
 
     return switch (result) {
       final SyncPushAccepted accepted => _completeCommand(
@@ -547,6 +552,18 @@ final class SyncEngine {
       )..where((row) => row.draftId.equals(current.aggregateId))).write(
         DbContactDraftsCompanion(serverRevision: Value(acceptedRevision)),
       );
+    } else if (current.commandType == 'contact.resolve.v1') {
+      await (_database.update(_database.dbContactRevisionConflicts)..where(
+            (row) =>
+                row.resolutionCommandId.equals(current.commandId) &
+                row.status.equals('resolution_pending'),
+          ))
+          .write(
+            DbContactRevisionConflictsCompanion(
+              status: const Value('resolved'),
+              resolvedAtUtc: Value(nowUtc),
+            ),
+          );
     }
     await _writeScopeState(
       nowUtc: nowUtc,
@@ -554,6 +571,245 @@ final class SyncEngine {
       lastFailureCode: null,
     );
     return SyncDrainResult.completed;
+  }
+
+  Future<void> _installContactRevisionConflict(
+    DbSyncOutboxData command,
+    SyncContactRevisionConflict conflict,
+    DateTime nowUtc,
+  ) async {
+    if (conflict.contactId != command.aggregateId ||
+        conflict.baseRevision != command.baseRevision ||
+        conflict.currentRevision <= conflict.baseRevision ||
+        conflict.questionnaireVersionId.trim().isEmpty ||
+        conflict.conflictingFields.isEmpty) {
+      throw const FormatException('revision conflict does not match command');
+    }
+    final contactQuery = _database.select(_database.dbContactRecords)
+      ..where((row) => row.contactId.equals(command.aggregateId));
+    final contact = await contactQuery.getSingleOrNull();
+    if (contact == null ||
+        contact.appUserId != _scope.appUserId ||
+        contact.workspaceId != _scope.workspaceId ||
+        contact.projectId != _scope.projectId ||
+        contact.questionnaireVersionId != conflict.questionnaireVersionId ||
+        contact.currentRevision < conflict.baseRevision + 1) {
+      throw const FormatException('revision conflict scope is invalid');
+    }
+    if (!await _localRevisionMatchesSnapshot(
+      contactId: command.aggregateId,
+      revisionNumber: conflict.baseRevision + 1,
+      snapshot: conflict.proposedSnapshot,
+    )) {
+      throw const FormatException('revision conflict lost the local proposal');
+    }
+
+    final currentLocation = _remoteLocationColumns(
+      conflict.currentSnapshot.location,
+    );
+    if (conflict.currentSnapshot.location
+        case final ResolvedContactLocation resolved) {
+      await _regionCatalog.requireAnalyzableRegion(
+        regionId: resolved.smallestRegionId,
+        treeVersion: resolved.regionTreeVersion,
+      );
+    }
+
+    await (_database.delete(_database.dbContactAnswers)..where(
+          (row) =>
+              row.contactId.equals(command.aggregateId) &
+              row.revisionNumber.isBiggerThanValue(conflict.baseRevision),
+        ))
+        .go();
+    await (_database.delete(_database.dbContactRevisions)..where(
+          (row) =>
+              row.contactId.equals(command.aggregateId) &
+              row.revisionNumber.isBiggerThanValue(conflict.baseRevision),
+        ))
+        .go();
+    await _database
+        .into(_database.dbContactRevisions)
+        .insert(
+          DbContactRevisionsCompanion.insert(
+            revisionId:
+                '${command.aggregateId}:remote:${conflict.currentRevision}',
+            contactId: command.aggregateId,
+            revisionNumber: conflict.currentRevision,
+            revisionKind: Value(conflict.currentRevisionKind.storageValue),
+            revisedByAppUserId: _scope.appUserId,
+            revisedAtUtc: conflict.currentRevisedAtUtc,
+            reason: Value(conflict.currentReason),
+            occurredAtUtc: conflict.currentSnapshot.occurredAtUtc,
+            occurredTimeZone: conflict.currentSnapshot.occurredTimeZone,
+            channel: conflict.currentSnapshot.channel.storageValue,
+            channelDetail: Value(conflict.currentSnapshot.channelDetail),
+            locationKind: currentLocation.kind,
+            placeName: Value(currentLocation.placeName),
+            smallestRegionId: Value(currentLocation.smallestRegionId),
+            regionTreeVersion: Value(currentLocation.regionTreeVersion),
+            latitude: Value(currentLocation.latitude),
+            longitude: Value(currentLocation.longitude),
+            locationAccuracyMeters: Value(currentLocation.accuracyMeters),
+            reachCount: conflict.currentSnapshot.reachCount,
+            interestLevel: conflict.currentSnapshot.interestLevel,
+          ),
+        );
+    for (final answer in conflict.currentSnapshot.answers) {
+      final booleanAnswer = answer as BooleanQuestionnaireAnswer;
+      await _database
+          .into(_database.dbContactAnswers)
+          .insert(
+            DbContactAnswersCompanion.insert(
+              contactId: command.aggregateId,
+              revisionNumber: conflict.currentRevision,
+              questionId: booleanAnswer.questionId,
+              answerState: booleanAnswer.state.storageValue,
+              answerType: 'boolean',
+              booleanValue: Value(booleanAnswer.value),
+            ),
+          );
+    }
+    await (_database.update(
+      _database.dbContactRecords,
+    )..where((row) => row.contactId.equals(command.aggregateId))).write(
+      DbContactRecordsCompanion(
+        occurredAtUtc: Value(conflict.currentSnapshot.occurredAtUtc),
+        occurredTimeZone: Value(conflict.currentSnapshot.occurredTimeZone),
+        channel: Value(conflict.currentSnapshot.channel.storageValue),
+        channelDetail: Value(conflict.currentSnapshot.channelDetail),
+        locationKind: Value(currentLocation.kind),
+        placeName: Value(currentLocation.placeName),
+        smallestRegionId: Value(currentLocation.smallestRegionId),
+        regionTreeVersion: Value(currentLocation.regionTreeVersion),
+        latitude: Value(currentLocation.latitude),
+        longitude: Value(currentLocation.longitude),
+        locationAccuracyMeters: Value(currentLocation.accuracyMeters),
+        reachCount: Value(conflict.currentSnapshot.reachCount),
+        interestLevel: Value(conflict.currentSnapshot.interestLevel),
+        currentRevision: Value(conflict.currentRevision),
+        lifecycleStatus: const Value('active'),
+      ),
+    );
+    if (conflict.currentSnapshot.location
+        case final ResolvedContactLocation resolved) {
+      await _regionCatalog.assignContact(
+        contactId: command.aggregateId,
+        regionId: resolved.smallestRegionId,
+        treeVersion: resolved.regionTreeVersion,
+      );
+    } else {
+      await _regionCatalog.clearContactAssignment(command.aggregateId);
+    }
+    await _database
+        .into(_database.dbContactRevisionConflicts)
+        .insertOnConflictUpdate(
+          DbContactRevisionConflictsCompanion.insert(
+            conflictId: conflict.conflictId,
+            commandId: command.commandId,
+            contactId: command.aggregateId,
+            appUserId: _scope.appUserId,
+            workspaceId: _scope.workspaceId,
+            projectId: _scope.projectId,
+            baseRevision: conflict.baseRevision,
+            currentRevision: conflict.currentRevision,
+            conflictingFieldsJson: jsonEncode(conflict.conflictingFields),
+            questionnaireVersionId: conflict.questionnaireVersionId,
+            currentRevisionKind: conflict.currentRevisionKind.storageValue,
+            currentRevisedAtUtc: conflict.currentRevisedAtUtc,
+            currentReason: conflict.currentReason,
+            currentSnapshotJson: jsonEncode(
+              _conflictSnapshotPayload(conflict.currentSnapshot),
+            ),
+            proposedSnapshotJson: jsonEncode(
+              _conflictSnapshotPayload(conflict.proposedSnapshot),
+            ),
+            createdAtUtc: nowUtc,
+          ),
+        );
+  }
+
+  Future<bool> _localRevisionMatchesSnapshot({
+    required String contactId,
+    required int revisionNumber,
+    required ContactConflictSnapshot snapshot,
+  }) async {
+    final query = _database.select(_database.dbContactRevisions)
+      ..where(
+        (row) =>
+            row.contactId.equals(contactId) &
+            row.revisionNumber.equals(revisionNumber),
+      );
+    final stored = await query.getSingleOrNull();
+    final location = _remoteLocationColumns(snapshot.location);
+    if (stored == null ||
+        stored.occurredAtUtc.toUtc() != snapshot.occurredAtUtc.toUtc() ||
+        stored.occurredTimeZone != snapshot.occurredTimeZone ||
+        stored.channel != snapshot.channel.storageValue ||
+        stored.channelDetail != snapshot.channelDetail ||
+        stored.locationKind != location.kind ||
+        stored.placeName != location.placeName ||
+        stored.smallestRegionId != location.smallestRegionId ||
+        stored.regionTreeVersion != location.regionTreeVersion ||
+        stored.latitude != location.latitude ||
+        stored.longitude != location.longitude ||
+        stored.locationAccuracyMeters != location.accuracyMeters ||
+        stored.reachCount != snapshot.reachCount ||
+        stored.interestLevel != snapshot.interestLevel) {
+      return false;
+    }
+    final answers =
+        await (_database.select(_database.dbContactAnswers)..where(
+              (row) =>
+                  row.contactId.equals(contactId) &
+                  row.revisionNumber.equals(revisionNumber),
+            ))
+            .get();
+    if (answers.length != snapshot.answers.length) {
+      return false;
+    }
+    final expected = {
+      for (final answer in snapshot.answers)
+        answer.questionId: answer as BooleanQuestionnaireAnswer,
+    };
+    return answers.every((answer) {
+      final value = expected[answer.questionId];
+      return value != null &&
+          answer.answerState == value.state.storageValue &&
+          answer.answerType == 'boolean' &&
+          answer.booleanValue == value.value;
+    });
+  }
+
+  Map<String, Object?> _conflictSnapshotPayload(
+    ContactConflictSnapshot snapshot,
+  ) {
+    final location = _remoteLocationColumns(snapshot.location);
+    return {
+      'occurredAtUtc': snapshot.occurredAtUtc.toUtc().toIso8601String(),
+      'occurredTimeZone': snapshot.occurredTimeZone,
+      'channel': snapshot.channel.storageValue,
+      'channelDetail': snapshot.channelDetail,
+      'location': {
+        'kind': location.kind,
+        'placeName': location.placeName,
+        'smallestRegionId': location.smallestRegionId,
+        'regionTreeVersion': location.regionTreeVersion,
+        'latitude': location.latitude,
+        'longitude': location.longitude,
+        'accuracyMeters': location.accuracyMeters,
+      },
+      'reachCount': snapshot.reachCount,
+      'interestLevel': snapshot.interestLevel,
+      'answers': [
+        for (final answer in snapshot.answers)
+          {
+            'questionId': answer.questionId,
+            'state': (answer as BooleanQuestionnaireAnswer).state.storageValue,
+            'type': 'boolean',
+            'value': answer.value,
+          },
+      ],
+    };
   }
 
   Future<SyncDrainResult> _retryCommand(
@@ -1008,21 +1264,40 @@ final class SyncEngine {
       throw const FormatException('remote revision contact is unavailable');
     }
 
+    var replacingAcknowledgedOptimisticRevision = false;
     if (existing.currentRevision >= revision.revisionNumber) {
-      if (!await _existingRevisionMatchesRemote(revision)) {
+      if (await _existingRevisionMatchesRemote(revision)) {
+        if (existing.currentRevision == revision.revisionNumber &&
+            !_currentProjectionMatchesRevision(existing, revision)) {
+          throw const FormatException(
+            'remote revision conflicts with local projection',
+          );
+        }
+        return;
+      }
+      replacingAcknowledgedOptimisticRevision =
+          existing.currentRevision == revision.revisionNumber &&
+          await _isAcknowledgedOptimisticRevision(revision);
+      if (!replacingAcknowledgedOptimisticRevision) {
         throw const FormatException(
           'remote revision conflicts with local history',
         );
       }
-      if (existing.currentRevision == revision.revisionNumber &&
-          !_currentProjectionMatchesRevision(existing, revision)) {
-        throw const FormatException(
-          'remote revision conflicts with local projection',
-        );
-      }
-      return;
+      await (_database.delete(_database.dbContactAnswers)..where(
+            (row) =>
+                row.contactId.equals(revision.contactId) &
+                row.revisionNumber.equals(revision.revisionNumber),
+          ))
+          .go();
+      await (_database.delete(_database.dbContactRevisions)..where(
+            (row) =>
+                row.contactId.equals(revision.contactId) &
+                row.revisionNumber.equals(revision.revisionNumber),
+          ))
+          .go();
     }
-    if (existing.currentRevision != revision.revisionNumber - 1) {
+    if (!replacingAcknowledgedOptimisticRevision &&
+        existing.currentRevision != revision.revisionNumber - 1) {
       throw const FormatException('remote revision sequence is not contiguous');
     }
     if (revision.kind == ContactRevisionKind.voided &&
@@ -1114,6 +1389,33 @@ final class SyncEngine {
     } else {
       await _regionCatalog.clearContactAssignment(revision.contactId);
     }
+  }
+
+  /// 上传已被服务器确认后，pull 是本机乐观 revision 的权威对账。
+  ///
+  /// 普通更正的服务器审计时间与设备时间可能不同。自动合并时，拉取到的
+  /// 同编号 revision 甚至可能是另一台设备的先行更正。只有同范围的
+  /// revise、void 或 resolve command 已经 ACK，且 base 紧邻该 revision 时，
+  /// 才允许服务器历史替换这条乐观记录。
+  Future<bool> _isAcknowledgedOptimisticRevision(
+    _RemoteContactRevision revision,
+  ) async {
+    final query = _database.select(_database.dbSyncOutbox)
+      ..where(
+        (row) =>
+            row.aggregateId.equals(revision.contactId) &
+            row.appUserId.equals(_scope.appUserId) &
+            row.workspaceId.equals(_scope.workspaceId) &
+            row.projectId.equals(_scope.projectId) &
+            row.baseRevision.equals(revision.revisionNumber - 1) &
+            row.status.equals('completed') &
+            (revision.kind == ContactRevisionKind.voided
+                ? row.commandType.equals('contact.void.v1')
+                : (row.commandType.equals('contact.revise.v1') |
+                      row.commandType.equals('contact.resolve.v1'))),
+      )
+      ..limit(1);
+    return await query.getSingleOrNull() != null;
   }
 
   Future<void> _applyRemoteContactAttempt(_RemoteContactAttempt attempt) async {

@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -114,7 +117,193 @@ void main() {
     );
     expect(summary.contactSessionCount, 0);
   });
+
+  testWidgets('跨设备冲突显示差异并可手动组合为追加 revision', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final database = LocalDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final clock = _FixedClock(DateTime.utc(2030, 1, 10, 18));
+    final journal = ContactJournal(
+      database: database,
+      clock: clock,
+      idGenerator: _SequenceIdGenerator([
+        'contact-1',
+        'revision-1',
+        'command-1',
+        'revision-server-2',
+        'command-conflict',
+        'revision-resolution-3',
+        'command-resolution',
+      ]),
+    );
+    await journal.submitAnonymousContact(
+      AnonymousContactSubmission(
+        appUserId: _context.appUserId,
+        workspaceId: _context.workspace.id,
+        projectId: _context.project.id,
+        questionnaireVersionId: _context.questionnaireVersion.id,
+        deviceId: 'device-1',
+        occurredAtUtc: DateTime.utc(2030, 1, 9, 17),
+        occurredTimeZone: 'America/Chicago',
+        channel: ContactChannel.videoCall,
+        location: const NotApplicableContactLocation(),
+        reachCount: 1,
+        interestLevel: 2,
+      ),
+    );
+    await journal.correctContact(
+      ContactCorrectionSubmission(
+        contactId: 'contact-1',
+        appUserId: _context.appUserId,
+        workspaceId: _context.workspace.id,
+        projectId: _context.project.id,
+        deviceId: 'device-other',
+        baseRevision: 1,
+        reason: '另一台设备修正人数',
+        occurredAtUtc: DateTime.utc(2030, 1, 9, 17),
+        occurredTimeZone: 'America/Chicago',
+        channel: ContactChannel.videoCall,
+        location: const NotApplicableContactLocation(),
+        reachCount: 4,
+        interestLevel: 2,
+      ),
+    );
+    await (database.update(database.dbSyncOutbox)
+          ..where((row) => row.commandId.equals('command-conflict')))
+        .write(const DbSyncOutboxCompanion(status: Value('needs_resolution')));
+    await database
+        .into(database.dbContactRevisionConflicts)
+        .insert(
+          DbContactRevisionConflictsCompanion.insert(
+            conflictId: 'conflict-1',
+            commandId: 'command-conflict',
+            contactId: 'contact-1',
+            appUserId: _context.appUserId,
+            workspaceId: _context.workspace.id,
+            projectId: _context.project.id,
+            baseRevision: 1,
+            currentRevision: 2,
+            conflictingFieldsJson: jsonEncode(['reachCount', 'answers']),
+            questionnaireVersionId: _context.questionnaireVersion.id,
+            currentRevisionKind: 'corrected',
+            currentRevisedAtUtc: clock.now(),
+            currentReason: '另一台设备修正人数',
+            currentSnapshotJson: jsonEncode(
+              _snapshot(reachCount: 4, answerValue: true),
+            ),
+            proposedSnapshotJson: jsonEncode(
+              _snapshot(reachCount: 3, answerValue: false),
+            ),
+            createdAtUtc: clock.now(),
+          ),
+        );
+    final controller = AppController(
+      database: database,
+      clock: clock,
+      idGenerator: _SequenceIdGenerator(const []),
+    );
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ContactRevisionScreen(
+          controller: controller,
+          context: _context,
+          contactId: 'contact-1',
+          contactJournal: journal,
+          deviceId: 'device-1',
+          locationCapture: const _NoLocationCapture(),
+          timeZoneProvider: const _TimeZoneProvider(),
+          regionResolver: const _NoopRegionResolver(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('contact-conflict-conflict-1')), findsOne);
+    expect(find.textContaining('触达人数'), findsWidgets);
+    expect(find.textContaining('服务器：4'), findsOne);
+    expect(find.textContaining('本机：3'), findsOne);
+    expect(find.textContaining('follow_up: 是'), findsOne);
+    expect(find.textContaining('follow_up: 否'), findsOne);
+    expect(
+      find.byKey(const ValueKey('use-current-conflict-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('merge-conflict-conflict-1')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('merge-conflict-conflict-1')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('conflict-answer-source')),
+      findsOneWidget,
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('contact-correction-reason')),
+      '组合两边修改',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('contact-correction-reach')),
+      '5',
+    );
+    await tester.tap(find.byKey(const ValueKey('use-proposed-answers')));
+    await tester.tap(find.byKey(const ValueKey('confirm-contact-correction')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('正在等待同步'), findsOneWidget);
+    expect(find.byKey(const ValueKey('use-proposed-conflict-1')), findsNothing);
+    expect(find.byKey(const ValueKey('correct-contact')), findsNothing);
+    expect(find.byKey(const ValueKey('void-contact')), findsNothing);
+    expect(find.textContaining('触达人数：5'), findsWidgets);
+    expect(find.byKey(const ValueKey('contact-revision-3')), findsOneWidget);
+    final resolved = await journal.contactByIdForOwner(
+      contactId: 'contact-1',
+      appUserId: _context.appUserId,
+    );
+    final resolvedAnswer =
+        resolved!.answers.single as BooleanQuestionnaireAnswer;
+    expect(resolvedAnswer.value, isFalse);
+    final resolution = await (database.select(
+      database.dbSyncOutbox,
+    )..where((row) => row.commandId.equals('command-resolution'))).getSingle();
+    expect(resolution.commandType, 'contact.resolve.v1');
+  });
 }
+
+Map<String, Object?> _snapshot({required int reachCount, bool? answerValue}) =>
+    {
+      'occurredAtUtc': '2030-01-09T17:00:00.000Z',
+      'occurredTimeZone': 'America/Chicago',
+      'channel': 'video_call',
+      'channelDetail': null,
+      'location': {
+        'kind': 'not_applicable',
+        'placeName': null,
+        'smallestRegionId': null,
+        'regionTreeVersion': null,
+        'latitude': null,
+        'longitude': null,
+        'accuracyMeters': null,
+      },
+      'reachCount': reachCount,
+      'interestLevel': 2,
+      'answers': answerValue == null
+          ? <Object?>[]
+          : <Object?>[
+              {
+                'questionId': 'follow_up',
+                'state': 'answered',
+                'type': 'boolean',
+                'value': answerValue,
+              },
+            ],
+    };
 
 const _context = TrustedSessionContext(
   appUserId: 'app-user-1',

@@ -1,3 +1,5 @@
+import '../features/contact_journal/contact_models.dart';
+
 /// 当前 bearer token 被授权处理的同步范围。
 final class SyncScope {
   const SyncScope({
@@ -45,9 +47,39 @@ final class SyncPushAccepted extends SyncPushResult {
 }
 
 final class SyncPushConflict extends SyncPushResult {
-  const SyncPushConflict({this.failureCode = 'conflict'});
+  const SyncPushConflict({this.failureCode = 'conflict', this.conflict});
 
   final String failureCode;
+  final SyncContactRevisionConflict? conflict;
+}
+
+/// Backend 已按可信身份和当前项目裁剪的冲突详情。
+final class SyncContactRevisionConflict {
+  const SyncContactRevisionConflict({
+    required this.conflictId,
+    required this.contactId,
+    required this.baseRevision,
+    required this.currentRevision,
+    required this.conflictingFields,
+    required this.questionnaireVersionId,
+    required this.currentRevisionKind,
+    required this.currentRevisedAtUtc,
+    required this.currentReason,
+    required this.currentSnapshot,
+    required this.proposedSnapshot,
+  });
+
+  final String conflictId;
+  final String contactId;
+  final int baseRevision;
+  final int currentRevision;
+  final List<String> conflictingFields;
+  final String questionnaireVersionId;
+  final ContactRevisionKind currentRevisionKind;
+  final DateTime currentRevisedAtUtc;
+  final String currentReason;
+  final ContactConflictSnapshot currentSnapshot;
+  final ContactConflictSnapshot proposedSnapshot;
 }
 
 final class SyncPushPermanentFailure extends SyncPushResult {

@@ -20,7 +20,7 @@ HTTP 层的 context、command 和 pull 端点共用 [`bearerToken`](../../backen
 
 ## Outbox 为什么和接触在同一 transaction
 
-`ContactJournal.submitDraft` 在同一 SQLite transaction 内写入接触、revision、答案和 `contact.submit.v1` command。更正和作废分别写入 `contact.revise.v1` 与 `contact.void.v1`。`recordContactAttempt` 同样原子写入尝试和 `contact.attempt.submit.v1` command。如果只写本机事实，随后 App 崩溃，同步引擎就不知道它需要上传。如果只写 command，本机又会出现无事实可显示的幽灵命令。
+`ContactJournal.submitDraft` 在同一 SQLite transaction 内写入接触、revision、答案和 `contact.submit.v1` command。更正和作废分别写入 `contact.revise.v1` 与 `contact.void.v1`。冲突解决会追加 revision，并写入 `contact.resolve.v1`。`recordContactAttempt` 同样原子写入尝试和 `contact.attempt.submit.v1` command。如果只写本机事实，随后 App 崩溃，同步引擎就不知道它需要上传。如果只写 command，本机又会出现无事实可显示的幽灵命令。
 
 Outbox 保存稳定 command ID、设备 ID、aggregate ID、基础 revision、payload、尝试次数和失败状态。它不保存 access token。token 每次发送前从 `IdentitySession` 取得。
 
@@ -103,9 +103,21 @@ Backend 接受 command 后返回 change feed cursor。这个回执只能证明�
 
 每条命令先核对可信用户、个人空间、活动项目、接触归属和 `base_revision`。更正随后追加完整 snapshot 和答案，更新当前投影，并写入 change feed、审计事件和 warehouse Outbox。作废复制当前完整 snapshot 和答案，追加作废 revision，再把当前投影标为 `voided`。任何一步失败时，整个 transaction 回滚。
 
-同一 `(app_user_id, command_id)` 重放返回原 cursor。新的 command 如果仍使用旧 base revision，则返回 `contact_revision_conflict`。其他用户即使知道 contact ID，也只得到稳定的 `contact_forbidden`，不能通过错误差异探测归属。
+同一 `(app_user_id, command_id)` 重放返回原 cursor。新的 command 使用旧 base revision 时，`0010_contact_revision_conflicts.sql` 执行三路比较，不把所有过期命令都当成冲突。其他用户即使知道 contact ID，也只得到稳定的 `contact_forbidden`，不能通过错误差异探测归属。
 
 更正发生时间后，SQLite 和 PostgreSQL 的个人指标都使用新的当前投影重新归期。作废后，两端都因 `lifecycle_status = 'active'` 条件排除该记录。revision 历史、审计事件和 warehouse 作废事件仍保留。
+
+## 跨设备更正如何合并
+
+三路比较同时查看基础 revision、服务器当前 revision 和本机建议快照。它把事实分成发生时间、渠道、地点、触达人数、单次兴趣和问卷答案六组。如果两台设备修改的组没有重叠，服务器把本机改动合并到当前快照，再追加一条 `corrected` revision。
+
+如果两边修改了同一事实组，服务器保存基础、当前和本机建议快照，并返回 `contact_revision_conflict`。Backend 只能按已验证的用户、空间和项目读取这一份对比。普通 runtime role 不能直接读冲突表，同步健康与日志也不包含快照。
+
+本机在发出更正前已经乐观地追加了 revision。收到冲突时，`SyncEngine` 先把这份本机建议保存到冲突表，再恢复服务器的精确当前 revision 和投影。这个顺序很重要：如果保留了两条编号相同但内容不同的 revision，后续 pull 会把它判定为无效远端变化。
+
+自动合并也要解决编号碰撞。例如，本机乐观保存 revision 2 后，服务器可能已经把另一台设备的更正保存为 revision 2，再把合并结果保存为 revision 3。只有当本机 revise、void 或 resolve command 已经得到 ACK，且 base 紧邻撞号 revision 时，`SyncEngine` 才用服务器历史替换该乐观 revision。未确认的本机修改仍会阻止 pull 并回滚整个 batch。
+
+接触详情页只显示两边不同的事实组。本人可以采用服务器版本、采用本机修改，或手动编辑合并结果。问卷回答冲突时，手动合并也会明确选择服务器或本机的回答组。三种选择都会在本机原子地追加新 revision、完成原冲突 command，并写入新的 `contact.resolve.v1`。服务器接受后保留冲突记录并标记已解决；重放同一解决 command 不会重复追加 revision。本机在冲突待处理或解决 command 待同步期间不提供普通更正和作废入口，也在领域接口拒绝这两类写入。
 
 ## change feed 如何拉取
 
@@ -147,9 +159,9 @@ Flutter 的 [`HttpContactRegionResolver`](../../lib/regions/contact_region_resol
 
 ## 为什么这样测试
 
-Flutter 测试使用真实内存 SQLite 和可控 Transport。它们覆盖 ACK、指数退避、jitter 上限、双 worker 租约、过期恢复、迟到 ACK、aggregate 顺序、永久失败隔离、批量部分成功、乱序结果、远端 batch 原子性、cursor 区分和同 ID 内容冲突。HTTP Adapter 测试固定 bearer header、路径、query、JSON、`Retry-After` 和错误分类。
+Flutter 测试使用真实内存 SQLite 和可控 Transport。它们覆盖 ACK、指数退避、jitter 上限、双 worker 租约、过期恢复、迟到 ACK、aggregate 顺序、永久失败隔离、批量部分成功、乱序结果、远端 batch 原子性、cursor 区分、同 ID 内容冲突，以及冲突快照恢复与解决 ACK。HTTP Adapter 测试固定 bearer header、路径、query、JSON、`Retry-After`、完整冲突对比和错误分类。
 
-Backend 测试使用 synthetic 身份和上下文。它们证明伪造项目在 Store 调用前被拒绝，固定 protocol v1 兼容 fixture，并验证批量单条失败。它们还证明 PostgreSQL 的无效 cursor 不会被误报成临时服务故障。PostgreSQL 16 验证从空库执行全部 migration，再次执行核对 checksum，运行 runtime 权限、接触修订、区域循环、草稿冲突、跨用户隔离和共用指标 fixture，最后执行 `pg_dump` 与 `pg_restore` 并重跑检查。
+Backend 测试使用 synthetic 身份和上下文。它们证明伪造项目在 Store 调用前被拒绝，固定 protocol v1 兼容 fixture，并验证批量单条失败。它们还证明 PostgreSQL 的无效 cursor 不会被误报成临时服务故障。PostgreSQL 16 验证从空库执行全部 migration，再次执行核对 checksum，运行 runtime 权限、接触修订、自动合并、同字段冲突、解决重放、区域循环、草稿冲突、跨用户隔离和共用指标 fixture，最后执行 `pg_dump` 与 `pg_restore` 并重跑检查。
 
 这些测试分别回答不同问题。单元测试证明状态机，HTTP 测试证明协议转换，真实 PostgreSQL 证明 SQL 语法、权限、transaction 和恢复路径。某一类通过不能替代另一类。
 
@@ -157,4 +169,4 @@ Backend 测试使用 synthetic 身份和上下文。它们证明伪造项目在 
 
 [`ProductionHomeViewModel`](../../lib/features/home/production_home_view_model.dart) 接收 App 启动、回到前台、提交或放弃草稿等意图。它调用内部的 [`ForegroundSyncCoordinator`](../../lib/sync/foreground_sync_coordinator.dart)，再刷新同一可信上下文的首页快照。Widget 不创建 worker，也不直接调用 `ContactJournal` 或 `SyncEngine`。
 
-同步运行中的重复信号会合并为一次串行补跑，不并发启动第二个 drainer，也不会漏掉运行中刚产生的 command。ViewModel 负责同步后的数据刷新和失败隔离；`ForegroundSyncCoordinator` 负责每轮批量上传、拉取和批次数上限。项目切换会创建使用新 scope 的 ViewModel。后台调度、两台设备并发更正的冲突合并页和运维监控属于后续切片。
+同步运行中的重复信号会合并为一次串行补跑，不并发启动第二个 drainer，也不会漏掉运行中刚产生的 command。ViewModel 负责同步后的数据刷新和失败隔离；`ForegroundSyncCoordinator` 负责每轮批量上传、拉取和批次数上限。项目切换会创建使用新 scope 的 ViewModel。后台调度和运维监控属于后续切片。
