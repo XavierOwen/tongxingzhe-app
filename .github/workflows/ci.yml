@@ -52,13 +52,13 @@ jobs:
       - name: Verify Markdown links
         run: dart run tool/check_markdown_links.dart
 
-      - name: Verify Drift v5 schema snapshot
+      - name: Verify current Drift v9 schema snapshot
         run: |
           dart run drift_dev schema dump \
             lib/data/local_database.dart \
-            "${RUNNER_TEMP}/drift_schema_v5.json"
-          cmp drift_schemas/drift_schema_v5.json \
-            "${RUNNER_TEMP}/drift_schema_v5.json"
+            "${RUNNER_TEMP}/drift_schema_v9.json"
+          cmp drift_schemas/drift_schema_v9.json \
+            "${RUNNER_TEMP}/drift_schema_v9.json"
 
       - name: Verify Drift migration helpers are current
         run: |
@@ -106,6 +106,30 @@ jobs:
             --file backend/database/checks/verify_bootstrap.sql
           psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file backend/database/fixtures/0001_runtime_probe.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_identity_context.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0002_identity_context.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_contact_sync.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0003_contact_sync.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_personal_project_contexts.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0004_personal_project_contexts.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_regions_and_private_drafts.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0005_regions_and_private_drafts.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_personal_contact_metrics.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0006_personal_contact_metrics.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_region_resolution.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0007_canonical_region_resolution.sql
 
       - name: Reject edited migration history
         run: |
@@ -131,6 +155,53 @@ jobs:
             "${RUNNER_TEMP}/tongxingzhe.dump"
           psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file backend/database/checks/verify_bootstrap.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_identity_context.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0002_identity_context.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_contact_sync.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0003_contact_sync.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_personal_project_contexts.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0004_personal_project_contexts.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_regions_and_private_drafts.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0005_regions_and_private_drafts.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_personal_contact_metrics.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0006_personal_contact_metrics.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_region_resolution.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0007_canonical_region_resolution.sql
+
+  backend-server:
+    name: Backend identity, context, and sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/server/package-lock.json
+
+      - name: Install Backend dependencies
+        run: npm --prefix backend/server ci
+
+      - name: Check and test Backend
+        run: |
+          npm --prefix backend/server run check
+          npm --prefix backend/server test
 
   platform-build:
     name: Build ${{ matrix.target }}

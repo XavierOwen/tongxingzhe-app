@@ -8,12 +8,16 @@
 
 1. [第 1 章：先让正式代码安全、可替换、可验证](01-safety-foundations.md)
 2. [第 2 章：用测试和证据安全地修改代码](02-testing-and-change-workflow.md)
+3. [第 3 章：匿名接触如何在 SQLite 中原子保存和统计](03-contact-journal-and-local-sql.md)
+4. [第 4 章：登录身份如何成为可信的当前项目上下文](04-identity-and-current-context.md)
+5. [第 5 章：正式接触闭环如何连接 Flutter 与 SQL](05-formal-contact-loop.md)
+6. [第 6 章：持久同步与 Backend SQL 如何保护接触事实](06-persistent-sync-and-backend-sql.md)
 
 当前认证验证状态见 [Supabase Auth 六平台 Spike](../spikes/supabase-auth-six-platform.md)。它会明确区分 package 声明、build 通过和真实设备流程通过。
 
 数据库、离线、同步、界面和认证的整体证据见 [六平台能力证据矩阵](../spikes/six-platform-capability-matrix.md)。
 
-后续切片会依次加入：领域与数据模型、接触记录、离线同步、认证与权限、推广对象、问卷、个人计划、统计与隐私、六平台能力、发布与恢复演练。
+后续章节会依次加入：推广对象、问卷、个人计划、管理统计与隐私、六平台能力、发布与恢复演练。
 
 ## 文档与代码如何保持一致
 

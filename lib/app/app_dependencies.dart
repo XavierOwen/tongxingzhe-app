@@ -1,9 +1,20 @@
+import '../app_session/app_session.dart';
+import '../app_session/http_session_context_gateway.dart';
+import '../app_session/session_context_gateway.dart';
 import '../data/local_database.dart';
 import '../data/local_database_factory.dart';
+import '../device/device_identity_store.dart';
+import '../device/device_time_zone.dart';
+import '../features/contact_journal/contact_journal.dart';
 import '../foundation/runtime_values.dart';
 import '../identity/identity_session.dart';
 import '../identity/supabase/supabase_identity_session.dart';
 import '../platform/platform_capabilities.dart';
+import '../regions/contact_region_resolver.dart';
+import '../services/location_service.dart';
+import '../sync/http_sync_transport.dart';
+import '../sync/sync_engine_factory.dart';
+import '../sync/sync_transport.dart';
 import 'app_controller.dart';
 import 'legacy_demo_access.dart';
 
@@ -17,7 +28,12 @@ final class AppDependencies {
     required this.clock,
     required this.idGenerator,
     required this.identitySessionFactory,
+    required this.sessionContextGateway,
     required this.platformCapabilitiesProvider,
+    this.timeZoneProvider = const FlutterDeviceTimeZoneProvider(),
+    this.locationCapture = const LocationService(),
+    this.syncTransportBuilder,
+    this.regionResolverBuilder,
     this.legacyDemoAccess,
   });
 
@@ -27,7 +43,10 @@ final class AppDependencies {
       clock: const SystemClock(),
       idGenerator: SecureIdGenerator(),
       identitySessionFactory: productionIdentitySessionFactory(),
+      sessionContextGateway: productionSessionContextGateway(),
       platformCapabilitiesProvider: const FlutterPlatformCapabilitiesProvider(),
+      syncTransportBuilder: productionSyncTransport,
+      regionResolverBuilder: productionContactRegionResolver,
     );
   }
 
@@ -35,7 +54,13 @@ final class AppDependencies {
   final AppClock clock;
   final IdGenerator idGenerator;
   final IdentitySessionFactory identitySessionFactory;
+  final SessionContextGateway sessionContextGateway;
   final PlatformCapabilitiesProvider platformCapabilitiesProvider;
+  final DeviceTimeZoneProvider timeZoneProvider;
+  final ContactLocationCapture locationCapture;
+  final SyncTransport? Function(IdentitySession)? syncTransportBuilder;
+  final ContactRegionResolver Function(IdentitySession, LocalDatabase)?
+  regionResolverBuilder;
 
   /// 临时兼容 legacy demo；正式 composition root 永远不提供此 Adapter。
   final LegacyDemoAccess? legacyDemoAccess;
@@ -43,9 +68,13 @@ final class AppDependencies {
   Future<AppStartupResult> start() async {
     LocalDatabase? database;
     IdentitySession? identitySession;
+    AppSession? appSession;
+    SyncEngineFactory? syncEngineFactory;
+    ContactRegionResolver? regionResolver;
     try {
       identitySession = await identitySessionFactory.open();
     } catch (error, stackTrace) {
+      await sessionContextGateway.close();
       return AppStartupFailed(
         AppStartupFailure(
           code: error is SupabaseConfigurationException
@@ -62,6 +91,7 @@ final class AppDependencies {
       platformCapabilities = await platformCapabilitiesProvider.load();
     } catch (error, stackTrace) {
       await identitySession.close();
+      await sessionContextGateway.close();
       return AppStartupFailed(
         AppStartupFailure(
           code: 'platform_capability_detection_failed',
@@ -79,15 +109,56 @@ final class AppDependencies {
         idGenerator: idGenerator,
         legacyDemoAccess: legacyDemoAccess,
       );
+      final contactJournal = ContactJournal(
+        database: database,
+        clock: clock,
+        idGenerator: idGenerator,
+      );
       await controller.load();
+      final deviceId = await DeviceIdentityStore(
+        database,
+        idGenerator,
+      ).loadOrCreate();
+      final syncTransport = syncTransportBuilder?.call(identitySession);
+      if (syncTransport != null) {
+        syncEngineFactory = SyncEngineFactory(
+          database: database,
+          clock: clock,
+          idGenerator: idGenerator,
+          transport: syncTransport,
+          jitter: SecureSyncJitter(),
+        );
+      }
+      regionResolver =
+          regionResolverBuilder?.call(identitySession, database) ??
+          const DeferredContactRegionResolver();
+      appSession = AppSession(
+        identitySession: identitySession,
+        contextGateway: sessionContextGateway,
+      );
+      await appSession.start();
       return AppStartupReady(
         controller: controller,
+        clock: clock,
+        contactJournal: contactJournal,
+        deviceId: deviceId,
+        syncEngineFactory: syncEngineFactory,
         identitySession: identitySession,
+        appSession: appSession,
         platformCapabilities: platformCapabilities,
         platformPolicy: PlatformPolicy.from(platformCapabilities),
+        locationCapture: locationCapture,
+        timeZoneProvider: timeZoneProvider,
+        regionResolver: regionResolver,
       );
     } catch (error, stackTrace) {
       await database?.close();
+      await syncEngineFactory?.close();
+      await regionResolver?.close();
+      await appSession?.close();
+      if (appSession == null) {
+        await sessionContextGateway.close();
+      }
       await identitySession.close();
       return AppStartupFailed(
         AppStartupFailure(
@@ -107,15 +178,31 @@ sealed class AppStartupResult {
 final class AppStartupReady extends AppStartupResult {
   const AppStartupReady({
     required this.controller,
+    required this.clock,
+    required this.contactJournal,
+    required this.deviceId,
+    required this.syncEngineFactory,
     required this.identitySession,
+    required this.appSession,
     required this.platformCapabilities,
     required this.platformPolicy,
+    required this.locationCapture,
+    required this.timeZoneProvider,
+    required this.regionResolver,
   });
 
   final AppController controller;
+  final AppClock clock;
+  final ContactJournal contactJournal;
+  final String deviceId;
+  final SyncEngineFactory? syncEngineFactory;
   final IdentitySession identitySession;
+  final AppSession appSession;
   final PlatformCapabilities platformCapabilities;
   final PlatformPolicy platformPolicy;
+  final ContactLocationCapture locationCapture;
+  final DeviceTimeZoneProvider timeZoneProvider;
+  final ContactRegionResolver regionResolver;
 }
 
 final class AppStartupFailed extends AppStartupResult {

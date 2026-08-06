@@ -1,0 +1,508 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+
+import '../../app/app_controller.dart';
+import '../../app_session/session_context_gateway.dart';
+import '../../device/device_time_zone.dart';
+import '../../foundation/runtime_values.dart';
+import '../../l10n/app_strings.dart';
+import '../../regions/contact_region_resolver.dart';
+import '../../services/location_service.dart';
+import '../contact_journal/contact_journal.dart';
+import '../contact_journal/contact_models.dart';
+import 'contact_entry_view_model.dart';
+
+/// 正式接触表单的首个渐进式切片。
+///
+/// Widget 只提交当前表单快照。草稿 ID、transaction 和创建时固定的归属由
+/// [ContactJournal] 处理。
+final class ContactEntryScreen extends StatefulWidget {
+  const ContactEntryScreen({
+    super.key,
+    required this.controller,
+    required this.clock,
+    required this.context,
+    required this.contactJournal,
+    required this.deviceId,
+    required this.locationCapture,
+    required this.timeZoneProvider,
+    this.initialDraft,
+    this.entryStore,
+    this.regionResolver = const DeferredContactRegionResolver(),
+  });
+
+  final AppController controller;
+  final AppClock clock;
+  final TrustedSessionContext context;
+  final ContactJournal contactJournal;
+  final String deviceId;
+  final ContactLocationCapture locationCapture;
+  final DeviceTimeZoneProvider timeZoneProvider;
+  final ContactDraft? initialDraft;
+  final ContactEntryStore? entryStore;
+  final ContactRegionResolver regionResolver;
+
+  @override
+  State<ContactEntryScreen> createState() => _ContactEntryScreenState();
+}
+
+final class _ContactEntryScreenState extends State<ContactEntryScreen>
+    with WidgetsBindingObserver {
+  late final TextEditingController _reachController;
+  late final TextEditingController _channelDetailController;
+  late final ContactEntryViewModel _viewModel;
+  var _allowPop = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _reachController = TextEditingController(
+      text: widget.initialDraft?.reachCount?.toString() ?? '',
+    );
+    _channelDetailController = TextEditingController(
+      text: widget.initialDraft?.channelDetail ?? '',
+    );
+    _viewModel = ContactEntryViewModel(
+      clock: widget.clock,
+      timeZoneProvider: widget.timeZoneProvider,
+      context: widget.context,
+      deviceId: widget.deviceId,
+      store:
+          widget.entryStore ?? ContactJournalEntryStore(widget.contactJournal),
+      locationCapture: widget.locationCapture,
+      regionResolver: widget.regionResolver,
+    )..addListener(_onViewStateChanged);
+    unawaited(_viewModel.initialize(draft: widget.initialDraft));
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _viewModel
+      ..removeListener(_onViewStateChanged)
+      ..dispose();
+    _reachController.dispose();
+    _channelDetailController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      unawaited(_viewModel.flushDraft());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = AppStrings(widget.controller.localeCode);
+    final entryState = _viewModel.state;
+    if (!entryState.isReady) {
+      return Scaffold(
+        appBar: AppBar(title: Text(text.t('recordContact'))),
+        body: Center(
+          child: entryState.initializationFailure == null
+              ? const CircularProgressIndicator()
+              : Text(text.t(entryState.initializationFailure!)),
+        ),
+      );
+    }
+    return PopScope<bool>(
+      canPop: _allowPop || !entryState.hasUnsavedChanges,
+      onPopInvokedWithResult: _onPopInvoked,
+      child: Scaffold(
+        appBar: AppBar(title: Text(text.t('recordContact'))),
+        body: ListView(
+          // 固定提交栏会覆盖 Scaffold 底部区域；额外留白让最后一个输入控件
+          // 可以完整滚到提交栏上方，在小屏幕和键盘弹出时仍可操作。
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+          children: [
+            _ContextCard(context: widget.context, text: text),
+            const SizedBox(height: 16),
+            if (entryState.isConflictCopy)
+              _ConflictDraftCard(text: text)
+            else
+              SegmentedButton<ContactDraftSyncMode>(
+                key: const ValueKey('draft-sync-mode'),
+                segments: [
+                  ButtonSegment(
+                    value: ContactDraftSyncMode.accountPrivate,
+                    icon: const Icon(Icons.devices_outlined),
+                    label: Text(text.t('draftSyncAccountPrivate')),
+                  ),
+                  ButtonSegment(
+                    value: ContactDraftSyncMode.deviceOnly,
+                    icon: const Icon(Icons.phone_iphone_outlined),
+                    label: Text(text.t('draftSyncDeviceOnly')),
+                  ),
+                ],
+                selected: {entryState.syncMode},
+                onSelectionChanged: (selection) {
+                  _viewModel.setSyncMode(selection.single);
+                },
+              ),
+            const SizedBox(height: 6),
+            Text(
+              entryState.isConflictCopy
+                  ? text.t('draftConflictHelp')
+                  : entryState.syncMode == ContactDraftSyncMode.accountPrivate
+                  ? text.t('draftSyncAccountPrivateHelp')
+                  : text.t('draftSyncDeviceOnlyHelp'),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              text.t('coreContactFacts'),
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 6),
+            Text(text.t('chooseContactChannel')),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final channel in ContactChannel.values)
+                  ChoiceChip(
+                    label: Text(contactChannelLabel(text, channel)),
+                    selected: entryState.channel == channel,
+                    onSelected: (_) => _viewModel.setChannel(channel),
+                  ),
+              ],
+            ),
+            if (entryState.channel == ContactChannel.otherDirect) ...[
+              const SizedBox(height: 16),
+              TextField(
+                key: const ValueKey('contact-channel-detail'),
+                controller: _channelDetailController,
+                decoration: InputDecoration(
+                  labelText: text.t('otherChannelDetail'),
+                  helperText: text.t('otherChannelDetailHelp'),
+                  prefixIcon: const Icon(Icons.edit_outlined),
+                ),
+                onChanged: _viewModel.setChannelDetail,
+              ),
+            ],
+            const SizedBox(height: 16),
+            _FactRow(
+              icon: Icons.schedule_outlined,
+              label: text.t('occurredAt'),
+              value: entryState.occurredAtUtc!.toIso8601String(),
+              trailing: IconButton(
+                key: const ValueKey('edit-occurred-at'),
+                tooltip: text.t('editOccurredAt'),
+                onPressed: _editOccurredAt,
+                icon: const Icon(Icons.edit_calendar_outlined),
+              ),
+            ),
+            const SizedBox(height: 8),
+            _FactRow(
+              icon: Icons.public_outlined,
+              label: text.t('occurredTimeZone'),
+              value: entryState.occurredTimeZone!,
+            ),
+            const SizedBox(height: 8),
+            _FactRow(
+              icon: Icons.place_outlined,
+              label: text.t('location'),
+              value: _locationLabel(text, entryState.location),
+            ),
+            if (entryState.channel == ContactChannel.faceToFace ||
+                entryState.channel == ContactChannel.mixed) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: entryState.isCapturingLocation
+                      ? null
+                      : _captureLocation,
+                  icon: entryState.isCapturingLocation
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.my_location_outlined),
+                  label: Text(
+                    entryState.isCapturingLocation
+                        ? text.t('gettingLocation')
+                        : text.t('captureContactLocation'),
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            TextField(
+              key: const ValueKey('contact-reach-count'),
+              controller: _reachController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: text.t('reachCount'),
+                helperText: text.t('reachCountHelp'),
+                prefixIcon: const Icon(Icons.groups_outlined),
+              ),
+              onChanged: _viewModel.setReachCountText,
+            ),
+            const SizedBox(height: 16),
+            Text(text.t('singleContactInterest')),
+            const SizedBox(height: 8),
+            SegmentedButton<int>(
+              segments: [
+                for (var level = 0; level <= 4; level++)
+                  ButtonSegment(value: level, label: Text('$level')),
+              ],
+              selected: entryState.interestLevel == null
+                  ? const <int>{}
+                  : {entryState.interestLevel!},
+              emptySelectionAllowed: true,
+              onSelectionChanged: (selection) {
+                if (selection.isNotEmpty) {
+                  _viewModel.setInterestLevel(selection.single);
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '${entryState.completedCoreFactCount} / '
+              '${entryState.requiredCoreFactCount}',
+              textAlign: TextAlign.end,
+            ),
+          ],
+        ),
+        bottomNavigationBar: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: Row(
+              children: [
+                Icon(_saveIcon(entryState.saveState), size: 18),
+                const SizedBox(width: 8),
+                Expanded(child: Text(_saveLabel(text, entryState.saveState))),
+                if (entryState.saveState == ContactDraftSaveState.failed)
+                  IconButton(
+                    key: const ValueKey('retry-draft-save'),
+                    tooltip: text.t('retry'),
+                    onPressed: () => unawaited(_viewModel.retrySave()),
+                    icon: const Icon(Icons.refresh_outlined),
+                  ),
+                FilledButton(
+                  onPressed: entryState.canSubmit ? _submit : null,
+                  child: entryState.isSubmitting
+                      ? const SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(text.t('submitContact')),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  IconData _saveIcon(ContactDraftSaveState state) => switch (state) {
+    ContactDraftSaveState.untouched => Icons.edit_outlined,
+    ContactDraftSaveState.waiting ||
+    ContactDraftSaveState.saving => Icons.sync_outlined,
+    ContactDraftSaveState.saved => Icons.cloud_done_outlined,
+    ContactDraftSaveState.failed => Icons.error_outline,
+  };
+
+  String _saveLabel(AppStrings text, ContactDraftSaveState state) {
+    return switch (state) {
+      ContactDraftSaveState.untouched => text.t('draftStartsAfterInput'),
+      ContactDraftSaveState.waiting ||
+      ContactDraftSaveState.saving => text.t('saving'),
+      ContactDraftSaveState.saved => text.t('saved'),
+      ContactDraftSaveState.failed => text.t('draftSaveFailed'),
+    };
+  }
+
+  void _onViewStateChanged() {
+    if (mounted) {
+      final detail = _viewModel.state.channelDetail;
+      if (_channelDetailController.text != detail) {
+        _channelDetailController.value = TextEditingValue(
+          text: detail,
+          selection: TextSelection.collapsed(offset: detail.length),
+        );
+      }
+      setState(() {});
+    }
+  }
+
+  Future<void> _editOccurredAt() async {
+    final currentLocal = _viewModel.state.occurredAtUtc!.toLocal();
+    final selectedDate = await showDatePicker(
+      context: context,
+      initialDate: currentLocal,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+    );
+    if (selectedDate == null || !mounted) {
+      return;
+    }
+    final selectedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(currentLocal),
+    );
+    if (selectedTime == null || !mounted) {
+      return;
+    }
+    _viewModel.setOccurredAtLocal(
+      DateTime(
+        selectedDate.year,
+        selectedDate.month,
+        selectedDate.day,
+        selectedTime.hour,
+        selectedTime.minute,
+      ),
+    );
+  }
+
+  Future<void> _captureLocation() async {
+    final failureCode = await _viewModel.captureLocation();
+    if (!mounted) {
+      return;
+    }
+    if (failureCode != null) {
+      final text = AppStrings(widget.controller.localeCode);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(text.t(failureCode))));
+    }
+  }
+
+  String _locationLabel(AppStrings text, ContactLocation? location) {
+    return switch (location) {
+      NotApplicableContactLocation() => text.t('locationNotApplicable'),
+      final PendingContactLocation pending =>
+        '${pending.latitude.toStringAsFixed(6)}, '
+            '${pending.longitude.toStringAsFixed(6)}'
+            '${pending.accuracyMeters == null ? '' : '\n${text.t('locationAccuracy')} ${pending.accuracyMeters!.toStringAsFixed(1)} m'}'
+            '\n${text.t('locationPendingResolution')}',
+      final ResolvedContactLocation resolved => resolved.placeName,
+      null => text.t('locationRequired'),
+    };
+  }
+
+  Future<void> _onPopInvoked(bool didPop, bool? result) async {
+    if (didPop || _allowPop) {
+      return;
+    }
+    final canLeave = await _viewModel.canLeaveAfterSave();
+    if (!mounted || !canLeave) {
+      return;
+    }
+    setState(() => _allowPop = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        Navigator.of(context).pop(result);
+      }
+    });
+  }
+
+  Future<void> _submit() async {
+    final submitted = await _viewModel.submit();
+    if (!mounted) {
+      return;
+    }
+    if (submitted) {
+      Navigator.of(context).pop(true);
+      return;
+    }
+    final text = AppStrings(widget.controller.localeCode);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(text.t('contactSubmissionFailed'))));
+  }
+}
+
+final class _ConflictDraftCard extends StatelessWidget {
+  const _ConflictDraftCard({required this.text});
+
+  final AppStrings text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: Theme.of(context).colorScheme.errorContainer,
+      child: ListTile(
+        leading: const Icon(Icons.call_split_outlined),
+        title: Text(text.t('draftConflictCopy')),
+      ),
+    );
+  }
+}
+
+final class _ContextCard extends StatelessWidget {
+  const _ContextCard({required this.context, required this.text});
+
+  final TrustedSessionContext context;
+  final AppStrings text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${this.context.workspace.name} → ${this.context.project.name}',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${text.t('questionnaireVersion')} '
+              '${this.context.questionnaireVersion.versionNumber}',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+final class _FactRow extends StatelessWidget {
+  const _FactRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.trailing,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 20),
+        const SizedBox(width: 8),
+        Expanded(child: Text('$label：$value')),
+        ?trailing,
+      ],
+    );
+  }
+}
+
+String contactChannelLabel(AppStrings text, ContactChannel channel) {
+  return switch (channel) {
+    ContactChannel.faceToFace => text.t('channel.faceToFace'),
+    ContactChannel.voiceCall => text.t('channel.voiceCall'),
+    ContactChannel.videoCall => text.t('channel.videoCall'),
+    ContactChannel.instantText => text.t('channel.instantText'),
+    ContactChannel.asynchronousMessage => text.t('channel.asynchronousMessage'),
+    ContactChannel.mixed => text.t('channel.mixed'),
+    ContactChannel.otherDirect => text.t('channel.otherDirect'),
+  };
+}

@@ -237,7 +237,7 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `TARGET-014` | 关系阶段的固定语义为：`0` 初次建立、`1` 可以联络、`2` 持续互动、`3` 明确推进、`4` 达成项目定义的目标关系。 |
 | `TARGET-015` | 项目可为两套量表配置符合固定语义的显示名，但不得改变含义、顺序或方向；如界面显示 `0／2／4／6／8`，由 `stage * 2` 派生，不写入数据库。 |
 
-#### 5.6.1 个人—机构关系
+#### 5.6.1 个人与机构关系
 
 - 个人与机构在同一空间内是多对多，每条关系保留开始、结束和历史状态。
 - 一条关系必须且只能选择任职／代表、所有／治理、学习／参与、成员／归属、合作／服务或其他；“其他”必填角色说明。
@@ -454,7 +454,7 @@ typed_payload
 
 首批 command 是 `contact.submit.v1`、`contact.revise.v1` 和 `contact.void.v1`。同一 `app_user_id + command_id` 重放必须返回原结果，不重复写入、计数或发布 warehouse 事实。
 
-Outbox 采用 ADR-0098 的持久状态机。`ContactJournal` 在本地业务 transaction 中写入唯一 command；内部 `SyncEngine` 在 SQLite transaction 中领取并租赁待发送项，ACK 后再更新稳定结果和 cursor。关键运行合同如下：
+Outbox 采用 ADR-0098 的持久状态机。`ContactJournal` 在本地业务 transaction 中写入唯一 command；内部 `SyncEngine` 在 SQLite transaction 中领取并租赁待发送项，ACK 后更新稳定 command 结果。依 ADR-0100，pull cursor 只在整批远端变化本地落盘后推进。关键运行合同如下：
 
 | 合同 | 规则 |
 | --- | --- |
@@ -462,7 +462,7 @@ Outbox 采用 ADR-0098 的持久状态机。`ContactJournal` 在本地业务 tra
 | 顺序与并行 | 同一 aggregate 同时最多一条租约并按创建顺序发送；其他 aggregate 可以继续 |
 | 崩溃恢复 | 租约过期后可重新领取；Web 以持久租约保证单 drainer，tab 内存锁只作优化 |
 | 结果 | accepted／duplicate 完成，conflict 待解决，rejected／forbidden 永久失败，超时／429／5xx 退避重试 |
-| 确认与清理 | result 和 cursor 在本地 transaction 中持久化后才清理 completed；待解决项不自动清理 |
+| 确认与清理 | push result 与 command 状态原子确认；pull 事实与 cursor 原子确认；待解决项不自动清理 |
 | 健康状态 | 只返回数量、最旧等待时长、最后成功时间和稳定错误码，不暴露 payload、PII 或自由文本 |
 
 重试采用有上限的指数退避、jitter 和可信 `Retry-After`。服务端幂等仍是 ACK 丢失后重放的最终安全边界。
@@ -513,7 +513,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `MetricRepository` | 返回带版本、单位和口径的 `MetricResult` | SQL、去重、分母／排除、隐私抑制和数据截止 |
 | `ManualCatalog` | 目录、章节、版本、代码块和复制内容 | bundled Markdown、manifest、snippet 和在线／本地版本差异 |
 
-`SyncEngine` 是内部深模块，独占领取、租约、ACK、退避、cursor 和错误分类。页面只观察“仅本机／同步中／失败／冲突／已同步”及不含 payload 的健康状态，不需理解 HTTP 或 Outbox 表结构。
+`SyncEngine` 是内部深模块，独占领取、租约、ACK、退避、pull cursor 和错误分类。页面只观察“仅本机／同步中／失败／冲突／已同步”及不含 payload 的健康状态，不需理解 HTTP 或 Outbox 表结构。
 
 ### 8.3 七类固定测试接缝
 
@@ -612,7 +612,7 @@ Slice 0、1、2 完成后可以发放内部 Alpha，用于验证匿名接触闭�
 
 ### Slice 4：推广对象与隐私跟进
 
-交付：个人／机构对象、个人—机构历史关系、接触对象关联、对象×项目关系阶段、对象当次反应、后续联系同意、分配、共享备注、保留／匿名化，以及加密本地 PII 缓存。
+交付：个人／机构对象、个人与机构历史关系、接触对象关联、对象×项目关系阶段、对象当次反应、后续联系同意、分配、共享备注、保留／匿名化，以及加密本地 PII 缓存。
 
 先做七十二小时离线 PII 方案的 security spike，再决定各平台具体存储实现；CSV 导入、批量导出、疑似重复和可逆合并可在本切片后半段逐项开放。
 
@@ -696,14 +696,18 @@ Slice 0、1、2 完成后可以发放内部 Alpha，用于验证匿名接触闭�
 
 ## 16. 批准状态与 GitHub Issues 输出
 
-本文件 1.0 已于 2026-07-31 由用户整体确认；1.1 的 Outbox、早期闭环、平台证据、隐私查询面和 ADR 治理调整已于 2026-08-03 确认，状态为 `accepted`。后续实现以 GitHub 父 Issue、Slice 0 至 7 子票和独立发布门槛控制范围，不以口头理解取代 requirement ID、测试和 Definition of Done。
+本文件 1.0 已于 2026-07-31 由用户整体确认。1.1 的 Outbox、早期闭环、平台证据、隐私查询面和 ADR 治理调整已于 2026-08-03 确认，状态为 `accepted`。
 
-GitHub 实施地图为 [#1](https://github.com/XavierOwen/tongxingzhe-app/issues/1)；当前实施前沿是 [#2 Slice 0](https://github.com/XavierOwen/tongxingzhe-app/issues/2)。后续切片依次为 [#3](https://github.com/XavierOwen/tongxingzhe-app/issues/3)、[#4](https://github.com/XavierOwen/tongxingzhe-app/issues/4)、[#5](https://github.com/XavierOwen/tongxingzhe-app/issues/5)、[#6](https://github.com/XavierOwen/tongxingzhe-app/issues/6)、[#7](https://github.com/XavierOwen/tongxingzhe-app/issues/7)、[#8](https://github.com/XavierOwen/tongxingzhe-app/issues/8) 和 [#9](https://github.com/XavierOwen/tongxingzhe-app/issues/9)。Android、Windows、Linux 的认证与安全存储运行时证据由 [#11](https://github.com/XavierOwen/tongxingzhe-app/issues/11) 并行推进；它不阻塞 Slice 1 和 2，但阻塞首个公开版本。
+1.2 于 2026-08-05 依 ADR-0100 澄清 push 结果与 pull cursor 的不同事实。push 结果不推进 pull cursor。只有远端 batch 已在本地完整落盘才推进 pull cursor。
+
+后续实现以 GitHub 父 Issue、Slice 0 至 7 子票和独立发布门槛控制范围。不以口头理解取代 requirement ID、测试和 Definition of Done。
+
+GitHub 实施地图为 [#1](https://github.com/XavierOwen/tongxingzhe-app/issues/1)。[#2 Slice 0](https://github.com/XavierOwen/tongxingzhe-app/issues/2) 已完成，当前实施前沿是 [#3 Slice 1](https://github.com/XavierOwen/tongxingzhe-app/issues/3)。后续切片依次为 [#4](https://github.com/XavierOwen/tongxingzhe-app/issues/4)、[#5](https://github.com/XavierOwen/tongxingzhe-app/issues/5)、[#6](https://github.com/XavierOwen/tongxingzhe-app/issues/6)、[#7](https://github.com/XavierOwen/tongxingzhe-app/issues/7)、[#8](https://github.com/XavierOwen/tongxingzhe-app/issues/8) 和 [#9](https://github.com/XavierOwen/tongxingzhe-app/issues/9)。Android、Windows、Linux 的认证与安全存储运行时证据由 [#11](https://github.com/XavierOwen/tongxingzhe-app/issues/11) 并行推进；它不阻塞 Slice 1 和 2，但阻塞首个公开版本。
 
 批准后的执行规则：
 
 1. 创建一个带 `ready-for-agent` 标签的 GitHub 父 Issue，链接本 Spec、`CONTEXT.md` 和关键 ADR；
-2. 按 Slice 0–7 创建有依赖关系的子 Issue，每张票只包含可独立验收的垂直切片，并引用适用 requirement ID、测试和 Definition of Done；
+2. 按 Slice 0 至 7 创建有依赖关系的子 Issue，每张票只包含可独立验收的垂直切片，并引用适用 requirement ID、测试和 Definition of Done；
 3. 先实施 Slice 0，不在同一 PR 中顺带重写未进入当前票的整个 App；
 4. 后续需求变更先判断应更新领域词汇、ADR、Spec、指标定义还是实现票，再同步修改测试、代码和说明书。
 

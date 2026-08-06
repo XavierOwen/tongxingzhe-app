@@ -8,6 +8,7 @@ import 'package:tongxingzhe_app/legacy_demo/legacy_demo_dependencies.dart';
 
 import '../support/fake_identity_session.dart';
 import '../support/fake_platform_capabilities.dart';
+import '../support/fake_session_context_gateway.dart';
 
 void main() {
   test('正式启动不会创建 legacy 演示账号或记录', () async {
@@ -17,13 +18,17 @@ void main() {
       clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
       idGenerator: _SequenceIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
+      sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
     );
 
     final startup = await dependencies.start();
 
     expect(startup, isA<AppStartupReady>());
-    final controller = (startup as AppStartupReady).controller;
+    final ready = startup as AppStartupReady;
+    final controller = ready.controller;
+    addTearDown(ready.identitySession.close);
+    addTearDown(ready.appSession.close);
     addTearDown(controller.dispose);
     expect(controller.users, isEmpty);
     expect(controller.records, isEmpty);
@@ -40,6 +45,7 @@ void main() {
       clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
       idGenerator: _SequenceIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
     );
 
@@ -59,6 +65,7 @@ void main() {
       clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
       idGenerator: _SequenceIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: FakePlatformCapabilitiesProvider(
         failure: StateError('synthetic capability failure'),
       ),
@@ -85,7 +92,10 @@ void main() {
     final startup = await dependencies.start();
 
     expect(startup, isA<AppStartupReady>());
-    final controller = (startup as AppStartupReady).controller;
+    final ready = startup as AppStartupReady;
+    final controller = ready.controller;
+    addTearDown(ready.identitySession.close);
+    addTearDown(ready.appSession.close);
     addTearDown(controller.dispose);
     expect(controller.users, hasLength(5));
     expect(controller.records, hasLength(30));

@@ -16,7 +16,16 @@ class LocationSnapshot {
   bool get hasPosition => latitude != null && longitude != null;
 }
 
-class LocationService {
+/// 表单依赖的位置端口。测试可提供确定性坐标，不触发系统权限弹窗。
+abstract interface class ContactLocationCapture {
+  Future<LocationSnapshot> captureCurrentPosition();
+}
+
+/// 通过 Geolocator 请求正式设备的当前位置。
+final class LocationService implements ContactLocationCapture {
+  const LocationService();
+
+  @override
   Future<LocationSnapshot> captureCurrentPosition() async {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();

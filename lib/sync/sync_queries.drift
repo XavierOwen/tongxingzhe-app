@@ -1,0 +1,96 @@
+import '../features/contact_journal/contact_tables.dart';
+import 'sync_tables.dart';
+
+-- 只领取当前可信用户和项目的命令。NOT EXISTS 保证同一 aggregate 的较早
+-- 未完成命令先处理；其他 aggregate 不受一条失败命令阻塞。
+readReadySyncCommand(
+  REQUIRED :app_user_id AS TEXT,
+  REQUIRED :workspace_id AS TEXT,
+  REQUIRED :project_id AS TEXT,
+  REQUIRED :now_utc AS DATETIME
+):
+SELECT outbox.*
+FROM db_sync_outbox AS outbox
+LEFT JOIN db_contact_records AS contact
+  ON contact.contact_id = outbox.aggregate_id
+WHERE COALESCE(outbox.app_user_id, contact.app_user_id) = :app_user_id
+  AND COALESCE(outbox.workspace_id, contact.workspace_id) = :workspace_id
+  AND COALESCE(outbox.project_id, contact.project_id) = :project_id
+  AND outbox.status = 'pending'
+  AND outbox.next_attempt_at_utc <= :now_utc
+  AND NOT EXISTS (
+    SELECT 1
+    FROM db_sync_outbox AS earlier
+    WHERE earlier.aggregate_id = outbox.aggregate_id
+      AND earlier.status != 'completed'
+      AND (
+        earlier.created_at_utc < outbox.created_at_utc
+        OR (
+          earlier.created_at_utc = outbox.created_at_utc
+          AND earlier.command_id < outbox.command_id
+        )
+      )
+  )
+ORDER BY outbox.created_at_utc, outbox.command_id
+LIMIT 1;
+
+-- 页面只读取数量和时间，不读取 command payload。
+-- 从远端拉取的接触没有本机 Outbox，它们已经是“已同步”，
+-- 因此必须从接触左连接 Outbox，不能只统计 Outbox 行。
+readSyncHealth(
+  REQUIRED :app_user_id AS TEXT,
+  REQUIRED :workspace_id AS TEXT,
+  REQUIRED :project_id AS TEXT
+):
+WITH contact_sync AS (
+  SELECT
+    contact.contact_id,
+    CASE
+      WHEN COUNT(outbox.command_id) = 0 THEN 'completed'
+      WHEN SUM(CASE WHEN outbox.status = 'permanent_failure'
+        THEN 1 ELSE 0 END) > 0 THEN 'permanent_failure'
+      WHEN SUM(CASE WHEN outbox.status = 'needs_resolution'
+        THEN 1 ELSE 0 END) > 0 THEN 'needs_resolution'
+      WHEN SUM(CASE WHEN outbox.status = 'leased'
+        THEN 1 ELSE 0 END) > 0 THEN 'syncing'
+      WHEN SUM(CASE WHEN outbox.status = 'pending'
+        AND outbox.attempt_count > 0 THEN 1 ELSE 0 END) > 0 THEN 'retrying'
+      WHEN SUM(CASE WHEN outbox.status = 'pending'
+        AND outbox.attempt_count = 0 THEN 1 ELSE 0 END) > 0
+        THEN 'only_on_device'
+      ELSE 'completed'
+    END AS contact_status,
+    MIN(CASE
+      WHEN outbox.status IS NOT NULL AND outbox.status != 'completed'
+        THEN outbox.created_at_utc
+      ELSE NULL
+    END) AS oldest_pending_at_utc
+  FROM db_contact_records AS contact
+  LEFT JOIN db_sync_outbox AS outbox
+    ON outbox.aggregate_id = contact.contact_id
+  WHERE contact.app_user_id = :app_user_id
+    AND contact.workspace_id = :workspace_id
+    AND contact.project_id = :project_id
+  GROUP BY contact.contact_id
+)
+SELECT
+  COALESCE(SUM(CASE
+    WHEN contact_status = 'only_on_device' THEN 1
+    ELSE 0 END), 0) AS only_on_device_count,
+  COALESCE(SUM(CASE
+    WHEN contact_status = 'syncing' THEN 1 ELSE 0 END), 0)
+    AS syncing_count,
+  COALESCE(SUM(CASE
+    WHEN contact_status = 'retrying' THEN 1
+    ELSE 0 END), 0) AS retrying_count,
+  COALESCE(SUM(CASE
+    WHEN contact_status = 'needs_resolution' THEN 1 ELSE 0 END), 0)
+    AS needs_resolution_count,
+  COALESCE(SUM(CASE
+    WHEN contact_status = 'permanent_failure' THEN 1 ELSE 0 END), 0)
+    AS permanent_failure_count,
+  COALESCE(SUM(CASE
+    WHEN contact_status = 'completed' THEN 1 ELSE 0 END), 0)
+    AS completed_count,
+  MIN(oldest_pending_at_utc) AS oldest_pending_at_utc
+FROM contact_sync;

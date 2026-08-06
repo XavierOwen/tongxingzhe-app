@@ -24,7 +24,7 @@ ADR-0022 已决定先在本地事务中写入业务事实和 Outbox，再通过 
 
 领取必须在 SQLite transaction 中完成。过期租约可重新领取，以恢复 App、进程或浏览器标签崩溃。同一 `aggregate_id` 同时最多租出一条 command，并按创建顺序发送；其他 aggregate 不被一个冲突或失败阻塞。Web 也以持久租约保证同一时刻只有一个 drainer；内存锁或 tab 协调只能作为减少竞争的优化，不能作为正确性边界。
 
-服务端结果按稳定合同转换：`accepted`／`duplicate` 进入 `completed`；`conflict` 进入 `needs_resolution`；`rejected`／`forbidden` 进入 `permanent_failure`；传输超时、`429` 和 `5xx` 回到 `pending`。可重试失败使用有上限的指数退避和 jitter，并遵守可信的 `Retry-After`。服务端响应与本地状态、错误码和 cursor 更新必须在本地 transaction 中确认；只有 result 和 cursor 均已持久化后，才可清理已完成记录。`needs_resolution` 不自动清理。
+服务端结果按稳定合同转换：`accepted`／`duplicate` 进入 `completed`；`conflict` 进入 `needs_resolution`；`rejected`／`forbidden` 进入 `permanent_failure`；传输超时、`429` 和 `5xx` 回到 `pending`。可重试失败使用有上限的指数退避和 jitter，并遵守可信的 `Retry-After`。服务端 push 结果与本地 command 状态、错误码必须在本地 transaction 中确认。pull 事实与 pull cursor 必须在另一个本地 transaction 中确认。push ACK cursor 不得直接推进 pull cursor；原因和失败场景见 ADR-0100。`needs_resolution` 不自动清理。
 
 同步健康只暴露 `pending_count`、`retrying_count`、`needs_resolution_count`、`oldest_pending_age`、`last_success_at` 和稳定 failure code，不暴露 payload、PII 或自由文本。Slice 1 必须提供最小健康状态和过期租约恢复；Slice 2 再加入冲突处理、部分批次失败和完整错误分类。
 

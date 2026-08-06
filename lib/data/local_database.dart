@@ -1,6 +1,10 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
+import '../features/contact_journal/contact_tables.dart';
+import '../regions/region_tables.dart';
+import '../sync/sync_tables.dart';
+
 part 'local_database.g.dart';
 
 class DbUsers extends Table {
@@ -99,12 +103,27 @@ class DbSecurityEvents extends Table {
 }
 
 @DriftDatabase(
+  include: {
+    'package:tongxingzhe_app/features/contact_journal/contact_queries.drift',
+    'package:tongxingzhe_app/sync/sync_queries.drift',
+  },
   tables: [
     DbUsers,
     DbConversationRecords,
     DbRecordContacts,
     DbAppSettings,
     DbSecurityEvents,
+    DbContactRecords,
+    DbContactRevisions,
+    DbContactAnswers,
+    DbSyncOutbox,
+    DbContactDrafts,
+    DbContactDraftAnswers,
+    DbSyncDrainerLeases,
+    DbSyncScopes,
+    DbCanonicalRegionVersions,
+    DbContactRegionAssignments,
+    DbDraftRegionAssignments,
   ],
 )
 class LocalDatabase extends _$LocalDatabase {
@@ -122,11 +141,16 @@ class LocalDatabase extends _$LocalDatabase {
       );
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (migrator) => migrator.createAll(),
+    beforeOpen: (details) async {
+      // SQLite 默认不会在每个连接上强制外键；显式开启后，revision 不可能
+      // 指向不存在的接触。该设置同样作用于正式库和内存测试库。
+      await customStatement('PRAGMA foreign_keys = ON');
+    },
     onUpgrade: (migrator, from, to) async {
       // v2 adds the relationship/progress stage for the person being recorded.
       // Existing local demo records are treated as level 1 ("new contact").
@@ -198,6 +222,94 @@ class LocalDatabase extends _$LocalDatabase {
           }
         }
       }
+      if (from < 6) {
+        // v6 采用 expand-contract：保留五张 legacy 表为只读兼容证据，新增
+        // 现代接触表。旧字段不能可靠推导空间、项目、问卷或匿名接触事实，
+        // 因而这里不猜测、不回填、不删除。
+        await migrator.createTable(dbContactRecords);
+        await migrator.createTable(dbContactRevisions);
+        await migrator.createTable(dbContactAnswers);
+        await migrator.createTable(dbSyncOutbox);
+        await migrator.createIndex(contactRecordsPersonalPeriod);
+        await migrator.createIndex(syncOutboxReady);
+        await migrator.createIndex(syncOutboxAggregateOrder);
+      }
+      if (from < 7) {
+        // v7 新增私有多草稿。草稿是尚未提交的填写状态，不从 legacy 宽表
+        // 或已提交接触反推，因而升级只建新表和创建者列表索引。
+        await migrator.createTable(dbContactDrafts);
+        await migrator.createTable(dbContactDraftAnswers);
+        await migrator.createIndex(contactDraftsOwnerUpdated);
+      }
+      if (from < 8) {
+        // v8 把同步执行租约和按用户项目保存的 server cursor 分开。
+        // 旧 Outbox 行保持原样；首次运行 SyncEngine 时再领取它们。
+        await migrator.createTable(dbSyncDrainerLeases);
+        await migrator.createTable(dbSyncScopes);
+      }
+      if (from < 9) {
+        // v9 的新列同时参与 CHECK 约束，SQLite `ADD COLUMN` 不会更新旧表
+        // 约束。因此这里重建四张表并复制旧数据。跨多版升级时，v6/v7
+        // 可能已按当前定义创建新列；动态 newColumns 避免随后重复加列。
+        final contactRecordColumns = await _missingColumns(
+          dbContactRecords.actualTableName,
+          [dbContactRecords.regionTreeVersion],
+        );
+        await migrator.alterTable(
+          TableMigration(dbContactRecords, newColumns: contactRecordColumns),
+        );
+        final contactRevisionColumns = await _missingColumns(
+          dbContactRevisions.actualTableName,
+          [dbContactRevisions.regionTreeVersion],
+        );
+        await migrator.alterTable(
+          TableMigration(
+            dbContactRevisions,
+            newColumns: contactRevisionColumns,
+          ),
+        );
+        final draftColumns =
+            await _missingColumns(dbContactDrafts.actualTableName, [
+              dbContactDrafts.regionTreeVersion,
+              dbContactDrafts.localRevision,
+              dbContactDrafts.serverRevision,
+              dbContactDrafts.conflictOfDraftId,
+            ]);
+        await migrator.alterTable(
+          TableMigration(dbContactDrafts, newColumns: draftColumns),
+        );
+        final outboxColumns = await _missingColumns(
+          dbSyncOutbox.actualTableName,
+          [
+            dbSyncOutbox.appUserId,
+            dbSyncOutbox.workspaceId,
+            dbSyncOutbox.projectId,
+          ],
+        );
+        await migrator.alterTable(
+          TableMigration(dbSyncOutbox, newColumns: outboxColumns),
+        );
+
+        // 旧接触没有可证明的区域版本，因此不猜测、不自动分配。
+        await migrator.createTable(dbCanonicalRegionVersions);
+        await migrator.createTable(dbContactRegionAssignments);
+        await migrator.createTable(dbDraftRegionAssignments);
+      }
     },
   );
+
+  Future<List<GeneratedColumn<Object>>> _missingColumns(
+    String tableName,
+    List<GeneratedColumn<Object>> candidates,
+  ) async {
+    final rows = await customSelect(
+      'SELECT name FROM pragma_table_info(?)',
+      variables: [Variable<String>(tableName)],
+    ).get();
+    final existing = {for (final row in rows) row.read<String>('name')};
+    return [
+      for (final column in candidates)
+        if (!existing.contains(column.$name)) column,
+    ];
+  }
 }

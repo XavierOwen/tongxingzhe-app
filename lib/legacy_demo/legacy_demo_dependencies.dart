@@ -1,4 +1,5 @@
 import '../app/app_dependencies.dart';
+import '../app_session/session_context_gateway.dart';
 import '../data/local_database_factory.dart';
 import '../foundation/runtime_values.dart';
 import '../identity/identity_session.dart';
@@ -20,6 +21,7 @@ abstract final class LegacyDemoDependencies {
       clock: clock,
       idGenerator: idGenerator ?? SecureIdGenerator(),
       identitySessionFactory: const UnavailableIdentitySessionFactory(),
+      sessionContextGateway: const UnavailableSessionContextGateway(),
       platformCapabilitiesProvider: const FlutterPlatformCapabilitiesProvider(),
       legacyDemoAccess: Md5LegacyDemoAccess(),
     );
