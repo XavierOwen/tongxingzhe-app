@@ -8,6 +8,7 @@ import { PostgresRegionResolutionStore } from "./region-resolution.js";
 import { PostgresQuestionnaireStore } from "./questionnaire-catalog.js";
 import { PostgresQuestionnaireAdministrationStore } from "./questionnaire-administration.js";
 import { PostgresQuestionnaireMetricCompatibilityStore } from "./questionnaire-metric-compatibility.js";
+import { PostgresPromotionTargetStore } from "./promotion-targets.js";
 
 const databaseUrl = requireEnvironment("DATABASE_URL");
 const authIssuer = requireEnvironment("AUTH_ISSUER");
@@ -42,6 +43,9 @@ const questionnaireMetricCompatibilityStore =
   new PostgresQuestionnaireMetricCompatibilityStore(
     async (text, values) => pool.query(text, [...values]),
   );
+const promotionTargetStore = new PostgresPromotionTargetStore(
+  async (text, values) => pool.query(text, [...values]),
+);
 const server = createBackendServer({
   identityVerifier,
   contextStore,
@@ -50,6 +54,7 @@ const server = createBackendServer({
   questionnaireStore,
   questionnaireAdministrationStore,
   questionnaireMetricCompatibilityStore,
+  promotionTargetStore,
 });
 
 server.listen(port, "0.0.0.0");

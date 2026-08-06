@@ -34,6 +34,11 @@ import {
   revokeQuestionnaireMetricCompatibility,
   type QuestionnaireMetricCompatibilityStore,
 } from "./questionnaire-metric-compatibility.js";
+import {
+  createPromotionTarget,
+  listAssignedPromotionTargets,
+  type PromotionTargetStore,
+} from "./promotion-targets.js";
 
 export interface BackendServerDependencies
   extends SessionContextHttpDependencies {
@@ -43,6 +48,7 @@ export interface BackendServerDependencies
   readonly questionnaireAdministrationStore?: QuestionnaireAdministrationStore;
   readonly questionnaireMetricCompatibilityStore?:
     QuestionnaireMetricCompatibilityStore;
+  readonly promotionTargetStore?: PromotionTargetStore;
 }
 
 export function createBackendServer(
@@ -189,6 +195,45 @@ export function createBackendServer(
             },
           }),
         );
+      }
+      return;
+    }
+
+    if (
+      requestUrl.pathname === "/v1/promotion-targets" &&
+      (request.method === "GET" || request.method === "POST")
+    ) {
+      if (dependencies.promotionTargetStore === undefined) {
+        response.statusCode = 503;
+        response.end(JSON.stringify({
+          error: {code: "promotion_targets_unavailable"},
+        }));
+        return;
+      }
+      const targetDependencies = {
+        identityVerifier: dependencies.identityVerifier,
+        contextStore: dependencies.contextStore,
+        targetStore: dependencies.promotionTargetStore,
+      };
+      if (request.method === "GET") {
+        const result = await listAssignedPromotionTargets(
+          request.headers.authorization,
+          targetDependencies,
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+        return;
+      }
+      try {
+        const result = await createPromotionTarget(
+          request.headers.authorization,
+          await readJsonBody(request),
+          targetDependencies,
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
       }
       return;
     }

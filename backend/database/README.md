@@ -77,6 +77,10 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/checks/verify_questionnaire_metric_compatibility.sql
 psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/fixtures/0015_questionnaire_metric_compatibility.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_promotion_target_directory.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0016_promotion_target_directory.sql
 ./tool/verify_questionnaire_publish_concurrency.sh
 ./tool/verify_questionnaire_metric_concurrency.sh
 ```
@@ -119,5 +123,7 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 `0014_questionnaire_draft_upgrades.sql` 给私有草稿保存升级来源，要求新旧草稿属于同一用户、空间和项目，并绑定不同问卷版本。来源草稿可以作废，新草稿及审计来源保持不变。
 
 `0015_questionnaire_metric_compatibility.sql` 保存稳定问卷指标、当前版本成员和追加式兼容审计。确认前生成问题定义和样本影响快照；撤销追加事件并删除当前候选成员。runtime role 只能调用受控函数，不能直接读写指标表。
+
+`0016_promotion_target_directory.sql` 保存 workspace 级个人或机构对象、当前跟进分配和不重复 PII 的幂等与访问审计。建立函数在同一事务中产生对象 UUID、初始分配和审计；列表函数只返回当前分配对象。runtime role 不能直接读写资料或审计表。
 
 普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。两个 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，分别并发发布问卷，以及确认和撤销同一兼容关系。检查脚本只使用 synthetic 个人空间，并要求显式 `DATABASE_URL`。
