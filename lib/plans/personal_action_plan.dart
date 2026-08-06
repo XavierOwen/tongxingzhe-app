@@ -80,9 +80,15 @@ sealed class PersonalActionPlanResult<T> {
 }
 
 final class PersonalActionPlanSuccess<T> extends PersonalActionPlanResult<T> {
-  const PersonalActionPlanSuccess(this.value);
+  const PersonalActionPlanSuccess(
+    this.value, {
+    this.fromOfflineCache = false,
+    this.cachedAtUtc,
+  }) : assert(fromOfflineCache == (cachedAtUtc != null));
 
   final T value;
+  final bool fromOfflineCache;
+  final DateTime? cachedAtUtc;
 }
 
 final class PersonalActionPlanRejected<T> extends PersonalActionPlanResult<T> {

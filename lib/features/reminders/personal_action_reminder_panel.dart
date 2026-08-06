@@ -48,15 +48,12 @@ final class _PersonalActionReminderPanelState
   DeviceReminderPreference _preference =
       const DeviceReminderPreference.disabled();
   _ReminderPanelFailure? _failure;
+  DateTime? _cachedAtUtc;
+  var _fromOfflineCache = false;
   var _loading = true;
   var _saving = false;
 
-  String get _scheduleKey => [
-    widget.scope.deviceId,
-    widget.scope.appUserId,
-    widget.scope.workspaceId,
-    widget.scope.projectId,
-  ].join(':');
+  String get _scheduleKey => personalActionReminderScheduleKey(widget.scope);
 
   ReminderNotificationContent get _genericContent =>
       ReminderNotificationContent(
@@ -98,6 +95,8 @@ final class _PersonalActionReminderPanelState
       _reminder = null;
       _preference = const DeviceReminderPreference.disabled();
       _failure = null;
+      _cachedAtUtc = null;
+      _fromOfflineCache = false;
       _loading = true;
       unawaited(_load());
     }
@@ -127,7 +126,7 @@ final class _PersonalActionReminderPanelState
                 if (!_loading)
                   TextButton(
                     key: const ValueKey('edit-personal-reminder'),
-                    onPressed: _saving ? null : _pickTime,
+                    onPressed: _saving || _fromOfflineCache ? null : _pickTime,
                     child: Text(
                       text.t(
                         localTime == null
@@ -140,6 +139,13 @@ final class _PersonalActionReminderPanelState
             ),
             const SizedBox(height: 4),
             Text(text.t('personalReminderPrivateHelp')),
+            if (_fromOfflineCache) ...[
+              const SizedBox(height: 8),
+              Text(
+                _offlineCacheText(text, _cachedAtUtc!),
+                key: const ValueKey('personal-reminder-offline-cache'),
+              ),
+            ],
             const SizedBox(height: 12),
             if (_loading)
               const Center(child: CircularProgressIndicator())
@@ -192,7 +198,7 @@ final class _PersonalActionReminderPanelState
                   alignment: Alignment.centerLeft,
                   child: TextButton(
                     key: const ValueKey('clear-personal-reminder'),
-                    onPressed: _saving ? null : _clearTime,
+                    onPressed: _saving || _fromOfflineCache ? null : _clearTime,
                     child: Text(text.t('personalReminderClearTime')),
                   ),
                 ),
@@ -233,10 +239,14 @@ final class _PersonalActionReminderPanelState
       switch (result) {
         case PersonalActionReminderSuccess<PersonalActionReminder?>(
           :final value,
+          :final fromOfflineCache,
+          :final cachedAtUtc,
         ):
           setState(() {
             _reminder = value;
             _preference = preference;
+            _fromOfflineCache = fromOfflineCache;
+            _cachedAtUtc = cachedAtUtc;
             _loading = false;
           });
           if (preference.systemNotificationsEnabled) {
@@ -249,20 +259,20 @@ final class _PersonalActionReminderPanelState
         case PersonalActionReminderRejected<PersonalActionReminder?>():
           setState(() {
             _preference = preference;
+            _fromOfflineCache = false;
+            _cachedAtUtc = null;
             _loading = false;
             _failure = _ReminderPanelFailure.remoteUnavailable;
           });
-          if (preference.systemNotificationsEnabled) {
-            await _cancelScheduled(showFailure: false);
-          }
       }
     } on Object {
       if (!mounted) return;
       setState(() {
+        _fromOfflineCache = false;
+        _cachedAtUtc = null;
         _loading = false;
         _failure = _ReminderPanelFailure.remoteUnavailable;
       });
-      await _cancelScheduled(showFailure: false);
     }
   }
 
@@ -301,6 +311,8 @@ final class _PersonalActionReminderPanelState
       ):
         setState(() {
           _reminder = value.reminder;
+          _fromOfflineCache = false;
+          _cachedAtUtc = null;
           _saving = false;
         });
         if (_preference.systemNotificationsEnabled) {
@@ -611,11 +623,18 @@ final class _PersonalActionReminderPanelState
     final result = await widget.planGateway.load();
     return switch (result) {
       PersonalActionPlanRejected<PersonalActionPlanSnapshot?>() => null,
-      PersonalActionPlanSuccess<PersonalActionPlanSnapshot?>(:final value) =>
-        ReminderNotificationContent(
-          title: '${widget.text.t('appTitle')} · $projectName',
-          body: _detailedBody(value),
-        ),
+      PersonalActionPlanSuccess<PersonalActionPlanSnapshot?>(
+        :final value,
+        :final fromOfflineCache,
+      ) =>
+        fromOfflineCache &&
+                value != null &&
+                !DateTime.now().toUtc().isBefore(value.progress.cycleUntilUtc)
+            ? _genericContent
+            : ReminderNotificationContent(
+                title: '${widget.text.t('appTitle')} · $projectName',
+                body: _detailedBody(value),
+              ),
     };
   }
 
@@ -677,3 +696,7 @@ bool _sameScope(DeviceReminderScope left, DeviceReminderScope right) =>
     left.workspaceId == right.workspaceId &&
     left.projectId == right.projectId &&
     left.deviceId == right.deviceId;
+
+String _offlineCacheText(AppStrings text, DateTime cachedAtUtc) => text
+    .t('personalPlanningOfflineReadOnly')
+    .replaceAll('{time}', cachedAtUtc.toUtc().toIso8601String());

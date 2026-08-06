@@ -303,6 +303,7 @@ const Map<String, Map<String, String>> _strings = {
     'personalPlanEdit': '编辑私人周计划',
     'personalPlanEnableTarget': '启用每周接触场次目标',
     'personalPlanTarget': '本周计划',
+    'personalPlanPreviousTarget': '上一周期计划',
     'personalPlanRecorded': '已记录',
     'personalPlanRemaining': '还差',
     'personalPlanReached': '已达到计划',
@@ -316,6 +317,8 @@ const Map<String, Map<String, String>> _strings = {
     'personalPlanConflict': '计划已在另一台设备更新，请重新载入。',
     'personalPlanInvalid': '请检查目标数、IANA 时区和周期起始日。',
     'personalPlanUnavailable': '私人计划暂时无法载入。',
+    'personalPlanningOfflineReadOnly': '离线副本 · 上次同步 {time}。计划与提醒时间只读；联网后再修改。',
+    'personalPlanOfflinePreviousCycle': '这是上一周期的缓存，需要联网刷新后才能作为当前进度使用。',
     'personalReminderTitle': '每日行动提醒',
     'personalReminderPrivateHelp': '提醒时间在设备间同步；系统通知必须在每台设备单独开启。',
     'personalReminderNotSet': '本项目尚未设置每日提醒时间。',
@@ -1007,6 +1010,7 @@ const Map<String, Map<String, String>> _strings = {
     'personalPlanEdit': 'Edit private weekly plan',
     'personalPlanEnableTarget': 'Enable a weekly contact-session target',
     'personalPlanTarget': 'Planned',
+    'personalPlanPreviousTarget': 'Previous cycle plan',
     'personalPlanRecorded': 'Recorded',
     'personalPlanRemaining': 'Remaining',
     'personalPlanReached': 'Plan reached',
@@ -1026,6 +1030,10 @@ const Map<String, Map<String, String>> _strings = {
     'personalPlanInvalid':
         'Check the target, IANA time zone, and cycle start day.',
     'personalPlanUnavailable': 'Your private plan is temporarily unavailable.',
+    'personalPlanningOfflineReadOnly':
+        'Offline copy · last synced {time}. The plan and reminder time are read-only until you reconnect.',
+    'personalPlanOfflinePreviousCycle':
+        'This is a previous-cycle copy. Reconnect before treating it as current progress.',
     'personalReminderTitle': 'Daily action reminder',
     'personalReminderPrivateHelp':
         'The reminder time syncs across devices. System notifications must be enabled on each device.',

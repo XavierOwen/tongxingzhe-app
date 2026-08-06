@@ -62,6 +62,16 @@ void main() {
     expect(find.text('已有一项待生效修改；生效后才能再次修改。'), findsOneWidget);
     expect(find.byKey(const ValueKey('edit-personal-plan')), findsNothing);
   });
+
+  testWidgets('离线副本显示同步时间且计划保持只读', (tester) async {
+    final gateway = _FakeGateway(plan: _plan, fromOfflineCache: true);
+    await tester.pumpWidget(_app(gateway));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('离线副本'), findsOneWidget);
+    expect(find.textContaining('2030-03-09T20:00:00.000Z'), findsOneWidget);
+    expect(find.byKey(const ValueKey('edit-personal-plan')), findsNothing);
+  });
 }
 
 Widget _app(_FakeGateway gateway) => MaterialApp(
@@ -77,9 +87,10 @@ Widget _app(_FakeGateway gateway) => MaterialApp(
 );
 
 final class _FakeGateway implements PersonalActionPlanGateway {
-  _FakeGateway({this.plan});
+  _FakeGateway({this.plan, this.fromOfflineCache = false});
 
   PersonalActionPlanSnapshot? plan;
+  final bool fromOfflineCache;
   int? savedExpectedRevision;
   int? savedTarget;
   String? savedTimeZone;
@@ -87,7 +98,11 @@ final class _FakeGateway implements PersonalActionPlanGateway {
 
   @override
   Future<PersonalActionPlanResult<PersonalActionPlanSnapshot?>> load() async =>
-      PersonalActionPlanSuccess(plan);
+      PersonalActionPlanSuccess(
+        plan,
+        fromOfflineCache: fromOfflineCache,
+        cachedAtUtc: fromOfflineCache ? DateTime.utc(2030, 3, 9, 20) : null,
+      );
 
   @override
   Future<PersonalActionPlanResult<PersonalActionPlanMutation>> save({

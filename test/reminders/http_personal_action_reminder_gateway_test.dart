@@ -66,6 +66,22 @@ void main() {
     expect(result, isA<PersonalActionReminderSuccess>());
   });
 
+  test('403 明确归为授权失效，供上层清除离线缓存', () async {
+    final gateway = HttpPersonalActionReminderGateway(
+      baseUri: Uri.parse('https://backend.example.test'),
+      identitySession: _identity(),
+      client: MockClient((_) async => http.Response('', 403)),
+    );
+    addTearDown(gateway.close);
+
+    final result = await gateway.load();
+
+    expect(
+      (result as PersonalActionReminderRejected).code,
+      PersonalActionReminderFailureCode.unauthorized,
+    );
+  });
+
   test('非 UTC 更新时间和越界当地分钟失败关闭', () async {
     for (final invalid in [
       {..._reminder, 'local_minute_of_day': 1440},

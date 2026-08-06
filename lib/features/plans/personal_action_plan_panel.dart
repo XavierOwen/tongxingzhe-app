@@ -35,6 +35,8 @@ final class _PersonalActionPlanPanelState
     extends State<PersonalActionPlanPanel> {
   PersonalActionPlanSnapshot? _plan;
   PersonalActionPlanFailureCode? _failure;
+  DateTime? _cachedAtUtc;
+  var _fromOfflineCache = false;
   var _loading = true;
   var _saving = false;
 
@@ -51,6 +53,8 @@ final class _PersonalActionPlanPanelState
         oldWidget.gateway != widget.gateway) {
       _plan = null;
       _failure = null;
+      _cachedAtUtc = null;
+      _fromOfflineCache = false;
       _loading = true;
       unawaited(_load());
     }
@@ -76,7 +80,9 @@ final class _PersonalActionPlanPanelState
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
-                if (_plan != null && _plan!.pending == null)
+                if (_plan != null &&
+                    _plan!.pending == null &&
+                    !_fromOfflineCache)
                   TextButton(
                     key: const ValueKey('edit-personal-plan'),
                     onPressed: _saving ? null : _edit,
@@ -86,6 +92,18 @@ final class _PersonalActionPlanPanelState
             ),
             const SizedBox(height: 4),
             Text(text.t('personalPlanPrivateHelp')),
+            if (_fromOfflineCache) ...[
+              const SizedBox(height: 8),
+              Text(
+                _offlineCacheText(text, _cachedAtUtc!),
+                key: const ValueKey('personal-plan-offline-cache'),
+              ),
+              if (_plan != null &&
+                  !DateTime.now().toUtc().isBefore(
+                    _plan!.progress.cycleUntilUtc,
+                  ))
+                Text(text.t('personalPlanOfflinePreviousCycle')),
+            ],
             const SizedBox(height: 12),
             if (_loading)
               const Center(child: CircularProgressIndicator())
@@ -96,13 +114,17 @@ final class _PersonalActionPlanPanelState
                 alignment: Alignment.centerLeft,
                 child: FilledButton.icon(
                   key: const ValueKey('create-personal-plan'),
-                  onPressed: _saving ? null : _edit,
+                  onPressed: _saving || _fromOfflineCache ? null : _edit,
                   icon: const Icon(Icons.add_outlined),
                   label: Text(text.t('personalPlanCreate')),
                 ),
               )
             else
-              _PlanFacts(text: text, plan: _plan!),
+              _PlanFacts(
+                text: text,
+                plan: _plan!,
+                fromOfflineCache: _fromOfflineCache,
+              ),
             if (_saving) ...[
               const SizedBox(height: 12),
               const LinearProgressIndicator(),
@@ -127,18 +149,25 @@ final class _PersonalActionPlanPanelState
       switch (result) {
         case PersonalActionPlanSuccess<PersonalActionPlanSnapshot?>(
           :final value,
+          :final fromOfflineCache,
+          :final cachedAtUtc,
         ):
           _plan = value;
           _failure = null;
+          _fromOfflineCache = fromOfflineCache;
+          _cachedAtUtc = cachedAtUtc;
         case PersonalActionPlanRejected<PersonalActionPlanSnapshot?>(
           :final code,
         ):
           _failure = code;
+          _fromOfflineCache = false;
+          _cachedAtUtc = null;
       }
     });
   }
 
   Future<void> _edit() async {
+    if (_fromOfflineCache) return;
     final current = _plan?.current;
     late final String timeZone;
     try {
@@ -188,6 +217,8 @@ final class _PersonalActionPlanPanelState
         ):
           _plan = value.plan;
           _failure = null;
+          _fromOfflineCache = false;
+          _cachedAtUtc = null;
         case PersonalActionPlanRejected<PersonalActionPlanMutation>(
           :final code,
         ):
@@ -198,15 +229,23 @@ final class _PersonalActionPlanPanelState
 }
 
 final class _PlanFacts extends StatelessWidget {
-  const _PlanFacts({required this.text, required this.plan});
+  const _PlanFacts({
+    required this.text,
+    required this.plan,
+    required this.fromOfflineCache,
+  });
 
   final AppStrings text;
   final PersonalActionPlanSnapshot plan;
+  final bool fromOfflineCache;
 
   @override
   Widget build(BuildContext context) {
     final target = plan.current.weeklyContactTarget;
     final progress = plan.progress;
+    final previousCycle =
+        fromOfflineCache &&
+        !DateTime.now().toUtc().isBefore(progress.cycleUntilUtc);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -217,7 +256,14 @@ final class _PlanFacts extends StatelessWidget {
             spacing: 12,
             runSpacing: 12,
             children: [
-              _PlanFact(label: text.t('personalPlanTarget'), value: target),
+              _PlanFact(
+                label: text.t(
+                  previousCycle
+                      ? 'personalPlanPreviousTarget'
+                      : 'personalPlanTarget',
+                ),
+                value: target,
+              ),
               _PlanFact(
                 label: text.t('personalPlanRecorded'),
                 value: progress.recordedContactSessions,
@@ -446,3 +492,7 @@ final class _PlanDialogState extends State<_PlanDialog> {
 }
 
 String _weekDay(AppStrings text, int isoDay) => text.t('weekDay.$isoDay');
+
+String _offlineCacheText(AppStrings text, DateTime cachedAtUtc) => text
+    .t('personalPlanningOfflineReadOnly')
+    .replaceAll('{time}', cachedAtUtc.toUtc().toIso8601String());
