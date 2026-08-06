@@ -21,7 +21,7 @@ class DbQuestionnaireVersions extends Table {
   ];
 }
 
-/// 已发布版本中的问题；所有可执行规则都被排除在 3A 合同之外。
+/// 已发布版本中的问题；显示规则是已验证的受限声明合同，不执行代码。
 class DbQuestionnaireQuestions extends Table {
   TextColumn get questionnaireVersionId =>
       text().references(DbQuestionnaireVersions, #questionnaireVersionId)();
@@ -40,6 +40,7 @@ class DbQuestionnaireQuestions extends Table {
   RealColumn get minimum => real().nullable()();
   RealColumn get maximum => real().nullable()();
   IntColumn get maximumLength => integer().nullable()();
+  TextColumn get displayRuleJson => text().nullable()();
 
   @override
   Set<Column<Object>> get primaryKey => {questionnaireVersionId, questionId};
@@ -65,6 +66,9 @@ class DbQuestionnaireQuestions extends Table {
         'maximum_length > 0) OR '
         "(question_type NOT IN ('short_text', 'long_text') AND "
         'maximum_length IS NULL))',
+    'CHECK (display_rule_json IS NULL OR '
+        '(json_valid(display_rule_json) AND '
+        "json_type(display_rule_json) = 'object'))",
     'UNIQUE (questionnaire_version_id, position)',
   ];
 }

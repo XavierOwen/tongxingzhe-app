@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart';
 
 import '../data/local_database.dart';
@@ -44,13 +46,20 @@ enum QuestionnaireAnswerState {
 /// 回答状态与真实值始终分开。具体子类型使持久化层可以选择确定的值列，而
 /// 不必把所有答案压成无法约束的任意 JSON。
 sealed class QuestionnaireAnswer {
-  const QuestionnaireAnswer({required this.questionId, required this.state});
+  const QuestionnaireAnswer({
+    required this.questionId,
+    required this.state,
+    this.stateReason,
+  });
 
   final String questionId;
   final QuestionnaireAnswerState state;
+  final String? stateReason;
   QuestionnaireQuestionType get type;
   Object? get value;
 }
+
+const questionnaireRuleSkippedReason = 'rule_skipped';
 
 /// 从题目定义、回答状态和值建立对应的类型化答案。
 ///
@@ -481,6 +490,7 @@ final class _RawQuestionnaireAnswer extends QuestionnaireAnswer {
   const _RawQuestionnaireAnswer({
     required super.questionId,
     required super.state,
+    super.stateReason,
     required this.type,
     required this.value,
   });
@@ -489,6 +499,29 @@ final class _RawQuestionnaireAnswer extends QuestionnaireAnswer {
   final QuestionnaireQuestionType type;
   @override
   final Object? value;
+}
+
+/// 显示规则生成的系统答案；它不携带使用者先前填写的值。
+final class RuleSkippedQuestionnaireAnswer extends QuestionnaireAnswer {
+  const RuleSkippedQuestionnaireAnswer({
+    required super.questionId,
+    required this.type,
+  }) : super(
+         state: QuestionnaireAnswerState.notApplicable,
+         stateReason: questionnaireRuleSkippedReason,
+       );
+
+  @override
+  final QuestionnaireQuestionType type;
+  @override
+  Object? get value => null;
+
+  @override
+  bool operator ==(Object other) =>
+      other is RuleSkippedQuestionnaireAnswer && _sameAnswer(this, other);
+
+  @override
+  int get hashCode => Object.hash(questionId, state, stateReason, type);
 }
 
 enum QuestionnaireNumberKind {
@@ -515,6 +548,60 @@ final class QuestionnaireOption {
   final String label;
 }
 
+enum QuestionnaireVisibilityMatch {
+  all('all'),
+  any('any');
+
+  const QuestionnaireVisibilityMatch(this.storageValue);
+  final String storageValue;
+
+  static QuestionnaireVisibilityMatch fromStorage(String value) =>
+      values.singleWhere((match) => match.storageValue == value);
+}
+
+enum QuestionnaireVisibilityOperator {
+  equals('equals'),
+  notEquals('not_equals'),
+  inSet('in'),
+  contains('contains'),
+  notContains('not_contains'),
+  greaterThan('greater_than'),
+  greaterThanOrEqual('greater_than_or_equal'),
+  lessThan('less_than'),
+  lessThanOrEqual('less_than_or_equal'),
+  between('between'),
+  isAnswered('is_answered'),
+  isUnanswered('is_unanswered');
+
+  const QuestionnaireVisibilityOperator(this.storageValue);
+  final String storageValue;
+
+  static QuestionnaireVisibilityOperator fromStorage(String value) =>
+      values.singleWhere((operator) => operator.storageValue == value);
+}
+
+final class QuestionnaireVisibilityCondition {
+  const QuestionnaireVisibilityCondition({
+    required this.sourceQuestionId,
+    required this.operator,
+    this.operand,
+  });
+
+  final String sourceQuestionId;
+  final QuestionnaireVisibilityOperator operator;
+  final Object? operand;
+}
+
+final class QuestionnaireVisibilityRule {
+  QuestionnaireVisibilityRule({
+    required this.match,
+    required Iterable<QuestionnaireVisibilityCondition> conditions,
+  }) : conditions = List.unmodifiable(conditions);
+
+  final QuestionnaireVisibilityMatch match;
+  final List<QuestionnaireVisibilityCondition> conditions;
+}
+
 /// 一个不可变已发布问卷版本中的受控问题。
 final class QuestionnaireQuestion {
   QuestionnaireQuestion({
@@ -534,6 +621,7 @@ final class QuestionnaireQuestion {
     this.minimum,
     this.maximum,
     this.maximumLength,
+    this.displayRule,
   }) : options = List.unmodifiable(options);
 
   final String id;
@@ -552,6 +640,7 @@ final class QuestionnaireQuestion {
   final num? minimum;
   final num? maximum;
   final int? maximumLength;
+  final QuestionnaireVisibilityRule? displayRule;
 }
 
 final class QuestionnaireVersion {
@@ -577,11 +666,33 @@ final class QuestionnaireValidationError {
 }
 
 final class QuestionnaireEvaluation {
-  QuestionnaireEvaluation(Iterable<QuestionnaireValidationError> errors)
-    : errors = List.unmodifiable(errors);
+  QuestionnaireEvaluation(
+    Iterable<QuestionnaireValidationError> errors, {
+    Iterable<String> visibleQuestionIds = const [],
+    Iterable<String> ruleSkippedQuestionIds = const [],
+    Iterable<QuestionnaireAnswer> answers = const [],
+  }) : errors = List.unmodifiable(errors),
+       visibleQuestionIds = List.unmodifiable(visibleQuestionIds),
+       ruleSkippedQuestionIds = List.unmodifiable(ruleSkippedQuestionIds),
+       answers = List.unmodifiable(answers);
 
   final List<QuestionnaireValidationError> errors;
+  final List<String> visibleQuestionIds;
+  final List<String> ruleSkippedQuestionIds;
+  final List<QuestionnaireAnswer> answers;
   bool get isValid => errors.isEmpty;
+}
+
+final class QuestionnaireAnswerTransition {
+  QuestionnaireAnswerTransition({
+    required Iterable<QuestionnaireAnswer> answers,
+    required Iterable<QuestionnaireAnswer> answersToClear,
+  }) : answers = List.unmodifiable(answers),
+       answersToClear = List.unmodifiable(answersToClear);
+
+  final List<QuestionnaireAnswer> answers;
+  final List<QuestionnaireAnswer> answersToClear;
+  bool get requiresClearConfirmation => answersToClear.isNotEmpty;
 }
 
 abstract interface class QuestionnaireRemoteSource {
@@ -671,6 +782,15 @@ final class QuestionnaireCatalog {
                 minimum: Value(question.minimum?.toDouble()),
                 maximum: Value(question.maximum?.toDouble()),
                 maximumLength: Value(question.maximumLength),
+                displayRuleJson: Value(
+                  question.displayRule == null
+                      ? null
+                      : jsonEncode(
+                          QuestionnaireContract.displayRuleToJson(
+                            question.displayRule!,
+                          ),
+                        ),
+                ),
               ),
             );
         for (final option in question.options) {
@@ -712,7 +832,7 @@ final class QuestionnaireCatalog {
     final questionRows = await questionQuery.get();
     final optionRows = await optionQuery.get();
     questionRows.sort((left, right) => left.position.compareTo(right.position));
-    return QuestionnaireVersion(
+    final version = QuestionnaireVersion(
       id: row.questionnaireVersionId,
       projectId: row.projectId,
       versionNumber: row.versionNumber,
@@ -745,8 +865,16 @@ final class QuestionnaireCatalog {
             minimum: question.minimum,
             maximum: question.maximum,
             maximumLength: question.maximumLength,
+            displayRule: question.displayRuleJson == null
+                ? null
+                : QuestionnaireContract.parseDisplayRule(
+                    jsonDecode(question.displayRuleJson!),
+                  ),
           ),
       ],
+    );
+    return QuestionnaireContract.parseVersion(
+      QuestionnaireContract.versionToJson(version),
     );
   }
 
@@ -777,6 +905,41 @@ final class QuestionnaireCatalog {
         continue;
       }
       answersByQuestion[answer.questionId] = answer;
+    }
+
+    final visibleByQuestion = <String, bool>{};
+    for (final question in version.questions) {
+      visibleByQuestion[question.id] = _questionIsVisible(
+        question,
+        questions,
+        answersByQuestion,
+        visibleByQuestion,
+      );
+    }
+
+    for (final entry in answersByQuestion.entries) {
+      final answer = entry.value;
+      final question = questions[entry.key]!;
+      if (!visibleByQuestion[question.id]!) {
+        if (answer.type != question.type ||
+            answer.state != QuestionnaireAnswerState.notApplicable ||
+            answer.stateReason != questionnaireRuleSkippedReason ||
+            answer.value != null) {
+          errors.add(
+            QuestionnaireValidationError('hidden_answer_present', question.id),
+          );
+        }
+        continue;
+      }
+      if (answer.stateReason != null) {
+        errors.add(
+          QuestionnaireValidationError(
+            'answer_state_reason_invalid',
+            question.id,
+          ),
+        );
+        continue;
+      }
       if (answer.type != question.type) {
         errors.add(
           QuestionnaireValidationError('answer_type_mismatch', question.id),
@@ -819,14 +982,144 @@ final class QuestionnaireCatalog {
     }
 
     for (final question in version.questions) {
-      if (question.required && !answersByQuestion.containsKey(question.id)) {
+      if (visibleByQuestion[question.id]! &&
+          question.required &&
+          !answersByQuestion.containsKey(question.id)) {
         errors.add(
           QuestionnaireValidationError('required_answer_missing', question.id),
         );
       }
     }
-    return QuestionnaireEvaluation(errors);
+
+    return QuestionnaireEvaluation(
+      errors,
+      visibleQuestionIds: [
+        for (final question in version.questions)
+          if (visibleByQuestion[question.id]!) question.id,
+      ],
+      ruleSkippedQuestionIds: [
+        for (final question in version.questions)
+          if (!visibleByQuestion[question.id]!) question.id,
+      ],
+      answers: [
+        for (final question in version.questions)
+          if (!visibleByQuestion[question.id]!)
+            RuleSkippedQuestionnaireAnswer(
+              questionId: question.id,
+              type: question.type,
+            )
+          else if (answersByQuestion[question.id] case final answer?)
+            if (answer.stateReason != questionnaireRuleSkippedReason) answer,
+      ],
+    );
   }
+
+  static QuestionnaireAnswerTransition previewAnswerChange(
+    QuestionnaireVersion version,
+    Iterable<QuestionnaireAnswer> currentAnswers,
+    QuestionnaireAnswer nextAnswer,
+  ) {
+    final currentByQuestion = {
+      for (final answer in currentAnswers) answer.questionId: answer,
+    };
+    final proposed = {...currentByQuestion, nextAnswer.questionId: nextAnswer};
+    final evaluation = evaluate(version, proposed.values);
+    final skipped = evaluation.ruleSkippedQuestionIds.toSet();
+    final answersToClear = <QuestionnaireAnswer>[];
+    for (final question in version.questions) {
+      final answer = currentByQuestion[question.id];
+      if (skipped.contains(question.id) &&
+          answer != null &&
+          answer.state != QuestionnaireAnswerState.unanswered &&
+          answer.stateReason != questionnaireRuleSkippedReason) {
+        answersToClear.add(answer);
+      }
+    }
+    return QuestionnaireAnswerTransition(
+      answers: evaluation.answers,
+      answersToClear: answersToClear,
+    );
+  }
+
+  static bool _questionIsVisible(
+    QuestionnaireQuestion question,
+    Map<String, QuestionnaireQuestion> questions,
+    Map<String, QuestionnaireAnswer> answers,
+    Map<String, bool> visibleByQuestion,
+  ) {
+    final rule = question.displayRule;
+    if (rule == null) {
+      return true;
+    }
+    final results = rule.conditions.map((condition) {
+      final source = questions[condition.sourceQuestionId]!;
+      if (visibleByQuestion[source.id] != true) {
+        return false;
+      }
+      return _conditionMatches(source, answers[source.id], condition);
+    });
+    return rule.match == QuestionnaireVisibilityMatch.all
+        ? results.every((result) => result)
+        : results.any((result) => result);
+  }
+
+  static bool _conditionMatches(
+    QuestionnaireQuestion source,
+    QuestionnaireAnswer? answer,
+    QuestionnaireVisibilityCondition condition,
+  ) {
+    final answered =
+        answer?.state == QuestionnaireAnswerState.answered &&
+        answer?.stateReason == null &&
+        answer?.type == source.type &&
+        _validValue(source, answer?.value);
+    if (condition.operator == QuestionnaireVisibilityOperator.isAnswered) {
+      return answered;
+    }
+    if (condition.operator == QuestionnaireVisibilityOperator.isUnanswered) {
+      return !answered;
+    }
+    if (!answered) {
+      return false;
+    }
+    final value = answer!.value;
+    final operand = condition.operand;
+    return switch (condition.operator) {
+      QuestionnaireVisibilityOperator.equals => value == operand,
+      QuestionnaireVisibilityOperator.notEquals => value != operand,
+      QuestionnaireVisibilityOperator.inSet =>
+        (operand! as List<Object?>).contains(value),
+      QuestionnaireVisibilityOperator.contains =>
+        (value! as List<String>).contains(operand),
+      QuestionnaireVisibilityOperator.notContains =>
+        !(value! as List<String>).contains(operand),
+      QuestionnaireVisibilityOperator.greaterThan =>
+        _compareRuleValues(value!, operand!) > 0,
+      QuestionnaireVisibilityOperator.greaterThanOrEqual =>
+        _compareRuleValues(value!, operand!) >= 0,
+      QuestionnaireVisibilityOperator.lessThan =>
+        _compareRuleValues(value!, operand!) < 0,
+      QuestionnaireVisibilityOperator.lessThanOrEqual =>
+        _compareRuleValues(value!, operand!) <= 0,
+      QuestionnaireVisibilityOperator.between => _valueIsBetween(
+        value!,
+        operand! as List<Object?>,
+      ),
+      QuestionnaireVisibilityOperator.isAnswered ||
+      QuestionnaireVisibilityOperator.isUnanswered => false,
+    };
+  }
+
+  static int _compareRuleValues(Object left, Object right) {
+    if (left is num && right is num) {
+      return left.compareTo(right);
+    }
+    return (left as String).compareTo(right as String);
+  }
+
+  static bool _valueIsBetween(Object value, List<Object?> bounds) =>
+      _compareRuleValues(value, bounds[0]!) >= 0 &&
+      _compareRuleValues(value, bounds[1]!) <= 0;
 
   static bool _stateAllowed(
     QuestionnaireQuestion question,
@@ -903,6 +1196,22 @@ final class QuestionnaireContract {
       throw const FormatException('question IDs and positions must be unique');
     }
     questions.sort((left, right) => left.position.compareTo(right.position));
+    final questionsById = {
+      for (final question in questions) question.id: question,
+    };
+    for (final question in questions) {
+      for (final condition
+          in question.displayRule?.conditions ??
+              const <QuestionnaireVisibilityCondition>[]) {
+        final source = questionsById[condition.sourceQuestionId];
+        if (source == null || source.position >= question.position) {
+          throw const FormatException(
+            'visibility source must precede question',
+          );
+        }
+        _validateVisibilityCondition(source, condition);
+      }
+    }
     return QuestionnaireVersion(
       id: _string(root['questionnaire_version_id']),
       projectId: _string(root['project_id']),
@@ -916,6 +1225,7 @@ final class QuestionnaireContract {
     return _RawQuestionnaireAnswer(
       questionId: _string(root['question_id']),
       state: QuestionnaireAnswerState.fromStorage(_string(root['state'])),
+      stateReason: _nullableString(root['state_reason']),
       type: QuestionnaireQuestionType.fromStorage(_string(root['type'])),
       value: _normalizeValue(root['value']),
     );
@@ -957,9 +1267,28 @@ final class QuestionnaireContract {
           if (question.maximum != null) 'maximum': question.maximum,
           if (question.maximumLength != null)
             'maximum_length': question.maximumLength,
+          if (question.displayRule case final rule?)
+            'display_rule': displayRuleToJson(rule),
         },
     ],
   };
+
+  static Map<String, Object?> displayRuleToJson(
+    QuestionnaireVisibilityRule rule,
+  ) => {
+    'match': rule.match.storageValue,
+    'conditions': [
+      for (final condition in rule.conditions)
+        {
+          'source_question_id': condition.sourceQuestionId,
+          'operator': condition.operator.storageValue,
+          if (condition.operand != null) 'operand': condition.operand,
+        },
+    ],
+  };
+
+  static QuestionnaireVisibilityRule parseDisplayRule(Object? value) =>
+      _parseVisibilityRule(value);
 
   static QuestionnaireQuestion _parseQuestion(Object? value) {
     final root = _object(value);
@@ -1013,6 +1342,9 @@ final class QuestionnaireContract {
     final textType =
         type == QuestionnaireQuestionType.shortText ||
         type == QuestionnaireQuestionType.longText;
+    final displayRule = root['display_rule'] == null
+        ? null
+        : _parseVisibilityRule(root['display_rule']);
     return QuestionnaireQuestion(
       id: _string(root['question_id']),
       position: _positiveInt(root['position']),
@@ -1032,13 +1364,122 @@ final class QuestionnaireContract {
       minimum: minimum,
       maximum: maximum,
       maximumLength: textType ? _positiveInt(root['maximum_length']) : null,
+      displayRule: displayRule,
     );
+  }
+
+  static QuestionnaireVisibilityRule _parseVisibilityRule(Object? value) {
+    final root = _object(value);
+    _requireOnlyKeys(root, const {'match', 'conditions'});
+    final conditions = _list(root['conditions']).map((rawCondition) {
+      final condition = _object(rawCondition);
+      _requireOnlyKeys(condition, const {
+        'source_question_id',
+        'operator',
+        'operand',
+      });
+      final operator = QuestionnaireVisibilityOperator.fromStorage(
+        _string(condition['operator']),
+      );
+      return QuestionnaireVisibilityCondition(
+        sourceQuestionId: _string(condition['source_question_id']),
+        operator: operator,
+        operand: _normalizeValue(condition['operand']),
+      );
+    }).toList();
+    if (conditions.isEmpty) {
+      throw const FormatException('visibility rule requires conditions');
+    }
+    return QuestionnaireVisibilityRule(
+      match: QuestionnaireVisibilityMatch.fromStorage(_string(root['match'])),
+      conditions: conditions,
+    );
+  }
+
+  static void _validateVisibilityCondition(
+    QuestionnaireQuestion source,
+    QuestionnaireVisibilityCondition condition,
+  ) {
+    final operator = condition.operator;
+    final operand = condition.operand;
+    final valid = switch (source.type) {
+      QuestionnaireQuestionType.boolean =>
+        ((operator == QuestionnaireVisibilityOperator.equals ||
+                    operator == QuestionnaireVisibilityOperator.notEquals) &&
+                operand is bool) ||
+            (operator == QuestionnaireVisibilityOperator.inSet &&
+                operand is List<Object?> &&
+                operand.isNotEmpty &&
+                operand.every((value) => value is bool)),
+      QuestionnaireQuestionType.singleChoice ||
+      QuestionnaireQuestionType.ordinalChoice =>
+        ((operator == QuestionnaireVisibilityOperator.equals ||
+                    operator == QuestionnaireVisibilityOperator.notEquals) &&
+                operand is String &&
+                _optionExists(source, operand)) ||
+            (operator == QuestionnaireVisibilityOperator.inSet &&
+                operand is List<Object?> &&
+                operand.isNotEmpty &&
+                operand.every(
+                  (value) => value is String && _optionExists(source, value),
+                )),
+      QuestionnaireQuestionType.multiChoice =>
+        (operator == QuestionnaireVisibilityOperator.contains ||
+                operator == QuestionnaireVisibilityOperator.notContains) &&
+            operand is String &&
+            _optionExists(source, operand),
+      QuestionnaireQuestionType.number => _validComparableCondition(
+        operator,
+        operand,
+        (value) => value is num && value.isFinite,
+      ),
+      QuestionnaireQuestionType.date => _validComparableCondition(
+        operator,
+        operand,
+        (value) => value is String && _isCalendarDate(value),
+      ),
+      QuestionnaireQuestionType.shortText ||
+      QuestionnaireQuestionType.longText =>
+        (operator == QuestionnaireVisibilityOperator.isAnswered ||
+                operator == QuestionnaireVisibilityOperator.isUnanswered) &&
+            operand == null,
+    };
+    if (!valid) {
+      throw const FormatException('visibility operator is not allowed');
+    }
+  }
+
+  static bool _optionExists(QuestionnaireQuestion question, String id) =>
+      question.options.any((option) => option.id == id);
+
+  static bool _validComparableCondition(
+    QuestionnaireVisibilityOperator operator,
+    Object? operand,
+    bool Function(Object? value) validValue,
+  ) {
+    const singleValueOperators = {
+      QuestionnaireVisibilityOperator.equals,
+      QuestionnaireVisibilityOperator.notEquals,
+      QuestionnaireVisibilityOperator.greaterThan,
+      QuestionnaireVisibilityOperator.greaterThanOrEqual,
+      QuestionnaireVisibilityOperator.lessThan,
+      QuestionnaireVisibilityOperator.lessThanOrEqual,
+    };
+    if (singleValueOperators.contains(operator)) {
+      return validValue(operand);
+    }
+    return operator == QuestionnaireVisibilityOperator.between &&
+        operand is List<Object?> &&
+        operand.length == 2 &&
+        operand.every(validValue) &&
+        QuestionnaireCatalog._compareRuleValues(operand[0]!, operand[1]!) <= 0;
   }
 }
 
 bool _sameAnswer(QuestionnaireAnswer left, QuestionnaireAnswer right) =>
     left.questionId == right.questionId &&
     left.state == right.state &&
+    left.stateReason == right.stateReason &&
     left.type == right.type;
 
 bool _listEquals(List<Object?>? left, List<Object?>? right) {
@@ -1123,4 +1564,10 @@ Object? _normalizeValue(Object? value) {
     return value.cast<String>();
   }
   return value;
+}
+
+void _requireOnlyKeys(Map<String, Object?> value, Set<String> allowedKeys) {
+  if (value.keys.any((key) => !allowedKeys.contains(key))) {
+    throw const FormatException('unsupported visibility rule field');
+  }
 }

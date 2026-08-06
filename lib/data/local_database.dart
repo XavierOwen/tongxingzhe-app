@@ -147,7 +147,7 @@ class LocalDatabase extends _$LocalDatabase {
       );
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -348,6 +348,7 @@ class LocalDatabase extends _$LocalDatabase {
               dbContactAnswers.textValue,
               dbContactAnswers.numberValue,
               dbContactAnswers.multiChoiceValueJson,
+              dbContactAnswers.answerStateReason,
             ]);
         if (answerColumns.isNotEmpty) {
           await migrator.alterTable(
@@ -359,6 +360,7 @@ class LocalDatabase extends _$LocalDatabase {
               dbContactDraftAnswers.textValue,
               dbContactDraftAnswers.numberValue,
               dbContactDraftAnswers.multiChoiceValueJson,
+              dbContactDraftAnswers.answerStateReason,
             ]);
         if (draftAnswerColumns.isNotEmpty) {
           await migrator.alterTable(
@@ -371,6 +373,31 @@ class LocalDatabase extends _$LocalDatabase {
         await migrator.createTable(dbQuestionnaireVersions);
         await migrator.createTable(dbQuestionnaireQuestions);
         await migrator.createTable(dbQuestionnaireOptions);
+      }
+      if (from >= 13 && from < 14) {
+        // v14 保留受限显示规则和系统跳题原因。重建答案表以启用原因约束；
+        // 已有 v13 行的原因保持 NULL，不推测任何历史问题曾被规则跳过。
+        final answerColumns = await _missingColumns(
+          dbContactAnswers.actualTableName,
+          [dbContactAnswers.answerStateReason],
+        );
+        await migrator.alterTable(
+          TableMigration(dbContactAnswers, newColumns: answerColumns),
+        );
+        final draftAnswerColumns = await _missingColumns(
+          dbContactDraftAnswers.actualTableName,
+          [dbContactDraftAnswers.answerStateReason],
+        );
+        await migrator.alterTable(
+          TableMigration(dbContactDraftAnswers, newColumns: draftAnswerColumns),
+        );
+        final questionColumns = await _missingColumns(
+          dbQuestionnaireQuestions.actualTableName,
+          [dbQuestionnaireQuestions.displayRuleJson],
+        );
+        await migrator.alterTable(
+          TableMigration(dbQuestionnaireQuestions, newColumns: questionColumns),
+        );
       }
     },
   );

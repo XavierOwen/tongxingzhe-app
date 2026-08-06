@@ -72,7 +72,12 @@ final class ContactEntryViewState {
     this.questionnaireVersion,
     Iterable<QuestionnaireAnswer> answers = const [],
     QuestionnaireEvaluation? questionnaireEvaluation,
+    Iterable<QuestionnaireAnswer> pendingQuestionnaireAnswersToClear = const [],
+    this.canUndoQuestionnaireClear = false,
   }) : answers = List.unmodifiable(answers),
+       pendingQuestionnaireAnswersToClear = List.unmodifiable(
+         pendingQuestionnaireAnswersToClear,
+       ),
        questionnaireEvaluation =
            questionnaireEvaluation ?? QuestionnaireEvaluation(const []);
 
@@ -95,6 +100,8 @@ final class ContactEntryViewState {
   final QuestionnaireVersion? questionnaireVersion;
   final List<QuestionnaireAnswer> answers;
   final QuestionnaireEvaluation questionnaireEvaluation;
+  final List<QuestionnaireAnswer> pendingQuestionnaireAnswersToClear;
+  final bool canUndoQuestionnaireClear;
 
   bool get isReady =>
       occurredAtUtc != null &&
@@ -105,10 +112,16 @@ final class ContactEntryViewState {
 
   int get requiredCoreFactCount => 5;
 
-  int get questionCount => questionnaireVersion?.questions.length ?? 0;
+  int get questionCount => questionnaireEvaluation.visibleQuestionIds.length;
 
   int get completedQuestionCount => answers
-      .where((answer) => answer.state != QuestionnaireAnswerState.unanswered)
+      .where(
+        (answer) =>
+            questionnaireEvaluation.visibleQuestionIds.contains(
+              answer.questionId,
+            ) &&
+            answer.state != QuestionnaireAnswerState.unanswered,
+      )
       .length;
 
   QuestionnaireAnswer? answerFor(String questionId) {
@@ -171,6 +184,7 @@ final class ContactEntryViewModel extends ChangeNotifier {
     String? sourceAttemptId,
     ContactChannel? initialChannel,
     QuestionnaireVersion? questionnaireVersion,
+    Duration questionnaireUndoDuration = const Duration(seconds: 10),
   }) : this._(
          clock,
          timeZoneProvider,
@@ -183,6 +197,7 @@ final class ContactEntryViewModel extends ChangeNotifier {
          sourceAttemptId,
          initialChannel,
          questionnaireVersion,
+         questionnaireUndoDuration,
        );
 
   ContactEntryViewModel._(
@@ -197,6 +212,7 @@ final class ContactEntryViewModel extends ChangeNotifier {
     this._initialSourceAttemptId,
     this._initialChannel,
     this._questionnaireVersion,
+    this._questionnaireUndoDuration,
   );
 
   final AppClock _clock;
@@ -210,8 +226,10 @@ final class ContactEntryViewModel extends ChangeNotifier {
   final String? _initialSourceAttemptId;
   final ContactChannel? _initialChannel;
   final QuestionnaireVersion? _questionnaireVersion;
+  final Duration _questionnaireUndoDuration;
 
   Timer? _saveTimer;
+  Timer? _questionnaireUndoTimer;
   Future<void>? _activeSave;
   ContactDraft? _draft;
   DateTime? _occurredAtUtc;
@@ -223,6 +241,8 @@ final class ContactEntryViewModel extends ChangeNotifier {
   int? _reachCount;
   int? _interestLevel;
   final Map<String, QuestionnaireAnswer> _answers = {};
+  QuestionnaireAnswerTransition? _pendingQuestionnaireTransition;
+  Map<String, QuestionnaireAnswer>? _questionnaireUndoAnswers;
   ContactDraftSyncMode _syncMode = ContactDraftSyncMode.accountPrivate;
   ContactDraftSaveState _saveState = ContactDraftSaveState.untouched;
   String? _submissionFailure;
@@ -236,6 +256,9 @@ final class ContactEntryViewModel extends ChangeNotifier {
 
   ContactEntryViewState get state {
     final orderedAnswers = _orderedAnswers();
+    final questionnaireEvaluation = _questionnaireVersion == null
+        ? QuestionnaireEvaluation(const [])
+        : QuestionnaireCatalog.evaluate(_questionnaireVersion, orderedAnswers);
     return ContactEntryViewState(
       occurredAtUtc: _occurredAtUtc,
       occurredTimeZone: _occurredTimeZone,
@@ -255,12 +278,10 @@ final class ContactEntryViewModel extends ChangeNotifier {
       sourceAttemptId: _sourceAttemptId,
       questionnaireVersion: _questionnaireVersion,
       answers: orderedAnswers,
-      questionnaireEvaluation: _questionnaireVersion == null
-          ? QuestionnaireEvaluation(const [])
-          : QuestionnaireCatalog.evaluate(
-              _questionnaireVersion,
-              orderedAnswers,
-            ),
+      questionnaireEvaluation: questionnaireEvaluation,
+      pendingQuestionnaireAnswersToClear:
+          _pendingQuestionnaireTransition?.answersToClear ?? const [],
+      canUndoQuestionnaireClear: _questionnaireUndoAnswers != null,
     );
   }
 
@@ -359,8 +380,8 @@ final class ContactEntryViewModel extends ChangeNotifier {
     _markEdited();
   }
 
-  void setQuestionnaireValue(QuestionnaireQuestion question, Object value) {
-    _setQuestionnaireAnswer(
+  bool setQuestionnaireValue(QuestionnaireQuestion question, Object value) {
+    return _setQuestionnaireAnswer(
       QuestionnaireAnswerFactory.create(
         question: question,
         state: QuestionnaireAnswerState.answered,
@@ -369,28 +390,98 @@ final class ContactEntryViewModel extends ChangeNotifier {
     );
   }
 
-  void setQuestionnaireState(
+  bool setQuestionnaireState(
     QuestionnaireQuestion question,
     QuestionnaireAnswerState answerState,
   ) {
     final current = _answers[question.id];
     if (answerState == QuestionnaireAnswerState.answered) {
       if (current?.state != QuestionnaireAnswerState.answered) {
-        return;
+        return false;
       }
-      return;
+      return false;
     }
-    _setQuestionnaireAnswer(
+    return _setQuestionnaireAnswer(
       QuestionnaireAnswerFactory.create(question: question, state: answerState),
     );
   }
 
-  void _setQuestionnaireAnswer(QuestionnaireAnswer answer) {
+  bool _setQuestionnaireAnswer(QuestionnaireAnswer answer) {
     if (_answers[answer.questionId] == answer) {
+      return false;
+    }
+    final version = _questionnaireVersion;
+    if (version == null) {
+      _answers[answer.questionId] = answer;
+      _markEdited();
+      return false;
+    }
+    final transition = QuestionnaireCatalog.previewAnswerChange(
+      version,
+      _orderedAnswers(),
+      answer,
+    );
+    if (transition.requiresClearConfirmation) {
+      _pendingQuestionnaireTransition = transition;
+      _notify();
+      return true;
+    }
+    _clearQuestionnaireUndo();
+    _applyQuestionnaireAnswers(transition.answers);
+    return false;
+  }
+
+  void cancelQuestionnaireClear() {
+    if (_pendingQuestionnaireTransition == null) {
       return;
     }
-    _answers[answer.questionId] = answer;
+    _pendingQuestionnaireTransition = null;
+    _notify();
+  }
+
+  void confirmQuestionnaireClear() {
+    final transition = _pendingQuestionnaireTransition;
+    if (transition == null) {
+      return;
+    }
+    _questionnaireUndoTimer?.cancel();
+    _questionnaireUndoAnswers = Map.of(_answers);
+    _pendingQuestionnaireTransition = null;
+    _applyQuestionnaireAnswers(transition.answers);
+    _questionnaireUndoTimer = Timer(_questionnaireUndoDuration, () {
+      _questionnaireUndoAnswers = null;
+      _questionnaireUndoTimer = null;
+      _notify();
+    });
+  }
+
+  void undoQuestionnaireClear() {
+    final previous = _questionnaireUndoAnswers;
+    if (previous == null) {
+      return;
+    }
+    _questionnaireUndoTimer?.cancel();
+    _questionnaireUndoTimer = null;
+    _questionnaireUndoAnswers = null;
+    _answers
+      ..clear()
+      ..addAll(previous);
     _markEdited();
+  }
+
+  void _applyQuestionnaireAnswers(Iterable<QuestionnaireAnswer> answers) {
+    _answers
+      ..clear()
+      ..addEntries(
+        answers.map((answer) => MapEntry(answer.questionId, answer)),
+      );
+    _markEdited();
+  }
+
+  void _clearQuestionnaireUndo() {
+    _questionnaireUndoTimer?.cancel();
+    _questionnaireUndoTimer = null;
+    _questionnaireUndoAnswers = null;
   }
 
   void setSyncMode(ContactDraftSyncMode mode) {
@@ -510,8 +601,22 @@ final class ContactEntryViewModel extends ChangeNotifier {
     interestLevel: _interestLevel,
     syncMode: _syncMode,
     sourceAttemptId: _sourceAttemptId,
-    answers: _orderedAnswers(),
+    answers: _answersForSave(),
   );
+
+  List<QuestionnaireAnswer> _answersForSave() {
+    final ordered = _orderedAnswers();
+    final version = _questionnaireVersion;
+    if (version == null) {
+      return ordered;
+    }
+    final evaluation = QuestionnaireCatalog.evaluate(version, ordered);
+    // 规范化可以补齐跳题标记，但隐藏旧值只能经确认框清除。
+    final wouldSilentlyClear = evaluation.errors.any(
+      (error) => error.code == 'hidden_answer_present',
+    );
+    return wouldSilentlyClear ? ordered : evaluation.answers;
+  }
 
   List<QuestionnaireAnswer> _orderedAnswers() {
     final version = _questionnaireVersion;
@@ -579,6 +684,7 @@ final class ContactEntryViewModel extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _saveTimer?.cancel();
+    _questionnaireUndoTimer?.cancel();
     super.dispose();
   }
 }

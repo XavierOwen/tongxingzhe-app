@@ -107,6 +107,8 @@ Backend 接受 command 后返回 change feed cursor。这个回执只能证明�
 
 更正发生时间后，SQLite 和 PostgreSQL 的个人指标都使用新的当前投影重新归期。作废后，两端都因 `lifecycle_status = 'active'` 条件排除该记录。revision 历史、审计事件和 warehouse 作废事件仍保留。
 
+问卷答案经过同步时，Backend 先把受控 wire 格式解析为类型化答案，PostgreSQL 再按可信项目与精确已发布版本复验。[`0012_questionnaire_visibility.sql`](../../backend/database/migrations/0012_questionnaire_visibility.sql) 按问题顺序重算显示规则，拒绝隐藏题的真实值、可见题的 `rule_skipped` 标记和可见必填题遗漏。客户端即时预验只改善离线体验，不代替这个服务端边界。
+
 ## 跨设备更正如何合并
 
 三路比较同时查看基础 revision、服务器当前 revision 和本机建议快照。它把事实分成发生时间、渠道、地点、触达人数、单次兴趣和问卷答案六组。如果两台设备修改的组没有重叠，服务器把本机改动合并到当前快照，再追加一条 `corrected` revision。

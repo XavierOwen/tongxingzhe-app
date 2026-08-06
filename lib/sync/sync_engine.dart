@@ -1948,6 +1948,7 @@ final class SyncEngine {
             revisionNumber: revisionNumber,
             questionId: columns.questionId,
             answerState: columns.state,
+            answerStateReason: Value(columns.stateReason),
             answerType: columns.type,
             booleanValue: Value(columns.booleanValue),
             textValue: Value(columns.textValue),
@@ -1969,6 +1970,7 @@ final class SyncEngine {
             draftId: draftId,
             questionId: columns.questionId,
             answerState: columns.state,
+            answerStateReason: Value(columns.stateReason),
             answerType: columns.type,
             booleanValue: Value(columns.booleanValue),
             textValue: Value(columns.textValue),
@@ -1985,6 +1987,7 @@ final class SyncEngine {
     final local = QuestionnaireAnswerCodec.fromColumns(
       questionId: stored.questionId,
       state: stored.answerState,
+      stateReason: stored.answerStateReason,
       type: stored.answerType,
       booleanValue: stored.booleanValue,
       textValue: stored.textValue,
@@ -2001,6 +2004,7 @@ final class SyncEngine {
     final local = QuestionnaireAnswerCodec.fromColumns(
       questionId: stored.questionId,
       state: stored.answerState,
+      stateReason: stored.answerStateReason,
       type: stored.answerType,
       booleanValue: stored.booleanValue,
       textValue: stored.textValue,
@@ -2016,6 +2020,7 @@ final class SyncEngine {
   ) {
     if (left.questionId != right.questionId ||
         left.state != right.state ||
+        left.stateReason != right.stateReason ||
         left.type != right.type) {
       return false;
     }
@@ -2037,6 +2042,7 @@ final class SyncEngine {
     return QuestionnaireAnswerCodec.fromJson({
       'question_id': value['questionId'],
       'state': value['state'],
+      'state_reason': value['stateReason'],
       'type': value['type'],
       'value': value['value'],
     });

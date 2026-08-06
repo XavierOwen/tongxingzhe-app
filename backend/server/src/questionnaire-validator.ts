@@ -21,6 +21,33 @@ export interface QuestionnaireOption {
   readonly label: string;
 }
 
+export type QuestionnaireVisibilityMatch = "all" | "any";
+
+export type QuestionnaireVisibilityOperator =
+  | "equals"
+  | "not_equals"
+  | "in"
+  | "contains"
+  | "not_contains"
+  | "greater_than"
+  | "greater_than_or_equal"
+  | "less_than"
+  | "less_than_or_equal"
+  | "between"
+  | "is_answered"
+  | "is_unanswered";
+
+export interface QuestionnaireVisibilityCondition {
+  readonly sourceQuestionId: string;
+  readonly operator: QuestionnaireVisibilityOperator;
+  readonly operand: unknown;
+}
+
+export interface QuestionnaireVisibilityRule {
+  readonly match: QuestionnaireVisibilityMatch;
+  readonly conditions: readonly QuestionnaireVisibilityCondition[];
+}
+
 export interface QuestionnaireQuestion {
   readonly id: string;
   readonly position: number;
@@ -38,6 +65,7 @@ export interface QuestionnaireQuestion {
   readonly minimum: number | null;
   readonly maximum: number | null;
   readonly maximumLength: number | null;
+  readonly displayRule: QuestionnaireVisibilityRule | null;
 }
 
 export interface QuestionnaireVersion {
@@ -50,13 +78,22 @@ export interface QuestionnaireVersion {
 export interface QuestionnaireValidationResult {
   readonly valid: boolean;
   readonly errors: readonly string[];
+  readonly visibleQuestionIds: readonly string[];
+  readonly ruleSkippedQuestionIds: readonly string[];
+  readonly answers: readonly ParsedAnswer[];
 }
 
-interface ParsedAnswer {
+export interface ParsedAnswer {
   readonly questionId: string;
   readonly state: QuestionnaireAnswerState;
+  readonly stateReason: string | null;
   readonly type: QuestionnaireQuestionType;
   readonly value: unknown;
+}
+
+export interface QuestionnaireAnswerTransition {
+  readonly answers: readonly ParsedAnswer[];
+  readonly answersToClear: readonly ParsedAnswer[];
 }
 
 /**
@@ -76,6 +113,20 @@ export function parseQuestionnaireVersion(value: unknown): QuestionnaireVersion 
     questions.map((question) => question.position),
     "duplicate_question_position",
   );
+  const questionsById = new Map(
+    questions.map((question) => [question.id, question]),
+  );
+  for (const question of questions) {
+    for (const condition of question.displayRule?.conditions ?? []) {
+      const source = questionsById.get(condition.sourceQuestionId);
+      if (source === undefined || source.position >= question.position) {
+        throw new QuestionnaireContractError(
+          "visibility_source_must_precede_question",
+        );
+      }
+      validateVisibilityCondition(source, condition);
+    }
+  }
   return {
     id: string(root.questionnaire_version_id, "invalid_questionnaire_version_id"),
     projectId: string(root.project_id, "invalid_project_id"),
@@ -125,6 +176,20 @@ export function serializeQuestionnaireVersion(
       ...(question.maximumLength === null
         ? {}
         : { maximum_length: question.maximumLength }),
+      ...(question.displayRule === null
+        ? {}
+        : {
+          display_rule: {
+            match: question.displayRule.match,
+            conditions: question.displayRule.conditions.map((condition) => ({
+              source_question_id: condition.sourceQuestionId,
+              operator: condition.operator,
+              ...(condition.operand === null
+                ? {}
+                : { operand: condition.operand }),
+            })),
+          },
+        }),
     })),
   };
 }
@@ -161,6 +226,33 @@ export function validateQuestionnaireAnswers(
       continue;
     }
     answers.set(answer.questionId, answer);
+  }
+
+  const visible = new Map<string, boolean>();
+  for (const question of questionnaire.questions) {
+    visible.set(
+      question.id,
+      questionIsVisible(question, questions, answers, visible),
+    );
+  }
+
+  for (const [questionId, answer] of answers) {
+    const question = questions.get(questionId)!;
+    if (visible.get(questionId) !== true) {
+      if (
+        answer.type !== question.type ||
+        answer.state !== "not_applicable" ||
+        answer.stateReason !== "rule_skipped" ||
+        answer.value !== null
+      ) {
+        errors.push(`hidden_answer_present:${question.id}`);
+      }
+      continue;
+    }
+    if (answer.stateReason !== null) {
+      errors.push(`answer_state_reason_invalid:${question.id}`);
+      continue;
+    }
     if (answer.type !== question.type) {
       errors.push(`answer_type_mismatch:${question.id}`);
       continue;
@@ -183,11 +275,73 @@ export function validateQuestionnaireAnswers(
   }
 
   for (const question of questionnaire.questions) {
-    if (question.required && !answers.has(question.id)) {
+    if (
+      visible.get(question.id) === true &&
+      question.required &&
+      !answers.has(question.id)
+    ) {
       errors.push(`required_answer_missing:${question.id}`);
     }
   }
-  return { valid: errors.length === 0, errors };
+  const visibleQuestionIds = questionnaire.questions
+    .filter((question) => visible.get(question.id) === true)
+    .map((question) => question.id);
+  const ruleSkippedQuestionIds = questionnaire.questions
+    .filter((question) => visible.get(question.id) !== true)
+    .map((question) => question.id);
+  const normalizedAnswers = questionnaire.questions.flatMap((question) => {
+    if (visible.get(question.id) !== true) {
+      return [{
+        questionId: question.id,
+        state: "not_applicable" as const,
+        stateReason: "rule_skipped",
+        type: question.type,
+        value: null,
+      }];
+    }
+    const answer = answers.get(question.id);
+    return answer === undefined || answer.stateReason === "rule_skipped"
+      ? []
+      : [answer];
+  });
+  return {
+    valid: errors.length === 0,
+    errors,
+    visibleQuestionIds,
+    ruleSkippedQuestionIds,
+    answers: normalizedAnswers,
+  };
+}
+
+export function previewQuestionnaireAnswerChange(
+  questionnaire: QuestionnaireVersion,
+  rawCurrentAnswers: readonly unknown[],
+  rawNextAnswer: unknown,
+): QuestionnaireAnswerTransition {
+  const currentAnswers = rawCurrentAnswers.map(parseAnswer);
+  const currentByQuestion = new Map(
+    currentAnswers.map((answer) => [answer.questionId, answer]),
+  );
+  const nextAnswer = parseAnswer(rawNextAnswer);
+  const proposed = new Map(currentByQuestion);
+  proposed.set(nextAnswer.questionId, nextAnswer);
+  const evaluation = validateQuestionnaireAnswers(
+    questionnaire,
+    [...proposed.values()].map(serializeAnswer),
+  );
+  const skipped = new Set(evaluation.ruleSkippedQuestionIds);
+  return {
+    answers: evaluation.answers,
+    answersToClear: questionnaire.questions.flatMap((question) => {
+      const answer = currentByQuestion.get(question.id);
+      return skipped.has(question.id) &&
+          answer !== undefined &&
+          answer.state !== "unanswered" &&
+          answer.stateReason !== "rule_skipped"
+        ? [answer]
+        : [];
+    }),
+  };
 }
 
 export class QuestionnaireContractError extends Error {
@@ -260,7 +414,119 @@ function parseQuestion(value: unknown): QuestionnaireQuestion {
     maximumLength: textType
       ? positiveInteger(root.maximum_length, "invalid_maximum_length")
       : null,
+    displayRule: root.display_rule === undefined
+      ? null
+      : parseVisibilityRule(root.display_rule),
   };
+}
+
+function parseVisibilityRule(value: unknown): QuestionnaireVisibilityRule {
+  const root = object(value, "invalid_visibility_rule");
+  requireOnlyKeys(root, new Set(["match", "conditions"]));
+  const match = root.match === "all" || root.match === "any"
+    ? root.match
+    : (() => {
+      throw new QuestionnaireContractError("invalid_visibility_match");
+    })();
+  const conditions = array(
+    root.conditions,
+    "invalid_visibility_conditions",
+  ).map((value) => {
+    const condition = object(value, "invalid_visibility_condition");
+    requireOnlyKeys(
+      condition,
+      new Set(["source_question_id", "operator", "operand"]),
+    );
+    return {
+      sourceQuestionId: string(
+        condition.source_question_id,
+        "invalid_visibility_source",
+      ),
+      operator: visibilityOperator(condition.operator),
+      operand: condition.operand ?? null,
+    };
+  });
+  if (conditions.length === 0) {
+    throw new QuestionnaireContractError("visibility_conditions_required");
+  }
+  return { match, conditions };
+}
+
+function validateVisibilityCondition(
+  source: QuestionnaireQuestion,
+  condition: QuestionnaireVisibilityCondition,
+): void {
+  const { operator, operand } = condition;
+  let valid = false;
+  switch (source.type) {
+    case "boolean":
+      valid = ((operator === "equals" || operator === "not_equals") &&
+          typeof operand === "boolean") ||
+        (operator === "in" && Array.isArray(operand) && operand.length > 0 &&
+          operand.every((value) => typeof value === "boolean"));
+      break;
+    case "single_choice":
+    case "ordinal_choice":
+      valid = ((operator === "equals" || operator === "not_equals") &&
+          typeof operand === "string" && optionExists(source, operand)) ||
+        (operator === "in" && Array.isArray(operand) && operand.length > 0 &&
+          operand.every((value) =>
+            typeof value === "string" && optionExists(source, value)
+          ));
+      break;
+    case "multi_choice":
+      valid = (operator === "contains" || operator === "not_contains") &&
+        typeof operand === "string" && optionExists(source, operand);
+      break;
+    case "number":
+      valid = validComparableCondition(
+        operator,
+        operand,
+        (value) => typeof value === "number" && Number.isFinite(value),
+      );
+      break;
+    case "date":
+      valid = validComparableCondition(
+        operator,
+        operand,
+        (value) => typeof value === "string" && isCalendarDate(value),
+      );
+      break;
+    case "short_text":
+    case "long_text":
+      valid = (operator === "is_answered" || operator === "is_unanswered") &&
+        operand === null;
+      break;
+  }
+  if (!valid) {
+    throw new QuestionnaireContractError("visibility_operator_not_allowed");
+  }
+}
+
+function optionExists(question: QuestionnaireQuestion, id: string): boolean {
+  return question.options.some((option) => option.id === id);
+}
+
+function validComparableCondition(
+  operator: QuestionnaireVisibilityOperator,
+  operand: unknown,
+  validValue: (value: unknown) => boolean,
+): boolean {
+  if (
+    operator === "equals" ||
+    operator === "not_equals" ||
+    operator === "greater_than" ||
+    operator === "greater_than_or_equal" ||
+    operator === "less_than" ||
+    operator === "less_than_or_equal"
+  ) {
+    return validValue(operand);
+  }
+  return operator === "between" &&
+    Array.isArray(operand) &&
+    operand.length === 2 &&
+    operand.every(validValue) &&
+    compareRuleValues(operand[0], operand[1]) <= 0;
 }
 
 function parseAnswer(value: unknown): ParsedAnswer {
@@ -268,9 +534,90 @@ function parseAnswer(value: unknown): ParsedAnswer {
   return {
     questionId: string(root.question_id, "invalid_question_id"),
     state: answerState(root.state),
+    stateReason: nullableString(root.state_reason),
     type: questionType(root.type),
     value: root.value,
   };
+}
+
+function serializeAnswer(answer: ParsedAnswer): Readonly<Record<string, unknown>> {
+  return {
+    question_id: answer.questionId,
+    state: answer.state,
+    ...(answer.stateReason === null
+      ? {}
+      : { state_reason: answer.stateReason }),
+    type: answer.type,
+    value: answer.value,
+  };
+}
+
+function questionIsVisible(
+  question: QuestionnaireQuestion,
+  questions: ReadonlyMap<string, QuestionnaireQuestion>,
+  answers: ReadonlyMap<string, ParsedAnswer>,
+  visible: ReadonlyMap<string, boolean>,
+): boolean {
+  if (question.displayRule === null) return true;
+  const results = question.displayRule.conditions.map((condition) => {
+    const source = questions.get(condition.sourceQuestionId)!;
+    if (visible.get(source.id) !== true) return false;
+    return conditionMatches(source, answers.get(source.id), condition);
+  });
+  return question.displayRule.match === "all"
+    ? results.every(Boolean)
+    : results.some(Boolean);
+}
+
+function conditionMatches(
+  source: QuestionnaireQuestion,
+  answer: ParsedAnswer | undefined,
+  condition: QuestionnaireVisibilityCondition,
+): boolean {
+  const answered = answer !== undefined &&
+    answer.state === "answered" &&
+    answer.stateReason === null &&
+    answer.type === source.type &&
+    validValue(source, answer.value);
+  if (condition.operator === "is_answered") return answered;
+  if (condition.operator === "is_unanswered") return !answered;
+  if (!answered) return false;
+  switch (condition.operator) {
+    case "equals":
+      return answer.value === condition.operand;
+    case "not_equals":
+      return answer.value !== condition.operand;
+    case "in":
+      return (condition.operand as readonly unknown[]).includes(answer.value);
+    case "contains":
+      return (answer.value as readonly string[]).includes(
+        condition.operand as string,
+      );
+    case "not_contains":
+      return !(answer.value as readonly string[]).includes(
+        condition.operand as string,
+      );
+    case "greater_than":
+      return compareRuleValues(answer.value, condition.operand) > 0;
+    case "greater_than_or_equal":
+      return compareRuleValues(answer.value, condition.operand) >= 0;
+    case "less_than":
+      return compareRuleValues(answer.value, condition.operand) < 0;
+    case "less_than_or_equal":
+      return compareRuleValues(answer.value, condition.operand) <= 0;
+    case "between": {
+      const bounds = condition.operand as readonly unknown[];
+      return compareRuleValues(answer.value, bounds[0]) >= 0 &&
+        compareRuleValues(answer.value, bounds[1]) <= 0;
+    }
+  }
+}
+
+function compareRuleValues(left: unknown, right: unknown): number {
+  if (typeof left === "number" && typeof right === "number") {
+    return left - right;
+  }
+  return (left as string).localeCompare(right as string);
 }
 
 function stateAllowed(
@@ -363,6 +710,26 @@ function answerState(value: unknown): QuestionnaireAnswerState {
   throw new QuestionnaireContractError("invalid_answer_state");
 }
 
+function visibilityOperator(value: unknown): QuestionnaireVisibilityOperator {
+  if (
+    value === "equals" ||
+    value === "not_equals" ||
+    value === "in" ||
+    value === "contains" ||
+    value === "not_contains" ||
+    value === "greater_than" ||
+    value === "greater_than_or_equal" ||
+    value === "less_than" ||
+    value === "less_than_or_equal" ||
+    value === "between" ||
+    value === "is_answered" ||
+    value === "is_unanswered"
+  ) {
+    return value;
+  }
+  throw new QuestionnaireContractError("unsupported_visibility_operator");
+}
+
 function parseNumberKind(value: unknown): "integer" | "decimal" {
   if (value === "integer" || value === "decimal") return value;
   throw new QuestionnaireContractError("invalid_number_kind");
@@ -416,5 +783,14 @@ function nullableFiniteNumber(value: unknown): number | null {
 function unique(values: readonly unknown[], code: string): void {
   if (new Set(values).size !== values.length) {
     throw new QuestionnaireContractError(code);
+  }
+}
+
+function requireOnlyKeys(
+  value: Readonly<Record<string, unknown>>,
+  allowedKeys: ReadonlySet<string>,
+): void {
+  if (Object.keys(value).some((key) => !allowedKeys.has(key))) {
+    throw new QuestionnaireContractError("unsupported_visibility_rule_field");
   }
 }

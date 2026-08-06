@@ -57,6 +57,14 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/checks/verify_contact_revision_conflicts.sql
 psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/fixtures/0010_contact_revision_conflicts.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_questionnaire_execution.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0011_questionnaire_execution.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_questionnaire_visibility.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0012_questionnaire_visibility.sql
 ```
 
 第二次执行不是重复建库，而是验证已经记录的 checksum。若历史文件被修改，脚本会拒绝继续。
@@ -87,3 +95,7 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 `0009_contact_revisions.sql` 保存追加式接触更正和作废。更正与作废都需要原因和当前 base revision。runtime role 只能执行受控包装函数，不能执行私有 helper 或直接读取历史表。更正会更新当前投影并重新归期；作废保留历史，但退出有效接触指标。
 
 `0010_contact_revision_conflicts.sql` 对过期更正做三路比较。两台设备修改不同事实组时，服务器追加自动合并的 revision；修改同一事实组时，服务器保留基础、当前和本机建议快照。runtime role 只能按可信用户与项目读取单个比较结果，解决操作会追加新 revision，不覆盖历史。
+
+`0011_questionnaire_execution.sql` 加入八种受控题型、五种回答状态、已发布定义读取和 v2 写入入口。客户端可以离线预验，但 PostgreSQL 仍会按可信项目与精确问卷版本复验每个答案。
+
+`0012_questionnaire_visibility.sql` 给问题定义加入受限显示规则，并给答案加入 `rule_skipped` 原因。服务端按问题顺序重算可见性：可见必填题不能遗漏，隐藏题不能夹带旧值，也不能伪造普通“不适用”。

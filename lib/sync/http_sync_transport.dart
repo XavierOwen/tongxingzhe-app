@@ -449,6 +449,7 @@ final class HttpSyncTransport implements SyncTransport, SyncBatchTransport {
     return QuestionnaireAnswerCodec.fromJson({
       'question_id': value['questionId'],
       'state': value['state'],
+      'state_reason': value['stateReason'],
       'type': value['type'],
       'value': value['value'],
     });

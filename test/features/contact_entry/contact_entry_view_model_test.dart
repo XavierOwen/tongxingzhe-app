@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/device/device_time_zone.dart';
 import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
@@ -168,6 +171,99 @@ void main() {
     ]);
     expect(viewModel.state.canSubmit, isTrue);
   });
+
+  test('首次保存草稿时补齐规则跳过原因', () async {
+    final fixture =
+        jsonDecode(
+              File(
+                'fixtures/questionnaire/questionnaire-visibility-contract-v1.json',
+              ).readAsStringSync(),
+            )
+            as Map<String, Object?>;
+    final version = QuestionnaireContract.parseVersion(
+      fixture['questionnaire'],
+    );
+    final store = _FakeEntryStore();
+    final viewModel = _viewModel(store: store, questionnaireVersion: version);
+    await viewModel.initialize();
+
+    viewModel.setChannel(ContactChannel.videoCall);
+    await viewModel.flushDraft();
+
+    final skippedIds =
+        viewModel.state.questionnaireEvaluation.ruleSkippedQuestionIds;
+    final savedAnswers = {
+      for (final answer in store.savedDraft!.answers) answer.questionId: answer,
+    };
+    for (final questionId in skippedIds) {
+      expect(
+        savedAnswers[questionId]?.stateReason,
+        questionnaireRuleSkippedReason,
+      );
+      expect(savedAnswers[questionId]?.value, isNull);
+    }
+  });
+
+  test('前置答案隐藏已答问题时先确认清除，并可撤销整次变更', () async {
+    final fixture =
+        jsonDecode(
+              File(
+                'fixtures/questionnaire/questionnaire-visibility-contract-v1.json',
+              ).readAsStringSync(),
+            )
+            as Map<String, Object?>;
+    final version = QuestionnaireContract.parseVersion(
+      fixture['questionnaire'],
+    );
+    final transitionCase = fixture['transition_case']! as Map<String, Object?>;
+    final answers = (transitionCase['answers']! as List<Object?>)
+        .map(QuestionnaireContract.parseAnswer)
+        .toList();
+    final topics = version.questions.singleWhere(
+      (question) => question.id == 'topics',
+    );
+    final store = _FakeEntryStore();
+    final viewModel = _viewModel(
+      store: store,
+      questionnaireVersion: version,
+      questionnaireUndoDuration: const Duration(days: 1),
+    );
+    await viewModel.initialize(draft: _draftWithAnswers(answers));
+
+    final requiresConfirmation = viewModel.setQuestionnaireValue(topics, const [
+      'courses',
+    ]);
+
+    expect(requiresConfirmation, isTrue);
+    expect(
+      viewModel.state.pendingQuestionnaireAnswersToClear.map(
+        (answer) => answer.questionId,
+      ),
+      ['event_detail', 'no_courses'],
+    );
+    expect(viewModel.state.answerFor('topics')!.value, ['events']);
+
+    viewModel.confirmQuestionnaireClear();
+    expect(viewModel.state.answerFor('topics')!.value, ['courses']);
+    for (final questionId in ['event_detail', 'no_courses']) {
+      final skipped = viewModel.state.answerFor(questionId)!;
+      expect(skipped.state, QuestionnaireAnswerState.notApplicable);
+      expect(skipped.stateReason, questionnaireRuleSkippedReason);
+    }
+    expect(viewModel.state.canUndoQuestionnaireClear, isTrue);
+    await viewModel.flushDraft();
+    expect(
+      store.savedDraft!.answers
+          .singleWhere((answer) => answer.questionId == 'event_detail')
+          .stateReason,
+      questionnaireRuleSkippedReason,
+    );
+
+    viewModel.undoQuestionnaireClear();
+    expect(viewModel.state.answerFor('topics')!.value, ['events']);
+    expect(viewModel.state.answerFor('event_detail')!.value, '原活动答案');
+    expect(viewModel.state.answerFor('no_courses')!.value, '原课程答案');
+  });
 }
 
 ContactEntryViewModel _viewModel({
@@ -175,6 +271,7 @@ ContactEntryViewModel _viewModel({
   ContactLocationCapture locationCapture = const _FakeLocationCapture([]),
   ContactRegionResolver regionResolver = const DeferredContactRegionResolver(),
   QuestionnaireVersion? questionnaireVersion,
+  Duration questionnaireUndoDuration = const Duration(seconds: 10),
 }) {
   return ContactEntryViewModel(
     clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
@@ -185,9 +282,33 @@ ContactEntryViewModel _viewModel({
     locationCapture: locationCapture,
     regionResolver: regionResolver,
     questionnaireVersion: questionnaireVersion,
+    questionnaireUndoDuration: questionnaireUndoDuration,
     saveDelay: const Duration(days: 1),
   );
 }
+
+ContactDraft _draftWithAnswers(List<QuestionnaireAnswer> answers) =>
+    ContactDraft(
+      draftId: 'draft-visibility',
+      appUserId: 'user-1',
+      workspaceId: 'workspace-1',
+      projectId: 'project-1',
+      questionnaireVersionId: 'questionnaire-1',
+      createdAtUtc: DateTime.utc(2030, 1, 1),
+      updatedAtUtc: DateTime.utc(2030, 1, 1),
+      occurredAtUtc: DateTime.utc(2030, 1, 1),
+      occurredTimeZone: 'America/Chicago',
+      channel: ContactChannel.videoCall,
+      channelDetail: null,
+      location: const NotApplicableContactLocation(),
+      reachCount: 1,
+      interestLevel: 2,
+      answers: answers,
+      syncMode: ContactDraftSyncMode.accountPrivate,
+      localRevision: 1,
+      serverRevision: 0,
+      conflictOfDraftId: null,
+    );
 
 final _questionnaire = QuestionnaireVersion(
   id: 'questionnaire-1',

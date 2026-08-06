@@ -82,6 +82,7 @@ test("sync parser preserves all controlled answer value shapes", async () => {
     { question_id: "date", state: "answered", type: "date", value: "2030-02-28" },
     { question_id: "short", state: "answered", type: "short_text", value: "short" },
     { question_id: "long", state: "refused", type: "long_text", value: null },
+    { question_id: "skipped", state: "not_applicable", state_reason: "rule_skipped", type: "long_text", value: null },
   ];
   (body.typed_payload as Record<string, unknown>).answers = typedAnswers;
 
@@ -102,6 +103,7 @@ test("sync parser preserves all controlled answer value shapes", async () => {
     assert.deepEqual(storedCommand.payload.answers, typedAnswers.map((answer) => ({
       questionId: answer.question_id,
       state: answer.state,
+      stateReason: "state_reason" in answer ? answer.state_reason : null,
       type: answer.type,
       value: answer.value,
     })));

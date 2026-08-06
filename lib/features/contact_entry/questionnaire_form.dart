@@ -14,6 +14,7 @@ final class QuestionnaireForm extends StatefulWidget {
     required this.version,
     required this.answers,
     required this.errors,
+    required this.visibleQuestionIds,
     required this.onValueChanged,
     required this.onStateChanged,
   });
@@ -22,6 +23,7 @@ final class QuestionnaireForm extends StatefulWidget {
   final QuestionnaireVersion version;
   final List<QuestionnaireAnswer> answers;
   final List<QuestionnaireValidationError> errors;
+  final List<String> visibleQuestionIds;
   final void Function(QuestionnaireQuestion question, Object value)
   onValueChanged;
   final void Function(
@@ -64,15 +66,16 @@ final class _QuestionnaireFormState extends State<QuestionnaireForm> {
         const SizedBox(height: 6),
         Text(widget.text.t('questionnairePrivacyHelp')),
         const SizedBox(height: 8),
-        for (final question in widget.version.questions) ...[
-          _questionCard(
-            context,
-            question,
-            answers[question.id],
-            errors[question.id] ?? const [],
-          ),
-          const SizedBox(height: 8),
-        ],
+        for (final question in widget.version.questions)
+          if (widget.visibleQuestionIds.contains(question.id)) ...[
+            _questionCard(
+              context,
+              question,
+              answers[question.id],
+              errors[question.id] ?? const [],
+            ),
+            const SizedBox(height: 8),
+          ],
       ],
     );
   }

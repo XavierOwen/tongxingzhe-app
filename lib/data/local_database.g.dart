@@ -5024,6 +5024,18 @@ class $DbContactAnswersTable extends DbContactAnswers
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _answerStateReasonMeta = const VerificationMeta(
+    'answerStateReason',
+  );
+  @override
+  late final GeneratedColumn<String> answerStateReason =
+      GeneratedColumn<String>(
+        'answer_state_reason',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _answerTypeMeta = const VerificationMeta(
     'answerType',
   );
@@ -5088,6 +5100,7 @@ class $DbContactAnswersTable extends DbContactAnswers
     revisionNumber,
     questionId,
     answerState,
+    answerStateReason,
     answerType,
     booleanValue,
     textValue,
@@ -5143,6 +5156,15 @@ class $DbContactAnswersTable extends DbContactAnswers
       );
     } else if (isInserting) {
       context.missing(_answerStateMeta);
+    }
+    if (data.containsKey('answer_state_reason')) {
+      context.handle(
+        _answerStateReasonMeta,
+        answerStateReason.isAcceptableOrUnknown(
+          data['answer_state_reason']!,
+          _answerStateReasonMeta,
+        ),
+      );
     }
     if (data.containsKey('answer_type')) {
       context.handle(
@@ -5214,6 +5236,10 @@ class $DbContactAnswersTable extends DbContactAnswers
         DriftSqlType.string,
         data['${effectivePrefix}answer_state'],
       )!,
+      answerStateReason: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}answer_state_reason'],
+      ),
       answerType: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}answer_type'],
@@ -5248,6 +5274,7 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
   final int revisionNumber;
   final String questionId;
   final String answerState;
+  final String? answerStateReason;
   final String answerType;
   final bool? booleanValue;
   final String? textValue;
@@ -5258,6 +5285,7 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
     required this.revisionNumber,
     required this.questionId,
     required this.answerState,
+    this.answerStateReason,
     required this.answerType,
     this.booleanValue,
     this.textValue,
@@ -5271,6 +5299,9 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
     map['revision_number'] = Variable<int>(revisionNumber);
     map['question_id'] = Variable<String>(questionId);
     map['answer_state'] = Variable<String>(answerState);
+    if (!nullToAbsent || answerStateReason != null) {
+      map['answer_state_reason'] = Variable<String>(answerStateReason);
+    }
     map['answer_type'] = Variable<String>(answerType);
     if (!nullToAbsent || booleanValue != null) {
       map['boolean_value'] = Variable<bool>(booleanValue);
@@ -5293,6 +5324,9 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
       revisionNumber: Value(revisionNumber),
       questionId: Value(questionId),
       answerState: Value(answerState),
+      answerStateReason: answerStateReason == null && nullToAbsent
+          ? const Value.absent()
+          : Value(answerStateReason),
       answerType: Value(answerType),
       booleanValue: booleanValue == null && nullToAbsent
           ? const Value.absent()
@@ -5319,6 +5353,9 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
       revisionNumber: serializer.fromJson<int>(json['revisionNumber']),
       questionId: serializer.fromJson<String>(json['questionId']),
       answerState: serializer.fromJson<String>(json['answerState']),
+      answerStateReason: serializer.fromJson<String?>(
+        json['answerStateReason'],
+      ),
       answerType: serializer.fromJson<String>(json['answerType']),
       booleanValue: serializer.fromJson<bool?>(json['booleanValue']),
       textValue: serializer.fromJson<String?>(json['textValue']),
@@ -5336,6 +5373,7 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
       'revisionNumber': serializer.toJson<int>(revisionNumber),
       'questionId': serializer.toJson<String>(questionId),
       'answerState': serializer.toJson<String>(answerState),
+      'answerStateReason': serializer.toJson<String?>(answerStateReason),
       'answerType': serializer.toJson<String>(answerType),
       'booleanValue': serializer.toJson<bool?>(booleanValue),
       'textValue': serializer.toJson<String?>(textValue),
@@ -5349,6 +5387,7 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
     int? revisionNumber,
     String? questionId,
     String? answerState,
+    Value<String?> answerStateReason = const Value.absent(),
     String? answerType,
     Value<bool?> booleanValue = const Value.absent(),
     Value<String?> textValue = const Value.absent(),
@@ -5359,6 +5398,9 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
     revisionNumber: revisionNumber ?? this.revisionNumber,
     questionId: questionId ?? this.questionId,
     answerState: answerState ?? this.answerState,
+    answerStateReason: answerStateReason.present
+        ? answerStateReason.value
+        : this.answerStateReason,
     answerType: answerType ?? this.answerType,
     booleanValue: booleanValue.present ? booleanValue.value : this.booleanValue,
     textValue: textValue.present ? textValue.value : this.textValue,
@@ -5379,6 +5421,9 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
       answerState: data.answerState.present
           ? data.answerState.value
           : this.answerState,
+      answerStateReason: data.answerStateReason.present
+          ? data.answerStateReason.value
+          : this.answerStateReason,
       answerType: data.answerType.present
           ? data.answerType.value
           : this.answerType,
@@ -5402,6 +5447,7 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
           ..write('revisionNumber: $revisionNumber, ')
           ..write('questionId: $questionId, ')
           ..write('answerState: $answerState, ')
+          ..write('answerStateReason: $answerStateReason, ')
           ..write('answerType: $answerType, ')
           ..write('booleanValue: $booleanValue, ')
           ..write('textValue: $textValue, ')
@@ -5417,6 +5463,7 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
     revisionNumber,
     questionId,
     answerState,
+    answerStateReason,
     answerType,
     booleanValue,
     textValue,
@@ -5431,6 +5478,7 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
           other.revisionNumber == this.revisionNumber &&
           other.questionId == this.questionId &&
           other.answerState == this.answerState &&
+          other.answerStateReason == this.answerStateReason &&
           other.answerType == this.answerType &&
           other.booleanValue == this.booleanValue &&
           other.textValue == this.textValue &&
@@ -5443,6 +5491,7 @@ class DbContactAnswersCompanion extends UpdateCompanion<DbContactAnswer> {
   final Value<int> revisionNumber;
   final Value<String> questionId;
   final Value<String> answerState;
+  final Value<String?> answerStateReason;
   final Value<String> answerType;
   final Value<bool?> booleanValue;
   final Value<String?> textValue;
@@ -5454,6 +5503,7 @@ class DbContactAnswersCompanion extends UpdateCompanion<DbContactAnswer> {
     this.revisionNumber = const Value.absent(),
     this.questionId = const Value.absent(),
     this.answerState = const Value.absent(),
+    this.answerStateReason = const Value.absent(),
     this.answerType = const Value.absent(),
     this.booleanValue = const Value.absent(),
     this.textValue = const Value.absent(),
@@ -5466,6 +5516,7 @@ class DbContactAnswersCompanion extends UpdateCompanion<DbContactAnswer> {
     required int revisionNumber,
     required String questionId,
     required String answerState,
+    this.answerStateReason = const Value.absent(),
     required String answerType,
     this.booleanValue = const Value.absent(),
     this.textValue = const Value.absent(),
@@ -5482,6 +5533,7 @@ class DbContactAnswersCompanion extends UpdateCompanion<DbContactAnswer> {
     Expression<int>? revisionNumber,
     Expression<String>? questionId,
     Expression<String>? answerState,
+    Expression<String>? answerStateReason,
     Expression<String>? answerType,
     Expression<bool>? booleanValue,
     Expression<String>? textValue,
@@ -5494,6 +5546,7 @@ class DbContactAnswersCompanion extends UpdateCompanion<DbContactAnswer> {
       if (revisionNumber != null) 'revision_number': revisionNumber,
       if (questionId != null) 'question_id': questionId,
       if (answerState != null) 'answer_state': answerState,
+      if (answerStateReason != null) 'answer_state_reason': answerStateReason,
       if (answerType != null) 'answer_type': answerType,
       if (booleanValue != null) 'boolean_value': booleanValue,
       if (textValue != null) 'text_value': textValue,
@@ -5509,6 +5562,7 @@ class DbContactAnswersCompanion extends UpdateCompanion<DbContactAnswer> {
     Value<int>? revisionNumber,
     Value<String>? questionId,
     Value<String>? answerState,
+    Value<String?>? answerStateReason,
     Value<String>? answerType,
     Value<bool?>? booleanValue,
     Value<String?>? textValue,
@@ -5521,6 +5575,7 @@ class DbContactAnswersCompanion extends UpdateCompanion<DbContactAnswer> {
       revisionNumber: revisionNumber ?? this.revisionNumber,
       questionId: questionId ?? this.questionId,
       answerState: answerState ?? this.answerState,
+      answerStateReason: answerStateReason ?? this.answerStateReason,
       answerType: answerType ?? this.answerType,
       booleanValue: booleanValue ?? this.booleanValue,
       textValue: textValue ?? this.textValue,
@@ -5544,6 +5599,9 @@ class DbContactAnswersCompanion extends UpdateCompanion<DbContactAnswer> {
     }
     if (answerState.present) {
       map['answer_state'] = Variable<String>(answerState.value);
+    }
+    if (answerStateReason.present) {
+      map['answer_state_reason'] = Variable<String>(answerStateReason.value);
     }
     if (answerType.present) {
       map['answer_type'] = Variable<String>(answerType.value);
@@ -5575,6 +5633,7 @@ class DbContactAnswersCompanion extends UpdateCompanion<DbContactAnswer> {
           ..write('revisionNumber: $revisionNumber, ')
           ..write('questionId: $questionId, ')
           ..write('answerState: $answerState, ')
+          ..write('answerStateReason: $answerStateReason, ')
           ..write('answerType: $answerType, ')
           ..write('booleanValue: $booleanValue, ')
           ..write('textValue: $textValue, ')
@@ -8374,6 +8433,18 @@ class $DbContactDraftAnswersTable extends DbContactDraftAnswers
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _answerStateReasonMeta = const VerificationMeta(
+    'answerStateReason',
+  );
+  @override
+  late final GeneratedColumn<String> answerStateReason =
+      GeneratedColumn<String>(
+        'answer_state_reason',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _answerTypeMeta = const VerificationMeta(
     'answerType',
   );
@@ -8437,6 +8508,7 @@ class $DbContactDraftAnswersTable extends DbContactDraftAnswers
     draftId,
     questionId,
     answerState,
+    answerStateReason,
     answerType,
     booleanValue,
     textValue,
@@ -8481,6 +8553,15 @@ class $DbContactDraftAnswersTable extends DbContactDraftAnswers
       );
     } else if (isInserting) {
       context.missing(_answerStateMeta);
+    }
+    if (data.containsKey('answer_state_reason')) {
+      context.handle(
+        _answerStateReasonMeta,
+        answerStateReason.isAcceptableOrUnknown(
+          data['answer_state_reason']!,
+          _answerStateReasonMeta,
+        ),
+      );
     }
     if (data.containsKey('answer_type')) {
       context.handle(
@@ -8544,6 +8625,10 @@ class $DbContactDraftAnswersTable extends DbContactDraftAnswers
         DriftSqlType.string,
         data['${effectivePrefix}answer_state'],
       )!,
+      answerStateReason: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}answer_state_reason'],
+      ),
       answerType: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}answer_type'],
@@ -8578,6 +8663,7 @@ class DbContactDraftAnswer extends DataClass
   final String draftId;
   final String questionId;
   final String answerState;
+  final String? answerStateReason;
   final String answerType;
   final bool? booleanValue;
   final String? textValue;
@@ -8587,6 +8673,7 @@ class DbContactDraftAnswer extends DataClass
     required this.draftId,
     required this.questionId,
     required this.answerState,
+    this.answerStateReason,
     required this.answerType,
     this.booleanValue,
     this.textValue,
@@ -8599,6 +8686,9 @@ class DbContactDraftAnswer extends DataClass
     map['draft_id'] = Variable<String>(draftId);
     map['question_id'] = Variable<String>(questionId);
     map['answer_state'] = Variable<String>(answerState);
+    if (!nullToAbsent || answerStateReason != null) {
+      map['answer_state_reason'] = Variable<String>(answerStateReason);
+    }
     map['answer_type'] = Variable<String>(answerType);
     if (!nullToAbsent || booleanValue != null) {
       map['boolean_value'] = Variable<bool>(booleanValue);
@@ -8620,6 +8710,9 @@ class DbContactDraftAnswer extends DataClass
       draftId: Value(draftId),
       questionId: Value(questionId),
       answerState: Value(answerState),
+      answerStateReason: answerStateReason == null && nullToAbsent
+          ? const Value.absent()
+          : Value(answerStateReason),
       answerType: Value(answerType),
       booleanValue: booleanValue == null && nullToAbsent
           ? const Value.absent()
@@ -8645,6 +8738,9 @@ class DbContactDraftAnswer extends DataClass
       draftId: serializer.fromJson<String>(json['draftId']),
       questionId: serializer.fromJson<String>(json['questionId']),
       answerState: serializer.fromJson<String>(json['answerState']),
+      answerStateReason: serializer.fromJson<String?>(
+        json['answerStateReason'],
+      ),
       answerType: serializer.fromJson<String>(json['answerType']),
       booleanValue: serializer.fromJson<bool?>(json['booleanValue']),
       textValue: serializer.fromJson<String?>(json['textValue']),
@@ -8661,6 +8757,7 @@ class DbContactDraftAnswer extends DataClass
       'draftId': serializer.toJson<String>(draftId),
       'questionId': serializer.toJson<String>(questionId),
       'answerState': serializer.toJson<String>(answerState),
+      'answerStateReason': serializer.toJson<String?>(answerStateReason),
       'answerType': serializer.toJson<String>(answerType),
       'booleanValue': serializer.toJson<bool?>(booleanValue),
       'textValue': serializer.toJson<String?>(textValue),
@@ -8673,6 +8770,7 @@ class DbContactDraftAnswer extends DataClass
     String? draftId,
     String? questionId,
     String? answerState,
+    Value<String?> answerStateReason = const Value.absent(),
     String? answerType,
     Value<bool?> booleanValue = const Value.absent(),
     Value<String?> textValue = const Value.absent(),
@@ -8682,6 +8780,9 @@ class DbContactDraftAnswer extends DataClass
     draftId: draftId ?? this.draftId,
     questionId: questionId ?? this.questionId,
     answerState: answerState ?? this.answerState,
+    answerStateReason: answerStateReason.present
+        ? answerStateReason.value
+        : this.answerStateReason,
     answerType: answerType ?? this.answerType,
     booleanValue: booleanValue.present ? booleanValue.value : this.booleanValue,
     textValue: textValue.present ? textValue.value : this.textValue,
@@ -8699,6 +8800,9 @@ class DbContactDraftAnswer extends DataClass
       answerState: data.answerState.present
           ? data.answerState.value
           : this.answerState,
+      answerStateReason: data.answerStateReason.present
+          ? data.answerStateReason.value
+          : this.answerStateReason,
       answerType: data.answerType.present
           ? data.answerType.value
           : this.answerType,
@@ -8721,6 +8825,7 @@ class DbContactDraftAnswer extends DataClass
           ..write('draftId: $draftId, ')
           ..write('questionId: $questionId, ')
           ..write('answerState: $answerState, ')
+          ..write('answerStateReason: $answerStateReason, ')
           ..write('answerType: $answerType, ')
           ..write('booleanValue: $booleanValue, ')
           ..write('textValue: $textValue, ')
@@ -8735,6 +8840,7 @@ class DbContactDraftAnswer extends DataClass
     draftId,
     questionId,
     answerState,
+    answerStateReason,
     answerType,
     booleanValue,
     textValue,
@@ -8748,6 +8854,7 @@ class DbContactDraftAnswer extends DataClass
           other.draftId == this.draftId &&
           other.questionId == this.questionId &&
           other.answerState == this.answerState &&
+          other.answerStateReason == this.answerStateReason &&
           other.answerType == this.answerType &&
           other.booleanValue == this.booleanValue &&
           other.textValue == this.textValue &&
@@ -8760,6 +8867,7 @@ class DbContactDraftAnswersCompanion
   final Value<String> draftId;
   final Value<String> questionId;
   final Value<String> answerState;
+  final Value<String?> answerStateReason;
   final Value<String> answerType;
   final Value<bool?> booleanValue;
   final Value<String?> textValue;
@@ -8770,6 +8878,7 @@ class DbContactDraftAnswersCompanion
     this.draftId = const Value.absent(),
     this.questionId = const Value.absent(),
     this.answerState = const Value.absent(),
+    this.answerStateReason = const Value.absent(),
     this.answerType = const Value.absent(),
     this.booleanValue = const Value.absent(),
     this.textValue = const Value.absent(),
@@ -8781,6 +8890,7 @@ class DbContactDraftAnswersCompanion
     required String draftId,
     required String questionId,
     required String answerState,
+    this.answerStateReason = const Value.absent(),
     required String answerType,
     this.booleanValue = const Value.absent(),
     this.textValue = const Value.absent(),
@@ -8795,6 +8905,7 @@ class DbContactDraftAnswersCompanion
     Expression<String>? draftId,
     Expression<String>? questionId,
     Expression<String>? answerState,
+    Expression<String>? answerStateReason,
     Expression<String>? answerType,
     Expression<bool>? booleanValue,
     Expression<String>? textValue,
@@ -8806,6 +8917,7 @@ class DbContactDraftAnswersCompanion
       if (draftId != null) 'draft_id': draftId,
       if (questionId != null) 'question_id': questionId,
       if (answerState != null) 'answer_state': answerState,
+      if (answerStateReason != null) 'answer_state_reason': answerStateReason,
       if (answerType != null) 'answer_type': answerType,
       if (booleanValue != null) 'boolean_value': booleanValue,
       if (textValue != null) 'text_value': textValue,
@@ -8820,6 +8932,7 @@ class DbContactDraftAnswersCompanion
     Value<String>? draftId,
     Value<String>? questionId,
     Value<String>? answerState,
+    Value<String?>? answerStateReason,
     Value<String>? answerType,
     Value<bool?>? booleanValue,
     Value<String?>? textValue,
@@ -8831,6 +8944,7 @@ class DbContactDraftAnswersCompanion
       draftId: draftId ?? this.draftId,
       questionId: questionId ?? this.questionId,
       answerState: answerState ?? this.answerState,
+      answerStateReason: answerStateReason ?? this.answerStateReason,
       answerType: answerType ?? this.answerType,
       booleanValue: booleanValue ?? this.booleanValue,
       textValue: textValue ?? this.textValue,
@@ -8851,6 +8965,9 @@ class DbContactDraftAnswersCompanion
     }
     if (answerState.present) {
       map['answer_state'] = Variable<String>(answerState.value);
+    }
+    if (answerStateReason.present) {
+      map['answer_state_reason'] = Variable<String>(answerStateReason.value);
     }
     if (answerType.present) {
       map['answer_type'] = Variable<String>(answerType.value);
@@ -8881,6 +8998,7 @@ class DbContactDraftAnswersCompanion
           ..write('draftId: $draftId, ')
           ..write('questionId: $questionId, ')
           ..write('answerState: $answerState, ')
+          ..write('answerStateReason: $answerStateReason, ')
           ..write('answerType: $answerType, ')
           ..write('booleanValue: $booleanValue, ')
           ..write('textValue: $textValue, ')
@@ -14054,6 +14172,17 @@ class $DbQuestionnaireQuestionsTable extends DbQuestionnaireQuestions
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _displayRuleJsonMeta = const VerificationMeta(
+    'displayRuleJson',
+  );
+  @override
+  late final GeneratedColumn<String> displayRuleJson = GeneratedColumn<String>(
+    'display_rule_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     questionnaireVersionId,
@@ -14072,6 +14201,7 @@ class $DbQuestionnaireQuestionsTable extends DbQuestionnaireQuestions
     minimum,
     maximum,
     maximumLength,
+    displayRuleJson,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -14223,6 +14353,15 @@ class $DbQuestionnaireQuestionsTable extends DbQuestionnaireQuestions
         ),
       );
     }
+    if (data.containsKey('display_rule_json')) {
+      context.handle(
+        _displayRuleJsonMeta,
+        displayRuleJson.isAcceptableOrUnknown(
+          data['display_rule_json']!,
+          _displayRuleJsonMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -14299,6 +14438,10 @@ class $DbQuestionnaireQuestionsTable extends DbQuestionnaireQuestions
         DriftSqlType.int,
         data['${effectivePrefix}maximum_length'],
       ),
+      displayRuleJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}display_rule_json'],
+      ),
     );
   }
 
@@ -14326,6 +14469,7 @@ class DbQuestionnaireQuestion extends DataClass
   final double? minimum;
   final double? maximum;
   final int? maximumLength;
+  final String? displayRuleJson;
   const DbQuestionnaireQuestion({
     required this.questionnaireVersionId,
     required this.questionId,
@@ -14343,6 +14487,7 @@ class DbQuestionnaireQuestion extends DataClass
     this.minimum,
     this.maximum,
     this.maximumLength,
+    this.displayRuleJson,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -14377,6 +14522,9 @@ class DbQuestionnaireQuestion extends DataClass
     if (!nullToAbsent || maximumLength != null) {
       map['maximum_length'] = Variable<int>(maximumLength);
     }
+    if (!nullToAbsent || displayRuleJson != null) {
+      map['display_rule_json'] = Variable<String>(displayRuleJson);
+    }
     return map;
   }
 
@@ -14410,6 +14558,9 @@ class DbQuestionnaireQuestion extends DataClass
       maximumLength: maximumLength == null && nullToAbsent
           ? const Value.absent()
           : Value(maximumLength),
+      displayRuleJson: displayRuleJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(displayRuleJson),
     );
   }
 
@@ -14437,6 +14588,7 @@ class DbQuestionnaireQuestion extends DataClass
       minimum: serializer.fromJson<double?>(json['minimum']),
       maximum: serializer.fromJson<double?>(json['maximum']),
       maximumLength: serializer.fromJson<int?>(json['maximumLength']),
+      displayRuleJson: serializer.fromJson<String?>(json['displayRuleJson']),
     );
   }
   @override
@@ -14461,6 +14613,7 @@ class DbQuestionnaireQuestion extends DataClass
       'minimum': serializer.toJson<double?>(minimum),
       'maximum': serializer.toJson<double?>(maximum),
       'maximumLength': serializer.toJson<int?>(maximumLength),
+      'displayRuleJson': serializer.toJson<String?>(displayRuleJson),
     };
   }
 
@@ -14481,6 +14634,7 @@ class DbQuestionnaireQuestion extends DataClass
     Value<double?> minimum = const Value.absent(),
     Value<double?> maximum = const Value.absent(),
     Value<int?> maximumLength = const Value.absent(),
+    Value<String?> displayRuleJson = const Value.absent(),
   }) => DbQuestionnaireQuestion(
     questionnaireVersionId:
         questionnaireVersionId ?? this.questionnaireVersionId,
@@ -14505,6 +14659,9 @@ class DbQuestionnaireQuestion extends DataClass
     maximumLength: maximumLength.present
         ? maximumLength.value
         : this.maximumLength,
+    displayRuleJson: displayRuleJson.present
+        ? displayRuleJson.value
+        : this.displayRuleJson,
   );
   DbQuestionnaireQuestion copyWithCompanion(
     DbQuestionnaireQuestionsCompanion data,
@@ -14548,6 +14705,9 @@ class DbQuestionnaireQuestion extends DataClass
       maximumLength: data.maximumLength.present
           ? data.maximumLength.value
           : this.maximumLength,
+      displayRuleJson: data.displayRuleJson.present
+          ? data.displayRuleJson.value
+          : this.displayRuleJson,
     );
   }
 
@@ -14569,7 +14729,8 @@ class DbQuestionnaireQuestion extends DataClass
           ..write('unit: $unit, ')
           ..write('minimum: $minimum, ')
           ..write('maximum: $maximum, ')
-          ..write('maximumLength: $maximumLength')
+          ..write('maximumLength: $maximumLength, ')
+          ..write('displayRuleJson: $displayRuleJson')
           ..write(')'))
         .toString();
   }
@@ -14592,6 +14753,7 @@ class DbQuestionnaireQuestion extends DataClass
     minimum,
     maximum,
     maximumLength,
+    displayRuleJson,
   );
   @override
   bool operator ==(Object other) =>
@@ -14612,7 +14774,8 @@ class DbQuestionnaireQuestion extends DataClass
           other.unit == this.unit &&
           other.minimum == this.minimum &&
           other.maximum == this.maximum &&
-          other.maximumLength == this.maximumLength);
+          other.maximumLength == this.maximumLength &&
+          other.displayRuleJson == this.displayRuleJson);
 }
 
 class DbQuestionnaireQuestionsCompanion
@@ -14633,6 +14796,7 @@ class DbQuestionnaireQuestionsCompanion
   final Value<double?> minimum;
   final Value<double?> maximum;
   final Value<int?> maximumLength;
+  final Value<String?> displayRuleJson;
   final Value<int> rowid;
   const DbQuestionnaireQuestionsCompanion({
     this.questionnaireVersionId = const Value.absent(),
@@ -14651,6 +14815,7 @@ class DbQuestionnaireQuestionsCompanion
     this.minimum = const Value.absent(),
     this.maximum = const Value.absent(),
     this.maximumLength = const Value.absent(),
+    this.displayRuleJson = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   DbQuestionnaireQuestionsCompanion.insert({
@@ -14670,6 +14835,7 @@ class DbQuestionnaireQuestionsCompanion
     this.minimum = const Value.absent(),
     this.maximum = const Value.absent(),
     this.maximumLength = const Value.absent(),
+    this.displayRuleJson = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : questionnaireVersionId = Value(questionnaireVersionId),
        questionId = Value(questionId),
@@ -14697,6 +14863,7 @@ class DbQuestionnaireQuestionsCompanion
     Expression<double>? minimum,
     Expression<double>? maximum,
     Expression<int>? maximumLength,
+    Expression<String>? displayRuleJson,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -14718,6 +14885,7 @@ class DbQuestionnaireQuestionsCompanion
       if (minimum != null) 'minimum': minimum,
       if (maximum != null) 'maximum': maximum,
       if (maximumLength != null) 'maximum_length': maximumLength,
+      if (displayRuleJson != null) 'display_rule_json': displayRuleJson,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -14739,6 +14907,7 @@ class DbQuestionnaireQuestionsCompanion
     Value<double?>? minimum,
     Value<double?>? maximum,
     Value<int?>? maximumLength,
+    Value<String?>? displayRuleJson,
     Value<int>? rowid,
   }) {
     return DbQuestionnaireQuestionsCompanion(
@@ -14759,6 +14928,7 @@ class DbQuestionnaireQuestionsCompanion
       minimum: minimum ?? this.minimum,
       maximum: maximum ?? this.maximum,
       maximumLength: maximumLength ?? this.maximumLength,
+      displayRuleJson: displayRuleJson ?? this.displayRuleJson,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -14816,6 +14986,9 @@ class DbQuestionnaireQuestionsCompanion
     if (maximumLength.present) {
       map['maximum_length'] = Variable<int>(maximumLength.value);
     }
+    if (displayRuleJson.present) {
+      map['display_rule_json'] = Variable<String>(displayRuleJson.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -14841,6 +15014,7 @@ class DbQuestionnaireQuestionsCompanion
           ..write('minimum: $minimum, ')
           ..write('maximum: $maximum, ')
           ..write('maximumLength: $maximumLength, ')
+          ..write('displayRuleJson: $displayRuleJson, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -18552,6 +18726,7 @@ typedef $$DbContactAnswersTableCreateCompanionBuilder =
       required int revisionNumber,
       required String questionId,
       required String answerState,
+      Value<String?> answerStateReason,
       required String answerType,
       Value<bool?> booleanValue,
       Value<String?> textValue,
@@ -18565,6 +18740,7 @@ typedef $$DbContactAnswersTableUpdateCompanionBuilder =
       Value<int> revisionNumber,
       Value<String> questionId,
       Value<String> answerState,
+      Value<String?> answerStateReason,
       Value<String> answerType,
       Value<bool?> booleanValue,
       Value<String?> textValue,
@@ -18627,6 +18803,11 @@ class $$DbContactAnswersTableFilterComposer
 
   ColumnFilters<String> get answerState => $composableBuilder(
     column: $table.answerState,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get answerStateReason => $composableBuilder(
+    column: $table.answerStateReason,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -18703,6 +18884,11 @@ class $$DbContactAnswersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get answerStateReason => $composableBuilder(
+    column: $table.answerStateReason,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get answerType => $composableBuilder(
     column: $table.answerType,
     builder: (column) => ColumnOrderings(column),
@@ -18773,6 +18959,11 @@ class $$DbContactAnswersTableAnnotationComposer
 
   GeneratedColumn<String> get answerState => $composableBuilder(
     column: $table.answerState,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get answerStateReason => $composableBuilder(
+    column: $table.answerStateReason,
     builder: (column) => column,
   );
 
@@ -18857,6 +19048,7 @@ class $$DbContactAnswersTableTableManager
                 Value<int> revisionNumber = const Value.absent(),
                 Value<String> questionId = const Value.absent(),
                 Value<String> answerState = const Value.absent(),
+                Value<String?> answerStateReason = const Value.absent(),
                 Value<String> answerType = const Value.absent(),
                 Value<bool?> booleanValue = const Value.absent(),
                 Value<String?> textValue = const Value.absent(),
@@ -18868,6 +19060,7 @@ class $$DbContactAnswersTableTableManager
                 revisionNumber: revisionNumber,
                 questionId: questionId,
                 answerState: answerState,
+                answerStateReason: answerStateReason,
                 answerType: answerType,
                 booleanValue: booleanValue,
                 textValue: textValue,
@@ -18881,6 +19074,7 @@ class $$DbContactAnswersTableTableManager
                 required int revisionNumber,
                 required String questionId,
                 required String answerState,
+                Value<String?> answerStateReason = const Value.absent(),
                 required String answerType,
                 Value<bool?> booleanValue = const Value.absent(),
                 Value<String?> textValue = const Value.absent(),
@@ -18892,6 +19086,7 @@ class $$DbContactAnswersTableTableManager
                 revisionNumber: revisionNumber,
                 questionId: questionId,
                 answerState: answerState,
+                answerStateReason: answerStateReason,
                 answerType: answerType,
                 booleanValue: booleanValue,
                 textValue: textValue,
@@ -20510,6 +20705,7 @@ typedef $$DbContactDraftAnswersTableCreateCompanionBuilder =
       required String draftId,
       required String questionId,
       required String answerState,
+      Value<String?> answerStateReason,
       required String answerType,
       Value<bool?> booleanValue,
       Value<String?> textValue,
@@ -20522,6 +20718,7 @@ typedef $$DbContactDraftAnswersTableUpdateCompanionBuilder =
       Value<String> draftId,
       Value<String> questionId,
       Value<String> answerState,
+      Value<String?> answerStateReason,
       Value<String> answerType,
       Value<bool?> booleanValue,
       Value<String?> textValue,
@@ -20579,6 +20776,11 @@ class $$DbContactDraftAnswersTableFilterComposer
 
   ColumnFilters<String> get answerState => $composableBuilder(
     column: $table.answerState,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get answerStateReason => $composableBuilder(
+    column: $table.answerStateReason,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -20650,6 +20852,11 @@ class $$DbContactDraftAnswersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get answerStateReason => $composableBuilder(
+    column: $table.answerStateReason,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get answerType => $composableBuilder(
     column: $table.answerType,
     builder: (column) => ColumnOrderings(column),
@@ -20715,6 +20922,11 @@ class $$DbContactDraftAnswersTableAnnotationComposer
 
   GeneratedColumn<String> get answerState => $composableBuilder(
     column: $table.answerState,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get answerStateReason => $composableBuilder(
+    column: $table.answerStateReason,
     builder: (column) => column,
   );
 
@@ -20807,6 +21019,7 @@ class $$DbContactDraftAnswersTableTableManager
                 Value<String> draftId = const Value.absent(),
                 Value<String> questionId = const Value.absent(),
                 Value<String> answerState = const Value.absent(),
+                Value<String?> answerStateReason = const Value.absent(),
                 Value<String> answerType = const Value.absent(),
                 Value<bool?> booleanValue = const Value.absent(),
                 Value<String?> textValue = const Value.absent(),
@@ -20817,6 +21030,7 @@ class $$DbContactDraftAnswersTableTableManager
                 draftId: draftId,
                 questionId: questionId,
                 answerState: answerState,
+                answerStateReason: answerStateReason,
                 answerType: answerType,
                 booleanValue: booleanValue,
                 textValue: textValue,
@@ -20829,6 +21043,7 @@ class $$DbContactDraftAnswersTableTableManager
                 required String draftId,
                 required String questionId,
                 required String answerState,
+                Value<String?> answerStateReason = const Value.absent(),
                 required String answerType,
                 Value<bool?> booleanValue = const Value.absent(),
                 Value<String?> textValue = const Value.absent(),
@@ -20839,6 +21054,7 @@ class $$DbContactDraftAnswersTableTableManager
                 draftId: draftId,
                 questionId: questionId,
                 answerState: answerState,
+                answerStateReason: answerStateReason,
                 answerType: answerType,
                 booleanValue: booleanValue,
                 textValue: textValue,
@@ -24515,6 +24731,7 @@ typedef $$DbQuestionnaireQuestionsTableCreateCompanionBuilder =
       Value<double?> minimum,
       Value<double?> maximum,
       Value<int?> maximumLength,
+      Value<String?> displayRuleJson,
       Value<int> rowid,
     });
 typedef $$DbQuestionnaireQuestionsTableUpdateCompanionBuilder =
@@ -24535,6 +24752,7 @@ typedef $$DbQuestionnaireQuestionsTableUpdateCompanionBuilder =
       Value<double?> minimum,
       Value<double?> maximum,
       Value<int?> maximumLength,
+      Value<String?> displayRuleJson,
       Value<int> rowid,
     });
 
@@ -24659,6 +24877,11 @@ class $$DbQuestionnaireQuestionsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get displayRuleJson => $composableBuilder(
+    column: $table.displayRuleJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$DbQuestionnaireVersionsTableFilterComposer get questionnaireVersionId {
     final $$DbQuestionnaireVersionsTableFilterComposer composer =
         $composerBuilder(
@@ -24768,6 +24991,11 @@ class $$DbQuestionnaireQuestionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get displayRuleJson => $composableBuilder(
+    column: $table.displayRuleJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$DbQuestionnaireVersionsTableOrderingComposer get questionnaireVersionId {
     final $$DbQuestionnaireVersionsTableOrderingComposer composer =
         $composerBuilder(
@@ -24867,6 +25095,11 @@ class $$DbQuestionnaireQuestionsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get displayRuleJson => $composableBuilder(
+    column: $table.displayRuleJson,
+    builder: (column) => column,
+  );
+
   $$DbQuestionnaireVersionsTableAnnotationComposer get questionnaireVersionId {
     final $$DbQuestionnaireVersionsTableAnnotationComposer composer =
         $composerBuilder(
@@ -24947,6 +25180,7 @@ class $$DbQuestionnaireQuestionsTableTableManager
                 Value<double?> minimum = const Value.absent(),
                 Value<double?> maximum = const Value.absent(),
                 Value<int?> maximumLength = const Value.absent(),
+                Value<String?> displayRuleJson = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => DbQuestionnaireQuestionsCompanion(
                 questionnaireVersionId: questionnaireVersionId,
@@ -24965,6 +25199,7 @@ class $$DbQuestionnaireQuestionsTableTableManager
                 minimum: minimum,
                 maximum: maximum,
                 maximumLength: maximumLength,
+                displayRuleJson: displayRuleJson,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -24985,6 +25220,7 @@ class $$DbQuestionnaireQuestionsTableTableManager
                 Value<double?> minimum = const Value.absent(),
                 Value<double?> maximum = const Value.absent(),
                 Value<int?> maximumLength = const Value.absent(),
+                Value<String?> displayRuleJson = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => DbQuestionnaireQuestionsCompanion.insert(
                 questionnaireVersionId: questionnaireVersionId,
@@ -25003,6 +25239,7 @@ class $$DbQuestionnaireQuestionsTableTableManager
                 minimum: minimum,
                 maximum: maximum,
                 maximumLength: maximumLength,
+                displayRuleJson: displayRuleJson,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

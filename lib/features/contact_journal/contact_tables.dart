@@ -97,6 +97,7 @@ class DbContactDraftAnswers extends Table {
   TextColumn get draftId => text().references(DbContactDrafts, #draftId)();
   TextColumn get questionId => text()();
   TextColumn get answerState => text()();
+  TextColumn get answerStateReason => text().nullable()();
   TextColumn get answerType => text()();
   BoolColumn get booleanValue => boolean().nullable()();
   TextColumn get textValue => text().nullable()();
@@ -109,6 +110,8 @@ class DbContactDraftAnswers extends Table {
   @override
   List<String> get customConstraints => const [
     'CHECK (length(trim(question_id)) > 0)',
+    "CHECK (answer_state_reason IS NULL OR (answer_state = 'not_applicable' "
+        "AND answer_state_reason = 'rule_skipped'))",
     "CHECK ((answer_state IN ('unknown', 'refused', 'not_applicable', "
         "'unanswered') AND boolean_value IS NULL AND text_value IS NULL AND "
         'number_value IS NULL AND multi_choice_value_json IS NULL) OR '
@@ -311,6 +314,7 @@ class DbContactAnswers extends Table {
   IntColumn get revisionNumber => integer()();
   TextColumn get questionId => text()();
   TextColumn get answerState => text()();
+  TextColumn get answerStateReason => text().nullable()();
   TextColumn get answerType => text()();
   BoolColumn get booleanValue => boolean().nullable()();
   TextColumn get textValue => text().nullable()();
@@ -324,6 +328,8 @@ class DbContactAnswers extends Table {
   List<String> get customConstraints => const [
     'CHECK (revision_number > 0)',
     'CHECK (length(trim(question_id)) > 0)',
+    "CHECK (answer_state_reason IS NULL OR (answer_state = 'not_applicable' "
+        "AND answer_state_reason = 'rule_skipped'))",
     "CHECK ((answer_state IN ('unknown', 'refused', 'not_applicable', "
         "'unanswered') AND boolean_value IS NULL AND text_value IS NULL AND "
         'number_value IS NULL AND multi_choice_value_json IS NULL) OR '

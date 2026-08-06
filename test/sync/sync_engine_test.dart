@@ -7,6 +7,7 @@ import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_journal.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
+import 'package:tongxingzhe_app/questionnaires/questionnaire_contract.dart';
 import 'package:tongxingzhe_app/sync/sync_engine.dart';
 import 'package:tongxingzhe_app/sync/sync_models.dart';
 import 'package:tongxingzhe_app/sync/sync_transport.dart';
@@ -700,7 +701,15 @@ void main() {
                   'location': {'kind': 'not_applicable'},
                   'reachCount': 2,
                   'interestLevel': 3,
-                  'answers': <Object?>[],
+                  'answers': <Object?>[
+                    {
+                      'questionId': 'hidden-detail',
+                      'state': 'not_applicable',
+                      'stateReason': 'rule_skipped',
+                      'type': 'short_text',
+                      'value': null,
+                    },
+                  ],
                 },
               ),
             ],
@@ -726,6 +735,8 @@ void main() {
     );
     expect(summary.contactSessionCount, 1);
     expect(summary.reachCount, 2);
+    final contact = await journal.contactById('remote-contact-1');
+    expect(contact!.answers.single.stateReason, questionnaireRuleSkippedReason);
     final health = await engine.health();
     expect(health.completedCount, 1);
     expect(health.serverCursor, 'cursor-from-other-device');
