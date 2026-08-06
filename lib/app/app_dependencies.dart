@@ -11,6 +11,9 @@ import '../identity/identity_session.dart';
 import '../identity/supabase/supabase_identity_session.dart';
 import '../platform/platform_capabilities.dart';
 import '../questionnaires/http_questionnaire_remote_source.dart';
+import '../questionnaires/http_questionnaire_administration_gateway.dart';
+import '../questionnaires/questionnaire_administration.dart';
+import '../questionnaires/questionnaire_administration_cache.dart';
 import '../questionnaires/questionnaire_contract.dart';
 import '../regions/contact_region_resolver.dart';
 import '../services/location_service.dart';
@@ -37,6 +40,7 @@ final class AppDependencies {
     this.syncTransportBuilder,
     this.regionResolverBuilder,
     this.questionnaireRemoteSourceBuilder,
+    this.questionnaireAdministrationBuilder,
     this.legacyDemoAccess,
   });
 
@@ -51,6 +55,7 @@ final class AppDependencies {
       syncTransportBuilder: productionSyncTransport,
       regionResolverBuilder: productionContactRegionResolver,
       questionnaireRemoteSourceBuilder: productionQuestionnaireRemoteSource,
+      questionnaireAdministrationBuilder: productionQuestionnaireAdministration,
     );
   }
 
@@ -67,6 +72,8 @@ final class AppDependencies {
   regionResolverBuilder;
   final QuestionnaireRemoteSource? Function(IdentitySession)?
   questionnaireRemoteSourceBuilder;
+  final QuestionnaireAdministrationGateway Function(IdentitySession)?
+  questionnaireAdministrationBuilder;
 
   /// 临时兼容 legacy demo；正式 composition root 永远不提供此 Adapter。
   final LegacyDemoAccess? legacyDemoAccess;
@@ -78,6 +85,7 @@ final class AppDependencies {
     SyncEngineFactory? syncEngineFactory;
     ContactRegionResolver? regionResolver;
     QuestionnaireCatalog? questionnaireCatalog;
+    QuestionnaireAdministrationGateway? questionnaireAdministration;
     try {
       identitySession = await identitySessionFactory.open();
     } catch (error, stackTrace) {
@@ -143,6 +151,12 @@ final class AppDependencies {
         database: database,
         remoteSource: questionnaireRemoteSourceBuilder?.call(identitySession),
       );
+      questionnaireAdministration = CachedQuestionnaireAdministrationGateway(
+        database: database,
+        remote:
+            questionnaireAdministrationBuilder?.call(identitySession) ??
+            const DeferredQuestionnaireAdministrationGateway(),
+      );
       appSession = AppSession(
         identitySession: identitySession,
         contextGateway: sessionContextGateway,
@@ -162,12 +176,15 @@ final class AppDependencies {
         timeZoneProvider: timeZoneProvider,
         regionResolver: regionResolver,
         questionnaireCatalog: questionnaireCatalog,
+        questionnaireAdministration: questionnaireAdministration,
+        idGenerator: idGenerator,
       );
     } catch (error, stackTrace) {
       await database?.close();
       await syncEngineFactory?.close();
       await regionResolver?.close();
       await questionnaireCatalog?.close();
+      await questionnaireAdministration?.close();
       await appSession?.close();
       if (appSession == null) {
         await sessionContextGateway.close();
@@ -203,6 +220,8 @@ final class AppStartupReady extends AppStartupResult {
     required this.timeZoneProvider,
     required this.regionResolver,
     required this.questionnaireCatalog,
+    required this.questionnaireAdministration,
+    required this.idGenerator,
   });
 
   final AppController controller;
@@ -218,6 +237,8 @@ final class AppStartupReady extends AppStartupResult {
   final DeviceTimeZoneProvider timeZoneProvider;
   final ContactRegionResolver regionResolver;
   final QuestionnaireCatalog questionnaireCatalog;
+  final QuestionnaireAdministrationGateway questionnaireAdministration;
+  final IdGenerator idGenerator;
 }
 
 final class AppStartupFailed extends AppStartupResult {

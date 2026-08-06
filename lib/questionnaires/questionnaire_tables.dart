@@ -98,3 +98,26 @@ class DbQuestionnaireOptions extends Table {
     'UNIQUE (questionnaire_version_id, question_id, position)',
   ];
 }
+
+/// 管理端显式保存时先落本机的工作副本；发布仍只能由 Backend 事务完成。
+class DbQuestionnaireDraftWorkingCopies extends Table {
+  TextColumn get questionnaireDraftId => text()();
+  TextColumn get projectId => text()();
+  TextColumn get sourceVersionId => text().nullable()();
+  IntColumn get baseRevision => integer()();
+  TextColumn get definitionJson => text()();
+  BoolColumn get hasLocalChanges => boolean()();
+  DateTimeColumn get updatedAtUtc => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {questionnaireDraftId};
+
+  @override
+  List<String> get customConstraints => const [
+    'CHECK (length(trim(questionnaire_draft_id)) > 0)',
+    'CHECK (length(trim(project_id)) > 0)',
+    'CHECK (base_revision > 0)',
+    'CHECK (json_valid(definition_json) AND '
+        "json_type(definition_json) = 'object')",
+  ];
+}

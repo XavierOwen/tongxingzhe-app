@@ -13,8 +13,10 @@ import '../features/contact_entry/contact_channel_label.dart';
 import '../features/contact_journal/contact_journal.dart';
 import '../features/contact_journal/contact_models.dart';
 import '../features/home/production_home_view_model.dart';
+import '../features/questionnaire_admin/questionnaire_admin_screen.dart';
 import '../features/contact_metrics/personal_contact_overview.dart';
 import '../l10n/app_strings.dart';
+import '../questionnaires/questionnaire_administration.dart';
 import '../routing/app_router.dart';
 import '../services/location_service.dart';
 import '../sync/sync_engine_factory.dart';
@@ -37,6 +39,8 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.timeZoneProvider,
     required this.selectedIndex,
     required this.contactPageClosedEvents,
+    required this.questionnaireAdministration,
+    required this.idGenerator,
     required this.onDestinationSelected,
     required this.onOpenContactEntry,
     required this.onOpenContactFromAttempt,
@@ -54,6 +58,8 @@ final class ProductionHomeShell extends StatefulWidget {
   final DeviceTimeZoneProvider timeZoneProvider;
   final int selectedIndex;
   final ValueListenable<ContactPageClosedEvent> contactPageClosedEvents;
+  final QuestionnaireAdministrationGateway questionnaireAdministration;
+  final IdGenerator idGenerator;
   final ValueChanged<int> onDestinationSelected;
   final ValueChanged<ContactDraft?> onOpenContactEntry;
   final ValueChanged<ContactAttempt> onOpenContactFromAttempt;
@@ -209,6 +215,21 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
                   ],
                 ),
               ),
+              if (widget.context.capabilities.contains(
+                questionnaireManagementCapability,
+              )) ...[
+                const PopupMenuDivider(),
+                PopupMenuItem<String>(
+                  value: _manageQuestionnaireMenuValue,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.schema_outlined, size: 18),
+                      const SizedBox(width: 8),
+                      Text(strings.t('questionnaireManage')),
+                    ],
+                  ),
+                ),
+              ],
             ],
             icon: const Icon(Icons.swap_horiz_outlined),
           ),
@@ -302,11 +323,31 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
   }
 
   Future<void> _handleProjectMenuSelection(String value) async {
+    if (value == _manageQuestionnaireMenuValue) {
+      await _manageQuestionnaire();
+      return;
+    }
     if (value == _createProjectMenuValue) {
       await _createProject();
       return;
     }
     await _viewModel.selectProject(value);
+  }
+
+  Future<void> _manageQuestionnaire() async {
+    final published = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => Dialog.fullscreen(
+        child: QuestionnaireAdminScreen(
+          controller: widget.controller,
+          gateway: widget.questionnaireAdministration,
+          idGenerator: widget.idGenerator,
+        ),
+      ),
+    );
+    if (published == true && mounted) {
+      await _viewModel.refreshCurrentProject();
+    }
   }
 
   Future<void> _createProject() async {
@@ -410,6 +451,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
 }
 
 const _createProjectMenuValue = '__create_personal_project__';
+const _manageQuestionnaireMenuValue = '__manage_questionnaire__';
 
 /// 对话框自行持有输入控制器，关闭动画结束后再随 State 一起释放。
 final class _CreateProjectDialog extends StatefulWidget {

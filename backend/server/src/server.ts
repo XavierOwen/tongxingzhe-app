@@ -20,12 +20,21 @@ import {
   readPublishedQuestionnaire,
   type QuestionnaireStore,
 } from "./questionnaire-catalog.js";
+import {
+  createQuestionnaireDraft,
+  listQuestionnaireAdministration,
+  publishQuestionnaireDraft,
+  readQuestionnaireDraft,
+  updateQuestionnaireDraft,
+  type QuestionnaireAdministrationStore,
+} from "./questionnaire-administration.js";
 
 export interface BackendServerDependencies
   extends SessionContextHttpDependencies {
   readonly commandStore?: SyncCommandStore;
   readonly regionResolutionStore?: RegionResolutionStore;
   readonly questionnaireStore?: QuestionnaireStore;
+  readonly questionnaireAdministrationStore?: QuestionnaireAdministrationStore;
 }
 
 export function createBackendServer(
@@ -34,6 +43,7 @@ export function createBackendServer(
   return createServer(async (request, response) => {
     response.setHeader("content-type", "application/json; charset=utf-8");
     response.setHeader("cache-control", "no-store");
+    const requestUrl = new URL(request.url ?? "/", "http://localhost");
 
     if (request.method === "GET" && request.url === "/healthz") {
       response.statusCode = 200;
@@ -175,7 +185,122 @@ export function createBackendServer(
       return;
     }
 
-    const requestUrl = new URL(request.url ?? "/", "http://localhost");
+    if (
+      request.method === "GET" &&
+      requestUrl.pathname === "/v1/questionnaire-administration"
+    ) {
+      if (dependencies.questionnaireAdministrationStore === undefined) {
+        response.statusCode = 503;
+        response.end(JSON.stringify({
+          error: { code: "questionnaire_administration_unavailable" },
+        }));
+        return;
+      }
+      const result = await listQuestionnaireAdministration(
+        request.headers.authorization,
+        {
+          identityVerifier: dependencies.identityVerifier,
+          contextStore: dependencies.contextStore,
+          administrationStore: dependencies.questionnaireAdministrationStore,
+        },
+      );
+      response.statusCode = result.status;
+      response.end(JSON.stringify(result.body));
+      return;
+    }
+
+    if (
+      request.method === "POST" &&
+      requestUrl.pathname === "/v1/questionnaire-drafts"
+    ) {
+      if (dependencies.questionnaireAdministrationStore === undefined) {
+        response.statusCode = 503;
+        response.end(JSON.stringify({
+          error: { code: "questionnaire_administration_unavailable" },
+        }));
+        return;
+      }
+      try {
+        const body = await readJsonBody(request);
+        const result = await createQuestionnaireDraft(
+          request.headers.authorization,
+          body,
+          {
+            identityVerifier: dependencies.identityVerifier,
+            contextStore: dependencies.contextStore,
+            administrationStore:
+              dependencies.questionnaireAdministrationStore,
+          },
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
+      }
+      return;
+    }
+
+    const draftMatch = /^\/v1\/questionnaire-drafts\/([^/]+)$/.exec(
+      requestUrl.pathname,
+    );
+    const publishMatch =
+      /^\/v1\/questionnaire-drafts\/([^/]+)\/publish$/.exec(
+        requestUrl.pathname,
+      );
+    if (
+      (draftMatch !== null || publishMatch !== null) &&
+      (request.method === "GET" ||
+        request.method === "PUT" ||
+        request.method === "POST")
+    ) {
+      if (dependencies.questionnaireAdministrationStore === undefined) {
+        response.statusCode = 503;
+        response.end(JSON.stringify({
+          error: { code: "questionnaire_administration_unavailable" },
+        }));
+        return;
+      }
+      const draftId = (publishMatch ?? draftMatch)?.[1];
+      if (draftId === undefined) {
+        response.statusCode = 404;
+        response.end(JSON.stringify({ error: { code: "not_found" } }));
+        return;
+      }
+      const administrationDependencies = {
+        identityVerifier: dependencies.identityVerifier,
+        contextStore: dependencies.contextStore,
+        administrationStore: dependencies.questionnaireAdministrationStore,
+      };
+      try {
+        const result = request.method === "GET" && draftMatch !== null
+          ? await readQuestionnaireDraft(
+            request.headers.authorization,
+            draftId,
+            administrationDependencies,
+          )
+          : request.method === "PUT" && draftMatch !== null
+          ? await updateQuestionnaireDraft(
+            request.headers.authorization,
+            draftId,
+            await readJsonBody(request),
+            administrationDependencies,
+          )
+          : request.method === "POST" && publishMatch !== null
+          ? await publishQuestionnaireDraft(
+            request.headers.authorization,
+            draftId,
+            await readJsonBody(request),
+            administrationDependencies,
+          )
+          : { status: 404, body: { error: { code: "not_found" } } };
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
+      }
+      return;
+    }
+
     const questionnaireMatch = /^\/v1\/questionnaire-versions\/([^/]+)$/
       .exec(requestUrl.pathname);
     if (request.method === "GET" && questionnaireMatch !== null) {
@@ -247,6 +372,20 @@ export function createBackendServer(
 }
 
 class PayloadTooLargeError extends Error {}
+
+function writeBodyError(
+  response: {statusCode: number; end(value: string): void},
+  error: unknown,
+): void {
+  response.statusCode = error instanceof PayloadTooLargeError ? 413 : 400;
+  response.end(JSON.stringify({
+    error: {
+      code: error instanceof PayloadTooLargeError
+        ? "payload_too_large"
+        : "invalid_json",
+    },
+  }));
+}
 
 async function readJsonBody(request: AsyncIterable<unknown>): Promise<unknown> {
   const chunks: Buffer[] = [];

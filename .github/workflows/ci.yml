@@ -52,13 +52,13 @@ jobs:
       - name: Verify Markdown links
         run: dart run tool/check_markdown_links.dart
 
-      - name: Verify current Drift v14 schema snapshot
+      - name: Verify current Drift v15 schema snapshot
         run: |
           dart run drift_dev schema dump \
             lib/data/local_database.dart \
-            "${RUNNER_TEMP}/drift_schema_v14.json"
-          cmp drift_schemas/drift_schema_v14.json \
-            "${RUNNER_TEMP}/drift_schema_v14.json"
+            "${RUNNER_TEMP}/drift_schema_v15.json"
+          cmp drift_schemas/drift_schema_v15.json \
+            "${RUNNER_TEMP}/drift_schema_v15.json"
 
       - name: Verify Drift migration helpers are current
         run: |
@@ -150,6 +150,13 @@ jobs:
             --file backend/database/checks/verify_questionnaire_visibility.sql
           psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file backend/database/fixtures/0012_questionnaire_visibility.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_questionnaire_publishing.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0013_questionnaire_publishing.sql
+
+      - name: Verify concurrent questionnaire publication
+        run: ./tool/verify_questionnaire_publish_concurrency.sh
 
       - name: Reject edited migration history
         run: |
@@ -219,6 +226,10 @@ jobs:
             --file backend/database/checks/verify_questionnaire_visibility.sql
           psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file backend/database/fixtures/0012_questionnaire_visibility.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_questionnaire_publishing.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0013_questionnaire_publishing.sql
 
   backend-server:
     name: Backend identity, context, and sync

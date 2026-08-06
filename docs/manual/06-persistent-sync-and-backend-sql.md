@@ -18,6 +18,19 @@ Flutter 不知道 PostgreSQL 密码。它只用 Supabase access token 调用自�
 
 HTTP 层的 context、command 和 pull 端点共用 [`bearerToken`](../../backend/server/src/authorization.ts)。它只接受一个 `Bearer token`，拒绝缺失、含空白或拼接多个值的 header。统一解析器防止不同端点形成不同的认证边界。
 
+## 问卷管理为何使用独立命令边界
+
+问卷管理不是接触同步 command。它有自己的列表、草稿 revision 和发布 transaction：
+
+- `GET /v1/questionnaire-administration` 列出当前版本、历史版本和未发布草稿；
+- `POST /v1/questionnaire-drafts` 建立空白草稿或复制一个已发布版本；
+- `GET`／`PUT /v1/questionnaire-drafts/:id` 读取或按预期 revision 保存；
+- `POST /v1/questionnaire-drafts/:id/publish` 用 request ID 发布新版本。
+
+这些端点每次都重新验证 JWT 和可信上下文，要求 `manage_analysis_definitions` capability。客户端不能提交用户、空间或项目来扩大范围。PostgreSQL 的 `0013_questionnaire_publishing.sql` 还会重新检查活动用户、个人空间所有权和活动项目，所以旧页面状态、旧 capability 或被撤销的身份不能继续发布。
+
+保存失败可以保留本机工作副本，但发布没有离线成功状态。发布函数取得项目级事务锁，在同一 transaction 内验证草稿、建立定义、记录发布者与说明并切换唯一 current 版本。相同请求可以安全重试；并发请求不会留下两个 current 版本。已发布定义只读，回退必须复制旧版本再发布新版本。
+
 ## Outbox 为什么和接触在同一 transaction
 
 `ContactJournal.submitDraft` 在同一 SQLite transaction 内写入接触、revision、答案和 `contact.submit.v1` command。更正和作废分别写入 `contact.revise.v1` 与 `contact.void.v1`。冲突解决会追加 revision，并写入 `contact.resolve.v1`。`recordContactAttempt` 同样原子写入尝试和 `contact.attempt.submit.v1` command。如果只写本机事实，随后 App 崩溃，同步引擎就不知道它需要上传。如果只写 command，本机又会出现无事实可显示的幽灵命令。
@@ -163,7 +176,7 @@ Flutter 的 [`HttpContactRegionResolver`](../../lib/regions/contact_region_resol
 
 Flutter 测试使用真实内存 SQLite 和可控 Transport。它们覆盖 ACK、指数退避、jitter 上限、双 worker 租约、过期恢复、迟到 ACK、aggregate 顺序、永久失败隔离、批量部分成功、乱序结果、远端 batch 原子性、cursor 区分、同 ID 内容冲突，以及冲突快照恢复与解决 ACK。HTTP Adapter 测试固定 bearer header、路径、query、JSON、`Retry-After`、完整冲突对比和错误分类。
 
-Backend 测试使用 synthetic 身份和上下文。它们证明伪造项目在 Store 调用前被拒绝，固定 protocol v1 兼容 fixture，并验证批量单条失败。它们还证明 PostgreSQL 的无效 cursor 不会被误报成临时服务故障。PostgreSQL 16 验证从空库执行全部 migration，再次执行核对 checksum，运行 runtime 权限、接触修订、自动合并、同字段冲突、解决重放、区域循环、草稿冲突、跨用户隔离和共用指标 fixture，最后执行 `pg_dump` 与 `pg_restore` 并重跑检查。
+Backend 测试使用 synthetic 身份和上下文。它们证明伪造项目在 Store 调用前被拒绝，固定 protocol v1 兼容 fixture，并验证批量单条失败。它们还证明 PostgreSQL 的无效 cursor 不会被误报成临时服务故障，问卷管理会重新取得 capability，并在发布前重读草稿 revision。PostgreSQL 16 验证从空库执行全部 migration，再次执行核对 checksum，运行 runtime 权限、接触修订、自动合并、同字段冲突、解决重放、区域循环、草稿冲突、跨用户隔离、问卷事务发布和共用指标 fixture，最后执行并发发布、`pg_dump` 与 `pg_restore` 检查。
 
 这些测试分别回答不同问题。单元测试证明状态机，HTTP 测试证明协议转换，真实 PostgreSQL 证明 SQL 语法、权限、transaction 和恢复路径。某一类通过不能替代另一类。
 

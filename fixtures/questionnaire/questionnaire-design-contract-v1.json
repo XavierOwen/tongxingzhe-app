@@ -1,0 +1,156 @@
+{
+  "contract_version": 1,
+  "current": {
+    "questionnaire_version_id": "11111111-1111-4111-8111-111111111111",
+    "project_id": "22222222-2222-4222-8222-222222222222",
+    "version_number": 3,
+    "status": "published",
+    "questions": [
+      {
+        "question_id": "consent",
+        "position": 1,
+        "prompt": "愿意继续了解吗？",
+        "type": "boolean",
+        "required": true,
+        "allow_unknown": false,
+        "allow_refused": true,
+        "allow_not_applicable": false
+      },
+      {
+        "question_id": "topics",
+        "position": 2,
+        "prompt": "想了解哪些主题？",
+        "type": "multi_choice",
+        "required": false,
+        "allow_unknown": false,
+        "allow_refused": true,
+        "allow_not_applicable": true,
+        "options": [
+          {"option_id": "life", "position": 1, "label": "人生"},
+          {"option_id": "faith", "position": 2, "label": "信仰"}
+        ],
+        "minimum_selections": 1,
+        "maximum_selections": 2
+      },
+      {
+        "question_id": "age",
+        "position": 3,
+        "prompt": "年龄范围",
+        "type": "number",
+        "required": false,
+        "allow_unknown": true,
+        "allow_refused": true,
+        "allow_not_applicable": true,
+        "number_kind": "integer",
+        "minimum": 18,
+        "maximum": 80
+      },
+      {
+        "question_id": "legacy_note",
+        "position": 4,
+        "prompt": "旧备注",
+        "type": "short_text",
+        "required": false,
+        "allow_unknown": false,
+        "allow_refused": true,
+        "allow_not_applicable": true,
+        "maximum_length": 80
+      }
+    ]
+  },
+  "candidate": {
+    "questionnaire_version_id": "33333333-3333-4333-8333-333333333333",
+    "project_id": "22222222-2222-4222-8222-222222222222",
+    "version_number": 4,
+    "status": "published",
+    "questions": [
+      {
+        "question_id": "consent",
+        "position": 1,
+        "prompt": "愿意进一步了解吗？",
+        "type": "boolean",
+        "required": true,
+        "allow_unknown": true,
+        "allow_refused": true,
+        "allow_not_applicable": false
+      },
+      {
+        "question_id": "topics",
+        "position": 2,
+        "prompt": "想了解哪些主题？",
+        "type": "multi_choice",
+        "required": false,
+        "allow_unknown": false,
+        "allow_refused": true,
+        "allow_not_applicable": true,
+        "options": [
+          {"option_id": "life", "position": 1, "label": "人生"},
+          {"option_id": "faith", "position": 2, "label": "信仰与圣经"},
+          {"option_id": "family", "position": 3, "label": "家庭"}
+        ],
+        "minimum_selections": 1,
+        "maximum_selections": 3,
+        "display_rule": {
+          "match": "all",
+          "conditions": [
+            {
+              "source_question_id": "consent",
+              "operator": "equals",
+              "operand": true
+            }
+          ]
+        }
+      },
+      {
+        "question_id": "age",
+        "position": 3,
+        "prompt": "年龄范围",
+        "type": "number",
+        "required": false,
+        "allow_unknown": true,
+        "allow_refused": true,
+        "allow_not_applicable": true,
+        "number_kind": "integer",
+        "minimum": 16,
+        "maximum": 90
+      },
+      {
+        "question_id": "follow_up_date",
+        "position": 4,
+        "prompt": "适合再次联系的日期",
+        "type": "date",
+        "required": false,
+        "allow_unknown": true,
+        "allow_refused": true,
+        "allow_not_applicable": true
+      }
+    ]
+  },
+  "expected_differences": [
+    {
+      "question_id": "consent",
+      "kind": "changed",
+      "fields": ["definition", "answer_mode"]
+    },
+    {
+      "question_id": "topics",
+      "kind": "changed",
+      "fields": ["options", "value_bounds", "display_rule"]
+    },
+    {
+      "question_id": "age",
+      "kind": "changed",
+      "fields": ["value_bounds"]
+    },
+    {
+      "question_id": "legacy_note",
+      "kind": "removed",
+      "fields": ["definition"]
+    },
+    {
+      "question_id": "follow_up_date",
+      "kind": "added",
+      "fields": ["definition"]
+    }
+  ]
+}

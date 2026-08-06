@@ -279,6 +279,11 @@ final class ProductionHomeViewModel extends ChangeNotifier {
     return _runProjectChange(() => _sessionActions.selectProject(projectId));
   }
 
+  /// 重新解析当前项目的可信上下文，例如获取刚发布的问卷版本。
+  Future<bool> refreshCurrentProject() => _runProjectChange(
+    () => _sessionActions.selectProject(_context.project.id),
+  );
+
   Future<bool> createPersonalProject(String displayName) => _runProjectChange(
     () => _sessionActions.createPersonalProject(displayName),
   );

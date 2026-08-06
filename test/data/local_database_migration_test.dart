@@ -11,15 +11,40 @@ import '../generated_migrations/schema_v10.dart' as v10;
 import '../generated_migrations/schema_v11.dart' as v11;
 import '../generated_migrations/schema_v12.dart' as v12;
 import '../generated_migrations/schema_v13.dart' as v13;
+import '../generated_migrations/schema_v14.dart' as v14;
 
 void main() {
-  test('保存的 schema v14 可以独立重建', () async {
+  test('保存的 schema v15 可以独立重建', () async {
     final verifier = SchemaVerifier(GeneratedHelper());
-    final connection = await verifier.startAt(14);
+    final connection = await verifier.startAt(15);
     final database = LocalDatabase(connection);
     addTearDown(database.close);
 
-    await verifier.migrateAndValidate(database, 14);
+    await verifier.migrateAndValidate(database, 15);
+  });
+
+  test('v14 升级到 v15 时保留旧设置并新增空问卷工作副本表', () async {
+    final verifier = SchemaVerifier(GeneratedHelper());
+    final schema = await verifier.schemaAt(14);
+    addTearDown(schema.close);
+    final oldDatabase = v14.DatabaseAtV14(schema.newConnection());
+    await oldDatabase.customStatement(
+      "INSERT INTO db_app_settings (key, value) VALUES ('locale', 'zh')",
+    );
+    await oldDatabase.close();
+
+    final database = LocalDatabase(schema.newConnection());
+    addTearDown(database.close);
+    await verifier.migrateAndValidate(database, 15);
+
+    expect(
+      (await database.select(database.dbAppSettings).getSingle()).value,
+      'zh',
+    );
+    expect(
+      await database.select(database.dbQuestionnaireDraftWorkingCopies).get(),
+      isEmpty,
+    );
   });
 
   test('v13 升级到 v14 时保留答案并新增规则与跳题原因列', () async {
@@ -68,7 +93,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 14);
+    await verifier.migrateAndValidate(database, 15);
 
     final answer = await database.select(database.dbContactAnswers).getSingle();
     expect(answer.booleanValue, isTrue);
@@ -139,7 +164,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 14);
+    await verifier.migrateAndValidate(database, 15);
 
     final submittedAnswer = await database
         .select(database.dbContactAnswers)
@@ -189,7 +214,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 14);
+    await verifier.migrateAndValidate(database, 15);
 
     expect(
       (await database.select(database.dbContactRecords).getSingle()).contactId,
@@ -234,7 +259,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 14);
+    await verifier.migrateAndValidate(database, 15);
 
     final revision = await database
         .select(database.dbContactRevisions)
@@ -281,7 +306,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 14);
+    await verifier.migrateAndValidate(database, 15);
 
     final draft = await database.select(database.dbContactDrafts).getSingle();
     expect(draft.draftId, 'draft-before-v10');
@@ -326,7 +351,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 14);
+    await verifier.migrateAndValidate(database, 15);
 
     final draft = await database.select(database.dbContactDrafts).getSingle();
     expect(draft.draftId, 'draft-before-v9');
@@ -399,7 +424,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 14);
+    await verifier.migrateAndValidate(database, 15);
 
     final contact = await database
         .select(database.dbContactRecords)
@@ -431,7 +456,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 14);
+    await verifier.migrateAndValidate(database, 15);
 
     final legacySetting = await (database.select(
       database.dbAppSettings,

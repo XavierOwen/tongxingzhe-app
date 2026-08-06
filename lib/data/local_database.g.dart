@@ -15419,6 +15419,528 @@ class DbQuestionnaireOptionsCompanion
   }
 }
 
+class $DbQuestionnaireDraftWorkingCopiesTable
+    extends DbQuestionnaireDraftWorkingCopies
+    with
+        TableInfo<
+          $DbQuestionnaireDraftWorkingCopiesTable,
+          DbQuestionnaireDraftWorkingCopy
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DbQuestionnaireDraftWorkingCopiesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _questionnaireDraftIdMeta =
+      const VerificationMeta('questionnaireDraftId');
+  @override
+  late final GeneratedColumn<String> questionnaireDraftId =
+      GeneratedColumn<String>(
+        'questionnaire_draft_id',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<String> projectId = GeneratedColumn<String>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceVersionIdMeta = const VerificationMeta(
+    'sourceVersionId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceVersionId = GeneratedColumn<String>(
+    'source_version_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _baseRevisionMeta = const VerificationMeta(
+    'baseRevision',
+  );
+  @override
+  late final GeneratedColumn<int> baseRevision = GeneratedColumn<int>(
+    'base_revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _definitionJsonMeta = const VerificationMeta(
+    'definitionJson',
+  );
+  @override
+  late final GeneratedColumn<String> definitionJson = GeneratedColumn<String>(
+    'definition_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _hasLocalChangesMeta = const VerificationMeta(
+    'hasLocalChanges',
+  );
+  @override
+  late final GeneratedColumn<bool> hasLocalChanges = GeneratedColumn<bool>(
+    'has_local_changes',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("has_local_changes" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _updatedAtUtcMeta = const VerificationMeta(
+    'updatedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAtUtc = GeneratedColumn<DateTime>(
+    'updated_at_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    questionnaireDraftId,
+    projectId,
+    sourceVersionId,
+    baseRevision,
+    definitionJson,
+    hasLocalChanges,
+    updatedAtUtc,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'db_questionnaire_draft_working_copies';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DbQuestionnaireDraftWorkingCopy> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('questionnaire_draft_id')) {
+      context.handle(
+        _questionnaireDraftIdMeta,
+        questionnaireDraftId.isAcceptableOrUnknown(
+          data['questionnaire_draft_id']!,
+          _questionnaireDraftIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_questionnaireDraftIdMeta);
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('source_version_id')) {
+      context.handle(
+        _sourceVersionIdMeta,
+        sourceVersionId.isAcceptableOrUnknown(
+          data['source_version_id']!,
+          _sourceVersionIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('base_revision')) {
+      context.handle(
+        _baseRevisionMeta,
+        baseRevision.isAcceptableOrUnknown(
+          data['base_revision']!,
+          _baseRevisionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_baseRevisionMeta);
+    }
+    if (data.containsKey('definition_json')) {
+      context.handle(
+        _definitionJsonMeta,
+        definitionJson.isAcceptableOrUnknown(
+          data['definition_json']!,
+          _definitionJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_definitionJsonMeta);
+    }
+    if (data.containsKey('has_local_changes')) {
+      context.handle(
+        _hasLocalChangesMeta,
+        hasLocalChanges.isAcceptableOrUnknown(
+          data['has_local_changes']!,
+          _hasLocalChangesMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_hasLocalChangesMeta);
+    }
+    if (data.containsKey('updated_at_utc')) {
+      context.handle(
+        _updatedAtUtcMeta,
+        updatedAtUtc.isAcceptableOrUnknown(
+          data['updated_at_utc']!,
+          _updatedAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtUtcMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {questionnaireDraftId};
+  @override
+  DbQuestionnaireDraftWorkingCopy map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DbQuestionnaireDraftWorkingCopy(
+      questionnaireDraftId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}questionnaire_draft_id'],
+      )!,
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}project_id'],
+      )!,
+      sourceVersionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_version_id'],
+      ),
+      baseRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}base_revision'],
+      )!,
+      definitionJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}definition_json'],
+      )!,
+      hasLocalChanges: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}has_local_changes'],
+      )!,
+      updatedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at_utc'],
+      )!,
+    );
+  }
+
+  @override
+  $DbQuestionnaireDraftWorkingCopiesTable createAlias(String alias) {
+    return $DbQuestionnaireDraftWorkingCopiesTable(attachedDatabase, alias);
+  }
+}
+
+class DbQuestionnaireDraftWorkingCopy extends DataClass
+    implements Insertable<DbQuestionnaireDraftWorkingCopy> {
+  final String questionnaireDraftId;
+  final String projectId;
+  final String? sourceVersionId;
+  final int baseRevision;
+  final String definitionJson;
+  final bool hasLocalChanges;
+  final DateTime updatedAtUtc;
+  const DbQuestionnaireDraftWorkingCopy({
+    required this.questionnaireDraftId,
+    required this.projectId,
+    this.sourceVersionId,
+    required this.baseRevision,
+    required this.definitionJson,
+    required this.hasLocalChanges,
+    required this.updatedAtUtc,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['questionnaire_draft_id'] = Variable<String>(questionnaireDraftId);
+    map['project_id'] = Variable<String>(projectId);
+    if (!nullToAbsent || sourceVersionId != null) {
+      map['source_version_id'] = Variable<String>(sourceVersionId);
+    }
+    map['base_revision'] = Variable<int>(baseRevision);
+    map['definition_json'] = Variable<String>(definitionJson);
+    map['has_local_changes'] = Variable<bool>(hasLocalChanges);
+    map['updated_at_utc'] = Variable<DateTime>(updatedAtUtc);
+    return map;
+  }
+
+  DbQuestionnaireDraftWorkingCopiesCompanion toCompanion(bool nullToAbsent) {
+    return DbQuestionnaireDraftWorkingCopiesCompanion(
+      questionnaireDraftId: Value(questionnaireDraftId),
+      projectId: Value(projectId),
+      sourceVersionId: sourceVersionId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceVersionId),
+      baseRevision: Value(baseRevision),
+      definitionJson: Value(definitionJson),
+      hasLocalChanges: Value(hasLocalChanges),
+      updatedAtUtc: Value(updatedAtUtc),
+    );
+  }
+
+  factory DbQuestionnaireDraftWorkingCopy.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DbQuestionnaireDraftWorkingCopy(
+      questionnaireDraftId: serializer.fromJson<String>(
+        json['questionnaireDraftId'],
+      ),
+      projectId: serializer.fromJson<String>(json['projectId']),
+      sourceVersionId: serializer.fromJson<String?>(json['sourceVersionId']),
+      baseRevision: serializer.fromJson<int>(json['baseRevision']),
+      definitionJson: serializer.fromJson<String>(json['definitionJson']),
+      hasLocalChanges: serializer.fromJson<bool>(json['hasLocalChanges']),
+      updatedAtUtc: serializer.fromJson<DateTime>(json['updatedAtUtc']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'questionnaireDraftId': serializer.toJson<String>(questionnaireDraftId),
+      'projectId': serializer.toJson<String>(projectId),
+      'sourceVersionId': serializer.toJson<String?>(sourceVersionId),
+      'baseRevision': serializer.toJson<int>(baseRevision),
+      'definitionJson': serializer.toJson<String>(definitionJson),
+      'hasLocalChanges': serializer.toJson<bool>(hasLocalChanges),
+      'updatedAtUtc': serializer.toJson<DateTime>(updatedAtUtc),
+    };
+  }
+
+  DbQuestionnaireDraftWorkingCopy copyWith({
+    String? questionnaireDraftId,
+    String? projectId,
+    Value<String?> sourceVersionId = const Value.absent(),
+    int? baseRevision,
+    String? definitionJson,
+    bool? hasLocalChanges,
+    DateTime? updatedAtUtc,
+  }) => DbQuestionnaireDraftWorkingCopy(
+    questionnaireDraftId: questionnaireDraftId ?? this.questionnaireDraftId,
+    projectId: projectId ?? this.projectId,
+    sourceVersionId: sourceVersionId.present
+        ? sourceVersionId.value
+        : this.sourceVersionId,
+    baseRevision: baseRevision ?? this.baseRevision,
+    definitionJson: definitionJson ?? this.definitionJson,
+    hasLocalChanges: hasLocalChanges ?? this.hasLocalChanges,
+    updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
+  );
+  DbQuestionnaireDraftWorkingCopy copyWithCompanion(
+    DbQuestionnaireDraftWorkingCopiesCompanion data,
+  ) {
+    return DbQuestionnaireDraftWorkingCopy(
+      questionnaireDraftId: data.questionnaireDraftId.present
+          ? data.questionnaireDraftId.value
+          : this.questionnaireDraftId,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      sourceVersionId: data.sourceVersionId.present
+          ? data.sourceVersionId.value
+          : this.sourceVersionId,
+      baseRevision: data.baseRevision.present
+          ? data.baseRevision.value
+          : this.baseRevision,
+      definitionJson: data.definitionJson.present
+          ? data.definitionJson.value
+          : this.definitionJson,
+      hasLocalChanges: data.hasLocalChanges.present
+          ? data.hasLocalChanges.value
+          : this.hasLocalChanges,
+      updatedAtUtc: data.updatedAtUtc.present
+          ? data.updatedAtUtc.value
+          : this.updatedAtUtc,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbQuestionnaireDraftWorkingCopy(')
+          ..write('questionnaireDraftId: $questionnaireDraftId, ')
+          ..write('projectId: $projectId, ')
+          ..write('sourceVersionId: $sourceVersionId, ')
+          ..write('baseRevision: $baseRevision, ')
+          ..write('definitionJson: $definitionJson, ')
+          ..write('hasLocalChanges: $hasLocalChanges, ')
+          ..write('updatedAtUtc: $updatedAtUtc')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    questionnaireDraftId,
+    projectId,
+    sourceVersionId,
+    baseRevision,
+    definitionJson,
+    hasLocalChanges,
+    updatedAtUtc,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DbQuestionnaireDraftWorkingCopy &&
+          other.questionnaireDraftId == this.questionnaireDraftId &&
+          other.projectId == this.projectId &&
+          other.sourceVersionId == this.sourceVersionId &&
+          other.baseRevision == this.baseRevision &&
+          other.definitionJson == this.definitionJson &&
+          other.hasLocalChanges == this.hasLocalChanges &&
+          other.updatedAtUtc == this.updatedAtUtc);
+}
+
+class DbQuestionnaireDraftWorkingCopiesCompanion
+    extends UpdateCompanion<DbQuestionnaireDraftWorkingCopy> {
+  final Value<String> questionnaireDraftId;
+  final Value<String> projectId;
+  final Value<String?> sourceVersionId;
+  final Value<int> baseRevision;
+  final Value<String> definitionJson;
+  final Value<bool> hasLocalChanges;
+  final Value<DateTime> updatedAtUtc;
+  final Value<int> rowid;
+  const DbQuestionnaireDraftWorkingCopiesCompanion({
+    this.questionnaireDraftId = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.sourceVersionId = const Value.absent(),
+    this.baseRevision = const Value.absent(),
+    this.definitionJson = const Value.absent(),
+    this.hasLocalChanges = const Value.absent(),
+    this.updatedAtUtc = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DbQuestionnaireDraftWorkingCopiesCompanion.insert({
+    required String questionnaireDraftId,
+    required String projectId,
+    this.sourceVersionId = const Value.absent(),
+    required int baseRevision,
+    required String definitionJson,
+    required bool hasLocalChanges,
+    required DateTime updatedAtUtc,
+    this.rowid = const Value.absent(),
+  }) : questionnaireDraftId = Value(questionnaireDraftId),
+       projectId = Value(projectId),
+       baseRevision = Value(baseRevision),
+       definitionJson = Value(definitionJson),
+       hasLocalChanges = Value(hasLocalChanges),
+       updatedAtUtc = Value(updatedAtUtc);
+  static Insertable<DbQuestionnaireDraftWorkingCopy> custom({
+    Expression<String>? questionnaireDraftId,
+    Expression<String>? projectId,
+    Expression<String>? sourceVersionId,
+    Expression<int>? baseRevision,
+    Expression<String>? definitionJson,
+    Expression<bool>? hasLocalChanges,
+    Expression<DateTime>? updatedAtUtc,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (questionnaireDraftId != null)
+        'questionnaire_draft_id': questionnaireDraftId,
+      if (projectId != null) 'project_id': projectId,
+      if (sourceVersionId != null) 'source_version_id': sourceVersionId,
+      if (baseRevision != null) 'base_revision': baseRevision,
+      if (definitionJson != null) 'definition_json': definitionJson,
+      if (hasLocalChanges != null) 'has_local_changes': hasLocalChanges,
+      if (updatedAtUtc != null) 'updated_at_utc': updatedAtUtc,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DbQuestionnaireDraftWorkingCopiesCompanion copyWith({
+    Value<String>? questionnaireDraftId,
+    Value<String>? projectId,
+    Value<String?>? sourceVersionId,
+    Value<int>? baseRevision,
+    Value<String>? definitionJson,
+    Value<bool>? hasLocalChanges,
+    Value<DateTime>? updatedAtUtc,
+    Value<int>? rowid,
+  }) {
+    return DbQuestionnaireDraftWorkingCopiesCompanion(
+      questionnaireDraftId: questionnaireDraftId ?? this.questionnaireDraftId,
+      projectId: projectId ?? this.projectId,
+      sourceVersionId: sourceVersionId ?? this.sourceVersionId,
+      baseRevision: baseRevision ?? this.baseRevision,
+      definitionJson: definitionJson ?? this.definitionJson,
+      hasLocalChanges: hasLocalChanges ?? this.hasLocalChanges,
+      updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (questionnaireDraftId.present) {
+      map['questionnaire_draft_id'] = Variable<String>(
+        questionnaireDraftId.value,
+      );
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<String>(projectId.value);
+    }
+    if (sourceVersionId.present) {
+      map['source_version_id'] = Variable<String>(sourceVersionId.value);
+    }
+    if (baseRevision.present) {
+      map['base_revision'] = Variable<int>(baseRevision.value);
+    }
+    if (definitionJson.present) {
+      map['definition_json'] = Variable<String>(definitionJson.value);
+    }
+    if (hasLocalChanges.present) {
+      map['has_local_changes'] = Variable<bool>(hasLocalChanges.value);
+    }
+    if (updatedAtUtc.present) {
+      map['updated_at_utc'] = Variable<DateTime>(updatedAtUtc.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbQuestionnaireDraftWorkingCopiesCompanion(')
+          ..write('questionnaireDraftId: $questionnaireDraftId, ')
+          ..write('projectId: $projectId, ')
+          ..write('sourceVersionId: $sourceVersionId, ')
+          ..write('baseRevision: $baseRevision, ')
+          ..write('definitionJson: $definitionJson, ')
+          ..write('hasLocalChanges: $hasLocalChanges, ')
+          ..write('updatedAtUtc: $updatedAtUtc, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$LocalDatabase extends GeneratedDatabase {
   _$LocalDatabase(QueryExecutor e) : super(e);
   $LocalDatabaseManager get managers => $LocalDatabaseManager(this);
@@ -15489,6 +16011,10 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
       $DbQuestionnaireQuestionsTable(this);
   late final $DbQuestionnaireOptionsTable dbQuestionnaireOptions =
       $DbQuestionnaireOptionsTable(this);
+  late final $DbQuestionnaireDraftWorkingCopiesTable
+  dbQuestionnaireDraftWorkingCopies = $DbQuestionnaireDraftWorkingCopiesTable(
+    this,
+  );
   Selectable<DbSyncOutboxData> readReadySyncCommand(
     String appUserId,
     String workspaceId,
@@ -15625,6 +16151,7 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
     dbQuestionnaireVersions,
     dbQuestionnaireQuestions,
     dbQuestionnaireOptions,
+    dbQuestionnaireDraftWorkingCopies,
   ];
 }
 
@@ -25661,6 +26188,275 @@ typedef $$DbQuestionnaireOptionsTableProcessedTableManager =
       DbQuestionnaireOption,
       PrefetchHooks Function({bool questionnaireVersionId})
     >;
+typedef $$DbQuestionnaireDraftWorkingCopiesTableCreateCompanionBuilder =
+    DbQuestionnaireDraftWorkingCopiesCompanion Function({
+      required String questionnaireDraftId,
+      required String projectId,
+      Value<String?> sourceVersionId,
+      required int baseRevision,
+      required String definitionJson,
+      required bool hasLocalChanges,
+      required DateTime updatedAtUtc,
+      Value<int> rowid,
+    });
+typedef $$DbQuestionnaireDraftWorkingCopiesTableUpdateCompanionBuilder =
+    DbQuestionnaireDraftWorkingCopiesCompanion Function({
+      Value<String> questionnaireDraftId,
+      Value<String> projectId,
+      Value<String?> sourceVersionId,
+      Value<int> baseRevision,
+      Value<String> definitionJson,
+      Value<bool> hasLocalChanges,
+      Value<DateTime> updatedAtUtc,
+      Value<int> rowid,
+    });
+
+class $$DbQuestionnaireDraftWorkingCopiesTableFilterComposer
+    extends Composer<_$LocalDatabase, $DbQuestionnaireDraftWorkingCopiesTable> {
+  $$DbQuestionnaireDraftWorkingCopiesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get questionnaireDraftId => $composableBuilder(
+    column: $table.questionnaireDraftId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get projectId => $composableBuilder(
+    column: $table.projectId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceVersionId => $composableBuilder(
+    column: $table.sourceVersionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get baseRevision => $composableBuilder(
+    column: $table.baseRevision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get definitionJson => $composableBuilder(
+    column: $table.definitionJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get hasLocalChanges => $composableBuilder(
+    column: $table.hasLocalChanges,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DbQuestionnaireDraftWorkingCopiesTableOrderingComposer
+    extends Composer<_$LocalDatabase, $DbQuestionnaireDraftWorkingCopiesTable> {
+  $$DbQuestionnaireDraftWorkingCopiesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get questionnaireDraftId => $composableBuilder(
+    column: $table.questionnaireDraftId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get projectId => $composableBuilder(
+    column: $table.projectId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceVersionId => $composableBuilder(
+    column: $table.sourceVersionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get baseRevision => $composableBuilder(
+    column: $table.baseRevision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get definitionJson => $composableBuilder(
+    column: $table.definitionJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get hasLocalChanges => $composableBuilder(
+    column: $table.hasLocalChanges,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DbQuestionnaireDraftWorkingCopiesTableAnnotationComposer
+    extends Composer<_$LocalDatabase, $DbQuestionnaireDraftWorkingCopiesTable> {
+  $$DbQuestionnaireDraftWorkingCopiesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get questionnaireDraftId => $composableBuilder(
+    column: $table.questionnaireDraftId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get projectId =>
+      $composableBuilder(column: $table.projectId, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceVersionId => $composableBuilder(
+    column: $table.sourceVersionId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get baseRevision => $composableBuilder(
+    column: $table.baseRevision,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get definitionJson => $composableBuilder(
+    column: $table.definitionJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get hasLocalChanges => $composableBuilder(
+    column: $table.hasLocalChanges,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get updatedAtUtc => $composableBuilder(
+    column: $table.updatedAtUtc,
+    builder: (column) => column,
+  );
+}
+
+class $$DbQuestionnaireDraftWorkingCopiesTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $DbQuestionnaireDraftWorkingCopiesTable,
+          DbQuestionnaireDraftWorkingCopy,
+          $$DbQuestionnaireDraftWorkingCopiesTableFilterComposer,
+          $$DbQuestionnaireDraftWorkingCopiesTableOrderingComposer,
+          $$DbQuestionnaireDraftWorkingCopiesTableAnnotationComposer,
+          $$DbQuestionnaireDraftWorkingCopiesTableCreateCompanionBuilder,
+          $$DbQuestionnaireDraftWorkingCopiesTableUpdateCompanionBuilder,
+          (
+            DbQuestionnaireDraftWorkingCopy,
+            BaseReferences<
+              _$LocalDatabase,
+              $DbQuestionnaireDraftWorkingCopiesTable,
+              DbQuestionnaireDraftWorkingCopy
+            >,
+          ),
+          DbQuestionnaireDraftWorkingCopy,
+          PrefetchHooks Function()
+        > {
+  $$DbQuestionnaireDraftWorkingCopiesTableTableManager(
+    _$LocalDatabase db,
+    $DbQuestionnaireDraftWorkingCopiesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DbQuestionnaireDraftWorkingCopiesTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$DbQuestionnaireDraftWorkingCopiesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$DbQuestionnaireDraftWorkingCopiesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> questionnaireDraftId = const Value.absent(),
+                Value<String> projectId = const Value.absent(),
+                Value<String?> sourceVersionId = const Value.absent(),
+                Value<int> baseRevision = const Value.absent(),
+                Value<String> definitionJson = const Value.absent(),
+                Value<bool> hasLocalChanges = const Value.absent(),
+                Value<DateTime> updatedAtUtc = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbQuestionnaireDraftWorkingCopiesCompanion(
+                questionnaireDraftId: questionnaireDraftId,
+                projectId: projectId,
+                sourceVersionId: sourceVersionId,
+                baseRevision: baseRevision,
+                definitionJson: definitionJson,
+                hasLocalChanges: hasLocalChanges,
+                updatedAtUtc: updatedAtUtc,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String questionnaireDraftId,
+                required String projectId,
+                Value<String?> sourceVersionId = const Value.absent(),
+                required int baseRevision,
+                required String definitionJson,
+                required bool hasLocalChanges,
+                required DateTime updatedAtUtc,
+                Value<int> rowid = const Value.absent(),
+              }) => DbQuestionnaireDraftWorkingCopiesCompanion.insert(
+                questionnaireDraftId: questionnaireDraftId,
+                projectId: projectId,
+                sourceVersionId: sourceVersionId,
+                baseRevision: baseRevision,
+                definitionJson: definitionJson,
+                hasLocalChanges: hasLocalChanges,
+                updatedAtUtc: updatedAtUtc,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DbQuestionnaireDraftWorkingCopiesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $DbQuestionnaireDraftWorkingCopiesTable,
+      DbQuestionnaireDraftWorkingCopy,
+      $$DbQuestionnaireDraftWorkingCopiesTableFilterComposer,
+      $$DbQuestionnaireDraftWorkingCopiesTableOrderingComposer,
+      $$DbQuestionnaireDraftWorkingCopiesTableAnnotationComposer,
+      $$DbQuestionnaireDraftWorkingCopiesTableCreateCompanionBuilder,
+      $$DbQuestionnaireDraftWorkingCopiesTableUpdateCompanionBuilder,
+      (
+        DbQuestionnaireDraftWorkingCopy,
+        BaseReferences<
+          _$LocalDatabase,
+          $DbQuestionnaireDraftWorkingCopiesTable,
+          DbQuestionnaireDraftWorkingCopy
+        >,
+      ),
+      DbQuestionnaireDraftWorkingCopy,
+      PrefetchHooks Function()
+    >;
 
 class $LocalDatabaseManager {
   final _$LocalDatabase _db;
@@ -25729,6 +26525,12 @@ class $LocalDatabaseManager {
       $$DbQuestionnaireOptionsTableTableManager(
         _db,
         _db.dbQuestionnaireOptions,
+      );
+  $$DbQuestionnaireDraftWorkingCopiesTableTableManager
+  get dbQuestionnaireDraftWorkingCopies =>
+      $$DbQuestionnaireDraftWorkingCopiesTableTableManager(
+        _db,
+        _db.dbQuestionnaireDraftWorkingCopies,
       );
 }
 
