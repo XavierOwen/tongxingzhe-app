@@ -10,6 +10,7 @@ import 'package:tongxingzhe_app/device/device_time_zone.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
+import 'package:tongxingzhe_app/questionnaires/questionnaire_contract.dart';
 import 'package:tongxingzhe_app/regions/contact_region_resolver.dart';
 import 'package:tongxingzhe_app/regions/region_catalog.dart';
 import 'package:tongxingzhe_app/regions/region_models.dart';
@@ -41,6 +42,8 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -85,6 +88,8 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: contextGateway,
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -129,6 +134,8 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: contextGateway,
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -176,6 +183,8 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: contextGateway,
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -223,6 +232,8 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: contextGateway,
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -254,7 +265,7 @@ void main() {
     expect(find.text('问卷版本 1'), findsOneWidget);
   });
 
-  testWidgets('新接触显示设备 IANA 时区而不是固定 UTC', (tester) async {
+  testWidgets('新接触显示设备时区和当前发布问卷', (tester) async {
     final database = LocalDatabase(NativeDatabase.memory());
     final identity = FakeIdentitySession(
       initial: IdentitySnapshot(
@@ -273,6 +284,8 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _OneQuestionPublishedSource(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -285,6 +298,13 @@ void main() {
 
     expect(find.textContaining('America/Chicago'), findsOneWidget);
     expect(find.byKey(const ValueKey('edit-occurred-at')), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.textContaining('是否同意后续联系？'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.textContaining('是否同意后续联系？'), findsOneWidget);
+    expect(find.textContaining('不应用来代替推广对象姓名'), findsOneWidget);
   });
 
   testWidgets('稳定地址可直达、跟随导航并保留表单返回语义', (tester) async {
@@ -309,6 +329,8 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -381,6 +403,8 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -411,6 +435,8 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -458,6 +484,8 @@ void main() {
         rejectWith: SessionContextFailureCode.unauthorized,
       ),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -493,6 +521,8 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -550,6 +580,8 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -600,6 +632,8 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -637,6 +671,8 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -674,6 +710,8 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -745,6 +783,8 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
       syncTransportBuilder: (_) => transport,
     );
@@ -797,6 +837,8 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
       syncTransportBuilder: (_) => transport,
     );
@@ -881,6 +923,8 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
       syncTransportBuilder: (_) => transport,
     );
@@ -915,6 +959,8 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
       locationCapture: const _FakeLocationCapture(
         LocationSnapshot(
@@ -983,6 +1029,8 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -1030,6 +1078,8 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
     addTearDown(database.close);
@@ -1089,6 +1139,58 @@ final class _FakeTimeZoneProvider implements DeviceTimeZoneProvider {
 
   @override
   Future<String> currentIanaTimeZone() async => value;
+}
+
+/// 这些 App 级测试原本只验证空基础问卷下的导航和接触核心事实。
+/// 显式远端保留该前提，同时让生产路由继续要求一个受权发布版本。
+final class _EmptyPublishedQuestionnaireSource
+    implements QuestionnaireRemoteSource {
+  const _EmptyPublishedQuestionnaireSource();
+
+  @override
+  Future<QuestionnaireVersion?> fetchPublishedVersion(String versionId) async {
+    final context =
+        versionId == syntheticSecondSessionContext.questionnaireVersion.id
+        ? syntheticSecondSessionContext
+        : syntheticSessionContext;
+    return QuestionnaireVersion(
+      id: versionId,
+      projectId: context.project.id,
+      versionNumber: context.questionnaireVersion.versionNumber,
+      questions: const [],
+    );
+  }
+
+  @override
+  Future<void> close() async {}
+}
+
+final class _OneQuestionPublishedSource implements QuestionnaireRemoteSource {
+  const _OneQuestionPublishedSource();
+
+  @override
+  Future<QuestionnaireVersion?> fetchPublishedVersion(String versionId) async {
+    return QuestionnaireVersion(
+      id: versionId,
+      projectId: syntheticSessionContext.project.id,
+      versionNumber: syntheticSessionContext.questionnaireVersion.versionNumber,
+      questions: [
+        QuestionnaireQuestion(
+          id: 'follow_up_consent',
+          position: 1,
+          prompt: '是否同意后续联系？',
+          type: QuestionnaireQuestionType.boolean,
+          required: true,
+          allowUnknown: false,
+          allowRefused: true,
+          allowNotApplicable: false,
+        ),
+      ],
+    );
+  }
+
+  @override
+  Future<void> close() async {}
 }
 
 final class _AcceptingSyncTransport implements SyncTransport {

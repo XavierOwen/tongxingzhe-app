@@ -1,0 +1,283 @@
+{
+  "contract_version": 1,
+  "questionnaire": {
+    "questionnaire_version_id": "44444444-4444-4444-8444-444444444444",
+    "project_id": "33333333-3333-4333-8333-333333333333",
+    "version_number": 1,
+    "status": "published",
+    "questions": [
+      {
+        "question_id": "follow_up_consent",
+        "position": 1,
+        "prompt": "是否同意后续联系？",
+        "type": "boolean",
+        "required": true,
+        "allow_unknown": false,
+        "allow_refused": true,
+        "allow_not_applicable": false
+      },
+      {
+        "question_id": "primary_interest",
+        "position": 2,
+        "prompt": "最感兴趣的主题",
+        "type": "single_choice",
+        "required": true,
+        "allow_unknown": true,
+        "allow_refused": true,
+        "allow_not_applicable": false,
+        "options": [
+          {"option_id": "community", "position": 1, "label": "社区"},
+          {"option_id": "study", "position": 2, "label": "学习"},
+          {"option_id": "service", "position": 3, "label": "服务"}
+        ]
+      },
+      {
+        "question_id": "readiness",
+        "position": 3,
+        "prompt": "参与意愿",
+        "type": "ordinal_choice",
+        "required": true,
+        "allow_unknown": true,
+        "allow_refused": true,
+        "allow_not_applicable": false,
+        "options": [
+          {"option_id": "low", "position": 1, "label": "低"},
+          {"option_id": "medium", "position": 2, "label": "中"},
+          {"option_id": "high", "position": 3, "label": "高"}
+        ]
+      },
+      {
+        "question_id": "topics",
+        "position": 4,
+        "prompt": "希望了解的主题",
+        "type": "multi_choice",
+        "required": false,
+        "allow_unknown": true,
+        "allow_refused": true,
+        "allow_not_applicable": true,
+        "minimum_selections": 1,
+        "maximum_selections": 2,
+        "options": [
+          {"option_id": "events", "position": 1, "label": "活动"},
+          {"option_id": "courses", "position": 2, "label": "课程"},
+          {"option_id": "volunteering", "position": 3, "label": "志愿服务"}
+        ]
+      },
+      {
+        "question_id": "household_size",
+        "position": 5,
+        "prompt": "家庭人数",
+        "type": "number",
+        "required": false,
+        "allow_unknown": true,
+        "allow_refused": true,
+        "allow_not_applicable": true,
+        "number_kind": "integer",
+        "unit": "人",
+        "minimum": 1,
+        "maximum": 20
+      },
+      {
+        "question_id": "available_hours",
+        "position": 6,
+        "prompt": "每周可参与时长",
+        "type": "number",
+        "required": false,
+        "allow_unknown": true,
+        "allow_refused": true,
+        "allow_not_applicable": true,
+        "number_kind": "decimal",
+        "unit": "小时",
+        "minimum": 0.5,
+        "maximum": 40.0
+      },
+      {
+        "question_id": "preferred_date",
+        "position": 7,
+        "prompt": "希望参加的日期",
+        "type": "date",
+        "required": false,
+        "allow_unknown": true,
+        "allow_refused": true,
+        "allow_not_applicable": true
+      },
+      {
+        "question_id": "short_note",
+        "position": 8,
+        "prompt": "一句话备注",
+        "type": "short_text",
+        "required": false,
+        "allow_unknown": true,
+        "allow_refused": true,
+        "allow_not_applicable": true,
+        "maximum_length": 40
+      },
+      {
+        "question_id": "long_note",
+        "position": 9,
+        "prompt": "详细备注",
+        "type": "long_text",
+        "required": false,
+        "allow_unknown": true,
+        "allow_refused": true,
+        "allow_not_applicable": true,
+        "maximum_length": 2000
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "all_answer_types_are_valid",
+      "answers": [
+        {"question_id": "follow_up_consent", "state": "answered", "type": "boolean", "value": true},
+        {"question_id": "primary_interest", "state": "answered", "type": "single_choice", "value": "study"},
+        {"question_id": "readiness", "state": "answered", "type": "ordinal_choice", "value": "high"},
+        {"question_id": "topics", "state": "answered", "type": "multi_choice", "value": ["events", "courses"]},
+        {"question_id": "household_size", "state": "answered", "type": "number", "value": 4},
+        {"question_id": "available_hours", "state": "answered", "type": "number", "value": 2.5},
+        {"question_id": "preferred_date", "state": "answered", "type": "date", "value": "2030-02-28"},
+        {"question_id": "short_note", "state": "answered", "type": "short_text", "value": "愿意了解下一场活动"},
+        {"question_id": "long_note", "state": "answered", "type": "long_text", "value": "希望先收到活动时间，再决定是否参加。"}
+      ],
+      "valid": true,
+      "errors": []
+    },
+    {
+      "name": "allowed_non_answer_states_are_valid",
+      "answers": [
+        {"question_id": "follow_up_consent", "state": "refused", "type": "boolean", "value": null},
+        {"question_id": "primary_interest", "state": "unknown", "type": "single_choice", "value": null},
+        {"question_id": "readiness", "state": "refused", "type": "ordinal_choice", "value": null},
+        {"question_id": "topics", "state": "not_applicable", "type": "multi_choice", "value": null},
+        {"question_id": "household_size", "state": "unanswered", "type": "number", "value": null}
+      ],
+      "valid": true,
+      "errors": []
+    },
+    {
+      "name": "required_question_cannot_be_omitted",
+      "answers": [
+        {"question_id": "primary_interest", "state": "answered", "type": "single_choice", "value": "community"},
+        {"question_id": "readiness", "state": "answered", "type": "ordinal_choice", "value": "medium"}
+      ],
+      "valid": false,
+      "errors": ["required_answer_missing:follow_up_consent"]
+    },
+    {
+      "name": "required_question_cannot_be_unanswered",
+      "answers": [
+        {"question_id": "follow_up_consent", "state": "unanswered", "type": "boolean", "value": null},
+        {"question_id": "primary_interest", "state": "answered", "type": "single_choice", "value": "community"},
+        {"question_id": "readiness", "state": "answered", "type": "ordinal_choice", "value": "medium"}
+      ],
+      "valid": false,
+      "errors": ["required_answer_missing:follow_up_consent"]
+    },
+    {
+      "name": "disallowed_unknown_is_rejected",
+      "answers": [
+        {"question_id": "follow_up_consent", "state": "unknown", "type": "boolean", "value": null},
+        {"question_id": "primary_interest", "state": "answered", "type": "single_choice", "value": "community"},
+        {"question_id": "readiness", "state": "answered", "type": "ordinal_choice", "value": "medium"}
+      ],
+      "valid": false,
+      "errors": ["answer_state_not_allowed:follow_up_consent"]
+    },
+    {
+      "name": "unknown_question_is_rejected",
+      "answers": [
+        {"question_id": "follow_up_consent", "state": "answered", "type": "boolean", "value": true},
+        {"question_id": "primary_interest", "state": "answered", "type": "single_choice", "value": "community"},
+        {"question_id": "readiness", "state": "answered", "type": "ordinal_choice", "value": "medium"},
+        {"question_id": "invented", "state": "answered", "type": "boolean", "value": true}
+      ],
+      "valid": false,
+      "errors": ["unknown_question:invented"]
+    },
+    {
+      "name": "answer_type_must_match_definition",
+      "answers": [
+        {"question_id": "follow_up_consent", "state": "answered", "type": "short_text", "value": "yes"},
+        {"question_id": "primary_interest", "state": "answered", "type": "single_choice", "value": "community"},
+        {"question_id": "readiness", "state": "answered", "type": "ordinal_choice", "value": "medium"}
+      ],
+      "valid": false,
+      "errors": ["answer_type_mismatch:follow_up_consent"]
+    },
+    {
+      "name": "choice_option_must_exist",
+      "answers": [
+        {"question_id": "follow_up_consent", "state": "answered", "type": "boolean", "value": true},
+        {"question_id": "primary_interest", "state": "answered", "type": "single_choice", "value": "missing"},
+        {"question_id": "readiness", "state": "answered", "type": "ordinal_choice", "value": "medium"}
+      ],
+      "valid": false,
+      "errors": ["answer_value_invalid:primary_interest"]
+    },
+    {
+      "name": "multi_choice_is_unique_and_bounded",
+      "answers": [
+        {"question_id": "follow_up_consent", "state": "answered", "type": "boolean", "value": true},
+        {"question_id": "primary_interest", "state": "answered", "type": "single_choice", "value": "community"},
+        {"question_id": "readiness", "state": "answered", "type": "ordinal_choice", "value": "medium"},
+        {"question_id": "topics", "state": "answered", "type": "multi_choice", "value": ["events", "events", "courses"]}
+      ],
+      "valid": false,
+      "errors": ["answer_value_invalid:topics"]
+    },
+    {
+      "name": "integer_number_rejects_fraction",
+      "answers": [
+        {"question_id": "follow_up_consent", "state": "answered", "type": "boolean", "value": true},
+        {"question_id": "primary_interest", "state": "answered", "type": "single_choice", "value": "community"},
+        {"question_id": "readiness", "state": "answered", "type": "ordinal_choice", "value": "medium"},
+        {"question_id": "household_size", "state": "answered", "type": "number", "value": 2.5}
+      ],
+      "valid": false,
+      "errors": ["answer_value_invalid:household_size"]
+    },
+    {
+      "name": "decimal_number_honors_range",
+      "answers": [
+        {"question_id": "follow_up_consent", "state": "answered", "type": "boolean", "value": true},
+        {"question_id": "primary_interest", "state": "answered", "type": "single_choice", "value": "community"},
+        {"question_id": "readiness", "state": "answered", "type": "ordinal_choice", "value": "medium"},
+        {"question_id": "available_hours", "state": "answered", "type": "number", "value": 40.5}
+      ],
+      "valid": false,
+      "errors": ["answer_value_invalid:available_hours"]
+    },
+    {
+      "name": "date_is_calendar_only_and_real",
+      "answers": [
+        {"question_id": "follow_up_consent", "state": "answered", "type": "boolean", "value": true},
+        {"question_id": "primary_interest", "state": "answered", "type": "single_choice", "value": "community"},
+        {"question_id": "readiness", "state": "answered", "type": "ordinal_choice", "value": "medium"},
+        {"question_id": "preferred_date", "state": "answered", "type": "date", "value": "2030-02-30"}
+      ],
+      "valid": false,
+      "errors": ["answer_value_invalid:preferred_date"]
+    },
+    {
+      "name": "text_length_is_bounded",
+      "answers": [
+        {"question_id": "follow_up_consent", "state": "answered", "type": "boolean", "value": true},
+        {"question_id": "primary_interest", "state": "answered", "type": "single_choice", "value": "community"},
+        {"question_id": "readiness", "state": "answered", "type": "ordinal_choice", "value": "medium"},
+        {"question_id": "short_note", "state": "answered", "type": "short_text", "value": "这段备注故意超过四十个字符以验证客户端和服务端采用相同的Unicode字符计数规则而不是字节长度"}
+      ],
+      "valid": false,
+      "errors": ["answer_value_invalid:short_note"]
+    },
+    {
+      "name": "non_answer_state_cannot_carry_value",
+      "answers": [
+        {"question_id": "follow_up_consent", "state": "refused", "type": "boolean", "value": false},
+        {"question_id": "primary_interest", "state": "answered", "type": "single_choice", "value": "community"},
+        {"question_id": "readiness", "state": "answered", "type": "ordinal_choice", "value": "medium"}
+      ],
+      "valid": false,
+      "errors": ["answer_value_shape_invalid:follow_up_consent"]
+    }
+  ]
+}

@@ -14,6 +14,7 @@ import '../features/contact_revision/contact_revision_screen.dart';
 import '../foundation/runtime_values.dart';
 import '../identity/identity_session.dart';
 import '../l10n/app_strings.dart';
+import '../questionnaires/questionnaire_contract.dart';
 import '../regions/contact_region_resolver.dart';
 import '../routing/app_route.dart';
 import '../routing/app_router.dart';
@@ -56,6 +57,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
   AppSession? _appSession;
   SyncEngineFactory? _syncEngineFactory;
   ContactRegionResolver? _regionResolver;
+  QuestionnaireCatalog? _questionnaireCatalog;
 
   @override
   void initState() {
@@ -71,12 +73,14 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       :final appSession,
       :final syncEngineFactory,
       :final regionResolver,
+      :final questionnaireCatalog,
     )) {
       _controller = controller;
       _identitySession = identitySession;
       _appSession = appSession;
       _syncEngineFactory = syncEngineFactory;
       _regionResolver = regionResolver;
+      _questionnaireCatalog = questionnaireCatalog;
     }
     return result;
   }
@@ -87,6 +91,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
     unawaited(_identitySession?.close());
     unawaited(_syncEngineFactory?.close());
     unawaited(_regionResolver?.close());
+    unawaited(_questionnaireCatalog?.close());
     _controller?.dispose();
     super.dispose();
   }
@@ -115,6 +120,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
             :final locationCapture,
             :final timeZoneProvider,
             :final regionResolver,
+            :final questionnaireCatalog,
           ) =>
             _ReadyApp(
               controller: controller,
@@ -127,6 +133,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
               locationCapture: locationCapture,
               timeZoneProvider: timeZoneProvider,
               regionResolver: regionResolver,
+              questionnaireCatalog: questionnaireCatalog,
               signedOutScreenBuilder: widget.signedOutScreenBuilder,
               routeInformationProvider: widget.routeInformationProvider,
             ),
@@ -151,6 +158,7 @@ class _ReadyApp extends StatefulWidget {
     required this.locationCapture,
     required this.timeZoneProvider,
     required this.regionResolver,
+    required this.questionnaireCatalog,
     required this.signedOutScreenBuilder,
     required this.routeInformationProvider,
   });
@@ -165,6 +173,7 @@ class _ReadyApp extends StatefulWidget {
   final ContactLocationCapture locationCapture;
   final DeviceTimeZoneProvider timeZoneProvider;
   final ContactRegionResolver regionResolver;
+  final QuestionnaireCatalog questionnaireCatalog;
   final SignedOutScreenBuilder? signedOutScreenBuilder;
   final RouteInformationProvider? routeInformationProvider;
 
@@ -285,6 +294,7 @@ final class _ReadyAppState extends State<_ReadyApp> {
         locationCapture: widget.locationCapture,
         timeZoneProvider: widget.timeZoneProvider,
         regionResolver: widget.regionResolver,
+        questionnaireCatalog: widget.questionnaireCatalog,
         draftId: draftId,
         sourceAttemptId: sourceAttemptId,
       ),
@@ -367,6 +377,7 @@ final class _ContactEntryRoute extends StatefulWidget {
     required this.locationCapture,
     required this.timeZoneProvider,
     required this.regionResolver,
+    required this.questionnaireCatalog,
     required this.draftId,
     required this.sourceAttemptId,
   });
@@ -380,6 +391,7 @@ final class _ContactEntryRoute extends StatefulWidget {
   final ContactLocationCapture locationCapture;
   final DeviceTimeZoneProvider timeZoneProvider;
   final ContactRegionResolver regionResolver;
+  final QuestionnaireCatalog questionnaireCatalog;
   final String? draftId;
   final String? sourceAttemptId;
 
@@ -390,6 +402,7 @@ final class _ContactEntryRoute extends StatefulWidget {
 final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
   late Future<ContactDraft?> _draft;
   late Future<ContactAttempt?> _sourceAttempt;
+  final Map<String, Future<QuestionnaireVersion?>> _questionnaires = {};
 
   @override
   void initState() {
@@ -405,6 +418,7 @@ final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
         oldWidget.sourceAttemptId != widget.sourceAttemptId ||
         oldWidget.context.appUserId != widget.context.appUserId ||
         oldWidget.context.project.id != widget.context.project.id) {
+      _questionnaires.clear();
       _draft = _loadDraft();
       _sourceAttempt = _loadSourceAttempt();
     }
@@ -458,17 +472,68 @@ final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
   }
 
   Widget _screen(ContactDraft? draft, ContactAttempt? sourceAttempt) {
-    return ContactEntryScreen(
-      controller: widget.controller,
-      clock: widget.clock,
-      context: widget.context,
-      contactJournal: widget.contactJournal,
-      deviceId: widget.deviceId,
-      initialDraft: draft,
-      locationCapture: widget.locationCapture,
-      timeZoneProvider: widget.timeZoneProvider,
-      regionResolver: widget.regionResolver,
-      sourceAttempt: sourceAttempt,
+    final versionId =
+        draft?.questionnaireVersionId ?? widget.context.questionnaireVersion.id;
+    final questionnaire = _questionnaires.putIfAbsent(
+      versionId,
+      () => widget.questionnaireCatalog.resolvePublishedVersion(
+        projectId: widget.context.project.id,
+        versionId: versionId,
+      ),
+    );
+    return FutureBuilder<QuestionnaireVersion?>(
+      future: questionnaire,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final version = snapshot.data;
+        if (snapshot.hasError || version == null) {
+          final text = AppStrings(widget.controller.localeCode);
+          return Scaffold(
+            appBar: AppBar(title: Text(text.t('recordContact'))),
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      text.t('questionnaireUnavailable'),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _questionnaires.remove(versionId);
+                        });
+                      },
+                      icon: const Icon(Icons.refresh_outlined),
+                      label: Text(text.t('retry')),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+        return ContactEntryScreen(
+          controller: widget.controller,
+          clock: widget.clock,
+          context: widget.context,
+          contactJournal: widget.contactJournal,
+          deviceId: widget.deviceId,
+          initialDraft: draft,
+          locationCapture: widget.locationCapture,
+          timeZoneProvider: widget.timeZoneProvider,
+          regionResolver: widget.regionResolver,
+          sourceAttempt: sourceAttempt,
+          questionnaireVersion: version,
+        );
+      },
     );
   }
 

@@ -5049,6 +5049,39 @@ class $DbContactAnswersTable extends DbContactAnswers
       'CHECK ("boolean_value" IN (0, 1))',
     ),
   );
+  static const VerificationMeta _textValueMeta = const VerificationMeta(
+    'textValue',
+  );
+  @override
+  late final GeneratedColumn<String> textValue = GeneratedColumn<String>(
+    'text_value',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _numberValueMeta = const VerificationMeta(
+    'numberValue',
+  );
+  @override
+  late final GeneratedColumn<double> numberValue = GeneratedColumn<double>(
+    'number_value',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _multiChoiceValueJsonMeta =
+      const VerificationMeta('multiChoiceValueJson');
+  @override
+  late final GeneratedColumn<String> multiChoiceValueJson =
+      GeneratedColumn<String>(
+        'multi_choice_value_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   @override
   List<GeneratedColumn> get $columns => [
     contactId,
@@ -5057,6 +5090,9 @@ class $DbContactAnswersTable extends DbContactAnswers
     answerState,
     answerType,
     booleanValue,
+    textValue,
+    numberValue,
+    multiChoiceValueJson,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -5125,6 +5161,30 @@ class $DbContactAnswersTable extends DbContactAnswers
         ),
       );
     }
+    if (data.containsKey('text_value')) {
+      context.handle(
+        _textValueMeta,
+        textValue.isAcceptableOrUnknown(data['text_value']!, _textValueMeta),
+      );
+    }
+    if (data.containsKey('number_value')) {
+      context.handle(
+        _numberValueMeta,
+        numberValue.isAcceptableOrUnknown(
+          data['number_value']!,
+          _numberValueMeta,
+        ),
+      );
+    }
+    if (data.containsKey('multi_choice_value_json')) {
+      context.handle(
+        _multiChoiceValueJsonMeta,
+        multiChoiceValueJson.isAcceptableOrUnknown(
+          data['multi_choice_value_json']!,
+          _multiChoiceValueJsonMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -5162,6 +5222,18 @@ class $DbContactAnswersTable extends DbContactAnswers
         DriftSqlType.bool,
         data['${effectivePrefix}boolean_value'],
       ),
+      textValue: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}text_value'],
+      ),
+      numberValue: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}number_value'],
+      ),
+      multiChoiceValueJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}multi_choice_value_json'],
+      ),
     );
   }
 
@@ -5178,6 +5250,9 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
   final String answerState;
   final String answerType;
   final bool? booleanValue;
+  final String? textValue;
+  final double? numberValue;
+  final String? multiChoiceValueJson;
   const DbContactAnswer({
     required this.contactId,
     required this.revisionNumber,
@@ -5185,6 +5260,9 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
     required this.answerState,
     required this.answerType,
     this.booleanValue,
+    this.textValue,
+    this.numberValue,
+    this.multiChoiceValueJson,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -5196,6 +5274,15 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
     map['answer_type'] = Variable<String>(answerType);
     if (!nullToAbsent || booleanValue != null) {
       map['boolean_value'] = Variable<bool>(booleanValue);
+    }
+    if (!nullToAbsent || textValue != null) {
+      map['text_value'] = Variable<String>(textValue);
+    }
+    if (!nullToAbsent || numberValue != null) {
+      map['number_value'] = Variable<double>(numberValue);
+    }
+    if (!nullToAbsent || multiChoiceValueJson != null) {
+      map['multi_choice_value_json'] = Variable<String>(multiChoiceValueJson);
     }
     return map;
   }
@@ -5210,6 +5297,15 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
       booleanValue: booleanValue == null && nullToAbsent
           ? const Value.absent()
           : Value(booleanValue),
+      textValue: textValue == null && nullToAbsent
+          ? const Value.absent()
+          : Value(textValue),
+      numberValue: numberValue == null && nullToAbsent
+          ? const Value.absent()
+          : Value(numberValue),
+      multiChoiceValueJson: multiChoiceValueJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(multiChoiceValueJson),
     );
   }
 
@@ -5225,6 +5321,11 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
       answerState: serializer.fromJson<String>(json['answerState']),
       answerType: serializer.fromJson<String>(json['answerType']),
       booleanValue: serializer.fromJson<bool?>(json['booleanValue']),
+      textValue: serializer.fromJson<String?>(json['textValue']),
+      numberValue: serializer.fromJson<double?>(json['numberValue']),
+      multiChoiceValueJson: serializer.fromJson<String?>(
+        json['multiChoiceValueJson'],
+      ),
     );
   }
   @override
@@ -5237,6 +5338,9 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
       'answerState': serializer.toJson<String>(answerState),
       'answerType': serializer.toJson<String>(answerType),
       'booleanValue': serializer.toJson<bool?>(booleanValue),
+      'textValue': serializer.toJson<String?>(textValue),
+      'numberValue': serializer.toJson<double?>(numberValue),
+      'multiChoiceValueJson': serializer.toJson<String?>(multiChoiceValueJson),
     };
   }
 
@@ -5247,6 +5351,9 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
     String? answerState,
     String? answerType,
     Value<bool?> booleanValue = const Value.absent(),
+    Value<String?> textValue = const Value.absent(),
+    Value<double?> numberValue = const Value.absent(),
+    Value<String?> multiChoiceValueJson = const Value.absent(),
   }) => DbContactAnswer(
     contactId: contactId ?? this.contactId,
     revisionNumber: revisionNumber ?? this.revisionNumber,
@@ -5254,6 +5361,11 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
     answerState: answerState ?? this.answerState,
     answerType: answerType ?? this.answerType,
     booleanValue: booleanValue.present ? booleanValue.value : this.booleanValue,
+    textValue: textValue.present ? textValue.value : this.textValue,
+    numberValue: numberValue.present ? numberValue.value : this.numberValue,
+    multiChoiceValueJson: multiChoiceValueJson.present
+        ? multiChoiceValueJson.value
+        : this.multiChoiceValueJson,
   );
   DbContactAnswer copyWithCompanion(DbContactAnswersCompanion data) {
     return DbContactAnswer(
@@ -5273,6 +5385,13 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
       booleanValue: data.booleanValue.present
           ? data.booleanValue.value
           : this.booleanValue,
+      textValue: data.textValue.present ? data.textValue.value : this.textValue,
+      numberValue: data.numberValue.present
+          ? data.numberValue.value
+          : this.numberValue,
+      multiChoiceValueJson: data.multiChoiceValueJson.present
+          ? data.multiChoiceValueJson.value
+          : this.multiChoiceValueJson,
     );
   }
 
@@ -5284,7 +5403,10 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
           ..write('questionId: $questionId, ')
           ..write('answerState: $answerState, ')
           ..write('answerType: $answerType, ')
-          ..write('booleanValue: $booleanValue')
+          ..write('booleanValue: $booleanValue, ')
+          ..write('textValue: $textValue, ')
+          ..write('numberValue: $numberValue, ')
+          ..write('multiChoiceValueJson: $multiChoiceValueJson')
           ..write(')'))
         .toString();
   }
@@ -5297,6 +5419,9 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
     answerState,
     answerType,
     booleanValue,
+    textValue,
+    numberValue,
+    multiChoiceValueJson,
   );
   @override
   bool operator ==(Object other) =>
@@ -5307,7 +5432,10 @@ class DbContactAnswer extends DataClass implements Insertable<DbContactAnswer> {
           other.questionId == this.questionId &&
           other.answerState == this.answerState &&
           other.answerType == this.answerType &&
-          other.booleanValue == this.booleanValue);
+          other.booleanValue == this.booleanValue &&
+          other.textValue == this.textValue &&
+          other.numberValue == this.numberValue &&
+          other.multiChoiceValueJson == this.multiChoiceValueJson);
 }
 
 class DbContactAnswersCompanion extends UpdateCompanion<DbContactAnswer> {
@@ -5317,6 +5445,9 @@ class DbContactAnswersCompanion extends UpdateCompanion<DbContactAnswer> {
   final Value<String> answerState;
   final Value<String> answerType;
   final Value<bool?> booleanValue;
+  final Value<String?> textValue;
+  final Value<double?> numberValue;
+  final Value<String?> multiChoiceValueJson;
   final Value<int> rowid;
   const DbContactAnswersCompanion({
     this.contactId = const Value.absent(),
@@ -5325,6 +5456,9 @@ class DbContactAnswersCompanion extends UpdateCompanion<DbContactAnswer> {
     this.answerState = const Value.absent(),
     this.answerType = const Value.absent(),
     this.booleanValue = const Value.absent(),
+    this.textValue = const Value.absent(),
+    this.numberValue = const Value.absent(),
+    this.multiChoiceValueJson = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   DbContactAnswersCompanion.insert({
@@ -5334,6 +5468,9 @@ class DbContactAnswersCompanion extends UpdateCompanion<DbContactAnswer> {
     required String answerState,
     required String answerType,
     this.booleanValue = const Value.absent(),
+    this.textValue = const Value.absent(),
+    this.numberValue = const Value.absent(),
+    this.multiChoiceValueJson = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : contactId = Value(contactId),
        revisionNumber = Value(revisionNumber),
@@ -5347,6 +5484,9 @@ class DbContactAnswersCompanion extends UpdateCompanion<DbContactAnswer> {
     Expression<String>? answerState,
     Expression<String>? answerType,
     Expression<bool>? booleanValue,
+    Expression<String>? textValue,
+    Expression<double>? numberValue,
+    Expression<String>? multiChoiceValueJson,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -5356,6 +5496,10 @@ class DbContactAnswersCompanion extends UpdateCompanion<DbContactAnswer> {
       if (answerState != null) 'answer_state': answerState,
       if (answerType != null) 'answer_type': answerType,
       if (booleanValue != null) 'boolean_value': booleanValue,
+      if (textValue != null) 'text_value': textValue,
+      if (numberValue != null) 'number_value': numberValue,
+      if (multiChoiceValueJson != null)
+        'multi_choice_value_json': multiChoiceValueJson,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -5367,6 +5511,9 @@ class DbContactAnswersCompanion extends UpdateCompanion<DbContactAnswer> {
     Value<String>? answerState,
     Value<String>? answerType,
     Value<bool?>? booleanValue,
+    Value<String?>? textValue,
+    Value<double?>? numberValue,
+    Value<String?>? multiChoiceValueJson,
     Value<int>? rowid,
   }) {
     return DbContactAnswersCompanion(
@@ -5376,6 +5523,9 @@ class DbContactAnswersCompanion extends UpdateCompanion<DbContactAnswer> {
       answerState: answerState ?? this.answerState,
       answerType: answerType ?? this.answerType,
       booleanValue: booleanValue ?? this.booleanValue,
+      textValue: textValue ?? this.textValue,
+      numberValue: numberValue ?? this.numberValue,
+      multiChoiceValueJson: multiChoiceValueJson ?? this.multiChoiceValueJson,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -5401,6 +5551,17 @@ class DbContactAnswersCompanion extends UpdateCompanion<DbContactAnswer> {
     if (booleanValue.present) {
       map['boolean_value'] = Variable<bool>(booleanValue.value);
     }
+    if (textValue.present) {
+      map['text_value'] = Variable<String>(textValue.value);
+    }
+    if (numberValue.present) {
+      map['number_value'] = Variable<double>(numberValue.value);
+    }
+    if (multiChoiceValueJson.present) {
+      map['multi_choice_value_json'] = Variable<String>(
+        multiChoiceValueJson.value,
+      );
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -5416,6 +5577,9 @@ class DbContactAnswersCompanion extends UpdateCompanion<DbContactAnswer> {
           ..write('answerState: $answerState, ')
           ..write('answerType: $answerType, ')
           ..write('booleanValue: $booleanValue, ')
+          ..write('textValue: $textValue, ')
+          ..write('numberValue: $numberValue, ')
+          ..write('multiChoiceValueJson: $multiChoiceValueJson, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -8235,6 +8399,39 @@ class $DbContactDraftAnswersTable extends DbContactDraftAnswers
       'CHECK ("boolean_value" IN (0, 1))',
     ),
   );
+  static const VerificationMeta _textValueMeta = const VerificationMeta(
+    'textValue',
+  );
+  @override
+  late final GeneratedColumn<String> textValue = GeneratedColumn<String>(
+    'text_value',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _numberValueMeta = const VerificationMeta(
+    'numberValue',
+  );
+  @override
+  late final GeneratedColumn<double> numberValue = GeneratedColumn<double>(
+    'number_value',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _multiChoiceValueJsonMeta =
+      const VerificationMeta('multiChoiceValueJson');
+  @override
+  late final GeneratedColumn<String> multiChoiceValueJson =
+      GeneratedColumn<String>(
+        'multi_choice_value_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   @override
   List<GeneratedColumn> get $columns => [
     draftId,
@@ -8242,6 +8439,9 @@ class $DbContactDraftAnswersTable extends DbContactDraftAnswers
     answerState,
     answerType,
     booleanValue,
+    textValue,
+    numberValue,
+    multiChoiceValueJson,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -8299,6 +8499,30 @@ class $DbContactDraftAnswersTable extends DbContactDraftAnswers
         ),
       );
     }
+    if (data.containsKey('text_value')) {
+      context.handle(
+        _textValueMeta,
+        textValue.isAcceptableOrUnknown(data['text_value']!, _textValueMeta),
+      );
+    }
+    if (data.containsKey('number_value')) {
+      context.handle(
+        _numberValueMeta,
+        numberValue.isAcceptableOrUnknown(
+          data['number_value']!,
+          _numberValueMeta,
+        ),
+      );
+    }
+    if (data.containsKey('multi_choice_value_json')) {
+      context.handle(
+        _multiChoiceValueJsonMeta,
+        multiChoiceValueJson.isAcceptableOrUnknown(
+          data['multi_choice_value_json']!,
+          _multiChoiceValueJsonMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -8328,6 +8552,18 @@ class $DbContactDraftAnswersTable extends DbContactDraftAnswers
         DriftSqlType.bool,
         data['${effectivePrefix}boolean_value'],
       ),
+      textValue: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}text_value'],
+      ),
+      numberValue: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}number_value'],
+      ),
+      multiChoiceValueJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}multi_choice_value_json'],
+      ),
     );
   }
 
@@ -8344,12 +8580,18 @@ class DbContactDraftAnswer extends DataClass
   final String answerState;
   final String answerType;
   final bool? booleanValue;
+  final String? textValue;
+  final double? numberValue;
+  final String? multiChoiceValueJson;
   const DbContactDraftAnswer({
     required this.draftId,
     required this.questionId,
     required this.answerState,
     required this.answerType,
     this.booleanValue,
+    this.textValue,
+    this.numberValue,
+    this.multiChoiceValueJson,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -8360,6 +8602,15 @@ class DbContactDraftAnswer extends DataClass
     map['answer_type'] = Variable<String>(answerType);
     if (!nullToAbsent || booleanValue != null) {
       map['boolean_value'] = Variable<bool>(booleanValue);
+    }
+    if (!nullToAbsent || textValue != null) {
+      map['text_value'] = Variable<String>(textValue);
+    }
+    if (!nullToAbsent || numberValue != null) {
+      map['number_value'] = Variable<double>(numberValue);
+    }
+    if (!nullToAbsent || multiChoiceValueJson != null) {
+      map['multi_choice_value_json'] = Variable<String>(multiChoiceValueJson);
     }
     return map;
   }
@@ -8373,6 +8624,15 @@ class DbContactDraftAnswer extends DataClass
       booleanValue: booleanValue == null && nullToAbsent
           ? const Value.absent()
           : Value(booleanValue),
+      textValue: textValue == null && nullToAbsent
+          ? const Value.absent()
+          : Value(textValue),
+      numberValue: numberValue == null && nullToAbsent
+          ? const Value.absent()
+          : Value(numberValue),
+      multiChoiceValueJson: multiChoiceValueJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(multiChoiceValueJson),
     );
   }
 
@@ -8387,6 +8647,11 @@ class DbContactDraftAnswer extends DataClass
       answerState: serializer.fromJson<String>(json['answerState']),
       answerType: serializer.fromJson<String>(json['answerType']),
       booleanValue: serializer.fromJson<bool?>(json['booleanValue']),
+      textValue: serializer.fromJson<String?>(json['textValue']),
+      numberValue: serializer.fromJson<double?>(json['numberValue']),
+      multiChoiceValueJson: serializer.fromJson<String?>(
+        json['multiChoiceValueJson'],
+      ),
     );
   }
   @override
@@ -8398,6 +8663,9 @@ class DbContactDraftAnswer extends DataClass
       'answerState': serializer.toJson<String>(answerState),
       'answerType': serializer.toJson<String>(answerType),
       'booleanValue': serializer.toJson<bool?>(booleanValue),
+      'textValue': serializer.toJson<String?>(textValue),
+      'numberValue': serializer.toJson<double?>(numberValue),
+      'multiChoiceValueJson': serializer.toJson<String?>(multiChoiceValueJson),
     };
   }
 
@@ -8407,12 +8675,20 @@ class DbContactDraftAnswer extends DataClass
     String? answerState,
     String? answerType,
     Value<bool?> booleanValue = const Value.absent(),
+    Value<String?> textValue = const Value.absent(),
+    Value<double?> numberValue = const Value.absent(),
+    Value<String?> multiChoiceValueJson = const Value.absent(),
   }) => DbContactDraftAnswer(
     draftId: draftId ?? this.draftId,
     questionId: questionId ?? this.questionId,
     answerState: answerState ?? this.answerState,
     answerType: answerType ?? this.answerType,
     booleanValue: booleanValue.present ? booleanValue.value : this.booleanValue,
+    textValue: textValue.present ? textValue.value : this.textValue,
+    numberValue: numberValue.present ? numberValue.value : this.numberValue,
+    multiChoiceValueJson: multiChoiceValueJson.present
+        ? multiChoiceValueJson.value
+        : this.multiChoiceValueJson,
   );
   DbContactDraftAnswer copyWithCompanion(DbContactDraftAnswersCompanion data) {
     return DbContactDraftAnswer(
@@ -8429,6 +8705,13 @@ class DbContactDraftAnswer extends DataClass
       booleanValue: data.booleanValue.present
           ? data.booleanValue.value
           : this.booleanValue,
+      textValue: data.textValue.present ? data.textValue.value : this.textValue,
+      numberValue: data.numberValue.present
+          ? data.numberValue.value
+          : this.numberValue,
+      multiChoiceValueJson: data.multiChoiceValueJson.present
+          ? data.multiChoiceValueJson.value
+          : this.multiChoiceValueJson,
     );
   }
 
@@ -8439,14 +8722,25 @@ class DbContactDraftAnswer extends DataClass
           ..write('questionId: $questionId, ')
           ..write('answerState: $answerState, ')
           ..write('answerType: $answerType, ')
-          ..write('booleanValue: $booleanValue')
+          ..write('booleanValue: $booleanValue, ')
+          ..write('textValue: $textValue, ')
+          ..write('numberValue: $numberValue, ')
+          ..write('multiChoiceValueJson: $multiChoiceValueJson')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(draftId, questionId, answerState, answerType, booleanValue);
+  int get hashCode => Object.hash(
+    draftId,
+    questionId,
+    answerState,
+    answerType,
+    booleanValue,
+    textValue,
+    numberValue,
+    multiChoiceValueJson,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -8455,7 +8749,10 @@ class DbContactDraftAnswer extends DataClass
           other.questionId == this.questionId &&
           other.answerState == this.answerState &&
           other.answerType == this.answerType &&
-          other.booleanValue == this.booleanValue);
+          other.booleanValue == this.booleanValue &&
+          other.textValue == this.textValue &&
+          other.numberValue == this.numberValue &&
+          other.multiChoiceValueJson == this.multiChoiceValueJson);
 }
 
 class DbContactDraftAnswersCompanion
@@ -8465,6 +8762,9 @@ class DbContactDraftAnswersCompanion
   final Value<String> answerState;
   final Value<String> answerType;
   final Value<bool?> booleanValue;
+  final Value<String?> textValue;
+  final Value<double?> numberValue;
+  final Value<String?> multiChoiceValueJson;
   final Value<int> rowid;
   const DbContactDraftAnswersCompanion({
     this.draftId = const Value.absent(),
@@ -8472,6 +8772,9 @@ class DbContactDraftAnswersCompanion
     this.answerState = const Value.absent(),
     this.answerType = const Value.absent(),
     this.booleanValue = const Value.absent(),
+    this.textValue = const Value.absent(),
+    this.numberValue = const Value.absent(),
+    this.multiChoiceValueJson = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   DbContactDraftAnswersCompanion.insert({
@@ -8480,6 +8783,9 @@ class DbContactDraftAnswersCompanion
     required String answerState,
     required String answerType,
     this.booleanValue = const Value.absent(),
+    this.textValue = const Value.absent(),
+    this.numberValue = const Value.absent(),
+    this.multiChoiceValueJson = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : draftId = Value(draftId),
        questionId = Value(questionId),
@@ -8491,6 +8797,9 @@ class DbContactDraftAnswersCompanion
     Expression<String>? answerState,
     Expression<String>? answerType,
     Expression<bool>? booleanValue,
+    Expression<String>? textValue,
+    Expression<double>? numberValue,
+    Expression<String>? multiChoiceValueJson,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -8499,6 +8808,10 @@ class DbContactDraftAnswersCompanion
       if (answerState != null) 'answer_state': answerState,
       if (answerType != null) 'answer_type': answerType,
       if (booleanValue != null) 'boolean_value': booleanValue,
+      if (textValue != null) 'text_value': textValue,
+      if (numberValue != null) 'number_value': numberValue,
+      if (multiChoiceValueJson != null)
+        'multi_choice_value_json': multiChoiceValueJson,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -8509,6 +8822,9 @@ class DbContactDraftAnswersCompanion
     Value<String>? answerState,
     Value<String>? answerType,
     Value<bool?>? booleanValue,
+    Value<String?>? textValue,
+    Value<double?>? numberValue,
+    Value<String?>? multiChoiceValueJson,
     Value<int>? rowid,
   }) {
     return DbContactDraftAnswersCompanion(
@@ -8517,6 +8833,9 @@ class DbContactDraftAnswersCompanion
       answerState: answerState ?? this.answerState,
       answerType: answerType ?? this.answerType,
       booleanValue: booleanValue ?? this.booleanValue,
+      textValue: textValue ?? this.textValue,
+      numberValue: numberValue ?? this.numberValue,
+      multiChoiceValueJson: multiChoiceValueJson ?? this.multiChoiceValueJson,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -8539,6 +8858,17 @@ class DbContactDraftAnswersCompanion
     if (booleanValue.present) {
       map['boolean_value'] = Variable<bool>(booleanValue.value);
     }
+    if (textValue.present) {
+      map['text_value'] = Variable<String>(textValue.value);
+    }
+    if (numberValue.present) {
+      map['number_value'] = Variable<double>(numberValue.value);
+    }
+    if (multiChoiceValueJson.present) {
+      map['multi_choice_value_json'] = Variable<String>(
+        multiChoiceValueJson.value,
+      );
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -8553,6 +8883,9 @@ class DbContactDraftAnswersCompanion
           ..write('answerState: $answerState, ')
           ..write('answerType: $answerType, ')
           ..write('booleanValue: $booleanValue, ')
+          ..write('textValue: $textValue, ')
+          ..write('numberValue: $numberValue, ')
+          ..write('multiChoiceValueJson: $multiChoiceValueJson, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -13129,6 +13462,1789 @@ class DbDraftRegionAssignmentsCompanion
   }
 }
 
+class $DbQuestionnaireVersionsTable extends DbQuestionnaireVersions
+    with TableInfo<$DbQuestionnaireVersionsTable, DbQuestionnaireVersion> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DbQuestionnaireVersionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _questionnaireVersionIdMeta =
+      const VerificationMeta('questionnaireVersionId');
+  @override
+  late final GeneratedColumn<String> questionnaireVersionId =
+      GeneratedColumn<String>(
+        'questionnaire_version_id',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<String> projectId = GeneratedColumn<String>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _versionNumberMeta = const VerificationMeta(
+    'versionNumber',
+  );
+  @override
+  late final GeneratedColumn<int> versionNumber = GeneratedColumn<int>(
+    'version_number',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _installedAtUtcMeta = const VerificationMeta(
+    'installedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<DateTime> installedAtUtc =
+      GeneratedColumn<DateTime>(
+        'installed_at_utc',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      );
+  @override
+  List<GeneratedColumn> get $columns => [
+    questionnaireVersionId,
+    projectId,
+    versionNumber,
+    status,
+    installedAtUtc,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'db_questionnaire_versions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DbQuestionnaireVersion> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('questionnaire_version_id')) {
+      context.handle(
+        _questionnaireVersionIdMeta,
+        questionnaireVersionId.isAcceptableOrUnknown(
+          data['questionnaire_version_id']!,
+          _questionnaireVersionIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_questionnaireVersionIdMeta);
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('version_number')) {
+      context.handle(
+        _versionNumberMeta,
+        versionNumber.isAcceptableOrUnknown(
+          data['version_number']!,
+          _versionNumberMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_versionNumberMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_statusMeta);
+    }
+    if (data.containsKey('installed_at_utc')) {
+      context.handle(
+        _installedAtUtcMeta,
+        installedAtUtc.isAcceptableOrUnknown(
+          data['installed_at_utc']!,
+          _installedAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_installedAtUtcMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {questionnaireVersionId};
+  @override
+  DbQuestionnaireVersion map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DbQuestionnaireVersion(
+      questionnaireVersionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}questionnaire_version_id'],
+      )!,
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}project_id'],
+      )!,
+      versionNumber: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}version_number'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      installedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}installed_at_utc'],
+      )!,
+    );
+  }
+
+  @override
+  $DbQuestionnaireVersionsTable createAlias(String alias) {
+    return $DbQuestionnaireVersionsTable(attachedDatabase, alias);
+  }
+}
+
+class DbQuestionnaireVersion extends DataClass
+    implements Insertable<DbQuestionnaireVersion> {
+  final String questionnaireVersionId;
+  final String projectId;
+  final int versionNumber;
+  final String status;
+  final DateTime installedAtUtc;
+  const DbQuestionnaireVersion({
+    required this.questionnaireVersionId,
+    required this.projectId,
+    required this.versionNumber,
+    required this.status,
+    required this.installedAtUtc,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['questionnaire_version_id'] = Variable<String>(questionnaireVersionId);
+    map['project_id'] = Variable<String>(projectId);
+    map['version_number'] = Variable<int>(versionNumber);
+    map['status'] = Variable<String>(status);
+    map['installed_at_utc'] = Variable<DateTime>(installedAtUtc);
+    return map;
+  }
+
+  DbQuestionnaireVersionsCompanion toCompanion(bool nullToAbsent) {
+    return DbQuestionnaireVersionsCompanion(
+      questionnaireVersionId: Value(questionnaireVersionId),
+      projectId: Value(projectId),
+      versionNumber: Value(versionNumber),
+      status: Value(status),
+      installedAtUtc: Value(installedAtUtc),
+    );
+  }
+
+  factory DbQuestionnaireVersion.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DbQuestionnaireVersion(
+      questionnaireVersionId: serializer.fromJson<String>(
+        json['questionnaireVersionId'],
+      ),
+      projectId: serializer.fromJson<String>(json['projectId']),
+      versionNumber: serializer.fromJson<int>(json['versionNumber']),
+      status: serializer.fromJson<String>(json['status']),
+      installedAtUtc: serializer.fromJson<DateTime>(json['installedAtUtc']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'questionnaireVersionId': serializer.toJson<String>(
+        questionnaireVersionId,
+      ),
+      'projectId': serializer.toJson<String>(projectId),
+      'versionNumber': serializer.toJson<int>(versionNumber),
+      'status': serializer.toJson<String>(status),
+      'installedAtUtc': serializer.toJson<DateTime>(installedAtUtc),
+    };
+  }
+
+  DbQuestionnaireVersion copyWith({
+    String? questionnaireVersionId,
+    String? projectId,
+    int? versionNumber,
+    String? status,
+    DateTime? installedAtUtc,
+  }) => DbQuestionnaireVersion(
+    questionnaireVersionId:
+        questionnaireVersionId ?? this.questionnaireVersionId,
+    projectId: projectId ?? this.projectId,
+    versionNumber: versionNumber ?? this.versionNumber,
+    status: status ?? this.status,
+    installedAtUtc: installedAtUtc ?? this.installedAtUtc,
+  );
+  DbQuestionnaireVersion copyWithCompanion(
+    DbQuestionnaireVersionsCompanion data,
+  ) {
+    return DbQuestionnaireVersion(
+      questionnaireVersionId: data.questionnaireVersionId.present
+          ? data.questionnaireVersionId.value
+          : this.questionnaireVersionId,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      versionNumber: data.versionNumber.present
+          ? data.versionNumber.value
+          : this.versionNumber,
+      status: data.status.present ? data.status.value : this.status,
+      installedAtUtc: data.installedAtUtc.present
+          ? data.installedAtUtc.value
+          : this.installedAtUtc,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbQuestionnaireVersion(')
+          ..write('questionnaireVersionId: $questionnaireVersionId, ')
+          ..write('projectId: $projectId, ')
+          ..write('versionNumber: $versionNumber, ')
+          ..write('status: $status, ')
+          ..write('installedAtUtc: $installedAtUtc')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    questionnaireVersionId,
+    projectId,
+    versionNumber,
+    status,
+    installedAtUtc,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DbQuestionnaireVersion &&
+          other.questionnaireVersionId == this.questionnaireVersionId &&
+          other.projectId == this.projectId &&
+          other.versionNumber == this.versionNumber &&
+          other.status == this.status &&
+          other.installedAtUtc == this.installedAtUtc);
+}
+
+class DbQuestionnaireVersionsCompanion
+    extends UpdateCompanion<DbQuestionnaireVersion> {
+  final Value<String> questionnaireVersionId;
+  final Value<String> projectId;
+  final Value<int> versionNumber;
+  final Value<String> status;
+  final Value<DateTime> installedAtUtc;
+  final Value<int> rowid;
+  const DbQuestionnaireVersionsCompanion({
+    this.questionnaireVersionId = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.versionNumber = const Value.absent(),
+    this.status = const Value.absent(),
+    this.installedAtUtc = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DbQuestionnaireVersionsCompanion.insert({
+    required String questionnaireVersionId,
+    required String projectId,
+    required int versionNumber,
+    required String status,
+    required DateTime installedAtUtc,
+    this.rowid = const Value.absent(),
+  }) : questionnaireVersionId = Value(questionnaireVersionId),
+       projectId = Value(projectId),
+       versionNumber = Value(versionNumber),
+       status = Value(status),
+       installedAtUtc = Value(installedAtUtc);
+  static Insertable<DbQuestionnaireVersion> custom({
+    Expression<String>? questionnaireVersionId,
+    Expression<String>? projectId,
+    Expression<int>? versionNumber,
+    Expression<String>? status,
+    Expression<DateTime>? installedAtUtc,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (questionnaireVersionId != null)
+        'questionnaire_version_id': questionnaireVersionId,
+      if (projectId != null) 'project_id': projectId,
+      if (versionNumber != null) 'version_number': versionNumber,
+      if (status != null) 'status': status,
+      if (installedAtUtc != null) 'installed_at_utc': installedAtUtc,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DbQuestionnaireVersionsCompanion copyWith({
+    Value<String>? questionnaireVersionId,
+    Value<String>? projectId,
+    Value<int>? versionNumber,
+    Value<String>? status,
+    Value<DateTime>? installedAtUtc,
+    Value<int>? rowid,
+  }) {
+    return DbQuestionnaireVersionsCompanion(
+      questionnaireVersionId:
+          questionnaireVersionId ?? this.questionnaireVersionId,
+      projectId: projectId ?? this.projectId,
+      versionNumber: versionNumber ?? this.versionNumber,
+      status: status ?? this.status,
+      installedAtUtc: installedAtUtc ?? this.installedAtUtc,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (questionnaireVersionId.present) {
+      map['questionnaire_version_id'] = Variable<String>(
+        questionnaireVersionId.value,
+      );
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<String>(projectId.value);
+    }
+    if (versionNumber.present) {
+      map['version_number'] = Variable<int>(versionNumber.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (installedAtUtc.present) {
+      map['installed_at_utc'] = Variable<DateTime>(installedAtUtc.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbQuestionnaireVersionsCompanion(')
+          ..write('questionnaireVersionId: $questionnaireVersionId, ')
+          ..write('projectId: $projectId, ')
+          ..write('versionNumber: $versionNumber, ')
+          ..write('status: $status, ')
+          ..write('installedAtUtc: $installedAtUtc, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $DbQuestionnaireQuestionsTable extends DbQuestionnaireQuestions
+    with TableInfo<$DbQuestionnaireQuestionsTable, DbQuestionnaireQuestion> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DbQuestionnaireQuestionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _questionnaireVersionIdMeta =
+      const VerificationMeta('questionnaireVersionId');
+  @override
+  late final GeneratedColumn<String> questionnaireVersionId =
+      GeneratedColumn<String>(
+        'questionnaire_version_id',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+        defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'REFERENCES db_questionnaire_versions (questionnaire_version_id)',
+        ),
+      );
+  static const VerificationMeta _questionIdMeta = const VerificationMeta(
+    'questionId',
+  );
+  @override
+  late final GeneratedColumn<String> questionId = GeneratedColumn<String>(
+    'question_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _positionMeta = const VerificationMeta(
+    'position',
+  );
+  @override
+  late final GeneratedColumn<int> position = GeneratedColumn<int>(
+    'position',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _promptMeta = const VerificationMeta('prompt');
+  @override
+  late final GeneratedColumn<String> prompt = GeneratedColumn<String>(
+    'prompt',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _questionTypeMeta = const VerificationMeta(
+    'questionType',
+  );
+  @override
+  late final GeneratedColumn<String> questionType = GeneratedColumn<String>(
+    'question_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isRequiredMeta = const VerificationMeta(
+    'isRequired',
+  );
+  @override
+  late final GeneratedColumn<bool> isRequired = GeneratedColumn<bool>(
+    'is_required',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_required" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _allowUnknownMeta = const VerificationMeta(
+    'allowUnknown',
+  );
+  @override
+  late final GeneratedColumn<bool> allowUnknown = GeneratedColumn<bool>(
+    'allow_unknown',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("allow_unknown" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _allowRefusedMeta = const VerificationMeta(
+    'allowRefused',
+  );
+  @override
+  late final GeneratedColumn<bool> allowRefused = GeneratedColumn<bool>(
+    'allow_refused',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("allow_refused" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _allowNotApplicableMeta =
+      const VerificationMeta('allowNotApplicable');
+  @override
+  late final GeneratedColumn<bool> allowNotApplicable = GeneratedColumn<bool>(
+    'allow_not_applicable',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("allow_not_applicable" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _minimumSelectionsMeta = const VerificationMeta(
+    'minimumSelections',
+  );
+  @override
+  late final GeneratedColumn<int> minimumSelections = GeneratedColumn<int>(
+    'minimum_selections',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _maximumSelectionsMeta = const VerificationMeta(
+    'maximumSelections',
+  );
+  @override
+  late final GeneratedColumn<int> maximumSelections = GeneratedColumn<int>(
+    'maximum_selections',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _numberKindMeta = const VerificationMeta(
+    'numberKind',
+  );
+  @override
+  late final GeneratedColumn<String> numberKind = GeneratedColumn<String>(
+    'number_kind',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _unitMeta = const VerificationMeta('unit');
+  @override
+  late final GeneratedColumn<String> unit = GeneratedColumn<String>(
+    'unit',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _minimumMeta = const VerificationMeta(
+    'minimum',
+  );
+  @override
+  late final GeneratedColumn<double> minimum = GeneratedColumn<double>(
+    'minimum',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _maximumMeta = const VerificationMeta(
+    'maximum',
+  );
+  @override
+  late final GeneratedColumn<double> maximum = GeneratedColumn<double>(
+    'maximum',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _maximumLengthMeta = const VerificationMeta(
+    'maximumLength',
+  );
+  @override
+  late final GeneratedColumn<int> maximumLength = GeneratedColumn<int>(
+    'maximum_length',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    questionnaireVersionId,
+    questionId,
+    position,
+    prompt,
+    questionType,
+    isRequired,
+    allowUnknown,
+    allowRefused,
+    allowNotApplicable,
+    minimumSelections,
+    maximumSelections,
+    numberKind,
+    unit,
+    minimum,
+    maximum,
+    maximumLength,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'db_questionnaire_questions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DbQuestionnaireQuestion> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('questionnaire_version_id')) {
+      context.handle(
+        _questionnaireVersionIdMeta,
+        questionnaireVersionId.isAcceptableOrUnknown(
+          data['questionnaire_version_id']!,
+          _questionnaireVersionIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_questionnaireVersionIdMeta);
+    }
+    if (data.containsKey('question_id')) {
+      context.handle(
+        _questionIdMeta,
+        questionId.isAcceptableOrUnknown(data['question_id']!, _questionIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_questionIdMeta);
+    }
+    if (data.containsKey('position')) {
+      context.handle(
+        _positionMeta,
+        position.isAcceptableOrUnknown(data['position']!, _positionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_positionMeta);
+    }
+    if (data.containsKey('prompt')) {
+      context.handle(
+        _promptMeta,
+        prompt.isAcceptableOrUnknown(data['prompt']!, _promptMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_promptMeta);
+    }
+    if (data.containsKey('question_type')) {
+      context.handle(
+        _questionTypeMeta,
+        questionType.isAcceptableOrUnknown(
+          data['question_type']!,
+          _questionTypeMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_questionTypeMeta);
+    }
+    if (data.containsKey('is_required')) {
+      context.handle(
+        _isRequiredMeta,
+        isRequired.isAcceptableOrUnknown(data['is_required']!, _isRequiredMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_isRequiredMeta);
+    }
+    if (data.containsKey('allow_unknown')) {
+      context.handle(
+        _allowUnknownMeta,
+        allowUnknown.isAcceptableOrUnknown(
+          data['allow_unknown']!,
+          _allowUnknownMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_allowUnknownMeta);
+    }
+    if (data.containsKey('allow_refused')) {
+      context.handle(
+        _allowRefusedMeta,
+        allowRefused.isAcceptableOrUnknown(
+          data['allow_refused']!,
+          _allowRefusedMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_allowRefusedMeta);
+    }
+    if (data.containsKey('allow_not_applicable')) {
+      context.handle(
+        _allowNotApplicableMeta,
+        allowNotApplicable.isAcceptableOrUnknown(
+          data['allow_not_applicable']!,
+          _allowNotApplicableMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_allowNotApplicableMeta);
+    }
+    if (data.containsKey('minimum_selections')) {
+      context.handle(
+        _minimumSelectionsMeta,
+        minimumSelections.isAcceptableOrUnknown(
+          data['minimum_selections']!,
+          _minimumSelectionsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('maximum_selections')) {
+      context.handle(
+        _maximumSelectionsMeta,
+        maximumSelections.isAcceptableOrUnknown(
+          data['maximum_selections']!,
+          _maximumSelectionsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('number_kind')) {
+      context.handle(
+        _numberKindMeta,
+        numberKind.isAcceptableOrUnknown(data['number_kind']!, _numberKindMeta),
+      );
+    }
+    if (data.containsKey('unit')) {
+      context.handle(
+        _unitMeta,
+        unit.isAcceptableOrUnknown(data['unit']!, _unitMeta),
+      );
+    }
+    if (data.containsKey('minimum')) {
+      context.handle(
+        _minimumMeta,
+        minimum.isAcceptableOrUnknown(data['minimum']!, _minimumMeta),
+      );
+    }
+    if (data.containsKey('maximum')) {
+      context.handle(
+        _maximumMeta,
+        maximum.isAcceptableOrUnknown(data['maximum']!, _maximumMeta),
+      );
+    }
+    if (data.containsKey('maximum_length')) {
+      context.handle(
+        _maximumLengthMeta,
+        maximumLength.isAcceptableOrUnknown(
+          data['maximum_length']!,
+          _maximumLengthMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {questionnaireVersionId, questionId};
+  @override
+  DbQuestionnaireQuestion map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DbQuestionnaireQuestion(
+      questionnaireVersionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}questionnaire_version_id'],
+      )!,
+      questionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}question_id'],
+      )!,
+      position: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}position'],
+      )!,
+      prompt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}prompt'],
+      )!,
+      questionType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}question_type'],
+      )!,
+      isRequired: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_required'],
+      )!,
+      allowUnknown: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}allow_unknown'],
+      )!,
+      allowRefused: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}allow_refused'],
+      )!,
+      allowNotApplicable: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}allow_not_applicable'],
+      )!,
+      minimumSelections: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}minimum_selections'],
+      ),
+      maximumSelections: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}maximum_selections'],
+      ),
+      numberKind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}number_kind'],
+      ),
+      unit: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}unit'],
+      ),
+      minimum: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}minimum'],
+      ),
+      maximum: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}maximum'],
+      ),
+      maximumLength: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}maximum_length'],
+      ),
+    );
+  }
+
+  @override
+  $DbQuestionnaireQuestionsTable createAlias(String alias) {
+    return $DbQuestionnaireQuestionsTable(attachedDatabase, alias);
+  }
+}
+
+class DbQuestionnaireQuestion extends DataClass
+    implements Insertable<DbQuestionnaireQuestion> {
+  final String questionnaireVersionId;
+  final String questionId;
+  final int position;
+  final String prompt;
+  final String questionType;
+  final bool isRequired;
+  final bool allowUnknown;
+  final bool allowRefused;
+  final bool allowNotApplicable;
+  final int? minimumSelections;
+  final int? maximumSelections;
+  final String? numberKind;
+  final String? unit;
+  final double? minimum;
+  final double? maximum;
+  final int? maximumLength;
+  const DbQuestionnaireQuestion({
+    required this.questionnaireVersionId,
+    required this.questionId,
+    required this.position,
+    required this.prompt,
+    required this.questionType,
+    required this.isRequired,
+    required this.allowUnknown,
+    required this.allowRefused,
+    required this.allowNotApplicable,
+    this.minimumSelections,
+    this.maximumSelections,
+    this.numberKind,
+    this.unit,
+    this.minimum,
+    this.maximum,
+    this.maximumLength,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['questionnaire_version_id'] = Variable<String>(questionnaireVersionId);
+    map['question_id'] = Variable<String>(questionId);
+    map['position'] = Variable<int>(position);
+    map['prompt'] = Variable<String>(prompt);
+    map['question_type'] = Variable<String>(questionType);
+    map['is_required'] = Variable<bool>(isRequired);
+    map['allow_unknown'] = Variable<bool>(allowUnknown);
+    map['allow_refused'] = Variable<bool>(allowRefused);
+    map['allow_not_applicable'] = Variable<bool>(allowNotApplicable);
+    if (!nullToAbsent || minimumSelections != null) {
+      map['minimum_selections'] = Variable<int>(minimumSelections);
+    }
+    if (!nullToAbsent || maximumSelections != null) {
+      map['maximum_selections'] = Variable<int>(maximumSelections);
+    }
+    if (!nullToAbsent || numberKind != null) {
+      map['number_kind'] = Variable<String>(numberKind);
+    }
+    if (!nullToAbsent || unit != null) {
+      map['unit'] = Variable<String>(unit);
+    }
+    if (!nullToAbsent || minimum != null) {
+      map['minimum'] = Variable<double>(minimum);
+    }
+    if (!nullToAbsent || maximum != null) {
+      map['maximum'] = Variable<double>(maximum);
+    }
+    if (!nullToAbsent || maximumLength != null) {
+      map['maximum_length'] = Variable<int>(maximumLength);
+    }
+    return map;
+  }
+
+  DbQuestionnaireQuestionsCompanion toCompanion(bool nullToAbsent) {
+    return DbQuestionnaireQuestionsCompanion(
+      questionnaireVersionId: Value(questionnaireVersionId),
+      questionId: Value(questionId),
+      position: Value(position),
+      prompt: Value(prompt),
+      questionType: Value(questionType),
+      isRequired: Value(isRequired),
+      allowUnknown: Value(allowUnknown),
+      allowRefused: Value(allowRefused),
+      allowNotApplicable: Value(allowNotApplicable),
+      minimumSelections: minimumSelections == null && nullToAbsent
+          ? const Value.absent()
+          : Value(minimumSelections),
+      maximumSelections: maximumSelections == null && nullToAbsent
+          ? const Value.absent()
+          : Value(maximumSelections),
+      numberKind: numberKind == null && nullToAbsent
+          ? const Value.absent()
+          : Value(numberKind),
+      unit: unit == null && nullToAbsent ? const Value.absent() : Value(unit),
+      minimum: minimum == null && nullToAbsent
+          ? const Value.absent()
+          : Value(minimum),
+      maximum: maximum == null && nullToAbsent
+          ? const Value.absent()
+          : Value(maximum),
+      maximumLength: maximumLength == null && nullToAbsent
+          ? const Value.absent()
+          : Value(maximumLength),
+    );
+  }
+
+  factory DbQuestionnaireQuestion.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DbQuestionnaireQuestion(
+      questionnaireVersionId: serializer.fromJson<String>(
+        json['questionnaireVersionId'],
+      ),
+      questionId: serializer.fromJson<String>(json['questionId']),
+      position: serializer.fromJson<int>(json['position']),
+      prompt: serializer.fromJson<String>(json['prompt']),
+      questionType: serializer.fromJson<String>(json['questionType']),
+      isRequired: serializer.fromJson<bool>(json['isRequired']),
+      allowUnknown: serializer.fromJson<bool>(json['allowUnknown']),
+      allowRefused: serializer.fromJson<bool>(json['allowRefused']),
+      allowNotApplicable: serializer.fromJson<bool>(json['allowNotApplicable']),
+      minimumSelections: serializer.fromJson<int?>(json['minimumSelections']),
+      maximumSelections: serializer.fromJson<int?>(json['maximumSelections']),
+      numberKind: serializer.fromJson<String?>(json['numberKind']),
+      unit: serializer.fromJson<String?>(json['unit']),
+      minimum: serializer.fromJson<double?>(json['minimum']),
+      maximum: serializer.fromJson<double?>(json['maximum']),
+      maximumLength: serializer.fromJson<int?>(json['maximumLength']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'questionnaireVersionId': serializer.toJson<String>(
+        questionnaireVersionId,
+      ),
+      'questionId': serializer.toJson<String>(questionId),
+      'position': serializer.toJson<int>(position),
+      'prompt': serializer.toJson<String>(prompt),
+      'questionType': serializer.toJson<String>(questionType),
+      'isRequired': serializer.toJson<bool>(isRequired),
+      'allowUnknown': serializer.toJson<bool>(allowUnknown),
+      'allowRefused': serializer.toJson<bool>(allowRefused),
+      'allowNotApplicable': serializer.toJson<bool>(allowNotApplicable),
+      'minimumSelections': serializer.toJson<int?>(minimumSelections),
+      'maximumSelections': serializer.toJson<int?>(maximumSelections),
+      'numberKind': serializer.toJson<String?>(numberKind),
+      'unit': serializer.toJson<String?>(unit),
+      'minimum': serializer.toJson<double?>(minimum),
+      'maximum': serializer.toJson<double?>(maximum),
+      'maximumLength': serializer.toJson<int?>(maximumLength),
+    };
+  }
+
+  DbQuestionnaireQuestion copyWith({
+    String? questionnaireVersionId,
+    String? questionId,
+    int? position,
+    String? prompt,
+    String? questionType,
+    bool? isRequired,
+    bool? allowUnknown,
+    bool? allowRefused,
+    bool? allowNotApplicable,
+    Value<int?> minimumSelections = const Value.absent(),
+    Value<int?> maximumSelections = const Value.absent(),
+    Value<String?> numberKind = const Value.absent(),
+    Value<String?> unit = const Value.absent(),
+    Value<double?> minimum = const Value.absent(),
+    Value<double?> maximum = const Value.absent(),
+    Value<int?> maximumLength = const Value.absent(),
+  }) => DbQuestionnaireQuestion(
+    questionnaireVersionId:
+        questionnaireVersionId ?? this.questionnaireVersionId,
+    questionId: questionId ?? this.questionId,
+    position: position ?? this.position,
+    prompt: prompt ?? this.prompt,
+    questionType: questionType ?? this.questionType,
+    isRequired: isRequired ?? this.isRequired,
+    allowUnknown: allowUnknown ?? this.allowUnknown,
+    allowRefused: allowRefused ?? this.allowRefused,
+    allowNotApplicable: allowNotApplicable ?? this.allowNotApplicable,
+    minimumSelections: minimumSelections.present
+        ? minimumSelections.value
+        : this.minimumSelections,
+    maximumSelections: maximumSelections.present
+        ? maximumSelections.value
+        : this.maximumSelections,
+    numberKind: numberKind.present ? numberKind.value : this.numberKind,
+    unit: unit.present ? unit.value : this.unit,
+    minimum: minimum.present ? minimum.value : this.minimum,
+    maximum: maximum.present ? maximum.value : this.maximum,
+    maximumLength: maximumLength.present
+        ? maximumLength.value
+        : this.maximumLength,
+  );
+  DbQuestionnaireQuestion copyWithCompanion(
+    DbQuestionnaireQuestionsCompanion data,
+  ) {
+    return DbQuestionnaireQuestion(
+      questionnaireVersionId: data.questionnaireVersionId.present
+          ? data.questionnaireVersionId.value
+          : this.questionnaireVersionId,
+      questionId: data.questionId.present
+          ? data.questionId.value
+          : this.questionId,
+      position: data.position.present ? data.position.value : this.position,
+      prompt: data.prompt.present ? data.prompt.value : this.prompt,
+      questionType: data.questionType.present
+          ? data.questionType.value
+          : this.questionType,
+      isRequired: data.isRequired.present
+          ? data.isRequired.value
+          : this.isRequired,
+      allowUnknown: data.allowUnknown.present
+          ? data.allowUnknown.value
+          : this.allowUnknown,
+      allowRefused: data.allowRefused.present
+          ? data.allowRefused.value
+          : this.allowRefused,
+      allowNotApplicable: data.allowNotApplicable.present
+          ? data.allowNotApplicable.value
+          : this.allowNotApplicable,
+      minimumSelections: data.minimumSelections.present
+          ? data.minimumSelections.value
+          : this.minimumSelections,
+      maximumSelections: data.maximumSelections.present
+          ? data.maximumSelections.value
+          : this.maximumSelections,
+      numberKind: data.numberKind.present
+          ? data.numberKind.value
+          : this.numberKind,
+      unit: data.unit.present ? data.unit.value : this.unit,
+      minimum: data.minimum.present ? data.minimum.value : this.minimum,
+      maximum: data.maximum.present ? data.maximum.value : this.maximum,
+      maximumLength: data.maximumLength.present
+          ? data.maximumLength.value
+          : this.maximumLength,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbQuestionnaireQuestion(')
+          ..write('questionnaireVersionId: $questionnaireVersionId, ')
+          ..write('questionId: $questionId, ')
+          ..write('position: $position, ')
+          ..write('prompt: $prompt, ')
+          ..write('questionType: $questionType, ')
+          ..write('isRequired: $isRequired, ')
+          ..write('allowUnknown: $allowUnknown, ')
+          ..write('allowRefused: $allowRefused, ')
+          ..write('allowNotApplicable: $allowNotApplicable, ')
+          ..write('minimumSelections: $minimumSelections, ')
+          ..write('maximumSelections: $maximumSelections, ')
+          ..write('numberKind: $numberKind, ')
+          ..write('unit: $unit, ')
+          ..write('minimum: $minimum, ')
+          ..write('maximum: $maximum, ')
+          ..write('maximumLength: $maximumLength')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    questionnaireVersionId,
+    questionId,
+    position,
+    prompt,
+    questionType,
+    isRequired,
+    allowUnknown,
+    allowRefused,
+    allowNotApplicable,
+    minimumSelections,
+    maximumSelections,
+    numberKind,
+    unit,
+    minimum,
+    maximum,
+    maximumLength,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DbQuestionnaireQuestion &&
+          other.questionnaireVersionId == this.questionnaireVersionId &&
+          other.questionId == this.questionId &&
+          other.position == this.position &&
+          other.prompt == this.prompt &&
+          other.questionType == this.questionType &&
+          other.isRequired == this.isRequired &&
+          other.allowUnknown == this.allowUnknown &&
+          other.allowRefused == this.allowRefused &&
+          other.allowNotApplicable == this.allowNotApplicable &&
+          other.minimumSelections == this.minimumSelections &&
+          other.maximumSelections == this.maximumSelections &&
+          other.numberKind == this.numberKind &&
+          other.unit == this.unit &&
+          other.minimum == this.minimum &&
+          other.maximum == this.maximum &&
+          other.maximumLength == this.maximumLength);
+}
+
+class DbQuestionnaireQuestionsCompanion
+    extends UpdateCompanion<DbQuestionnaireQuestion> {
+  final Value<String> questionnaireVersionId;
+  final Value<String> questionId;
+  final Value<int> position;
+  final Value<String> prompt;
+  final Value<String> questionType;
+  final Value<bool> isRequired;
+  final Value<bool> allowUnknown;
+  final Value<bool> allowRefused;
+  final Value<bool> allowNotApplicable;
+  final Value<int?> minimumSelections;
+  final Value<int?> maximumSelections;
+  final Value<String?> numberKind;
+  final Value<String?> unit;
+  final Value<double?> minimum;
+  final Value<double?> maximum;
+  final Value<int?> maximumLength;
+  final Value<int> rowid;
+  const DbQuestionnaireQuestionsCompanion({
+    this.questionnaireVersionId = const Value.absent(),
+    this.questionId = const Value.absent(),
+    this.position = const Value.absent(),
+    this.prompt = const Value.absent(),
+    this.questionType = const Value.absent(),
+    this.isRequired = const Value.absent(),
+    this.allowUnknown = const Value.absent(),
+    this.allowRefused = const Value.absent(),
+    this.allowNotApplicable = const Value.absent(),
+    this.minimumSelections = const Value.absent(),
+    this.maximumSelections = const Value.absent(),
+    this.numberKind = const Value.absent(),
+    this.unit = const Value.absent(),
+    this.minimum = const Value.absent(),
+    this.maximum = const Value.absent(),
+    this.maximumLength = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DbQuestionnaireQuestionsCompanion.insert({
+    required String questionnaireVersionId,
+    required String questionId,
+    required int position,
+    required String prompt,
+    required String questionType,
+    required bool isRequired,
+    required bool allowUnknown,
+    required bool allowRefused,
+    required bool allowNotApplicable,
+    this.minimumSelections = const Value.absent(),
+    this.maximumSelections = const Value.absent(),
+    this.numberKind = const Value.absent(),
+    this.unit = const Value.absent(),
+    this.minimum = const Value.absent(),
+    this.maximum = const Value.absent(),
+    this.maximumLength = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : questionnaireVersionId = Value(questionnaireVersionId),
+       questionId = Value(questionId),
+       position = Value(position),
+       prompt = Value(prompt),
+       questionType = Value(questionType),
+       isRequired = Value(isRequired),
+       allowUnknown = Value(allowUnknown),
+       allowRefused = Value(allowRefused),
+       allowNotApplicable = Value(allowNotApplicable);
+  static Insertable<DbQuestionnaireQuestion> custom({
+    Expression<String>? questionnaireVersionId,
+    Expression<String>? questionId,
+    Expression<int>? position,
+    Expression<String>? prompt,
+    Expression<String>? questionType,
+    Expression<bool>? isRequired,
+    Expression<bool>? allowUnknown,
+    Expression<bool>? allowRefused,
+    Expression<bool>? allowNotApplicable,
+    Expression<int>? minimumSelections,
+    Expression<int>? maximumSelections,
+    Expression<String>? numberKind,
+    Expression<String>? unit,
+    Expression<double>? minimum,
+    Expression<double>? maximum,
+    Expression<int>? maximumLength,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (questionnaireVersionId != null)
+        'questionnaire_version_id': questionnaireVersionId,
+      if (questionId != null) 'question_id': questionId,
+      if (position != null) 'position': position,
+      if (prompt != null) 'prompt': prompt,
+      if (questionType != null) 'question_type': questionType,
+      if (isRequired != null) 'is_required': isRequired,
+      if (allowUnknown != null) 'allow_unknown': allowUnknown,
+      if (allowRefused != null) 'allow_refused': allowRefused,
+      if (allowNotApplicable != null)
+        'allow_not_applicable': allowNotApplicable,
+      if (minimumSelections != null) 'minimum_selections': minimumSelections,
+      if (maximumSelections != null) 'maximum_selections': maximumSelections,
+      if (numberKind != null) 'number_kind': numberKind,
+      if (unit != null) 'unit': unit,
+      if (minimum != null) 'minimum': minimum,
+      if (maximum != null) 'maximum': maximum,
+      if (maximumLength != null) 'maximum_length': maximumLength,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DbQuestionnaireQuestionsCompanion copyWith({
+    Value<String>? questionnaireVersionId,
+    Value<String>? questionId,
+    Value<int>? position,
+    Value<String>? prompt,
+    Value<String>? questionType,
+    Value<bool>? isRequired,
+    Value<bool>? allowUnknown,
+    Value<bool>? allowRefused,
+    Value<bool>? allowNotApplicable,
+    Value<int?>? minimumSelections,
+    Value<int?>? maximumSelections,
+    Value<String?>? numberKind,
+    Value<String?>? unit,
+    Value<double?>? minimum,
+    Value<double?>? maximum,
+    Value<int?>? maximumLength,
+    Value<int>? rowid,
+  }) {
+    return DbQuestionnaireQuestionsCompanion(
+      questionnaireVersionId:
+          questionnaireVersionId ?? this.questionnaireVersionId,
+      questionId: questionId ?? this.questionId,
+      position: position ?? this.position,
+      prompt: prompt ?? this.prompt,
+      questionType: questionType ?? this.questionType,
+      isRequired: isRequired ?? this.isRequired,
+      allowUnknown: allowUnknown ?? this.allowUnknown,
+      allowRefused: allowRefused ?? this.allowRefused,
+      allowNotApplicable: allowNotApplicable ?? this.allowNotApplicable,
+      minimumSelections: minimumSelections ?? this.minimumSelections,
+      maximumSelections: maximumSelections ?? this.maximumSelections,
+      numberKind: numberKind ?? this.numberKind,
+      unit: unit ?? this.unit,
+      minimum: minimum ?? this.minimum,
+      maximum: maximum ?? this.maximum,
+      maximumLength: maximumLength ?? this.maximumLength,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (questionnaireVersionId.present) {
+      map['questionnaire_version_id'] = Variable<String>(
+        questionnaireVersionId.value,
+      );
+    }
+    if (questionId.present) {
+      map['question_id'] = Variable<String>(questionId.value);
+    }
+    if (position.present) {
+      map['position'] = Variable<int>(position.value);
+    }
+    if (prompt.present) {
+      map['prompt'] = Variable<String>(prompt.value);
+    }
+    if (questionType.present) {
+      map['question_type'] = Variable<String>(questionType.value);
+    }
+    if (isRequired.present) {
+      map['is_required'] = Variable<bool>(isRequired.value);
+    }
+    if (allowUnknown.present) {
+      map['allow_unknown'] = Variable<bool>(allowUnknown.value);
+    }
+    if (allowRefused.present) {
+      map['allow_refused'] = Variable<bool>(allowRefused.value);
+    }
+    if (allowNotApplicable.present) {
+      map['allow_not_applicable'] = Variable<bool>(allowNotApplicable.value);
+    }
+    if (minimumSelections.present) {
+      map['minimum_selections'] = Variable<int>(minimumSelections.value);
+    }
+    if (maximumSelections.present) {
+      map['maximum_selections'] = Variable<int>(maximumSelections.value);
+    }
+    if (numberKind.present) {
+      map['number_kind'] = Variable<String>(numberKind.value);
+    }
+    if (unit.present) {
+      map['unit'] = Variable<String>(unit.value);
+    }
+    if (minimum.present) {
+      map['minimum'] = Variable<double>(minimum.value);
+    }
+    if (maximum.present) {
+      map['maximum'] = Variable<double>(maximum.value);
+    }
+    if (maximumLength.present) {
+      map['maximum_length'] = Variable<int>(maximumLength.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbQuestionnaireQuestionsCompanion(')
+          ..write('questionnaireVersionId: $questionnaireVersionId, ')
+          ..write('questionId: $questionId, ')
+          ..write('position: $position, ')
+          ..write('prompt: $prompt, ')
+          ..write('questionType: $questionType, ')
+          ..write('isRequired: $isRequired, ')
+          ..write('allowUnknown: $allowUnknown, ')
+          ..write('allowRefused: $allowRefused, ')
+          ..write('allowNotApplicable: $allowNotApplicable, ')
+          ..write('minimumSelections: $minimumSelections, ')
+          ..write('maximumSelections: $maximumSelections, ')
+          ..write('numberKind: $numberKind, ')
+          ..write('unit: $unit, ')
+          ..write('minimum: $minimum, ')
+          ..write('maximum: $maximum, ')
+          ..write('maximumLength: $maximumLength, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $DbQuestionnaireOptionsTable extends DbQuestionnaireOptions
+    with TableInfo<$DbQuestionnaireOptionsTable, DbQuestionnaireOption> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DbQuestionnaireOptionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _questionnaireVersionIdMeta =
+      const VerificationMeta('questionnaireVersionId');
+  @override
+  late final GeneratedColumn<String> questionnaireVersionId =
+      GeneratedColumn<String>(
+        'questionnaire_version_id',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+        defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'REFERENCES db_questionnaire_versions (questionnaire_version_id)',
+        ),
+      );
+  static const VerificationMeta _questionIdMeta = const VerificationMeta(
+    'questionId',
+  );
+  @override
+  late final GeneratedColumn<String> questionId = GeneratedColumn<String>(
+    'question_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _optionIdMeta = const VerificationMeta(
+    'optionId',
+  );
+  @override
+  late final GeneratedColumn<String> optionId = GeneratedColumn<String>(
+    'option_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _positionMeta = const VerificationMeta(
+    'position',
+  );
+  @override
+  late final GeneratedColumn<int> position = GeneratedColumn<int>(
+    'position',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _labelMeta = const VerificationMeta('label');
+  @override
+  late final GeneratedColumn<String> label = GeneratedColumn<String>(
+    'label',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    questionnaireVersionId,
+    questionId,
+    optionId,
+    position,
+    label,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'db_questionnaire_options';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DbQuestionnaireOption> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('questionnaire_version_id')) {
+      context.handle(
+        _questionnaireVersionIdMeta,
+        questionnaireVersionId.isAcceptableOrUnknown(
+          data['questionnaire_version_id']!,
+          _questionnaireVersionIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_questionnaireVersionIdMeta);
+    }
+    if (data.containsKey('question_id')) {
+      context.handle(
+        _questionIdMeta,
+        questionId.isAcceptableOrUnknown(data['question_id']!, _questionIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_questionIdMeta);
+    }
+    if (data.containsKey('option_id')) {
+      context.handle(
+        _optionIdMeta,
+        optionId.isAcceptableOrUnknown(data['option_id']!, _optionIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_optionIdMeta);
+    }
+    if (data.containsKey('position')) {
+      context.handle(
+        _positionMeta,
+        position.isAcceptableOrUnknown(data['position']!, _positionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_positionMeta);
+    }
+    if (data.containsKey('label')) {
+      context.handle(
+        _labelMeta,
+        label.isAcceptableOrUnknown(data['label']!, _labelMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_labelMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {
+    questionnaireVersionId,
+    questionId,
+    optionId,
+  };
+  @override
+  DbQuestionnaireOption map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DbQuestionnaireOption(
+      questionnaireVersionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}questionnaire_version_id'],
+      )!,
+      questionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}question_id'],
+      )!,
+      optionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}option_id'],
+      )!,
+      position: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}position'],
+      )!,
+      label: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}label'],
+      )!,
+    );
+  }
+
+  @override
+  $DbQuestionnaireOptionsTable createAlias(String alias) {
+    return $DbQuestionnaireOptionsTable(attachedDatabase, alias);
+  }
+}
+
+class DbQuestionnaireOption extends DataClass
+    implements Insertable<DbQuestionnaireOption> {
+  final String questionnaireVersionId;
+  final String questionId;
+  final String optionId;
+  final int position;
+  final String label;
+  const DbQuestionnaireOption({
+    required this.questionnaireVersionId,
+    required this.questionId,
+    required this.optionId,
+    required this.position,
+    required this.label,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['questionnaire_version_id'] = Variable<String>(questionnaireVersionId);
+    map['question_id'] = Variable<String>(questionId);
+    map['option_id'] = Variable<String>(optionId);
+    map['position'] = Variable<int>(position);
+    map['label'] = Variable<String>(label);
+    return map;
+  }
+
+  DbQuestionnaireOptionsCompanion toCompanion(bool nullToAbsent) {
+    return DbQuestionnaireOptionsCompanion(
+      questionnaireVersionId: Value(questionnaireVersionId),
+      questionId: Value(questionId),
+      optionId: Value(optionId),
+      position: Value(position),
+      label: Value(label),
+    );
+  }
+
+  factory DbQuestionnaireOption.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DbQuestionnaireOption(
+      questionnaireVersionId: serializer.fromJson<String>(
+        json['questionnaireVersionId'],
+      ),
+      questionId: serializer.fromJson<String>(json['questionId']),
+      optionId: serializer.fromJson<String>(json['optionId']),
+      position: serializer.fromJson<int>(json['position']),
+      label: serializer.fromJson<String>(json['label']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'questionnaireVersionId': serializer.toJson<String>(
+        questionnaireVersionId,
+      ),
+      'questionId': serializer.toJson<String>(questionId),
+      'optionId': serializer.toJson<String>(optionId),
+      'position': serializer.toJson<int>(position),
+      'label': serializer.toJson<String>(label),
+    };
+  }
+
+  DbQuestionnaireOption copyWith({
+    String? questionnaireVersionId,
+    String? questionId,
+    String? optionId,
+    int? position,
+    String? label,
+  }) => DbQuestionnaireOption(
+    questionnaireVersionId:
+        questionnaireVersionId ?? this.questionnaireVersionId,
+    questionId: questionId ?? this.questionId,
+    optionId: optionId ?? this.optionId,
+    position: position ?? this.position,
+    label: label ?? this.label,
+  );
+  DbQuestionnaireOption copyWithCompanion(
+    DbQuestionnaireOptionsCompanion data,
+  ) {
+    return DbQuestionnaireOption(
+      questionnaireVersionId: data.questionnaireVersionId.present
+          ? data.questionnaireVersionId.value
+          : this.questionnaireVersionId,
+      questionId: data.questionId.present
+          ? data.questionId.value
+          : this.questionId,
+      optionId: data.optionId.present ? data.optionId.value : this.optionId,
+      position: data.position.present ? data.position.value : this.position,
+      label: data.label.present ? data.label.value : this.label,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbQuestionnaireOption(')
+          ..write('questionnaireVersionId: $questionnaireVersionId, ')
+          ..write('questionId: $questionId, ')
+          ..write('optionId: $optionId, ')
+          ..write('position: $position, ')
+          ..write('label: $label')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    questionnaireVersionId,
+    questionId,
+    optionId,
+    position,
+    label,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DbQuestionnaireOption &&
+          other.questionnaireVersionId == this.questionnaireVersionId &&
+          other.questionId == this.questionId &&
+          other.optionId == this.optionId &&
+          other.position == this.position &&
+          other.label == this.label);
+}
+
+class DbQuestionnaireOptionsCompanion
+    extends UpdateCompanion<DbQuestionnaireOption> {
+  final Value<String> questionnaireVersionId;
+  final Value<String> questionId;
+  final Value<String> optionId;
+  final Value<int> position;
+  final Value<String> label;
+  final Value<int> rowid;
+  const DbQuestionnaireOptionsCompanion({
+    this.questionnaireVersionId = const Value.absent(),
+    this.questionId = const Value.absent(),
+    this.optionId = const Value.absent(),
+    this.position = const Value.absent(),
+    this.label = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DbQuestionnaireOptionsCompanion.insert({
+    required String questionnaireVersionId,
+    required String questionId,
+    required String optionId,
+    required int position,
+    required String label,
+    this.rowid = const Value.absent(),
+  }) : questionnaireVersionId = Value(questionnaireVersionId),
+       questionId = Value(questionId),
+       optionId = Value(optionId),
+       position = Value(position),
+       label = Value(label);
+  static Insertable<DbQuestionnaireOption> custom({
+    Expression<String>? questionnaireVersionId,
+    Expression<String>? questionId,
+    Expression<String>? optionId,
+    Expression<int>? position,
+    Expression<String>? label,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (questionnaireVersionId != null)
+        'questionnaire_version_id': questionnaireVersionId,
+      if (questionId != null) 'question_id': questionId,
+      if (optionId != null) 'option_id': optionId,
+      if (position != null) 'position': position,
+      if (label != null) 'label': label,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DbQuestionnaireOptionsCompanion copyWith({
+    Value<String>? questionnaireVersionId,
+    Value<String>? questionId,
+    Value<String>? optionId,
+    Value<int>? position,
+    Value<String>? label,
+    Value<int>? rowid,
+  }) {
+    return DbQuestionnaireOptionsCompanion(
+      questionnaireVersionId:
+          questionnaireVersionId ?? this.questionnaireVersionId,
+      questionId: questionId ?? this.questionId,
+      optionId: optionId ?? this.optionId,
+      position: position ?? this.position,
+      label: label ?? this.label,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (questionnaireVersionId.present) {
+      map['questionnaire_version_id'] = Variable<String>(
+        questionnaireVersionId.value,
+      );
+    }
+    if (questionId.present) {
+      map['question_id'] = Variable<String>(questionId.value);
+    }
+    if (optionId.present) {
+      map['option_id'] = Variable<String>(optionId.value);
+    }
+    if (position.present) {
+      map['position'] = Variable<int>(position.value);
+    }
+    if (label.present) {
+      map['label'] = Variable<String>(label.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbQuestionnaireOptionsCompanion(')
+          ..write('questionnaireVersionId: $questionnaireVersionId, ')
+          ..write('questionId: $questionId, ')
+          ..write('optionId: $optionId, ')
+          ..write('position: $position, ')
+          ..write('label: $label, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$LocalDatabase extends GeneratedDatabase {
   _$LocalDatabase(QueryExecutor e) : super(e);
   $LocalDatabaseManager get managers => $LocalDatabaseManager(this);
@@ -13193,6 +15309,12 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
       $DbContactRegionAssignmentsTable(this);
   late final $DbDraftRegionAssignmentsTable dbDraftRegionAssignments =
       $DbDraftRegionAssignmentsTable(this);
+  late final $DbQuestionnaireVersionsTable dbQuestionnaireVersions =
+      $DbQuestionnaireVersionsTable(this);
+  late final $DbQuestionnaireQuestionsTable dbQuestionnaireQuestions =
+      $DbQuestionnaireQuestionsTable(this);
+  late final $DbQuestionnaireOptionsTable dbQuestionnaireOptions =
+      $DbQuestionnaireOptionsTable(this);
   Selectable<DbSyncOutboxData> readReadySyncCommand(
     String appUserId,
     String workspaceId,
@@ -13326,6 +15448,9 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
     dbCanonicalRegionVersions,
     dbContactRegionAssignments,
     dbDraftRegionAssignments,
+    dbQuestionnaireVersions,
+    dbQuestionnaireQuestions,
+    dbQuestionnaireOptions,
   ];
 }
 
@@ -16429,6 +18554,9 @@ typedef $$DbContactAnswersTableCreateCompanionBuilder =
       required String answerState,
       required String answerType,
       Value<bool?> booleanValue,
+      Value<String?> textValue,
+      Value<double?> numberValue,
+      Value<String?> multiChoiceValueJson,
       Value<int> rowid,
     });
 typedef $$DbContactAnswersTableUpdateCompanionBuilder =
@@ -16439,6 +18567,9 @@ typedef $$DbContactAnswersTableUpdateCompanionBuilder =
       Value<String> answerState,
       Value<String> answerType,
       Value<bool?> booleanValue,
+      Value<String?> textValue,
+      Value<double?> numberValue,
+      Value<String?> multiChoiceValueJson,
       Value<int> rowid,
     });
 
@@ -16509,6 +18640,21 @@ class $$DbContactAnswersTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get textValue => $composableBuilder(
+    column: $table.textValue,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get numberValue => $composableBuilder(
+    column: $table.numberValue,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get multiChoiceValueJson => $composableBuilder(
+    column: $table.multiChoiceValueJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$DbContactRecordsTableFilterComposer get contactId {
     final $$DbContactRecordsTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -16567,6 +18713,21 @@ class $$DbContactAnswersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get textValue => $composableBuilder(
+    column: $table.textValue,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get numberValue => $composableBuilder(
+    column: $table.numberValue,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get multiChoiceValueJson => $composableBuilder(
+    column: $table.multiChoiceValueJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$DbContactRecordsTableOrderingComposer get contactId {
     final $$DbContactRecordsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -16622,6 +18783,19 @@ class $$DbContactAnswersTableAnnotationComposer
 
   GeneratedColumn<bool> get booleanValue => $composableBuilder(
     column: $table.booleanValue,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get textValue =>
+      $composableBuilder(column: $table.textValue, builder: (column) => column);
+
+  GeneratedColumn<double> get numberValue => $composableBuilder(
+    column: $table.numberValue,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get multiChoiceValueJson => $composableBuilder(
+    column: $table.multiChoiceValueJson,
     builder: (column) => column,
   );
 
@@ -16685,6 +18859,9 @@ class $$DbContactAnswersTableTableManager
                 Value<String> answerState = const Value.absent(),
                 Value<String> answerType = const Value.absent(),
                 Value<bool?> booleanValue = const Value.absent(),
+                Value<String?> textValue = const Value.absent(),
+                Value<double?> numberValue = const Value.absent(),
+                Value<String?> multiChoiceValueJson = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => DbContactAnswersCompanion(
                 contactId: contactId,
@@ -16693,6 +18870,9 @@ class $$DbContactAnswersTableTableManager
                 answerState: answerState,
                 answerType: answerType,
                 booleanValue: booleanValue,
+                textValue: textValue,
+                numberValue: numberValue,
+                multiChoiceValueJson: multiChoiceValueJson,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -16703,6 +18883,9 @@ class $$DbContactAnswersTableTableManager
                 required String answerState,
                 required String answerType,
                 Value<bool?> booleanValue = const Value.absent(),
+                Value<String?> textValue = const Value.absent(),
+                Value<double?> numberValue = const Value.absent(),
+                Value<String?> multiChoiceValueJson = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => DbContactAnswersCompanion.insert(
                 contactId: contactId,
@@ -16711,6 +18894,9 @@ class $$DbContactAnswersTableTableManager
                 answerState: answerState,
                 answerType: answerType,
                 booleanValue: booleanValue,
+                textValue: textValue,
+                numberValue: numberValue,
+                multiChoiceValueJson: multiChoiceValueJson,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -18326,6 +20512,9 @@ typedef $$DbContactDraftAnswersTableCreateCompanionBuilder =
       required String answerState,
       required String answerType,
       Value<bool?> booleanValue,
+      Value<String?> textValue,
+      Value<double?> numberValue,
+      Value<String?> multiChoiceValueJson,
       Value<int> rowid,
     });
 typedef $$DbContactDraftAnswersTableUpdateCompanionBuilder =
@@ -18335,6 +20524,9 @@ typedef $$DbContactDraftAnswersTableUpdateCompanionBuilder =
       Value<String> answerState,
       Value<String> answerType,
       Value<bool?> booleanValue,
+      Value<String?> textValue,
+      Value<double?> numberValue,
+      Value<String?> multiChoiceValueJson,
       Value<int> rowid,
     });
 
@@ -18400,6 +20592,21 @@ class $$DbContactDraftAnswersTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get textValue => $composableBuilder(
+    column: $table.textValue,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get numberValue => $composableBuilder(
+    column: $table.numberValue,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get multiChoiceValueJson => $composableBuilder(
+    column: $table.multiChoiceValueJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$DbContactDraftsTableFilterComposer get draftId {
     final $$DbContactDraftsTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -18453,6 +20660,21 @@ class $$DbContactDraftAnswersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get textValue => $composableBuilder(
+    column: $table.textValue,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get numberValue => $composableBuilder(
+    column: $table.numberValue,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get multiChoiceValueJson => $composableBuilder(
+    column: $table.multiChoiceValueJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$DbContactDraftsTableOrderingComposer get draftId {
     final $$DbContactDraftsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -18503,6 +20725,19 @@ class $$DbContactDraftAnswersTableAnnotationComposer
 
   GeneratedColumn<bool> get booleanValue => $composableBuilder(
     column: $table.booleanValue,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get textValue =>
+      $composableBuilder(column: $table.textValue, builder: (column) => column);
+
+  GeneratedColumn<double> get numberValue => $composableBuilder(
+    column: $table.numberValue,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get multiChoiceValueJson => $composableBuilder(
+    column: $table.multiChoiceValueJson,
     builder: (column) => column,
   );
 
@@ -18574,6 +20809,9 @@ class $$DbContactDraftAnswersTableTableManager
                 Value<String> answerState = const Value.absent(),
                 Value<String> answerType = const Value.absent(),
                 Value<bool?> booleanValue = const Value.absent(),
+                Value<String?> textValue = const Value.absent(),
+                Value<double?> numberValue = const Value.absent(),
+                Value<String?> multiChoiceValueJson = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => DbContactDraftAnswersCompanion(
                 draftId: draftId,
@@ -18581,6 +20819,9 @@ class $$DbContactDraftAnswersTableTableManager
                 answerState: answerState,
                 answerType: answerType,
                 booleanValue: booleanValue,
+                textValue: textValue,
+                numberValue: numberValue,
+                multiChoiceValueJson: multiChoiceValueJson,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -18590,6 +20831,9 @@ class $$DbContactDraftAnswersTableTableManager
                 required String answerState,
                 required String answerType,
                 Value<bool?> booleanValue = const Value.absent(),
+                Value<String?> textValue = const Value.absent(),
+                Value<double?> numberValue = const Value.absent(),
+                Value<String?> multiChoiceValueJson = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => DbContactDraftAnswersCompanion.insert(
                 draftId: draftId,
@@ -18597,6 +20841,9 @@ class $$DbContactDraftAnswersTableTableManager
                 answerState: answerState,
                 answerType: answerType,
                 booleanValue: booleanValue,
+                textValue: textValue,
+                numberValue: numberValue,
+                multiChoiceValueJson: multiChoiceValueJson,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -21778,6 +24025,1405 @@ typedef $$DbDraftRegionAssignmentsTableProcessedTableManager =
       DbDraftRegionAssignment,
       PrefetchHooks Function({bool draftId, bool regionVersionKey})
     >;
+typedef $$DbQuestionnaireVersionsTableCreateCompanionBuilder =
+    DbQuestionnaireVersionsCompanion Function({
+      required String questionnaireVersionId,
+      required String projectId,
+      required int versionNumber,
+      required String status,
+      required DateTime installedAtUtc,
+      Value<int> rowid,
+    });
+typedef $$DbQuestionnaireVersionsTableUpdateCompanionBuilder =
+    DbQuestionnaireVersionsCompanion Function({
+      Value<String> questionnaireVersionId,
+      Value<String> projectId,
+      Value<int> versionNumber,
+      Value<String> status,
+      Value<DateTime> installedAtUtc,
+      Value<int> rowid,
+    });
+
+final class $$DbQuestionnaireVersionsTableReferences
+    extends
+        BaseReferences<
+          _$LocalDatabase,
+          $DbQuestionnaireVersionsTable,
+          DbQuestionnaireVersion
+        > {
+  $$DbQuestionnaireVersionsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static MultiTypedResultKey<
+    $DbQuestionnaireQuestionsTable,
+    List<DbQuestionnaireQuestion>
+  >
+  _dbQuestionnaireQuestionsRefsTable(
+    _$LocalDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.dbQuestionnaireQuestions,
+    aliasName:
+        'db_questionnaire_versions__questionnaire_version_id__db_questionnaire_questions__questionnaire_version_id',
+  );
+
+  $$DbQuestionnaireQuestionsTableProcessedTableManager
+  get dbQuestionnaireQuestionsRefs {
+    final manager =
+        $$DbQuestionnaireQuestionsTableTableManager(
+          $_db,
+          $_db.dbQuestionnaireQuestions,
+        ).filter(
+          (f) => f.questionnaireVersionId.questionnaireVersionId.sqlEquals(
+            $_itemColumn<String>('questionnaire_version_id')!,
+          ),
+        );
+
+    final cache = $_typedResult.readTableOrNull(
+      _dbQuestionnaireQuestionsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $DbQuestionnaireOptionsTable,
+    List<DbQuestionnaireOption>
+  >
+  _dbQuestionnaireOptionsRefsTable(
+    _$LocalDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.dbQuestionnaireOptions,
+    aliasName:
+        'db_questionnaire_versions__questionnaire_version_id__db_questionnaire_options__questionnaire_version_id',
+  );
+
+  $$DbQuestionnaireOptionsTableProcessedTableManager
+  get dbQuestionnaireOptionsRefs {
+    final manager =
+        $$DbQuestionnaireOptionsTableTableManager(
+          $_db,
+          $_db.dbQuestionnaireOptions,
+        ).filter(
+          (f) => f.questionnaireVersionId.questionnaireVersionId.sqlEquals(
+            $_itemColumn<String>('questionnaire_version_id')!,
+          ),
+        );
+
+    final cache = $_typedResult.readTableOrNull(
+      _dbQuestionnaireOptionsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$DbQuestionnaireVersionsTableFilterComposer
+    extends Composer<_$LocalDatabase, $DbQuestionnaireVersionsTable> {
+  $$DbQuestionnaireVersionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get questionnaireVersionId => $composableBuilder(
+    column: $table.questionnaireVersionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get projectId => $composableBuilder(
+    column: $table.projectId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get versionNumber => $composableBuilder(
+    column: $table.versionNumber,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get installedAtUtc => $composableBuilder(
+    column: $table.installedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  Expression<bool> dbQuestionnaireQuestionsRefs(
+    Expression<bool> Function($$DbQuestionnaireQuestionsTableFilterComposer f)
+    f,
+  ) {
+    final $$DbQuestionnaireQuestionsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.questionnaireVersionId,
+          referencedTable: $db.dbQuestionnaireQuestions,
+          getReferencedColumn: (t) => t.questionnaireVersionId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbQuestionnaireQuestionsTableFilterComposer(
+                $db: $db,
+                $table: $db.dbQuestionnaireQuestions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+
+  Expression<bool> dbQuestionnaireOptionsRefs(
+    Expression<bool> Function($$DbQuestionnaireOptionsTableFilterComposer f) f,
+  ) {
+    final $$DbQuestionnaireOptionsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.questionnaireVersionId,
+          referencedTable: $db.dbQuestionnaireOptions,
+          getReferencedColumn: (t) => t.questionnaireVersionId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbQuestionnaireOptionsTableFilterComposer(
+                $db: $db,
+                $table: $db.dbQuestionnaireOptions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+}
+
+class $$DbQuestionnaireVersionsTableOrderingComposer
+    extends Composer<_$LocalDatabase, $DbQuestionnaireVersionsTable> {
+  $$DbQuestionnaireVersionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get questionnaireVersionId => $composableBuilder(
+    column: $table.questionnaireVersionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get projectId => $composableBuilder(
+    column: $table.projectId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get versionNumber => $composableBuilder(
+    column: $table.versionNumber,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get installedAtUtc => $composableBuilder(
+    column: $table.installedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DbQuestionnaireVersionsTableAnnotationComposer
+    extends Composer<_$LocalDatabase, $DbQuestionnaireVersionsTable> {
+  $$DbQuestionnaireVersionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get questionnaireVersionId => $composableBuilder(
+    column: $table.questionnaireVersionId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get projectId =>
+      $composableBuilder(column: $table.projectId, builder: (column) => column);
+
+  GeneratedColumn<int> get versionNumber => $composableBuilder(
+    column: $table.versionNumber,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get installedAtUtc => $composableBuilder(
+    column: $table.installedAtUtc,
+    builder: (column) => column,
+  );
+
+  Expression<T> dbQuestionnaireQuestionsRefs<T extends Object>(
+    Expression<T> Function($$DbQuestionnaireQuestionsTableAnnotationComposer a)
+    f,
+  ) {
+    final $$DbQuestionnaireQuestionsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.questionnaireVersionId,
+          referencedTable: $db.dbQuestionnaireQuestions,
+          getReferencedColumn: (t) => t.questionnaireVersionId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbQuestionnaireQuestionsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.dbQuestionnaireQuestions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+
+  Expression<T> dbQuestionnaireOptionsRefs<T extends Object>(
+    Expression<T> Function($$DbQuestionnaireOptionsTableAnnotationComposer a) f,
+  ) {
+    final $$DbQuestionnaireOptionsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.questionnaireVersionId,
+          referencedTable: $db.dbQuestionnaireOptions,
+          getReferencedColumn: (t) => t.questionnaireVersionId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbQuestionnaireOptionsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.dbQuestionnaireOptions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+}
+
+class $$DbQuestionnaireVersionsTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $DbQuestionnaireVersionsTable,
+          DbQuestionnaireVersion,
+          $$DbQuestionnaireVersionsTableFilterComposer,
+          $$DbQuestionnaireVersionsTableOrderingComposer,
+          $$DbQuestionnaireVersionsTableAnnotationComposer,
+          $$DbQuestionnaireVersionsTableCreateCompanionBuilder,
+          $$DbQuestionnaireVersionsTableUpdateCompanionBuilder,
+          (DbQuestionnaireVersion, $$DbQuestionnaireVersionsTableReferences),
+          DbQuestionnaireVersion,
+          PrefetchHooks Function({
+            bool dbQuestionnaireQuestionsRefs,
+            bool dbQuestionnaireOptionsRefs,
+          })
+        > {
+  $$DbQuestionnaireVersionsTableTableManager(
+    _$LocalDatabase db,
+    $DbQuestionnaireVersionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DbQuestionnaireVersionsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$DbQuestionnaireVersionsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$DbQuestionnaireVersionsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> questionnaireVersionId = const Value.absent(),
+                Value<String> projectId = const Value.absent(),
+                Value<int> versionNumber = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<DateTime> installedAtUtc = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbQuestionnaireVersionsCompanion(
+                questionnaireVersionId: questionnaireVersionId,
+                projectId: projectId,
+                versionNumber: versionNumber,
+                status: status,
+                installedAtUtc: installedAtUtc,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String questionnaireVersionId,
+                required String projectId,
+                required int versionNumber,
+                required String status,
+                required DateTime installedAtUtc,
+                Value<int> rowid = const Value.absent(),
+              }) => DbQuestionnaireVersionsCompanion.insert(
+                questionnaireVersionId: questionnaireVersionId,
+                projectId: projectId,
+                versionNumber: versionNumber,
+                status: status,
+                installedAtUtc: installedAtUtc,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$DbQuestionnaireVersionsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({
+                dbQuestionnaireQuestionsRefs = false,
+                dbQuestionnaireOptionsRefs = false,
+              }) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (dbQuestionnaireQuestionsRefs)
+                      db.dbQuestionnaireQuestions,
+                    if (dbQuestionnaireOptionsRefs) db.dbQuestionnaireOptions,
+                  ],
+                  addJoins: null,
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (dbQuestionnaireQuestionsRefs)
+                        await $_getPrefetchedData<
+                          DbQuestionnaireVersion,
+                          $DbQuestionnaireVersionsTable,
+                          DbQuestionnaireQuestion
+                        >(
+                          currentTable: table,
+                          referencedTable:
+                              $$DbQuestionnaireVersionsTableReferences
+                                  ._dbQuestionnaireQuestionsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$DbQuestionnaireVersionsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).dbQuestionnaireQuestionsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) =>
+                                    e.questionnaireVersionId ==
+                                    item.questionnaireVersionId,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (dbQuestionnaireOptionsRefs)
+                        await $_getPrefetchedData<
+                          DbQuestionnaireVersion,
+                          $DbQuestionnaireVersionsTable,
+                          DbQuestionnaireOption
+                        >(
+                          currentTable: table,
+                          referencedTable:
+                              $$DbQuestionnaireVersionsTableReferences
+                                  ._dbQuestionnaireOptionsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$DbQuestionnaireVersionsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).dbQuestionnaireOptionsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) =>
+                                    e.questionnaireVersionId ==
+                                    item.questionnaireVersionId,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$DbQuestionnaireVersionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $DbQuestionnaireVersionsTable,
+      DbQuestionnaireVersion,
+      $$DbQuestionnaireVersionsTableFilterComposer,
+      $$DbQuestionnaireVersionsTableOrderingComposer,
+      $$DbQuestionnaireVersionsTableAnnotationComposer,
+      $$DbQuestionnaireVersionsTableCreateCompanionBuilder,
+      $$DbQuestionnaireVersionsTableUpdateCompanionBuilder,
+      (DbQuestionnaireVersion, $$DbQuestionnaireVersionsTableReferences),
+      DbQuestionnaireVersion,
+      PrefetchHooks Function({
+        bool dbQuestionnaireQuestionsRefs,
+        bool dbQuestionnaireOptionsRefs,
+      })
+    >;
+typedef $$DbQuestionnaireQuestionsTableCreateCompanionBuilder =
+    DbQuestionnaireQuestionsCompanion Function({
+      required String questionnaireVersionId,
+      required String questionId,
+      required int position,
+      required String prompt,
+      required String questionType,
+      required bool isRequired,
+      required bool allowUnknown,
+      required bool allowRefused,
+      required bool allowNotApplicable,
+      Value<int?> minimumSelections,
+      Value<int?> maximumSelections,
+      Value<String?> numberKind,
+      Value<String?> unit,
+      Value<double?> minimum,
+      Value<double?> maximum,
+      Value<int?> maximumLength,
+      Value<int> rowid,
+    });
+typedef $$DbQuestionnaireQuestionsTableUpdateCompanionBuilder =
+    DbQuestionnaireQuestionsCompanion Function({
+      Value<String> questionnaireVersionId,
+      Value<String> questionId,
+      Value<int> position,
+      Value<String> prompt,
+      Value<String> questionType,
+      Value<bool> isRequired,
+      Value<bool> allowUnknown,
+      Value<bool> allowRefused,
+      Value<bool> allowNotApplicable,
+      Value<int?> minimumSelections,
+      Value<int?> maximumSelections,
+      Value<String?> numberKind,
+      Value<String?> unit,
+      Value<double?> minimum,
+      Value<double?> maximum,
+      Value<int?> maximumLength,
+      Value<int> rowid,
+    });
+
+final class $$DbQuestionnaireQuestionsTableReferences
+    extends
+        BaseReferences<
+          _$LocalDatabase,
+          $DbQuestionnaireQuestionsTable,
+          DbQuestionnaireQuestion
+        > {
+  $$DbQuestionnaireQuestionsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $DbQuestionnaireVersionsTable _questionnaireVersionIdTable(
+    _$LocalDatabase db,
+  ) => db.dbQuestionnaireVersions.createAlias(
+    'db_questionnaire_questions__questionnaire_version_id__db_questionnaire_versions__questionnaire_version_id',
+  );
+
+  $$DbQuestionnaireVersionsTableProcessedTableManager
+  get questionnaireVersionId {
+    final $_column = $_itemColumn<String>('questionnaire_version_id')!;
+
+    final manager = $$DbQuestionnaireVersionsTableTableManager(
+      $_db,
+      $_db.dbQuestionnaireVersions,
+    ).filter((f) => f.questionnaireVersionId.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(
+      _questionnaireVersionIdTable($_db),
+    );
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$DbQuestionnaireQuestionsTableFilterComposer
+    extends Composer<_$LocalDatabase, $DbQuestionnaireQuestionsTable> {
+  $$DbQuestionnaireQuestionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get questionId => $composableBuilder(
+    column: $table.questionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get prompt => $composableBuilder(
+    column: $table.prompt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get questionType => $composableBuilder(
+    column: $table.questionType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isRequired => $composableBuilder(
+    column: $table.isRequired,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get allowUnknown => $composableBuilder(
+    column: $table.allowUnknown,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get allowRefused => $composableBuilder(
+    column: $table.allowRefused,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get allowNotApplicable => $composableBuilder(
+    column: $table.allowNotApplicable,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get minimumSelections => $composableBuilder(
+    column: $table.minimumSelections,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get maximumSelections => $composableBuilder(
+    column: $table.maximumSelections,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get numberKind => $composableBuilder(
+    column: $table.numberKind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get unit => $composableBuilder(
+    column: $table.unit,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get minimum => $composableBuilder(
+    column: $table.minimum,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get maximum => $composableBuilder(
+    column: $table.maximum,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get maximumLength => $composableBuilder(
+    column: $table.maximumLength,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$DbQuestionnaireVersionsTableFilterComposer get questionnaireVersionId {
+    final $$DbQuestionnaireVersionsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.questionnaireVersionId,
+          referencedTable: $db.dbQuestionnaireVersions,
+          getReferencedColumn: (t) => t.questionnaireVersionId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbQuestionnaireVersionsTableFilterComposer(
+                $db: $db,
+                $table: $db.dbQuestionnaireVersions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$DbQuestionnaireQuestionsTableOrderingComposer
+    extends Composer<_$LocalDatabase, $DbQuestionnaireQuestionsTable> {
+  $$DbQuestionnaireQuestionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get questionId => $composableBuilder(
+    column: $table.questionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get prompt => $composableBuilder(
+    column: $table.prompt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get questionType => $composableBuilder(
+    column: $table.questionType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isRequired => $composableBuilder(
+    column: $table.isRequired,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get allowUnknown => $composableBuilder(
+    column: $table.allowUnknown,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get allowRefused => $composableBuilder(
+    column: $table.allowRefused,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get allowNotApplicable => $composableBuilder(
+    column: $table.allowNotApplicable,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get minimumSelections => $composableBuilder(
+    column: $table.minimumSelections,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get maximumSelections => $composableBuilder(
+    column: $table.maximumSelections,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get numberKind => $composableBuilder(
+    column: $table.numberKind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get unit => $composableBuilder(
+    column: $table.unit,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get minimum => $composableBuilder(
+    column: $table.minimum,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get maximum => $composableBuilder(
+    column: $table.maximum,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get maximumLength => $composableBuilder(
+    column: $table.maximumLength,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$DbQuestionnaireVersionsTableOrderingComposer get questionnaireVersionId {
+    final $$DbQuestionnaireVersionsTableOrderingComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.questionnaireVersionId,
+          referencedTable: $db.dbQuestionnaireVersions,
+          getReferencedColumn: (t) => t.questionnaireVersionId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbQuestionnaireVersionsTableOrderingComposer(
+                $db: $db,
+                $table: $db.dbQuestionnaireVersions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$DbQuestionnaireQuestionsTableAnnotationComposer
+    extends Composer<_$LocalDatabase, $DbQuestionnaireQuestionsTable> {
+  $$DbQuestionnaireQuestionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get questionId => $composableBuilder(
+    column: $table.questionId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get position =>
+      $composableBuilder(column: $table.position, builder: (column) => column);
+
+  GeneratedColumn<String> get prompt =>
+      $composableBuilder(column: $table.prompt, builder: (column) => column);
+
+  GeneratedColumn<String> get questionType => $composableBuilder(
+    column: $table.questionType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isRequired => $composableBuilder(
+    column: $table.isRequired,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get allowUnknown => $composableBuilder(
+    column: $table.allowUnknown,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get allowRefused => $composableBuilder(
+    column: $table.allowRefused,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get allowNotApplicable => $composableBuilder(
+    column: $table.allowNotApplicable,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get minimumSelections => $composableBuilder(
+    column: $table.minimumSelections,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get maximumSelections => $composableBuilder(
+    column: $table.maximumSelections,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get numberKind => $composableBuilder(
+    column: $table.numberKind,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get unit =>
+      $composableBuilder(column: $table.unit, builder: (column) => column);
+
+  GeneratedColumn<double> get minimum =>
+      $composableBuilder(column: $table.minimum, builder: (column) => column);
+
+  GeneratedColumn<double> get maximum =>
+      $composableBuilder(column: $table.maximum, builder: (column) => column);
+
+  GeneratedColumn<int> get maximumLength => $composableBuilder(
+    column: $table.maximumLength,
+    builder: (column) => column,
+  );
+
+  $$DbQuestionnaireVersionsTableAnnotationComposer get questionnaireVersionId {
+    final $$DbQuestionnaireVersionsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.questionnaireVersionId,
+          referencedTable: $db.dbQuestionnaireVersions,
+          getReferencedColumn: (t) => t.questionnaireVersionId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbQuestionnaireVersionsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.dbQuestionnaireVersions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$DbQuestionnaireQuestionsTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $DbQuestionnaireQuestionsTable,
+          DbQuestionnaireQuestion,
+          $$DbQuestionnaireQuestionsTableFilterComposer,
+          $$DbQuestionnaireQuestionsTableOrderingComposer,
+          $$DbQuestionnaireQuestionsTableAnnotationComposer,
+          $$DbQuestionnaireQuestionsTableCreateCompanionBuilder,
+          $$DbQuestionnaireQuestionsTableUpdateCompanionBuilder,
+          (DbQuestionnaireQuestion, $$DbQuestionnaireQuestionsTableReferences),
+          DbQuestionnaireQuestion,
+          PrefetchHooks Function({bool questionnaireVersionId})
+        > {
+  $$DbQuestionnaireQuestionsTableTableManager(
+    _$LocalDatabase db,
+    $DbQuestionnaireQuestionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DbQuestionnaireQuestionsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$DbQuestionnaireQuestionsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$DbQuestionnaireQuestionsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> questionnaireVersionId = const Value.absent(),
+                Value<String> questionId = const Value.absent(),
+                Value<int> position = const Value.absent(),
+                Value<String> prompt = const Value.absent(),
+                Value<String> questionType = const Value.absent(),
+                Value<bool> isRequired = const Value.absent(),
+                Value<bool> allowUnknown = const Value.absent(),
+                Value<bool> allowRefused = const Value.absent(),
+                Value<bool> allowNotApplicable = const Value.absent(),
+                Value<int?> minimumSelections = const Value.absent(),
+                Value<int?> maximumSelections = const Value.absent(),
+                Value<String?> numberKind = const Value.absent(),
+                Value<String?> unit = const Value.absent(),
+                Value<double?> minimum = const Value.absent(),
+                Value<double?> maximum = const Value.absent(),
+                Value<int?> maximumLength = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbQuestionnaireQuestionsCompanion(
+                questionnaireVersionId: questionnaireVersionId,
+                questionId: questionId,
+                position: position,
+                prompt: prompt,
+                questionType: questionType,
+                isRequired: isRequired,
+                allowUnknown: allowUnknown,
+                allowRefused: allowRefused,
+                allowNotApplicable: allowNotApplicable,
+                minimumSelections: minimumSelections,
+                maximumSelections: maximumSelections,
+                numberKind: numberKind,
+                unit: unit,
+                minimum: minimum,
+                maximum: maximum,
+                maximumLength: maximumLength,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String questionnaireVersionId,
+                required String questionId,
+                required int position,
+                required String prompt,
+                required String questionType,
+                required bool isRequired,
+                required bool allowUnknown,
+                required bool allowRefused,
+                required bool allowNotApplicable,
+                Value<int?> minimumSelections = const Value.absent(),
+                Value<int?> maximumSelections = const Value.absent(),
+                Value<String?> numberKind = const Value.absent(),
+                Value<String?> unit = const Value.absent(),
+                Value<double?> minimum = const Value.absent(),
+                Value<double?> maximum = const Value.absent(),
+                Value<int?> maximumLength = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbQuestionnaireQuestionsCompanion.insert(
+                questionnaireVersionId: questionnaireVersionId,
+                questionId: questionId,
+                position: position,
+                prompt: prompt,
+                questionType: questionType,
+                isRequired: isRequired,
+                allowUnknown: allowUnknown,
+                allowRefused: allowRefused,
+                allowNotApplicable: allowNotApplicable,
+                minimumSelections: minimumSelections,
+                maximumSelections: maximumSelections,
+                numberKind: numberKind,
+                unit: unit,
+                minimum: minimum,
+                maximum: maximum,
+                maximumLength: maximumLength,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$DbQuestionnaireQuestionsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({questionnaireVersionId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (questionnaireVersionId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.questionnaireVersionId,
+                                referencedTable:
+                                    $$DbQuestionnaireQuestionsTableReferences
+                                        ._questionnaireVersionIdTable(db),
+                                referencedColumn:
+                                    $$DbQuestionnaireQuestionsTableReferences
+                                        ._questionnaireVersionIdTable(db)
+                                        .questionnaireVersionId,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$DbQuestionnaireQuestionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $DbQuestionnaireQuestionsTable,
+      DbQuestionnaireQuestion,
+      $$DbQuestionnaireQuestionsTableFilterComposer,
+      $$DbQuestionnaireQuestionsTableOrderingComposer,
+      $$DbQuestionnaireQuestionsTableAnnotationComposer,
+      $$DbQuestionnaireQuestionsTableCreateCompanionBuilder,
+      $$DbQuestionnaireQuestionsTableUpdateCompanionBuilder,
+      (DbQuestionnaireQuestion, $$DbQuestionnaireQuestionsTableReferences),
+      DbQuestionnaireQuestion,
+      PrefetchHooks Function({bool questionnaireVersionId})
+    >;
+typedef $$DbQuestionnaireOptionsTableCreateCompanionBuilder =
+    DbQuestionnaireOptionsCompanion Function({
+      required String questionnaireVersionId,
+      required String questionId,
+      required String optionId,
+      required int position,
+      required String label,
+      Value<int> rowid,
+    });
+typedef $$DbQuestionnaireOptionsTableUpdateCompanionBuilder =
+    DbQuestionnaireOptionsCompanion Function({
+      Value<String> questionnaireVersionId,
+      Value<String> questionId,
+      Value<String> optionId,
+      Value<int> position,
+      Value<String> label,
+      Value<int> rowid,
+    });
+
+final class $$DbQuestionnaireOptionsTableReferences
+    extends
+        BaseReferences<
+          _$LocalDatabase,
+          $DbQuestionnaireOptionsTable,
+          DbQuestionnaireOption
+        > {
+  $$DbQuestionnaireOptionsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $DbQuestionnaireVersionsTable _questionnaireVersionIdTable(
+    _$LocalDatabase db,
+  ) => db.dbQuestionnaireVersions.createAlias(
+    'db_questionnaire_options__questionnaire_version_id__db_questionnaire_versions__questionnaire_version_id',
+  );
+
+  $$DbQuestionnaireVersionsTableProcessedTableManager
+  get questionnaireVersionId {
+    final $_column = $_itemColumn<String>('questionnaire_version_id')!;
+
+    final manager = $$DbQuestionnaireVersionsTableTableManager(
+      $_db,
+      $_db.dbQuestionnaireVersions,
+    ).filter((f) => f.questionnaireVersionId.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(
+      _questionnaireVersionIdTable($_db),
+    );
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$DbQuestionnaireOptionsTableFilterComposer
+    extends Composer<_$LocalDatabase, $DbQuestionnaireOptionsTable> {
+  $$DbQuestionnaireOptionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get questionId => $composableBuilder(
+    column: $table.questionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get optionId => $composableBuilder(
+    column: $table.optionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$DbQuestionnaireVersionsTableFilterComposer get questionnaireVersionId {
+    final $$DbQuestionnaireVersionsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.questionnaireVersionId,
+          referencedTable: $db.dbQuestionnaireVersions,
+          getReferencedColumn: (t) => t.questionnaireVersionId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbQuestionnaireVersionsTableFilterComposer(
+                $db: $db,
+                $table: $db.dbQuestionnaireVersions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$DbQuestionnaireOptionsTableOrderingComposer
+    extends Composer<_$LocalDatabase, $DbQuestionnaireOptionsTable> {
+  $$DbQuestionnaireOptionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get questionId => $composableBuilder(
+    column: $table.questionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get optionId => $composableBuilder(
+    column: $table.optionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$DbQuestionnaireVersionsTableOrderingComposer get questionnaireVersionId {
+    final $$DbQuestionnaireVersionsTableOrderingComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.questionnaireVersionId,
+          referencedTable: $db.dbQuestionnaireVersions,
+          getReferencedColumn: (t) => t.questionnaireVersionId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbQuestionnaireVersionsTableOrderingComposer(
+                $db: $db,
+                $table: $db.dbQuestionnaireVersions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$DbQuestionnaireOptionsTableAnnotationComposer
+    extends Composer<_$LocalDatabase, $DbQuestionnaireOptionsTable> {
+  $$DbQuestionnaireOptionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get questionId => $composableBuilder(
+    column: $table.questionId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get optionId =>
+      $composableBuilder(column: $table.optionId, builder: (column) => column);
+
+  GeneratedColumn<int> get position =>
+      $composableBuilder(column: $table.position, builder: (column) => column);
+
+  GeneratedColumn<String> get label =>
+      $composableBuilder(column: $table.label, builder: (column) => column);
+
+  $$DbQuestionnaireVersionsTableAnnotationComposer get questionnaireVersionId {
+    final $$DbQuestionnaireVersionsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.questionnaireVersionId,
+          referencedTable: $db.dbQuestionnaireVersions,
+          getReferencedColumn: (t) => t.questionnaireVersionId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbQuestionnaireVersionsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.dbQuestionnaireVersions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$DbQuestionnaireOptionsTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $DbQuestionnaireOptionsTable,
+          DbQuestionnaireOption,
+          $$DbQuestionnaireOptionsTableFilterComposer,
+          $$DbQuestionnaireOptionsTableOrderingComposer,
+          $$DbQuestionnaireOptionsTableAnnotationComposer,
+          $$DbQuestionnaireOptionsTableCreateCompanionBuilder,
+          $$DbQuestionnaireOptionsTableUpdateCompanionBuilder,
+          (DbQuestionnaireOption, $$DbQuestionnaireOptionsTableReferences),
+          DbQuestionnaireOption,
+          PrefetchHooks Function({bool questionnaireVersionId})
+        > {
+  $$DbQuestionnaireOptionsTableTableManager(
+    _$LocalDatabase db,
+    $DbQuestionnaireOptionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DbQuestionnaireOptionsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$DbQuestionnaireOptionsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$DbQuestionnaireOptionsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> questionnaireVersionId = const Value.absent(),
+                Value<String> questionId = const Value.absent(),
+                Value<String> optionId = const Value.absent(),
+                Value<int> position = const Value.absent(),
+                Value<String> label = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbQuestionnaireOptionsCompanion(
+                questionnaireVersionId: questionnaireVersionId,
+                questionId: questionId,
+                optionId: optionId,
+                position: position,
+                label: label,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String questionnaireVersionId,
+                required String questionId,
+                required String optionId,
+                required int position,
+                required String label,
+                Value<int> rowid = const Value.absent(),
+              }) => DbQuestionnaireOptionsCompanion.insert(
+                questionnaireVersionId: questionnaireVersionId,
+                questionId: questionId,
+                optionId: optionId,
+                position: position,
+                label: label,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$DbQuestionnaireOptionsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({questionnaireVersionId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (questionnaireVersionId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.questionnaireVersionId,
+                                referencedTable:
+                                    $$DbQuestionnaireOptionsTableReferences
+                                        ._questionnaireVersionIdTable(db),
+                                referencedColumn:
+                                    $$DbQuestionnaireOptionsTableReferences
+                                        ._questionnaireVersionIdTable(db)
+                                        .questionnaireVersionId,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$DbQuestionnaireOptionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $DbQuestionnaireOptionsTable,
+      DbQuestionnaireOption,
+      $$DbQuestionnaireOptionsTableFilterComposer,
+      $$DbQuestionnaireOptionsTableOrderingComposer,
+      $$DbQuestionnaireOptionsTableAnnotationComposer,
+      $$DbQuestionnaireOptionsTableCreateCompanionBuilder,
+      $$DbQuestionnaireOptionsTableUpdateCompanionBuilder,
+      (DbQuestionnaireOption, $$DbQuestionnaireOptionsTableReferences),
+      DbQuestionnaireOption,
+      PrefetchHooks Function({bool questionnaireVersionId})
+    >;
 
 class $LocalDatabaseManager {
   final _$LocalDatabase _db;
@@ -21831,6 +25477,21 @@ class $LocalDatabaseManager {
       $$DbDraftRegionAssignmentsTableTableManager(
         _db,
         _db.dbDraftRegionAssignments,
+      );
+  $$DbQuestionnaireVersionsTableTableManager get dbQuestionnaireVersions =>
+      $$DbQuestionnaireVersionsTableTableManager(
+        _db,
+        _db.dbQuestionnaireVersions,
+      );
+  $$DbQuestionnaireQuestionsTableTableManager get dbQuestionnaireQuestions =>
+      $$DbQuestionnaireQuestionsTableTableManager(
+        _db,
+        _db.dbQuestionnaireQuestions,
+      );
+  $$DbQuestionnaireOptionsTableTableManager get dbQuestionnaireOptions =>
+      $$DbQuestionnaireOptionsTableTableManager(
+        _db,
+        _db.dbQuestionnaireOptions,
       );
 }
 

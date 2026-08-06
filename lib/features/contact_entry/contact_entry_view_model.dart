@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../../app_session/session_context_gateway.dart';
 import '../../device/device_time_zone.dart';
 import '../../foundation/runtime_values.dart';
+import '../../questionnaires/questionnaire_contract.dart';
 import '../../regions/contact_region_resolver.dart';
 import '../../services/location_service.dart';
 import '../contact_journal/contact_journal.dart';
@@ -51,7 +52,7 @@ final class ContactJournalEntryStore implements ContactEntryStore {
 
 /// Widget 可观察的完整表单快照。
 final class ContactEntryViewState {
-  const ContactEntryViewState({
+  ContactEntryViewState({
     this.occurredAtUtc,
     this.occurredTimeZone,
     this.initializationFailure,
@@ -68,7 +69,12 @@ final class ContactEntryViewState {
     this.isCapturingLocation = false,
     this.submissionFailure,
     this.sourceAttemptId,
-  });
+    this.questionnaireVersion,
+    Iterable<QuestionnaireAnswer> answers = const [],
+    QuestionnaireEvaluation? questionnaireEvaluation,
+  }) : answers = List.unmodifiable(answers),
+       questionnaireEvaluation =
+           questionnaireEvaluation ?? QuestionnaireEvaluation(const []);
 
   final DateTime? occurredAtUtc;
   final String? occurredTimeZone;
@@ -86,6 +92,9 @@ final class ContactEntryViewState {
   final bool isCapturingLocation;
   final String? submissionFailure;
   final String? sourceAttemptId;
+  final QuestionnaireVersion? questionnaireVersion;
+  final List<QuestionnaireAnswer> answers;
+  final QuestionnaireEvaluation questionnaireEvaluation;
 
   bool get isReady =>
       occurredAtUtc != null &&
@@ -95,6 +104,21 @@ final class ContactEntryViewState {
   bool get isConflictCopy => draft?.isConflictCopy ?? false;
 
   int get requiredCoreFactCount => 5;
+
+  int get questionCount => questionnaireVersion?.questions.length ?? 0;
+
+  int get completedQuestionCount => answers
+      .where((answer) => answer.state != QuestionnaireAnswerState.unanswered)
+      .length;
+
+  QuestionnaireAnswer? answerFor(String questionId) {
+    for (final answer in answers) {
+      if (answer.questionId == questionId) {
+        return answer;
+      }
+    }
+    return null;
+  }
 
   int get completedCoreFactCount {
     var completed = 0;
@@ -125,7 +149,8 @@ final class ContactEntryViewState {
       !isConflictCopy &&
       draft != null &&
       saveState == ContactDraftSaveState.saved &&
-      completedCoreFactCount == requiredCoreFactCount;
+      completedCoreFactCount == requiredCoreFactCount &&
+      questionnaireEvaluation.isValid;
 }
 
 /// 管理时间、定位、草稿自动保存和正式提交的接触录入深模块。
@@ -145,6 +170,7 @@ final class ContactEntryViewModel extends ChangeNotifier {
     Duration saveDelay = const Duration(milliseconds: 350),
     String? sourceAttemptId,
     ContactChannel? initialChannel,
+    QuestionnaireVersion? questionnaireVersion,
   }) : this._(
          clock,
          timeZoneProvider,
@@ -156,6 +182,7 @@ final class ContactEntryViewModel extends ChangeNotifier {
          saveDelay,
          sourceAttemptId,
          initialChannel,
+         questionnaireVersion,
        );
 
   ContactEntryViewModel._(
@@ -169,6 +196,7 @@ final class ContactEntryViewModel extends ChangeNotifier {
     this._saveDelay,
     this._initialSourceAttemptId,
     this._initialChannel,
+    this._questionnaireVersion,
   );
 
   final AppClock _clock;
@@ -181,6 +209,7 @@ final class ContactEntryViewModel extends ChangeNotifier {
   final Duration _saveDelay;
   final String? _initialSourceAttemptId;
   final ContactChannel? _initialChannel;
+  final QuestionnaireVersion? _questionnaireVersion;
 
   Timer? _saveTimer;
   Future<void>? _activeSave;
@@ -193,6 +222,7 @@ final class ContactEntryViewModel extends ChangeNotifier {
   ContactLocation? _location;
   int? _reachCount;
   int? _interestLevel;
+  final Map<String, QuestionnaireAnswer> _answers = {};
   ContactDraftSyncMode _syncMode = ContactDraftSyncMode.accountPrivate;
   ContactDraftSaveState _saveState = ContactDraftSaveState.untouched;
   String? _submissionFailure;
@@ -204,24 +234,35 @@ final class ContactEntryViewModel extends ChangeNotifier {
   var _initialized = false;
   var _disposed = false;
 
-  ContactEntryViewState get state => ContactEntryViewState(
-    occurredAtUtc: _occurredAtUtc,
-    occurredTimeZone: _occurredTimeZone,
-    initializationFailure: _initializationFailure,
-    draft: _draft,
-    channel: _channel,
-    channelDetail: _channelDetail,
-    location: _location,
-    reachCount: _reachCount,
-    interestLevel: _interestLevel,
-    syncMode: _syncMode,
-    saveState: _saveState,
-    hasUnsavedChanges: _hasUnsavedChanges,
-    isSubmitting: _isSubmitting,
-    isCapturingLocation: _isCapturingLocation,
-    submissionFailure: _submissionFailure,
-    sourceAttemptId: _sourceAttemptId,
-  );
+  ContactEntryViewState get state {
+    final orderedAnswers = _orderedAnswers();
+    return ContactEntryViewState(
+      occurredAtUtc: _occurredAtUtc,
+      occurredTimeZone: _occurredTimeZone,
+      initializationFailure: _initializationFailure,
+      draft: _draft,
+      channel: _channel,
+      channelDetail: _channelDetail,
+      location: _location,
+      reachCount: _reachCount,
+      interestLevel: _interestLevel,
+      syncMode: _syncMode,
+      saveState: _saveState,
+      hasUnsavedChanges: _hasUnsavedChanges,
+      isSubmitting: _isSubmitting,
+      isCapturingLocation: _isCapturingLocation,
+      submissionFailure: _submissionFailure,
+      sourceAttemptId: _sourceAttemptId,
+      questionnaireVersion: _questionnaireVersion,
+      answers: orderedAnswers,
+      questionnaireEvaluation: _questionnaireVersion == null
+          ? QuestionnaireEvaluation(const [])
+          : QuestionnaireCatalog.evaluate(
+              _questionnaireVersion,
+              orderedAnswers,
+            ),
+    );
+  }
 
   bool get _hasUnsavedChanges => _editRevision > _savedRevision;
 
@@ -242,6 +283,13 @@ final class ContactEntryViewModel extends ChangeNotifier {
     }
     _reachCount = draft?.reachCount;
     _interestLevel = draft?.interestLevel;
+    _answers
+      ..clear()
+      ..addEntries(
+        (draft?.answers ?? const <QuestionnaireAnswer>[]).map(
+          (answer) => MapEntry(answer.questionId, answer),
+        ),
+      );
     _syncMode = draft?.syncMode ?? ContactDraftSyncMode.accountPrivate;
     if (draft != null) {
       _saveState = ContactDraftSaveState.saved;
@@ -308,6 +356,40 @@ final class ContactEntryViewModel extends ChangeNotifier {
       return;
     }
     _interestLevel = value;
+    _markEdited();
+  }
+
+  void setQuestionnaireValue(QuestionnaireQuestion question, Object value) {
+    _setQuestionnaireAnswer(
+      QuestionnaireAnswerFactory.create(
+        question: question,
+        state: QuestionnaireAnswerState.answered,
+        value: value,
+      ),
+    );
+  }
+
+  void setQuestionnaireState(
+    QuestionnaireQuestion question,
+    QuestionnaireAnswerState answerState,
+  ) {
+    final current = _answers[question.id];
+    if (answerState == QuestionnaireAnswerState.answered) {
+      if (current?.state != QuestionnaireAnswerState.answered) {
+        return;
+      }
+      return;
+    }
+    _setQuestionnaireAnswer(
+      QuestionnaireAnswerFactory.create(question: question, state: answerState),
+    );
+  }
+
+  void _setQuestionnaireAnswer(QuestionnaireAnswer answer) {
+    if (_answers[answer.questionId] == answer) {
+      return;
+    }
+    _answers[answer.questionId] = answer;
     _markEdited();
   }
 
@@ -428,7 +510,18 @@ final class ContactEntryViewModel extends ChangeNotifier {
     interestLevel: _interestLevel,
     syncMode: _syncMode,
     sourceAttemptId: _sourceAttemptId,
+    answers: _orderedAnswers(),
   );
+
+  List<QuestionnaireAnswer> _orderedAnswers() {
+    final version = _questionnaireVersion;
+    if (version == null) {
+      return List.unmodifiable(_answers.values);
+    }
+    return List.unmodifiable([
+      for (final question in version.questions) ?_answers[question.id],
+    ]);
+  }
 
   /// 保存后判断是否可离开。`false` 表示仍有失败或并发产生的未保存编辑。
   Future<bool> canLeaveAfterSave() async {

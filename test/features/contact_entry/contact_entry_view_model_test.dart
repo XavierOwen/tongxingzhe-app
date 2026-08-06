@@ -5,6 +5,7 @@ import 'package:tongxingzhe_app/features/contact_entry/contact_entry_view_model.
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/regions/contact_region_resolver.dart';
+import 'package:tongxingzhe_app/questionnaires/questionnaire_contract.dart';
 import 'package:tongxingzhe_app/services/location_service.dart';
 
 void main() {
@@ -139,12 +140,41 @@ void main() {
     expect(await viewModel.captureLocation(), isNull);
     expect(viewModel.state.location, isA<PendingContactLocation>());
   });
+
+  test('必填问卷未回答时阻止提交，回答后与草稿一起保存', () async {
+    final store = _FakeEntryStore();
+    final viewModel = _viewModel(
+      store: store,
+      questionnaireVersion: _questionnaire,
+    );
+    await viewModel.initialize();
+    viewModel
+      ..setChannel(ContactChannel.videoCall)
+      ..setReachCountText('2')
+      ..setInterestLevel(3);
+    await viewModel.flushDraft();
+
+    expect(viewModel.state.completedQuestionCount, 0);
+    expect(viewModel.state.questionnaireEvaluation.isValid, isFalse);
+    expect(viewModel.state.canSubmit, isFalse);
+
+    viewModel.setQuestionnaireValue(_questionnaire.questions.first, true);
+    await viewModel.flushDraft();
+
+    expect(viewModel.state.completedQuestionCount, 1);
+    expect(viewModel.state.questionnaireEvaluation.isValid, isTrue);
+    expect(store.savedDraft!.answers, [
+      const BooleanQuestionnaireAnswer(questionId: 'consent', value: true),
+    ]);
+    expect(viewModel.state.canSubmit, isTrue);
+  });
 }
 
 ContactEntryViewModel _viewModel({
   required ContactEntryStore store,
   ContactLocationCapture locationCapture = const _FakeLocationCapture([]),
   ContactRegionResolver regionResolver = const DeferredContactRegionResolver(),
+  QuestionnaireVersion? questionnaireVersion,
 }) {
   return ContactEntryViewModel(
     clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
@@ -154,9 +184,28 @@ ContactEntryViewModel _viewModel({
     store: store,
     locationCapture: locationCapture,
     regionResolver: regionResolver,
+    questionnaireVersion: questionnaireVersion,
     saveDelay: const Duration(days: 1),
   );
 }
+
+final _questionnaire = QuestionnaireVersion(
+  id: 'questionnaire-1',
+  projectId: 'project-1',
+  versionNumber: 1,
+  questions: [
+    QuestionnaireQuestion(
+      id: 'consent',
+      position: 1,
+      prompt: '是否同意后续联系？',
+      type: QuestionnaireQuestionType.boolean,
+      required: true,
+      allowUnknown: false,
+      allowRefused: true,
+      allowNotApplicable: false,
+    ),
+  ],
+);
 
 const _context = TrustedSessionContext(
   appUserId: 'user-1',

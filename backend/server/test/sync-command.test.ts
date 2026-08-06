@@ -70,6 +70,44 @@ test("verified command uses internal context and returns accepted cursor", async
   assert.equal("appUserId" in (storedCommand ?? {}), false);
 });
 
+test("sync parser preserves all controlled answer value shapes", async () => {
+  let storedCommand: SyncCommand | undefined;
+  const body = validCommandBody();
+  const typedAnswers = [
+    { question_id: "boolean", state: "answered", type: "boolean", value: true },
+    { question_id: "single", state: "answered", type: "single_choice", value: "one" },
+    { question_id: "ordinal", state: "answered", type: "ordinal_choice", value: "high" },
+    { question_id: "multi", state: "answered", type: "multi_choice", value: ["one", "two"] },
+    { question_id: "number", state: "answered", type: "number", value: 2.5 },
+    { question_id: "date", state: "answered", type: "date", value: "2030-02-28" },
+    { question_id: "short", state: "answered", type: "short_text", value: "short" },
+    { question_id: "long", state: "refused", type: "long_text", value: null },
+  ];
+  (body.typed_payload as Record<string, unknown>).answers = typedAnswers;
+
+  const response = await handleSyncCommand(
+    "Bearer synthetic-token",
+    body,
+    fakeDependencies({
+      apply: async (_resolvedContext, command) => {
+        storedCommand = command;
+        return { result: "accepted", serverCursor: "opaque-typed" };
+      },
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(storedCommand?.type, "contact.submit.v1");
+  if (storedCommand?.type === "contact.submit.v1") {
+    assert.deepEqual(storedCommand.payload.answers, typedAnswers.map((answer) => ({
+      questionId: answer.question_id,
+      state: answer.state,
+      type: answer.type,
+      value: answer.value,
+    })));
+  }
+});
+
 test("duplicate command returns its original cursor", async () => {
   const dependencies = fakeDependencies({
     apply: async () => ({

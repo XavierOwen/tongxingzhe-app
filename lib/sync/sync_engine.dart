@@ -6,6 +6,9 @@ import 'package:drift/drift.dart';
 import '../data/local_database.dart';
 import '../features/contact_journal/contact_models.dart';
 import '../foundation/runtime_values.dart';
+import '../questionnaires/questionnaire_answer_codec.dart';
+import '../questionnaires/questionnaire_contract.dart'
+    show QuestionnaireQuestionType;
 import '../regions/region_catalog.dart';
 import 'sync_models.dart';
 import 'sync_transport.dart';
@@ -655,19 +658,11 @@ final class SyncEngine {
           ),
         );
     for (final answer in conflict.currentSnapshot.answers) {
-      final booleanAnswer = answer as BooleanQuestionnaireAnswer;
-      await _database
-          .into(_database.dbContactAnswers)
-          .insert(
-            DbContactAnswersCompanion.insert(
-              contactId: command.aggregateId,
-              revisionNumber: conflict.currentRevision,
-              questionId: booleanAnswer.questionId,
-              answerState: booleanAnswer.state.storageValue,
-              answerType: 'boolean',
-              booleanValue: Value(booleanAnswer.value),
-            ),
-          );
+      await _insertContactAnswer(
+        contactId: command.aggregateId,
+        revisionNumber: conflict.currentRevision,
+        answer: answer,
+      );
     }
     await (_database.update(
       _database.dbContactRecords,
@@ -768,15 +763,11 @@ final class SyncEngine {
       return false;
     }
     final expected = {
-      for (final answer in snapshot.answers)
-        answer.questionId: answer as BooleanQuestionnaireAnswer,
+      for (final answer in snapshot.answers) answer.questionId: answer,
     };
     return answers.every((answer) {
       final value = expected[answer.questionId];
-      return value != null &&
-          answer.answerState == value.state.storageValue &&
-          answer.answerType == 'boolean' &&
-          answer.booleanValue == value.value;
+      return value != null && _storedContactAnswerMatches(answer, value);
     });
   }
 
@@ -804,9 +795,11 @@ final class SyncEngine {
         for (final answer in snapshot.answers)
           {
             'questionId': answer.questionId,
-            'state': (answer as BooleanQuestionnaireAnswer).state.storageValue,
-            'type': 'boolean',
-            'value': answer.value,
+            'state': answer.state.storageValue,
+            'type': answer.type.storageValue,
+            'value': answer.state == QuestionnaireAnswerState.answered
+                ? answer.value
+                : null,
           },
       ],
     };
@@ -1234,18 +1227,11 @@ final class SyncEngine {
           ),
         );
     for (final answer in contact.answers) {
-      await _database
-          .into(_database.dbContactAnswers)
-          .insert(
-            DbContactAnswersCompanion.insert(
-              contactId: contact.contactId,
-              revisionNumber: 1,
-              questionId: answer.questionId,
-              answerState: answer.state.storageValue,
-              answerType: 'boolean',
-              booleanValue: Value(answer.value),
-            ),
-          );
+      await _insertContactAnswer(
+        contactId: contact.contactId,
+        revisionNumber: 1,
+        answer: answer,
+      );
     }
     await _linkRemoteSourceAttempt(contact);
   }
@@ -1344,18 +1330,11 @@ final class SyncEngine {
           ),
         );
     for (final answer in revision.answers) {
-      await _database
-          .into(_database.dbContactAnswers)
-          .insert(
-            DbContactAnswersCompanion.insert(
-              contactId: revision.contactId,
-              revisionNumber: revision.revisionNumber,
-              questionId: answer.questionId,
-              answerState: answer.state.storageValue,
-              answerType: 'boolean',
-              booleanValue: Value(answer.value),
-            ),
-          );
+      await _insertContactAnswer(
+        contactId: revision.contactId,
+        revisionNumber: revision.revisionNumber,
+        answer: answer,
+      );
     }
     await (_database.update(
       _database.dbContactRecords,
@@ -1595,17 +1574,7 @@ final class SyncEngine {
           ),
         );
     for (final answer in draft.answers) {
-      await _database
-          .into(_database.dbContactDraftAnswers)
-          .insert(
-            DbContactDraftAnswersCompanion.insert(
-              draftId: draft.draftId,
-              questionId: answer.questionId,
-              answerState: answer.state.storageValue,
-              answerType: 'boolean',
-              booleanValue: Value(answer.value),
-            ),
-          );
+      await _insertDraftAnswer(draftId: draft.draftId, answer: answer);
     }
     if (draft.location case final ResolvedContactLocation resolved) {
       await _regionCatalog.assignDraft(
@@ -1654,10 +1623,7 @@ final class SyncEngine {
     };
     return stored.every((answer) {
       final remote = remoteById[answer.questionId];
-      return remote != null &&
-          answer.answerState == remote.state.storageValue &&
-          answer.answerType == 'boolean' &&
-          answer.booleanValue == remote.value;
+      return remote != null && _storedDraftAnswerMatches(answer, remote);
     });
   }
 
@@ -1723,6 +1689,9 @@ final class SyncEngine {
               answerState: answer.answerState,
               answerType: answer.answerType,
               booleanValue: Value(answer.booleanValue),
+              textValue: Value(answer.textValue),
+              numberValue: Value(answer.numberValue),
+              multiChoiceValueJson: Value(answer.multiChoiceValueJson),
             ),
           );
     }
@@ -1840,10 +1809,7 @@ final class SyncEngine {
     };
     return storedAnswers.every((stored) {
       final remote = remoteAnswers[stored.questionId];
-      return remote != null &&
-          stored.answerType == 'boolean' &&
-          stored.answerState == remote.state.storageValue &&
-          stored.booleanValue == remote.value;
+      return remote != null && _storedContactAnswerMatches(stored, remote);
     });
   }
 
@@ -1892,9 +1858,7 @@ final class SyncEngine {
     return storedAnswers.every((storedAnswer) {
       final remote = remoteAnswers[storedAnswer.questionId];
       return remote != null &&
-          storedAnswer.answerType == 'boolean' &&
-          storedAnswer.answerState == remote.state.storageValue &&
-          storedAnswer.booleanValue == remote.value;
+          _storedContactAnswerMatches(storedAnswer, remote);
     });
   }
 
@@ -1970,26 +1934,112 @@ final class SyncEngine {
     );
   }
 
-  BooleanQuestionnaireAnswer _remoteAnswer(Object? value) {
-    if (value is! Map<String, Object?> || value['type'] != 'boolean') {
+  Future<void> _insertContactAnswer({
+    required String contactId,
+    required int revisionNumber,
+    required QuestionnaireAnswer answer,
+  }) async {
+    final columns = QuestionnaireAnswerCodec.toColumns(answer);
+    await _database
+        .into(_database.dbContactAnswers)
+        .insert(
+          DbContactAnswersCompanion.insert(
+            contactId: contactId,
+            revisionNumber: revisionNumber,
+            questionId: columns.questionId,
+            answerState: columns.state,
+            answerType: columns.type,
+            booleanValue: Value(columns.booleanValue),
+            textValue: Value(columns.textValue),
+            numberValue: Value(columns.numberValue),
+            multiChoiceValueJson: Value(columns.multiChoiceValueJson),
+          ),
+        );
+  }
+
+  Future<void> _insertDraftAnswer({
+    required String draftId,
+    required QuestionnaireAnswer answer,
+  }) async {
+    final columns = QuestionnaireAnswerCodec.toColumns(answer);
+    await _database
+        .into(_database.dbContactDraftAnswers)
+        .insert(
+          DbContactDraftAnswersCompanion.insert(
+            draftId: draftId,
+            questionId: columns.questionId,
+            answerState: columns.state,
+            answerType: columns.type,
+            booleanValue: Value(columns.booleanValue),
+            textValue: Value(columns.textValue),
+            numberValue: Value(columns.numberValue),
+            multiChoiceValueJson: Value(columns.multiChoiceValueJson),
+          ),
+        );
+  }
+
+  bool _storedContactAnswerMatches(
+    DbContactAnswer stored,
+    QuestionnaireAnswer remote,
+  ) {
+    final local = QuestionnaireAnswerCodec.fromColumns(
+      questionId: stored.questionId,
+      state: stored.answerState,
+      type: stored.answerType,
+      booleanValue: stored.booleanValue,
+      textValue: stored.textValue,
+      numberValue: stored.numberValue,
+      multiChoiceValueJson: stored.multiChoiceValueJson,
+    );
+    return _questionnaireAnswersEqual(local, remote);
+  }
+
+  bool _storedDraftAnswerMatches(
+    DbContactDraftAnswer stored,
+    QuestionnaireAnswer remote,
+  ) {
+    final local = QuestionnaireAnswerCodec.fromColumns(
+      questionId: stored.questionId,
+      state: stored.answerState,
+      type: stored.answerType,
+      booleanValue: stored.booleanValue,
+      textValue: stored.textValue,
+      numberValue: stored.numberValue,
+      multiChoiceValueJson: stored.multiChoiceValueJson,
+    );
+    return _questionnaireAnswersEqual(local, remote);
+  }
+
+  bool _questionnaireAnswersEqual(
+    QuestionnaireAnswer left,
+    QuestionnaireAnswer right,
+  ) {
+    if (left.questionId != right.questionId ||
+        left.state != right.state ||
+        left.type != right.type) {
+      return false;
+    }
+    if (left.type == QuestionnaireQuestionType.multiChoice &&
+        left.state == QuestionnaireAnswerState.answered) {
+      return (left.value! as List<String>).toSet().containsAll(
+            (right.value! as List<String>).toSet(),
+          ) &&
+          (left.value! as List<String>).length ==
+              (right.value! as List<String>).length;
+    }
+    return left.value == right.value;
+  }
+
+  QuestionnaireAnswer _remoteAnswer(Object? value) {
+    if (value is! Map<String, Object?>) {
       throw const FormatException('unsupported remote answer');
     }
-    final questionId = _requiredString(value['questionId']);
-    return switch (value['state']) {
-      'answered' when value['value'] is bool => BooleanQuestionnaireAnswer(
-        questionId: questionId,
-        value: value['value']! as bool,
-      ),
-      'unknown' when value['value'] == null =>
-        BooleanQuestionnaireAnswer.unknown(questionId: questionId),
-      'refused' when value['value'] == null =>
-        BooleanQuestionnaireAnswer.refused(questionId: questionId),
-      'not_applicable' when value['value'] == null =>
-        BooleanQuestionnaireAnswer.notApplicable(questionId: questionId),
-      'unanswered' when value['value'] == null =>
-        BooleanQuestionnaireAnswer.unanswered(questionId: questionId),
-      _ => throw const FormatException('invalid remote answer state'),
-    };
+    return QuestionnaireAnswerCodec.fromJson({
+      'question_id': value['questionId'],
+      'state': value['state'],
+      'type': value['type'],
+      'value': value['value'],
+    });
   }
 
   ({
@@ -2143,7 +2193,7 @@ final class _RemoteContact extends _ParsedRemoteChange {
   final ContactLocation location;
   final int reachCount;
   final int interestLevel;
-  final List<BooleanQuestionnaireAnswer> answers;
+  final List<QuestionnaireAnswer> answers;
   final String? sourceAttemptId;
 }
 
@@ -2180,7 +2230,7 @@ final class _RemoteContactRevision extends _ParsedRemoteChange {
   final ContactLocation location;
   final int reachCount;
   final int interestLevel;
-  final List<BooleanQuestionnaireAnswer> answers;
+  final List<QuestionnaireAnswer> answers;
 }
 
 final class _RemoteContactAttempt extends _ParsedRemoteChange {
@@ -2233,7 +2283,7 @@ final class _RemoteDraftUpsert extends _ParsedRemoteChange {
   final ContactLocation? location;
   final int? reachCount;
   final int? interestLevel;
-  final List<BooleanQuestionnaireAnswer> answers;
+  final List<QuestionnaireAnswer> answers;
   final int serverRevision;
   final String sourceDeviceId;
   final String? sourceAttemptId;

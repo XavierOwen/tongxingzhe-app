@@ -32,8 +32,16 @@ export interface ContactAnswer {
     | "refused"
     | "not_applicable"
     | "unanswered";
-  readonly type: "boolean";
-  readonly value: boolean | null;
+  readonly type:
+    | "boolean"
+    | "single_choice"
+    | "ordinal_choice"
+    | "multi_choice"
+    | "number"
+    | "date"
+    | "short_text"
+    | "long_text";
+  readonly value: boolean | string | number | readonly string[] | null;
 }
 
 export interface ContactSubmitPayload {
@@ -256,17 +264,17 @@ export class PostgresSyncCommandStore implements SyncCommandStore {
     command: SyncCommand,
   ): Promise<SyncCommandResult> {
     const functionName = command.type === "contact.submit.v1"
-      ? "apply_contact_submit"
+      ? "apply_contact_submit_v2"
       : command.type === "contact.attempt.submit.v1"
       ? "apply_contact_attempt_submit"
       : command.type === "contact.revise.v1"
-      ? "apply_contact_revise"
+      ? "apply_contact_revise_v2"
       : command.type === "contact.void.v1"
-      ? "apply_contact_void"
+      ? "apply_contact_void_v2"
       : command.type === "contact.resolve.v1"
-      ? "apply_contact_conflict_resolution"
+      ? "apply_contact_conflict_resolution_v2"
       : command.type === "draft.upsert.v1"
-      ? "apply_draft_upsert"
+      ? "apply_draft_upsert_v2"
       : "apply_draft_delete";
     const result = await this.query(
       `SELECT result_code, server_cursor, failure_code

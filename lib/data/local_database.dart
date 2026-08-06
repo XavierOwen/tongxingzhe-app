@@ -3,6 +3,7 @@ import 'package:drift_flutter/drift_flutter.dart';
 
 import '../features/contact_journal/contact_tables.dart';
 import '../regions/region_tables.dart';
+import '../questionnaires/questionnaire_tables.dart';
 import '../sync/sync_tables.dart';
 
 part 'local_database.g.dart';
@@ -126,6 +127,9 @@ class DbSecurityEvents extends Table {
     DbCanonicalRegionVersions,
     DbContactRegionAssignments,
     DbDraftRegionAssignments,
+    DbQuestionnaireVersions,
+    DbQuestionnaireQuestions,
+    DbQuestionnaireOptions,
   ],
 )
 class LocalDatabase extends _$LocalDatabase {
@@ -143,7 +147,7 @@ class LocalDatabase extends _$LocalDatabase {
       );
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -335,6 +339,38 @@ class LocalDatabase extends _$LocalDatabase {
         // 因而不能安全推测或回填。
         await migrator.createTable(dbContactRevisionConflicts);
         await migrator.createIndex(contactRevisionConflictsOwnerContact);
+      }
+      if (from < 13) {
+        // v13 扩展受控问卷答案值列，并缓存不可变发布定义。旧 boolean 行原样
+        // 复制；旧数据没有可证明的问卷定义，因此不猜测、不回填定义内容。
+        final answerColumns =
+            await _missingColumns(dbContactAnswers.actualTableName, [
+              dbContactAnswers.textValue,
+              dbContactAnswers.numberValue,
+              dbContactAnswers.multiChoiceValueJson,
+            ]);
+        if (answerColumns.isNotEmpty) {
+          await migrator.alterTable(
+            TableMigration(dbContactAnswers, newColumns: answerColumns),
+          );
+        }
+        final draftAnswerColumns =
+            await _missingColumns(dbContactDraftAnswers.actualTableName, [
+              dbContactDraftAnswers.textValue,
+              dbContactDraftAnswers.numberValue,
+              dbContactDraftAnswers.multiChoiceValueJson,
+            ]);
+        if (draftAnswerColumns.isNotEmpty) {
+          await migrator.alterTable(
+            TableMigration(
+              dbContactDraftAnswers,
+              newColumns: draftAnswerColumns,
+            ),
+          );
+        }
+        await migrator.createTable(dbQuestionnaireVersions);
+        await migrator.createTable(dbQuestionnaireQuestions);
+        await migrator.createTable(dbQuestionnaireOptions);
       }
     },
   );

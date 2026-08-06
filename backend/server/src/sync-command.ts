@@ -534,7 +534,17 @@ function parseLocation(value: unknown): ContactLocation {
 
 function parseAnswer(value: unknown): ContactAnswer {
   const answer = object(value, "invalid_answer");
-  if (answer.type !== "boolean") {
+  const type = answer.type;
+  if (
+    type !== "boolean" &&
+    type !== "single_choice" &&
+    type !== "ordinal_choice" &&
+    type !== "multi_choice" &&
+    type !== "number" &&
+    type !== "date" &&
+    type !== "short_text" &&
+    type !== "long_text"
+  ) {
     throw new CommandValidationError("unsupported_answer_type");
   }
   const state = answer.state;
@@ -547,18 +557,42 @@ function parseAnswer(value: unknown): ContactAnswer {
   ) {
     throw new CommandValidationError("invalid_answer_state");
   }
-  const booleanValue = answer.value;
-  if (
-    (state === "answered" && typeof booleanValue !== "boolean") ||
-    (state !== "answered" && booleanValue !== null)
-  ) {
-    throw new CommandValidationError("invalid_boolean_answer");
+  const rawValue = answer.value;
+  if (state !== "answered") {
+    if (rawValue !== null) {
+      throw new CommandValidationError("invalid_answer_value_shape");
+    }
+    return {
+      questionId: string(answer.question_id, "invalid_question_id"),
+      state,
+      type,
+      value: null,
+    };
+  }
+  const parsedValue = type === "boolean"
+    ? typeof rawValue === "boolean"
+      ? rawValue
+      : null
+    : type === "number"
+    ? typeof rawValue === "number" && Number.isFinite(rawValue)
+      ? rawValue
+      : null
+    : type === "multi_choice"
+    ? Array.isArray(rawValue) &&
+        rawValue.every((item): item is string => typeof item === "string")
+      ? rawValue
+      : null
+    : typeof rawValue === "string"
+    ? rawValue
+    : null;
+  if (parsedValue === null) {
+    throw new CommandValidationError("invalid_answer_value_shape");
   }
   return {
     questionId: string(answer.question_id, "invalid_question_id"),
     state,
-    type: "boolean",
-    value: state === "answered" ? (booleanValue as boolean) : null,
+    type,
+    value: parsedValue,
   };
 }
 
