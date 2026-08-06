@@ -52,13 +52,13 @@ jobs:
       - name: Verify Markdown links
         run: dart run tool/check_markdown_links.dart
 
-      - name: Verify current Drift v16 schema snapshot
+      - name: Verify current Drift v17 schema snapshot
         run: |
           dart run drift_dev schema dump \
             lib/data/local_database.dart \
-            "${RUNNER_TEMP}/drift_schema_v16.json"
-          cmp drift_schemas/drift_schema_v16.json \
-            "${RUNNER_TEMP}/drift_schema_v16.json"
+            "${RUNNER_TEMP}/drift_schema_v17.json"
+          cmp drift_schemas/drift_schema_v17.json \
+            "${RUNNER_TEMP}/drift_schema_v17.json"
 
       - name: Verify Drift migration helpers are current
         run: |
@@ -166,6 +166,10 @@ jobs:
             --file backend/database/checks/verify_promotion_target_directory.sql
           psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file backend/database/fixtures/0016_promotion_target_directory.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_contact_target_links.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0017_contact_target_links.sql
 
       - name: Verify concurrent questionnaire publication
         run: |
@@ -256,6 +260,10 @@ jobs:
             --file backend/database/checks/verify_promotion_target_directory.sql
           psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file backend/database/fixtures/0016_promotion_target_directory.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_contact_target_links.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0017_contact_target_links.sql
 
   backend-server:
     name: Backend identity, context, and sync

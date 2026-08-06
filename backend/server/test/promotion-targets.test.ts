@@ -18,6 +18,7 @@ const profile: PromotionTargetProfile = {
   phone: "+1 312 555 0100",
   email: null,
   createdAt: "2026-08-06T12:00:00.000Z",
+  hasCurrentProjectRelationship: false,
 };
 
 test("target operations recheck capabilities before reading PII", async () => {

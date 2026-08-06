@@ -11,6 +11,7 @@ import 'package:tongxingzhe_app/questionnaires/questionnaire_contract.dart';
 import 'package:tongxingzhe_app/sync/sync_engine.dart';
 import 'package:tongxingzhe_app/sync/sync_models.dart';
 import 'package:tongxingzhe_app/sync/sync_transport.dart';
+import 'package:tongxingzhe_app/targets/promotion_target.dart';
 
 void main() {
   test('accepted ACK 完成上传但不冒充已拉取 cursor', () async {
@@ -740,6 +741,90 @@ void main() {
     final health = await engine.health();
     expect(health.completedCount, 1);
     expect(health.serverCursor, 'cursor-from-other-device');
+  });
+
+  test('远端对象关联随 revision 安装且参与幂等比较', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    final targetLinks = <Object?>[
+      {
+        'targetId': '55555555-5555-4555-8555-555555555555',
+        'targetType': 'institution',
+        'responseLevel': 4,
+        'followUpConsent': 'yes',
+        'institutionRepresentativeConfirmed': true,
+        'confirmStageZero': true,
+      },
+    ];
+    final transport = _QueueSyncTransport(
+      const [],
+      pullReplies: [
+        SyncPullSucceeded(
+          SyncPullBatch(
+            nextCursor: 'cursor-target-links',
+            changes: [
+              SyncRemoteChange(
+                changeType: 'contact.submitted',
+                revisionNumber: 1,
+                payload: {
+                  ..._remotePayload(contactId: 'remote-target-contact'),
+                  'targetLinks': targetLinks,
+                },
+              ),
+            ],
+          ),
+        ),
+        SyncPullSucceeded(
+          SyncPullBatch(
+            nextCursor: 'cursor-target-links-invalid',
+            changes: [
+              SyncRemoteChange(
+                changeType: 'contact.submitted',
+                revisionNumber: 1,
+                payload: {
+                  ..._remotePayload(contactId: 'remote-target-contact'),
+                  'targetLinks': [
+                    {
+                      ...(targetLinks.single! as Map<String, Object?>),
+                      'responseLevel': 3,
+                    },
+                  ],
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    final engine = fixture.engine(workerId: 'worker-1', transport: transport);
+    final journal = ContactJournal(
+      database: fixture.database,
+      clock: fixture.clock,
+      idGenerator: _SequenceIdGenerator(const []),
+    );
+
+    expect(await engine.pullOnce(), SyncPullApplyResult.applied);
+    final contact = await journal.contactById('remote-target-contact');
+    expect(contact!.targetLinks, const [
+      ContactTargetLink(
+        targetId: '55555555-5555-4555-8555-555555555555',
+        targetType: PromotionTargetType.institution,
+        responseLevel: 4,
+        followUpConsent: ContactFollowUpConsent.yes,
+        institutionRepresentativeConfirmed: true,
+        confirmStageZero: true,
+      ),
+    ]);
+    expect(contact.reachCount, 2);
+
+    expect(await engine.pullOnce(), SyncPullApplyResult.permanentFailure);
+    expect((await engine.health()).serverCursor, 'cursor-target-links');
+    expect(
+      (await journal.contactById(
+        'remote-target-contact',
+      ))!.targetLinks.single.responseLevel,
+      4,
+    );
   });
 
   test('远端更正按新发生时间归期，后续作废保留三条历史', () async {

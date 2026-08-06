@@ -58,6 +58,7 @@ extension ContactDraftOperations on ContactJournal {
               ),
             );
         await _replaceDraftAnswers(draftId, input.answers);
+        await _replaceDraftTargetLinks(draftId, input.targetLinks);
         await _replaceDraftRegionAssignment(draftId, input.location);
         if (input.syncMode == ContactDraftSyncMode.accountPrivate) {
           await _enqueueDraftUpsert(
@@ -94,6 +95,7 @@ extension ContactDraftOperations on ContactJournal {
       reachCount: input.reachCount,
       interestLevel: input.interestLevel,
       answers: List.unmodifiable(input.answers),
+      targetLinks: List.unmodifiable(input.targetLinks),
       syncMode: input.syncMode,
       localRevision: localRevision,
       serverRevision: serverRevision,
@@ -161,6 +163,7 @@ extension ContactDraftOperations on ContactJournal {
           ),
         );
         await _replaceDraftAnswers(existing.draftId, input.answers);
+        await _replaceDraftTargetLinks(existing.draftId, input.targetLinks);
         await _replaceDraftRegionAssignment(existing.draftId, input.location);
         if (input.syncMode == ContactDraftSyncMode.accountPrivate) {
           await _deleteUnsentDraftDeletes(existing.draftId);
@@ -195,6 +198,7 @@ extension ContactDraftOperations on ContactJournal {
           reachCount: input.reachCount,
           interestLevel: input.interestLevel,
           answers: List.unmodifiable(input.answers),
+          targetLinks: List.unmodifiable(input.targetLinks),
           syncMode: input.syncMode,
           localRevision: localRevision,
           serverRevision: existing.serverRevision,
@@ -236,7 +240,11 @@ extension ContactDraftOperations on ContactJournal {
     final answerQuery = _database.select(_database.dbContactDraftAnswers)
       ..where((answer) => answer.draftId.equals(draftId))
       ..orderBy([(answer) => OrderingTerm.asc(answer.questionId)]);
-    return _draftFromRow(row, await answerQuery.get());
+    return _draftFromRow(
+      row,
+      await answerQuery.get(),
+      await _draftTargetLinkRows(draftId),
+    );
   }
 
   /// 列出一位创建者仍在填写的全部私有草稿，最近修改的排在前面。
@@ -261,13 +269,24 @@ extension ContactDraftOperations on ContactJournal {
         (row) => OrderingTerm.asc(row.questionId),
       ]);
     final answerRows = await answerQuery.get();
+    final targetLinkRows = await (_database.select(
+      _database.dbContactDraftTargetLinks,
+    )..where((row) => row.draftId.isIn(draftIds))).get();
     final answersByDraftId = <String, List<DbContactDraftAnswer>>{};
     for (final answer in answerRows) {
       answersByDraftId.putIfAbsent(answer.draftId, () => []).add(answer);
     }
+    final targetLinksByDraftId = <String, List<DbContactDraftTargetLink>>{};
+    for (final link in targetLinkRows) {
+      targetLinksByDraftId.putIfAbsent(link.draftId, () => []).add(link);
+    }
     return [
       for (final row in rows)
-        _draftFromRow(row, answersByDraftId[row.draftId] ?? const []),
+        _draftFromRow(
+          row,
+          answersByDraftId[row.draftId] ?? const [],
+          targetLinksByDraftId[row.draftId] ?? const [],
+        ),
     ];
   }
 
@@ -376,7 +395,7 @@ extension ContactDraftOperations on ContactJournal {
           return _draftFromRow(existing, [
             for (final question in parsedTarget.questions)
               ?answersById[question.id],
-          ]);
+          ], await _draftTargetLinkRows(targetDraftId));
         }
 
         final source = _draftFromRow(
@@ -384,6 +403,7 @@ extension ContactDraftOperations on ContactJournal {
           await (_database.select(
             _database.dbContactDraftAnswers,
           )..where((row) => row.draftId.equals(sourceDraftId))).get(),
+          await _draftTargetLinkRows(sourceDraftId),
         );
         final location = _contactLocationColumns(source.location);
         const localRevision = 1;
@@ -420,6 +440,7 @@ extension ContactDraftOperations on ContactJournal {
               ),
             );
         await _replaceDraftAnswers(targetDraftId, normalizedAnswers);
+        await _replaceDraftTargetLinks(targetDraftId, source.targetLinks);
         await _replaceDraftRegionAssignment(targetDraftId, source.location);
         final upgraded = ContactDraft(
           draftId: targetDraftId,
@@ -437,6 +458,7 @@ extension ContactDraftOperations on ContactJournal {
           reachCount: source.reachCount,
           interestLevel: source.interestLevel,
           answers: normalizedAnswers,
+          targetLinks: source.targetLinks,
           syncMode: source.syncMode,
           localRevision: localRevision,
           serverRevision: serverRevision,
@@ -554,7 +576,11 @@ extension ContactDraftOperations on ContactJournal {
         final answerQuery = _database.select(_database.dbContactDraftAnswers)
           ..where((row) => row.draftId.equals(draftId));
         final answers = await answerQuery.get();
-        final restoredDraft = _draftFromRow(restored, answers);
+        final restoredDraft = _draftFromRow(
+          restored,
+          answers,
+          await _draftTargetLinkRows(draftId),
+        );
         await _deleteUnsentDraftDeletes(draftId);
         if (restoredDraft.syncMode == ContactDraftSyncMode.accountPrivate) {
           await _enqueueDraftUpsert(
@@ -623,6 +649,7 @@ extension ContactDraftOperations on ContactJournal {
         throw const ContactValidationException('duplicate_question_answer');
       }
     }
+    _validateTargetLinks(input.targetLinks);
   }
 
   bool _hasMeaningfulDraftContent(ContactDraftInput input) {
@@ -634,6 +661,7 @@ extension ContactDraftOperations on ContactJournal {
         input.reachCount != null ||
         input.interestLevel != null ||
         input.answers.isNotEmpty ||
+        input.targetLinks.isNotEmpty ||
         input.syncMode != ContactDraftSyncMode.accountPrivate;
   }
 
@@ -678,6 +706,7 @@ extension ContactDraftOperations on ContactJournal {
         for (final answer in input.answers)
           QuestionnaireAnswerCodec.toJson(answer),
       ],
+      'target_links': _targetLinkPayload(input.targetLinks),
     });
     await _database
         .into(_database.dbSyncOutbox)
@@ -791,6 +820,7 @@ extension ContactDraftOperations on ContactJournal {
       reachCount: draft.reachCount,
       interestLevel: draft.interestLevel,
       answers: draft.answers,
+      targetLinks: draft.targetLinks,
       syncMode: draft.syncMode,
     );
   }
@@ -822,9 +852,42 @@ extension ContactDraftOperations on ContactJournal {
     }
   }
 
+  Future<void> _replaceDraftTargetLinks(
+    String draftId,
+    List<ContactTargetLink> targetLinks,
+  ) async {
+    await (_database.delete(
+      _database.dbContactDraftTargetLinks,
+    )..where((row) => row.draftId.equals(draftId))).go();
+    for (final link in targetLinks) {
+      await _database
+          .into(_database.dbContactDraftTargetLinks)
+          .insert(
+            DbContactDraftTargetLinksCompanion.insert(
+              draftId: draftId,
+              targetId: link.targetId,
+              targetType: link.targetType.storageValue,
+              responseLevel: Value(link.responseLevel),
+              followUpConsent: link.followUpConsent.storageValue,
+              institutionRepresentativeConfirmed:
+                  link.institutionRepresentativeConfirmed,
+              confirmStageZero: link.confirmStageZero,
+            ),
+          );
+    }
+  }
+
+  Future<List<DbContactDraftTargetLink>> _draftTargetLinkRows(String draftId) {
+    final query = _database.select(_database.dbContactDraftTargetLinks)
+      ..where((row) => row.draftId.equals(draftId))
+      ..orderBy([(row) => OrderingTerm.asc(row.targetId)]);
+    return query.get();
+  }
+
   ContactDraft _draftFromRow(
     DbContactDraft row,
     List<DbContactDraftAnswer> answerRows,
+    List<DbContactDraftTargetLink> targetLinkRows,
   ) {
     return ContactDraft(
       draftId: row.draftId,
@@ -856,6 +919,22 @@ extension ContactDraftOperations on ContactJournal {
             textValue: answer.textValue,
             numberValue: answer.numberValue,
             multiChoiceValueJson: answer.multiChoiceValueJson,
+          ),
+      ],
+      targetLinks: [
+        for (final link in targetLinkRows)
+          ContactTargetLink(
+            targetId: link.targetId,
+            targetType: PromotionTargetType.values.singleWhere(
+              (type) => type.storageValue == link.targetType,
+            ),
+            responseLevel: link.responseLevel,
+            followUpConsent: ContactFollowUpConsent.fromStorage(
+              link.followUpConsent,
+            ),
+            institutionRepresentativeConfirmed:
+                link.institutionRepresentativeConfirmed,
+            confirmStageZero: link.confirmStageZero,
           ),
       ],
       syncMode: ContactDraftSyncMode.fromStorage(row.syncMode),
@@ -984,7 +1063,11 @@ extension ContactDraftOperations on ContactJournal {
         }
         final answerQuery = _database.select(_database.dbContactDraftAnswers)
           ..where((row) => row.draftId.equals(draftId));
-        final draft = _draftFromRow(draftRow, await answerQuery.get());
+        final draft = _draftFromRow(
+          draftRow,
+          await answerQuery.get(),
+          await _draftTargetLinkRows(draftId),
+        );
         if (draft.isConflictCopy) {
           throw const ContactValidationException(
             'contact_draft_conflict_requires_resolution',
@@ -1012,6 +1095,7 @@ extension ContactDraftOperations on ContactJournal {
           reachCount: draft.reachCount!,
           interestLevel: draft.interestLevel!,
           answers: draft.answers,
+          targetLinks: draft.targetLinks,
           sourceAttemptId: draft.sourceAttemptId,
         );
         _validateSubmission(submission);
@@ -1034,6 +1118,9 @@ extension ContactDraftOperations on ContactJournal {
         );
         await (_database.delete(
           _database.dbContactDraftAnswers,
+        )..where((row) => row.draftId.equals(draftId))).go();
+        await (_database.delete(
+          _database.dbContactDraftTargetLinks,
         )..where((row) => row.draftId.equals(draftId))).go();
         await _regionCatalog.clearDraftAssignment(draftId);
         await (_database.delete(

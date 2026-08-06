@@ -9071,6 +9071,1122 @@ class DbContactDraftAnswersCompanion
   }
 }
 
+class $DbContactTargetLinksTable extends DbContactTargetLinks
+    with TableInfo<$DbContactTargetLinksTable, DbContactTargetLink> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DbContactTargetLinksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _contactIdMeta = const VerificationMeta(
+    'contactId',
+  );
+  @override
+  late final GeneratedColumn<String> contactId = GeneratedColumn<String>(
+    'contact_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES db_contact_records (contact_id)',
+    ),
+  );
+  static const VerificationMeta _revisionNumberMeta = const VerificationMeta(
+    'revisionNumber',
+  );
+  @override
+  late final GeneratedColumn<int> revisionNumber = GeneratedColumn<int>(
+    'revision_number',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _targetIdMeta = const VerificationMeta(
+    'targetId',
+  );
+  @override
+  late final GeneratedColumn<String> targetId = GeneratedColumn<String>(
+    'target_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _targetTypeMeta = const VerificationMeta(
+    'targetType',
+  );
+  @override
+  late final GeneratedColumn<String> targetType = GeneratedColumn<String>(
+    'target_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _responseLevelMeta = const VerificationMeta(
+    'responseLevel',
+  );
+  @override
+  late final GeneratedColumn<int> responseLevel = GeneratedColumn<int>(
+    'response_level',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _followUpConsentMeta = const VerificationMeta(
+    'followUpConsent',
+  );
+  @override
+  late final GeneratedColumn<String> followUpConsent = GeneratedColumn<String>(
+    'follow_up_consent',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _institutionRepresentativeConfirmedMeta =
+      const VerificationMeta('institutionRepresentativeConfirmed');
+  @override
+  late final GeneratedColumn<bool> institutionRepresentativeConfirmed =
+      GeneratedColumn<bool>(
+        'institution_representative_confirmed',
+        aliasedName,
+        false,
+        type: DriftSqlType.bool,
+        requiredDuringInsert: true,
+        defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("institution_representative_confirmed" IN (0, 1))',
+        ),
+      );
+  static const VerificationMeta _confirmStageZeroMeta = const VerificationMeta(
+    'confirmStageZero',
+  );
+  @override
+  late final GeneratedColumn<bool> confirmStageZero = GeneratedColumn<bool>(
+    'confirm_stage_zero',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("confirm_stage_zero" IN (0, 1))',
+    ),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    contactId,
+    revisionNumber,
+    targetId,
+    targetType,
+    responseLevel,
+    followUpConsent,
+    institutionRepresentativeConfirmed,
+    confirmStageZero,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'db_contact_target_links';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DbContactTargetLink> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('contact_id')) {
+      context.handle(
+        _contactIdMeta,
+        contactId.isAcceptableOrUnknown(data['contact_id']!, _contactIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_contactIdMeta);
+    }
+    if (data.containsKey('revision_number')) {
+      context.handle(
+        _revisionNumberMeta,
+        revisionNumber.isAcceptableOrUnknown(
+          data['revision_number']!,
+          _revisionNumberMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_revisionNumberMeta);
+    }
+    if (data.containsKey('target_id')) {
+      context.handle(
+        _targetIdMeta,
+        targetId.isAcceptableOrUnknown(data['target_id']!, _targetIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_targetIdMeta);
+    }
+    if (data.containsKey('target_type')) {
+      context.handle(
+        _targetTypeMeta,
+        targetType.isAcceptableOrUnknown(data['target_type']!, _targetTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_targetTypeMeta);
+    }
+    if (data.containsKey('response_level')) {
+      context.handle(
+        _responseLevelMeta,
+        responseLevel.isAcceptableOrUnknown(
+          data['response_level']!,
+          _responseLevelMeta,
+        ),
+      );
+    }
+    if (data.containsKey('follow_up_consent')) {
+      context.handle(
+        _followUpConsentMeta,
+        followUpConsent.isAcceptableOrUnknown(
+          data['follow_up_consent']!,
+          _followUpConsentMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_followUpConsentMeta);
+    }
+    if (data.containsKey('institution_representative_confirmed')) {
+      context.handle(
+        _institutionRepresentativeConfirmedMeta,
+        institutionRepresentativeConfirmed.isAcceptableOrUnknown(
+          data['institution_representative_confirmed']!,
+          _institutionRepresentativeConfirmedMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_institutionRepresentativeConfirmedMeta);
+    }
+    if (data.containsKey('confirm_stage_zero')) {
+      context.handle(
+        _confirmStageZeroMeta,
+        confirmStageZero.isAcceptableOrUnknown(
+          data['confirm_stage_zero']!,
+          _confirmStageZeroMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_confirmStageZeroMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {contactId, revisionNumber, targetId};
+  @override
+  DbContactTargetLink map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DbContactTargetLink(
+      contactId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}contact_id'],
+      )!,
+      revisionNumber: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}revision_number'],
+      )!,
+      targetId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}target_id'],
+      )!,
+      targetType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}target_type'],
+      )!,
+      responseLevel: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}response_level'],
+      ),
+      followUpConsent: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}follow_up_consent'],
+      )!,
+      institutionRepresentativeConfirmed: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}institution_representative_confirmed'],
+      )!,
+      confirmStageZero: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}confirm_stage_zero'],
+      )!,
+    );
+  }
+
+  @override
+  $DbContactTargetLinksTable createAlias(String alias) {
+    return $DbContactTargetLinksTable(attachedDatabase, alias);
+  }
+}
+
+class DbContactTargetLink extends DataClass
+    implements Insertable<DbContactTargetLink> {
+  final String contactId;
+  final int revisionNumber;
+  final String targetId;
+  final String targetType;
+  final int? responseLevel;
+  final String followUpConsent;
+  final bool institutionRepresentativeConfirmed;
+  final bool confirmStageZero;
+  const DbContactTargetLink({
+    required this.contactId,
+    required this.revisionNumber,
+    required this.targetId,
+    required this.targetType,
+    this.responseLevel,
+    required this.followUpConsent,
+    required this.institutionRepresentativeConfirmed,
+    required this.confirmStageZero,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['contact_id'] = Variable<String>(contactId);
+    map['revision_number'] = Variable<int>(revisionNumber);
+    map['target_id'] = Variable<String>(targetId);
+    map['target_type'] = Variable<String>(targetType);
+    if (!nullToAbsent || responseLevel != null) {
+      map['response_level'] = Variable<int>(responseLevel);
+    }
+    map['follow_up_consent'] = Variable<String>(followUpConsent);
+    map['institution_representative_confirmed'] = Variable<bool>(
+      institutionRepresentativeConfirmed,
+    );
+    map['confirm_stage_zero'] = Variable<bool>(confirmStageZero);
+    return map;
+  }
+
+  DbContactTargetLinksCompanion toCompanion(bool nullToAbsent) {
+    return DbContactTargetLinksCompanion(
+      contactId: Value(contactId),
+      revisionNumber: Value(revisionNumber),
+      targetId: Value(targetId),
+      targetType: Value(targetType),
+      responseLevel: responseLevel == null && nullToAbsent
+          ? const Value.absent()
+          : Value(responseLevel),
+      followUpConsent: Value(followUpConsent),
+      institutionRepresentativeConfirmed: Value(
+        institutionRepresentativeConfirmed,
+      ),
+      confirmStageZero: Value(confirmStageZero),
+    );
+  }
+
+  factory DbContactTargetLink.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DbContactTargetLink(
+      contactId: serializer.fromJson<String>(json['contactId']),
+      revisionNumber: serializer.fromJson<int>(json['revisionNumber']),
+      targetId: serializer.fromJson<String>(json['targetId']),
+      targetType: serializer.fromJson<String>(json['targetType']),
+      responseLevel: serializer.fromJson<int?>(json['responseLevel']),
+      followUpConsent: serializer.fromJson<String>(json['followUpConsent']),
+      institutionRepresentativeConfirmed: serializer.fromJson<bool>(
+        json['institutionRepresentativeConfirmed'],
+      ),
+      confirmStageZero: serializer.fromJson<bool>(json['confirmStageZero']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'contactId': serializer.toJson<String>(contactId),
+      'revisionNumber': serializer.toJson<int>(revisionNumber),
+      'targetId': serializer.toJson<String>(targetId),
+      'targetType': serializer.toJson<String>(targetType),
+      'responseLevel': serializer.toJson<int?>(responseLevel),
+      'followUpConsent': serializer.toJson<String>(followUpConsent),
+      'institutionRepresentativeConfirmed': serializer.toJson<bool>(
+        institutionRepresentativeConfirmed,
+      ),
+      'confirmStageZero': serializer.toJson<bool>(confirmStageZero),
+    };
+  }
+
+  DbContactTargetLink copyWith({
+    String? contactId,
+    int? revisionNumber,
+    String? targetId,
+    String? targetType,
+    Value<int?> responseLevel = const Value.absent(),
+    String? followUpConsent,
+    bool? institutionRepresentativeConfirmed,
+    bool? confirmStageZero,
+  }) => DbContactTargetLink(
+    contactId: contactId ?? this.contactId,
+    revisionNumber: revisionNumber ?? this.revisionNumber,
+    targetId: targetId ?? this.targetId,
+    targetType: targetType ?? this.targetType,
+    responseLevel: responseLevel.present
+        ? responseLevel.value
+        : this.responseLevel,
+    followUpConsent: followUpConsent ?? this.followUpConsent,
+    institutionRepresentativeConfirmed:
+        institutionRepresentativeConfirmed ??
+        this.institutionRepresentativeConfirmed,
+    confirmStageZero: confirmStageZero ?? this.confirmStageZero,
+  );
+  DbContactTargetLink copyWithCompanion(DbContactTargetLinksCompanion data) {
+    return DbContactTargetLink(
+      contactId: data.contactId.present ? data.contactId.value : this.contactId,
+      revisionNumber: data.revisionNumber.present
+          ? data.revisionNumber.value
+          : this.revisionNumber,
+      targetId: data.targetId.present ? data.targetId.value : this.targetId,
+      targetType: data.targetType.present
+          ? data.targetType.value
+          : this.targetType,
+      responseLevel: data.responseLevel.present
+          ? data.responseLevel.value
+          : this.responseLevel,
+      followUpConsent: data.followUpConsent.present
+          ? data.followUpConsent.value
+          : this.followUpConsent,
+      institutionRepresentativeConfirmed:
+          data.institutionRepresentativeConfirmed.present
+          ? data.institutionRepresentativeConfirmed.value
+          : this.institutionRepresentativeConfirmed,
+      confirmStageZero: data.confirmStageZero.present
+          ? data.confirmStageZero.value
+          : this.confirmStageZero,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbContactTargetLink(')
+          ..write('contactId: $contactId, ')
+          ..write('revisionNumber: $revisionNumber, ')
+          ..write('targetId: $targetId, ')
+          ..write('targetType: $targetType, ')
+          ..write('responseLevel: $responseLevel, ')
+          ..write('followUpConsent: $followUpConsent, ')
+          ..write(
+            'institutionRepresentativeConfirmed: $institutionRepresentativeConfirmed, ',
+          )
+          ..write('confirmStageZero: $confirmStageZero')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    contactId,
+    revisionNumber,
+    targetId,
+    targetType,
+    responseLevel,
+    followUpConsent,
+    institutionRepresentativeConfirmed,
+    confirmStageZero,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DbContactTargetLink &&
+          other.contactId == this.contactId &&
+          other.revisionNumber == this.revisionNumber &&
+          other.targetId == this.targetId &&
+          other.targetType == this.targetType &&
+          other.responseLevel == this.responseLevel &&
+          other.followUpConsent == this.followUpConsent &&
+          other.institutionRepresentativeConfirmed ==
+              this.institutionRepresentativeConfirmed &&
+          other.confirmStageZero == this.confirmStageZero);
+}
+
+class DbContactTargetLinksCompanion
+    extends UpdateCompanion<DbContactTargetLink> {
+  final Value<String> contactId;
+  final Value<int> revisionNumber;
+  final Value<String> targetId;
+  final Value<String> targetType;
+  final Value<int?> responseLevel;
+  final Value<String> followUpConsent;
+  final Value<bool> institutionRepresentativeConfirmed;
+  final Value<bool> confirmStageZero;
+  final Value<int> rowid;
+  const DbContactTargetLinksCompanion({
+    this.contactId = const Value.absent(),
+    this.revisionNumber = const Value.absent(),
+    this.targetId = const Value.absent(),
+    this.targetType = const Value.absent(),
+    this.responseLevel = const Value.absent(),
+    this.followUpConsent = const Value.absent(),
+    this.institutionRepresentativeConfirmed = const Value.absent(),
+    this.confirmStageZero = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DbContactTargetLinksCompanion.insert({
+    required String contactId,
+    required int revisionNumber,
+    required String targetId,
+    required String targetType,
+    this.responseLevel = const Value.absent(),
+    required String followUpConsent,
+    required bool institutionRepresentativeConfirmed,
+    required bool confirmStageZero,
+    this.rowid = const Value.absent(),
+  }) : contactId = Value(contactId),
+       revisionNumber = Value(revisionNumber),
+       targetId = Value(targetId),
+       targetType = Value(targetType),
+       followUpConsent = Value(followUpConsent),
+       institutionRepresentativeConfirmed = Value(
+         institutionRepresentativeConfirmed,
+       ),
+       confirmStageZero = Value(confirmStageZero);
+  static Insertable<DbContactTargetLink> custom({
+    Expression<String>? contactId,
+    Expression<int>? revisionNumber,
+    Expression<String>? targetId,
+    Expression<String>? targetType,
+    Expression<int>? responseLevel,
+    Expression<String>? followUpConsent,
+    Expression<bool>? institutionRepresentativeConfirmed,
+    Expression<bool>? confirmStageZero,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (contactId != null) 'contact_id': contactId,
+      if (revisionNumber != null) 'revision_number': revisionNumber,
+      if (targetId != null) 'target_id': targetId,
+      if (targetType != null) 'target_type': targetType,
+      if (responseLevel != null) 'response_level': responseLevel,
+      if (followUpConsent != null) 'follow_up_consent': followUpConsent,
+      if (institutionRepresentativeConfirmed != null)
+        'institution_representative_confirmed':
+            institutionRepresentativeConfirmed,
+      if (confirmStageZero != null) 'confirm_stage_zero': confirmStageZero,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DbContactTargetLinksCompanion copyWith({
+    Value<String>? contactId,
+    Value<int>? revisionNumber,
+    Value<String>? targetId,
+    Value<String>? targetType,
+    Value<int?>? responseLevel,
+    Value<String>? followUpConsent,
+    Value<bool>? institutionRepresentativeConfirmed,
+    Value<bool>? confirmStageZero,
+    Value<int>? rowid,
+  }) {
+    return DbContactTargetLinksCompanion(
+      contactId: contactId ?? this.contactId,
+      revisionNumber: revisionNumber ?? this.revisionNumber,
+      targetId: targetId ?? this.targetId,
+      targetType: targetType ?? this.targetType,
+      responseLevel: responseLevel ?? this.responseLevel,
+      followUpConsent: followUpConsent ?? this.followUpConsent,
+      institutionRepresentativeConfirmed:
+          institutionRepresentativeConfirmed ??
+          this.institutionRepresentativeConfirmed,
+      confirmStageZero: confirmStageZero ?? this.confirmStageZero,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (contactId.present) {
+      map['contact_id'] = Variable<String>(contactId.value);
+    }
+    if (revisionNumber.present) {
+      map['revision_number'] = Variable<int>(revisionNumber.value);
+    }
+    if (targetId.present) {
+      map['target_id'] = Variable<String>(targetId.value);
+    }
+    if (targetType.present) {
+      map['target_type'] = Variable<String>(targetType.value);
+    }
+    if (responseLevel.present) {
+      map['response_level'] = Variable<int>(responseLevel.value);
+    }
+    if (followUpConsent.present) {
+      map['follow_up_consent'] = Variable<String>(followUpConsent.value);
+    }
+    if (institutionRepresentativeConfirmed.present) {
+      map['institution_representative_confirmed'] = Variable<bool>(
+        institutionRepresentativeConfirmed.value,
+      );
+    }
+    if (confirmStageZero.present) {
+      map['confirm_stage_zero'] = Variable<bool>(confirmStageZero.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbContactTargetLinksCompanion(')
+          ..write('contactId: $contactId, ')
+          ..write('revisionNumber: $revisionNumber, ')
+          ..write('targetId: $targetId, ')
+          ..write('targetType: $targetType, ')
+          ..write('responseLevel: $responseLevel, ')
+          ..write('followUpConsent: $followUpConsent, ')
+          ..write(
+            'institutionRepresentativeConfirmed: $institutionRepresentativeConfirmed, ',
+          )
+          ..write('confirmStageZero: $confirmStageZero, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $DbContactDraftTargetLinksTable extends DbContactDraftTargetLinks
+    with TableInfo<$DbContactDraftTargetLinksTable, DbContactDraftTargetLink> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DbContactDraftTargetLinksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _draftIdMeta = const VerificationMeta(
+    'draftId',
+  );
+  @override
+  late final GeneratedColumn<String> draftId = GeneratedColumn<String>(
+    'draft_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES db_contact_drafts (draft_id)',
+    ),
+  );
+  static const VerificationMeta _targetIdMeta = const VerificationMeta(
+    'targetId',
+  );
+  @override
+  late final GeneratedColumn<String> targetId = GeneratedColumn<String>(
+    'target_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _targetTypeMeta = const VerificationMeta(
+    'targetType',
+  );
+  @override
+  late final GeneratedColumn<String> targetType = GeneratedColumn<String>(
+    'target_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _responseLevelMeta = const VerificationMeta(
+    'responseLevel',
+  );
+  @override
+  late final GeneratedColumn<int> responseLevel = GeneratedColumn<int>(
+    'response_level',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _followUpConsentMeta = const VerificationMeta(
+    'followUpConsent',
+  );
+  @override
+  late final GeneratedColumn<String> followUpConsent = GeneratedColumn<String>(
+    'follow_up_consent',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _institutionRepresentativeConfirmedMeta =
+      const VerificationMeta('institutionRepresentativeConfirmed');
+  @override
+  late final GeneratedColumn<bool> institutionRepresentativeConfirmed =
+      GeneratedColumn<bool>(
+        'institution_representative_confirmed',
+        aliasedName,
+        false,
+        type: DriftSqlType.bool,
+        requiredDuringInsert: true,
+        defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("institution_representative_confirmed" IN (0, 1))',
+        ),
+      );
+  static const VerificationMeta _confirmStageZeroMeta = const VerificationMeta(
+    'confirmStageZero',
+  );
+  @override
+  late final GeneratedColumn<bool> confirmStageZero = GeneratedColumn<bool>(
+    'confirm_stage_zero',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("confirm_stage_zero" IN (0, 1))',
+    ),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    draftId,
+    targetId,
+    targetType,
+    responseLevel,
+    followUpConsent,
+    institutionRepresentativeConfirmed,
+    confirmStageZero,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'db_contact_draft_target_links';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DbContactDraftTargetLink> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('draft_id')) {
+      context.handle(
+        _draftIdMeta,
+        draftId.isAcceptableOrUnknown(data['draft_id']!, _draftIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_draftIdMeta);
+    }
+    if (data.containsKey('target_id')) {
+      context.handle(
+        _targetIdMeta,
+        targetId.isAcceptableOrUnknown(data['target_id']!, _targetIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_targetIdMeta);
+    }
+    if (data.containsKey('target_type')) {
+      context.handle(
+        _targetTypeMeta,
+        targetType.isAcceptableOrUnknown(data['target_type']!, _targetTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_targetTypeMeta);
+    }
+    if (data.containsKey('response_level')) {
+      context.handle(
+        _responseLevelMeta,
+        responseLevel.isAcceptableOrUnknown(
+          data['response_level']!,
+          _responseLevelMeta,
+        ),
+      );
+    }
+    if (data.containsKey('follow_up_consent')) {
+      context.handle(
+        _followUpConsentMeta,
+        followUpConsent.isAcceptableOrUnknown(
+          data['follow_up_consent']!,
+          _followUpConsentMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_followUpConsentMeta);
+    }
+    if (data.containsKey('institution_representative_confirmed')) {
+      context.handle(
+        _institutionRepresentativeConfirmedMeta,
+        institutionRepresentativeConfirmed.isAcceptableOrUnknown(
+          data['institution_representative_confirmed']!,
+          _institutionRepresentativeConfirmedMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_institutionRepresentativeConfirmedMeta);
+    }
+    if (data.containsKey('confirm_stage_zero')) {
+      context.handle(
+        _confirmStageZeroMeta,
+        confirmStageZero.isAcceptableOrUnknown(
+          data['confirm_stage_zero']!,
+          _confirmStageZeroMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_confirmStageZeroMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {draftId, targetId};
+  @override
+  DbContactDraftTargetLink map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DbContactDraftTargetLink(
+      draftId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}draft_id'],
+      )!,
+      targetId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}target_id'],
+      )!,
+      targetType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}target_type'],
+      )!,
+      responseLevel: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}response_level'],
+      ),
+      followUpConsent: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}follow_up_consent'],
+      )!,
+      institutionRepresentativeConfirmed: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}institution_representative_confirmed'],
+      )!,
+      confirmStageZero: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}confirm_stage_zero'],
+      )!,
+    );
+  }
+
+  @override
+  $DbContactDraftTargetLinksTable createAlias(String alias) {
+    return $DbContactDraftTargetLinksTable(attachedDatabase, alias);
+  }
+}
+
+class DbContactDraftTargetLink extends DataClass
+    implements Insertable<DbContactDraftTargetLink> {
+  final String draftId;
+  final String targetId;
+  final String targetType;
+  final int? responseLevel;
+  final String followUpConsent;
+  final bool institutionRepresentativeConfirmed;
+  final bool confirmStageZero;
+  const DbContactDraftTargetLink({
+    required this.draftId,
+    required this.targetId,
+    required this.targetType,
+    this.responseLevel,
+    required this.followUpConsent,
+    required this.institutionRepresentativeConfirmed,
+    required this.confirmStageZero,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['draft_id'] = Variable<String>(draftId);
+    map['target_id'] = Variable<String>(targetId);
+    map['target_type'] = Variable<String>(targetType);
+    if (!nullToAbsent || responseLevel != null) {
+      map['response_level'] = Variable<int>(responseLevel);
+    }
+    map['follow_up_consent'] = Variable<String>(followUpConsent);
+    map['institution_representative_confirmed'] = Variable<bool>(
+      institutionRepresentativeConfirmed,
+    );
+    map['confirm_stage_zero'] = Variable<bool>(confirmStageZero);
+    return map;
+  }
+
+  DbContactDraftTargetLinksCompanion toCompanion(bool nullToAbsent) {
+    return DbContactDraftTargetLinksCompanion(
+      draftId: Value(draftId),
+      targetId: Value(targetId),
+      targetType: Value(targetType),
+      responseLevel: responseLevel == null && nullToAbsent
+          ? const Value.absent()
+          : Value(responseLevel),
+      followUpConsent: Value(followUpConsent),
+      institutionRepresentativeConfirmed: Value(
+        institutionRepresentativeConfirmed,
+      ),
+      confirmStageZero: Value(confirmStageZero),
+    );
+  }
+
+  factory DbContactDraftTargetLink.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DbContactDraftTargetLink(
+      draftId: serializer.fromJson<String>(json['draftId']),
+      targetId: serializer.fromJson<String>(json['targetId']),
+      targetType: serializer.fromJson<String>(json['targetType']),
+      responseLevel: serializer.fromJson<int?>(json['responseLevel']),
+      followUpConsent: serializer.fromJson<String>(json['followUpConsent']),
+      institutionRepresentativeConfirmed: serializer.fromJson<bool>(
+        json['institutionRepresentativeConfirmed'],
+      ),
+      confirmStageZero: serializer.fromJson<bool>(json['confirmStageZero']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'draftId': serializer.toJson<String>(draftId),
+      'targetId': serializer.toJson<String>(targetId),
+      'targetType': serializer.toJson<String>(targetType),
+      'responseLevel': serializer.toJson<int?>(responseLevel),
+      'followUpConsent': serializer.toJson<String>(followUpConsent),
+      'institutionRepresentativeConfirmed': serializer.toJson<bool>(
+        institutionRepresentativeConfirmed,
+      ),
+      'confirmStageZero': serializer.toJson<bool>(confirmStageZero),
+    };
+  }
+
+  DbContactDraftTargetLink copyWith({
+    String? draftId,
+    String? targetId,
+    String? targetType,
+    Value<int?> responseLevel = const Value.absent(),
+    String? followUpConsent,
+    bool? institutionRepresentativeConfirmed,
+    bool? confirmStageZero,
+  }) => DbContactDraftTargetLink(
+    draftId: draftId ?? this.draftId,
+    targetId: targetId ?? this.targetId,
+    targetType: targetType ?? this.targetType,
+    responseLevel: responseLevel.present
+        ? responseLevel.value
+        : this.responseLevel,
+    followUpConsent: followUpConsent ?? this.followUpConsent,
+    institutionRepresentativeConfirmed:
+        institutionRepresentativeConfirmed ??
+        this.institutionRepresentativeConfirmed,
+    confirmStageZero: confirmStageZero ?? this.confirmStageZero,
+  );
+  DbContactDraftTargetLink copyWithCompanion(
+    DbContactDraftTargetLinksCompanion data,
+  ) {
+    return DbContactDraftTargetLink(
+      draftId: data.draftId.present ? data.draftId.value : this.draftId,
+      targetId: data.targetId.present ? data.targetId.value : this.targetId,
+      targetType: data.targetType.present
+          ? data.targetType.value
+          : this.targetType,
+      responseLevel: data.responseLevel.present
+          ? data.responseLevel.value
+          : this.responseLevel,
+      followUpConsent: data.followUpConsent.present
+          ? data.followUpConsent.value
+          : this.followUpConsent,
+      institutionRepresentativeConfirmed:
+          data.institutionRepresentativeConfirmed.present
+          ? data.institutionRepresentativeConfirmed.value
+          : this.institutionRepresentativeConfirmed,
+      confirmStageZero: data.confirmStageZero.present
+          ? data.confirmStageZero.value
+          : this.confirmStageZero,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbContactDraftTargetLink(')
+          ..write('draftId: $draftId, ')
+          ..write('targetId: $targetId, ')
+          ..write('targetType: $targetType, ')
+          ..write('responseLevel: $responseLevel, ')
+          ..write('followUpConsent: $followUpConsent, ')
+          ..write(
+            'institutionRepresentativeConfirmed: $institutionRepresentativeConfirmed, ',
+          )
+          ..write('confirmStageZero: $confirmStageZero')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    draftId,
+    targetId,
+    targetType,
+    responseLevel,
+    followUpConsent,
+    institutionRepresentativeConfirmed,
+    confirmStageZero,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DbContactDraftTargetLink &&
+          other.draftId == this.draftId &&
+          other.targetId == this.targetId &&
+          other.targetType == this.targetType &&
+          other.responseLevel == this.responseLevel &&
+          other.followUpConsent == this.followUpConsent &&
+          other.institutionRepresentativeConfirmed ==
+              this.institutionRepresentativeConfirmed &&
+          other.confirmStageZero == this.confirmStageZero);
+}
+
+class DbContactDraftTargetLinksCompanion
+    extends UpdateCompanion<DbContactDraftTargetLink> {
+  final Value<String> draftId;
+  final Value<String> targetId;
+  final Value<String> targetType;
+  final Value<int?> responseLevel;
+  final Value<String> followUpConsent;
+  final Value<bool> institutionRepresentativeConfirmed;
+  final Value<bool> confirmStageZero;
+  final Value<int> rowid;
+  const DbContactDraftTargetLinksCompanion({
+    this.draftId = const Value.absent(),
+    this.targetId = const Value.absent(),
+    this.targetType = const Value.absent(),
+    this.responseLevel = const Value.absent(),
+    this.followUpConsent = const Value.absent(),
+    this.institutionRepresentativeConfirmed = const Value.absent(),
+    this.confirmStageZero = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DbContactDraftTargetLinksCompanion.insert({
+    required String draftId,
+    required String targetId,
+    required String targetType,
+    this.responseLevel = const Value.absent(),
+    required String followUpConsent,
+    required bool institutionRepresentativeConfirmed,
+    required bool confirmStageZero,
+    this.rowid = const Value.absent(),
+  }) : draftId = Value(draftId),
+       targetId = Value(targetId),
+       targetType = Value(targetType),
+       followUpConsent = Value(followUpConsent),
+       institutionRepresentativeConfirmed = Value(
+         institutionRepresentativeConfirmed,
+       ),
+       confirmStageZero = Value(confirmStageZero);
+  static Insertable<DbContactDraftTargetLink> custom({
+    Expression<String>? draftId,
+    Expression<String>? targetId,
+    Expression<String>? targetType,
+    Expression<int>? responseLevel,
+    Expression<String>? followUpConsent,
+    Expression<bool>? institutionRepresentativeConfirmed,
+    Expression<bool>? confirmStageZero,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (draftId != null) 'draft_id': draftId,
+      if (targetId != null) 'target_id': targetId,
+      if (targetType != null) 'target_type': targetType,
+      if (responseLevel != null) 'response_level': responseLevel,
+      if (followUpConsent != null) 'follow_up_consent': followUpConsent,
+      if (institutionRepresentativeConfirmed != null)
+        'institution_representative_confirmed':
+            institutionRepresentativeConfirmed,
+      if (confirmStageZero != null) 'confirm_stage_zero': confirmStageZero,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DbContactDraftTargetLinksCompanion copyWith({
+    Value<String>? draftId,
+    Value<String>? targetId,
+    Value<String>? targetType,
+    Value<int?>? responseLevel,
+    Value<String>? followUpConsent,
+    Value<bool>? institutionRepresentativeConfirmed,
+    Value<bool>? confirmStageZero,
+    Value<int>? rowid,
+  }) {
+    return DbContactDraftTargetLinksCompanion(
+      draftId: draftId ?? this.draftId,
+      targetId: targetId ?? this.targetId,
+      targetType: targetType ?? this.targetType,
+      responseLevel: responseLevel ?? this.responseLevel,
+      followUpConsent: followUpConsent ?? this.followUpConsent,
+      institutionRepresentativeConfirmed:
+          institutionRepresentativeConfirmed ??
+          this.institutionRepresentativeConfirmed,
+      confirmStageZero: confirmStageZero ?? this.confirmStageZero,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (draftId.present) {
+      map['draft_id'] = Variable<String>(draftId.value);
+    }
+    if (targetId.present) {
+      map['target_id'] = Variable<String>(targetId.value);
+    }
+    if (targetType.present) {
+      map['target_type'] = Variable<String>(targetType.value);
+    }
+    if (responseLevel.present) {
+      map['response_level'] = Variable<int>(responseLevel.value);
+    }
+    if (followUpConsent.present) {
+      map['follow_up_consent'] = Variable<String>(followUpConsent.value);
+    }
+    if (institutionRepresentativeConfirmed.present) {
+      map['institution_representative_confirmed'] = Variable<bool>(
+        institutionRepresentativeConfirmed.value,
+      );
+    }
+    if (confirmStageZero.present) {
+      map['confirm_stage_zero'] = Variable<bool>(confirmStageZero.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbContactDraftTargetLinksCompanion(')
+          ..write('draftId: $draftId, ')
+          ..write('targetId: $targetId, ')
+          ..write('targetType: $targetType, ')
+          ..write('responseLevel: $responseLevel, ')
+          ..write('followUpConsent: $followUpConsent, ')
+          ..write(
+            'institutionRepresentativeConfirmed: $institutionRepresentativeConfirmed, ',
+          )
+          ..write('confirmStageZero: $confirmStageZero, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $DbUsersTable extends DbUsers with TableInfo<$DbUsersTable, DbUser> {
   @override
   final GeneratedDatabase attachedDatabase;
@@ -16026,6 +17142,10 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
   );
   late final $DbContactDraftAnswersTable dbContactDraftAnswers =
       $DbContactDraftAnswersTable(this);
+  late final $DbContactTargetLinksTable dbContactTargetLinks =
+      $DbContactTargetLinksTable(this);
+  late final $DbContactDraftTargetLinksTable dbContactDraftTargetLinks =
+      $DbContactDraftTargetLinksTable(this);
   late final Index contactDraftsOwnerUpdated = Index(
     'contact_drafts_owner_updated',
     'CREATE INDEX contact_drafts_owner_updated ON db_contact_drafts (app_user_id, abandoned_at_utc, updated_at_utc)',
@@ -16195,6 +17315,8 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
     dbContactRevisionConflicts,
     dbContactDrafts,
     dbContactDraftAnswers,
+    dbContactTargetLinks,
+    dbContactDraftTargetLinks,
     contactDraftsOwnerUpdated,
     contactRecordsPersonalPeriod,
     contactAttemptsPersonalPeriod,
@@ -16869,6 +17991,38 @@ final class $$DbContactRecordsTableReferences
   }
 
   static MultiTypedResultKey<
+    $DbContactTargetLinksTable,
+    List<DbContactTargetLink>
+  >
+  _dbContactTargetLinksRefsTable(
+    _$LocalDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.dbContactTargetLinks,
+    aliasName:
+        'db_contact_records__contact_id__db_contact_target_links__contact_id',
+  );
+
+  $$DbContactTargetLinksTableProcessedTableManager
+  get dbContactTargetLinksRefs {
+    final manager =
+        $$DbContactTargetLinksTableTableManager(
+          $_db,
+          $_db.dbContactTargetLinks,
+        ).filter(
+          (f) => f.contactId.contactId.sqlEquals(
+            $_itemColumn<String>('contact_id')!,
+          ),
+        );
+
+    final cache = $_typedResult.readTableOrNull(
+      _dbContactTargetLinksRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<
     $DbContactRegionAssignmentsTable,
     List<DbContactRegionAssignment>
   >
@@ -17114,6 +18268,31 @@ class $$DbContactRecordsTableFilterComposer
                     $removeJoinBuilderFromRootComposer,
               ),
         );
+    return f(composer);
+  }
+
+  Expression<bool> dbContactTargetLinksRefs(
+    Expression<bool> Function($$DbContactTargetLinksTableFilterComposer f) f,
+  ) {
+    final $$DbContactTargetLinksTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.contactId,
+      referencedTable: $db.dbContactTargetLinks,
+      getReferencedColumn: (t) => t.contactId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbContactTargetLinksTableFilterComposer(
+            $db: $db,
+            $table: $db.dbContactTargetLinks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
     return f(composer);
   }
 
@@ -17466,6 +18645,32 @@ class $$DbContactRecordsTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> dbContactTargetLinksRefs<T extends Object>(
+    Expression<T> Function($$DbContactTargetLinksTableAnnotationComposer a) f,
+  ) {
+    final $$DbContactTargetLinksTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.contactId,
+          referencedTable: $db.dbContactTargetLinks,
+          getReferencedColumn: (t) => t.contactId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbContactTargetLinksTableAnnotationComposer(
+                $db: $db,
+                $table: $db.dbContactTargetLinks,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+
   Expression<T> dbContactRegionAssignmentsRefs<T extends Object>(
     Expression<T> Function(
       $$DbContactRegionAssignmentsTableAnnotationComposer a,
@@ -17514,6 +18719,7 @@ class $$DbContactRecordsTableTableManager
             bool dbContactRevisionsRefs,
             bool dbContactAnswersRefs,
             bool dbContactRevisionConflictsRefs,
+            bool dbContactTargetLinksRefs,
             bool dbContactRegionAssignmentsRefs,
           })
         > {
@@ -17640,6 +18846,7 @@ class $$DbContactRecordsTableTableManager
                 dbContactRevisionsRefs = false,
                 dbContactAnswersRefs = false,
                 dbContactRevisionConflictsRefs = false,
+                dbContactTargetLinksRefs = false,
                 dbContactRegionAssignmentsRefs = false,
               }) {
                 return PrefetchHooks(
@@ -17650,6 +18857,7 @@ class $$DbContactRecordsTableTableManager
                     if (dbContactAnswersRefs) db.dbContactAnswers,
                     if (dbContactRevisionConflictsRefs)
                       db.dbContactRevisionConflicts,
+                    if (dbContactTargetLinksRefs) db.dbContactTargetLinks,
                     if (dbContactRegionAssignmentsRefs)
                       db.dbContactRegionAssignments,
                   ],
@@ -17740,6 +18948,27 @@ class $$DbContactRecordsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (dbContactTargetLinksRefs)
+                        await $_getPrefetchedData<
+                          DbContactRecord,
+                          $DbContactRecordsTable,
+                          DbContactTargetLink
+                        >(
+                          currentTable: table,
+                          referencedTable: $$DbContactRecordsTableReferences
+                              ._dbContactTargetLinksRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$DbContactRecordsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).dbContactTargetLinksRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.contactId == item.contactId,
+                              ),
+                          typedResults: items,
+                        ),
                       if (dbContactRegionAssignmentsRefs)
                         await $_getPrefetchedData<
                           DbContactRecord,
@@ -17786,6 +19015,7 @@ typedef $$DbContactRecordsTableProcessedTableManager =
         bool dbContactRevisionsRefs,
         bool dbContactAnswersRefs,
         bool dbContactRevisionConflictsRefs,
+        bool dbContactTargetLinksRefs,
         bool dbContactRegionAssignmentsRefs,
       })
     >;
@@ -20494,6 +21724,36 @@ final class $$DbContactDraftsTableReferences
   }
 
   static MultiTypedResultKey<
+    $DbContactDraftTargetLinksTable,
+    List<DbContactDraftTargetLink>
+  >
+  _dbContactDraftTargetLinksRefsTable(
+    _$LocalDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.dbContactDraftTargetLinks,
+    aliasName:
+        'db_contact_drafts__draft_id__db_contact_draft_target_links__draft_id',
+  );
+
+  $$DbContactDraftTargetLinksTableProcessedTableManager
+  get dbContactDraftTargetLinksRefs {
+    final manager =
+        $$DbContactDraftTargetLinksTableTableManager(
+          $_db,
+          $_db.dbContactDraftTargetLinks,
+        ).filter(
+          (f) => f.draftId.draftId.sqlEquals($_itemColumn<String>('draft_id')!),
+        );
+
+    final cache = $_typedResult.readTableOrNull(
+      _dbContactDraftTargetLinksRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<
     $DbDraftRegionAssignmentsTable,
     List<DbDraftRegionAssignment>
   >
@@ -20690,6 +21950,33 @@ class $$DbContactDraftsTableFilterComposer
               }) => $$DbContactDraftAnswersTableFilterComposer(
                 $db: $db,
                 $table: $db.dbContactDraftAnswers,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+
+  Expression<bool> dbContactDraftTargetLinksRefs(
+    Expression<bool> Function($$DbContactDraftTargetLinksTableFilterComposer f)
+    f,
+  ) {
+    final $$DbContactDraftTargetLinksTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.draftId,
+          referencedTable: $db.dbContactDraftTargetLinks,
+          getReferencedColumn: (t) => t.draftId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbContactDraftTargetLinksTableFilterComposer(
+                $db: $db,
+                $table: $db.dbContactDraftTargetLinks,
                 $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
                 joinBuilder: joinBuilder,
                 $removeJoinBuilderFromRootComposer:
@@ -21036,6 +22323,33 @@ class $$DbContactDraftsTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> dbContactDraftTargetLinksRefs<T extends Object>(
+    Expression<T> Function($$DbContactDraftTargetLinksTableAnnotationComposer a)
+    f,
+  ) {
+    final $$DbContactDraftTargetLinksTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.draftId,
+          referencedTable: $db.dbContactDraftTargetLinks,
+          getReferencedColumn: (t) => t.draftId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DbContactDraftTargetLinksTableAnnotationComposer(
+                $db: $db,
+                $table: $db.dbContactDraftTargetLinks,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+
   Expression<T> dbDraftRegionAssignmentsRefs<T extends Object>(
     Expression<T> Function($$DbDraftRegionAssignmentsTableAnnotationComposer a)
     f,
@@ -21079,6 +22393,7 @@ class $$DbContactDraftsTableTableManager
           DbContactDraft,
           PrefetchHooks Function({
             bool dbContactDraftAnswersRefs,
+            bool dbContactDraftTargetLinksRefs,
             bool dbDraftRegionAssignmentsRefs,
           })
         > {
@@ -21230,12 +22545,15 @@ class $$DbContactDraftsTableTableManager
           prefetchHooksCallback:
               ({
                 dbContactDraftAnswersRefs = false,
+                dbContactDraftTargetLinksRefs = false,
                 dbDraftRegionAssignmentsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
                     if (dbContactDraftAnswersRefs) db.dbContactDraftAnswers,
+                    if (dbContactDraftTargetLinksRefs)
+                      db.dbContactDraftTargetLinks,
                     if (dbDraftRegionAssignmentsRefs)
                       db.dbDraftRegionAssignments,
                   ],
@@ -21257,6 +22575,27 @@ class $$DbContactDraftsTableTableManager
                                 table,
                                 p0,
                               ).dbContactDraftAnswersRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.draftId == item.draftId,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (dbContactDraftTargetLinksRefs)
+                        await $_getPrefetchedData<
+                          DbContactDraft,
+                          $DbContactDraftsTable,
+                          DbContactDraftTargetLink
+                        >(
+                          currentTable: table,
+                          referencedTable: $$DbContactDraftsTableReferences
+                              ._dbContactDraftTargetLinksRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$DbContactDraftsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).dbContactDraftTargetLinksRefs,
                           referencedItemsForCurrentItem:
                               (item, referencedItems) => referencedItems.where(
                                 (e) => e.draftId == item.draftId,
@@ -21306,6 +22645,7 @@ typedef $$DbContactDraftsTableProcessedTableManager =
       DbContactDraft,
       PrefetchHooks Function({
         bool dbContactDraftAnswersRefs,
+        bool dbContactDraftTargetLinksRefs,
         bool dbDraftRegionAssignmentsRefs,
       })
     >;
@@ -21738,6 +23078,817 @@ typedef $$DbContactDraftAnswersTableProcessedTableManager =
       $$DbContactDraftAnswersTableUpdateCompanionBuilder,
       (DbContactDraftAnswer, $$DbContactDraftAnswersTableReferences),
       DbContactDraftAnswer,
+      PrefetchHooks Function({bool draftId})
+    >;
+typedef $$DbContactTargetLinksTableCreateCompanionBuilder =
+    DbContactTargetLinksCompanion Function({
+      required String contactId,
+      required int revisionNumber,
+      required String targetId,
+      required String targetType,
+      Value<int?> responseLevel,
+      required String followUpConsent,
+      required bool institutionRepresentativeConfirmed,
+      required bool confirmStageZero,
+      Value<int> rowid,
+    });
+typedef $$DbContactTargetLinksTableUpdateCompanionBuilder =
+    DbContactTargetLinksCompanion Function({
+      Value<String> contactId,
+      Value<int> revisionNumber,
+      Value<String> targetId,
+      Value<String> targetType,
+      Value<int?> responseLevel,
+      Value<String> followUpConsent,
+      Value<bool> institutionRepresentativeConfirmed,
+      Value<bool> confirmStageZero,
+      Value<int> rowid,
+    });
+
+final class $$DbContactTargetLinksTableReferences
+    extends
+        BaseReferences<
+          _$LocalDatabase,
+          $DbContactTargetLinksTable,
+          DbContactTargetLink
+        > {
+  $$DbContactTargetLinksTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $DbContactRecordsTable _contactIdTable(_$LocalDatabase db) =>
+      db.dbContactRecords.createAlias(
+        'db_contact_target_links__contact_id__db_contact_records__contact_id',
+      );
+
+  $$DbContactRecordsTableProcessedTableManager get contactId {
+    final $_column = $_itemColumn<String>('contact_id')!;
+
+    final manager = $$DbContactRecordsTableTableManager(
+      $_db,
+      $_db.dbContactRecords,
+    ).filter((f) => f.contactId.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_contactIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$DbContactTargetLinksTableFilterComposer
+    extends Composer<_$LocalDatabase, $DbContactTargetLinksTable> {
+  $$DbContactTargetLinksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get revisionNumber => $composableBuilder(
+    column: $table.revisionNumber,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get targetId => $composableBuilder(
+    column: $table.targetId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get targetType => $composableBuilder(
+    column: $table.targetType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get responseLevel => $composableBuilder(
+    column: $table.responseLevel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get followUpConsent => $composableBuilder(
+    column: $table.followUpConsent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get institutionRepresentativeConfirmed =>
+      $composableBuilder(
+        column: $table.institutionRepresentativeConfirmed,
+        builder: (column) => ColumnFilters(column),
+      );
+
+  ColumnFilters<bool> get confirmStageZero => $composableBuilder(
+    column: $table.confirmStageZero,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$DbContactRecordsTableFilterComposer get contactId {
+    final $$DbContactRecordsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.contactId,
+      referencedTable: $db.dbContactRecords,
+      getReferencedColumn: (t) => t.contactId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbContactRecordsTableFilterComposer(
+            $db: $db,
+            $table: $db.dbContactRecords,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DbContactTargetLinksTableOrderingComposer
+    extends Composer<_$LocalDatabase, $DbContactTargetLinksTable> {
+  $$DbContactTargetLinksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get revisionNumber => $composableBuilder(
+    column: $table.revisionNumber,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get targetId => $composableBuilder(
+    column: $table.targetId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get targetType => $composableBuilder(
+    column: $table.targetType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get responseLevel => $composableBuilder(
+    column: $table.responseLevel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get followUpConsent => $composableBuilder(
+    column: $table.followUpConsent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get institutionRepresentativeConfirmed =>
+      $composableBuilder(
+        column: $table.institutionRepresentativeConfirmed,
+        builder: (column) => ColumnOrderings(column),
+      );
+
+  ColumnOrderings<bool> get confirmStageZero => $composableBuilder(
+    column: $table.confirmStageZero,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$DbContactRecordsTableOrderingComposer get contactId {
+    final $$DbContactRecordsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.contactId,
+      referencedTable: $db.dbContactRecords,
+      getReferencedColumn: (t) => t.contactId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbContactRecordsTableOrderingComposer(
+            $db: $db,
+            $table: $db.dbContactRecords,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DbContactTargetLinksTableAnnotationComposer
+    extends Composer<_$LocalDatabase, $DbContactTargetLinksTable> {
+  $$DbContactTargetLinksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get revisionNumber => $composableBuilder(
+    column: $table.revisionNumber,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get targetId =>
+      $composableBuilder(column: $table.targetId, builder: (column) => column);
+
+  GeneratedColumn<String> get targetType => $composableBuilder(
+    column: $table.targetType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get responseLevel => $composableBuilder(
+    column: $table.responseLevel,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get followUpConsent => $composableBuilder(
+    column: $table.followUpConsent,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get institutionRepresentativeConfirmed =>
+      $composableBuilder(
+        column: $table.institutionRepresentativeConfirmed,
+        builder: (column) => column,
+      );
+
+  GeneratedColumn<bool> get confirmStageZero => $composableBuilder(
+    column: $table.confirmStageZero,
+    builder: (column) => column,
+  );
+
+  $$DbContactRecordsTableAnnotationComposer get contactId {
+    final $$DbContactRecordsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.contactId,
+      referencedTable: $db.dbContactRecords,
+      getReferencedColumn: (t) => t.contactId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbContactRecordsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.dbContactRecords,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DbContactTargetLinksTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $DbContactTargetLinksTable,
+          DbContactTargetLink,
+          $$DbContactTargetLinksTableFilterComposer,
+          $$DbContactTargetLinksTableOrderingComposer,
+          $$DbContactTargetLinksTableAnnotationComposer,
+          $$DbContactTargetLinksTableCreateCompanionBuilder,
+          $$DbContactTargetLinksTableUpdateCompanionBuilder,
+          (DbContactTargetLink, $$DbContactTargetLinksTableReferences),
+          DbContactTargetLink,
+          PrefetchHooks Function({bool contactId})
+        > {
+  $$DbContactTargetLinksTableTableManager(
+    _$LocalDatabase db,
+    $DbContactTargetLinksTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DbContactTargetLinksTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DbContactTargetLinksTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$DbContactTargetLinksTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> contactId = const Value.absent(),
+                Value<int> revisionNumber = const Value.absent(),
+                Value<String> targetId = const Value.absent(),
+                Value<String> targetType = const Value.absent(),
+                Value<int?> responseLevel = const Value.absent(),
+                Value<String> followUpConsent = const Value.absent(),
+                Value<bool> institutionRepresentativeConfirmed =
+                    const Value.absent(),
+                Value<bool> confirmStageZero = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbContactTargetLinksCompanion(
+                contactId: contactId,
+                revisionNumber: revisionNumber,
+                targetId: targetId,
+                targetType: targetType,
+                responseLevel: responseLevel,
+                followUpConsent: followUpConsent,
+                institutionRepresentativeConfirmed:
+                    institutionRepresentativeConfirmed,
+                confirmStageZero: confirmStageZero,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String contactId,
+                required int revisionNumber,
+                required String targetId,
+                required String targetType,
+                Value<int?> responseLevel = const Value.absent(),
+                required String followUpConsent,
+                required bool institutionRepresentativeConfirmed,
+                required bool confirmStageZero,
+                Value<int> rowid = const Value.absent(),
+              }) => DbContactTargetLinksCompanion.insert(
+                contactId: contactId,
+                revisionNumber: revisionNumber,
+                targetId: targetId,
+                targetType: targetType,
+                responseLevel: responseLevel,
+                followUpConsent: followUpConsent,
+                institutionRepresentativeConfirmed:
+                    institutionRepresentativeConfirmed,
+                confirmStageZero: confirmStageZero,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$DbContactTargetLinksTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({contactId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (contactId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.contactId,
+                                referencedTable:
+                                    $$DbContactTargetLinksTableReferences
+                                        ._contactIdTable(db),
+                                referencedColumn:
+                                    $$DbContactTargetLinksTableReferences
+                                        ._contactIdTable(db)
+                                        .contactId,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$DbContactTargetLinksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $DbContactTargetLinksTable,
+      DbContactTargetLink,
+      $$DbContactTargetLinksTableFilterComposer,
+      $$DbContactTargetLinksTableOrderingComposer,
+      $$DbContactTargetLinksTableAnnotationComposer,
+      $$DbContactTargetLinksTableCreateCompanionBuilder,
+      $$DbContactTargetLinksTableUpdateCompanionBuilder,
+      (DbContactTargetLink, $$DbContactTargetLinksTableReferences),
+      DbContactTargetLink,
+      PrefetchHooks Function({bool contactId})
+    >;
+typedef $$DbContactDraftTargetLinksTableCreateCompanionBuilder =
+    DbContactDraftTargetLinksCompanion Function({
+      required String draftId,
+      required String targetId,
+      required String targetType,
+      Value<int?> responseLevel,
+      required String followUpConsent,
+      required bool institutionRepresentativeConfirmed,
+      required bool confirmStageZero,
+      Value<int> rowid,
+    });
+typedef $$DbContactDraftTargetLinksTableUpdateCompanionBuilder =
+    DbContactDraftTargetLinksCompanion Function({
+      Value<String> draftId,
+      Value<String> targetId,
+      Value<String> targetType,
+      Value<int?> responseLevel,
+      Value<String> followUpConsent,
+      Value<bool> institutionRepresentativeConfirmed,
+      Value<bool> confirmStageZero,
+      Value<int> rowid,
+    });
+
+final class $$DbContactDraftTargetLinksTableReferences
+    extends
+        BaseReferences<
+          _$LocalDatabase,
+          $DbContactDraftTargetLinksTable,
+          DbContactDraftTargetLink
+        > {
+  $$DbContactDraftTargetLinksTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $DbContactDraftsTable _draftIdTable(_$LocalDatabase db) =>
+      db.dbContactDrafts.createAlias(
+        'db_contact_draft_target_links__draft_id__db_contact_drafts__draft_id',
+      );
+
+  $$DbContactDraftsTableProcessedTableManager get draftId {
+    final $_column = $_itemColumn<String>('draft_id')!;
+
+    final manager = $$DbContactDraftsTableTableManager(
+      $_db,
+      $_db.dbContactDrafts,
+    ).filter((f) => f.draftId.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_draftIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$DbContactDraftTargetLinksTableFilterComposer
+    extends Composer<_$LocalDatabase, $DbContactDraftTargetLinksTable> {
+  $$DbContactDraftTargetLinksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get targetId => $composableBuilder(
+    column: $table.targetId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get targetType => $composableBuilder(
+    column: $table.targetType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get responseLevel => $composableBuilder(
+    column: $table.responseLevel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get followUpConsent => $composableBuilder(
+    column: $table.followUpConsent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get institutionRepresentativeConfirmed =>
+      $composableBuilder(
+        column: $table.institutionRepresentativeConfirmed,
+        builder: (column) => ColumnFilters(column),
+      );
+
+  ColumnFilters<bool> get confirmStageZero => $composableBuilder(
+    column: $table.confirmStageZero,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$DbContactDraftsTableFilterComposer get draftId {
+    final $$DbContactDraftsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.draftId,
+      referencedTable: $db.dbContactDrafts,
+      getReferencedColumn: (t) => t.draftId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbContactDraftsTableFilterComposer(
+            $db: $db,
+            $table: $db.dbContactDrafts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DbContactDraftTargetLinksTableOrderingComposer
+    extends Composer<_$LocalDatabase, $DbContactDraftTargetLinksTable> {
+  $$DbContactDraftTargetLinksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get targetId => $composableBuilder(
+    column: $table.targetId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get targetType => $composableBuilder(
+    column: $table.targetType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get responseLevel => $composableBuilder(
+    column: $table.responseLevel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get followUpConsent => $composableBuilder(
+    column: $table.followUpConsent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get institutionRepresentativeConfirmed =>
+      $composableBuilder(
+        column: $table.institutionRepresentativeConfirmed,
+        builder: (column) => ColumnOrderings(column),
+      );
+
+  ColumnOrderings<bool> get confirmStageZero => $composableBuilder(
+    column: $table.confirmStageZero,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$DbContactDraftsTableOrderingComposer get draftId {
+    final $$DbContactDraftsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.draftId,
+      referencedTable: $db.dbContactDrafts,
+      getReferencedColumn: (t) => t.draftId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbContactDraftsTableOrderingComposer(
+            $db: $db,
+            $table: $db.dbContactDrafts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DbContactDraftTargetLinksTableAnnotationComposer
+    extends Composer<_$LocalDatabase, $DbContactDraftTargetLinksTable> {
+  $$DbContactDraftTargetLinksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get targetId =>
+      $composableBuilder(column: $table.targetId, builder: (column) => column);
+
+  GeneratedColumn<String> get targetType => $composableBuilder(
+    column: $table.targetType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get responseLevel => $composableBuilder(
+    column: $table.responseLevel,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get followUpConsent => $composableBuilder(
+    column: $table.followUpConsent,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get institutionRepresentativeConfirmed =>
+      $composableBuilder(
+        column: $table.institutionRepresentativeConfirmed,
+        builder: (column) => column,
+      );
+
+  GeneratedColumn<bool> get confirmStageZero => $composableBuilder(
+    column: $table.confirmStageZero,
+    builder: (column) => column,
+  );
+
+  $$DbContactDraftsTableAnnotationComposer get draftId {
+    final $$DbContactDraftsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.draftId,
+      referencedTable: $db.dbContactDrafts,
+      getReferencedColumn: (t) => t.draftId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DbContactDraftsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.dbContactDrafts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DbContactDraftTargetLinksTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $DbContactDraftTargetLinksTable,
+          DbContactDraftTargetLink,
+          $$DbContactDraftTargetLinksTableFilterComposer,
+          $$DbContactDraftTargetLinksTableOrderingComposer,
+          $$DbContactDraftTargetLinksTableAnnotationComposer,
+          $$DbContactDraftTargetLinksTableCreateCompanionBuilder,
+          $$DbContactDraftTargetLinksTableUpdateCompanionBuilder,
+          (
+            DbContactDraftTargetLink,
+            $$DbContactDraftTargetLinksTableReferences,
+          ),
+          DbContactDraftTargetLink,
+          PrefetchHooks Function({bool draftId})
+        > {
+  $$DbContactDraftTargetLinksTableTableManager(
+    _$LocalDatabase db,
+    $DbContactDraftTargetLinksTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DbContactDraftTargetLinksTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$DbContactDraftTargetLinksTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$DbContactDraftTargetLinksTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> draftId = const Value.absent(),
+                Value<String> targetId = const Value.absent(),
+                Value<String> targetType = const Value.absent(),
+                Value<int?> responseLevel = const Value.absent(),
+                Value<String> followUpConsent = const Value.absent(),
+                Value<bool> institutionRepresentativeConfirmed =
+                    const Value.absent(),
+                Value<bool> confirmStageZero = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbContactDraftTargetLinksCompanion(
+                draftId: draftId,
+                targetId: targetId,
+                targetType: targetType,
+                responseLevel: responseLevel,
+                followUpConsent: followUpConsent,
+                institutionRepresentativeConfirmed:
+                    institutionRepresentativeConfirmed,
+                confirmStageZero: confirmStageZero,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String draftId,
+                required String targetId,
+                required String targetType,
+                Value<int?> responseLevel = const Value.absent(),
+                required String followUpConsent,
+                required bool institutionRepresentativeConfirmed,
+                required bool confirmStageZero,
+                Value<int> rowid = const Value.absent(),
+              }) => DbContactDraftTargetLinksCompanion.insert(
+                draftId: draftId,
+                targetId: targetId,
+                targetType: targetType,
+                responseLevel: responseLevel,
+                followUpConsent: followUpConsent,
+                institutionRepresentativeConfirmed:
+                    institutionRepresentativeConfirmed,
+                confirmStageZero: confirmStageZero,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$DbContactDraftTargetLinksTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({draftId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (draftId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.draftId,
+                                referencedTable:
+                                    $$DbContactDraftTargetLinksTableReferences
+                                        ._draftIdTable(db),
+                                referencedColumn:
+                                    $$DbContactDraftTargetLinksTableReferences
+                                        ._draftIdTable(db)
+                                        .draftId,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$DbContactDraftTargetLinksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $DbContactDraftTargetLinksTable,
+      DbContactDraftTargetLink,
+      $$DbContactDraftTargetLinksTableFilterComposer,
+      $$DbContactDraftTargetLinksTableOrderingComposer,
+      $$DbContactDraftTargetLinksTableAnnotationComposer,
+      $$DbContactDraftTargetLinksTableCreateCompanionBuilder,
+      $$DbContactDraftTargetLinksTableUpdateCompanionBuilder,
+      (DbContactDraftTargetLink, $$DbContactDraftTargetLinksTableReferences),
+      DbContactDraftTargetLink,
       PrefetchHooks Function({bool draftId})
     >;
 typedef $$DbUsersTableCreateCompanionBuilder =
@@ -26567,6 +28718,13 @@ class $LocalDatabaseManager {
       $$DbContactDraftsTableTableManager(_db, _db.dbContactDrafts);
   $$DbContactDraftAnswersTableTableManager get dbContactDraftAnswers =>
       $$DbContactDraftAnswersTableTableManager(_db, _db.dbContactDraftAnswers);
+  $$DbContactTargetLinksTableTableManager get dbContactTargetLinks =>
+      $$DbContactTargetLinksTableTableManager(_db, _db.dbContactTargetLinks);
+  $$DbContactDraftTargetLinksTableTableManager get dbContactDraftTargetLinks =>
+      $$DbContactDraftTargetLinksTableTableManager(
+        _db,
+        _db.dbContactDraftTargetLinks,
+      );
   $$DbUsersTableTableManager get dbUsers =>
       $$DbUsersTableTableManager(_db, _db.dbUsers);
   $$DbConversationRecordsTableTableManager get dbConversationRecords =>

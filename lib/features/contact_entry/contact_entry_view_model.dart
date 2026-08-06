@@ -8,11 +8,14 @@ import '../../foundation/runtime_values.dart';
 import '../../questionnaires/questionnaire_contract.dart';
 import '../../regions/contact_region_resolver.dart';
 import '../../services/location_service.dart';
+import '../../targets/promotion_target.dart';
 import '../contact_journal/contact_journal.dart';
 import '../contact_journal/contact_models.dart';
 
 /// 接触录入的自动保存状态。Widget 只负责把状态翻译成图标和文字。
 enum ContactDraftSaveState { untouched, waiting, saving, saved, failed }
+
+enum ContactTargetLoadState { idle, loading, loaded, failed }
 
 /// 接触录入模块需要的最小持久化接口。
 ///
@@ -71,10 +74,15 @@ final class ContactEntryViewState {
     this.sourceAttemptId,
     this.questionnaireVersion,
     Iterable<QuestionnaireAnswer> answers = const [],
+    Iterable<ContactTargetLink> targetLinks = const [],
+    Iterable<PromotionTargetProfile> assignedTargets = const [],
+    this.targetLoadState = ContactTargetLoadState.idle,
     QuestionnaireEvaluation? questionnaireEvaluation,
     Iterable<QuestionnaireAnswer> pendingQuestionnaireAnswersToClear = const [],
     this.canUndoQuestionnaireClear = false,
   }) : answers = List.unmodifiable(answers),
+       targetLinks = List.unmodifiable(targetLinks),
+       assignedTargets = List.unmodifiable(assignedTargets),
        pendingQuestionnaireAnswersToClear = List.unmodifiable(
          pendingQuestionnaireAnswersToClear,
        ),
@@ -99,6 +107,9 @@ final class ContactEntryViewState {
   final String? sourceAttemptId;
   final QuestionnaireVersion? questionnaireVersion;
   final List<QuestionnaireAnswer> answers;
+  final List<ContactTargetLink> targetLinks;
+  final List<PromotionTargetProfile> assignedTargets;
+  final ContactTargetLoadState targetLoadState;
   final QuestionnaireEvaluation questionnaireEvaluation;
   final List<QuestionnaireAnswer> pendingQuestionnaireAnswersToClear;
   final bool canUndoQuestionnaireClear;
@@ -184,6 +195,7 @@ final class ContactEntryViewModel extends ChangeNotifier {
     String? sourceAttemptId,
     ContactChannel? initialChannel,
     QuestionnaireVersion? questionnaireVersion,
+    PromotionTargetGateway? targetGateway,
     Duration questionnaireUndoDuration = const Duration(seconds: 10),
   }) : this._(
          clock,
@@ -197,6 +209,7 @@ final class ContactEntryViewModel extends ChangeNotifier {
          sourceAttemptId,
          initialChannel,
          questionnaireVersion,
+         targetGateway,
          questionnaireUndoDuration,
        );
 
@@ -212,6 +225,7 @@ final class ContactEntryViewModel extends ChangeNotifier {
     this._initialSourceAttemptId,
     this._initialChannel,
     this._questionnaireVersion,
+    this._targetGateway,
     this._questionnaireUndoDuration,
   );
 
@@ -226,6 +240,7 @@ final class ContactEntryViewModel extends ChangeNotifier {
   final String? _initialSourceAttemptId;
   final ContactChannel? _initialChannel;
   final QuestionnaireVersion? _questionnaireVersion;
+  final PromotionTargetGateway? _targetGateway;
   final Duration _questionnaireUndoDuration;
 
   Timer? _saveTimer;
@@ -241,6 +256,9 @@ final class ContactEntryViewModel extends ChangeNotifier {
   int? _reachCount;
   int? _interestLevel;
   final Map<String, QuestionnaireAnswer> _answers = {};
+  final List<ContactTargetLink> _targetLinks = [];
+  List<PromotionTargetProfile> _assignedTargets = const [];
+  ContactTargetLoadState _targetLoadState = ContactTargetLoadState.idle;
   QuestionnaireAnswerTransition? _pendingQuestionnaireTransition;
   Map<String, QuestionnaireAnswer>? _questionnaireUndoAnswers;
   ContactDraftSyncMode _syncMode = ContactDraftSyncMode.accountPrivate;
@@ -278,6 +296,9 @@ final class ContactEntryViewModel extends ChangeNotifier {
       sourceAttemptId: _sourceAttemptId,
       questionnaireVersion: _questionnaireVersion,
       answers: orderedAnswers,
+      targetLinks: _targetLinks,
+      assignedTargets: _assignedTargets,
+      targetLoadState: _targetLoadState,
       questionnaireEvaluation: questionnaireEvaluation,
       pendingQuestionnaireAnswersToClear:
           _pendingQuestionnaireTransition?.answersToClear ?? const [],
@@ -311,6 +332,9 @@ final class ContactEntryViewModel extends ChangeNotifier {
           (answer) => MapEntry(answer.questionId, answer),
         ),
       );
+    _targetLinks
+      ..clear()
+      ..addAll(draft?.targetLinks ?? const []);
     _syncMode = draft?.syncMode ?? ContactDraftSyncMode.accountPrivate;
     if (draft != null) {
       _saveState = ContactDraftSaveState.saved;
@@ -319,6 +343,7 @@ final class ContactEntryViewModel extends ChangeNotifier {
       _occurredAtUtc = draft!.occurredAtUtc!.toUtc();
       _occurredTimeZone = draft.occurredTimeZone;
       _notify();
+      unawaited(loadAssignedTargets());
       return;
     }
     try {
@@ -330,6 +355,125 @@ final class ContactEntryViewModel extends ChangeNotifier {
       _initializationFailure = 'device_time_zone_unavailable';
     }
     _notify();
+    unawaited(loadAssignedTargets());
+  }
+
+  Future<void> loadAssignedTargets() async {
+    final gateway = _targetGateway;
+    if (gateway == null || _disposed) return;
+    _targetLoadState = ContactTargetLoadState.loading;
+    _notify();
+    late final PromotionTargetResult<List<PromotionTargetProfile>> result;
+    try {
+      result = await gateway.loadAssigned();
+    } catch (_) {
+      if (_disposed) return;
+      _assignedTargets = const [];
+      _targetLoadState = ContactTargetLoadState.failed;
+      _notify();
+      return;
+    }
+    if (_disposed) return;
+    switch (result) {
+      case PromotionTargetSuccess<List<PromotionTargetProfile>>(:final value):
+        _assignedTargets = List.unmodifiable(value);
+        _targetLoadState = ContactTargetLoadState.loaded;
+      case PromotionTargetRejected<List<PromotionTargetProfile>>():
+        _assignedTargets = const [];
+        _targetLoadState = ContactTargetLoadState.failed;
+    }
+    _notify();
+  }
+
+  bool linkTarget(
+    PromotionTargetProfile target, {
+    required bool confirmStageZero,
+  }) {
+    if (_targetLinks.any((link) => link.targetId == target.id)) return true;
+    if (!target.hasCurrentProjectRelationship && !confirmStageZero) {
+      return false;
+    }
+    _targetLinks.add(
+      ContactTargetLink(
+        targetId: target.id,
+        targetType: target.type,
+        confirmStageZero: confirmStageZero,
+      ),
+    );
+    _markEdited();
+    return true;
+  }
+
+  void unlinkTarget(String targetId) {
+    final before = _targetLinks.length;
+    _targetLinks.removeWhere((link) => link.targetId == targetId);
+    if (_targetLinks.length != before) _markEdited();
+  }
+
+  void setTargetResponse(String targetId, int? responseLevel) {
+    if (responseLevel != null && (responseLevel < 0 || responseLevel > 4)) {
+      return;
+    }
+    _replaceTargetLink(targetId, (link) {
+      if (link.targetType == PromotionTargetType.institution &&
+          responseLevel != null &&
+          !link.institutionRepresentativeConfirmed) {
+        return link;
+      }
+      return ContactTargetLink(
+        targetId: link.targetId,
+        targetType: link.targetType,
+        responseLevel: responseLevel,
+        followUpConsent: link.followUpConsent,
+        institutionRepresentativeConfirmed:
+            link.institutionRepresentativeConfirmed,
+        confirmStageZero: link.confirmStageZero,
+      );
+    });
+  }
+
+  void setTargetFollowUpConsent(
+    String targetId,
+    ContactFollowUpConsent consent,
+  ) {
+    _replaceTargetLink(
+      targetId,
+      (link) => ContactTargetLink(
+        targetId: link.targetId,
+        targetType: link.targetType,
+        responseLevel: link.responseLevel,
+        followUpConsent: consent,
+        institutionRepresentativeConfirmed:
+            link.institutionRepresentativeConfirmed,
+        confirmStageZero: link.confirmStageZero,
+      ),
+    );
+  }
+
+  void setInstitutionRepresentativeConfirmed(String targetId, bool confirmed) {
+    _replaceTargetLink(
+      targetId,
+      (link) => ContactTargetLink(
+        targetId: link.targetId,
+        targetType: link.targetType,
+        responseLevel: confirmed ? link.responseLevel : null,
+        followUpConsent: link.followUpConsent,
+        institutionRepresentativeConfirmed: confirmed,
+        confirmStageZero: link.confirmStageZero,
+      ),
+    );
+  }
+
+  void _replaceTargetLink(
+    String targetId,
+    ContactTargetLink Function(ContactTargetLink link) replace,
+  ) {
+    final index = _targetLinks.indexWhere((link) => link.targetId == targetId);
+    if (index < 0) return;
+    final next = replace(_targetLinks[index]);
+    if (next == _targetLinks[index]) return;
+    _targetLinks[index] = next;
+    _markEdited();
   }
 
   void setOccurredAtLocal(DateTime localTime) {
@@ -605,6 +749,7 @@ final class ContactEntryViewModel extends ChangeNotifier {
     syncMode: _syncMode,
     sourceAttemptId: _sourceAttemptId,
     answers: _answersForSave(),
+    targetLinks: List.unmodifiable(_targetLinks),
   );
 
   List<QuestionnaireAnswer> _answersForSave() {

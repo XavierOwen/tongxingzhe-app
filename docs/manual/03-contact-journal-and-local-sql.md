@@ -1,6 +1,6 @@
 # 第 3 章：接触和未获回应尝试如何在 SQLite 中分开保存
 
-本章解释 Slice 1 和 Slice 2 的本地数据模块。当前代码可以保存私有草稿、提交匿名接触、追加更正和作废，也可以把未获回应的直接联络保存为独立尝试。尝试和已作废接触不会进入有效接触统计。
+本章解释接触日志的本地数据模块。当前代码可以保存私有草稿、提交匿名或关联对象的接触、追加更正和作废，也可以把未获回应的直接联络保存为独立尝试。尝试和已作废接触不会进入有效接触统计。
 
 ## 1. `ContactJournal` 为什么是一个深模块
 
@@ -15,13 +15,14 @@
 - 保存未获回应的接触尝试，并在后来回应时建立关联；
 - 带原因更正或作废本人接触；
 - 列出并明确解决本人的跨设备接触修订冲突；
-- 读取当前投影、完整 revision 历史和个人期间汇总。
+- 读取当前投影、完整 revision 历史和个人期间汇总；
+- 在草稿、提交、修订、冲突解决和拉取中保留逐版本对象关联。
 
 公开入口保留在 `contact_journal.dart`。草稿生命周期的实现放在 [`contact_draft_operations.dart`](../../lib/features/contact_journal/contact_draft_operations.dart)，并通过 Dart 的 `part` 属于同一个 library。这样可以缩短单个文件，同时让草稿代码继续访问模块私有实现；它没有增加第二套数据库接口。
 
 模块接收真实 Drift 数据库、Clock 和 ID generator。测试使用真实 SQLite、固定时间和确定性 ID。测试可以稳定重现失败，不把测试条件带入正式代码。
 
-## 2. v15 的十七张现代接触、问卷、同步与区域表
+## 2. v17 的十九张现代接触、问卷、同步与区域表
 
 表结构定义在 [`contact_tables.dart`](../../lib/features/contact_journal/contact_tables.dart) 和 [`questionnaire_tables.dart`](../../lib/questionnaires/questionnaire_tables.dart)。Drift 根据这些定义生成 SQLite schema 和类型安全的 Dart row。
 
@@ -29,9 +30,11 @@
 | --- | --- | --- |
 | `db_contact_drafts` | 创建者、项目、问卷版本、未完成核心字段、可选来源尝试、同步模式、放弃期限 | 姓名、电话、邮箱 |
 | `db_contact_draft_answers` | 草稿中的类型化问卷答案与规则跳过原因 | 已提交接触答案 |
+| `db_contact_draft_target_links` | 草稿中的对象 ID、类型、可选当次反应、后续联系同意和阶段 0 确认 | 姓名、电话、邮箱、关系阶段历史 |
 | `db_contact_records` | 当前有效核心事实、归属、当前 revision | 草稿、PII、私人备注 |
 | `db_contact_attempts` | 未获回应的直接渠道、发生时间、首次提交时间、可选后来接触 | 触达人数、兴趣、问卷答案、关系阶段 |
 | `db_contact_revisions` | 每次提交、更正或作废的类型、原因、操作者、时间和完整核心快照 | 被覆盖后消失的历史 |
+| `db_contact_target_links` | 每个接触 revision 的对象关联完整快照 | 对象 PII、场次兴趣、触达人数 |
 | `db_contact_answers` | 问题 ID、回答状态、规则跳过原因、答案类型和值 | 含义不明的任意 JSON |
 | `db_contact_revision_conflicts` | 同字段并发更正的服务器与本机快照、冲突字段和解决状态 | 最后写入覆盖、token、无关项目的冲突 |
 | `db_questionnaire_versions` | 已发布版本 ID、项目、版本号和安装时间 | 可变问卷草稿、任意配置 JSON |
@@ -63,6 +66,7 @@
 - 触达人数；
 - 单次兴趣；
 - 问卷答案；
+- 至少一条对象关联；
 - 用户明确选择“仅本设备”。
 
 这条规则防止仅打开页面就产生空草稿。创建后的每次保存会更新原草稿，不生成第二个 ID。创建时间保持不变，最后修改时间向前推进。
@@ -89,7 +93,7 @@ Native Drift 读取日期时可能使用设备本地时区表示同一瞬间。`
 
 ## 5. 自动保存为何需要 transaction
 
-一份草稿包含主表行和零到多条问卷答案。创建或更新时，`ContactJournal` 在一个 SQLite transaction 内保存两部分。更新使用当前表单快照替换旧答案。
+一份草稿包含主表行、零到多条问卷答案和零到多条对象关联。创建或更新时，`ContactJournal` 在一个 SQLite transaction 内保存三部分。更新使用当前表单快照替换旧答案和旧关联。
 
 如果答案写入失败，主表变化也会回滚。UI 只有在 `saveDraft` 返回后才能显示“已保存”。正式表单在输入停止 350 毫秒后保存，在页面返回或 App 进入后台时立即排空待保存编辑。
 
@@ -113,13 +117,13 @@ Native Drift 读取日期时可能使用设备本地时区表示同一瞬间。`
 
 一次合法草稿提交按下列顺序执行：
 
-1. 读取创建者拥有的活动草稿及其答案；
+1. 读取创建者拥有的活动草稿、答案和对象关联；
 2. 执行完整接触校验；
 3. 写入接触当前投影；
 4. 写入 revision 1；
-5. 写入正式问卷答案；
+5. 写入正式问卷答案和 revision 1 的对象关联；
 6. 写入唯一的 `contact.submit.v1` Outbox 命令；
-7. 删除草稿答案和草稿主表行；
+7. 删除草稿答案、草稿对象关联和草稿主表行；
 8. transaction 成功后返回本地保存回执。
 
 第六步失败时，SQLite 会回滚第三步到第七步。测试先占用一个 `command_id`，再故意重复该 ID。提交失败后，正式接触不存在，原草稿仍在。更换命令 ID 后重试可以成功。
@@ -133,7 +137,7 @@ Native Drift 读取日期时可能使用设备本地时区表示同一瞬间。`
 更正在一个 transaction 内执行以下操作：
 
 1. 核对创建者、空间、项目、活动状态和当前 revision；
-2. 追加 `corrected` revision 和该版本答案；
+2. 追加 `corrected` revision、该版本答案和对象关联快照；
 3. 更新 `db_contact_records` 当前投影；
 4. 更新或清除规范区域外键；
 5. 写入 `contact.revise.v1` Outbox command。
@@ -162,6 +166,7 @@ Native Drift 读取日期时可能使用设备本地时区表示同一瞬间。`
 - 更正保留前后完整快照并按新发生时间重新归期；
 - 空原因和旧 base revision 不产生部分写入；
 - 作废保留接触与历史，但退出个人指标；
+- 对象关联随草稿、提交和修订保留完整快照，但不改变场次或触达；
 - 同字段冲突保留双方快照，并恢复服务器的精确 revision；
 - 选择任一版本或手动合并都追加新 revision；
 - 其他用户不能读取或修改接触历史与冲突。
@@ -221,15 +226,16 @@ WHERE app_user_id = :app_user_id
 
 兴趣是有序等级。核心分析先返回五档分布，不计算平均值。若以后显示兴趣算术指数，页面必须说明它额外假设相邻等级距离相等。
 
-## 13. v5 至 v16 如何安全升级
+## 13. v5 至 v17 如何安全升级
 
-v6 使用 expand-contract 新增已提交接触、revision、答案和 Outbox 表。v7 新增草稿和草稿答案表。v8 新增同步执行租约和按可信范围保存的 cursor。v9 新增草稿同步版本、Outbox 可信范围和三张区域表。v10 新增独立尝试表，并给草稿加入可选来源尝试。v11 给 revision 增加受约束的 `submitted`、`corrected`、`voided` 类型。v12 新增只属于当前用户与项目的接触修订冲突表。v13 扩展八种问卷题型的互斥值列，并加入不可变定义缓存。v14 给问题定义加入受限显示规则，并给两张答案表加入受约束的跳过原因。v15 加入管理端问卷工作副本；它只用于恢复尚未得到服务器确认的编辑，不是发布凭据。v16 给明确问卷升级生成的新草稿加入 nullable 来源 ID；旧数据没有可证明的升级关系，因此不回填。升级不删除五张 legacy 表，也不从旧宽表猜测现代接触、尝试、冲突、区域归属、问卷定义或草稿升级关系。
+v6 使用 expand-contract 新增已提交接触、revision、答案和 Outbox 表。v7 新增草稿和草稿答案表。v8 新增同步执行租约和按可信范围保存的 cursor。v9 新增草稿同步版本、Outbox 可信范围和三张区域表。v10 新增独立尝试表，并给草稿加入可选来源尝试。v11 给 revision 增加受约束的 `submitted`、`corrected`、`voided` 类型。v12 新增只属于当前用户与项目的接触修订冲突表。v13 扩展八种问卷题型的互斥值列，并加入不可变定义缓存。v14 给问题定义加入受限显示规则，并给两张答案表加入受约束的跳过原因。v15 加入管理端问卷工作副本；它只用于恢复尚未得到服务器确认的编辑，不是发布凭据。v16 给明确问卷升级生成的新草稿加入 nullable 来源 ID；旧数据没有可证明的升级关系，因此不回填。v17 新增草稿与 revision 对象关联表；旧接触没有可证明的对象对应关系，所以升级后保持零关联。升级不删除五张 legacy 表，也不从旧宽表猜测现代接触、尝试、冲突、区域归属、问卷定义、草稿升级关系或对象关联。
 
 当新列参与 `CHECK` 约束时，不能只运行 SQLite `ADD COLUMN`。migration 使用 Drift `TableMigration` 重建受影响的表并复制旧数据。跨多个版本升级时，重建步骤按当前表定义复制数据；旧版本缺少的每一列都必须通过 `newColumns` 提供默认表达式。否则 SQL 会引用旧表中不存在的列。
 
 [`local_database_migration_test.dart`](../../test/data/local_database_migration_test.dart) 保存四类证据：
 
-- 当前 v16 快照可以独立重建；
+- 当前 v17 快照可以独立重建；
+- v16 的旧接触与草稿升级后保持零对象关联；
 - v15 的旧草稿升级后保留，新的升级来源为空；
 - v14 的设置升级后保留，新的问卷工作副本表为空；
 - v13 的已提交答案与问卷定义升级后保留，新的显示规则和跳过原因为空；
@@ -241,8 +247,8 @@ v6 使用 expand-contract 新增已提交接触、revision、答案和 Outbox �
 - v6 的 synthetic 已提交接触升级后仍存在；
 - v5 的 synthetic 设置升级后仍存在，无法证明的现代区域表保持为空。
 
-机器可读快照位于 [`drift_schema_v16.json`](../../drift_schemas/drift_schema_v16.json)。CI 会重新导出当前 schema 并逐字比较，也会重新生成所有 migration 测试辅助代码。
+机器可读快照位于 [`drift_schema_v17.json`](../../drift_schemas/drift_schema_v17.json)。CI 会重新导出当前 schema 并逐字比较，也会重新生成所有 migration 测试辅助代码。
 
 ## 14. 当前边界
 
-v16 完成草稿、正式接触、独立接触尝试、追加更正、带原因作废、跨设备私有草稿、草稿冲突副本、接触修订的自动合并与显式冲突解决、版本化区域外键、八题型问卷答案、受限显示规则、管理端问卷工作副本、问卷升级来源、本机同步状态和远端 cursor。本地数据库应用层加密仍属后续切片。同步状态机和 Backend SQL 见[第 6 章](06-persistent-sync-and-backend-sql.md)，问卷设计与执行见[第 7 章](07-versioned-questionnaire-execution.md)。
+v17 完成草稿、正式接触、独立接触尝试、追加更正、带原因作废、跨设备私有草稿、草稿冲突副本、接触修订的自动合并与显式冲突解决、逐 revision 对象关联、版本化区域外键、八题型问卷答案、受限显示规则、管理端问卷工作副本、问卷升级来源、本机同步状态和远端 cursor。对象姓名与联系方式仍只从在线对象目录读取，不写入接触 SQLite 表。本地数据库应用层加密仍属后续切片。同步状态机和 Backend SQL 见[第 6 章](06-persistent-sync-and-backend-sql.md)，问卷设计与执行见[第 7 章](07-versioned-questionnaire-execution.md)。

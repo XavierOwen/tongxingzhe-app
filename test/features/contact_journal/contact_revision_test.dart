@@ -6,6 +6,7 @@ import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_journal.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
+import 'package:tongxingzhe_app/targets/promotion_target.dart';
 
 void main() {
   test('更正追加完整快照并按新发生时间重新归期', () async {
@@ -238,6 +239,90 @@ void main() {
     );
   });
 
+  test('对象关联随修订保存完整快照且不改变场次和触达', () async {
+    final database = _database();
+    final journal = _journal(
+      database,
+      now: DateTime.utc(2030, 1, 10, 18),
+      ids: ['contact-1', 'revision-1', 'command-1'],
+    );
+    await journal.submitAnonymousContact(
+      _submission(
+        occurredAtUtc: DateTime.utc(2030, 1, 9, 17),
+        reachCount: 5,
+        interestLevel: 2,
+        targetLinks: const [
+          ContactTargetLink(
+            targetId: 'target-person',
+            targetType: PromotionTargetType.person,
+            responseLevel: 4,
+            followUpConsent: ContactFollowUpConsent.yes,
+          ),
+          ContactTargetLink(
+            targetId: 'target-org',
+            targetType: PromotionTargetType.institution,
+            responseLevel: 1,
+            followUpConsent: ContactFollowUpConsent.no,
+            institutionRepresentativeConfirmed: true,
+            confirmStageZero: true,
+          ),
+        ],
+      ),
+    );
+
+    final submitted = await journal.contactById('contact-1');
+    expect(submitted!.targetLinks, hasLength(2));
+    final summary = await _summary(
+      journal,
+      fromUtc: DateTime.utc(2030, 1),
+      untilUtc: DateTime.utc(2030, 2),
+    );
+    expect(summary.contactSessionCount, 1);
+    expect(summary.reachCount, 5);
+
+    final submitPayload =
+        jsonDecode(
+              (await database.select(database.dbSyncOutbox).get())
+                  .single
+                  .payloadJson,
+            )
+            as Map<String, Object?>;
+    expect(submitPayload['target_links'], hasLength(2));
+    expect(submitPayload.toString(), isNot(contains('display_name')));
+    expect(submitPayload.toString(), isNot(contains('phone')));
+
+    final correctionJournal = _journal(
+      database,
+      now: DateTime.utc(2030, 1, 11, 18),
+      ids: ['revision-2', 'command-2'],
+    );
+    await correctionJournal.correctContact(
+      _correction(
+        reason: '更新对象反应',
+        baseRevision: 1,
+        reachCount: 5,
+        targetLinks: const [
+          ContactTargetLink(
+            targetId: 'target-person',
+            targetType: PromotionTargetType.person,
+            responseLevel: 3,
+            followUpConsent: ContactFollowUpConsent.refused,
+          ),
+        ],
+      ),
+    );
+
+    final current = await correctionJournal.contactById('contact-1');
+    expect(current!.targetLinks, hasLength(1));
+    expect(current.targetLinks.single.responseLevel, 3);
+    final history = await correctionJournal.listContactRevisions(
+      contactId: 'contact-1',
+      appUserId: 'app-user-1',
+    );
+    expect(history.first.targetLinks, hasLength(1));
+    expect(history.last.targetLinks, hasLength(2));
+  });
+
   test('其他用户不能读取、更正或作废接触历史', () async {
     final database = _database();
     final journal = _journal(
@@ -339,6 +424,7 @@ AnonymousContactSubmission _submission({
   required int reachCount,
   required int interestLevel,
   List<QuestionnaireAnswer> answers = const [],
+  List<ContactTargetLink> targetLinks = const [],
 }) {
   return AnonymousContactSubmission(
     appUserId: 'app-user-1',
@@ -353,6 +439,7 @@ AnonymousContactSubmission _submission({
     reachCount: reachCount,
     interestLevel: interestLevel,
     answers: answers,
+    targetLinks: targetLinks,
   );
 }
 
@@ -361,6 +448,7 @@ ContactCorrectionSubmission _correction({
   required String reason,
   required int baseRevision,
   required int reachCount,
+  List<ContactTargetLink> targetLinks = const [],
 }) {
   return ContactCorrectionSubmission(
     contactId: 'contact-1',
@@ -376,6 +464,7 @@ ContactCorrectionSubmission _correction({
     location: const NotApplicableContactLocation(),
     reachCount: reachCount,
     interestLevel: 2,
+    targetLinks: targetLinks,
   );
 }
 
