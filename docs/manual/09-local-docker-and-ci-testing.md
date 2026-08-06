@@ -192,6 +192,7 @@ node --test backend/server/dist/test/promotion-targets.test.js
 
 ```bash
 flutter test --no-pub \
+  test/plans/drift_personal_planning_cache_test.dart \
   test/features/plans/personal_action_plan_panel_test.dart \
   test/plans/http_personal_action_plan_gateway_test.dart
 
@@ -207,7 +208,7 @@ node --test backend/server/dist/test/personal-action-plans.test.js
 
 看到 `fixture：0021_personal_action_plans.sql` 表示脚本正在检查私人计划。该 fixture 会验证美国夏令时切换周只有 167 小时、后续设置在下一周期生效、边界采用半开区间、mutation 可安全重放，以及另一位用户不能读取计划。Docker 脚本还会在恢复库再次运行相同 fixture。
 
-这条切片没有修改 Drift schema，因此不需要生成新的 Drift snapshot。计划的离线缓存仍属于后续切片；不要把当前 HTTP／Widget 测试写成离线计划已经完成。
+只读离线计划缓存复用现有 `db_app_settings`，没有修改 Drift schema，因此不需要生成新的 Drift snapshot。`drift_personal_planning_cache_test.dart` 在测试进程的内存 SQLite 中检查 scope 隔离、远端空值、损坏缓存、仅网络故障回退，以及 `401/403` 后清除。只修改这层缓存时不需要启动 Docker；改动 Backend 或 PostgreSQL 周期函数时仍必须运行 Docker 套件。
 
 ### 5.4 验证同步提醒和逐设备通知开关
 
@@ -215,7 +216,8 @@ node --test backend/server/dist/test/personal-action-plans.test.js
 
 ```bash
 flutter test --no-pub \
-  test/app/reminder_notification_privacy_guard_test.dart \
+  test/app/private_session_data_guard_test.dart \
+  test/plans/drift_personal_planning_cache_test.dart \
   test/reminders/http_personal_action_reminder_gateway_test.dart \
   test/reminders/drift_device_reminder_preference_store_test.dart \
   test/reminders/reminder_schedule_math_test.dart \

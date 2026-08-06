@@ -108,6 +108,22 @@ void main() {
     );
   });
 
+  test('403 明确归为授权失效，供上层清除离线缓存', () async {
+    final gateway = HttpPersonalActionPlanGateway(
+      baseUri: Uri.parse('https://backend.example.test'),
+      identitySession: _identity(),
+      client: MockClient((_) async => http.Response('', 403)),
+    );
+    addTearDown(gateway.close);
+
+    final result = await gateway.load();
+
+    expect(
+      (result as PersonalActionPlanRejected).code,
+      PersonalActionPlanFailureCode.unauthorized,
+    );
+  });
+
   test('非 UTC 或结构不完整的计划响应失败关闭', () async {
     final invalid = Map<String, Object?>.from(_plan)
       ..['progress'] = {

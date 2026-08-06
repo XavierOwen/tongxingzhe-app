@@ -12,6 +12,7 @@ import '../identity/supabase/supabase_identity_session.dart';
 import '../platform/platform_capabilities.dart';
 import '../plans/http_personal_action_plan_gateway.dart';
 import '../plans/personal_action_plan.dart';
+import '../plans/personal_planning_cache.dart';
 import '../privacy/drift_offline_pii_lock_store.dart';
 import '../privacy/flutter_secure_value_store.dart';
 import '../privacy/offline_pii_vault.dart';
@@ -35,7 +36,7 @@ import '../targets/offline_promotion_target_gateway.dart';
 import '../targets/promotion_target.dart';
 import 'app_controller.dart';
 import 'legacy_demo_access.dart';
-import 'reminder_notification_privacy_guard.dart';
+import 'private_session_data_guard.dart';
 
 /// App 唯一的 composition root。
 ///
@@ -129,7 +130,7 @@ final class AppDependencies {
     PersonalActionPlanGateway? personalActionPlanGateway;
     PersonalActionReminderGateway? personalActionReminderGateway;
     ReminderNotificationScheduler? reminderNotificationScheduler;
-    ReminderNotificationPrivacyGuard? reminderNotificationPrivacyGuard;
+    PrivateSessionDataGuard? privateSessionDataGuard;
     OfflinePiiVault? offlinePiiVault;
     try {
       identitySession = await identitySessionFactory.open();
@@ -242,20 +243,59 @@ final class AppDependencies {
                 return context;
               },
             );
-      personalActionPlanGateway =
-          personalActionPlanGatewayBuilder?.call(identitySession) ??
-          const DeferredPersonalActionPlanGateway();
-      personalActionReminderGateway =
-          personalActionReminderGatewayBuilder?.call(identitySession) ??
-          const DeferredPersonalActionReminderGateway();
+      final planningCache = DriftPersonalPlanningCache(database);
       reminderNotificationScheduler = reminderSchedulerBuilder(
         platformCapabilities.platform,
       );
-      reminderNotificationPrivacyGuard =
-          await ReminderNotificationPrivacyGuard.start(
-            appSession: appSession,
-            scheduler: reminderNotificationScheduler,
-          );
+      Future<void> cancelReminderForScope(PersonalPlanningScope scope) async {
+        await reminderNotificationScheduler!.cancel(
+          scheduleKey: personalActionReminderScheduleKey(
+            DeviceReminderScope(
+              appUserId: scope.appUserId,
+              workspaceId: scope.workspaceId,
+              projectId: scope.projectId,
+              deviceId: deviceId,
+            ),
+          ),
+        );
+      }
+
+      PersonalPlanningScope? currentPlanningScope() {
+        final snapshot = appSession!.current;
+        final context = snapshot.context;
+        if (snapshot.stage != AppSessionStage.ready || context == null) {
+          return null;
+        }
+        return PersonalPlanningScope(
+          appUserId: context.appUserId,
+          workspaceId: context.workspace.id,
+          projectId: context.project.id,
+        );
+      }
+
+      personalActionPlanGateway = CachedPersonalActionPlanGateway(
+        remote:
+            personalActionPlanGatewayBuilder?.call(identitySession) ??
+            const DeferredPersonalActionPlanGateway(),
+        cache: planningCache,
+        scopeProvider: currentPlanningScope,
+        clock: clock,
+        onAuthorizationRevoked: cancelReminderForScope,
+      );
+      personalActionReminderGateway = CachedPersonalActionReminderGateway(
+        remote:
+            personalActionReminderGatewayBuilder?.call(identitySession) ??
+            const DeferredPersonalActionReminderGateway(),
+        cache: planningCache,
+        scopeProvider: currentPlanningScope,
+        clock: clock,
+        onAuthorizationRevoked: cancelReminderForScope,
+      );
+      privateSessionDataGuard = await PrivateSessionDataGuard.start(
+        appSession: appSession,
+        scheduler: reminderNotificationScheduler,
+        planningCache: planningCache,
+      );
       return AppStartupReady(
         controller: controller,
         clock: clock,
@@ -278,7 +318,7 @@ final class AppDependencies {
           database,
         ),
         reminderNotificationScheduler: reminderNotificationScheduler,
-        reminderNotificationPrivacyGuard: reminderNotificationPrivacyGuard,
+        privateSessionDataGuard: privateSessionDataGuard,
         idGenerator: idGenerator,
       );
     } catch (error, stackTrace) {
@@ -290,7 +330,7 @@ final class AppDependencies {
       await promotionTargetGateway?.close();
       await personalActionPlanGateway?.close();
       await personalActionReminderGateway?.close();
-      await reminderNotificationPrivacyGuard?.close();
+      await privateSessionDataGuard?.close();
       await reminderNotificationScheduler?.close();
       await appSession?.close();
       if (appSession == null) {
@@ -333,7 +373,7 @@ final class AppStartupReady extends AppStartupResult {
     required this.personalActionReminderGateway,
     required this.deviceReminderPreferenceStore,
     required this.reminderNotificationScheduler,
-    required this.reminderNotificationPrivacyGuard,
+    required this.privateSessionDataGuard,
     required this.idGenerator,
   });
 
@@ -356,7 +396,7 @@ final class AppStartupReady extends AppStartupResult {
   final PersonalActionReminderGateway personalActionReminderGateway;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
   final ReminderNotificationScheduler reminderNotificationScheduler;
-  final ReminderNotificationPrivacyGuard reminderNotificationPrivacyGuard;
+  final PrivateSessionDataGuard privateSessionDataGuard;
   final IdGenerator idGenerator;
 }
 

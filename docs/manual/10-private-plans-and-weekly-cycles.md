@@ -2,7 +2,7 @@
 
 私人行动计划帮助使用者回顾自己的行动，不是组织考核。每个推广项目可以有一份只属于本人的计划。使用者可以不设周目标；启用后，App 只比较计划的接触场次数与当周有效接触场次数。
 
-当前实现包含周目标、固定统计时区、周期起始日、版本历史、每日当地提醒、逐设备系统通知 opt-in、可选详细通知、本人 HTTP API 和“今日”页卡片。计划与提醒仍未加入离线缓存。Web、Linux 和 Windows 也不能在 App 关闭后可靠运行每日重复调度。
+当前实现包含周目标、固定统计时区、周期起始日、版本历史、每日当地提醒、逐设备系统通知 opt-in、可选详细通知、本人 HTTP API、“今日”页卡片和只读离线副本。离线状态不能修改计划或同步提醒时间。Web、Linux 和 Windows 也不能在 App 关闭后可靠运行每日重复调度。
 
 ## 先分清三种时间
 
@@ -75,6 +75,18 @@
 
 文案不要求解释未完成原因，不产生连续打卡、排名或管理员通知。没有周目标时，页面仍保留计划入口，但不伪造差额。
 
+## 只读离线副本怎样工作
+
+[`DriftPersonalPlanningCache`](../../lib/plans/personal_planning_cache.dart) 使用 App 已有的 Drift／SQLite 设置表保存计划和提醒快照。它不是第二套授权，也不是同步队列。每条 key 同时包含内部 app user、workspace 和项目 ID。一次请求开始时会捕获这个可信 scope；远端结果返回时若 scope 已改变，结果不会写入缓存。
+
+只有远端明确返回 `networkUnavailable`，并且 `AppSession` 仍对同一 scope 保持 `ready`，gateway 才读取缓存。普通服务器拒绝、响应结构错误、配置缺失和 revision 冲突都不会回退。HTTP `401` 和 `403` 都视为授权失效，并清除该 scope 的计划与提醒缓存。登出、账号切换或会话授权失效会清除全部计划缓存。
+
+远端成功返回“没有计划”或“没有提醒”也是一个有效快照。缓存会保存这个空值，因此断网后不会复活已经清除的旧数据。损坏、字段多余、字段缺失或非 UTC 的缓存会被删除，并按“无可用缓存”处理。
+
+离线卡片显示“离线副本”和上次同步 UTC 时间。计划与同步提醒时间保持只读；本设备的系统通知开关和通知内容偏好仍可修改，因为它们本来就是逐设备设置。若计划快照已经跨过 `cycle_until_utc`，界面会把它标成上一周期，不再称为本周计划。详细系统通知遇到过期周期时会降级为通用文案。
+
+这份缓存不包含推广对象资料，也不进入七十二小时的 `OfflinePiiVault`。它仍必须经过 `AppSession` 的可信 scope 门；不能因为数据不属于对象 PII 就绕过授权。
+
 ## 提醒时间与设备开关为何分开
 
 [`0022_personal_action_reminders.sql`](../../backend/database/migrations/0022_personal_action_reminders.sql) 保存一个可选的每日当地分钟。`0` 表示 `00:00`，`1439` 表示 `23:59`。提醒可在没有周目标时单独使用。提醒版本只追加，并使用 expected revision 与 mutation ID 处理多设备更新和安全重试。
@@ -108,7 +120,7 @@ Backend 只同步提醒钟点。它不接收设备 ID、通知权限或 UTC 触�
 
 “已接 Adapter”不等于真机发布验收已经完成。Android 厂商后台限制、Apple 权限状态和时区旅行仍需真机矩阵验证。
 
-[`ReminderNotificationPrivacyGuard`](../../lib/app/reminder_notification_privacy_guard.dart) 监听可信 App session。登出、启动时未登录或 session 失败后，它会取消带私人提醒 payload 的待发通知。当前项目的提醒或计划读取失去授权时，面板也会取消该项目的旧调度。App 长期关闭期间无法立即得知远端撤权；这是本地重复调度的残余限制。
+[`PrivateSessionDataGuard`](../../lib/app/private_session_data_guard.dart) 监听可信 App session。登出、启动时未登录、账号切换或明确授权失败后，它会取消待发的私人提醒并清除计划缓存。单纯网络中断不会取消仍有效的提醒，也不会删除只读缓存。当前项目的提醒或计划读取失去授权时，gateway 会清缓存，面板也会取消该项目的旧调度。App 长期关闭期间无法立即得知远端撤权；这是本地重复调度的残余限制。
 
 ## 怎样运行这条切片的测试
 
@@ -116,10 +128,11 @@ Backend 只同步提醒钟点。它不接收设备 ID、通知权限或 UTC 触�
 
 ```bash
 flutter test --no-pub \
+  test/plans/drift_personal_planning_cache_test.dart \
   test/features/plans/personal_action_plan_panel_test.dart \
   test/plans/http_personal_action_plan_gateway_test.dart \
   test/features/reminders/personal_action_reminder_panel_test.dart \
-  test/app/reminder_notification_privacy_guard_test.dart \
+  test/app/private_session_data_guard_test.dart \
   test/reminders
 
 npm --prefix backend/server run build
@@ -136,11 +149,13 @@ node --test \
 
 没有用过 Docker 时，从[第 9 章](09-local-docker-and-ci-testing.md)第 2 节开始。脚本会自己建立临时数据库、运行 `0021` 和 `0022` 的 check 与 fixture、执行备份恢复，再删除容器。不要手工连接 production 验证这条功能。
 
+离线缓存本身使用测试进程中的 Drift／SQLite，不需要 Docker。Docker 套件验证的是 Backend 的 PostgreSQL schema、权限、周期计算、提醒版本和备份恢复。两组测试不能互相代替。
+
 ## 当前边界
 
 本章不能作为以下能力已完成的证据：
 
-- 断网查看或修改计划；
+- 断网修改计划或同步提醒时间；
 - 多设备离线合并计划；
 - 记录每次系统通知的实际触发时区；
 - App 长期未打开时，旅行后的首个通知立即改用新时区；

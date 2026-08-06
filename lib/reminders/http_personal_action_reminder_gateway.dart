@@ -156,7 +156,7 @@ final class HttpPersonalActionReminderGateway
   }
 
   PersonalActionReminderFailureCode _failure(http.Response response) {
-    if (response.statusCode == 401) {
+    if (response.statusCode == 401 || response.statusCode == 403) {
       return PersonalActionReminderFailureCode.unauthorized;
     }
     try {

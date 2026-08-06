@@ -31,7 +31,7 @@ import '../sync/sync_engine_factory.dart';
 import '../targets/promotion_target.dart';
 import 'app_controller.dart';
 import 'app_dependencies.dart';
-import 'reminder_notification_privacy_guard.dart';
+import 'private_session_data_guard.dart';
 
 typedef SignedOutScreenBuilder =
     Widget Function(BuildContext context, AppController controller);
@@ -70,7 +70,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
   PersonalActionPlanGateway? _personalActionPlanGateway;
   PersonalActionReminderGateway? _personalActionReminderGateway;
   ReminderNotificationScheduler? _reminderNotificationScheduler;
-  ReminderNotificationPrivacyGuard? _reminderNotificationPrivacyGuard;
+  PrivateSessionDataGuard? _privateSessionDataGuard;
 
   @override
   void initState() {
@@ -92,7 +92,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       :final personalActionPlanGateway,
       :final personalActionReminderGateway,
       :final reminderNotificationScheduler,
-      :final reminderNotificationPrivacyGuard,
+      :final privateSessionDataGuard,
     )) {
       _controller = controller;
       _identitySession = identitySession;
@@ -105,7 +105,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       _personalActionPlanGateway = personalActionPlanGateway;
       _personalActionReminderGateway = personalActionReminderGateway;
       _reminderNotificationScheduler = reminderNotificationScheduler;
-      _reminderNotificationPrivacyGuard = reminderNotificationPrivacyGuard;
+      _privateSessionDataGuard = privateSessionDataGuard;
     }
     return result;
   }
@@ -121,7 +121,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
     unawaited(_promotionTargetGateway?.close());
     unawaited(_personalActionPlanGateway?.close());
     unawaited(_personalActionReminderGateway?.close());
-    unawaited(_reminderNotificationPrivacyGuard?.close());
+    unawaited(_privateSessionDataGuard?.close());
     unawaited(_reminderNotificationScheduler?.close());
     _controller?.dispose();
     super.dispose();

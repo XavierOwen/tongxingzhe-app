@@ -160,7 +160,7 @@ final class HttpPersonalActionPlanGateway implements PersonalActionPlanGateway {
   }
 
   PersonalActionPlanFailureCode _failure(http.Response response) {
-    if (response.statusCode == 401) {
+    if (response.statusCode == 401 || response.statusCode == 403) {
       return PersonalActionPlanFailureCode.unauthorized;
     }
     try {

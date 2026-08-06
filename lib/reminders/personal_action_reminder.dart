@@ -72,9 +72,15 @@ sealed class PersonalActionReminderResult<T> {
 
 final class PersonalActionReminderSuccess<T>
     extends PersonalActionReminderResult<T> {
-  const PersonalActionReminderSuccess(this.value);
+  const PersonalActionReminderSuccess(
+    this.value, {
+    this.fromOfflineCache = false,
+    this.cachedAtUtc,
+  }) : assert(fromOfflineCache == (cachedAtUtc != null));
 
   final T value;
+  final bool fromOfflineCache;
+  final DateTime? cachedAtUtc;
 }
 
 final class PersonalActionReminderRejected<T>
@@ -110,6 +116,13 @@ final class DeviceReminderScope {
   final String projectId;
   final String deviceId;
 }
+
+String personalActionReminderScheduleKey(DeviceReminderScope scope) => [
+  scope.deviceId,
+  scope.appUserId,
+  scope.workspaceId,
+  scope.projectId,
+].join(':');
 
 enum ReminderNotificationContentMode { generic, projectAndProgress }
 

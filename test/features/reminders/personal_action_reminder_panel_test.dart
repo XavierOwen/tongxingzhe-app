@@ -27,6 +27,64 @@ void main() {
     expect(scheduler.scheduleCount, 0);
   });
 
+  testWidgets('离线副本禁止修改同步时间，但保留本机通知开关', (tester) async {
+    final store = _MemoryPreferenceStore();
+    final scheduler = _FakeScheduler();
+    await tester.pumpWidget(
+      _app(
+        store: store,
+        scheduler: scheduler,
+        gateway: _FakeGateway(fromOfflineCache: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('离线副本'), findsOneWidget);
+    expect(find.textContaining('2030-03-09T20:00:00.000Z'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextButton>(
+            find.byKey(const ValueKey('edit-personal-reminder')),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<TextButton>(
+            find.byKey(const ValueKey('clear-personal-reminder')),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<SwitchListTile>(
+            find.byKey(const ValueKey('device-reminder-opt-in')),
+          )
+          .onChanged,
+      isNotNull,
+    );
+  });
+
+  testWidgets('断网且无缓存时保留已安排的本机通知', (tester) async {
+    final store = _MemoryPreferenceStore(
+      const DeviceReminderPreference(systemNotificationsEnabled: true),
+    );
+    final scheduler = _FakeScheduler();
+    await tester.pumpWidget(
+      _app(
+        store: store,
+        scheduler: scheduler,
+        gateway: _FakeGateway(rejectLoad: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('暂时无法载入'), findsOneWidget);
+    expect(scheduler.cancelKeys, isEmpty);
+  });
+
   testWidgets('明确启用后才请求权限、安排通用通知并保存本机 opt-in', (tester) async {
     final store = _MemoryPreferenceStore();
     final scheduler = _FakeScheduler();
@@ -280,6 +338,10 @@ Widget _app({
 );
 
 final class _FakeGateway implements PersonalActionReminderGateway {
+  _FakeGateway({this.fromOfflineCache = false, this.rejectLoad = false});
+
+  final bool fromOfflineCache;
+  final bool rejectLoad;
   PersonalActionReminder? reminder = PersonalActionReminder(
     reminderId: 'reminder-1',
     revision: 1,
@@ -290,7 +352,15 @@ final class _FakeGateway implements PersonalActionReminderGateway {
 
   @override
   Future<PersonalActionReminderResult<PersonalActionReminder?>> load() async =>
-      PersonalActionReminderSuccess(reminder);
+      rejectLoad
+      ? const PersonalActionReminderRejected(
+          PersonalActionReminderFailureCode.networkUnavailable,
+        )
+      : PersonalActionReminderSuccess(
+          reminder,
+          fromOfflineCache: fromOfflineCache,
+          cachedAtUtc: fromOfflineCache ? DateTime.utc(2030, 3, 9, 20) : null,
+        );
 
   @override
   Future<PersonalActionReminderResult<PersonalActionReminderMutation>> save({
