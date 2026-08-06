@@ -20,6 +20,8 @@ import '../services/location_service.dart';
 import '../sync/http_sync_transport.dart';
 import '../sync/sync_engine_factory.dart';
 import '../sync/sync_transport.dart';
+import '../targets/http_promotion_target_gateway.dart';
+import '../targets/promotion_target.dart';
 import 'app_controller.dart';
 import 'legacy_demo_access.dart';
 
@@ -41,6 +43,7 @@ final class AppDependencies {
     this.regionResolverBuilder,
     this.questionnaireRemoteSourceBuilder,
     this.questionnaireAdministrationBuilder,
+    this.promotionTargetGatewayBuilder,
     this.legacyDemoAccess,
   });
 
@@ -56,6 +59,7 @@ final class AppDependencies {
       regionResolverBuilder: productionContactRegionResolver,
       questionnaireRemoteSourceBuilder: productionQuestionnaireRemoteSource,
       questionnaireAdministrationBuilder: productionQuestionnaireAdministration,
+      promotionTargetGatewayBuilder: productionPromotionTargetGateway,
     );
   }
 
@@ -74,6 +78,8 @@ final class AppDependencies {
   questionnaireRemoteSourceBuilder;
   final QuestionnaireAdministrationGateway Function(IdentitySession)?
   questionnaireAdministrationBuilder;
+  final PromotionTargetGateway Function(IdentitySession)?
+  promotionTargetGatewayBuilder;
 
   /// 临时兼容 legacy demo；正式 composition root 永远不提供此 Adapter。
   final LegacyDemoAccess? legacyDemoAccess;
@@ -86,6 +92,7 @@ final class AppDependencies {
     ContactRegionResolver? regionResolver;
     QuestionnaireCatalog? questionnaireCatalog;
     QuestionnaireAdministrationGateway? questionnaireAdministration;
+    PromotionTargetGateway? promotionTargetGateway;
     try {
       identitySession = await identitySessionFactory.open();
     } catch (error, stackTrace) {
@@ -157,6 +164,9 @@ final class AppDependencies {
             questionnaireAdministrationBuilder?.call(identitySession) ??
             const DeferredQuestionnaireAdministrationGateway(),
       );
+      promotionTargetGateway =
+          promotionTargetGatewayBuilder?.call(identitySession) ??
+          const DeferredPromotionTargetGateway();
       appSession = AppSession(
         identitySession: identitySession,
         contextGateway: sessionContextGateway,
@@ -177,6 +187,7 @@ final class AppDependencies {
         regionResolver: regionResolver,
         questionnaireCatalog: questionnaireCatalog,
         questionnaireAdministration: questionnaireAdministration,
+        promotionTargetGateway: promotionTargetGateway,
         idGenerator: idGenerator,
       );
     } catch (error, stackTrace) {
@@ -185,6 +196,7 @@ final class AppDependencies {
       await regionResolver?.close();
       await questionnaireCatalog?.close();
       await questionnaireAdministration?.close();
+      await promotionTargetGateway?.close();
       await appSession?.close();
       if (appSession == null) {
         await sessionContextGateway.close();
@@ -221,6 +233,7 @@ final class AppStartupReady extends AppStartupResult {
     required this.regionResolver,
     required this.questionnaireCatalog,
     required this.questionnaireAdministration,
+    required this.promotionTargetGateway,
     required this.idGenerator,
   });
 
@@ -238,6 +251,7 @@ final class AppStartupReady extends AppStartupResult {
   final ContactRegionResolver regionResolver;
   final QuestionnaireCatalog questionnaireCatalog;
   final QuestionnaireAdministrationGateway questionnaireAdministration;
+  final PromotionTargetGateway promotionTargetGateway;
   final IdGenerator idGenerator;
 }
 

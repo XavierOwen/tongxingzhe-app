@@ -14,12 +14,14 @@ import '../features/contact_journal/contact_journal.dart';
 import '../features/contact_journal/contact_models.dart';
 import '../features/home/production_home_view_model.dart';
 import '../features/questionnaire_admin/questionnaire_admin_screen.dart';
+import '../features/targets/promotion_target_directory_page.dart';
 import '../features/contact_metrics/personal_contact_overview.dart';
 import '../l10n/app_strings.dart';
 import '../questionnaires/questionnaire_administration.dart';
 import '../routing/app_router.dart';
 import '../services/location_service.dart';
 import '../sync/sync_engine_factory.dart';
+import '../targets/promotion_target.dart';
 
 /// 正式产品的四项主框架。
 ///
@@ -40,6 +42,7 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.selectedIndex,
     required this.contactPageClosedEvents,
     required this.questionnaireAdministration,
+    required this.promotionTargetGateway,
     required this.idGenerator,
     required this.onDestinationSelected,
     required this.onOpenContactEntry,
@@ -59,6 +62,7 @@ final class ProductionHomeShell extends StatefulWidget {
   final int selectedIndex;
   final ValueListenable<ContactPageClosedEvent> contactPageClosedEvents;
   final QuestionnaireAdministrationGateway questionnaireAdministration;
+  final PromotionTargetGateway promotionTargetGateway;
   final IdGenerator idGenerator;
   final ValueChanged<int> onDestinationSelected;
   final ValueChanged<ContactDraft?> onOpenContactEntry;
@@ -163,10 +167,11 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
         onRecordResponse: widget.onOpenContactFromAttempt,
         onOpenContact: widget.onOpenContactDetail,
       ),
-      _PlaceholderPage(
-        icon: Icons.people_outline,
-        title: strings.t('navTargets'),
-        body: strings.t('targetsPending'),
+      PromotionTargetDirectoryPage(
+        text: strings,
+        gateway: widget.promotionTargetGateway,
+        idGenerator: widget.idGenerator,
+        canCreate: widget.context.capabilities.contains('create_target'),
       ),
       _PersonalSummaryPage(
         controller: widget.controller,
@@ -638,37 +643,6 @@ final class _Destination {
 
   final IconData icon;
   final String label;
-}
-
-final class _PlaceholderPage extends StatelessWidget {
-  const _PlaceholderPage({
-    required this.icon,
-    required this.title,
-    required this.body,
-  });
-
-  final IconData icon;
-  final String title;
-  final String body;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 48),
-            const SizedBox(height: 16),
-            Text(title, style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 8),
-            Text(body, textAlign: TextAlign.center),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 final class _ContactsPage extends StatelessWidget {

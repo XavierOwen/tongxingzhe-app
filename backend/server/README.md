@@ -42,6 +42,12 @@ Backend 不接受客户端提供的用户、空间或项目范围。每次请求
 
 列表中的候选问题包含不可变定义、选项、时间范围、回答方式和当前样本数。Backend 不做文字相似匹配，也不接受任意公式或 SQL。PostgreSQL 保存当时的比较与影响快照；同一关系的并发确认或撤销只允许一个请求成为当前事实。
 
+## 推广对象合同
+
+`GET /v1/promotion-targets` 只返回当前分配给使用者的对象。`POST /v1/promotion-targets` 建立个人或机构对象，并在同一事务中把建立者设为初始跟进人。建立需要 `create_target` 和 `view_assigned_target_pii`；列表需要后一项能力。
+
+客户端不提交用户、空间、项目或对象 ID。PostgreSQL 生成对象 UUID，并用已验证使用者与 request ID 保护重试。当前对象资料只在线读取，不进入 Flutter 本地库、接触同步 command 或 warehouse。
+
 ## 配置
 
 Backend 需要以下环境变量：
@@ -66,6 +72,8 @@ npm run check
 ```
 
 测试使用临时 ES256 key 和 synthetic claims，不连接真实 Supabase 项目。身份 schema 见 [`0002_identity_context.sql`](../database/migrations/0002_identity_context.sql)，项目上下文见 [`0004_personal_project_contexts.sql`](../database/migrations/0004_personal_project_contexts.sql)，区域与私有草稿见 [`0005_regions_and_private_draft_sync.sql`](../database/migrations/0005_regions_and_private_draft_sync.sql)，个人指标见 [`0006_personal_contact_metrics.sql`](../database/migrations/0006_personal_contact_metrics.sql)，区域解析见 [`0007_canonical_region_resolution.sql`](../database/migrations/0007_canonical_region_resolution.sql)，独立接触尝试见 [`0008_contact_attempts.sql`](../database/migrations/0008_contact_attempts.sql)，接触更正与作废见 [`0009_contact_revisions.sql`](../database/migrations/0009_contact_revisions.sql)，修订冲突见 [`0010_contact_revision_conflicts.sql`](../database/migrations/0010_contact_revision_conflicts.sql)，版本化问卷执行见 [`0011_questionnaire_execution.sql`](../database/migrations/0011_questionnaire_execution.sql)，动态显示规则见 [`0012_questionnaire_visibility.sql`](../database/migrations/0012_questionnaire_visibility.sql)，管理草稿与不可变发布见 [`0013_questionnaire_publishing.sql`](../database/migrations/0013_questionnaire_publishing.sql)，旧草稿升级来源见 [`0014_questionnaire_draft_upgrades.sql`](../database/migrations/0014_questionnaire_draft_upgrades.sql)，问卷指标兼容见 [`0015_questionnaire_metric_compatibility.sql`](../database/migrations/0015_questionnaire_metric_compatibility.sql)。CI 使用 synthetic fixture 验证权限、重放、并发、跨项目、同步、问卷、区域、cursor 和 dump／restore。
+
+推广对象目录见 [`0016_promotion_target_directory.sql`](../database/migrations/0016_promotion_target_directory.sql)。对应 fixture 另外验证对象分配、PII 隔离、访问审计和恢复库权限。
 
 ## 运行
 
