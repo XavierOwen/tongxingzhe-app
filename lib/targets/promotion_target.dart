@@ -32,6 +32,83 @@ enum PromotionTargetRelationshipReason {
   final String storageValue;
 }
 
+enum TargetInstitutionRelationshipKind {
+  employmentRepresentative('employment_representative'),
+  ownershipGovernance('ownership_governance'),
+  learningParticipation('learning_participation'),
+  membershipAffiliation('membership_affiliation'),
+  partnershipService('partnership_service'),
+  other('other');
+
+  const TargetInstitutionRelationshipKind(this.storageValue);
+
+  final String storageValue;
+}
+
+enum TargetInstitutionRelationshipStatus {
+  active('active'),
+  ended('ended');
+
+  const TargetInstitutionRelationshipStatus(this.storageValue);
+
+  final String storageValue;
+}
+
+enum TargetInstitutionRelationshipEvent {
+  created('created'),
+  ended('ended');
+
+  const TargetInstitutionRelationshipEvent(this.storageValue);
+
+  final String storageValue;
+}
+
+final class TargetInstitutionRelationshipRevision {
+  const TargetInstitutionRelationshipRevision({
+    required this.revisionNumber,
+    required this.event,
+    required this.oldStatus,
+    required this.newStatus,
+    required this.endedAtUtc,
+    required this.changedByAppUserId,
+    required this.changedAtUtc,
+  });
+
+  final int revisionNumber;
+  final TargetInstitutionRelationshipEvent event;
+  final TargetInstitutionRelationshipStatus? oldStatus;
+  final TargetInstitutionRelationshipStatus newStatus;
+  final DateTime? endedAtUtc;
+  final String changedByAppUserId;
+  final DateTime changedAtUtc;
+}
+
+final class TargetInstitutionRelationship {
+  const TargetInstitutionRelationship({
+    required this.id,
+    required this.personTargetId,
+    required this.institutionTargetId,
+    required this.kind,
+    required this.roleDescription,
+    required this.startedAtUtc,
+    required this.endedAtUtc,
+    required this.status,
+    required this.revisionNumber,
+    required this.history,
+  });
+
+  final String id;
+  final String personTargetId;
+  final String institutionTargetId;
+  final TargetInstitutionRelationshipKind kind;
+  final String? roleDescription;
+  final DateTime startedAtUtc;
+  final DateTime? endedAtUtc;
+  final TargetInstitutionRelationshipStatus status;
+  final int revisionNumber;
+  final List<TargetInstitutionRelationshipRevision> history;
+}
+
 final class PromotionTargetStageAlias {
   const PromotionTargetStageAlias({
     required this.stage,
@@ -214,6 +291,25 @@ abstract interface class PromotionTargetGateway {
 
   Future<PromotionTargetResult<List<PromotionTargetStageAlias>>>
   configureStageAliases({required List<PromotionTargetStageAlias> aliases});
+
+  Future<PromotionTargetResult<List<TargetInstitutionRelationship>>>
+  loadInstitutionRelationships();
+
+  Future<PromotionTargetResult<TargetInstitutionRelationship>>
+  createInstitutionRelationship({
+    required String personTargetId,
+    required String institutionTargetId,
+    required TargetInstitutionRelationshipKind kind,
+    required String? roleDescription,
+    required String mutationId,
+  });
+
+  Future<PromotionTargetResult<TargetInstitutionRelationship>>
+  endInstitutionRelationship({
+    required String relationshipId,
+    required int expectedRevision,
+    required String mutationId,
+  });
 
   Future<void> close();
 }

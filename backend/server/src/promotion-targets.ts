@@ -1,8 +1,5 @@
-import {bearerToken} from "./authorization.js";
-import {
-  IdentityVerificationError,
-  type IdentityVerifier,
-} from "./identity.js";
+import {authorizeContext} from "./authorized-context.js";
+import type {IdentityVerifier} from "./identity.js";
 import type {
   SessionContext,
   SessionContextStore,
@@ -378,21 +375,15 @@ async function authorizedContext(
   dependencies: PromotionTargetDependencies,
   requiredCapabilities: readonly string[],
 ): Promise<AuthorizedContext | PromotionTargetHttpResult> {
-  const accessToken = bearerToken(authorization);
-  if (accessToken === null) return failure(401, "unauthenticated");
-  try {
-    const identity = await dependencies.identityVerifier.verify(accessToken);
-    const context = await dependencies.contextStore.loadOrCreate(identity);
-    return requiredCapabilities.every((capability) =>
-      context.capabilities.includes(capability)
-    )
-      ? new AuthorizedContext(context)
-      : failure(403, "capability_forbidden");
-  } catch (error) {
-    return error instanceof IdentityVerificationError
-      ? failure(401, "unauthenticated")
-      : failure(503, "promotion_targets_unavailable");
-  }
+  const result = await authorizeContext(
+    authorization,
+    dependencies,
+    requiredCapabilities,
+    "promotion_targets_unavailable",
+  );
+  return result.status === "authorized"
+    ? new AuthorizedContext(result.context)
+    : failure(result.responseStatus, result.errorCode);
 }
 
 class AuthorizedContext {

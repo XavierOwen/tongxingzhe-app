@@ -165,7 +165,7 @@ node --test backend/server/dist/test/sync-command.test.js
 4. 把数据库目录和三个正式 runner 复制到容器；
 5. 从空库执行全部 migration，再执行一次 checksum 重放；
 6. 运行全部 schema／权限 check 和可回滚 synthetic fixture；
-7. 用独立数据库会话检查问卷发布和指标兼容并发；
+7. 用独立数据库会话检查问卷发布、指标兼容和个人与机构关系并发；
 8. 修改 migration 的临时副本，确认 runner 拒绝 checksum 漂移；
 9. 执行 `pg_dump`，恢复到第二个空库，再运行全部 check 和 fixture；
 10. 成功后删除临时容器。
@@ -259,6 +259,13 @@ check 主要观察结构。fixture 会调用正式函数并核对结果。两者
 5. GitHub Actions 使用同一 check 和 fixture，因此本地证据与远端 CI 证据可比较。
 
 看到 `fixture：0018_promotion_target_relationship_audit.sql` 后失败，表示 migration 已经成功，失败点在行为验证。看到 `已执行 0018_promotion_target_relationship_audit` 前失败，则先检查 migration SQL。不要为绕过失败而删除旧 migration 或修改已经发布版本；修复尚未发布的新 migration，或为已发布 schema 追加更高版本。
+
+`0019_person_institution_relationships.sql` 还示范了“串行 fixture 不足以证明并发安全”的情况。fixture 验证关系形状、权限、重放和结束历史；`verify_person_institution_relationship_concurrency.sh` 另开两个 `psql` 会话，同时建立同一对对象的同一种活动关系。成功输出必须说明只有一个请求成功，并且数据库只保留一条关系和一个初始 revision。Docker wrapper 已自动运行这个脚本；使用现有测试库时也可单独执行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/verify_person_institution_relationship_concurrency.sh
+```
 
 ## 8. Drift v17 生成文件怎样检查
 

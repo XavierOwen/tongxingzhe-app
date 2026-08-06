@@ -66,6 +66,34 @@ final class DeferredPromotionTargetGateway implements PromotionTargetGateway {
   );
 
   @override
+  Future<PromotionTargetResult<List<TargetInstitutionRelationship>>>
+  loadInstitutionRelationships() async => const PromotionTargetRejected(
+    PromotionTargetFailureCode.networkUnavailable,
+  );
+
+  @override
+  Future<PromotionTargetResult<TargetInstitutionRelationship>>
+  createInstitutionRelationship({
+    required String personTargetId,
+    required String institutionTargetId,
+    required TargetInstitutionRelationshipKind kind,
+    required String? roleDescription,
+    required String mutationId,
+  }) async => const PromotionTargetRejected(
+    PromotionTargetFailureCode.networkUnavailable,
+  );
+
+  @override
+  Future<PromotionTargetResult<TargetInstitutionRelationship>>
+  endInstitutionRelationship({
+    required String relationshipId,
+    required int expectedRevision,
+    required String mutationId,
+  }) async => const PromotionTargetRejected(
+    PromotionTargetFailureCode.networkUnavailable,
+  );
+
+  @override
   Future<void> close() async {}
 }
 
@@ -174,6 +202,52 @@ final class HttpPromotionTargetGateway implements PromotionTargetGateway {
         },
         parse: (root) => _list(root['aliases']).map(_parseStageAlias).toList(),
       );
+
+  @override
+  Future<PromotionTargetResult<List<TargetInstitutionRelationship>>>
+  loadInstitutionRelationships() => _request(
+    method: 'GET',
+    path: '/v1/promotion-target-institution-relationships',
+    parse: (root) => _list(
+      root['relationships'],
+    ).map(_parseInstitutionRelationship).toList(),
+  );
+
+  @override
+  Future<PromotionTargetResult<TargetInstitutionRelationship>>
+  createInstitutionRelationship({
+    required String personTargetId,
+    required String institutionTargetId,
+    required TargetInstitutionRelationshipKind kind,
+    required String? roleDescription,
+    required String mutationId,
+  }) => _request(
+    method: 'POST',
+    path: '/v1/promotion-target-institution-relationships',
+    body: {
+      'person_target_id': personTargetId,
+      'institution_target_id': institutionTargetId,
+      'relationship_kind': kind.storageValue,
+      'role_description': roleDescription,
+      'mutation_id': mutationId,
+    },
+    parse: (root) => _parseInstitutionRelationship(root['relationship']),
+  );
+
+  @override
+  Future<PromotionTargetResult<TargetInstitutionRelationship>>
+  endInstitutionRelationship({
+    required String relationshipId,
+    required int expectedRevision,
+    required String mutationId,
+  }) => _request(
+    method: 'POST',
+    path:
+        '/v1/promotion-target-institution-relationships/'
+        '${Uri.encodeComponent(relationshipId)}/end',
+    body: {'expected_revision': expectedRevision, 'mutation_id': mutationId},
+    parse: (root) => _parseInstitutionRelationship(root['relationship']),
+  );
 
   Future<PromotionTargetResult<T>> _request<T>({
     required String method,
@@ -339,6 +413,57 @@ PromotionTargetRelationshipProposal _parseProposal(Object? value) {
       (candidate) => candidate.storageValue == _string(root['reason_code']),
     ),
     reasonDetail: _nullableString(root['reason_detail']),
+  );
+}
+
+TargetInstitutionRelationship _parseInstitutionRelationship(Object? value) {
+  final root = _object(value);
+  return TargetInstitutionRelationship(
+    id: _string(root['relationship_id']),
+    personTargetId: _string(root['person_target_id']),
+    institutionTargetId: _string(root['institution_target_id']),
+    kind: TargetInstitutionRelationshipKind.values.firstWhere(
+      (candidate) =>
+          candidate.storageValue == _string(root['relationship_kind']),
+    ),
+    roleDescription: _nullableString(root['role_description']),
+    startedAtUtc: DateTime.parse(_string(root['started_at'])).toUtc(),
+    endedAtUtc: root['ended_at'] == null
+        ? null
+        : DateTime.parse(_string(root['ended_at'])).toUtc(),
+    status: TargetInstitutionRelationshipStatus.values.firstWhere(
+      (candidate) => candidate.storageValue == _string(root['status']),
+    ),
+    revisionNumber: _integer(root['revision_number'], minimum: 1),
+    history: _list(
+      root['history'],
+    ).map(_parseInstitutionRelationshipRevision).toList(),
+  );
+}
+
+TargetInstitutionRelationshipRevision _parseInstitutionRelationshipRevision(
+  Object? value,
+) {
+  final root = _object(value);
+  return TargetInstitutionRelationshipRevision(
+    revisionNumber: _integer(root['revision_number'], minimum: 1),
+    event: TargetInstitutionRelationshipEvent.values.firstWhere(
+      (candidate) => candidate.storageValue == _string(root['event_type']),
+    ),
+    oldStatus: root['old_status'] == null
+        ? null
+        : TargetInstitutionRelationshipStatus.values.firstWhere(
+            (candidate) =>
+                candidate.storageValue == _string(root['old_status']),
+          ),
+    newStatus: TargetInstitutionRelationshipStatus.values.firstWhere(
+      (candidate) => candidate.storageValue == _string(root['new_status']),
+    ),
+    endedAtUtc: root['ended_at'] == null
+        ? null
+        : DateTime.parse(_string(root['ended_at'])).toUtc(),
+    changedByAppUserId: _string(root['changed_by_app_user_id']),
+    changedAtUtc: DateTime.parse(_string(root['changed_at'])).toUtc(),
   );
 }
 
