@@ -14,6 +14,7 @@
 6. [第 6 章：持久同步与 Backend SQL 如何保护追加历史](06-persistent-sync-and-backend-sql.md)
 7. [第 7 章：版本化问卷如何设计、发布、离线执行并由服务端复验](07-versioned-questionnaire-execution.md)
 8. [第 8 章：推广对象目录如何限制个人资料的建立与读取](08-promotion-target-directory-and-pii.md)
+9. [第 9 章：在本机、Docker 与 CI 中运行测试](09-local-docker-and-ci-testing.md)
 
 当前认证验证状态见 [Supabase Auth 六平台 Spike](../spikes/supabase-auth-six-platform.md)。它会明确区分 package 声明、build 通过和真实设备流程通过。
 

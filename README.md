@@ -6,13 +6,13 @@
 
 ## 当前状态
 
-项目已完成 [Slice 0：安全地基与可测试接缝](https://github.com/XavierOwen/tongxingzhe-app/issues/2)、[Slice 1：匿名接触闭环](https://github.com/XavierOwen/tongxingzhe-app/issues/3) 和 [Slice 2：离线事实更正、重试与合并](https://github.com/XavierOwen/tongxingzhe-app/issues/4)，以及 Slice 3A 至 3E 的版本化问卷执行、动态显示、管理发布、旧草稿明确升级和跨版本指标兼容审计。Backend 可验证 Supabase JWT，并原子映射内部用户、个人空间、多个个人项目和各项目当前问卷版本。Flutter `AppSession` 只接受这份可信上下文。正式 App 已接入邮箱密码登录、四个主导航、可选跨设备私有草稿、草稿冲突副本、七类匿名接触、已提交接触的追加式更正与作废、跨设备更正的不同字段自动合并与同字段显式解决、独立的未获回应接触尝试、IANA 发生时区、面对面坐标、版本化严格区域树、坐标自动解析、“今日”与最近七日个人统计、八题型离线问卷、受限显示条件与隐藏答案撤销，以及 SQLite 到自有 Backend／PostgreSQL 的持久双向同步。有管理能力的个人项目所有者还可以建立或复制问卷草稿、编辑受控定义、模拟预览、查看版本差异并发布新的不可变版本；稳定问卷指标只接收经过并排比较和明确审计的兼容问题版本，撤销后当前指标立即重新分开。旧接触草稿可继续按原版本编辑和提交，也可先预览保留、重新确认和不可复制的答案，再新建当前版本草稿；原草稿不会被覆盖。正式注册与恢复界面仍未完成。旧原型只作为显式 legacy Demo 保留。
+项目已完成 [Slice 0：安全地基与可测试接缝](https://github.com/XavierOwen/tongxingzhe-app/issues/2)、[Slice 1：匿名接触闭环](https://github.com/XavierOwen/tongxingzhe-app/issues/3) 和 [Slice 2：离线事实更正、重试与合并](https://github.com/XavierOwen/tongxingzhe-app/issues/4)，以及 Slice 3A 至 3E 的版本化问卷执行、动态显示、管理发布、旧草稿明确升级和跨版本指标兼容审计。Slice 4A 与 4B 已加入受分配的个人／机构对象目录，以及每个接触 revision 的零到多对象关联。Backend 可验证 Supabase JWT，并原子映射内部用户、个人空间、多个个人项目和各项目当前问卷版本。Flutter `AppSession` 只接受这份可信上下文。正式 App 已接入邮箱密码登录、四个主导航、可选跨设备私有草稿、草稿冲突副本、七类匿名接触、已提交接触的追加式更正与作废、跨设备更正的不同字段自动合并与同字段显式解决、独立的未获回应接触尝试、IANA 发生时区、面对面坐标、版本化严格区域树、坐标自动解析、“今日”与最近七日个人统计、八题型离线问卷、受限显示条件与隐藏答案撤销，以及 SQLite 到自有 Backend／PostgreSQL 的持久双向同步。有管理能力的个人项目所有者还可以建立或复制问卷草稿、编辑受控定义、模拟预览、查看版本差异并发布新的不可变版本；稳定问卷指标只接收经过并排比较和明确审计的兼容问题版本，撤销后当前指标立即重新分开。旧接触草稿可继续按原版本编辑和提交，也可先预览保留、重新确认和不可复制的答案，再新建当前版本草稿；原草稿不会被覆盖。正式注册与恢复界面仍未完成。旧原型只作为显式 legacy Demo 保留。
 
 已经建立的地基包括：
 
 - 正式 composition root，以及可控制的 Clock、ID、Database、Identity、错误结果和 Platform Capability 接缝；
 - 正式入口与 MD5、默认演示账号、自动 seed 和旧登录 UI 的 import 边界；
-- Drift v5 基线、v6 至 v15 中间版本、当前 v16 schema 快照和 v5／v6／v8／v9／v10／v11／v12／v13／v14／v15→v16 升级测试；
+- Drift v5 基线、v6 至 v16 中间版本、当前 v17 schema 快照和 v5／v6／v8 至 v16→v17 升级测试；
 - `ContactJournal` 本地深模块，以及可读的 SQLite 个人汇总 SQL；
 - Supabase `IdentitySession` Adapter、安全 session／PKCE 存储和 test-only fake；
 - PostgreSQL 有序 SQL migration、checksum、最小权限 runtime role、synthetic fixture 和恢复检查；
@@ -28,6 +28,7 @@ Supabase 仍是有条件首选。SDK 接线完成不等于六平台认证通过�
 - [统一领域语言](CONTEXT.md)：术语及其精确定义；
 - [架构决策索引](docs/adr/README.md)：每项决策的状态、取代关系、关联 Slice 和主题入口；
 - [正式开发说明书](docs/manual/README.md)：面向初学者解释 Flutter、SQL、设计和数学背景的唯一入口；
+- [本机、Docker 与 CI 测试指南](docs/manual/09-local-docker-and-ci-testing.md)：从零准备环境、选择测试、调试容器和理解九项 CI；
 - [Legacy v5 盘点](docs/migrations/legacy-v5-inventory.md)：旧 schema、数据分类和停止规则；
 - [PostgreSQL migration 说明](backend/database/README.md)：空库重建、权限与 fixture。
 - [Backend 运行说明](backend/server/README.md)：身份验证、配置、测试和上下文端点。
@@ -84,13 +85,19 @@ dart run tool/check_markdown_links.dart
 
 若中文路径使 `flutter analyze` 的 analysis server 输出异常，可使用 `dart analyze`；这不是跳过静态分析。
 
-Drift 当前 v15 快照和 v5／v6／v8／v9／v10／v11／v12／v13／v14→v15 升级检查：
+Drift 当前 v17 快照和 v5／v6／v8 至 v16→v17 升级检查：
 
 ```bash
 flutter test test/data/local_database_migration_test.dart
 ```
 
-PostgreSQL 空库重建需要一个明确的测试数据库，详见 [数据库说明](backend/database/README.md)。
+PostgreSQL 完整测试可在临时 Docker 容器中运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+第一次使用 Docker 时，按[本机、Docker 与 CI 测试指南](docs/manual/09-local-docker-and-ci-testing.md)准备环境和读取结果。
 
 ## 数据边界
 

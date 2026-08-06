@@ -95,6 +95,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
+      - name: Verify Docker test wrapper syntax
+        run: bash -n tool/run_postgres_tests_in_docker.sh
+
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install --yes postgresql-client
 

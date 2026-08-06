@@ -9,7 +9,17 @@
 - `checks/`：环境和权限不变量；
 - `fixtures/`：只含 synthetic 数据的可回滚验证资料。
 
-## 本地空库重建
+## Docker 中运行完整数据库测试
+
+没有安装 PostgreSQL 或 `psql` 时，先启动 Docker，再从仓库根目录运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+脚本建立隔离的 PostgreSQL 16 容器，运行 migration、check、fixture、并发和 dump／restore，最后自动删除容器。第一次使用 Docker、需要保留失败容器或理解输出时，阅读[本机、Docker 与 CI 测试指南](../../docs/manual/09-local-docker-and-ci-testing.md)。
+
+## 使用已有 PostgreSQL 测试库
 
 先创建一个专用 PostgreSQL 测试库，再显式传入连接地址：
 
