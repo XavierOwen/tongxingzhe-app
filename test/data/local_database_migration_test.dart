@@ -13,15 +13,50 @@ import '../generated_migrations/schema_v12.dart' as v12;
 import '../generated_migrations/schema_v13.dart' as v13;
 import '../generated_migrations/schema_v14.dart' as v14;
 import '../generated_migrations/schema_v15.dart' as v15;
+import '../generated_migrations/schema_v16.dart' as v16;
 
 void main() {
-  test('保存的 schema v16 可以独立重建', () async {
+  test('保存的 schema v17 可以独立重建', () async {
     final verifier = SchemaVerifier(GeneratedHelper());
-    final connection = await verifier.startAt(16);
+    final connection = await verifier.startAt(17);
     final database = LocalDatabase(connection);
     addTearDown(database.close);
 
-    await verifier.migrateAndValidate(database, 16);
+    await verifier.migrateAndValidate(database, 17);
+  });
+
+  test('v16 升级到 v17 时旧事实保持匿名零对象关联', () async {
+    final verifier = SchemaVerifier(GeneratedHelper());
+    final schema = await verifier.schemaAt(16);
+    addTearDown(schema.close);
+    final oldDatabase = v16.DatabaseAtV16(schema.newConnection());
+    await oldDatabase.customStatement('''
+      INSERT INTO db_contact_records (
+        contact_id, app_user_id, workspace_id, project_id,
+        questionnaire_version_id, occurred_at_utc, occurred_time_zone,
+        first_submitted_at_utc, channel, location_kind, reach_count,
+        interest_level, current_revision, lifecycle_status
+      ) VALUES (
+        'contact-before-v17', 'app-user-1', 'workspace-1', 'project-1',
+        'questionnaire-v1', 1894122000, 'America/Chicago', 1894123800,
+        'video_call', 'not_applicable', 5, 2, 1, 'active'
+      )
+    ''');
+    await oldDatabase.close();
+
+    final database = LocalDatabase(schema.newConnection());
+    addTearDown(database.close);
+    await verifier.migrateAndValidate(database, 17);
+
+    expect(
+      await database.select(database.dbContactRecords).get(),
+      hasLength(1),
+    );
+    expect(await database.select(database.dbContactTargetLinks).get(), isEmpty);
+    expect(
+      await database.select(database.dbContactDraftTargetLinks).get(),
+      isEmpty,
+    );
   });
 
   test('v15 升级到 v16 时保留旧草稿且不猜测升级来源', () async {
@@ -44,7 +79,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 16);
+    await verifier.migrateAndValidate(database, 17);
 
     final draft = await database.select(database.dbContactDrafts).getSingle();
     expect(draft.draftId, 'draft-before-v16');
@@ -63,7 +98,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 16);
+    await verifier.migrateAndValidate(database, 17);
 
     expect(
       (await database.select(database.dbAppSettings).getSingle()).value,
@@ -121,7 +156,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 16);
+    await verifier.migrateAndValidate(database, 17);
 
     final answer = await database.select(database.dbContactAnswers).getSingle();
     expect(answer.booleanValue, isTrue);
@@ -192,7 +227,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 16);
+    await verifier.migrateAndValidate(database, 17);
 
     final submittedAnswer = await database
         .select(database.dbContactAnswers)
@@ -242,7 +277,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 16);
+    await verifier.migrateAndValidate(database, 17);
 
     expect(
       (await database.select(database.dbContactRecords).getSingle()).contactId,
@@ -287,7 +322,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 16);
+    await verifier.migrateAndValidate(database, 17);
 
     final revision = await database
         .select(database.dbContactRevisions)
@@ -334,7 +369,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 16);
+    await verifier.migrateAndValidate(database, 17);
 
     final draft = await database.select(database.dbContactDrafts).getSingle();
     expect(draft.draftId, 'draft-before-v10');
@@ -379,7 +414,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 16);
+    await verifier.migrateAndValidate(database, 17);
 
     final draft = await database.select(database.dbContactDrafts).getSingle();
     expect(draft.draftId, 'draft-before-v9');
@@ -452,7 +487,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 16);
+    await verifier.migrateAndValidate(database, 17);
 
     final contact = await database
         .select(database.dbContactRecords)
@@ -484,7 +519,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 16);
+    await verifier.migrateAndValidate(database, 17);
 
     final legacySetting = await (database.select(
       database.dbAppSettings,

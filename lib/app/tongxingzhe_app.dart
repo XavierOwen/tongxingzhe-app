@@ -323,6 +323,7 @@ final class _ReadyAppState extends State<_ReadyApp> {
         regionResolver: widget.regionResolver,
         questionnaireCatalog: widget.questionnaireCatalog,
         questionnaireAdministration: widget.questionnaireAdministration,
+        promotionTargetGateway: widget.promotionTargetGateway,
         draftId: draftId,
         sourceAttemptId: sourceAttemptId,
       ),
@@ -343,6 +344,7 @@ final class _ReadyAppState extends State<_ReadyApp> {
         locationCapture: widget.locationCapture,
         timeZoneProvider: widget.timeZoneProvider,
         regionResolver: widget.regionResolver,
+        targetGateway: widget.promotionTargetGateway,
       ),
     );
   }
@@ -407,6 +409,7 @@ final class _ContactEntryRoute extends StatefulWidget {
     required this.regionResolver,
     required this.questionnaireCatalog,
     required this.questionnaireAdministration,
+    required this.promotionTargetGateway,
     required this.draftId,
     required this.sourceAttemptId,
   });
@@ -422,6 +425,7 @@ final class _ContactEntryRoute extends StatefulWidget {
   final ContactRegionResolver regionResolver;
   final QuestionnaireCatalog questionnaireCatalog;
   final QuestionnaireAdministrationGateway questionnaireAdministration;
+  final PromotionTargetGateway promotionTargetGateway;
   final String? draftId;
   final String? sourceAttemptId;
 
@@ -613,6 +617,7 @@ final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
           currentQuestionnaireVersion: currentVersion,
           auditedUpgradeCompatibilities:
               snapshot.data?.compatibilities ?? const [],
+          targetGateway: widget.promotionTargetGateway,
         );
       },
     );

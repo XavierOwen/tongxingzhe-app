@@ -20,6 +20,7 @@ export interface PromotionTargetProfile {
   readonly phone: string | null;
   readonly email: string | null;
   readonly createdAt: string;
+  readonly hasCurrentProjectRelationship?: boolean;
 }
 
 export interface CreatePromotionTargetInput {
@@ -205,6 +206,8 @@ function serializeTarget(target: PromotionTargetProfile) {
     phone: target.phone,
     email: target.email,
     created_at: target.createdAt,
+    has_current_project_relationship:
+      target.hasCurrentProjectRelationship ?? false,
   };
 }
 
@@ -217,6 +220,10 @@ function parseTarget(value: unknown): PromotionTargetProfile {
     phone: nullableRequiredString(root.phone),
     email: nullableRequiredString(root.email),
     createdAt: requiredString(root.created_at),
+    hasCurrentProjectRelationship: root.has_current_project_relationship ===
+        undefined
+      ? false
+      : requiredBoolean(root.has_current_project_relationship),
   };
 }
 
@@ -318,6 +325,11 @@ function requiredString(value: unknown): string {
   if (typeof value !== "string" || value.length === 0) {
     throw new TypeError("expected non-empty string");
   }
+  return value;
+}
+
+function requiredBoolean(value: unknown): boolean {
+  if (typeof value !== "boolean") throw new TypeError("expected boolean");
   return value;
 }
 

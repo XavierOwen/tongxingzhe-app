@@ -14,6 +14,7 @@ import 'package:tongxingzhe_app/features/contact_revision/contact_revision_scree
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/regions/contact_region_resolver.dart';
 import 'package:tongxingzhe_app/services/location_service.dart';
+import 'package:tongxingzhe_app/targets/promotion_target.dart';
 
 void main() {
   testWidgets('本人可查看历史、带原因更正并带原因作废', (tester) async {
@@ -49,6 +50,14 @@ void main() {
         location: const NotApplicableContactLocation(),
         reachCount: 1,
         interestLevel: 2,
+        targetLinks: const [
+          ContactTargetLink(
+            targetId: 'target-person',
+            targetType: PromotionTargetType.person,
+            responseLevel: 3,
+            followUpConsent: ContactFollowUpConsent.yes,
+          ),
+        ],
       ),
     );
     final controller = AppController(
@@ -87,6 +96,9 @@ void main() {
       find.byKey(const ValueKey('contact-correction-reach')),
       '3',
     );
+    await tester.tap(
+      find.byKey(const ValueKey('remove-contact-target-link-target-person')),
+    );
     await tester.tap(find.byKey(const ValueKey('confirm-contact-correction')));
     await tester.pumpAndSettle();
 
@@ -94,6 +106,13 @@ void main() {
     expect(find.byKey(const ValueKey('contact-revision-2')), findsOneWidget);
     expect(find.textContaining('修正触达人数'), findsOneWidget);
     expect(find.textContaining('触达人数：3'), findsWidgets);
+    final corrected = await journal.contactById('contact-1');
+    expect(corrected!.targetLinks, isEmpty);
+    final correctedHistory = await journal.listContactRevisions(
+      contactId: 'contact-1',
+      appUserId: _context.appUserId,
+    );
+    expect(correctedHistory.last.targetLinks, hasLength(1));
 
     await tester.tap(find.byKey(const ValueKey('void-contact')));
     await tester.pumpAndSettle();
@@ -152,6 +171,14 @@ void main() {
         location: const NotApplicableContactLocation(),
         reachCount: 1,
         interestLevel: 2,
+        targetLinks: const [
+          ContactTargetLink(
+            targetId: 'target-current',
+            targetType: PromotionTargetType.person,
+            responseLevel: 2,
+            followUpConsent: ContactFollowUpConsent.unknown,
+          ),
+        ],
       ),
     );
     await journal.correctContact(
@@ -169,6 +196,14 @@ void main() {
         location: const NotApplicableContactLocation(),
         reachCount: 4,
         interestLevel: 2,
+        targetLinks: const [
+          ContactTargetLink(
+            targetId: 'target-current',
+            targetType: PromotionTargetType.person,
+            responseLevel: 4,
+            followUpConsent: ContactFollowUpConsent.yes,
+          ),
+        ],
       ),
     );
     await (database.update(database.dbSyncOutbox)
@@ -186,16 +221,28 @@ void main() {
             projectId: _context.project.id,
             baseRevision: 1,
             currentRevision: 2,
-            conflictingFieldsJson: jsonEncode(['reachCount', 'answers']),
+            conflictingFieldsJson: jsonEncode([
+              'reachCount',
+              'answers',
+              'targetLinks',
+            ]),
             questionnaireVersionId: _context.questionnaireVersion.id,
             currentRevisionKind: 'corrected',
             currentRevisedAtUtc: clock.now(),
             currentReason: '另一台设备修正人数',
             currentSnapshotJson: jsonEncode(
-              _snapshot(reachCount: 4, answerValue: true),
+              _snapshot(
+                reachCount: 4,
+                answerValue: true,
+                targetId: 'target-current',
+              ),
             ),
             proposedSnapshotJson: jsonEncode(
-              _snapshot(reachCount: 3, answerValue: false),
+              _snapshot(
+                reachCount: 3,
+                answerValue: false,
+                targetId: 'target-proposed',
+              ),
             ),
             createdAtUtc: clock.now(),
           ),
@@ -229,6 +276,7 @@ void main() {
     expect(find.textContaining('本机：3'), findsOne);
     expect(find.textContaining('follow_up: 是'), findsOne);
     expect(find.textContaining('follow_up: 否'), findsOne);
+    expect(find.textContaining('关联推广对象'), findsWidgets);
     expect(
       find.byKey(const ValueKey('use-current-conflict-1')),
       findsOneWidget,
@@ -244,6 +292,10 @@ void main() {
       find.byKey(const ValueKey('conflict-answer-source')),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const ValueKey('conflict-target-link-source')),
+      findsOneWidget,
+    );
     await tester.enterText(
       find.byKey(const ValueKey('contact-correction-reason')),
       '组合两边修改',
@@ -253,6 +305,12 @@ void main() {
       '5',
     );
     await tester.tap(find.byKey(const ValueKey('use-proposed-answers')));
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('conflict-target-link-source')),
+        matching: find.text('本机'),
+      ),
+    );
     await tester.tap(find.byKey(const ValueKey('confirm-contact-correction')));
     await tester.pumpAndSettle();
 
@@ -269,6 +327,7 @@ void main() {
     final resolvedAnswer =
         resolved!.answers.single as BooleanQuestionnaireAnswer;
     expect(resolvedAnswer.value, isFalse);
+    expect(resolved.targetLinks.single.targetId, 'target-proposed');
     final resolution = await (database.select(
       database.dbSyncOutbox,
     )..where((row) => row.commandId.equals('command-resolution'))).getSingle();
@@ -276,34 +335,49 @@ void main() {
   });
 }
 
-Map<String, Object?> _snapshot({required int reachCount, bool? answerValue}) =>
-    {
-      'occurredAtUtc': '2030-01-09T17:00:00.000Z',
-      'occurredTimeZone': 'America/Chicago',
-      'channel': 'video_call',
-      'channelDetail': null,
-      'location': {
-        'kind': 'not_applicable',
-        'placeName': null,
-        'smallestRegionId': null,
-        'regionTreeVersion': null,
-        'latitude': null,
-        'longitude': null,
-        'accuracyMeters': null,
-      },
-      'reachCount': reachCount,
-      'interestLevel': 2,
-      'answers': answerValue == null
-          ? <Object?>[]
-          : <Object?>[
-              {
-                'questionId': 'follow_up',
-                'state': 'answered',
-                'type': 'boolean',
-                'value': answerValue,
-              },
-            ],
-    };
+Map<String, Object?> _snapshot({
+  required int reachCount,
+  bool? answerValue,
+  String? targetId,
+}) => {
+  'occurredAtUtc': '2030-01-09T17:00:00.000Z',
+  'occurredTimeZone': 'America/Chicago',
+  'channel': 'video_call',
+  'channelDetail': null,
+  'location': {
+    'kind': 'not_applicable',
+    'placeName': null,
+    'smallestRegionId': null,
+    'regionTreeVersion': null,
+    'latitude': null,
+    'longitude': null,
+    'accuracyMeters': null,
+  },
+  'reachCount': reachCount,
+  'interestLevel': 2,
+  'answers': answerValue == null
+      ? <Object?>[]
+      : <Object?>[
+          {
+            'questionId': 'follow_up',
+            'state': 'answered',
+            'type': 'boolean',
+            'value': answerValue,
+          },
+        ],
+  'targetLinks': targetId == null
+      ? <Object?>[]
+      : <Object?>[
+          {
+            'targetId': targetId,
+            'targetType': 'person',
+            'responseLevel': 3,
+            'followUpConsent': 'yes',
+            'institutionRepresentativeConfirmed': false,
+            'confirmStageZero': false,
+          },
+        ],
+};
 
 const _context = TrustedSessionContext(
   appUserId: 'app-user-1',

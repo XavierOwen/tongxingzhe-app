@@ -8,7 +8,9 @@ import '../../device/device_time_zone.dart';
 import '../../l10n/app_strings.dart';
 import '../../regions/contact_region_resolver.dart';
 import '../../services/location_service.dart';
+import '../../targets/promotion_target.dart';
 import '../contact_entry/contact_channel_label.dart';
+import '../contact_entry/contact_target_links_editor.dart';
 import '../contact_journal/contact_journal.dart';
 import '../contact_journal/contact_models.dart';
 
@@ -24,6 +26,7 @@ final class ContactRevisionScreen extends StatefulWidget {
     required this.locationCapture,
     required this.timeZoneProvider,
     required this.regionResolver,
+    this.targetGateway,
   });
 
   final AppController controller;
@@ -34,6 +37,7 @@ final class ContactRevisionScreen extends StatefulWidget {
   final ContactLocationCapture locationCapture;
   final DeviceTimeZoneProvider timeZoneProvider;
   final ContactRegionResolver regionResolver;
+  final PromotionTargetGateway? targetGateway;
 
   @override
   State<ContactRevisionScreen> createState() => _ContactRevisionScreenState();
@@ -288,6 +292,7 @@ final class _ContactRevisionScreenState extends State<ContactRevisionScreen> {
       'reachCount' => text.t('reachCount'),
       'interestLevel' => text.t('interestLevel'),
       'answers' => text.t('questionnaireAnswers'),
+      'targetLinks' => text.t('contactTargetLinks'),
       _ => field,
     };
     return [
@@ -309,6 +314,7 @@ final class _ContactRevisionScreenState extends State<ContactRevisionScreen> {
     'reachCount' => '${snapshot.reachCount}',
     'interestLevel' => '${snapshot.interestLevel}',
     'answers' => _questionnaireAnswerSummary(text, snapshot.answers),
+    'targetLinks' => '${snapshot.targetLinks.length}',
     _ => text.t('unknownValue'),
   };
 
@@ -359,6 +365,10 @@ final class _ContactRevisionScreenState extends State<ContactRevisionScreen> {
         proposedAnswers: conflict.conflictingFields.contains('answers')
             ? conflict.proposedSnapshot.answers
             : null,
+        proposedTargetLinks: conflict.conflictingFields.contains('targetLinks')
+            ? conflict.proposedSnapshot.targetLinks
+            : null,
+        targetGateway: widget.targetGateway,
       ),
     );
     if (values == null || !mounted) {
@@ -375,6 +385,7 @@ final class _ContactRevisionScreenState extends State<ContactRevisionScreen> {
         reachCount: values.reachCount,
         interestLevel: values.interestLevel,
         answers: values.answers,
+        targetLinks: values.targetLinks,
       ),
       values.reason,
     );
@@ -389,6 +400,7 @@ final class _ContactRevisionScreenState extends State<ContactRevisionScreen> {
         locationCapture: widget.locationCapture,
         timeZoneProvider: widget.timeZoneProvider,
         regionResolver: widget.regionResolver,
+        targetGateway: widget.targetGateway,
       ),
     );
     if (values == null || !mounted) {
@@ -413,6 +425,7 @@ final class _ContactRevisionScreenState extends State<ContactRevisionScreen> {
           reachCount: values.reachCount,
           interestLevel: values.interestLevel,
           answers: values.answers,
+          targetLinks: values.targetLinks,
         ),
       );
       await _load();
@@ -480,6 +493,7 @@ final class _ContactRevisionScreenState extends State<ContactRevisionScreen> {
     '${text.t('location')}：${_locationLabel(text, contact.location)}',
     '${text.t('reachCount')}：${contact.reachCount}',
     '${text.t('interestLevel')}：${contact.interestLevel}',
+    '${text.t('contactTargetLinks')}：${contact.targetLinks.length}',
   ].join('\n');
 
   String _revisionFactSummary(AppStrings text, ContactRevision revision) => [
@@ -487,6 +501,7 @@ final class _ContactRevisionScreenState extends State<ContactRevisionScreen> {
     '${text.t('contactChannel')}：${contactChannelLabel(text, revision.channel)}',
     '${text.t('reachCount')}：${revision.reachCount}',
     '${text.t('interestLevel')}：${revision.interestLevel}',
+    '${text.t('contactTargetLinks')}：${revision.targetLinks.length}',
   ].join('\n');
 
   String _revisionTitle(AppStrings text, ContactRevision revision) =>
@@ -554,6 +569,8 @@ final class _CorrectionDialog extends StatefulWidget {
     required this.regionResolver,
     this.titleKey = 'correctContact',
     this.proposedAnswers,
+    this.proposedTargetLinks,
+    this.targetGateway,
   });
 
   final AppStrings text;
@@ -563,6 +580,8 @@ final class _CorrectionDialog extends StatefulWidget {
   final ContactRegionResolver regionResolver;
   final String titleKey;
   final List<QuestionnaireAnswer>? proposedAnswers;
+  final List<ContactTargetLink>? proposedTargetLinks;
+  final PromotionTargetGateway? targetGateway;
 
   @override
   State<_CorrectionDialog> createState() => _CorrectionDialogState();
@@ -577,7 +596,13 @@ final class _CorrectionDialogState extends State<_CorrectionDialog> {
   late ContactChannel _channel;
   late ContactLocation _location;
   late int _interestLevel;
+  late List<ContactTargetLink> _targetLinks;
+  List<PromotionTargetProfile> _assignedTargets = const [];
   var _useProposedAnswers = false;
+  var _useProposedTargetLinks = false;
+  var _targetsLoading = false;
+  var _targetsLoaded = false;
+  var _targetLoadFailed = false;
   var _capturingLocation = false;
   String? _error;
 
@@ -596,6 +621,8 @@ final class _CorrectionDialogState extends State<_CorrectionDialog> {
     _channel = widget.contact.channel;
     _location = widget.contact.location;
     _interestLevel = widget.contact.interestLevel;
+    _targetLinks = [...widget.contact.targetLinks];
+    unawaited(_loadAssignedTargets());
   }
 
   @override
@@ -704,6 +731,49 @@ final class _CorrectionDialogState extends State<_CorrectionDialog> {
                 onSelectionChanged: (selection) {
                   setState(() => _interestLevel = selection.single);
                 },
+              ),
+              if (widget.proposedTargetLinks != null) ...[
+                const SizedBox(height: 12),
+                Text(widget.text.t('contactTargetLinks')),
+                SegmentedButton<bool>(
+                  key: const ValueKey('conflict-target-link-source'),
+                  segments: [
+                    ButtonSegment(
+                      value: false,
+                      label: Text(widget.text.t('contactConflictCurrent')),
+                    ),
+                    ButtonSegment(
+                      value: true,
+                      label: Text(widget.text.t('contactConflictProposed')),
+                    ),
+                  ],
+                  selected: {_useProposedTargetLinks},
+                  onSelectionChanged: (selection) {
+                    setState(() {
+                      _useProposedTargetLinks = selection.single;
+                      _targetLinks = [
+                        ...(_useProposedTargetLinks
+                            ? widget.proposedTargetLinks!
+                            : widget.contact.targetLinks),
+                      ];
+                    });
+                  },
+                ),
+              ],
+              const SizedBox(height: 12),
+              ContactTargetLinksEditor(
+                text: widget.text,
+                targetLinks: _targetLinks,
+                assignedTargets: _assignedTargets,
+                isLoading: _targetsLoading,
+                loadFailed: _targetLoadFailed,
+                hasLoaded: _targetsLoaded,
+                onAdd: _addTarget,
+                onRemove: _removeTarget,
+                onResponseChanged: _setTargetResponse,
+                onConsentChanged: _setTargetConsent,
+                onRepresentativeChanged: _setTargetRepresentative,
+                onRetry: _loadAssignedTargets,
               ),
               if (widget.proposedAnswers != null) ...[
                 const SizedBox(height: 12),
@@ -889,8 +959,139 @@ final class _CorrectionDialogState extends State<_CorrectionDialog> {
         answers: _useProposedAnswers
             ? widget.proposedAnswers!
             : widget.contact.answers,
+        targetLinks: List.unmodifiable(_targetLinks),
       ),
     );
+  }
+
+  Future<void> _loadAssignedTargets() async {
+    final gateway = widget.targetGateway;
+    if (gateway == null || _targetsLoading) return;
+    setState(() {
+      _targetsLoading = true;
+      _targetLoadFailed = false;
+    });
+    PromotionTargetResult<List<PromotionTargetProfile>> result;
+    try {
+      result = await gateway.loadAssigned();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _targetsLoading = false;
+        _targetLoadFailed = true;
+      });
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _targetsLoading = false;
+      _targetsLoaded = result is PromotionTargetSuccess;
+      _targetLoadFailed = result is PromotionTargetRejected;
+      _assignedTargets = switch (result) {
+        PromotionTargetSuccess<List<PromotionTargetProfile>>(:final value) =>
+          List.unmodifiable(value),
+        PromotionTargetRejected<List<PromotionTargetProfile>>() => const [],
+      };
+    });
+  }
+
+  Future<void> _addTarget(PromotionTargetProfile target) async {
+    var confirmed = false;
+    if (!target.hasCurrentProjectRelationship) {
+      confirmed =
+          await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text(widget.text.t('confirmTargetProjectEntry')),
+              content: Text(widget.text.t('confirmTargetProjectEntryHelp')),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: Text(widget.text.t('cancel')),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: Text(widget.text.t('confirm')),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+      if (!confirmed || !mounted) return;
+    }
+    if (_targetLinks.any((link) => link.targetId == target.id)) return;
+    setState(() {
+      _targetLinks.add(
+        ContactTargetLink(
+          targetId: target.id,
+          targetType: target.type,
+          confirmStageZero: confirmed,
+        ),
+      );
+    });
+  }
+
+  void _removeTarget(String targetId) {
+    setState(() {
+      _targetLinks.removeWhere((link) => link.targetId == targetId);
+    });
+  }
+
+  void _setTargetResponse(String targetId, int? responseLevel) {
+    _replaceTargetLink(targetId, (link) {
+      if (link.targetType == PromotionTargetType.institution &&
+          responseLevel != null &&
+          !link.institutionRepresentativeConfirmed) {
+        return link;
+      }
+      return ContactTargetLink(
+        targetId: link.targetId,
+        targetType: link.targetType,
+        responseLevel: responseLevel,
+        followUpConsent: link.followUpConsent,
+        institutionRepresentativeConfirmed:
+            link.institutionRepresentativeConfirmed,
+        confirmStageZero: link.confirmStageZero,
+      );
+    });
+  }
+
+  void _setTargetConsent(String targetId, ContactFollowUpConsent consent) {
+    _replaceTargetLink(
+      targetId,
+      (link) => ContactTargetLink(
+        targetId: link.targetId,
+        targetType: link.targetType,
+        responseLevel: link.responseLevel,
+        followUpConsent: consent,
+        institutionRepresentativeConfirmed:
+            link.institutionRepresentativeConfirmed,
+        confirmStageZero: link.confirmStageZero,
+      ),
+    );
+  }
+
+  void _setTargetRepresentative(String targetId, bool confirmed) {
+    _replaceTargetLink(
+      targetId,
+      (link) => ContactTargetLink(
+        targetId: link.targetId,
+        targetType: link.targetType,
+        responseLevel: confirmed ? link.responseLevel : null,
+        followUpConsent: link.followUpConsent,
+        institutionRepresentativeConfirmed: confirmed,
+        confirmStageZero: link.confirmStageZero,
+      ),
+    );
+  }
+
+  void _replaceTargetLink(
+    String targetId,
+    ContactTargetLink Function(ContactTargetLink link) replace,
+  ) {
+    final index = _targetLinks.indexWhere((link) => link.targetId == targetId);
+    if (index < 0) return;
+    setState(() => _targetLinks[index] = replace(_targetLinks[index]));
   }
 }
 
@@ -905,6 +1106,7 @@ final class _CorrectionValues {
     required this.reachCount,
     required this.interestLevel,
     required this.answers,
+    required this.targetLinks,
   });
 
   final String reason;
@@ -916,6 +1118,7 @@ final class _CorrectionValues {
   final int reachCount;
   final int interestLevel;
   final List<QuestionnaireAnswer> answers;
+  final List<ContactTargetLink> targetLinks;
 }
 
 bool _usesAutomaticNotApplicableLocation(ContactChannel channel) =>

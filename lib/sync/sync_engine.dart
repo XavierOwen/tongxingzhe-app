@@ -10,6 +10,7 @@ import '../questionnaires/questionnaire_answer_codec.dart';
 import '../questionnaires/questionnaire_contract.dart'
     show QuestionnaireQuestionType;
 import '../regions/region_catalog.dart';
+import '../targets/promotion_target.dart';
 import 'sync_models.dart';
 import 'sync_transport.dart';
 
@@ -624,6 +625,12 @@ final class SyncEngine {
               row.revisionNumber.isBiggerThanValue(conflict.baseRevision),
         ))
         .go();
+    await (_database.delete(_database.dbContactTargetLinks)..where(
+          (row) =>
+              row.contactId.equals(command.aggregateId) &
+              row.revisionNumber.isBiggerThanValue(conflict.baseRevision),
+        ))
+        .go();
     await (_database.delete(_database.dbContactRevisions)..where(
           (row) =>
               row.contactId.equals(command.aggregateId) &
@@ -664,6 +671,11 @@ final class SyncEngine {
         answer: answer,
       );
     }
+    await _insertRemoteContactTargetLinks(
+      contactId: command.aggregateId,
+      revisionNumber: conflict.currentRevision,
+      targetLinks: conflict.currentSnapshot.targetLinks,
+    );
     await (_database.update(
       _database.dbContactRecords,
     )..where((row) => row.contactId.equals(command.aggregateId))).write(
@@ -765,10 +777,16 @@ final class SyncEngine {
     final expected = {
       for (final answer in snapshot.answers) answer.questionId: answer,
     };
-    return answers.every((answer) {
+    final answersMatch = answers.every((answer) {
       final value = expected[answer.questionId];
       return value != null && _storedContactAnswerMatches(answer, value);
     });
+    return answersMatch &&
+        await _contactTargetLinksMatchRemote(
+          contactId,
+          revisionNumber,
+          snapshot.targetLinks,
+        );
   }
 
   Map<String, Object?> _conflictSnapshotPayload(
@@ -800,6 +818,18 @@ final class SyncEngine {
             'value': answer.state == QuestionnaireAnswerState.answered
                 ? answer.value
                 : null,
+          },
+      ],
+      'targetLinks': [
+        for (final link in snapshot.targetLinks)
+          {
+            'targetId': link.targetId,
+            'targetType': link.targetType.storageValue,
+            'responseLevel': link.responseLevel,
+            'followUpConsent': link.followUpConsent.storageValue,
+            'institutionRepresentativeConfirmed':
+                link.institutionRepresentativeConfirmed,
+            'confirmStageZero': link.confirmStageZero,
           },
       ],
     };
@@ -964,6 +994,7 @@ final class SyncEngine {
         answers.length) {
       throw const FormatException('remote answers contain duplicate IDs');
     }
+    final targetLinks = _remoteTargetLinks(payload['targetLinks']);
     return _RemoteContact(
       contactId: _requiredString(payload['contactId']),
       questionnaireVersionId: _requiredString(
@@ -978,6 +1009,7 @@ final class SyncEngine {
       reachCount: reachCount,
       interestLevel: interestLevel,
       answers: answers,
+      targetLinks: targetLinks,
       sourceAttemptId: _optionalString(payload['sourceAttemptId']),
     );
   }
@@ -1023,6 +1055,7 @@ final class SyncEngine {
         answers.length) {
       throw const FormatException('remote answers contain duplicate IDs');
     }
+    final targetLinks = _remoteTargetLinks(payload['targetLinks']);
     return _RemoteContactRevision(
       contactId: _requiredString(payload['contactId']),
       revisionNumber: change.revisionNumber,
@@ -1041,6 +1074,7 @@ final class SyncEngine {
       reachCount: reachCount,
       interestLevel: interestLevel,
       answers: answers,
+      targetLinks: targetLinks,
     );
   }
 
@@ -1106,6 +1140,7 @@ final class SyncEngine {
         answers.length) {
       throw const FormatException('remote answers contain duplicate IDs');
     }
+    final targetLinks = _remoteTargetLinks(payload['targetLinks']);
     final draftId = _requiredString(payload['draftId']);
     final upgradedFromDraftId = _optionalString(payload['upgradedFromDraftId']);
     if (upgradedFromDraftId == draftId) {
@@ -1126,6 +1161,7 @@ final class SyncEngine {
       reachCount: reachCount,
       interestLevel: interestLevel,
       answers: answers,
+      targetLinks: targetLinks,
       serverRevision: serverRevision,
       sourceDeviceId: _requiredString(payload['sourceDeviceId']),
       sourceAttemptId: _optionalString(payload['sourceAttemptId']),
@@ -1239,6 +1275,11 @@ final class SyncEngine {
         answer: answer,
       );
     }
+    await _insertRemoteContactTargetLinks(
+      contactId: contact.contactId,
+      revisionNumber: 1,
+      targetLinks: contact.targetLinks,
+    );
     await _linkRemoteSourceAttempt(contact);
   }
 
@@ -1276,6 +1317,12 @@ final class SyncEngine {
         );
       }
       await (_database.delete(_database.dbContactAnswers)..where(
+            (row) =>
+                row.contactId.equals(revision.contactId) &
+                row.revisionNumber.equals(revision.revisionNumber),
+          ))
+          .go();
+      await (_database.delete(_database.dbContactTargetLinks)..where(
             (row) =>
                 row.contactId.equals(revision.contactId) &
                 row.revisionNumber.equals(revision.revisionNumber),
@@ -1342,6 +1389,11 @@ final class SyncEngine {
         answer: answer,
       );
     }
+    await _insertRemoteContactTargetLinks(
+      contactId: revision.contactId,
+      revisionNumber: revision.revisionNumber,
+      targetLinks: revision.targetLinks,
+    );
     await (_database.update(
       _database.dbContactRecords,
     )..where((row) => row.contactId.equals(revision.contactId))).write(
@@ -1583,6 +1635,7 @@ final class SyncEngine {
     for (final answer in draft.answers) {
       await _insertDraftAnswer(draftId: draft.draftId, answer: answer);
     }
+    await _insertRemoteDraftTargetLinks(draft.draftId, draft.targetLinks);
     if (draft.location case final ResolvedContactLocation resolved) {
       await _regionCatalog.assignDraft(
         draftId: draft.draftId,
@@ -1629,10 +1682,11 @@ final class SyncEngine {
     final remoteById = {
       for (final answer in draft.answers) answer.questionId: answer,
     };
-    return stored.every((answer) {
+    final answersMatch = stored.every((answer) {
       final remote = remoteById[answer.questionId];
       return remote != null && _storedDraftAnswerMatches(answer, remote);
     });
+    return answersMatch && await _draftTargetLinksMatchRemote(draft);
   }
 
   Future<bool> _draftHasPendingChanges(String draftId) async {
@@ -1652,6 +1706,9 @@ final class SyncEngine {
         '$_workerId:${existing.localRevision}';
     final answers = await (_database.select(
       _database.dbContactDraftAnswers,
+    )..where((row) => row.draftId.equals(existing.draftId))).get();
+    final targetLinks = await (_database.select(
+      _database.dbContactDraftTargetLinks,
     )..where((row) => row.draftId.equals(existing.draftId))).get();
     final assignment = await (_database.select(
       _database.dbDraftRegionAssignments,
@@ -1701,6 +1758,22 @@ final class SyncEngine {
               textValue: Value(answer.textValue),
               numberValue: Value(answer.numberValue),
               multiChoiceValueJson: Value(answer.multiChoiceValueJson),
+            ),
+          );
+    }
+    for (final link in targetLinks) {
+      await _database
+          .into(_database.dbContactDraftTargetLinks)
+          .insert(
+            DbContactDraftTargetLinksCompanion.insert(
+              draftId: conflictId,
+              targetId: link.targetId,
+              targetType: link.targetType,
+              responseLevel: Value(link.responseLevel),
+              followUpConsent: link.followUpConsent,
+              institutionRepresentativeConfirmed:
+                  link.institutionRepresentativeConfirmed,
+              confirmStageZero: link.confirmStageZero,
             ),
           );
     }
@@ -1754,6 +1827,9 @@ final class SyncEngine {
     await _regionCatalog.clearDraftAssignment(draftId);
     await (_database.delete(
       _database.dbContactDraftAnswers,
+    )..where((row) => row.draftId.equals(draftId))).go();
+    await (_database.delete(
+      _database.dbContactDraftTargetLinks,
     )..where((row) => row.draftId.equals(draftId))).go();
     await (_database.delete(
       _database.dbContactDrafts,
@@ -1816,10 +1892,16 @@ final class SyncEngine {
     final remoteAnswers = {
       for (final answer in contact.answers) answer.questionId: answer,
     };
-    return storedAnswers.every((stored) {
+    final answersMatch = storedAnswers.every((stored) {
       final remote = remoteAnswers[stored.questionId];
       return remote != null && _storedContactAnswerMatches(stored, remote);
     });
+    return answersMatch &&
+        await _contactTargetLinksMatchRemote(
+          contact.contactId,
+          1,
+          contact.targetLinks,
+        );
   }
 
   Future<bool> _existingRevisionMatchesRemote(
@@ -1864,11 +1946,17 @@ final class SyncEngine {
     final remoteAnswers = {
       for (final answer in revision.answers) answer.questionId: answer,
     };
-    return storedAnswers.every((storedAnswer) {
+    final answersMatch = storedAnswers.every((storedAnswer) {
       final remote = remoteAnswers[storedAnswer.questionId];
       return remote != null &&
           _storedContactAnswerMatches(storedAnswer, remote);
     });
+    return answersMatch &&
+        await _contactTargetLinksMatchRemote(
+          revision.contactId,
+          revision.revisionNumber,
+          revision.targetLinks,
+        );
   }
 
   bool _currentProjectionMatchesRevision(
@@ -1967,6 +2055,110 @@ final class SyncEngine {
         );
   }
 
+  Future<void> _insertRemoteContactTargetLinks({
+    required String contactId,
+    required int revisionNumber,
+    required List<ContactTargetLink> targetLinks,
+  }) async {
+    for (final link in targetLinks) {
+      await _database
+          .into(_database.dbContactTargetLinks)
+          .insert(
+            DbContactTargetLinksCompanion.insert(
+              contactId: contactId,
+              revisionNumber: revisionNumber,
+              targetId: link.targetId,
+              targetType: link.targetType.storageValue,
+              responseLevel: Value(link.responseLevel),
+              followUpConsent: link.followUpConsent.storageValue,
+              institutionRepresentativeConfirmed:
+                  link.institutionRepresentativeConfirmed,
+              confirmStageZero: link.confirmStageZero,
+            ),
+          );
+    }
+  }
+
+  Future<void> _insertRemoteDraftTargetLinks(
+    String draftId,
+    List<ContactTargetLink> targetLinks,
+  ) async {
+    for (final link in targetLinks) {
+      await _database
+          .into(_database.dbContactDraftTargetLinks)
+          .insert(
+            DbContactDraftTargetLinksCompanion.insert(
+              draftId: draftId,
+              targetId: link.targetId,
+              targetType: link.targetType.storageValue,
+              responseLevel: Value(link.responseLevel),
+              followUpConsent: link.followUpConsent.storageValue,
+              institutionRepresentativeConfirmed:
+                  link.institutionRepresentativeConfirmed,
+              confirmStageZero: link.confirmStageZero,
+            ),
+          );
+    }
+  }
+
+  Future<bool> _contactTargetLinksMatchRemote(
+    String contactId,
+    int revisionNumber,
+    List<ContactTargetLink> remote,
+  ) async {
+    final stored =
+        await (_database.select(_database.dbContactTargetLinks)..where(
+              (row) =>
+                  row.contactId.equals(contactId) &
+                  row.revisionNumber.equals(revisionNumber),
+            ))
+            .get();
+    return _storedTargetLinksMatch(stored, remote);
+  }
+
+  Future<bool> _draftTargetLinksMatchRemote(_RemoteDraftUpsert draft) async {
+    final stored = await (_database.select(
+      _database.dbContactDraftTargetLinks,
+    )..where((row) => row.draftId.equals(draft.draftId))).get();
+    return _storedDraftTargetLinksMatch(stored, draft.targetLinks);
+  }
+
+  bool _storedTargetLinksMatch(
+    List<DbContactTargetLink> stored,
+    List<ContactTargetLink> remote,
+  ) {
+    if (stored.length != remote.length) return false;
+    final remoteById = {for (final link in remote) link.targetId: link};
+    return stored.every((row) {
+      final link = remoteById[row.targetId];
+      return link != null &&
+          row.targetType == link.targetType.storageValue &&
+          row.responseLevel == link.responseLevel &&
+          row.followUpConsent == link.followUpConsent.storageValue &&
+          row.institutionRepresentativeConfirmed ==
+              link.institutionRepresentativeConfirmed &&
+          row.confirmStageZero == link.confirmStageZero;
+    });
+  }
+
+  bool _storedDraftTargetLinksMatch(
+    List<DbContactDraftTargetLink> stored,
+    List<ContactTargetLink> remote,
+  ) {
+    if (stored.length != remote.length) return false;
+    final remoteById = {for (final link in remote) link.targetId: link};
+    return stored.every((row) {
+      final link = remoteById[row.targetId];
+      return link != null &&
+          row.targetType == link.targetType.storageValue &&
+          row.responseLevel == link.responseLevel &&
+          row.followUpConsent == link.followUpConsent.storageValue &&
+          row.institutionRepresentativeConfirmed ==
+              link.institutionRepresentativeConfirmed &&
+          row.confirmStageZero == link.confirmStageZero;
+    });
+  }
+
   Future<void> _insertDraftAnswer({
     required String draftId,
     required QuestionnaireAnswer answer,
@@ -2055,6 +2247,63 @@ final class SyncEngine {
       'type': value['type'],
       'value': value['value'],
     });
+  }
+
+  List<ContactTargetLink> _remoteTargetLinks(Object? value) {
+    if (value == null) return const [];
+    if (value is! List<Object?>) {
+      throw const FormatException('remote target links must be a list');
+    }
+    final targetIds = <String>{};
+    return [
+      for (final candidate in value)
+        (() {
+          if (candidate is! Map<String, Object?>) {
+            throw const FormatException('invalid remote target link');
+          }
+          final targetId = _requiredString(candidate['targetId']);
+          if (!targetIds.add(targetId)) {
+            throw const FormatException('duplicate remote target link');
+          }
+          final targetType = switch (_requiredString(candidate['targetType'])) {
+            'person' => PromotionTargetType.person,
+            'institution' => PromotionTargetType.institution,
+            _ => throw const FormatException('invalid remote target type'),
+          };
+          final responseLevel = _optionalInteger(candidate['responseLevel']);
+          final consent = switch (_requiredString(
+            candidate['followUpConsent'],
+          )) {
+            'yes' => ContactFollowUpConsent.yes,
+            'no' => ContactFollowUpConsent.no,
+            'unknown' => ContactFollowUpConsent.unknown,
+            'refused' => ContactFollowUpConsent.refused,
+            'not_applicable' => ContactFollowUpConsent.notApplicable,
+            _ => throw const FormatException('invalid remote consent'),
+          };
+          final representative =
+              candidate['institutionRepresentativeConfirmed'];
+          final confirmStageZero = candidate['confirmStageZero'];
+          if (responseLevel != null &&
+                  (responseLevel < 0 || responseLevel > 4) ||
+              representative is! bool ||
+              confirmStageZero is! bool ||
+              targetType == PromotionTargetType.person && representative ||
+              targetType == PromotionTargetType.institution &&
+                  responseLevel != null &&
+                  !representative) {
+            throw const FormatException('invalid remote target link');
+          }
+          return ContactTargetLink(
+            targetId: targetId,
+            targetType: targetType,
+            responseLevel: responseLevel,
+            followUpConsent: consent,
+            institutionRepresentativeConfirmed: representative,
+            confirmStageZero: confirmStageZero,
+          );
+        })(),
+    ];
   }
 
   ({
@@ -2195,6 +2444,7 @@ final class _RemoteContact extends _ParsedRemoteChange {
     required this.reachCount,
     required this.interestLevel,
     required this.answers,
+    required this.targetLinks,
     required this.sourceAttemptId,
   });
 
@@ -2209,6 +2459,7 @@ final class _RemoteContact extends _ParsedRemoteChange {
   final int reachCount;
   final int interestLevel;
   final List<QuestionnaireAnswer> answers;
+  final List<ContactTargetLink> targetLinks;
   final String? sourceAttemptId;
 }
 
@@ -2229,6 +2480,7 @@ final class _RemoteContactRevision extends _ParsedRemoteChange {
     required this.reachCount,
     required this.interestLevel,
     required this.answers,
+    required this.targetLinks,
   });
 
   final String contactId;
@@ -2246,6 +2498,7 @@ final class _RemoteContactRevision extends _ParsedRemoteChange {
   final int reachCount;
   final int interestLevel;
   final List<QuestionnaireAnswer> answers;
+  final List<ContactTargetLink> targetLinks;
 }
 
 final class _RemoteContactAttempt extends _ParsedRemoteChange {
@@ -2282,6 +2535,7 @@ final class _RemoteDraftUpsert extends _ParsedRemoteChange {
     required this.reachCount,
     required this.interestLevel,
     required this.answers,
+    required this.targetLinks,
     required this.serverRevision,
     required this.sourceDeviceId,
     required this.sourceAttemptId,
@@ -2300,6 +2554,7 @@ final class _RemoteDraftUpsert extends _ParsedRemoteChange {
   final int? reachCount;
   final int? interestLevel;
   final List<QuestionnaireAnswer> answers;
+  final List<ContactTargetLink> targetLinks;
   final int serverRevision;
   final String sourceDeviceId;
   final String? sourceAttemptId;

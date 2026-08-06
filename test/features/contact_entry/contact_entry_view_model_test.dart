@@ -10,6 +10,7 @@ import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/regions/contact_region_resolver.dart';
 import 'package:tongxingzhe_app/questionnaires/questionnaire_contract.dart';
 import 'package:tongxingzhe_app/services/location_service.dart';
+import 'package:tongxingzhe_app/targets/promotion_target.dart';
 
 void main() {
   test('新接触使用当前 UTC 时刻和设备 IANA 时区', () async {
@@ -81,6 +82,59 @@ void main() {
 
     expect(await viewModel.submit(), isTrue);
     expect(store.submitCalls, 2);
+  });
+
+  test('对象候选载入失败不阻止匿名接触提交', () async {
+    final store = _FakeEntryStore();
+    final viewModel = _viewModel(
+      store: store,
+      targetGateway: const _FakeTargetGateway(
+        PromotionTargetRejected(PromotionTargetFailureCode.networkUnavailable),
+      ),
+    );
+    await viewModel.initialize();
+    await Future<void>.delayed(Duration.zero);
+    viewModel
+      ..setChannel(ContactChannel.videoCall)
+      ..setReachCountText('2')
+      ..setInterestLevel(3);
+    await viewModel.flushDraft();
+
+    expect(viewModel.state.targetLoadState, ContactTargetLoadState.failed);
+    expect(viewModel.state.targetLinks, isEmpty);
+    expect(viewModel.state.canSubmit, isTrue);
+  });
+
+  test('首次项目关联必须显式确认阶段 0', () async {
+    final viewModel = _viewModel(store: _FakeEntryStore());
+    await viewModel.initialize();
+    final target = _target(hasCurrentProjectRelationship: false);
+
+    expect(viewModel.linkTarget(target, confirmStageZero: false), isFalse);
+    expect(viewModel.state.targetLinks, isEmpty);
+
+    expect(viewModel.linkTarget(target, confirmStageZero: true), isTrue);
+    expect(viewModel.state.targetLinks.single.confirmStageZero, isTrue);
+  });
+
+  test('机构反应只有在确认代表后才可记录，撤销确认会清空反应', () async {
+    final viewModel = _viewModel(store: _FakeEntryStore());
+    await viewModel.initialize();
+    final institution = _target(
+      type: PromotionTargetType.institution,
+      hasCurrentProjectRelationship: true,
+    );
+    viewModel.linkTarget(institution, confirmStageZero: false);
+
+    viewModel.setTargetResponse(institution.id, 4);
+    expect(viewModel.state.targetLinks.single.responseLevel, isNull);
+
+    viewModel.setInstitutionRepresentativeConfirmed(institution.id, true);
+    viewModel.setTargetResponse(institution.id, 4);
+    expect(viewModel.state.targetLinks.single.responseLevel, 4);
+
+    viewModel.setInstitutionRepresentativeConfirmed(institution.id, false);
+    expect(viewModel.state.targetLinks.single.responseLevel, isNull);
   });
 
   test('定位失败后可重试，并把坐标状态留在 ViewModel', () async {
@@ -297,6 +351,7 @@ ContactEntryViewModel _viewModel({
   ContactRegionResolver regionResolver = const DeferredContactRegionResolver(),
   QuestionnaireVersion? questionnaireVersion,
   TrustedSessionContext context = _context,
+  PromotionTargetGateway? targetGateway,
   Duration questionnaireUndoDuration = const Duration(seconds: 10),
 }) {
   return ContactEntryViewModel(
@@ -308,6 +363,7 @@ ContactEntryViewModel _viewModel({
     locationCapture: locationCapture,
     regionResolver: regionResolver,
     questionnaireVersion: questionnaireVersion,
+    targetGateway: targetGateway,
     questionnaireUndoDuration: questionnaireUndoDuration,
     saveDelay: const Duration(days: 1),
   );
@@ -453,6 +509,7 @@ final class _FakeEntryStore implements ContactEntryStore {
       reachCount: input.reachCount,
       interestLevel: input.interestLevel,
       answers: input.answers,
+      targetLinks: input.targetLinks,
       syncMode: input.syncMode,
       localRevision: (previous?.localRevision ?? 0) + 1,
       serverRevision: previous?.serverRevision ?? 0,
@@ -477,4 +534,40 @@ final class _FakeEntryStore implements ContactEntryStore {
       syncState: LocalSyncState.pending,
     );
   }
+}
+
+PromotionTargetProfile _target({
+  PromotionTargetType type = PromotionTargetType.person,
+  required bool hasCurrentProjectRelationship,
+}) => PromotionTargetProfile(
+  id: type == PromotionTargetType.person ? 'target-person' : 'target-org',
+  type: type,
+  displayName: type == PromotionTargetType.person ? '测试对象' : '测试机构',
+  phone: null,
+  email: null,
+  createdAtUtc: DateTime.utc(2030, 1, 1),
+  hasCurrentProjectRelationship: hasCurrentProjectRelationship,
+);
+
+final class _FakeTargetGateway implements PromotionTargetGateway {
+  const _FakeTargetGateway(this.result);
+
+  final PromotionTargetResult<List<PromotionTargetProfile>> result;
+
+  @override
+  Future<PromotionTargetResult<List<PromotionTargetProfile>>>
+  loadAssigned() async => result;
+
+  @override
+  Future<PromotionTargetResult<PromotionTargetProfile>> create({
+    required PromotionTargetType type,
+    required String displayName,
+    required String? phone,
+    required String? email,
+    required String requestId,
+  }) async =>
+      const PromotionTargetRejected(PromotionTargetFailureCode.serverRejected);
+
+  @override
+  Future<void> close() async {}
 }

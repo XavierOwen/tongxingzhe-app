@@ -15,6 +15,7 @@ import type {
   ContactLocation,
   ContactRevisionPayload,
   ContactSubmitPayload,
+  ContactTargetLink,
   ContactVoidPayload,
   DraftDeletePayload,
   DraftUpsertPayload,
@@ -151,6 +152,13 @@ async function handleTrustedSyncCommand(
 
   if (!context.capabilities.includes("record_contact")) {
     return commandFailure(403, "forbidden", "capability_forbidden");
+  }
+  if (
+    "targetLinks" in command.payload &&
+    (command.payload.targetLinks?.length ?? 0) > 0 &&
+    !context.capabilities.includes("view_assigned_target_pii")
+  ) {
+    return commandFailure(403, "forbidden", "target_capability_forbidden");
   }
   if (
     command.payload.workspaceId !== context.current.workspace.id ||
@@ -323,6 +331,7 @@ function parseDraftUpsertPayload(value: unknown): DraftUpsertPayload {
   if (new Set(answers.map((answer) => answer.questionId)).size !== answers.length) {
     throw new CommandValidationError("duplicate_question_answer");
   }
+  const targetLinks = parseTargetLinks(payload.target_links);
   return {
     draftId,
     workspaceId: uuid(payload.workspace_id, "invalid_workspace_id"),
@@ -343,6 +352,7 @@ function parseDraftUpsertPayload(value: unknown): DraftUpsertPayload {
     reachCount,
     interestLevel,
     answers,
+    targetLinks,
   };
 }
 
@@ -413,6 +423,7 @@ function parseContactFacts(
   if (new Set(answers.map((answer) => answer.questionId)).size !== answers.length) {
     throw new CommandValidationError("duplicate_question_answer");
   }
+  const targetLinks = parseTargetLinks(payload.target_links);
 
   return {
     occurredAtUtc,
@@ -423,7 +434,69 @@ function parseContactFacts(
     reachCount,
     interestLevel,
     answers,
+    targetLinks,
   };
+}
+
+function parseTargetLinks(value: unknown): readonly ContactTargetLink[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    throw new CommandValidationError("invalid_target_links");
+  }
+  const links = value.map((candidate) => {
+    const link = object(candidate, "invalid_target_link");
+    const targetType = enumValue(
+      link.target_type,
+      ["person", "institution"] as const,
+    );
+    const followUpConsent = enumValue(
+      link.follow_up_consent,
+      ["yes", "no", "unknown", "refused", "not_applicable"] as const,
+    );
+    if (targetType === null || followUpConsent === null) {
+      throw new CommandValidationError("invalid_target_link");
+    }
+    const responseLevel = nullableInteger(
+      link.response_level,
+      "invalid_target_response_level",
+    );
+    if (responseLevel !== null && (responseLevel < 0 || responseLevel > 4)) {
+      throw new CommandValidationError("invalid_target_response_level");
+    }
+    const institutionRepresentativeConfirmed = boolean(
+      link.institution_representative_confirmed,
+      "invalid_institution_representative_confirmation",
+    );
+    const confirmStageZero = boolean(
+      link.confirm_stage_zero,
+      "invalid_stage_zero_confirmation",
+    );
+    if (targetType === "person" && institutionRepresentativeConfirmed) {
+      throw new CommandValidationError(
+        "person_representative_confirmation_forbidden",
+      );
+    }
+    if (
+      targetType === "institution" && responseLevel !== null &&
+      !institutionRepresentativeConfirmed
+    ) {
+      throw new CommandValidationError(
+        "institution_response_requires_representative",
+      );
+    }
+    return {
+      targetId: uuid(link.target_id, "invalid_target_id"),
+      targetType,
+      responseLevel,
+      followUpConsent,
+      institutionRepresentativeConfirmed,
+      confirmStageZero,
+    };
+  });
+  if (new Set(links.map((link) => link.targetId)).size !== links.length) {
+    throw new CommandValidationError("duplicate_contact_target");
+  }
+  return links;
 }
 
 function parseContactRevisionPayload(value: unknown): ContactRevisionPayload {
@@ -698,6 +771,22 @@ function integer(value: unknown, code: string): number {
 
 function nullableInteger(value: unknown, code: string): number | null {
   return value === null || value === undefined ? null : integer(value, code);
+}
+
+function boolean(value: unknown, code: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new CommandValidationError(code);
+  }
+  return value;
+}
+
+function enumValue<T extends string>(
+  value: unknown,
+  values: readonly T[],
+): T | null {
+  return typeof value === "string" && values.includes(value as T)
+    ? value as T
+    : null;
 }
 
 function utcDateString(value: unknown, code: string): string {

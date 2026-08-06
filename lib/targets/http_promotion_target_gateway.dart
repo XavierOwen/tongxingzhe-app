@@ -173,6 +173,9 @@ PromotionTargetProfile _parseProfile(Object? value) {
     phone: _nullableString(root['phone']),
     email: _nullableString(root['email']),
     createdAtUtc: DateTime.parse(_string(root['created_at'])).toUtc(),
+    hasCurrentProjectRelationship: _bool(
+      root['has_current_project_relationship'] ?? false,
+    ),
   );
 }
 
@@ -200,6 +203,11 @@ String _string(Object? value) {
   if (value is! String || value.trim().isEmpty) {
     throw const FormatException('expected non-empty string');
   }
+  return value;
+}
+
+bool _bool(Object? value) {
+  if (value is! bool) throw const FormatException('expected boolean');
   return value;
 }
 

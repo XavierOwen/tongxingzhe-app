@@ -1,4 +1,5 @@
 import '../../questionnaires/questionnaire_contract.dart';
+import '../../targets/promotion_target.dart';
 
 export '../../questionnaires/questionnaire_contract.dart'
     show
@@ -191,6 +192,70 @@ enum ContactDraftSyncMode {
   }
 }
 
+/// 对一个明确推广对象作出的当次跟进决定。
+///
+/// 联系方式是否存在不能代替当事人的同意，因此“未知”“拒绝回答”和“不适用”
+/// 都保留为独立事实。
+enum ContactFollowUpConsent {
+  yes('yes'),
+  no('no'),
+  unknown('unknown'),
+  refused('refused'),
+  notApplicable('not_applicable');
+
+  const ContactFollowUpConsent(this.storageValue);
+
+  final String storageValue;
+
+  static ContactFollowUpConsent fromStorage(String value) =>
+      ContactFollowUpConsent.values.singleWhere(
+        (consent) => consent.storageValue == value,
+      );
+}
+
+/// 一次接触修订中与一个明确推广对象相连的受控事实。
+///
+/// 这里只保存对象 ID、类型和当次事实，不保存姓名、电话或邮箱。对象反应与
+/// 接触整体兴趣互不推导；[confirmStageZero] 只表达使用者明确确认首次进入项目。
+final class ContactTargetLink {
+  const ContactTargetLink({
+    required this.targetId,
+    required this.targetType,
+    this.responseLevel,
+    this.followUpConsent = ContactFollowUpConsent.unknown,
+    this.institutionRepresentativeConfirmed = false,
+    this.confirmStageZero = false,
+  });
+
+  final String targetId;
+  final PromotionTargetType targetType;
+  final int? responseLevel;
+  final ContactFollowUpConsent followUpConsent;
+  final bool institutionRepresentativeConfirmed;
+  final bool confirmStageZero;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ContactTargetLink &&
+      other.targetId == targetId &&
+      other.targetType == targetType &&
+      other.responseLevel == responseLevel &&
+      other.followUpConsent == followUpConsent &&
+      other.institutionRepresentativeConfirmed ==
+          institutionRepresentativeConfirmed &&
+      other.confirmStageZero == confirmStageZero;
+
+  @override
+  int get hashCode => Object.hash(
+    targetId,
+    targetType,
+    responseLevel,
+    followUpConsent,
+    institutionRepresentativeConfirmed,
+    confirmStageZero,
+  );
+}
+
 /// 草稿保存时 UI 交给 [ContactJournal] 的当前表单内容。
 ///
 /// 归属字段只是上下文，本身不算用户输入。其余 nullable 字段代表尚未填写；
@@ -211,6 +276,7 @@ final class ContactDraftInput {
     this.reachCount,
     this.interestLevel,
     this.answers = const [],
+    this.targetLinks = const [],
     this.syncMode = ContactDraftSyncMode.accountPrivate,
     this.sourceAttemptId,
     this.upgradedFromDraftId,
@@ -230,6 +296,7 @@ final class ContactDraftInput {
   final int? reachCount;
   final int? interestLevel;
   final List<QuestionnaireAnswer> answers;
+  final List<ContactTargetLink> targetLinks;
   final ContactDraftSyncMode syncMode;
   final String? sourceAttemptId;
   final String? upgradedFromDraftId;
@@ -253,6 +320,7 @@ final class ContactDraft {
     required this.reachCount,
     required this.interestLevel,
     required this.answers,
+    this.targetLinks = const [],
     required this.syncMode,
     required this.localRevision,
     required this.serverRevision,
@@ -276,6 +344,7 @@ final class ContactDraft {
   final int? reachCount;
   final int? interestLevel;
   final List<QuestionnaireAnswer> answers;
+  final List<ContactTargetLink> targetLinks;
   final ContactDraftSyncMode syncMode;
   final int localRevision;
   final int serverRevision;
@@ -336,6 +405,7 @@ final class ContactDraft {
         other.reachCount == reachCount &&
         other.interestLevel == interestLevel &&
         _answerListsEqual(other.answers, answers) &&
+        _targetLinkListsEqual(other.targetLinks, targetLinks) &&
         other.syncMode == syncMode &&
         other.localRevision == localRevision &&
         other.serverRevision == serverRevision &&
@@ -361,6 +431,7 @@ final class ContactDraft {
     reachCount,
     interestLevel,
     Object.hashAll(answers),
+    Object.hashAll(targetLinks),
     syncMode,
     localRevision,
     serverRevision,
@@ -457,6 +528,17 @@ bool _answerListsEqual(
   return true;
 }
 
+bool _targetLinkListsEqual(
+  List<ContactTargetLink> first,
+  List<ContactTargetLink> second,
+) {
+  if (first.length != second.length) return false;
+  for (var index = 0; index < first.length; index++) {
+    if (first[index] != second[index]) return false;
+  }
+  return true;
+}
+
 /// UI 提交一条默认匿名接触时交给 [ContactJournal] 的完整输入。
 ///
 /// `appUserId`、空间、项目和问卷版本来自当前上下文；它们用于确定本地归属，
@@ -476,6 +558,7 @@ final class AnonymousContactSubmission {
     required this.reachCount,
     required this.interestLevel,
     this.answers = const [],
+    this.targetLinks = const [],
     this.sourceAttemptId,
   });
 
@@ -492,6 +575,7 @@ final class AnonymousContactSubmission {
   final int reachCount;
   final int interestLevel;
   final List<QuestionnaireAnswer> answers;
+  final List<ContactTargetLink> targetLinks;
   final String? sourceAttemptId;
 }
 
@@ -532,6 +616,7 @@ final class ContactCorrectionSubmission {
     required this.reachCount,
     required this.interestLevel,
     this.answers = const [],
+    this.targetLinks = const [],
   });
 
   final String contactId;
@@ -549,6 +634,7 @@ final class ContactCorrectionSubmission {
   final int reachCount;
   final int interestLevel;
   final List<QuestionnaireAnswer> answers;
+  final List<ContactTargetLink> targetLinks;
 }
 
 /// 作废已提交接触所需的最小命令。
@@ -605,6 +691,7 @@ final class ContactRevision {
     required this.reachCount,
     required this.interestLevel,
     required this.answers,
+    this.targetLinks = const [],
   });
 
   final String revisionId;
@@ -622,6 +709,7 @@ final class ContactRevision {
   final int reachCount;
   final int interestLevel;
   final List<QuestionnaireAnswer> answers;
+  final List<ContactTargetLink> targetLinks;
 }
 
 /// 跨设备冲突中一方提交的完整核心事实。
@@ -637,6 +725,7 @@ final class ContactConflictSnapshot {
     required this.reachCount,
     required this.interestLevel,
     required this.answers,
+    this.targetLinks = const [],
   });
 
   final DateTime occurredAtUtc;
@@ -647,6 +736,7 @@ final class ContactConflictSnapshot {
   final int reachCount;
   final int interestLevel;
   final List<QuestionnaireAnswer> answers;
+  final List<ContactTargetLink> targetLinks;
 }
 
 enum ContactRevisionConflictStatus {
@@ -744,6 +834,7 @@ final class ContactRecord {
     required this.lifecycleStatus,
     required this.syncState,
     required this.answers,
+    this.targetLinks = const [],
   });
 
   final String contactId;
@@ -763,6 +854,7 @@ final class ContactRecord {
   final ContactLifecycleStatus lifecycleStatus;
   final LocalSyncState syncState;
   final List<QuestionnaireAnswer> answers;
+  final List<ContactTargetLink> targetLinks;
 }
 
 /// 一位推广者在一个项目、一个明确 UTC 期间内的个人接触汇总。

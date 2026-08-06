@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../features/contact_journal/contact_models.dart';
 import '../identity/identity_session.dart';
 import '../questionnaires/questionnaire_answer_codec.dart';
+import '../targets/promotion_target.dart';
 import 'sync_models.dart';
 import 'sync_transport.dart';
 
@@ -430,6 +431,17 @@ final class HttpSyncTransport implements SyncTransport, SyncBatchTransport {
         answers.length) {
       throw const FormatException('conflict answers contain duplicate IDs');
     }
+    final rawTargetLinks = value['targetLinks'] ?? const <Object?>[];
+    if (rawTargetLinks is! List<Object?>) {
+      throw const FormatException('conflict target links must be a list');
+    }
+    final targetLinks = [
+      for (final link in rawTargetLinks) _conflictTargetLink(link),
+    ];
+    if (targetLinks.map((link) => link.targetId).toSet().length !=
+        targetLinks.length) {
+      throw const FormatException('conflict target links contain duplicates');
+    }
     return ContactConflictSnapshot(
       occurredAtUtc: _utcDate(value['occurredAtUtc']),
       occurredTimeZone: _nonEmptyString(value['occurredTimeZone']),
@@ -439,6 +451,49 @@ final class HttpSyncTransport implements SyncTransport, SyncBatchTransport {
       reachCount: reachCount,
       interestLevel: interestLevel,
       answers: List.unmodifiable(answers),
+      targetLinks: List.unmodifiable(targetLinks),
+    );
+  }
+
+  ContactTargetLink _conflictTargetLink(Object? value) {
+    if (value is! Map<String, Object?>) {
+      throw const FormatException('conflict target link is invalid');
+    }
+    final type = switch (value['targetType']) {
+      'person' => PromotionTargetType.person,
+      'institution' => PromotionTargetType.institution,
+      _ => throw const FormatException('conflict target type is invalid'),
+    };
+    final response = value['responseLevel'];
+    if (response != null &&
+        (response is! int || response < 0 || response > 4)) {
+      throw const FormatException('conflict target response is invalid');
+    }
+    final representative = value['institutionRepresentativeConfirmed'];
+    final confirmStageZero = value['confirmStageZero'];
+    if (representative is! bool ||
+        confirmStageZero is! bool ||
+        type == PromotionTargetType.person && representative ||
+        type == PromotionTargetType.institution &&
+            response != null &&
+            !representative) {
+      throw const FormatException('conflict target link is invalid');
+    }
+    final consent = switch (value['followUpConsent']) {
+      'yes' => ContactFollowUpConsent.yes,
+      'no' => ContactFollowUpConsent.no,
+      'unknown' => ContactFollowUpConsent.unknown,
+      'refused' => ContactFollowUpConsent.refused,
+      'not_applicable' => ContactFollowUpConsent.notApplicable,
+      _ => throw const FormatException('conflict consent is invalid'),
+    };
+    return ContactTargetLink(
+      targetId: _nonEmptyString(value['targetId']),
+      targetType: type,
+      responseLevel: response as int?,
+      followUpConsent: consent,
+      institutionRepresentativeConfirmed: representative,
+      confirmStageZero: confirmStageZero,
     );
   }
 

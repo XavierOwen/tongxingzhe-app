@@ -110,6 +110,114 @@ test("sync parser preserves all controlled answer value shapes", async () => {
   }
 });
 
+test("target links require target access and preserve controlled facts", async () => {
+  let storedCommand: SyncCommand | undefined;
+  const body = validCommandBody();
+  (body.typed_payload as Record<string, unknown>).target_links = [
+    {
+      target_id: "55555555-5555-4555-8555-555555555555",
+      target_type: "institution",
+      response_level: 4,
+      follow_up_consent: "yes",
+      institution_representative_confirmed: true,
+      confirm_stage_zero: true,
+    },
+  ];
+
+  const forbidden = await handleSyncCommand(
+    "Bearer synthetic-token",
+    body,
+    fakeDependencies(),
+  );
+  assert.equal(forbidden.status, 403);
+  assert.deepEqual(forbidden.body, {
+    result: "forbidden",
+    error: { code: "target_capability_forbidden" },
+  });
+
+  const accepted = await handleSyncCommand(
+    "Bearer synthetic-token",
+    body,
+    fakeDependencies({
+      context: {
+        ...context,
+        capabilities: ["record_contact", "view_assigned_target_pii"],
+      },
+      apply: async (_resolvedContext, command) => {
+        storedCommand = command;
+        return { result: "accepted", serverCursor: "opaque-target" };
+      },
+    }),
+  );
+
+  assert.equal(accepted.status, 200);
+  assert.equal(storedCommand?.type, "contact.submit.v1");
+  if (storedCommand?.type === "contact.submit.v1") {
+    assert.deepEqual(storedCommand.payload.targetLinks, [
+      {
+        targetId: "55555555-5555-4555-8555-555555555555",
+        targetType: "institution",
+        responseLevel: 4,
+        followUpConsent: "yes",
+        institutionRepresentativeConfirmed: true,
+        confirmStageZero: true,
+      },
+    ]);
+  }
+});
+
+test("invalid or duplicate target links fail before store", async () => {
+  var storeCalls = 0;
+  const body = validCommandBody();
+  const invalidLink = {
+    target_id: "55555555-5555-4555-8555-555555555555",
+    target_type: "institution",
+    response_level: 4,
+    follow_up_consent: "unknown",
+    institution_representative_confirmed: false,
+    confirm_stage_zero: false,
+  };
+  (body.typed_payload as Record<string, unknown>).target_links = [invalidLink];
+  const invalid = await handleSyncCommand(
+    "Bearer synthetic-token",
+    body,
+    fakeDependencies({
+      context: {
+        ...context,
+        capabilities: ["record_contact", "view_assigned_target_pii"],
+      },
+      apply: async () => {
+        storeCalls += 1;
+        return { result: "accepted", serverCursor: "unused" };
+      },
+    }),
+  );
+  assert.deepEqual(invalid.body, {
+    result: "rejected",
+    error: { code: "institution_response_requires_representative" },
+  });
+
+  (body.typed_payload as Record<string, unknown>).target_links = [
+    { ...invalidLink, response_level: null },
+    { ...invalidLink, response_level: null },
+  ];
+  const duplicate = await handleSyncCommand(
+    "Bearer synthetic-token",
+    body,
+    fakeDependencies({
+      context: {
+        ...context,
+        capabilities: ["record_contact", "view_assigned_target_pii"],
+      },
+    }),
+  );
+  assert.deepEqual(duplicate.body, {
+    result: "rejected",
+    error: { code: "duplicate_contact_target" },
+  });
+  assert.equal(storeCalls, 0);
+});
+
 test("duplicate command returns its original cursor", async () => {
   const dependencies = fakeDependencies({
     apply: async () => ({

@@ -131,6 +131,8 @@ class DbSecurityEvents extends Table {
     DbQuestionnaireQuestions,
     DbQuestionnaireOptions,
     DbQuestionnaireDraftWorkingCopies,
+    DbContactTargetLinks,
+    DbContactDraftTargetLinks,
   ],
 )
 class LocalDatabase extends _$LocalDatabase {
@@ -148,7 +150,7 @@ class LocalDatabase extends _$LocalDatabase {
       );
 
   @override
-  int get schemaVersion => 16;
+  int get schemaVersion => 17;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -424,6 +426,12 @@ class LocalDatabase extends _$LocalDatabase {
             TableMigration(dbContactDrafts, newColumns: draftColumns),
           );
         }
+      }
+      if (from < 17) {
+        // v17 只新增对象关联快照。旧接触和草稿继续保持匿名零关联，不能从
+        // legacy 姓名、联系方式、触达人数或兴趣字段推断对象身份。
+        await migrator.createTable(dbContactTargetLinks);
+        await migrator.createTable(dbContactDraftTargetLinks);
       }
     },
   );

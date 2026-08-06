@@ -8,6 +8,7 @@ import '../../questionnaires/questionnaire_answer_codec.dart';
 import '../../questionnaires/questionnaire_contract.dart';
 import '../../regions/region_catalog.dart';
 import '../../regions/region_models.dart';
+import '../../targets/promotion_target.dart';
 import 'contact_models.dart';
 
 part 'contact_draft_operations.dart';
@@ -316,6 +317,11 @@ final class ContactJournal {
             ),
           );
     }
+    await _insertTargetLinks(
+      contactId: contactId,
+      revisionNumber: 1,
+      targetLinks: submission.targetLinks,
+    );
 
     final payload = jsonEncode({
       'contact_id': contactId,
@@ -342,6 +348,7 @@ final class ContactJournal {
         for (final answer in submission.answers)
           QuestionnaireAnswerCodec.toJson(answer),
       ],
+      'target_links': _targetLinkPayload(submission.targetLinks),
     });
     await _database
         .into(_database.dbSyncOutbox)
@@ -431,6 +438,11 @@ final class ContactJournal {
           revisionNumber: nextRevision,
           answers: submission.answers,
         );
+        await _insertTargetLinks(
+          contactId: current.contactId,
+          revisionNumber: nextRevision,
+          targetLinks: submission.targetLinks,
+        );
         await (_database.update(
           _database.dbContactRecords,
         )..where((row) => row.contactId.equals(current.contactId))).write(
@@ -476,6 +488,7 @@ final class ContactJournal {
           'reach_count': submission.reachCount,
           'interest_level': submission.interestLevel,
           'answers': _answerPayload(submission.answers),
+          'target_links': _targetLinkPayload(submission.targetLinks),
         });
         await _insertOutboxCommand(
           commandId: commandId,
@@ -576,6 +589,15 @@ final class ContactJournal {
           contactId: current.contactId,
           revisionNumber: nextRevision,
           answers: currentAnswers,
+        );
+        final currentTargetLinks = await _targetLinksForRevision(
+          current.contactId,
+          current.currentRevision,
+        );
+        await _insertTargetLinks(
+          contactId: current.contactId,
+          revisionNumber: nextRevision,
+          targetLinks: currentTargetLinks,
         );
         await (_database.update(
           _database.dbContactRecords,
@@ -683,6 +705,7 @@ final class ContactJournal {
       reachCount: snapshot.reachCount,
       interestLevel: snapshot.interestLevel,
       answers: snapshot.answers,
+      targetLinks: snapshot.targetLinks,
     );
     _validateCorrectionSubmission(correction);
     await _validateResolvedRegion(snapshot.location);
@@ -740,6 +763,11 @@ final class ContactJournal {
           contactId: current.contactId,
           revisionNumber: nextRevision,
           answers: snapshot.answers,
+        );
+        await _insertTargetLinks(
+          contactId: current.contactId,
+          revisionNumber: nextRevision,
+          targetLinks: snapshot.targetLinks,
         );
         await (_database.update(
           _database.dbContactRecords,
@@ -814,6 +842,7 @@ final class ContactJournal {
             'reach_count': snapshot.reachCount,
             'interest_level': snapshot.interestLevel,
             'answers': _answerPayload(snapshot.answers),
+            'target_links': _targetLinkPayload(snapshot.targetLinks),
           }),
           createdAtUtc: nowUtc,
         );
@@ -895,6 +924,30 @@ final class ContactJournal {
     }
   }
 
+  Future<void> _insertTargetLinks({
+    required String contactId,
+    required int revisionNumber,
+    required List<ContactTargetLink> targetLinks,
+  }) async {
+    for (final link in targetLinks) {
+      await _database
+          .into(_database.dbContactTargetLinks)
+          .insert(
+            DbContactTargetLinksCompanion.insert(
+              contactId: contactId,
+              revisionNumber: revisionNumber,
+              targetId: link.targetId,
+              targetType: link.targetType.storageValue,
+              responseLevel: Value(link.responseLevel),
+              followUpConsent: link.followUpConsent.storageValue,
+              institutionRepresentativeConfirmed:
+                  link.institutionRepresentativeConfirmed,
+              confirmStageZero: link.confirmStageZero,
+            ),
+          );
+    }
+  }
+
   Future<List<QuestionnaireAnswer>> _answersForRevision(
     String contactId,
     int revisionNumber,
@@ -921,9 +974,53 @@ final class ContactJournal {
     ];
   }
 
+  Future<List<ContactTargetLink>> _targetLinksForRevision(
+    String contactId,
+    int revisionNumber,
+  ) async {
+    final query = _database.select(_database.dbContactTargetLinks)
+      ..where(
+        (row) =>
+            row.contactId.equals(contactId) &
+            row.revisionNumber.equals(revisionNumber),
+      )
+      ..orderBy([(row) => OrderingTerm.asc(row.targetId)]);
+    return [
+      for (final row in await query.get())
+        ContactTargetLink(
+          targetId: row.targetId,
+          targetType: PromotionTargetType.values.singleWhere(
+            (type) => type.storageValue == row.targetType,
+          ),
+          responseLevel: row.responseLevel,
+          followUpConsent: ContactFollowUpConsent.fromStorage(
+            row.followUpConsent,
+          ),
+          institutionRepresentativeConfirmed:
+              row.institutionRepresentativeConfirmed,
+          confirmStageZero: row.confirmStageZero,
+        ),
+    ];
+  }
+
   List<Map<String, Object?>> _answerPayload(
     List<QuestionnaireAnswer> answers,
   ) => [for (final answer in answers) QuestionnaireAnswerCodec.toJson(answer)];
+
+  List<Map<String, Object?>> _targetLinkPayload(
+    List<ContactTargetLink> targetLinks,
+  ) => [
+    for (final link in targetLinks)
+      {
+        'target_id': link.targetId,
+        'target_type': link.targetType.storageValue,
+        'response_level': link.responseLevel,
+        'follow_up_consent': link.followUpConsent.storageValue,
+        'institution_representative_confirmed':
+            link.institutionRepresentativeConfirmed,
+        'confirm_stage_zero': link.confirmStageZero,
+      },
+  ];
 
   ContactRevisionConflict _conflictFromRow(DbContactRevisionConflict row) {
     final rawFields = jsonDecode(row.conflictingFieldsJson);
@@ -986,7 +1083,8 @@ final class ContactJournal {
       throw const FormatException('invalid stored conflict snapshot');
     }
     final rawAnswers = decoded['answers'];
-    if (rawAnswers is! List<Object?>) {
+    final rawTargetLinks = decoded['targetLinks'] ?? const <Object?>[];
+    if (rawAnswers is! List<Object?> || rawTargetLinks is! List<Object?>) {
       throw const FormatException('invalid stored conflict answers');
     }
     return ContactConflictSnapshot(
@@ -1000,6 +1098,31 @@ final class ContactJournal {
       reachCount: decoded['reachCount']! as int,
       interestLevel: decoded['interestLevel']! as int,
       answers: [for (final answer in rawAnswers) _storedConflictAnswer(answer)],
+      targetLinks: [
+        for (final link in rawTargetLinks) _storedConflictTargetLink(link),
+      ],
+    );
+  }
+
+  ContactTargetLink _storedConflictTargetLink(Object? value) {
+    if (value is! Map<String, Object?>) {
+      throw const FormatException('invalid stored conflict target link');
+    }
+    final targetType = value['targetType'];
+    final consent = value['followUpConsent'];
+    if (targetType is! String || consent is! String) {
+      throw const FormatException('invalid stored conflict target link');
+    }
+    return ContactTargetLink(
+      targetId: value['targetId']! as String,
+      targetType: PromotionTargetType.values.singleWhere(
+        (type) => type.storageValue == targetType,
+      ),
+      responseLevel: value['responseLevel'] as int?,
+      followUpConsent: ContactFollowUpConsent.fromStorage(consent),
+      institutionRepresentativeConfirmed:
+          value['institutionRepresentativeConfirmed']! as bool,
+      confirmStageZero: value['confirmStageZero']! as bool,
     );
   }
 
@@ -1107,6 +1230,7 @@ final class ContactJournal {
         throw const ContactValidationException('duplicate_question_answer');
       }
     }
+    _validateTargetLinks(submission.targetLinks);
     if (submission.location case final PendingContactLocation pending) {
       final accuracy = pending.accuracyMeters;
       if (!pending.latitude.isFinite ||
@@ -1174,6 +1298,7 @@ final class ContactJournal {
         throw const ContactValidationException('duplicate_question_answer');
       }
     }
+    _validateTargetLinks(submission.targetLinks);
     if (submission.location case final PendingContactLocation pending) {
       final accuracy = pending.accuracyMeters;
       if (!pending.latitude.isFinite ||
@@ -1214,6 +1339,37 @@ final class ContactJournal {
     }
     if (submission.reason.trim().isEmpty) {
       throw const ContactValidationException('contact_reason_required');
+    }
+  }
+
+  void _validateTargetLinks(List<ContactTargetLink> targetLinks) {
+    final targetIds = <String>{};
+    for (final link in targetLinks) {
+      if (link.targetId.trim().isEmpty) {
+        throw const ContactValidationException('target_id_required');
+      }
+      if (!targetIds.add(link.targetId)) {
+        throw const ContactValidationException('duplicate_contact_target');
+      }
+      if (link.responseLevel != null &&
+          (link.responseLevel! < 0 || link.responseLevel! > 4)) {
+        throw const ContactValidationException(
+          'target_response_level_out_of_range',
+        );
+      }
+      if (link.targetType == PromotionTargetType.person &&
+          link.institutionRepresentativeConfirmed) {
+        throw const ContactValidationException(
+          'person_representative_confirmation_forbidden',
+        );
+      }
+      if (link.targetType == PromotionTargetType.institution &&
+          link.responseLevel != null &&
+          !link.institutionRepresentativeConfirmed) {
+        throw const ContactValidationException(
+          'institution_response_requires_representative',
+        );
+      }
     }
   }
 
@@ -1355,6 +1511,10 @@ final class ContactJournal {
           reachCount: row.reachCount,
           interestLevel: row.interestLevel,
           answers: await _answersForRevision(row.contactId, row.revisionNumber),
+          targetLinks: await _targetLinksForRevision(
+            row.contactId,
+            row.revisionNumber,
+          ),
         ),
     ];
   }
@@ -1386,6 +1546,10 @@ final class ContactJournal {
       lifecycleStatus: ContactLifecycleStatus.fromStorage(row.lifecycleStatus),
       syncState: LocalSyncState.pending,
       answers: await _answersForRevision(row.contactId, row.currentRevision),
+      targetLinks: await _targetLinksForRevision(
+        row.contactId,
+        row.currentRevision,
+      ),
     );
   }
 

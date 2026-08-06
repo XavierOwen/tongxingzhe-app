@@ -15,6 +15,7 @@ final class PromotionTargetProfile {
     required this.phone,
     required this.email,
     required this.createdAtUtc,
+    this.hasCurrentProjectRelationship = false,
   });
 
   final String id;
@@ -23,6 +24,7 @@ final class PromotionTargetProfile {
   final String? phone;
   final String? email;
   final DateTime createdAtUtc;
+  final bool hasCurrentProjectRelationship;
 }
 
 enum PromotionTargetFailureCode {

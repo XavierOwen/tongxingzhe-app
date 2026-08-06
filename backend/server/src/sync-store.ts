@@ -45,6 +45,20 @@ export interface ContactAnswer {
   readonly value: boolean | string | number | readonly string[] | null;
 }
 
+export interface ContactTargetLink {
+  readonly targetId: string;
+  readonly targetType: "person" | "institution";
+  readonly responseLevel: number | null;
+  readonly followUpConsent:
+    | "yes"
+    | "no"
+    | "unknown"
+    | "refused"
+    | "not_applicable";
+  readonly institutionRepresentativeConfirmed: boolean;
+  readonly confirmStageZero: boolean;
+}
+
 export interface ContactSubmitPayload {
   readonly contactId: string;
   readonly workspaceId: string;
@@ -58,6 +72,7 @@ export interface ContactSubmitPayload {
   readonly reachCount: number;
   readonly interestLevel: number;
   readonly answers: readonly ContactAnswer[];
+  readonly targetLinks?: readonly ContactTargetLink[];
   readonly sourceAttemptId?: string | null;
 }
 
@@ -74,6 +89,7 @@ export interface ContactRevisionPayload {
   readonly reachCount: number;
   readonly interestLevel: number;
   readonly answers: readonly ContactAnswer[];
+  readonly targetLinks?: readonly ContactTargetLink[];
 }
 
 export interface ContactConflictResolutionPayload
@@ -132,6 +148,7 @@ export interface DraftUpsertPayload {
   readonly reachCount: number | null;
   readonly interestLevel: number | null;
   readonly answers: readonly ContactAnswer[];
+  readonly targetLinks?: readonly ContactTargetLink[];
   readonly sourceAttemptId?: string | null;
   readonly upgradedFromDraftId?: string | null;
 }
@@ -266,17 +283,17 @@ export class PostgresSyncCommandStore implements SyncCommandStore {
     command: SyncCommand,
   ): Promise<SyncCommandResult> {
     const functionName = command.type === "contact.submit.v1"
-      ? "apply_contact_submit_v2"
+      ? "apply_contact_submit_v3"
       : command.type === "contact.attempt.submit.v1"
       ? "apply_contact_attempt_submit"
       : command.type === "contact.revise.v1"
-      ? "apply_contact_revise_v2"
+      ? "apply_contact_revise_v3"
       : command.type === "contact.void.v1"
-      ? "apply_contact_void_v2"
+      ? "apply_contact_void_v3"
       : command.type === "contact.resolve.v1"
-      ? "apply_contact_conflict_resolution_v2"
+      ? "apply_contact_conflict_resolution_v3"
       : command.type === "draft.upsert.v1"
-      ? "apply_draft_upsert_v2"
+      ? "apply_draft_upsert_v3"
       : "apply_draft_delete";
     const result = await this.query(
       `SELECT result_code, server_cursor, failure_code
@@ -429,12 +446,14 @@ function parseConflictSnapshot(value: unknown): ContactConflictSnapshot {
   const channel = snapshot.channel;
   const location = snapshot.location;
   const answers = snapshot.answers;
+  const targetLinks = snapshot.targetLinks ?? [];
   if (
     !isContactChannel(channel) ||
     typeof location !== "object" ||
     location === null ||
     Array.isArray(location) ||
-    !Array.isArray(answers)
+    !Array.isArray(answers) ||
+    !Array.isArray(targetLinks)
   ) {
     throw new Error("Revision conflict snapshot facts are invalid");
   }
@@ -450,6 +469,42 @@ function parseConflictSnapshot(value: unknown): ContactConflictSnapshot {
     reachCount: positiveInteger(snapshot.reachCount, "reach count"),
     interestLevel: boundedInteger(snapshot.interestLevel, 0, 4, "interest"),
     answers: answers as ContactAnswer[],
+    targetLinks: targetLinks.map(parseConflictTargetLink),
+  };
+}
+
+function parseConflictTargetLink(value: unknown): ContactTargetLink {
+  const link = record(value, "Revision conflict target link is invalid");
+  const targetType = link.targetType;
+  const responseLevel = link.responseLevel;
+  const followUpConsent = link.followUpConsent;
+  const representativeConfirmed = link.institutionRepresentativeConfirmed;
+  const confirmStageZero = link.confirmStageZero;
+  if (
+    (targetType !== "person" && targetType !== "institution") ||
+    (responseLevel !== null &&
+      (typeof responseLevel !== "number" ||
+        !Number.isInteger(responseLevel) ||
+        responseLevel < 0 ||
+        responseLevel > 4)) ||
+    (followUpConsent !== "yes" && followUpConsent !== "no" &&
+      followUpConsent !== "unknown" && followUpConsent !== "refused" &&
+      followUpConsent !== "not_applicable") ||
+    typeof representativeConfirmed !== "boolean" ||
+    typeof confirmStageZero !== "boolean" ||
+    (targetType === "person" && representativeConfirmed) ||
+    (targetType === "institution" && responseLevel !== null &&
+      !representativeConfirmed)
+  ) {
+    throw new Error("Revision conflict target link facts are invalid");
+  }
+  return {
+    targetId: requiredString(link.targetId, "target ID"),
+    targetType,
+    responseLevel,
+    followUpConsent,
+    institutionRepresentativeConfirmed: representativeConfirmed,
+    confirmStageZero,
   };
 }
 

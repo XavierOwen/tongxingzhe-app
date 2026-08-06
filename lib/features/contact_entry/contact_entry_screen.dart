@@ -11,10 +11,12 @@ import '../../questionnaires/questionnaire_contract.dart';
 import '../../questionnaires/questionnaire_draft_upgrade.dart';
 import '../../regions/contact_region_resolver.dart';
 import '../../services/location_service.dart';
+import '../../targets/promotion_target.dart';
 import '../contact_journal/contact_journal.dart';
 import '../contact_journal/contact_models.dart';
 import 'contact_channel_label.dart';
 import 'contact_entry_view_model.dart';
+import 'contact_target_links_editor.dart';
 import 'questionnaire_form.dart';
 
 typedef ContactDraftUpgradeAction =
@@ -48,6 +50,7 @@ final class ContactEntryScreen extends StatefulWidget {
     this.currentQuestionnaireVersion,
     this.auditedUpgradeCompatibilities = const [],
     this.upgradeDraft,
+    this.targetGateway,
   });
 
   final AppController controller;
@@ -66,6 +69,7 @@ final class ContactEntryScreen extends StatefulWidget {
   final List<AuditedQuestionnaireAnswerCompatibility>
   auditedUpgradeCompatibilities;
   final ContactDraftUpgradeAction? upgradeDraft;
+  final PromotionTargetGateway? targetGateway;
 
   @override
   State<ContactEntryScreen> createState() => _ContactEntryScreenState();
@@ -103,6 +107,7 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
       sourceAttemptId: widget.sourceAttempt?.attemptId,
       initialChannel: widget.sourceAttempt?.channel,
       questionnaireVersion: widget.questionnaireVersion,
+      targetGateway: widget.targetGateway,
     )..addListener(_onViewStateChanged);
     unawaited(_viewModel.initialize(draft: widget.initialDraft));
   }
@@ -339,6 +344,25 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
               '${entryState.requiredCoreFactCount}',
               textAlign: TextAlign.end,
             ),
+            const SizedBox(height: 12),
+            ContactTargetLinksEditor(
+              text: text,
+              targetLinks: entryState.targetLinks,
+              assignedTargets: entryState.assignedTargets,
+              isLoading:
+                  entryState.targetLoadState == ContactTargetLoadState.loading,
+              loadFailed:
+                  entryState.targetLoadState == ContactTargetLoadState.failed,
+              hasLoaded:
+                  entryState.targetLoadState == ContactTargetLoadState.loaded,
+              onAdd: _addTarget,
+              onRemove: _viewModel.unlinkTarget,
+              onResponseChanged: _viewModel.setTargetResponse,
+              onConsentChanged: _viewModel.setTargetFollowUpConsent,
+              onRepresentativeChanged:
+                  _viewModel.setInstitutionRepresentativeConfirmed,
+              onRetry: _viewModel.loadAssignedTargets,
+            ),
             if (entryState.questionnaireVersion case final version?) ...[
               const SizedBox(height: 24),
               QuestionnaireForm(
@@ -399,6 +423,45 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
         ),
       ),
     );
+  }
+
+  Future<void> _addTarget(PromotionTargetProfile target) async {
+    var confirmed = false;
+    if (!target.hasCurrentProjectRelationship) {
+      confirmed =
+          await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text(
+                AppStrings(
+                  widget.controller.localeCode,
+                ).t('confirmTargetProjectEntry'),
+              ),
+              content: Text(
+                AppStrings(
+                  widget.controller.localeCode,
+                ).t('confirmTargetProjectEntryHelp'),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: Text(
+                    AppStrings(widget.controller.localeCode).t('cancel'),
+                  ),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: Text(
+                    AppStrings(widget.controller.localeCode).t('confirm'),
+                  ),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+      if (!confirmed || !mounted) return;
+    }
+    _viewModel.linkTarget(target, confirmStageZero: confirmed);
   }
 
   IconData _saveIcon(ContactDraftSaveState state) => switch (state) {

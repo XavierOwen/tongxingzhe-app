@@ -33,7 +33,7 @@ HTTP 层的 context、command 和 pull 端点共用 [`bearerToken`](../../backen
 
 ## Outbox 为什么和接触在同一 transaction
 
-`ContactJournal.submitDraft` 在同一 SQLite transaction 内写入接触、revision、答案和 `contact.submit.v1` command。更正和作废分别写入 `contact.revise.v1` 与 `contact.void.v1`。冲突解决会追加 revision，并写入 `contact.resolve.v1`。`recordContactAttempt` 同样原子写入尝试和 `contact.attempt.submit.v1` command。如果只写本机事实，随后 App 崩溃，同步引擎就不知道它需要上传。如果只写 command，本机又会出现无事实可显示的幽灵命令。
+`ContactJournal.submitDraft` 在同一 SQLite transaction 内写入接触、revision、答案、对象关联和 `contact.submit.v1` command。更正和作废分别写入 `contact.revise.v1` 与 `contact.void.v1`。冲突解决会追加 revision，并写入 `contact.resolve.v1`。`recordContactAttempt` 同样原子写入尝试和 `contact.attempt.submit.v1` command。如果只写本机事实，随后 App 崩溃，同步引擎就不知道它需要上传。如果只写 command，本机又会出现无事实可显示的幽灵命令。
 
 Outbox 保存稳定 command ID、设备 ID、aggregate ID、基础 revision、payload、尝试次数和失败状态。它不保存 access token。token 每次发送前从 `IdentitySession` 取得。
 
@@ -88,7 +88,7 @@ Backend 接受 command 后返回 change feed cursor。这个回执只能证明�
 - push ACK 只把本机 command 改为 `completed`；
 - 只有 pull batch 的全部事实已在 SQLite transaction 中成功应用，才推进 `server_cursor`。
 
-拉取遇到已在本机存在的同一 revision 时，只有动作类型、原因、完整快照和类型化答案都相同才幂等跳过。迟到的 revision 1 会与本机保存的 revision 1 比较，不会拿已经更正过的当前投影误判冲突。如果 contact ID 和 revision 相同，但触达人数、渠道、地点、原因或答案不同，客户端把它当成无效远端变化，不会静默覆盖本地事实。一个 batch 中任何变化无效时，该 batch 的接触和 cursor 全部回滚。
+拉取遇到已在本机存在的同一 revision 时，只有动作类型、原因、完整快照、类型化答案和对象关联都相同才幂等跳过。迟到的 revision 1 会与本机保存的 revision 1 比较，不会拿已经更正过的当前投影误判冲突。如果 contact ID 和 revision 相同，但触达人数、渠道、地点、原因、答案或对象关联不同，客户端把它当成无效远端变化，不会静默覆盖本地事实。一个 batch 中任何变化无效时，该 batch 的接触和 cursor 全部回滚。
 
 ## Backend 如何幂等写入 PostgreSQL
 
@@ -104,6 +104,8 @@ Backend 接受 command 后返回 change feed cursor。这个回执只能证明�
 
 重复 command 返回原 cursor，不再插入一次接触。这是幂等性：同一请求执行一次或多次，业务事实结果相同。
 
+[`0017_contact_target_links.sql`](../../backend/database/migrations/0017_contact_target_links.sql) 提供 v3 接触与草稿包装函数。Backend 只在使用者同时拥有接触记录和已分配对象查看能力时接受非空对象关联。PostgreSQL 再逐条核对对象属于同一空间、当前仍分配给使用者、类型一致，并在需要时以阶段 `0` 建立当前项目关系。接触 revision、对象关联、项目关系、幂等结果和 change feed 在同一 transaction 中提交；任一关联无效时不会留下接触或阶段变化。零关联的旧客户端仍走同一边界并保持匿名行为。
+
 [`apply_contact_attempt_submit`](../../backend/database/migrations/0008_contact_attempts.sql) 对尝试使用相同的 command 幂等边界，但只写尝试、处理结果、change feed 和审计事件。它不写 warehouse Outbox，因为未获回应不属于接触或转化事实。Backend parser 还会拒绝在尝试 payload 中夹带触达人数、兴趣、问卷答案或关系阶段。
 
 后来回应仍通过 `apply_contact_submit` 提交普通接触。该函数核对来源尝试属于同一用户、空间和项目，并且尚未关联其他接触；接触成功后才锁定并关联尝试。任一步失败时，整个 transaction 回滚。
@@ -114,7 +116,7 @@ Backend 接受 command 后返回 change feed cursor。这个回执只能证明�
 
 `apply_contact_revise` 和 `apply_contact_void` 是 runtime role 可以执行的 `SECURITY DEFINER` 包装函数。私有 helper 负责同一组事务规则，runtime role 不能直接执行该 helper，也不能直接读写事实表。
 
-每条命令先核对可信用户、个人空间、活动项目、接触归属和 `base_revision`。更正随后追加完整 snapshot 和答案，更新当前投影，并写入 change feed、审计事件和 warehouse Outbox。作废复制当前完整 snapshot 和答案，追加作废 revision，再把当前投影标为 `voided`。任何一步失败时，整个 transaction 回滚。
+每条命令先核对可信用户、个人空间、活动项目、接触归属和 `base_revision`。更正随后追加完整 snapshot、答案和对象关联，更新当前投影，并写入 change feed、审计事件和 warehouse Outbox。作废复制当前完整 snapshot、答案和对象关联，追加作废 revision，再把当前投影标为 `voided`。任何一步失败时，整个 transaction 回滚。
 
 同一 `(app_user_id, command_id)` 重放返回原 cursor。新的 command 使用旧 base revision 时，`0010_contact_revision_conflicts.sql` 执行三路比较，不把所有过期命令都当成冲突。其他用户即使知道 contact ID，也只得到稳定的 `contact_forbidden`，不能通过错误差异探测归属。
 
@@ -124,7 +126,7 @@ Backend 接受 command 后返回 change feed cursor。这个回执只能证明�
 
 ## 跨设备更正如何合并
 
-三路比较同时查看基础 revision、服务器当前 revision 和本机建议快照。它把事实分成发生时间、渠道、地点、触达人数、单次兴趣和问卷答案六组。如果两台设备修改的组没有重叠，服务器把本机改动合并到当前快照，再追加一条 `corrected` revision。
+三路比较同时查看基础 revision、服务器当前 revision 和本机建议快照。它把事实分成发生时间、渠道、地点、触达人数、单次兴趣、问卷答案和对象关联七组。如果两台设备修改的组没有重叠，服务器把本机改动合并到当前快照，再追加一条 `corrected` revision。
 
 如果两边修改了同一事实组，服务器保存基础、当前和本机建议快照，并返回 `contact_revision_conflict`。Backend 只能按已验证的用户、空间和项目读取这一份对比。普通 runtime role 不能直接读冲突表，同步健康与日志也不包含快照。
 
@@ -178,7 +180,7 @@ Flutter 的 [`HttpContactRegionResolver`](../../lib/regions/contact_region_resol
 
 Flutter 测试使用真实内存 SQLite 和可控 Transport。它们覆盖 ACK、指数退避、jitter 上限、双 worker 租约、过期恢复、迟到 ACK、aggregate 顺序、永久失败隔离、批量部分成功、乱序结果、远端 batch 原子性、cursor 区分、同 ID 内容冲突，以及冲突快照恢复与解决 ACK。HTTP Adapter 测试固定 bearer header、路径、query、JSON、`Retry-After`、完整冲突对比和错误分类。
 
-Backend 测试使用 synthetic 身份和上下文。它们证明伪造项目在 Store 调用前被拒绝，固定 protocol v1 兼容 fixture，并验证批量单条失败。它们还证明 PostgreSQL 的无效 cursor 不会被误报成临时服务故障，问卷管理和指标兼容决定都会重新取得 capability，并在发布前重读草稿 revision。PostgreSQL 16 验证从空库执行全部 migration，再次执行核对 checksum，运行 runtime 权限、接触修订、自动合并、同字段冲突、解决重放、区域循环、草稿冲突、跨用户隔离、问卷事务发布、问卷指标兼容和共用指标 fixture，最后执行并发发布、并发兼容确认与撤销、`pg_dump` 与 `pg_restore` 检查。
+Backend 测试使用 synthetic 身份和上下文。它们证明伪造项目在 Store 调用前被拒绝，固定 protocol v1 兼容 fixture，并验证批量单条失败。它们还证明非空对象关联需要额外 capability，机构反应和重复关联会在 Store 前被拒绝；PostgreSQL 的无效 cursor 不会被误报成临时服务故障，问卷管理和指标兼容决定都会重新取得 capability，并在发布前重读草稿 revision。PostgreSQL 16 验证从空库执行全部 migration，再次执行核对 checksum，运行 runtime 权限、接触修订、对象关联原子性、自动合并、同字段冲突、解决重放、区域循环、草稿冲突、跨用户隔离、问卷事务发布、问卷指标兼容和共用指标 fixture，最后执行并发发布、并发兼容确认与撤销、`pg_dump` 与 `pg_restore` 检查。
 
 这些测试分别回答不同问题。单元测试证明状态机，HTTP 测试证明协议转换，真实 PostgreSQL 证明 SQL 语法、权限、transaction 和恢复路径。某一类通过不能替代另一类。
 

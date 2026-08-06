@@ -447,3 +447,63 @@ class DbContactRevisionConflicts extends Table {
         'AND resolved_at_utc IS NOT NULL))',
   ];
 }
+
+/// 草稿中与明确对象相连的受控事实；对象 PII 仍只从 Backend 按需读取。
+class DbContactDraftTargetLinks extends Table {
+  TextColumn get draftId => text().references(DbContactDrafts, #draftId)();
+  TextColumn get targetId => text()();
+  TextColumn get targetType => text()();
+  IntColumn get responseLevel => integer().nullable()();
+  TextColumn get followUpConsent => text()();
+  BoolColumn get institutionRepresentativeConfirmed => boolean()();
+  BoolColumn get confirmStageZero => boolean()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {draftId, targetId};
+
+  @override
+  List<String> get customConstraints => const [
+    'CHECK (length(trim(target_id)) > 0)',
+    "CHECK (target_type IN ('person', 'institution'))",
+    'CHECK (response_level IS NULL OR response_level BETWEEN 0 AND 4)',
+    "CHECK (follow_up_consent IN ('yes', 'no', 'unknown', 'refused', "
+        "'not_applicable'))",
+    "CHECK (target_type = 'institution' OR "
+        'institution_representative_confirmed = 0)',
+    "CHECK (target_type != 'institution' OR response_level IS NULL OR "
+        'institution_representative_confirmed = 1)',
+  ];
+}
+
+/// 某个 contact revision 的对象关联完整快照。
+///
+/// 更正会追加新 revision 的全部关联，旧行不更新，因而删除和改正也有历史证据。
+class DbContactTargetLinks extends Table {
+  TextColumn get contactId => text().references(DbContactRecords, #contactId)();
+  IntColumn get revisionNumber => integer()();
+  TextColumn get targetId => text()();
+  TextColumn get targetType => text()();
+  IntColumn get responseLevel => integer().nullable()();
+  TextColumn get followUpConsent => text()();
+  BoolColumn get institutionRepresentativeConfirmed => boolean()();
+  BoolColumn get confirmStageZero => boolean()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {contactId, revisionNumber, targetId};
+
+  @override
+  List<String> get customConstraints => const [
+    'FOREIGN KEY (contact_id, revision_number) REFERENCES '
+        'db_contact_revisions (contact_id, revision_number) ON DELETE RESTRICT',
+    'CHECK (revision_number > 0)',
+    'CHECK (length(trim(target_id)) > 0)',
+    "CHECK (target_type IN ('person', 'institution'))",
+    'CHECK (response_level IS NULL OR response_level BETWEEN 0 AND 4)',
+    "CHECK (follow_up_consent IN ('yes', 'no', 'unknown', 'refused', "
+        "'not_applicable'))",
+    "CHECK (target_type = 'institution' OR "
+        'institution_representative_confirmed = 0)',
+    "CHECK (target_type != 'institution' OR response_level IS NULL OR "
+        'institution_representative_confirmed = 1)',
+  ];
+}
