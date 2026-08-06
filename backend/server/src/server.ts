@@ -35,8 +35,10 @@ import {
   type QuestionnaireMetricCompatibilityStore,
 } from "./questionnaire-metric-compatibility.js";
 import {
+  configurePromotionTargetStageAliases,
   createPromotionTarget,
   listAssignedPromotionTargets,
+  updatePromotionTargetRelationship,
   type PromotionTargetStore,
 } from "./promotion-targets.js";
 
@@ -229,6 +231,65 @@ export function createBackendServer(
           request.headers.authorization,
           await readJsonBody(request),
           targetDependencies,
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
+      }
+      return;
+    }
+
+    const relationshipMatch = requestUrl.pathname.match(
+      /^\/v1\/promotion-targets\/([^/]+)\/relationship$/,
+    );
+    if (request.method === "PATCH" && relationshipMatch !== null) {
+      if (dependencies.promotionTargetStore === undefined) {
+        response.statusCode = 503;
+        response.end(JSON.stringify({
+          error: {code: "promotion_targets_unavailable"},
+        }));
+        return;
+      }
+      try {
+        const result = await updatePromotionTargetRelationship(
+          request.headers.authorization,
+          relationshipMatch[1] ?? "",
+          await readJsonBody(request),
+          {
+            identityVerifier: dependencies.identityVerifier,
+            contextStore: dependencies.contextStore,
+            targetStore: dependencies.promotionTargetStore,
+          },
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
+      }
+      return;
+    }
+
+    if (
+      request.method === "PUT" &&
+      requestUrl.pathname === "/v1/promotion-target-stage-aliases"
+    ) {
+      if (dependencies.promotionTargetStore === undefined) {
+        response.statusCode = 503;
+        response.end(JSON.stringify({
+          error: {code: "promotion_targets_unavailable"},
+        }));
+        return;
+      }
+      try {
+        const result = await configurePromotionTargetStageAliases(
+          request.headers.authorization,
+          await readJsonBody(request),
+          {
+            identityVerifier: dependencies.identityVerifier,
+            contextStore: dependencies.contextStore,
+            targetStore: dependencies.promotionTargetStore,
+          },
         );
         response.statusCode = result.status;
         response.end(JSON.stringify(result.body));

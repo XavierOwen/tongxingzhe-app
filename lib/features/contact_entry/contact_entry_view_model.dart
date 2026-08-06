@@ -381,6 +381,9 @@ final class ContactEntryViewModel extends ChangeNotifier {
       case PromotionTargetRejected<List<PromotionTargetProfile>>():
         _assignedTargets = const [];
         _targetLoadState = ContactTargetLoadState.failed;
+      case PromotionTargetConflict<List<PromotionTargetProfile>>():
+        _assignedTargets = const [];
+        _targetLoadState = ContactTargetLoadState.failed;
     }
     _notify();
   }

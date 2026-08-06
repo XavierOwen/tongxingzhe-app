@@ -172,6 +172,12 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
         gateway: widget.promotionTargetGateway,
         idGenerator: widget.idGenerator,
         canCreate: widget.context.capabilities.contains('create_target'),
+        canConfigureStageAliases: widget.context.capabilities.contains(
+          'manage_analysis_definitions',
+        ),
+        canManageRelationship: widget.context.capabilities.contains(
+          'manage_assigned_target_follow_up',
+        ),
       ),
       _PersonalSummaryPage(
         controller: widget.controller,
