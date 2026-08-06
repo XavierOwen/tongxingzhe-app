@@ -33,6 +33,8 @@ Flutter 项目里有很多平台文件，例如 `ios/`、`android/`、`macos/`�
 
 暂时不要读 `lib/data/local_database.g.dart`。这个文件是 Drift 自动生成的，像机器打印出来的说明书，很长，不适合入门阅读。
 
+如果你的目标是参与当前正式产品开发，不要沿着这份 legacy demo 路线直接改代码。先读[正式开发说明书入口](manual/README.md)，再按[本机、Docker 与 CI 测试指南](manual/09-local-docker-and-ci-testing.md)准备环境。后者从 image、container、database 三个基本概念开始，不要求你用过 Docker。
+
 ## 1. 第一天：先学会把项目跑起来
 
 打开终端，进入项目目录：
@@ -65,6 +67,16 @@ http://127.0.0.1:54731
 dart analyze
 flutter test
 ```
+
+当前正式分支还包含 Backend 与 PostgreSQL。第一次准备完整测试环境时，继续执行：
+
+```bash
+npm --prefix backend/server ci
+docker info
+./tool/run_postgres_tests_in_docker.sh
+```
+
+最后一条命令会自己建立并删除临时 PostgreSQL 容器，不连接 production，也不要求本机安装 PostgreSQL。若 `docker info` 报 daemon 不可用，先启动 Docker Desktop。完整解释和失败排查见[第 9 章测试指南](manual/09-local-docker-and-ci-testing.md)。
 
 你现在只要记住三句话：
 
@@ -660,19 +672,26 @@ git push -u origin main
 
 把 `YOUR_USERNAME` 换成你的 GitHub 用户名。
 
-## 20. 每次提交前先做这三步
+## 20. 每次提交前先做完整检查
 
 ```bash
 dart analyze
-flutter test
+flutter test --no-pub
+npm --prefix backend/server run check
+npm --prefix backend/server test
+./tool/run_postgres_tests_in_docker.sh
 git status
 ```
 
 含义：
 
 - `dart analyze`：检查代码有没有明显问题。
-- `flutter test`：跑自动化测试。
+- `flutter test --no-pub`：跑 Flutter 自动化测试。
+- 两条 `npm` 命令：检查 Backend TypeScript 和 HTTP 合同。
+- Docker 脚本：在临时 PostgreSQL 16 中检查 migration、权限、fixture 和备份恢复。
 - `git status`：看看你准备提交什么。
+
+只改界面时可以先跑相关 Widget test 缩短反馈时间，但提交前仍按[正式测试清单](manual/09-local-docker-and-ci-testing.md#12-提交前复制清单)选择完整范围。没有运行的检查应写成“未验证”，不能凭本机其他测试推断通过。
 
 尤其注意不要提交真实数据：
 

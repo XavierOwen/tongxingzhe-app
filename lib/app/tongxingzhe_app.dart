@@ -14,6 +14,7 @@ import '../features/contact_revision/contact_revision_screen.dart';
 import '../foundation/runtime_values.dart';
 import '../identity/identity_session.dart';
 import '../l10n/app_strings.dart';
+import '../plans/personal_action_plan.dart';
 import '../questionnaires/questionnaire_contract.dart';
 import '../questionnaires/questionnaire_administration.dart';
 import '../questionnaires/questionnaire_draft_upgrade.dart';
@@ -64,6 +65,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
   QuestionnaireCatalog? _questionnaireCatalog;
   QuestionnaireAdministrationGateway? _questionnaireAdministration;
   PromotionTargetGateway? _promotionTargetGateway;
+  PersonalActionPlanGateway? _personalActionPlanGateway;
 
   @override
   void initState() {
@@ -82,6 +84,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       :final questionnaireCatalog,
       :final questionnaireAdministration,
       :final promotionTargetGateway,
+      :final personalActionPlanGateway,
     )) {
       _controller = controller;
       _identitySession = identitySession;
@@ -91,6 +94,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       _questionnaireCatalog = questionnaireCatalog;
       _questionnaireAdministration = questionnaireAdministration;
       _promotionTargetGateway = promotionTargetGateway;
+      _personalActionPlanGateway = personalActionPlanGateway;
     }
     return result;
   }
@@ -104,6 +108,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
     unawaited(_questionnaireCatalog?.close());
     unawaited(_questionnaireAdministration?.close());
     unawaited(_promotionTargetGateway?.close());
+    unawaited(_personalActionPlanGateway?.close());
     _controller?.dispose();
     super.dispose();
   }
@@ -135,6 +140,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
             :final questionnaireCatalog,
             :final questionnaireAdministration,
             :final promotionTargetGateway,
+            :final personalActionPlanGateway,
             :final idGenerator,
           ) =>
             _ReadyApp(
@@ -151,6 +157,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
               questionnaireCatalog: questionnaireCatalog,
               questionnaireAdministration: questionnaireAdministration,
               promotionTargetGateway: promotionTargetGateway,
+              personalActionPlanGateway: personalActionPlanGateway,
               idGenerator: idGenerator,
               signedOutScreenBuilder: widget.signedOutScreenBuilder,
               routeInformationProvider: widget.routeInformationProvider,
@@ -179,6 +186,7 @@ class _ReadyApp extends StatefulWidget {
     required this.questionnaireCatalog,
     required this.questionnaireAdministration,
     required this.promotionTargetGateway,
+    required this.personalActionPlanGateway,
     required this.idGenerator,
     required this.signedOutScreenBuilder,
     required this.routeInformationProvider,
@@ -197,6 +205,7 @@ class _ReadyApp extends StatefulWidget {
   final QuestionnaireCatalog questionnaireCatalog;
   final QuestionnaireAdministrationGateway questionnaireAdministration;
   final PromotionTargetGateway promotionTargetGateway;
+  final PersonalActionPlanGateway personalActionPlanGateway;
   final IdGenerator idGenerator;
   final SignedOutScreenBuilder? signedOutScreenBuilder;
   final RouteInformationProvider? routeInformationProvider;
@@ -282,6 +291,7 @@ final class _ReadyAppState extends State<_ReadyApp> {
         contactPageClosedEvents: contactPageClosedEvents,
         questionnaireAdministration: widget.questionnaireAdministration,
         promotionTargetGateway: widget.promotionTargetGateway,
+        personalActionPlanGateway: widget.personalActionPlanGateway,
         idGenerator: widget.idGenerator,
         onDestinationSelected: (index) => _routerDelegate.go(switch (index) {
           0 => AppRoute.today,

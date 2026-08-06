@@ -186,6 +186,29 @@ node --test backend/server/dist/test/promotion-targets.test.js
 
 不要只在已有数据库上执行 `0020` fixture。完整脚本还会从空库应用 migration、检查 runtime 最小权限、启动两个独立会话争用同一对象、制造 checksum 漂移，并在恢复库重跑全部 check 和 fixture。第一次使用 Docker 时，继续按第 6.1 至 6.4 节操作；不需要先安装 PostgreSQL 或学习容器网络。
 
+### 5.3 验证私人周计划
+
+私人周计划同时包含 Widget、HTTP 合同、Backend trusted context 和 PostgreSQL 周期计算。开发时先运行短反馈测试：
+
+```bash
+flutter test --no-pub \
+  test/features/plans/personal_action_plan_panel_test.dart \
+  test/plans/http_personal_action_plan_gateway_test.dart
+
+npm --prefix backend/server run build
+node --test backend/server/dist/test/personal-action-plans.test.js
+```
+
+只运行这些测试不能证明时区边界和数据库权限。随后运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+看到 `fixture：0021_personal_action_plans.sql` 表示脚本正在检查私人计划。该 fixture 会验证美国夏令时切换周只有 167 小时、后续设置在下一周期生效、边界采用半开区间、mutation 可安全重放，以及另一位用户不能读取计划。Docker 脚本还会在恢复库再次运行相同 fixture。
+
+这条切片没有修改 Drift schema，因此不需要生成新的 Drift snapshot。计划的离线缓存和逐设备系统提醒属于后续切片；不要把当前 HTTP／Widget 测试写成离线提醒已经完成。
+
 ## 6. Docker PostgreSQL 套件怎样运行
 
 ### 6.1 最短用法
@@ -316,6 +339,8 @@ export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_t
 export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
 ./tool/verify_promotion_target_retention_concurrency.sh
 ```
+
+`0021_personal_action_plans.sql` 展示另一类时间边界测试。计划保存固定 IANA 时区和 ISO 周起始日；SQL 先在当地日历中找周期边界，再转换为 UTC。这样夏令时切换周可以是 167 或 169 小时，而不是错误地固定成 168 小时。`verify_personal_action_plans.sql` 检查函数和最小权限，`0021` fixture 检查版本、重放、跨用户拒绝和下一周期生效。它不需要独立并发脚本，因为第一次创建用 scope advisory lock 串行化，fixture 与函数约束已覆盖本切片的写入合同。
 
 ## 8. Drift v17 生成文件怎样检查
 

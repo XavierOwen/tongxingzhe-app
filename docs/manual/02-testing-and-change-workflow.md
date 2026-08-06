@@ -323,6 +323,7 @@ iOS 第一次 `signup_request` 对原测试邮箱返回 HTTP 200，导出的 Sup
 | 隐藏答案变更 | 防止前置答案改变时静默丢失旧值 | 取消不修改答案；确认后记录跳过原因；撤销恢复整次变更 | Red 后 Green，ViewModel 与 Widget 测试保留 |
 | 问卷管理与发布 | 防止草稿覆盖、静默定义变化、重复版本或两个 current 版本 | revision 冲突、差异、模拟、幂等、不可变与双会话并发检查通过 | Red 后 Green，Flutter、Backend 与 PostgreSQL 测试保留 |
 | Drift/PostgreSQL 指标合同 | 防止两套 SQL 的 scope、区间或单位漂移 | 两端读取同一 synthetic CSV 并得到同一业务结果 | pass，共享 fixture 与两端测试保留 |
+| 私人周计划 | 防止管理者读取、目标口径漂移、DST 周偏移或当前周期被未来设置改写 | 本人 API、有效接触场次、167 小时切换周、下一周期版本和跨用户拒绝通过 | Red 后 Green，Flutter、Backend 与 PostgreSQL 测试保留 |
 | `dart analyze` | 发现类型和静态问题 | 0 issue | pass |
 | 全部 Flutter tests | 检查已有合同未被破坏 | 全部通过 | pass；数量以当次命令输出为准 |
 | Backend tests | 检查 JWT、可信上下文、项目、问卷、上传、拉取和错误分类 | TypeScript 检查与全部测试通过 | pass；数量以当次命令输出为准 |

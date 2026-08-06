@@ -50,6 +50,11 @@ import {
   listTargetInstitutionRelationships,
   type TargetInstitutionRelationshipStore,
 } from "./target-institution-relationships.js";
+import {
+  readPersonalActionPlan,
+  savePersonalActionPlan,
+  type PersonalActionPlanStore,
+} from "./personal-action-plans.js";
 
 export interface BackendServerDependencies
   extends SessionContextHttpDependencies {
@@ -63,6 +68,7 @@ export interface BackendServerDependencies
   readonly promotionTargetRetentionStore?: PromotionTargetRetentionStore;
   readonly targetInstitutionRelationshipStore?:
     TargetInstitutionRelationshipStore;
+  readonly personalActionPlanStore?: PersonalActionPlanStore;
 }
 
 export function createBackendServer(
@@ -375,6 +381,45 @@ export function createBackendServer(
             contextStore: dependencies.contextStore,
             targetStore: dependencies.promotionTargetRetentionStore,
           },
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
+      }
+      return;
+    }
+
+    if (
+      requestUrl.pathname === "/v1/personal-action-plan" &&
+      (request.method === "GET" || request.method === "PUT")
+    ) {
+      if (dependencies.personalActionPlanStore === undefined) {
+        response.statusCode = 503;
+        response.end(JSON.stringify({
+          error: {code: "personal_action_plan_unavailable"},
+        }));
+        return;
+      }
+      const planDependencies = {
+        identityVerifier: dependencies.identityVerifier,
+        contextStore: dependencies.contextStore,
+        planStore: dependencies.personalActionPlanStore,
+      };
+      if (request.method === "GET") {
+        const result = await readPersonalActionPlan(
+          request.headers.authorization,
+          planDependencies,
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+        return;
+      }
+      try {
+        const result = await savePersonalActionPlan(
+          request.headers.authorization,
+          await readJsonBody(request),
+          planDependencies,
         );
         response.statusCode = result.status;
         response.end(JSON.stringify(result.body));

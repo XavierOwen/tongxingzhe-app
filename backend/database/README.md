@@ -107,6 +107,10 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/checks/verify_promotion_target_retention.sql
 psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/fixtures/0020_promotion_target_retention.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_personal_action_plans.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0021_personal_action_plans.sql
 ./tool/verify_questionnaire_publish_concurrency.sh
 ./tool/verify_questionnaire_metric_concurrency.sh
 ./tool/verify_person_institution_relationship_concurrency.sh
@@ -161,5 +165,7 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 `0019_person_institution_relationships.sql` 保存 workspace 内明确建立的个人与机构关系。六类性质固定；同一对对象可同时有不同性质，但同一种活动关系只允许一条。建立和结束都追加 revision 并使用 mutation ID。列表和写入都要求调用者仍同时获分配两端对象；关系本身不增加分配、成员资格、接触关联或 warehouse 事实。
 
 `0020_promotion_target_retention.sql` 保存一至十二个月的 workspace 保留策略和不含 PII 的续期／匿名化审计。期限基准取对象建立、最近有效接触和最近明确续期中的最新时间。到期目录读取先匿名化；明确撤回立即匿名化。一个 transaction 会清除对象 PII 和历史敏感文本、结束活动分配与关系，同时保留接触和去标识统计。
+
+`0021_personal_action_plans.sql` 保存每位用户、每个项目的一份私人计划和追加式版本。首次设置采用当前自然周；后续目标、IANA 统计时区或周期起始日修改从下一周期生效。进度只计算当前有效、已提交且实际发生在周期内的接触。runtime role 只能用可信当前上下文读取或修改本人计划，不能直接读表，也没有管理员列表函数。
 
 普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。四个 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，验证问卷发布、指标兼容、个人与机构活动关系和对象匿名化的并发不变量。检查脚本只使用 synthetic 个人空间，并要求显式 `DATABASE_URL`。

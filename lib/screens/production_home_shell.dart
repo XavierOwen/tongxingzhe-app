@@ -13,10 +13,12 @@ import '../features/contact_entry/contact_channel_label.dart';
 import '../features/contact_journal/contact_journal.dart';
 import '../features/contact_journal/contact_models.dart';
 import '../features/home/production_home_view_model.dart';
+import '../features/plans/personal_action_plan_panel.dart';
 import '../features/questionnaire_admin/questionnaire_admin_screen.dart';
 import '../features/targets/promotion_target_directory_page.dart';
 import '../features/contact_metrics/personal_contact_overview.dart';
 import '../l10n/app_strings.dart';
+import '../plans/personal_action_plan.dart';
 import '../questionnaires/questionnaire_administration.dart';
 import '../routing/app_router.dart';
 import '../services/location_service.dart';
@@ -43,6 +45,7 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.contactPageClosedEvents,
     required this.questionnaireAdministration,
     required this.promotionTargetGateway,
+    required this.personalActionPlanGateway,
     required this.idGenerator,
     required this.onDestinationSelected,
     required this.onOpenContactEntry,
@@ -63,6 +66,7 @@ final class ProductionHomeShell extends StatefulWidget {
   final ValueListenable<ContactPageClosedEvent> contactPageClosedEvents;
   final QuestionnaireAdministrationGateway questionnaireAdministration;
   final PromotionTargetGateway promotionTargetGateway;
+  final PersonalActionPlanGateway personalActionPlanGateway;
   final IdGenerator idGenerator;
   final ValueChanged<int> onDestinationSelected;
   final ValueChanged<ContactDraft?> onOpenContactEntry;
@@ -152,6 +156,16 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
         snapshot: homeState.today,
         isLoading: homeState.isLoading,
         loadFailed: homeState.loadFailed,
+        personalPlanPanel: PersonalActionPlanPanel(
+          text: strings,
+          scopeKey:
+              '${widget.context.appUserId}/'
+              '${widget.context.workspace.id}/'
+              '${widget.context.project.id}',
+          gateway: widget.personalActionPlanGateway,
+          timeZoneProvider: widget.timeZoneProvider,
+          idGenerator: widget.idGenerator,
+        ),
       ),
       _ContactsPage(
         controller: widget.controller,
@@ -190,6 +204,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
         snapshot: homeState.recentSevenDays,
         isLoading: homeState.isLoading,
         loadFailed: homeState.loadFailed,
+        personalPlanPanel: null,
       ),
     ];
 
@@ -532,6 +547,7 @@ final class _PersonalSummaryPage extends StatelessWidget {
     required this.snapshot,
     required this.isLoading,
     required this.loadFailed,
+    required this.personalPlanPanel,
   });
 
   final AppController controller;
@@ -539,6 +555,7 @@ final class _PersonalSummaryPage extends StatelessWidget {
   final PersonalSummarySnapshot? snapshot;
   final bool isLoading;
   final bool loadFailed;
+  final Widget? personalPlanPanel;
 
   @override
   Widget build(BuildContext context) {
@@ -557,6 +574,10 @@ final class _PersonalSummaryPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (personalPlanPanel != null) ...[
+          personalPlanPanel!,
+          const SizedBox(height: 16),
+        ],
         Text(
           period == PersonalSummaryPeriod.today
               ? text.t('today')
