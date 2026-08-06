@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  applyPromotionTargetRetentionAction,
   configurePromotionTargetStageAliases,
   createPromotionTarget,
+  listPromotionTargetRetentionTasks,
   listAssignedPromotionTargets,
   PostgresPromotionTargetStore,
   updatePromotionTargetRelationship,
@@ -11,6 +13,10 @@ import {
   type PromotionTargetProfile,
   type PromotionTargetRelationship,
   type PromotionTargetRelationshipUpdate,
+  type PromotionTargetRetentionActionInput,
+  type PromotionTargetRetentionOutcome,
+  type PromotionTargetRetentionStore,
+  type PromotionTargetRetentionTask,
   type PromotionTargetStageAlias,
   type PromotionTargetStageAliasInput,
   type PromotionTargetStore,
@@ -314,6 +320,122 @@ test("Postgres relationship adapter sends expected revision and mutation id", as
   ]);
 });
 
+test("retention review requires follow-up capability and returns no PII", async () => {
+  const store = new MemoryRetentionStore();
+  const forbidden = await listPromotionTargetRetentionTasks(
+    "Bearer token",
+    retentionDependencies(store, ["view_assigned_target_pii"]),
+  );
+  assert.equal(forbidden.status, 403);
+  assert.equal(store.calls, 0);
+
+  const accepted = await listPromotionTargetRetentionTasks(
+    "Bearer token",
+    retentionDependencies(store, [
+      "view_assigned_target_pii",
+      "manage_assigned_target_follow_up",
+    ]),
+  );
+  assert.deepEqual(accepted, {
+    status: 200,
+    body: {
+      tasks: [{
+        target_id: profile.id,
+        review_due_at: "2026-08-20T12:00:00.000Z",
+      }],
+    },
+  });
+  assert.doesNotMatch(JSON.stringify(accepted.body), /王小明|312 555/);
+});
+
+test("retention mutation rejects forged context and validates action pairs", async () => {
+  const store = new MemoryRetentionStore();
+  const deps = retentionDependencies(store, [
+    "view_assigned_target_pii",
+    "manage_assigned_target_follow_up",
+  ]);
+  const invalidBodies = [
+    {...retentionBody(), workspace_id: "forged"},
+    {...retentionBody(), action: "renew", reason: "withdrawal"},
+    {...retentionBody(), mutation_id: ""},
+  ];
+
+  for (const body of invalidBodies) {
+    const result = await applyPromotionTargetRetentionAction(
+      "Bearer token",
+      profile.id,
+      body,
+      deps,
+    );
+    assert.equal(result.status, 400);
+  }
+  assert.equal(store.calls, 0);
+});
+
+test("withdrawal anonymization returns only an irreversible outcome", async () => {
+  const store = new MemoryRetentionStore();
+  const result = await applyPromotionTargetRetentionAction(
+    "Bearer token",
+    profile.id,
+    retentionBody(),
+    retentionDependencies(store, [
+      "view_assigned_target_pii",
+      "manage_assigned_target_follow_up",
+    ]),
+  );
+
+  assert.deepEqual(store.input, {
+    action: "anonymize",
+    reason: "withdrawal",
+    mutationId: "retention-action-1",
+  });
+  assert.deepEqual(result, {
+    status: 200,
+    body: {
+      target_id: profile.id,
+      status: "anonymized",
+      duplicate: false,
+      review_due_at: null,
+    },
+  });
+  assert.doesNotMatch(JSON.stringify(result.body), /王小明|312 555/);
+});
+
+test("Postgres retention adapter passes only trusted scope and mutation", async () => {
+  const calls: Array<{text: string; values: readonly unknown[]}> = [];
+  const store = new PostgresPromotionTargetStore(async (text, values) => {
+    calls.push({text, values});
+    return {rows: [{result: {
+      target_id: profile.id,
+      status: "active",
+      duplicate: false,
+      review_due_at: "2027-08-06T12:00:00.000Z",
+    }}]};
+  });
+
+  const outcome = await store.applyRetentionAction(
+    context([]),
+    profile.id,
+    {
+      action: "renew",
+      reason: "purpose_confirmed",
+      mutationId: "renew-1",
+    },
+  );
+
+  assert.equal(outcome.status, "active");
+  assert.match(calls[0]?.text ?? "", /apply_promotion_target_retention_action/);
+  assert.deepEqual(calls[0]?.values, [
+    "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    "22222222-2222-4222-8222-222222222222",
+    profile.id,
+    "renew",
+    "purpose_confirmed",
+    "renew-1",
+  ]);
+});
+
 function validBody() {
   return {
     target_type: "person",
@@ -334,6 +456,14 @@ function relationshipBody() {
     reason_detail: null,
     mutation_id: "relationship-change-1",
     resolved_conflict_id: null,
+  };
+}
+
+function retentionBody() {
+  return {
+    action: "anonymize",
+    reason: "withdrawal",
+    mutation_id: "retention-action-1",
   };
 }
 
@@ -457,5 +587,50 @@ class MemoryStore implements PromotionTargetStore {
     this.calls += 1;
     this.aliasInputs = aliasInputs;
     return aliases;
+  }
+}
+
+function retentionDependencies(
+  targetStore: PromotionTargetRetentionStore,
+  capabilities: readonly string[],
+) {
+  return {
+    identityVerifier: {
+      verify: async () => ({issuer: "issuer", subject: "subject"}),
+    },
+    contextStore: {
+      loadOrCreate: async () => context(capabilities),
+    },
+    targetStore,
+  };
+}
+
+class MemoryRetentionStore implements PromotionTargetRetentionStore {
+  calls = 0;
+  input: PromotionTargetRetentionActionInput | null = null;
+  tasks: readonly PromotionTargetRetentionTask[] = [{
+    targetId: profile.id,
+    reviewDueAt: "2026-08-20T12:00:00.000Z",
+  }];
+  outcome: PromotionTargetRetentionOutcome = {
+    targetId: profile.id,
+    status: "anonymized",
+    duplicate: false,
+    reviewDueAt: null,
+  };
+
+  async listRetentionTasks(): Promise<readonly PromotionTargetRetentionTask[]> {
+    this.calls += 1;
+    return this.tasks;
+  }
+
+  async applyRetentionAction(
+    _context: SessionContext,
+    _targetId: string,
+    input: PromotionTargetRetentionActionInput,
+  ): Promise<PromotionTargetRetentionOutcome> {
+    this.calls += 1;
+    this.input = input;
+    return this.outcome;
   }
 }

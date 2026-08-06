@@ -32,6 +32,58 @@ enum PromotionTargetRelationshipReason {
   final String storageValue;
 }
 
+enum PromotionTargetRetentionAction {
+  renew('renew'),
+  anonymize('anonymize');
+
+  const PromotionTargetRetentionAction(this.storageValue);
+
+  final String storageValue;
+}
+
+enum PromotionTargetRetentionReason {
+  purposeConfirmed('purpose_confirmed'),
+  withdrawal('withdrawal'),
+  retentionExpired('retention_expired');
+
+  const PromotionTargetRetentionReason(this.storageValue);
+
+  final String storageValue;
+}
+
+enum PromotionTargetRetentionStatus {
+  active('active'),
+  anonymized('anonymized');
+
+  const PromotionTargetRetentionStatus(this.storageValue);
+
+  final String storageValue;
+}
+
+final class PromotionTargetRetentionTask {
+  const PromotionTargetRetentionTask({
+    required this.targetId,
+    required this.reviewDueAtUtc,
+  });
+
+  final String targetId;
+  final DateTime reviewDueAtUtc;
+}
+
+final class PromotionTargetRetentionOutcome {
+  const PromotionTargetRetentionOutcome({
+    required this.targetId,
+    required this.status,
+    required this.duplicate,
+    required this.reviewDueAtUtc,
+  });
+
+  final String targetId;
+  final PromotionTargetRetentionStatus status;
+  final bool duplicate;
+  final DateTime? reviewDueAtUtc;
+}
+
 enum TargetInstitutionRelationshipKind {
   employmentRepresentative('employment_representative'),
   ownershipGovernance('ownership_governance'),
@@ -320,4 +372,18 @@ abstract interface class PromotionTargetGateway {
   });
 
   Future<void> close();
+}
+
+/// Online-only retention operations. Responses contain target IDs, never PII.
+abstract interface class PromotionTargetRetentionGateway {
+  Future<PromotionTargetResult<List<PromotionTargetRetentionTask>>>
+  loadRetentionTasks();
+
+  Future<PromotionTargetResult<PromotionTargetRetentionOutcome>>
+  applyRetentionAction({
+    required String targetId,
+    required PromotionTargetRetentionAction action,
+    required PromotionTargetRetentionReason reason,
+    required String mutationId,
+  });
 }

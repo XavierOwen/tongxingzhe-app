@@ -96,7 +96,10 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Verify Docker test wrapper syntax
-        run: bash -n tool/run_postgres_tests_in_docker.sh
+        run: >-
+          bash -n
+          tool/run_postgres_tests_in_docker.sh
+          tool/verify_promotion_target_retention_concurrency.sh
 
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install --yes postgresql-client
@@ -181,12 +184,17 @@ jobs:
             --file backend/database/checks/verify_person_institution_relationships.sql
           psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file backend/database/fixtures/0019_person_institution_relationships.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_promotion_target_retention.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0020_promotion_target_retention.sql
 
       - name: Verify concurrent questionnaire publication
         run: |
           ./tool/verify_questionnaire_publish_concurrency.sh
           ./tool/verify_questionnaire_metric_concurrency.sh
           ./tool/verify_person_institution_relationship_concurrency.sh
+          ./tool/verify_promotion_target_retention_concurrency.sh
 
       - name: Reject edited migration history
         run: |
@@ -284,6 +292,10 @@ jobs:
             --file backend/database/checks/verify_person_institution_relationships.sql
           psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file backend/database/fixtures/0019_person_institution_relationships.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_promotion_target_retention.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0020_promotion_target_retention.sql
 
   backend-server:
     name: Backend identity, context, and sync

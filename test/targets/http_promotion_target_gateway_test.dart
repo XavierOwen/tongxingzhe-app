@@ -282,6 +282,74 @@ void main() {
       TargetInstitutionRelationshipStatus.ended,
     );
   });
+
+  test('loads generic retention tasks and submits withdrawal', () async {
+    var requestNumber = 0;
+    final gateway = HttpPromotionTargetGateway(
+      baseUri: Uri.parse('https://backend.example.test'),
+      identitySession: _signedInIdentity(),
+      client: MockClient((request) async {
+        requestNumber += 1;
+        if (requestNumber == 1) {
+          expect(request.method, 'GET');
+          expect(request.url.path, '/v1/promotion-target-retention-tasks');
+          return http.Response(
+            jsonEncode({
+              'tasks': [
+                {
+                  'target_id': '44444444-4444-4444-8444-444444444444',
+                  'review_due_at': '2026-08-20T12:00:00Z',
+                },
+              ],
+            }),
+            200,
+          );
+        }
+        expect(request.method, 'POST');
+        expect(
+          request.url.path,
+          '/v1/promotion-targets/'
+          '44444444-4444-4444-8444-444444444444/retention',
+        );
+        expect(jsonDecode(request.body), {
+          'action': 'anonymize',
+          'reason': 'withdrawal',
+          'mutation_id': 'withdrawal-1',
+        });
+        return http.Response(
+          jsonEncode({
+            'target_id': '44444444-4444-4444-8444-444444444444',
+            'status': 'anonymized',
+            'duplicate': false,
+            'review_due_at': null,
+          }),
+          200,
+        );
+      }),
+    );
+
+    final tasks = await gateway.loadRetentionTasks();
+    final outcome = await gateway.applyRetentionAction(
+      targetId: '44444444-4444-4444-8444-444444444444',
+      action: PromotionTargetRetentionAction.anonymize,
+      reason: PromotionTargetRetentionReason.withdrawal,
+      mutationId: 'withdrawal-1',
+    );
+
+    expect(
+      (tasks as PromotionTargetSuccess<List<PromotionTargetRetentionTask>>)
+          .value
+          .single
+          .reviewDueAtUtc,
+      DateTime.utc(2026, 8, 20, 12),
+    );
+    expect(
+      (outcome as PromotionTargetSuccess<PromotionTargetRetentionOutcome>)
+          .value
+          .status,
+      PromotionTargetRetentionStatus.anonymized,
+    );
+  });
 }
 
 Map<String, Object?> _relationshipDocument({

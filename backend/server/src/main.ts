@@ -60,6 +60,7 @@ const server = createBackendServer({
   questionnaireAdministrationStore,
   questionnaireMetricCompatibilityStore,
   promotionTargetStore,
+  promotionTargetRetentionStore: promotionTargetStore,
   targetInstitutionRelationshipStore,
 });
 

@@ -112,6 +112,49 @@ void main() {
       PromotionTargetFailureCode.networkUnavailable,
     );
   });
+
+  test('匿名化成功后立即清除本地密文且不再离线回退', () async {
+    final remote = _RemoteGateway();
+    final vault = _vault();
+    final gateway = OfflinePromotionTargetGateway(
+      remote: remote,
+      vault: vault,
+      externalSubject: () => 'identity-subject-1',
+      currentContext: () => _context,
+    );
+    remote.listResult = PromotionTargetSuccess([
+      _target,
+    ], authorizedAtUtc: DateTime.utc(2026, 8, 6, 12));
+    await gateway.loadAssigned();
+
+    remote.retentionResult = const PromotionTargetSuccess(
+      PromotionTargetRetentionOutcome(
+        targetId: 'target-1',
+        status: PromotionTargetRetentionStatus.anonymized,
+        duplicate: false,
+        reviewDueAtUtc: null,
+      ),
+    );
+    final result = await gateway.applyRetentionAction(
+      targetId: 'target-1',
+      action: PromotionTargetRetentionAction.anonymize,
+      reason: PromotionTargetRetentionReason.withdrawal,
+      mutationId: 'withdrawal-1',
+    );
+
+    expect(
+      result,
+      isA<PromotionTargetSuccess<PromotionTargetRetentionOutcome>>(),
+    );
+    expect(await vault.read('identity-subject-1'), isA<OfflinePiiLocked>());
+    remote.listResult = const PromotionTargetRejected(
+      PromotionTargetFailureCode.networkUnavailable,
+    );
+    expect(
+      await gateway.loadAssigned(),
+      isA<PromotionTargetRejected<List<PromotionTargetProfile>>>(),
+    );
+  });
 }
 
 OfflinePiiVault _vault() => OfflinePiiVault(
@@ -148,11 +191,29 @@ final _target = PromotionTargetProfile(
   createdAtUtc: DateTime.utc(2026, 8, 1),
 );
 
-final class _RemoteGateway implements PromotionTargetGateway {
+final class _RemoteGateway
+    implements PromotionTargetGateway, PromotionTargetRetentionGateway {
   PromotionTargetResult<List<PromotionTargetProfile>> listResult =
       const PromotionTargetRejected(
         PromotionTargetFailureCode.networkUnavailable,
       );
+  PromotionTargetResult<PromotionTargetRetentionOutcome> retentionResult =
+      const PromotionTargetRejected(
+        PromotionTargetFailureCode.networkUnavailable,
+      );
+
+  @override
+  Future<PromotionTargetResult<List<PromotionTargetRetentionTask>>>
+  loadRetentionTasks() async => const PromotionTargetSuccess([]);
+
+  @override
+  Future<PromotionTargetResult<PromotionTargetRetentionOutcome>>
+  applyRetentionAction({
+    required String targetId,
+    required PromotionTargetRetentionAction action,
+    required PromotionTargetRetentionReason reason,
+    required String mutationId,
+  }) async => retentionResult;
 
   @override
   Future<PromotionTargetResult<List<PromotionTargetProfile>>>

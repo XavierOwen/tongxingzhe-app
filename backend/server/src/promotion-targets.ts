@@ -12,6 +12,11 @@ export const manageAssignedTargetFollowUpCapability =
 
 export type PromotionTargetType = "person" | "institution";
 export type PromotionTargetRelationshipLifecycle = "active" | "paused" | "ended";
+export type PromotionTargetRetentionAction = "renew" | "anonymize";
+export type PromotionTargetRetentionReason =
+  | "purpose_confirmed"
+  | "withdrawal"
+  | "retention_expired";
 
 export interface PromotionTargetStageAlias {
   readonly stage: number;
@@ -76,6 +81,24 @@ export interface UpdatePromotionTargetRelationshipInput {
   readonly resolvedConflictId: string | null;
 }
 
+export interface PromotionTargetRetentionTask {
+  readonly targetId: string;
+  readonly reviewDueAt: string;
+}
+
+export interface PromotionTargetRetentionActionInput {
+  readonly action: PromotionTargetRetentionAction;
+  readonly reason: PromotionTargetRetentionReason;
+  readonly mutationId: string;
+}
+
+export interface PromotionTargetRetentionOutcome {
+  readonly targetId: string;
+  readonly status: "active" | "anonymized";
+  readonly duplicate: boolean;
+  readonly reviewDueAt: string | null;
+}
+
 export interface PromotionTargetRelationshipProposal {
   readonly expectedRevision: number;
   readonly stage: number;
@@ -118,6 +141,17 @@ export interface PromotionTargetStore {
   ): Promise<readonly PromotionTargetStageAlias[]>;
 }
 
+export interface PromotionTargetRetentionStore {
+  listRetentionTasks(
+    context: SessionContext,
+  ): Promise<readonly PromotionTargetRetentionTask[]>;
+  applyRetentionAction(
+    context: SessionContext,
+    targetId: string,
+    input: PromotionTargetRetentionActionInput,
+  ): Promise<PromotionTargetRetentionOutcome>;
+}
+
 export interface PromotionTargetStageAliasInput {
   readonly stage: number;
   readonly displayName: string | null;
@@ -128,6 +162,12 @@ export interface PromotionTargetDependencies {
   readonly contextStore: SessionContextStore;
   readonly targetStore: PromotionTargetStore;
   readonly now?: () => Date;
+}
+
+export interface PromotionTargetRetentionDependencies {
+  readonly identityVerifier: IdentityVerifier;
+  readonly contextStore: SessionContextStore;
+  readonly targetStore: PromotionTargetRetentionStore;
 }
 
 export interface PromotionTargetHttpResult {
@@ -177,6 +217,65 @@ export async function createPromotionTarget(
     return {status: 201, body: {target: serializeTarget(target)}};
   } catch (error) {
     return storeFailure(error);
+  }
+}
+
+export async function listPromotionTargetRetentionTasks(
+  authorization: string | undefined,
+  dependencies: PromotionTargetRetentionDependencies,
+): Promise<PromotionTargetHttpResult> {
+  const context = await authorizedContext(
+    authorization,
+    dependencies,
+    [viewAssignedTargetPiiCapability, manageAssignedTargetFollowUpCapability],
+  );
+  if (!(context instanceof AuthorizedContext)) return context;
+  try {
+    const tasks = await dependencies.targetStore.listRetentionTasks(
+      context.value,
+    );
+    return {
+      status: 200,
+      body: {tasks: tasks.map((task) => ({
+        target_id: task.targetId,
+        review_due_at: task.reviewDueAt,
+      }))},
+    };
+  } catch (error) {
+    return storeFailure(error, "invalid_promotion_target_retention");
+  }
+}
+
+export async function applyPromotionTargetRetentionAction(
+  authorization: string | undefined,
+  targetId: string,
+  body: unknown,
+  dependencies: PromotionTargetRetentionDependencies,
+): Promise<PromotionTargetHttpResult> {
+  const input = parseRetentionActionInput(body);
+  if (!uuid(targetId) || input === null) {
+    return failure(400, "invalid_promotion_target_retention");
+  }
+  const context = await authorizedContext(
+    authorization,
+    dependencies,
+    [viewAssignedTargetPiiCapability, manageAssignedTargetFollowUpCapability],
+  );
+  if (!(context instanceof AuthorizedContext)) return context;
+  try {
+    const outcome = await dependencies.targetStore.applyRetentionAction(
+      context.value,
+      targetId,
+      input,
+    );
+    return {status: 200, body: {
+      target_id: outcome.targetId,
+      status: outcome.status,
+      duplicate: outcome.duplicate,
+      review_due_at: outcome.reviewDueAt,
+    }};
+  } catch (error) {
+    return storeFailure(error, "invalid_promotion_target_retention");
   }
 }
 
@@ -258,7 +357,8 @@ export type PromotionTargetQuery = (
   values: readonly unknown[],
 ) => Promise<{readonly rows: readonly unknown[]}>;
 
-export class PostgresPromotionTargetStore implements PromotionTargetStore {
+export class PostgresPromotionTargetStore
+  implements PromotionTargetStore, PromotionTargetRetentionStore {
   constructor(private readonly query: PromotionTargetQuery) {}
 
   async listAssigned(
@@ -368,6 +468,52 @@ export class PostgresPromotionTargetStore implements PromotionTargetStore {
       throw mapPostgresError(error);
     }
   }
+
+  async listRetentionTasks(
+    context: SessionContext,
+  ): Promise<readonly PromotionTargetRetentionTask[]> {
+    try {
+      const result = await this.query(
+        `SELECT task
+         FROM app_data.list_promotion_target_retention_tasks(
+           $1::uuid, $2::uuid, $3::uuid
+         )`,
+        contextValues(context),
+      );
+      return result.rows.map((row) => parseRetentionTask(rowField(row, "task")));
+    } catch (error) {
+      throw mapPostgresError(error);
+    }
+  }
+
+  async applyRetentionAction(
+    context: SessionContext,
+    targetId: string,
+    input: PromotionTargetRetentionActionInput,
+  ): Promise<PromotionTargetRetentionOutcome> {
+    try {
+      const result = await this.query(
+        `SELECT result
+         FROM app_data.apply_promotion_target_retention_action(
+           $1::uuid, $2::uuid, $3::uuid, $4::uuid,
+           $5::text, $6::text, $7::text
+         )`,
+        [
+          ...contextValues(context),
+          targetId,
+          input.action,
+          input.reason,
+          input.mutationId,
+        ],
+      );
+      if (result.rows.length !== 1) {
+        throw new Error("retention function must return exactly one row");
+      }
+      return parseRetentionOutcome(rowField(result.rows[0], "result"));
+    } catch (error) {
+      throw mapPostgresError(error);
+    }
+  }
 }
 
 export class PromotionTargetStoreError extends Error {
@@ -379,7 +525,10 @@ export class PromotionTargetStoreError extends Error {
 
 async function authorizedContext(
   authorization: string | undefined,
-  dependencies: PromotionTargetDependencies,
+  dependencies: Pick<
+    PromotionTargetDependencies,
+    "identityVerifier" | "contextStore"
+  >,
   requiredCapabilities: readonly string[],
 ): Promise<AuthorizedContext | PromotionTargetHttpResult> {
   const result = await authorizeContext(
@@ -471,6 +620,25 @@ function parseRelationshipUpdateInput(
     mutationId,
     resolvedConflictId,
   };
+}
+
+function parseRetentionActionInput(
+  value: unknown,
+): PromotionTargetRetentionActionInput | null {
+  const root = record(value);
+  if (!hasOnlyKeys(root, ["action", "reason", "mutation_id"])) return null;
+  const action = enumValue(root.action, ["renew", "anonymize"] as const);
+  const reason = enumValue(
+    root.reason,
+    ["purpose_confirmed", "withdrawal", "retention_expired"] as const,
+  );
+  const mutationId = boundedString(root.mutation_id, 1, 120);
+  if (action === null || reason === null || mutationId === null) return null;
+  if (
+    (action === "renew" && reason !== "purpose_confirmed") ||
+    (action === "anonymize" && reason === "purpose_confirmed")
+  ) return null;
+  return {action, reason, mutationId};
 }
 
 function parseStageAliasInput(
@@ -679,6 +847,24 @@ function parseRelationshipProposal(
     followUpNote: nullableRequiredString(root.follow_up_note),
     reasonCode: requiredString(root.reason_code),
     reasonDetail: nullableRequiredString(root.reason_detail),
+  };
+}
+
+function parseRetentionTask(value: unknown): PromotionTargetRetentionTask {
+  const root = record(value);
+  return {
+    targetId: requiredString(root.target_id),
+    reviewDueAt: requiredString(root.review_due_at),
+  };
+}
+
+function parseRetentionOutcome(value: unknown): PromotionTargetRetentionOutcome {
+  const root = record(value);
+  return {
+    targetId: requiredString(root.target_id),
+    status: requiredEnum(root.status, ["active", "anonymized"] as const),
+    duplicate: requiredBoolean(root.duplicate),
+    reviewDueAt: nullableRequiredString(root.review_due_at),
   };
 }
 

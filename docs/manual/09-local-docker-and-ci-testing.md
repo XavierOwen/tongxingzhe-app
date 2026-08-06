@@ -158,11 +158,33 @@ node --test backend/server/dist/test/promotion-targets.test.js
 
 `test/privacy` 使用可控 fake 模拟安全存储成功、损坏、删除失败和并发。它也检查普通 Drift 锁不含对象 PII。这证明业务合同，但不证明某个平台的 Keychain、Credential Store 或 keyring 已在真实设备运行。
 
-本切片没有 PostgreSQL migration 或函数变化，所以目标开发循环不需要启动 Docker。提交前仍应运行全部 Flutter 和 Backend 测试。若同一分支还改动 PostgreSQL，再运行第 6 节的 Docker 套件。
+只修改七十二小时离线缓存时，目标开发循环不需要启动 Docker。若改动资料保留、匿名化、对象分配或服务端关系，必须运行第 6 节的 Docker 套件。
 
 真实平台验收必须在目标设备上启动正式 App。启动探针需要完成写入、精确读回和删除，随后还要验证联网取得对象、结束进程、断网重启、只读显示、到期锁定与重新联网。只完成 `flutter build` 或上述 fake 测试时，应把平台结果写成 `build only` 或 `runtime pending`。
 
 若单个测试通过而完整测试失败，应按完整测试的失败处理。单个测试只能缩短开发反馈时间。
+
+### 5.2 验证资料保留与匿名化
+
+这项功能同时改动 Flutter、Backend、PostgreSQL migration、权限和独立会话并发脚本。先运行快速测试：
+
+```bash
+flutter test --no-pub \
+  test/targets/http_promotion_target_gateway_test.dart \
+  test/targets/offline_promotion_target_gateway_test.dart \
+  test/features/targets/promotion_target_directory_page_test.dart
+
+npm --prefix backend/server run build
+node --test backend/server/dist/test/promotion-targets.test.js
+```
+
+随后必须运行完整 Docker 套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+不要只在已有数据库上执行 `0020` fixture。完整脚本还会从空库应用 migration、检查 runtime 最小权限、启动两个独立会话争用同一对象、制造 checksum 漂移，并在恢复库重跑全部 check 和 fixture。第一次使用 Docker 时，继续按第 6.1 至 6.4 节操作；不需要先安装 PostgreSQL 或学习容器网络。
 
 ## 6. Docker PostgreSQL 套件怎样运行
 
@@ -183,10 +205,10 @@ node --test backend/server/dist/test/promotion-targets.test.js
 1. 确认 Docker CLI 和 daemon 可用；
 2. 建立名称含当前进程号的临时容器；
 3. 等待 PostgreSQL 健康检查通过；
-4. 把数据库目录和三个正式 runner 复制到容器；
+4. 把数据库目录和四个正式并发脚本复制到容器；
 5. 从空库执行全部 migration，再执行一次 checksum 重放；
 6. 运行全部 schema／权限 check 和可回滚 synthetic fixture；
-7. 用独立数据库会话检查问卷发布、指标兼容和个人与机构关系并发；
+7. 用独立数据库会话检查问卷发布、指标兼容、个人与机构关系和对象匿名化并发；
 8. 修改 migration 的临时副本，确认 runner 拒绝 checksum 漂移；
 9. 执行 `pg_dump`，恢复到第二个空库，再运行全部 check 和 fixture；
 10. 成功后删除临时容器。
@@ -286,6 +308,13 @@ check 主要观察结构。fixture 会调用正式函数并核对结果。两者
 ```bash
 export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
 ./tool/verify_person_institution_relationship_concurrency.sh
+```
+
+`0020_promotion_target_retention.sql` 使用相同方法证明匿名化并发安全。fixture 先验证较短保留策略、到期前通用复核、明确续期、自动到期、撤回和接触事实保留。`verify_promotion_target_retention_concurrency.sh` 再让两个独立会话同时匿名化同一对象。成功时必须只有一个请求完成，并且数据库只留下匿名化对象、零个活动分配和一条匿名化审计。单独运行方法如下：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/verify_promotion_target_retention_concurrency.sh
 ```
 
 ## 8. Drift v17 生成文件怎样检查

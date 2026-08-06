@@ -39,6 +39,7 @@ final class PromotionTargetDirectoryPage extends StatefulWidget {
 final class _PromotionTargetDirectoryPageState
     extends State<PromotionTargetDirectoryPage> {
   List<PromotionTargetProfile>? _targets;
+  List<PromotionTargetRetentionTask> _retentionTasks = const [];
   PromotionTargetFailureCode? _failure;
   DateTime? _offlineAuthorizedAtUtc;
   Timer? _offlineExpiryTimer;
@@ -60,6 +61,7 @@ final class _PromotionTargetDirectoryPageState
     _offlineExpiryTimer?.cancel();
     _offlineExpiryTimer = null;
     _targets = null;
+    _retentionTasks = const [];
     _offlineAuthorizedAtUtc = null;
     _failure = null;
     _busy = true;
@@ -109,6 +111,21 @@ final class _PromotionTargetDirectoryPageState
                 '${text.t('targetsOfflineAuthorizedAt')}: '
                 '${_offlineAuthorizedAtUtc!.toIso8601String()}',
               ),
+            ),
+          ),
+        ],
+        if (_retentionTasks.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Card(
+            key: const ValueKey('promotion-target-retention-review'),
+            color: Theme.of(context).colorScheme.tertiaryContainer,
+            child: ListTile(
+              leading: const Icon(Icons.policy_outlined),
+              title: Text(
+                '${_retentionTasks.length} '
+                '${text.t('targetsRetentionReviewCount')}',
+              ),
+              subtitle: Text(text.t('targetsRetentionReviewHelp')),
             ),
           ),
         ],
@@ -189,6 +206,16 @@ final class _PromotionTargetDirectoryPageState
       if (target.email != null) '${text.t('targetsEmail')}: ${target.email}',
     ];
     final relationship = target.projectRelationship;
+    final retentionGateway = widget.gateway is PromotionTargetRetentionGateway;
+    final retentionTask = _retentionTaskFor(target.id);
+    final canEditRelationship =
+        relationship != null &&
+        widget.canManageRelationship &&
+        _offlineAuthorizedAtUtc == null;
+    final canManageRetention =
+        retentionGateway &&
+        widget.canManageRelationship &&
+        _offlineAuthorizedAtUtc == null;
     return Card(
       key: ValueKey('promotion-target-${target.id}'),
       child: ListTile(
@@ -217,18 +244,34 @@ final class _PromotionTargetDirectoryPageState
             if (relationship == null) text.t('targetsNoProjectRelationship'),
           ].join('\n'),
         ),
-        trailing:
-            relationship == null ||
-                !widget.canManageRelationship ||
-                _offlineAuthorizedAtUtc != null
+        trailing: !canEditRelationship && !canManageRetention
             ? null
-            : const Icon(Icons.chevron_right),
-        onTap:
-            relationship == null ||
-                !widget.canManageRelationship ||
-                _offlineAuthorizedAtUtc != null
-            ? null
-            : () => _editRelationship(target),
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (canEditRelationship) const Icon(Icons.chevron_right),
+                  if (canManageRetention)
+                    PopupMenuButton<_RetentionMenuAction>(
+                      key: ValueKey('promotion-target-retention-${target.id}'),
+                      enabled: !_busy,
+                      tooltip: text.t('targetsRetentionMenu'),
+                      onSelected: (action) =>
+                          _confirmRetentionAction(target, action),
+                      itemBuilder: (context) => [
+                        if (retentionTask != null)
+                          PopupMenuItem(
+                            value: _RetentionMenuAction.renew,
+                            child: Text(text.t('targetsRetentionRenew')),
+                          ),
+                        PopupMenuItem(
+                          value: _RetentionMenuAction.withdraw,
+                          child: Text(text.t('targetsRetentionWithdraw')),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+        onTap: canEditRelationship ? () => _editRelationship(target) : null,
       ),
     );
   }
@@ -237,6 +280,13 @@ final class _PromotionTargetDirectoryPageState
     for (final target in _targets ?? const <PromotionTargetProfile>[]) {
       final relationship = target.projectRelationship;
       if (relationship != null) return relationship.stageAliases;
+    }
+    return null;
+  }
+
+  PromotionTargetRetentionTask? _retentionTaskFor(String targetId) {
+    for (final task in _retentionTasks) {
+      if (task.targetId == targetId) return task;
     }
     return null;
   }
@@ -268,6 +318,7 @@ final class _PromotionTargetDirectoryPageState
           _busy = false;
         });
         _scheduleOfflineExpiry(fromOfflineCache ? expiresAtUtc : null);
+        if (!fromOfflineCache) await _loadRetentionTasks();
       case PromotionTargetRejected(:final code):
         _clearVisibleTargets(code);
       case PromotionTargetConflict():
@@ -295,6 +346,7 @@ final class _PromotionTargetDirectoryPageState
     _offlineExpiryTimer = null;
     setState(() {
       _targets = null;
+      _retentionTasks = const [];
       _offlineAuthorizedAtUtc = null;
       _failure = failure;
       _busy = false;
@@ -334,6 +386,102 @@ final class _PromotionTargetDirectoryPageState
       return;
     }
     await _load();
+  }
+
+  Future<void> _loadRetentionTasks() async {
+    final gateway = widget.gateway;
+    if (gateway is! PromotionTargetRetentionGateway) {
+      if (mounted) setState(() => _retentionTasks = const []);
+      return;
+    }
+    final result = await (gateway as PromotionTargetRetentionGateway)
+        .loadRetentionTasks();
+    if (!mounted) return;
+    switch (result) {
+      case PromotionTargetSuccess(:final value):
+        setState(() => _retentionTasks = value);
+      case PromotionTargetRejected(:final code)
+          when code == PromotionTargetFailureCode.unauthorized ||
+              code == PromotionTargetFailureCode.forbidden:
+        _clearVisibleTargets(code);
+      case PromotionTargetRejected():
+      case PromotionTargetConflict():
+        setState(() => _retentionTasks = const []);
+    }
+  }
+
+  Future<void> _confirmRetentionAction(
+    PromotionTargetProfile target,
+    _RetentionMenuAction choice,
+  ) async {
+    final gateway = widget.gateway;
+    if (gateway is! PromotionTargetRetentionGateway) return;
+    final renew = choice == _RetentionMenuAction.renew;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          renew
+              ? widget.text.t('targetsRetentionRenewTitle')
+              : widget.text.t('targetsRetentionWithdrawTitle'),
+        ),
+        content: Text(
+          renew
+              ? widget.text.t('targetsRetentionRenewHelp')
+              : widget.text.t('targetsRetentionWithdrawHelp'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(widget.text.t('cancel')),
+          ),
+          FilledButton(
+            key: ValueKey(
+              renew
+                  ? 'confirm-target-retention-renewal'
+                  : 'confirm-target-anonymization',
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              renew
+                  ? widget.text.t('targetsRetentionRenewConfirm')
+                  : widget.text.t('targetsRetentionWithdrawConfirm'),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _busy = true;
+      _failure = null;
+    });
+    final result = await (gateway as PromotionTargetRetentionGateway)
+        .applyRetentionAction(
+          targetId: target.id,
+          action: renew
+              ? PromotionTargetRetentionAction.renew
+              : PromotionTargetRetentionAction.anonymize,
+          reason: renew
+              ? PromotionTargetRetentionReason.purposeConfirmed
+              : PromotionTargetRetentionReason.withdrawal,
+          mutationId: widget.idGenerator.next(),
+        );
+    if (!mounted) return;
+    switch (result) {
+      case PromotionTargetSuccess():
+        await _load();
+      case PromotionTargetRejected(:final code):
+        setState(() {
+          _busy = false;
+          _failure = code;
+        });
+      case PromotionTargetConflict():
+        setState(() {
+          _busy = false;
+          _failure = PromotionTargetFailureCode.conflict;
+        });
+    }
   }
 
   Future<void> _editRelationship(PromotionTargetProfile target) async {
@@ -763,6 +911,8 @@ final class _RelationshipInput {
 }
 
 enum _RelationshipConflictChoice { keepCurrent, applyProposed }
+
+enum _RetentionMenuAction { renew, withdraw }
 
 final class _StageAliasDialog extends StatefulWidget {
   const _StageAliasDialog({required this.text, required this.aliases});

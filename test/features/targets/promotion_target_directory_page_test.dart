@@ -296,6 +296,89 @@ void main() {
     expect(find.text('上一项目对象'), findsNothing);
     expect(find.text('当前项目对象'), findsOneWidget);
   });
+
+  testWidgets('retention review notice is generic and renewal is explicit', (
+    tester,
+  ) async {
+    final gateway = _MemoryGateway()
+      ..targets.add(
+        _plainTarget(
+          id: 'person-review',
+          type: PromotionTargetType.person,
+          name: '不应出现在复核通知中的姓名',
+        ),
+      )
+      ..retentionTasks.add(
+        PromotionTargetRetentionTask(
+          targetId: 'person-review',
+          reviewDueAtUtc: DateTime.utc(2026, 8, 20),
+        ),
+      );
+
+    await tester.pumpWidget(_app(gateway));
+    await tester.pumpAndSettle();
+
+    final notice = find.byKey(
+      const ValueKey('promotion-target-retention-review'),
+    );
+    expect(notice, findsOneWidget);
+    expect(
+      find.descendant(
+        of: notice,
+        matching: find.textContaining('不应出现在复核通知中的姓名'),
+      ),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('promotion-target-retention-person-review')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确认继续保留').last);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('confirm-target-retention-renewal')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(gateway.retentionAction, PromotionTargetRetentionAction.renew);
+    expect(
+      gateway.retentionReason,
+      PromotionTargetRetentionReason.purposeConfirmed,
+    );
+  });
+
+  testWidgets('confirmed withdrawal removes target details from the page', (
+    tester,
+  ) async {
+    final gateway = _MemoryGateway()
+      ..targets.add(
+        _plainTarget(
+          id: 'person-withdrawal',
+          type: PromotionTargetType.person,
+          name: '准备撤回的对象',
+        ),
+      );
+    await tester.pumpWidget(_app(gateway));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('promotion-target-retention-person-withdrawal'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('对方撤回资料').last);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('confirm-target-anonymization')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(gateway.retentionAction, PromotionTargetRetentionAction.anonymize);
+    expect(gateway.retentionReason, PromotionTargetRetentionReason.withdrawal);
+    expect(find.text('准备撤回的对象'), findsNothing);
+  });
 }
 
 Widget _app(
@@ -325,7 +408,8 @@ final class _FixedIds implements IdGenerator {
   String next() => 'request-${++_next}';
 }
 
-final class _MemoryGateway implements PromotionTargetGateway {
+final class _MemoryGateway
+    implements PromotionTargetGateway, PromotionTargetRetentionGateway {
   final targets = <PromotionTargetProfile>[];
   String? createdName;
   String? requestId;
@@ -341,6 +425,43 @@ final class _MemoryGateway implements PromotionTargetGateway {
   DateTime? authorizedAtUtc;
   DateTime? expiresAtUtc;
   PromotionTargetFailureCode? listFailure;
+  final retentionTasks = <PromotionTargetRetentionTask>[];
+  PromotionTargetRetentionAction? retentionAction;
+  PromotionTargetRetentionReason? retentionReason;
+
+  @override
+  Future<PromotionTargetResult<List<PromotionTargetRetentionTask>>>
+  loadRetentionTasks() async => PromotionTargetSuccess(List.of(retentionTasks));
+
+  @override
+  Future<PromotionTargetResult<PromotionTargetRetentionOutcome>>
+  applyRetentionAction({
+    required String targetId,
+    required PromotionTargetRetentionAction action,
+    required PromotionTargetRetentionReason reason,
+    required String mutationId,
+  }) async {
+    retentionAction = action;
+    retentionReason = reason;
+    if (action == PromotionTargetRetentionAction.anonymize) {
+      targets.removeWhere((target) => target.id == targetId);
+      retentionTasks.removeWhere((task) => task.targetId == targetId);
+    } else {
+      retentionTasks.removeWhere((task) => task.targetId == targetId);
+    }
+    return PromotionTargetSuccess(
+      PromotionTargetRetentionOutcome(
+        targetId: targetId,
+        status: action == PromotionTargetRetentionAction.anonymize
+            ? PromotionTargetRetentionStatus.anonymized
+            : PromotionTargetRetentionStatus.active,
+        duplicate: false,
+        reviewDueAtUtc: action == PromotionTargetRetentionAction.renew
+            ? DateTime.utc(2027, 8, 6)
+            : null,
+      ),
+    );
+  }
 
   @override
   Future<PromotionTargetResult<List<PromotionTargetProfile>>>
