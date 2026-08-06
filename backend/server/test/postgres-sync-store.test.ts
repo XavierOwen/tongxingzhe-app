@@ -134,6 +134,41 @@ test("Postgres store routes private draft commands to the draft function", async
   assert.match(text, /apply_draft_upsert/);
 });
 
+test("Postgres store routes contact attempts to the attempt function", async () => {
+  let text = "";
+  const store = new PostgresSyncCommandStore(async (queryText) => {
+    text = queryText;
+    return {
+      rows: [{
+        result_code: "accepted",
+        server_cursor: "opaque-attempt-1",
+        failure_code: null,
+      }],
+    };
+  });
+  const attemptCommand: SyncCommand = {
+    protocolVersion: 1,
+    commandId: "attempt-command-1",
+    deviceId: "device-1",
+    aggregateId: "attempt-1",
+    baseRevision: 0,
+    type: "contact.attempt.submit.v1",
+    payload: {
+      attemptId: "attempt-1",
+      workspaceId: context.current.workspace.id,
+      projectId: context.current.project.id,
+      occurredAtUtc: "2030-01-08T18:00:00.000Z",
+      occurredTimeZone: "America/Chicago",
+      channel: "voice_call",
+      channelDetail: null,
+    },
+  };
+
+  await store.apply(context, attemptCommand);
+
+  assert.match(text, /apply_contact_attempt_submit/);
+});
+
 test("Postgres store passes trusted scope and opaque cursor to pull function", async () => {
   var text = "";
   var values: readonly unknown[] | undefined;

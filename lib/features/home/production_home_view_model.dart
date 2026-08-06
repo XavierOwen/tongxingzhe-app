@@ -13,6 +13,7 @@ import '../contact_metrics/personal_contact_overview.dart';
 /// 首页一次性提示的稳定类别。
 enum ProductionHomeNoticeKind {
   contactSubmitted,
+  contactAttemptRecorded,
   draftAbandoned,
   draftAbandonFailed,
   draftUndoFailed,
@@ -263,6 +264,11 @@ final class ProductionHomeViewModel extends ChangeNotifier {
     if (submitted) {
       _publishNotice(ProductionHomeNoticeKind.contactSubmitted);
     }
+    return _synchronizeAndRefresh();
+  }
+
+  Future<void> contactAttemptRecorded() {
+    _publishNotice(ProductionHomeNoticeKind.contactAttemptRecorded);
     return _synchronizeAndRefresh();
   }
 

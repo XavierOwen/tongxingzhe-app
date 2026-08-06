@@ -11,7 +11,11 @@ typedef AppRootRouteBuilder =
     );
 
 typedef AppContactRouteBuilder =
-    Widget Function(BuildContext context, String? draftId);
+    Widget Function(
+      BuildContext context,
+      String? draftId,
+      String? sourceAttemptId,
+    );
 
 /// 一次接触表单关闭后的路由结果。
 ///
@@ -99,7 +103,11 @@ final class AppRouterDelegate extends RouterDelegate<AppRoute>
             key: ValueKey(_route.location),
             name: _route.location,
             onPopInvoked: _contactPagePopped,
-            child: contactBuilder(context, _route.draftId),
+            child: contactBuilder(
+              context,
+              _route.draftId,
+              _route.sourceAttemptId,
+            ),
           ),
       ],
       onDidRemovePage: (_) {},

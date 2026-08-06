@@ -231,6 +231,7 @@ final class ContactDraftInput {
     this.interestLevel,
     this.answers = const [],
     this.syncMode = ContactDraftSyncMode.accountPrivate,
+    this.sourceAttemptId,
   });
 
   final String? draftId;
@@ -248,6 +249,7 @@ final class ContactDraftInput {
   final int? interestLevel;
   final List<QuestionnaireAnswer> answers;
   final ContactDraftSyncMode syncMode;
+  final String? sourceAttemptId;
 }
 
 /// 已经落入 SQLite 的私有接触草稿。
@@ -272,6 +274,7 @@ final class ContactDraft {
     required this.localRevision,
     required this.serverRevision,
     required this.conflictOfDraftId,
+    this.sourceAttemptId,
   });
 
   final String draftId;
@@ -293,6 +296,7 @@ final class ContactDraft {
   final int localRevision;
   final int serverRevision;
   final String? conflictOfDraftId;
+  final String? sourceAttemptId;
 
   bool get isConflictCopy => conflictOfDraftId != null;
 
@@ -350,11 +354,12 @@ final class ContactDraft {
         other.syncMode == syncMode &&
         other.localRevision == localRevision &&
         other.serverRevision == serverRevision &&
-        other.conflictOfDraftId == conflictOfDraftId;
+        other.conflictOfDraftId == conflictOfDraftId &&
+        other.sourceAttemptId == sourceAttemptId;
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     draftId,
     appUserId,
     workspaceId,
@@ -374,7 +379,69 @@ final class ContactDraft {
     localRevision,
     serverRevision,
     conflictOfDraftId,
-  );
+    sourceAttemptId,
+  ]);
+}
+
+/// 一次未获回应的直接联络输入。
+final class ContactAttemptSubmission {
+  const ContactAttemptSubmission({
+    required this.appUserId,
+    required this.workspaceId,
+    required this.projectId,
+    required this.deviceId,
+    required this.occurredAtUtc,
+    required this.occurredTimeZone,
+    required this.channel,
+    this.channelDetail,
+  });
+
+  final String appUserId;
+  final String workspaceId;
+  final String projectId;
+  final String deviceId;
+  final DateTime occurredAtUtc;
+  final String occurredTimeZone;
+  final ContactChannel channel;
+  final String? channelDetail;
+}
+
+/// 本地已保存、等待或已经完成同步的接触尝试。
+final class ContactAttempt {
+  const ContactAttempt({
+    required this.attemptId,
+    required this.appUserId,
+    required this.workspaceId,
+    required this.projectId,
+    required this.occurredAtUtc,
+    required this.occurredTimeZone,
+    required this.firstSubmittedAtUtc,
+    required this.channel,
+    required this.channelDetail,
+    required this.linkedContactId,
+  });
+
+  final String attemptId;
+  final String appUserId;
+  final String workspaceId;
+  final String projectId;
+  final DateTime occurredAtUtc;
+  final String occurredTimeZone;
+  final DateTime firstSubmittedAtUtc;
+  final ContactChannel channel;
+  final String? channelDetail;
+  final String? linkedContactId;
+}
+
+/// 本地事务成功后的接触尝试回执。
+final class ContactAttemptReceipt {
+  const ContactAttemptReceipt({
+    required this.attemptId,
+    required this.syncState,
+  });
+
+  final String attemptId;
+  final LocalSyncState syncState;
 }
 
 /// 草稿已进入隐藏放弃状态后的撤销回执。
@@ -422,6 +489,7 @@ final class AnonymousContactSubmission {
     required this.reachCount,
     required this.interestLevel,
     this.answers = const [],
+    this.sourceAttemptId,
   });
 
   final String appUserId;
@@ -437,6 +505,7 @@ final class AnonymousContactSubmission {
   final int reachCount;
   final int interestLevel;
   final List<QuestionnaireAnswer> answers;
+  final String? sourceAttemptId;
 }
 
 /// 本地事务成功后的最小回执。

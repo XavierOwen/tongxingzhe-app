@@ -67,6 +67,7 @@ final class ContactEntryViewState {
     this.isSubmitting = false,
     this.isCapturingLocation = false,
     this.submissionFailure,
+    this.sourceAttemptId,
   });
 
   final DateTime? occurredAtUtc;
@@ -84,6 +85,7 @@ final class ContactEntryViewState {
   final bool isSubmitting;
   final bool isCapturingLocation;
   final String? submissionFailure;
+  final String? sourceAttemptId;
 
   bool get isReady =>
       occurredAtUtc != null &&
@@ -141,6 +143,8 @@ final class ContactEntryViewModel extends ChangeNotifier {
     ContactRegionResolver regionResolver =
         const DeferredContactRegionResolver(),
     Duration saveDelay = const Duration(milliseconds: 350),
+    String? sourceAttemptId,
+    ContactChannel? initialChannel,
   }) : this._(
          clock,
          timeZoneProvider,
@@ -150,6 +154,8 @@ final class ContactEntryViewModel extends ChangeNotifier {
          locationCapture,
          regionResolver,
          saveDelay,
+         sourceAttemptId,
+         initialChannel,
        );
 
   ContactEntryViewModel._(
@@ -161,6 +167,8 @@ final class ContactEntryViewModel extends ChangeNotifier {
     this._locationCapture,
     this._regionResolver,
     this._saveDelay,
+    this._initialSourceAttemptId,
+    this._initialChannel,
   );
 
   final AppClock _clock;
@@ -171,6 +179,8 @@ final class ContactEntryViewModel extends ChangeNotifier {
   final ContactLocationCapture _locationCapture;
   final ContactRegionResolver _regionResolver;
   final Duration _saveDelay;
+  final String? _initialSourceAttemptId;
+  final ContactChannel? _initialChannel;
 
   Timer? _saveTimer;
   Future<void>? _activeSave;
@@ -186,6 +196,7 @@ final class ContactEntryViewModel extends ChangeNotifier {
   ContactDraftSyncMode _syncMode = ContactDraftSyncMode.accountPrivate;
   ContactDraftSaveState _saveState = ContactDraftSaveState.untouched;
   String? _submissionFailure;
+  String? _sourceAttemptId;
   var _isSubmitting = false;
   var _isCapturingLocation = false;
   var _editRevision = 0;
@@ -209,6 +220,7 @@ final class ContactEntryViewModel extends ChangeNotifier {
     isSubmitting: _isSubmitting,
     isCapturingLocation: _isCapturingLocation,
     submissionFailure: _submissionFailure,
+    sourceAttemptId: _sourceAttemptId,
   );
 
   bool get _hasUnsavedChanges => _editRevision > _savedRevision;
@@ -219,9 +231,15 @@ final class ContactEntryViewModel extends ChangeNotifier {
     }
     _initialized = true;
     _draft = draft;
-    _channel = draft?.channel;
+    _sourceAttemptId = draft?.sourceAttemptId ?? _initialSourceAttemptId;
+    _channel = draft?.channel ?? _initialChannel;
     _channelDetail = draft?.channelDetail ?? '';
     _location = draft?.location;
+    if (draft == null &&
+        _channel != null &&
+        _usesAutomaticNotApplicableLocation(_channel!)) {
+      _location = const NotApplicableContactLocation();
+    }
     _reachCount = draft?.reachCount;
     _interestLevel = draft?.interestLevel;
     _syncMode = draft?.syncMode ?? ContactDraftSyncMode.accountPrivate;
@@ -409,6 +427,7 @@ final class ContactEntryViewModel extends ChangeNotifier {
     reachCount: _reachCount,
     interestLevel: _interestLevel,
     syncMode: _syncMode,
+    sourceAttemptId: _sourceAttemptId,
   );
 
   /// 保存后判断是否可离开。`false` 表示仍有失败或并发产生的未保存编辑。

@@ -9,6 +9,7 @@ import type {
 } from "./session-context.js";
 import type {
   ContactAnswer,
+  ContactAttemptSubmitPayload,
   ContactChannel,
   ContactLocation,
   ContactSubmitPayload,
@@ -118,6 +119,16 @@ function parseSyncCommand(value: unknown): SyncCommand {
       payload,
     };
   }
+  if (type === "contact.attempt.submit.v1") {
+    if (baseRevision !== 0) {
+      throw new CommandValidationError("invalid_base_revision");
+    }
+    const payload = parseContactAttemptPayload(root.typed_payload);
+    if (payload.attemptId !== aggregateId) {
+      throw new CommandValidationError("aggregate_id_mismatch");
+    }
+    return { ...common, baseRevision: 0, type, payload };
+  }
   if (type === "draft.upsert.v1") {
     const payload = parseDraftUpsertPayload(root.typed_payload);
     if (payload.draftId !== aggregateId) {
@@ -189,6 +200,7 @@ function parseDraftUpsertPayload(value: unknown): DraftUpsertPayload {
       payload.questionnaire_version_id,
       "invalid_questionnaire_version_id",
     ),
+    sourceAttemptId: nullableString(payload.source_attempt_id),
     createdAtUtc,
     updatedAtUtc,
     occurredAtUtc,
@@ -266,6 +278,44 @@ function parseContactPayload(value: unknown): ContactSubmitPayload {
     reachCount,
     interestLevel,
     answers,
+    sourceAttemptId: nullableString(payload.source_attempt_id),
+  };
+}
+
+function parseContactAttemptPayload(
+  value: unknown,
+): ContactAttemptSubmitPayload {
+  const payload = object(value, "invalid_contact_attempt_payload");
+  if (
+    "reach_count" in payload ||
+    "interest_level" in payload ||
+    "answers" in payload ||
+    "relationship_stage" in payload
+  ) {
+    throw new CommandValidationError("contact_attempt_forbidden_field");
+  }
+  const channel = contactChannel(payload.channel);
+  const channelDetail = nullableString(payload.channel_detail);
+  if (channel === "other_direct" && channelDetail === null) {
+    throw new CommandValidationError("other_channel_detail_required");
+  }
+  const occurredAtUtc = utcDateString(
+    payload.occurred_at_utc,
+    "invalid_occurred_at",
+  );
+  const occurredTimeZone = string(
+    payload.occurred_time_zone,
+    "invalid_occurred_time_zone",
+  );
+  validateTimeZone(occurredTimeZone);
+  return {
+    attemptId: string(payload.attempt_id, "invalid_attempt_id"),
+    workspaceId: uuid(payload.workspace_id, "invalid_workspace_id"),
+    projectId: uuid(payload.project_id, "invalid_project_id"),
+    occurredAtUtc,
+    occurredTimeZone,
+    channel,
+    channelDetail,
   };
 }
 

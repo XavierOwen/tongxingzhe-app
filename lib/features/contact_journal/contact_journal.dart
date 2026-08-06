@@ -43,6 +43,134 @@ final class ContactJournal {
   final IdGenerator _idGenerator;
   final RegionCatalog _regionCatalog;
 
+  /// 原子保存一次未获回应的直接联络及其待同步命令。
+  Future<ContactAttemptReceipt> recordContactAttempt(
+    ContactAttemptSubmission submission,
+  ) async {
+    _validateAttemptSubmission(submission);
+    final attemptId = _idGenerator.next();
+    final commandId = _idGenerator.next();
+    final submittedAtUtc = _clock.now().toUtc();
+    try {
+      await _database.transaction(() async {
+        await _database
+            .into(_database.dbContactAttempts)
+            .insert(
+              DbContactAttemptsCompanion.insert(
+                attemptId: attemptId,
+                appUserId: submission.appUserId,
+                workspaceId: submission.workspaceId,
+                projectId: submission.projectId,
+                occurredAtUtc: submission.occurredAtUtc,
+                occurredTimeZone: submission.occurredTimeZone,
+                firstSubmittedAtUtc: submittedAtUtc,
+                channel: submission.channel.storageValue,
+                channelDetail: Value(submission.channelDetail),
+              ),
+            );
+        final payload = jsonEncode({
+          'attempt_id': attemptId,
+          'workspace_id': submission.workspaceId,
+          'project_id': submission.projectId,
+          'occurred_at_utc': submission.occurredAtUtc.toIso8601String(),
+          'occurred_time_zone': submission.occurredTimeZone,
+          'channel': submission.channel.storageValue,
+          'channel_detail': submission.channelDetail,
+        });
+        await _database
+            .into(_database.dbSyncOutbox)
+            .insert(
+              DbSyncOutboxCompanion.insert(
+                commandId: commandId,
+                protocolVersion: 1,
+                commandType: 'contact.attempt.submit.v1',
+                deviceId: submission.deviceId,
+                aggregateId: attemptId,
+                appUserId: Value(submission.appUserId),
+                workspaceId: Value(submission.workspaceId),
+                projectId: Value(submission.projectId),
+                baseRevision: 0,
+                payloadJson: payload,
+                createdAtUtc: submittedAtUtc,
+                status: 'pending',
+                nextAttemptAtUtc: submittedAtUtc,
+              ),
+            );
+      });
+    } catch (error, stackTrace) {
+      throw ContactPersistenceException(
+        code: 'contact_attempt_save_failed',
+        cause: error,
+        stackTrace: stackTrace,
+      );
+    }
+    return ContactAttemptReceipt(
+      attemptId: attemptId,
+      syncState: LocalSyncState.pending,
+    );
+  }
+
+  /// 列出当前个人项目中的接触尝试，最近发生的排在前面。
+  Future<List<ContactAttempt>> listContactAttempts({
+    required String appUserId,
+    required String workspaceId,
+    required String projectId,
+  }) async {
+    final query = _database.select(_database.dbContactAttempts)
+      ..where(
+        (row) =>
+            row.appUserId.equals(appUserId) &
+            row.workspaceId.equals(workspaceId) &
+            row.projectId.equals(projectId),
+      )
+      ..orderBy([
+        (row) => OrderingTerm.desc(row.occurredAtUtc),
+        (row) => OrderingTerm.asc(row.attemptId),
+      ]);
+    return [
+      for (final row in await query.get())
+        ContactAttempt(
+          attemptId: row.attemptId,
+          appUserId: row.appUserId,
+          workspaceId: row.workspaceId,
+          projectId: row.projectId,
+          occurredAtUtc: row.occurredAtUtc.toUtc(),
+          occurredTimeZone: row.occurredTimeZone,
+          firstSubmittedAtUtc: row.firstSubmittedAtUtc.toUtc(),
+          channel: ContactChannel.fromStorage(row.channel),
+          channelDetail: row.channelDetail,
+          linkedContactId: row.linkedContactId,
+        ),
+    ];
+  }
+
+  Future<ContactAttempt?> contactAttemptByIdForOwner({
+    required String attemptId,
+    required String appUserId,
+  }) async {
+    final query = _database.select(_database.dbContactAttempts)
+      ..where(
+        (row) =>
+            row.attemptId.equals(attemptId) & row.appUserId.equals(appUserId),
+      );
+    final row = await query.getSingleOrNull();
+    if (row == null) {
+      return null;
+    }
+    return ContactAttempt(
+      attemptId: row.attemptId,
+      appUserId: row.appUserId,
+      workspaceId: row.workspaceId,
+      projectId: row.projectId,
+      occurredAtUtc: row.occurredAtUtc.toUtc(),
+      occurredTimeZone: row.occurredTimeZone,
+      firstSubmittedAtUtc: row.firstSubmittedAtUtc.toUtc(),
+      channel: ContactChannel.fromStorage(row.channel),
+      channelDetail: row.channelDetail,
+      linkedContactId: row.linkedContactId,
+    );
+  }
+
   /// 直接提交不经过草稿的完整匿名接触。
   Future<ContactSubmissionReceipt> submitAnonymousContact(
     AnonymousContactSubmission submission,
@@ -64,6 +192,8 @@ final class ContactJournal {
           submittedAtUtc: submittedAtUtc,
         );
       });
+    } on ContactValidationException {
+      rethrow;
     } catch (error, stackTrace) {
       throw ContactPersistenceException(
         code: 'contact_submission_failed',
@@ -86,6 +216,7 @@ final class ContactJournal {
     required String commandId,
     required DateTime submittedAtUtc,
   }) async {
+    final sourceAttempt = await _availableSourceAttempt(submission);
     final location = _contactLocationColumns(submission.location);
     await _database
         .into(_database.dbContactRecords)
@@ -121,6 +252,21 @@ final class ContactJournal {
         regionId: resolved.smallestRegionId,
         treeVersion: resolved.regionTreeVersion,
       );
+    }
+
+    if (sourceAttempt != null) {
+      final linked =
+          await (_database.update(_database.dbContactAttempts)..where(
+                (row) =>
+                    row.attemptId.equals(sourceAttempt.attemptId) &
+                    row.linkedContactId.isNull(),
+              ))
+              .write(
+                DbContactAttemptsCompanion(linkedContactId: Value(contactId)),
+              );
+      if (linked != 1) {
+        throw const ContactValidationException('source_attempt_already_linked');
+      }
     }
 
     await _database
@@ -169,6 +315,7 @@ final class ContactJournal {
       'workspace_id': submission.workspaceId,
       'project_id': submission.projectId,
       'questionnaire_version_id': submission.questionnaireVersionId,
+      'source_attempt_id': submission.sourceAttemptId,
       'occurred_at_utc': submission.occurredAtUtc.toIso8601String(),
       'occurred_time_zone': submission.occurredTimeZone,
       'channel': submission.channel.storageValue,
@@ -227,6 +374,10 @@ final class ContactJournal {
     if (submission.deviceId.trim().isEmpty) {
       throw const ContactValidationException('contact_device_required');
     }
+    if (submission.sourceAttemptId != null &&
+        submission.sourceAttemptId!.trim().isEmpty) {
+      throw const ContactValidationException('source_attempt_id_invalid');
+    }
     if (!submission.occurredAtUtc.isUtc) {
       throw const ContactValidationException('occurred_at_must_be_utc');
     }
@@ -276,6 +427,53 @@ final class ContactJournal {
         submission.location is NotApplicableContactLocation) {
       throw const ContactValidationException('face_to_face_location_required');
     }
+  }
+
+  void _validateAttemptSubmission(ContactAttemptSubmission submission) {
+    if (submission.appUserId.trim().isEmpty ||
+        submission.workspaceId.trim().isEmpty ||
+        submission.projectId.trim().isEmpty) {
+      throw const ContactValidationException('contact_context_required');
+    }
+    if (submission.deviceId.trim().isEmpty) {
+      throw const ContactValidationException('contact_device_required');
+    }
+    if (!submission.occurredAtUtc.isUtc) {
+      throw const ContactValidationException('occurred_at_must_be_utc');
+    }
+    if (submission.occurredTimeZone.trim().isEmpty) {
+      throw const ContactValidationException('occurred_time_zone_required');
+    }
+    if (submission.channel == ContactChannel.otherDirect &&
+        (submission.channelDetail == null ||
+            submission.channelDetail!.trim().isEmpty)) {
+      throw const ContactValidationException('other_channel_detail_required');
+    }
+  }
+
+  Future<DbContactAttempt?> _availableSourceAttempt(
+    AnonymousContactSubmission submission,
+  ) async {
+    final attemptId = submission.sourceAttemptId;
+    if (attemptId == null) {
+      return null;
+    }
+    final query = _database.select(_database.dbContactAttempts)
+      ..where(
+        (row) =>
+            row.attemptId.equals(attemptId) &
+            row.appUserId.equals(submission.appUserId) &
+            row.workspaceId.equals(submission.workspaceId) &
+            row.projectId.equals(submission.projectId),
+      );
+    final attempt = await query.getSingleOrNull();
+    if (attempt == null) {
+      throw const ContactValidationException('source_attempt_not_found');
+    }
+    if (attempt.linkedContactId != null) {
+      throw const ContactValidationException('source_attempt_already_linked');
+    }
+    return attempt;
   }
 
   /// 读取一条接触的当前有效视图。

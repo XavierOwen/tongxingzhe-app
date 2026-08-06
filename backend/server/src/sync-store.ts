@@ -49,6 +49,17 @@ export interface ContactSubmitPayload {
   readonly reachCount: number;
   readonly interestLevel: number;
   readonly answers: readonly ContactAnswer[];
+  readonly sourceAttemptId?: string | null;
+}
+
+export interface ContactAttemptSubmitPayload {
+  readonly attemptId: string;
+  readonly workspaceId: string;
+  readonly projectId: string;
+  readonly occurredAtUtc: string;
+  readonly occurredTimeZone: string;
+  readonly channel: ContactChannel;
+  readonly channelDetail: string | null;
 }
 
 export interface DraftUpsertPayload {
@@ -66,6 +77,7 @@ export interface DraftUpsertPayload {
   readonly reachCount: number | null;
   readonly interestLevel: number | null;
   readonly answers: readonly ContactAnswer[];
+  readonly sourceAttemptId?: string | null;
 }
 
 export interface DraftDeletePayload {
@@ -89,6 +101,12 @@ export interface ContactSubmitCommand extends SyncCommandEnvelope {
   readonly payload: ContactSubmitPayload;
 }
 
+export interface ContactAttemptSubmitCommand extends SyncCommandEnvelope {
+  readonly baseRevision: 0;
+  readonly type: "contact.attempt.submit.v1";
+  readonly payload: ContactAttemptSubmitPayload;
+}
+
 export interface DraftUpsertCommand extends SyncCommandEnvelope {
   readonly type: "draft.upsert.v1";
   readonly payload: DraftUpsertPayload;
@@ -101,6 +119,7 @@ export interface DraftDeleteCommand extends SyncCommandEnvelope {
 
 export type SyncCommand =
   | ContactSubmitCommand
+  | ContactAttemptSubmitCommand
   | DraftUpsertCommand
   | DraftDeleteCommand;
 
@@ -170,6 +189,8 @@ export class PostgresSyncCommandStore implements SyncCommandStore {
   ): Promise<SyncCommandResult> {
     const functionName = command.type === "contact.submit.v1"
       ? "apply_contact_submit"
+      : command.type === "contact.attempt.submit.v1"
+      ? "apply_contact_attempt_submit"
       : command.type === "draft.upsert.v1"
       ? "apply_draft_upsert"
       : "apply_draft_delete";

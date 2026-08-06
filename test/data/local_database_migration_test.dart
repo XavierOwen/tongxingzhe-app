@@ -6,18 +6,64 @@ import '../generated_migrations/schema.dart';
 import '../generated_migrations/schema_v5.dart' as v5;
 import '../generated_migrations/schema_v6.dart' as v6;
 import '../generated_migrations/schema_v8.dart' as v8;
+import '../generated_migrations/schema_v9.dart' as v9;
 
 void main() {
-  test('保存的 schema v9 可以独立重建', () async {
+  test('保存的 schema v10 可以独立重建', () async {
     final verifier = SchemaVerifier(GeneratedHelper());
-    final connection = await verifier.startAt(9);
+    final connection = await verifier.startAt(10);
     final database = LocalDatabase(connection);
     addTearDown(database.close);
 
-    await verifier.migrateAndValidate(database, 9);
+    await verifier.migrateAndValidate(database, 10);
   });
 
-  test('v8 升级到 v9 时保留草稿并加入同步版本和区域外键表', () async {
+  test('v9 升级到 v10 时保留草稿并新增独立接触尝试', () async {
+    final verifier = SchemaVerifier(GeneratedHelper());
+    final schema = await verifier.schemaAt(9);
+    addTearDown(schema.close);
+
+    final v9Database = v9.DatabaseAtV9(schema.newConnection());
+    await v9Database.customStatement('''
+      INSERT INTO db_contact_drafts (
+        draft_id,
+        app_user_id,
+        workspace_id,
+        project_id,
+        questionnaire_version_id,
+        created_at_utc,
+        updated_at_utc,
+        channel,
+        location_kind,
+        reach_count,
+        interest_level
+      ) VALUES (
+        'draft-before-v10',
+        'app-user-1',
+        'workspace-1',
+        'project-1',
+        'questionnaire-v1',
+        1894122000,
+        1894123800,
+        'video_call',
+        'not_applicable',
+        2,
+        3
+      )
+    ''');
+    await v9Database.close();
+
+    final database = LocalDatabase(schema.newConnection());
+    addTearDown(database.close);
+    await verifier.migrateAndValidate(database, 10);
+
+    final draft = await database.select(database.dbContactDrafts).getSingle();
+    expect(draft.draftId, 'draft-before-v10');
+    expect(draft.sourceAttemptId, isNull);
+    expect(await database.select(database.dbContactAttempts).get(), isEmpty);
+  });
+
+  test('v8 升级到 v10 时保留草稿并加入同步版本和区域外键表', () async {
     final verifier = SchemaVerifier(GeneratedHelper());
     final schema = await verifier.schemaAt(8);
     addTearDown(schema.close);
@@ -54,7 +100,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 9);
+    await verifier.migrateAndValidate(database, 10);
 
     final draft = await database.select(database.dbContactDrafts).getSingle();
     expect(draft.draftId, 'draft-before-v9');
@@ -72,7 +118,7 @@ void main() {
     );
   });
 
-  test('v6 升级到 v9 时保留已提交接触并新增同步协调表', () async {
+  test('v6 升级到 v10 时保留已提交接触并新增同步协调表', () async {
     final verifier = SchemaVerifier(GeneratedHelper());
     final schema = await verifier.schemaAt(6);
     addTearDown(schema.close);
@@ -127,7 +173,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 9);
+    await verifier.migrateAndValidate(database, 10);
 
     final contact = await database
         .select(database.dbContactRecords)
@@ -146,7 +192,7 @@ void main() {
     );
   });
 
-  test('v5 升级到 v9 时保留 legacy 数据并新增现代空表', () async {
+  test('v5 升级到 v10 时保留 legacy 数据并新增现代空表', () async {
     final verifier = SchemaVerifier(GeneratedHelper());
     final schema = await verifier.schemaAt(5);
     addTearDown(schema.close);
@@ -159,7 +205,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 9);
+    await verifier.migrateAndValidate(database, 10);
 
     final legacySetting = await (database.select(
       database.dbAppSettings,

@@ -33,6 +33,7 @@ class DbContactDrafts extends Table {
       text().withDefault(const Constant('account_private'))();
   IntColumn get localRevision => integer().withDefault(const Constant(1))();
   IntColumn get serverRevision => integer().withDefault(const Constant(0))();
+  TextColumn get sourceAttemptId => text().nullable()();
   TextColumn get conflictOfDraftId => text().nullable()();
   DateTimeColumn get abandonedAtUtc => dateTime().nullable()();
   DateTimeColumn get undoUntilUtc => dateTime().nullable()();
@@ -78,6 +79,8 @@ class DbContactDrafts extends Table {
     "CHECK (sync_mode IN ('account_private', 'device_only'))",
     'CHECK (local_revision > 0)',
     'CHECK (server_revision >= 0)',
+    'CHECK (source_attempt_id IS NULL OR '
+        'length(trim(source_attempt_id)) > 0)',
     'CHECK (conflict_of_draft_id IS NULL OR '
         'length(trim(conflict_of_draft_id)) > 0)',
     'CHECK ((abandoned_at_utc IS NULL AND undo_until_utc IS NULL) OR '
@@ -166,6 +169,45 @@ class DbContactRecords extends Table {
     'CHECK (reach_count > 0)',
     'CHECK (interest_level BETWEEN 0 AND 4)',
     'CHECK (current_revision > 0)',
+    "CHECK (channel IN ('face_to_face', 'voice_call', 'video_call', "
+        "'instant_text', 'asynchronous_message', 'mixed', "
+        "'other_direct'))",
+    "CHECK (channel != 'other_direct' OR "
+        '(channel_detail IS NOT NULL AND '
+        'length(trim(channel_detail)) > 0))',
+  ];
+}
+
+/// 针对明确对象发起、但没有获得回应的直接联络。
+///
+/// 尝试与接触分表，因此它没有触达人数、兴趣或问卷答案列，统计 SQL 也无法
+/// 把它误当作已发生互动。后来发生的接触只通过可选外键关联，不改写本行。
+@TableIndex(
+  name: 'contact_attempts_personal_period',
+  columns: {#appUserId, #workspaceId, #projectId, #occurredAtUtc},
+)
+class DbContactAttempts extends Table {
+  TextColumn get attemptId => text()();
+  TextColumn get appUserId => text()();
+  TextColumn get workspaceId => text()();
+  TextColumn get projectId => text()();
+  DateTimeColumn get occurredAtUtc => dateTime()();
+  TextColumn get occurredTimeZone => text()();
+  DateTimeColumn get firstSubmittedAtUtc => dateTime()();
+  TextColumn get channel => text()();
+  TextColumn get channelDetail => text().nullable()();
+  TextColumn get linkedContactId =>
+      text().nullable().references(DbContactRecords, #contactId)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {attemptId};
+
+  @override
+  List<String> get customConstraints => const [
+    'CHECK (length(trim(app_user_id)) > 0)',
+    'CHECK (length(trim(workspace_id)) > 0)',
+    'CHECK (length(trim(project_id)) > 0)',
+    'CHECK (length(trim(occurred_time_zone)) > 0)',
     "CHECK (channel IN ('face_to_face', 'voice_call', 'video_call', "
         "'instant_text', 'asynchronous_message', 'mixed', "
         "'other_direct'))",

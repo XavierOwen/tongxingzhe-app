@@ -114,6 +114,7 @@ class DbSecurityEvents extends Table {
     DbAppSettings,
     DbSecurityEvents,
     DbContactRecords,
+    DbContactAttempts,
     DbContactRevisions,
     DbContactAnswers,
     DbSyncOutbox,
@@ -141,7 +142,7 @@ class LocalDatabase extends _$LocalDatabase {
       );
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -274,6 +275,7 @@ class LocalDatabase extends _$LocalDatabase {
               dbContactDrafts.localRevision,
               dbContactDrafts.serverRevision,
               dbContactDrafts.conflictOfDraftId,
+              dbContactDrafts.sourceAttemptId,
             ]);
         await migrator.alterTable(
           TableMigration(dbContactDrafts, newColumns: draftColumns),
@@ -294,6 +296,21 @@ class LocalDatabase extends _$LocalDatabase {
         await migrator.createTable(dbCanonicalRegionVersions);
         await migrator.createTable(dbContactRegionAssignments);
         await migrator.createTable(dbDraftRegionAssignments);
+      }
+      if (from < 10) {
+        // v10 新增独立接触尝试，并让由尝试发起的接触草稿保留来源 ID。
+        // legacy 数据没有可证明的尝试语义，因此升级只建表，不猜测回填。
+        await migrator.createTable(dbContactAttempts);
+        await migrator.createIndex(contactAttemptsPersonalPeriod);
+        final draftColumns = await _missingColumns(
+          dbContactDrafts.actualTableName,
+          [dbContactDrafts.sourceAttemptId],
+        );
+        if (draftColumns.isNotEmpty) {
+          await migrator.alterTable(
+            TableMigration(dbContactDrafts, newColumns: draftColumns),
+          );
+        }
       }
     },
   );

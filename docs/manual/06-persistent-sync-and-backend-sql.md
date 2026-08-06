@@ -1,12 +1,12 @@
 # 第 6 章：持久同步与 Backend SQL 如何保护接触事实
 
-本章解释已提交接触和账号私有草稿如何在本机 SQLite、Backend 与 PostgreSQL 之间移动。这不是上传整个 SQLite 文件，而是传送有版本的 command 和有顺序的 change。
+本章解释已提交接触、未获回应尝试和账号私有草稿如何在本机 SQLite、Backend 与 PostgreSQL 之间移动。这不是上传整个 SQLite 文件，而是传送有版本的 command 和有顺序的 change。
 
 ## 同步链路
 
 ```mermaid
 flowchart LR
-  A["Flutter 表单"] --> B["SQLite 接触 + revision + Outbox"]
+  A["Flutter 表单"] --> B["SQLite 事实 + revision + Outbox"]
   B --> C["SyncEngine claim / lease"]
   C --> D["HTTPS Backend"]
   D --> E["PostgreSQL 事实 + change feed"]
@@ -20,7 +20,7 @@ HTTP 层的 context、command 和 pull 端点共用 [`bearerToken`](../../backen
 
 ## Outbox 为什么和接触在同一 transaction
 
-`ContactJournal.submitDraft` 在同一 SQLite transaction 内写入接触、revision、答案和 `contact.submit.v1` command。如果只写接触，随后 App 崩溃，同步引擎就不知道这条事实需要上传。如果只写 command，本机又会出现无事实可显示的幽灵命令。
+`ContactJournal.submitDraft` 在同一 SQLite transaction 内写入接触、revision、答案和 `contact.submit.v1` command。`recordContactAttempt` 同样原子写入尝试和 `contact.attempt.submit.v1` command。如果只写本机事实，随后 App 崩溃，同步引擎就不知道它需要上传。如果只写 command，本机又会出现无事实可显示的幽灵命令。
 
 Outbox 保存稳定 command ID、设备 ID、aggregate ID、基础 revision、payload、尝试次数和失败状态。它不保存 access token。token 每次发送前从 `IdentitySession` 取得。
 
@@ -68,11 +68,15 @@ Backend 接受 command 后返回 change feed cursor。这个回执只能证明�
 
 重复 command 返回原 cursor，不再插入一次接触。这是幂等性：同一请求执行一次或多次，业务事实结果相同。
 
+[`apply_contact_attempt_submit`](../../backend/database/migrations/0008_contact_attempts.sql) 对尝试使用相同的 command 幂等边界，但只写尝试、处理结果、change feed 和审计事件。它不写 warehouse Outbox，因为未获回应不属于接触或转化事实。Backend parser 还会拒绝在尝试 payload 中夹带触达人数、兴趣、问卷答案或关系阶段。
+
+后来回应仍通过 `apply_contact_submit` 提交普通接触。该函数核对来源尝试属于同一用户、空间和项目，并且尚未关联其他接触；接触成功后才锁定并关联尝试。任一步失败时，整个 transaction 回滚。
+
 ## change feed 如何拉取
 
 `GET /v1/sync/changes` 接收当前 workspace、project、可选 cursor 和最多 100 条的 batch 大小。Backend 先从 token 取得可信上下文，再与查询范围交叉核对。
 
-PostgreSQL 内部用递增 `change_sequence` 排序，对客户端只暴露随机 `cursor_token`。[`pull_sync_changes`](../../backend/database/migrations/0005_regions_and_private_draft_sync.sql) 确认 cursor 属于同一可信范围，再返回后续接触或私有草稿变化。客户端无需知道全局序号，也不能用别人项目的 cursor 探测数据。
+PostgreSQL 内部用递增 `change_sequence` 排序，对客户端只暴露随机 `cursor_token`。[`pull_sync_changes`](../../backend/database/migrations/0005_regions_and_private_draft_sync.sql) 确认 cursor 属于同一可信范围，再返回后续接触、尝试或私有草稿变化。客户端无需知道全局序号，也不能用别人项目的 cursor 探测数据。
 
 无效 cursor 是已确定的客户端问题，不是值得自动重试的服务不可用。PostgreSQL 用 SQLSTATE `22023` 拒绝它；Backend Store 将该错误转为 `InvalidSyncCursorError`，HTTP 再稳定返回 `400 invalid_cursor`。其他未分类的数据库错误仍失败关闭为 `503 sync_unavailable`。
 

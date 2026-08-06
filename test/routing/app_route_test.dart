@@ -11,6 +11,8 @@ void main() {
       '/contacts': AppRoute.contacts,
       '/contacts/new': AppRoute.newContact,
       '/contacts/drafts/draft%20one': const AppRoute.contactDraft('draft one'),
+      '/contacts/attempts/attempt%20one/contact':
+          const AppRoute.contactFromAttempt('attempt one'),
       '/targets': AppRoute.targets,
       '/analysis': AppRoute.analysis,
     };
