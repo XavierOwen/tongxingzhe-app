@@ -2,7 +2,7 @@
 
 这个模块提供可信 session context、个人推广项目选择／创建、规范区域解析、问卷管理发布、问卷指标兼容审计、同步 command 和 change feed。所有端点都先验证 Supabase access token，再取得内部用户和允许访问的项目。同步协议处理已提交接触、追加更正、带原因作废、跨设备更正的自动合并与显式解决、未获回应尝试和账号私有草稿；设备专用草稿不会离开本机。
 
-客户端不能提交 `app_user_id`、role 或 capability。上传会把 payload 的 workspace 和 project 与可信上下文交叉核对。拉取也会核对 query 范围，并只接受属于同一范围的不透明 cursor。响应不返回外部 subject、email 或 token。三个 HTTP 入口共用严格的 bearer header 解析器，防止端点之间出现不同的认证规则。
+客户端不能提交 `app_user_id`、role 或 capability。上传会把 payload 的 workspace 和 project 与可信上下文交叉核对。拉取也会核对 query 范围，并只接受属于同一范围的不透明 cursor。响应不返回外部 subject、email 或 token。所有受保护入口共用严格的 bearer header 解析器，防止端点之间出现不同的认证规则。
 
 cursor 不存在或不属于当前用户、空间和项目时，端点返回 `400 invalid_cursor`。未分类的数据库失败返回 `503 sync_unavailable`，不把内部 SQL 错误文字暴露给客户端。
 
@@ -69,6 +69,19 @@ Backend 不接受客户端提供的用户、空间或项目范围。每次请求
 
 读取需要 `view_assigned_target_pii`；建立和结束另需 `manage_assigned_target_relations`。Backend 不接受 workspace、project、操作者、开始或结束时间。PostgreSQL 用可信服务器时间，检查一端是个人、另一端是机构、两端属于同一 workspace，且调用者当前同时获分配两端。相同 mutation 精确重放不会增加历史；改写重放、活动关系重复和并发失败返回 `409`。
 
+## 私人行动计划合同
+
+私人周计划只使用已验证 identity 对应的当前个人空间和项目：
+
+| 方法与路径 | 行为 |
+| --- | --- |
+| `GET /v1/personal-action-plan` | 返回本人当前版本、待生效版本和本周期接触场次 |
+| `PUT /v1/personal-action-plan` | 按 expected revision 追加新版本 |
+
+客户端只能提交可选周目标、固定 IANA 统计时区、ISO 周起始日、expected revision 和 mutation ID，不能提交用户、workspace、项目、进度或生效时间。Backend 使用服务端时间。首次设置立即采用当前自然周；后续设置从新配置定义的下一周期生效。
+
+读取和写入不要求管理 capability，也没有组织或管理员列表入口。PostgreSQL 只计算当前有效的已提交接触，按实际发生时间使用半开周期边界。版本冲突返回 `409 personal_action_plan_conflict`；已有待生效版本时返回 `409 personal_action_plan_pending_change`。
+
 ## 配置
 
 Backend 需要以下环境变量：
@@ -103,6 +116,8 @@ npm run check
 个人与机构历史关系见 [`0019_person_institution_relationships.sql`](../database/migrations/0019_person_institution_relationships.sql)。对应 fixture 和独立会话脚本验证六类性质、两端授权、同空间与异类型约束、不同性质并存、同种活动关系唯一、结束历史、重放、并发和 warehouse 隔离。
 
 对象资料保留与匿名化见 [`0020_promotion_target_retention.sql`](../database/migrations/0020_promotion_target_retention.sql)。对应 fixture 和独立会话脚本验证十二个月上限、较短策略、通用复核任务、明确续期、到期清理、撤回、不可逆文本清除、接触事实保留、重放和并发。
+
+私人周计划见 [`0021_personal_action_plans.sql`](../database/migrations/0021_personal_action_plans.sql)。对应 fixture 验证固定 IANA 时区、任意周起始日、夏令时周期、下一周期版本、重放、revision 冲突、跨用户拒绝和恢复库权限。
 
 ## 运行
 

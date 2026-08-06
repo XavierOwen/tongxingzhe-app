@@ -10,6 +10,8 @@ import '../foundation/runtime_values.dart';
 import '../identity/identity_session.dart';
 import '../identity/supabase/supabase_identity_session.dart';
 import '../platform/platform_capabilities.dart';
+import '../plans/http_personal_action_plan_gateway.dart';
+import '../plans/personal_action_plan.dart';
 import '../privacy/drift_offline_pii_lock_store.dart';
 import '../privacy/flutter_secure_value_store.dart';
 import '../privacy/offline_pii_vault.dart';
@@ -49,6 +51,7 @@ final class AppDependencies {
     this.questionnaireRemoteSourceBuilder,
     this.questionnaireAdministrationBuilder,
     this.promotionTargetGatewayBuilder,
+    this.personalActionPlanGatewayBuilder,
     this.offlinePiiSecureStore,
     this.legacyDemoAccess,
   });
@@ -72,6 +75,7 @@ final class AppDependencies {
       questionnaireRemoteSourceBuilder: productionQuestionnaireRemoteSource,
       questionnaireAdministrationBuilder: productionQuestionnaireAdministration,
       promotionTargetGatewayBuilder: productionPromotionTargetGateway,
+      personalActionPlanGatewayBuilder: productionPersonalActionPlanGateway,
       offlinePiiSecureStore: secureStore,
     );
   }
@@ -93,6 +97,8 @@ final class AppDependencies {
   questionnaireAdministrationBuilder;
   final PromotionTargetGateway Function(IdentitySession)?
   promotionTargetGatewayBuilder;
+  final PersonalActionPlanGateway Function(IdentitySession)?
+  personalActionPlanGatewayBuilder;
   final SecureValueStore? offlinePiiSecureStore;
 
   /// 临时兼容 legacy demo；正式 composition root 永远不提供此 Adapter。
@@ -107,6 +113,7 @@ final class AppDependencies {
     QuestionnaireCatalog? questionnaireCatalog;
     QuestionnaireAdministrationGateway? questionnaireAdministration;
     PromotionTargetGateway? promotionTargetGateway;
+    PersonalActionPlanGateway? personalActionPlanGateway;
     OfflinePiiVault? offlinePiiVault;
     try {
       identitySession = await identitySessionFactory.open();
@@ -219,6 +226,9 @@ final class AppDependencies {
                 return context;
               },
             );
+      personalActionPlanGateway =
+          personalActionPlanGatewayBuilder?.call(identitySession) ??
+          const DeferredPersonalActionPlanGateway();
       return AppStartupReady(
         controller: controller,
         clock: clock,
@@ -235,6 +245,7 @@ final class AppDependencies {
         questionnaireCatalog: questionnaireCatalog,
         questionnaireAdministration: questionnaireAdministration,
         promotionTargetGateway: promotionTargetGateway,
+        personalActionPlanGateway: personalActionPlanGateway,
         idGenerator: idGenerator,
       );
     } catch (error, stackTrace) {
@@ -244,6 +255,7 @@ final class AppDependencies {
       await questionnaireCatalog?.close();
       await questionnaireAdministration?.close();
       await promotionTargetGateway?.close();
+      await personalActionPlanGateway?.close();
       await appSession?.close();
       if (appSession == null) {
         await sessionContextGateway.close();
@@ -281,6 +293,7 @@ final class AppStartupReady extends AppStartupResult {
     required this.questionnaireCatalog,
     required this.questionnaireAdministration,
     required this.promotionTargetGateway,
+    required this.personalActionPlanGateway,
     required this.idGenerator,
   });
 
@@ -299,6 +312,7 @@ final class AppStartupReady extends AppStartupResult {
   final QuestionnaireCatalog questionnaireCatalog;
   final QuestionnaireAdministrationGateway questionnaireAdministration;
   final PromotionTargetGateway promotionTargetGateway;
+  final PersonalActionPlanGateway personalActionPlanGateway;
   final IdGenerator idGenerator;
 }
 
