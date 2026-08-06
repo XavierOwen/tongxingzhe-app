@@ -190,7 +190,9 @@ const Map<String, Map<String, String>> _strings = {
     'contactsIntro': '管理接触草稿和已提交记录',
     'targetsTitle': '推广对象',
     'targetsPrivacyHelp': '只在确有跟进需要且对方愿意留下资料时建立对象。匿名接触始终可用。',
-    'targetsOnlineRequired': '对象资料当前只在线读取；离线仍可记录匿名接触。',
+    'targetsOfflineSnapshot': '离线加密快照（只读）',
+    'targetsOfflineAuthorizedAt': '最近联网验权',
+    'targetsOnlineRequired': '暂时无法读取对象资料，且本机没有可用的未过期加密快照；匿名接触仍可离线记录。',
     'targetsEmpty': '尚未建立推广对象',
     'targetsAnonymousDefault': '不建立对象不会影响记录接触。',
     'targetsOperationFailed': '对象操作未完成，请检查网络或权限后重试。',
@@ -799,8 +801,10 @@ const Map<String, Map<String, String>> _strings = {
     'targetsTitle': 'Promotion targets',
     'targetsPrivacyHelp':
         'Create a target only for a follow-up need and when the person agrees to leave these details. Anonymous contacts remain available.',
+    'targetsOfflineSnapshot': 'Encrypted offline snapshot (read-only)',
+    'targetsOfflineAuthorizedAt': 'Last online authorization',
     'targetsOnlineRequired':
-        'Target details are online-only for now. You can still record anonymous contacts offline.',
+        'Target details are unavailable, and this device has no valid encrypted snapshot. Anonymous contacts remain available offline.',
     'targetsEmpty': 'No promotion targets yet',
     'targetsAnonymousDefault':
         'You can record contacts without creating a target.',

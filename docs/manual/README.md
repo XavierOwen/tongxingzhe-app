@@ -13,14 +13,14 @@
 5. [第 5 章：接触提交、修订与尝试入口如何连接 Flutter 与 SQL](05-formal-contact-loop.md)
 6. [第 6 章：持久同步与 Backend SQL 如何保护追加历史](06-persistent-sync-and-backend-sql.md)
 7. [第 7 章：版本化问卷如何设计、发布、离线执行并由服务端复验](07-versioned-questionnaire-execution.md)
-8. [第 8 章：推广对象目录如何限制个人资料的建立与读取](08-promotion-target-directory-and-pii.md)
+8. [第 8 章：推广对象目录、项目关系和限时离线资料](08-promotion-target-directory-and-pii.md)
 9. [第 9 章：在本机、Docker 与 CI 中运行测试](09-local-docker-and-ci-testing.md)
 
 当前认证验证状态见 [Supabase Auth 六平台 Spike](../spikes/supabase-auth-six-platform.md)。它会明确区分 package 声明、build 通过和真实设备流程通过。
 
 数据库、离线、同步、界面和认证的整体证据见 [六平台能力证据矩阵](../spikes/six-platform-capability-matrix.md)。
 
-后续章节会依次加入：对象跟进与匿名化、个人计划、管理统计与隐私、六平台能力、发布与恢复演练。
+后续章节会依次加入：对象匿名化、个人计划、管理统计与隐私、六平台能力、发布与恢复演练。
 
 ## 文档与代码如何保持一致
 
@@ -35,6 +35,7 @@
 - 产品合同：[产品规格](../PRODUCT_SPEC.md)
 - 统一领域语言：[领域上下文](../../CONTEXT.md)
 - 单项架构决策：[ADR 索引](../adr/README.md)
+- 离线对象资料安全边界：[威胁模型](../security/offline-pii-threat-model.md)
 - legacy v5 证据：[v5 盘点](../migrations/legacy-v5-inventory.md)
 
 `docs/PROJECT_DESIGN.md` 是旧 Demo 的历史资料，不是现代实现依据。

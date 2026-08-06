@@ -13,6 +13,8 @@ final class PromotionTargetDirectoryPage extends StatefulWidget {
     required this.text,
     required this.gateway,
     required this.idGenerator,
+    required this.clock,
+    required this.scopeKey,
     required this.canCreate,
     required this.canConfigureStageAliases,
     required this.canManageRelationship,
@@ -22,6 +24,8 @@ final class PromotionTargetDirectoryPage extends StatefulWidget {
   final AppStrings text;
   final PromotionTargetGateway gateway;
   final IdGenerator idGenerator;
+  final AppClock clock;
+  final String scopeKey;
   final bool canCreate;
   final bool canConfigureStageAliases;
   final bool canManageRelationship;
@@ -36,6 +40,8 @@ final class _PromotionTargetDirectoryPageState
     extends State<PromotionTargetDirectoryPage> {
   List<PromotionTargetProfile>? _targets;
   PromotionTargetFailureCode? _failure;
+  DateTime? _offlineAuthorizedAtUtc;
+  Timer? _offlineExpiryTimer;
   var _busy = true;
 
   @override
@@ -45,24 +51,76 @@ final class _PromotionTargetDirectoryPageState
   }
 
   @override
+  void didUpdateWidget(covariant PromotionTargetDirectoryPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.scopeKey == widget.scopeKey &&
+        identical(oldWidget.gateway, widget.gateway)) {
+      return;
+    }
+    _offlineExpiryTimer?.cancel();
+    _offlineExpiryTimer = null;
+    _targets = null;
+    _offlineAuthorizedAtUtc = null;
+    _failure = null;
+    _busy = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_load());
+    });
+  }
+
+  @override
+  void dispose() {
+    _offlineExpiryTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final text = widget.text;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text(
-          text.t('targetsTitle'),
-          style: Theme.of(context).textTheme.headlineSmall,
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                text.t('targetsTitle'),
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+            ),
+            IconButton(
+              key: const ValueKey('refresh-promotion-targets'),
+              onPressed: _busy ? null : _load,
+              tooltip: text.t('retry'),
+              icon: const Icon(Icons.refresh_outlined),
+            ),
+          ],
         ),
         const SizedBox(height: 6),
         Text(text.t('targetsPrivacyHelp')),
+        if (_offlineAuthorizedAtUtc != null) ...[
+          const SizedBox(height: 8),
+          Card(
+            color: Theme.of(context).colorScheme.secondaryContainer,
+            child: ListTile(
+              leading: const Icon(Icons.lock_clock_outlined),
+              title: Text(text.t('targetsOfflineSnapshot')),
+              subtitle: Text(
+                '${text.t('targetsOfflineAuthorizedAt')}: '
+                '${_offlineAuthorizedAtUtc!.toIso8601String()}',
+              ),
+            ),
+          ),
+        ],
         if (widget.canConfigureStageAliases && _stageAliases != null) ...[
           const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerLeft,
             child: OutlinedButton.icon(
               key: const ValueKey('configure-target-stage-aliases'),
-              onPressed: _busy ? null : _configureStageAliases,
+              onPressed: _busy || _offlineAuthorizedAtUtc != null
+                  ? null
+                  : _configureStageAliases,
               icon: const Icon(Icons.tune_outlined),
               label: Text(text.t('targetsConfigureStageAliases')),
             ),
@@ -92,13 +150,15 @@ final class _PromotionTargetDirectoryPageState
           )
         else
           for (final target in _targets!) _targetCard(text, target),
-        if (_targets != null)
+        if (_targets != null && _offlineAuthorizedAtUtc == null)
           TargetInstitutionRelationshipPanel(
             text: text,
             gateway: widget.gateway,
             idGenerator: widget.idGenerator,
             targets: _targets!,
-            canManage: widget.canManageInstitutionRelationships,
+            canManage:
+                widget.canManageInstitutionRelationships &&
+                _offlineAuthorizedAtUtc == null,
           ),
         if (_failure != null && _targets != null)
           Padding(
@@ -112,7 +172,9 @@ final class _PromotionTargetDirectoryPageState
           const SizedBox(height: 16),
           FilledButton.icon(
             key: const ValueKey('create-promotion-target'),
-            onPressed: _busy ? null : _create,
+            onPressed: _busy || _offlineAuthorizedAtUtc != null
+                ? null
+                : _create,
             icon: const Icon(Icons.person_add_alt_1_outlined),
             label: Text(text.t('targetsCreate')),
           ),
@@ -155,10 +217,16 @@ final class _PromotionTargetDirectoryPageState
             if (relationship == null) text.t('targetsNoProjectRelationship'),
           ].join('\n'),
         ),
-        trailing: relationship == null || !widget.canManageRelationship
+        trailing:
+            relationship == null ||
+                !widget.canManageRelationship ||
+                _offlineAuthorizedAtUtc != null
             ? null
             : const Icon(Icons.chevron_right),
-        onTap: relationship == null || !widget.canManageRelationship
+        onTap:
+            relationship == null ||
+                !widget.canManageRelationship ||
+                _offlineAuthorizedAtUtc != null
             ? null
             : () => _editRelationship(target),
       ),
@@ -181,22 +249,56 @@ final class _PromotionTargetDirectoryPageState
     final result = await widget.gateway.loadAssigned();
     if (!mounted) return;
     switch (result) {
-      case PromotionTargetSuccess(:final value):
+      case PromotionTargetSuccess(
+        :final value,
+        :final authorizedAtUtc,
+        :final expiresAtUtc,
+        :final fromOfflineCache,
+      ):
+        if (fromOfflineCache &&
+            (authorizedAtUtc == null ||
+                expiresAtUtc == null ||
+                !widget.clock.now().toUtc().isBefore(expiresAtUtc))) {
+          _clearVisibleTargets(PromotionTargetFailureCode.networkUnavailable);
+          return;
+        }
         setState(() {
           _targets = value;
+          _offlineAuthorizedAtUtc = fromOfflineCache ? authorizedAtUtc : null;
           _busy = false;
         });
+        _scheduleOfflineExpiry(fromOfflineCache ? expiresAtUtc : null);
       case PromotionTargetRejected(:final code):
-        setState(() {
-          _failure = code;
-          _busy = false;
-        });
+        _clearVisibleTargets(code);
       case PromotionTargetConflict():
-        setState(() {
-          _failure = PromotionTargetFailureCode.conflict;
-          _busy = false;
-        });
+        _clearVisibleTargets(PromotionTargetFailureCode.conflict);
     }
+  }
+
+  void _scheduleOfflineExpiry(DateTime? expiresAtUtc) {
+    _offlineExpiryTimer?.cancel();
+    _offlineExpiryTimer = null;
+    if (expiresAtUtc == null) return;
+    final remaining = expiresAtUtc.difference(widget.clock.now().toUtc());
+    if (remaining <= Duration.zero) {
+      _clearVisibleTargets(PromotionTargetFailureCode.networkUnavailable);
+      return;
+    }
+    _offlineExpiryTimer = Timer(remaining, () {
+      if (!mounted) return;
+      _clearVisibleTargets(PromotionTargetFailureCode.networkUnavailable);
+    });
+  }
+
+  void _clearVisibleTargets(PromotionTargetFailureCode failure) {
+    _offlineExpiryTimer?.cancel();
+    _offlineExpiryTimer = null;
+    setState(() {
+      _targets = null;
+      _offlineAuthorizedAtUtc = null;
+      _failure = failure;
+      _busy = false;
+    });
   }
 
   Future<void> _create() async {

@@ -73,6 +73,7 @@ void main() {
         return http.Response.bytes(
           utf8.encode(
             jsonEncode({
+              'authorized_at': '2026-08-06T12:00:00Z',
               'targets': [
                 {
                   'target_id': '44444444-4444-4444-8444-444444444444',
@@ -92,9 +93,11 @@ void main() {
     );
 
     final result = await gateway.loadAssigned();
-    final targets =
-        (result as PromotionTargetSuccess<List<PromotionTargetProfile>>).value;
+    final success =
+        result as PromotionTargetSuccess<List<PromotionTargetProfile>>;
+    final targets = success.value;
     expect(targets.single.displayName, '王小明');
+    expect(success.authorizedAtUtc, DateTime.utc(2026, 8, 6, 12));
   });
 
   test('updates a relationship with expected revision and mutation id', () async {

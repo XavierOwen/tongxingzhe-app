@@ -141,6 +141,27 @@ npm --prefix backend/server run build
 node --test backend/server/dist/test/sync-command.test.js
 ```
 
+### 5.1 验证七十二小时离线对象资料
+
+这项功能同时改动 Flutter、设备安全存储接缝和 Backend 响应。开发时可先运行以下目标测试：
+
+```bash
+flutter test --no-pub test/privacy
+flutter test --no-pub test/app_session/app_session_test.dart
+flutter test --no-pub test/targets/offline_promotion_target_gateway_test.dart
+flutter test --no-pub \
+  test/features/targets/promotion_target_directory_page_test.dart
+
+npm --prefix backend/server run build
+node --test backend/server/dist/test/promotion-targets.test.js
+```
+
+`test/privacy` 使用可控 fake 模拟安全存储成功、损坏、删除失败和并发。它也检查普通 Drift 锁不含对象 PII。这证明业务合同，但不证明某个平台的 Keychain、Credential Store 或 keyring 已在真实设备运行。
+
+本切片没有 PostgreSQL migration 或函数变化，所以目标开发循环不需要启动 Docker。提交前仍应运行全部 Flutter 和 Backend 测试。若同一分支还改动 PostgreSQL，再运行第 6 节的 Docker 套件。
+
+真实平台验收必须在目标设备上启动正式 App。启动探针需要完成写入、精确读回和删除，随后还要验证联网取得对象、结束进程、断网重启、只读显示、到期锁定与重新联网。只完成 `flutter build` 或上述 fake 测试时，应把平台结果写成 `build only` 或 `runtime pending`。
+
 若单个测试通过而完整测试失败，应按完整测试的失败处理。单个测试只能缩短开发反馈时间。
 
 ## 6. Docker PostgreSQL 套件怎样运行
@@ -334,6 +355,7 @@ CI 的 PostgreSQL job 在 Linux runner 上启动 `postgres:16-alpine` service，
 | fixture 失败 | 最后打印的 fixture 文件和异常文本 |
 | restore check 失败 | dump schema 范围、role、函数授权和恢复 owner |
 | Flutter 单测通过但完整测试失败 | 共享状态、生成文件或其他模块的回归 |
+| 离线对象测试通过但真机不启用缓存 | 安全存储探针、本地数据库能力和六平台证据矩阵 |
 | 某平台 build 失败 | 该平台 job 的第一条失败命令，不把它写成所有平台失败 |
 
 先保存第一条稳定错误。后续清理错误常由第一条失败引起，不应同时修改多个层次。

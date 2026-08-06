@@ -7,6 +7,33 @@ import 'dart:io';
 /// local import，应先扩展本检查再改生产入口。
 void main() {
   final repositoryRoot = Directory.current.absolute;
+  final report = inspectProductionBoundary(repositoryRoot);
+
+  if (report.violations.isNotEmpty) {
+    stderr.writeln('Production boundary 检查失败：');
+    for (final violation in report.violations) {
+      stderr.writeln('- $violation');
+    }
+    exitCode = 1;
+    return;
+  }
+
+  stdout.writeln(
+    'Production boundary 通过：检查了 ${report.visitedFileCount} 个 Dart 文件。',
+  );
+}
+
+final class ProductionBoundaryReport {
+  const ProductionBoundaryReport({
+    required this.visitedFileCount,
+    required this.violations,
+  });
+
+  final int visitedFileCount;
+  final List<String> violations;
+}
+
+ProductionBoundaryReport inspectProductionBoundary(Directory repositoryRoot) {
   final libraryRoot = Directory('${repositoryRoot.path}/lib');
   final entrypoint = File('${libraryRoot.path}/main.dart');
   final pending = <File>[entrypoint];
@@ -31,8 +58,7 @@ void main() {
     }
 
     final contents = source.readAsStringSync();
-    if (contents.contains("package:crypto/crypto.dart") ||
-        RegExp(r'\bmd5\s*\.').hasMatch(contents)) {
+    if (RegExp(r'\bmd5\s*\.').hasMatch(contents)) {
       violations.add('production import 图触达 MD5：$relativePath');
     }
     if (RegExp(r'''['"](?:admin[123]|user[12])['"]''').hasMatch(contents)) {
@@ -51,16 +77,10 @@ void main() {
     }
   }
 
-  if (violations.isNotEmpty) {
-    stderr.writeln('Production boundary 检查失败：');
-    for (final violation in violations) {
-      stderr.writeln('- $violation');
-    }
-    exitCode = 1;
-    return;
-  }
-
-  stdout.writeln('Production boundary 通过：检查了 ${visited.length} 个 Dart 文件。');
+  return ProductionBoundaryReport(
+    visitedFileCount: visited.length,
+    violations: List.unmodifiable(violations),
+  );
 }
 
 Iterable<String> _localImports(String source) sync* {

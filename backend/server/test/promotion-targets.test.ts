@@ -81,6 +81,30 @@ test("target operations recheck capabilities before reading PII", async () => {
   assert.equal(store.calls, 0);
 });
 
+test("assigned target response carries the Backend authorization time", async () => {
+  const store = new MemoryStore();
+  const result = await listAssignedPromotionTargets(
+    "Bearer token",
+    {
+      ...dependencies(store, ["view_assigned_target_pii"]),
+      now: () => new Date("2026-08-06T12:00:00.000Z"),
+    },
+  );
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.authorized_at, "2026-08-06T12:00:00.000Z");
+  assert.deepEqual(result.body.targets, [{
+    target_id: profile.id,
+    target_type: profile.type,
+    display_name: profile.displayName,
+    phone: profile.phone,
+    email: profile.email,
+    created_at: profile.createdAt,
+    has_current_project_relationship: false,
+    project_relationship: null,
+  }]);
+});
+
 test("create accepts explicit profile fields and never trusts workspace input", async () => {
   const store = new MemoryStore();
   const deps = dependencies(store, [

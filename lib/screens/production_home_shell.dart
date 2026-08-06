@@ -171,6 +171,8 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
         text: strings,
         gateway: widget.promotionTargetGateway,
         idGenerator: widget.idGenerator,
+        clock: widget.clock,
+        scopeKey: '${widget.context.workspace.id}/${widget.context.project.id}',
         canCreate: widget.context.capabilities.contains('create_target'),
         canConfigureStageAliases: widget.context.capabilities.contains(
           'manage_analysis_definitions',

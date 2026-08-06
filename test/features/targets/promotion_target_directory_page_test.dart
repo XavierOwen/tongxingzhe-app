@@ -184,14 +184,132 @@ void main() {
       expect(find.textContaining('结束: 2026-08-07'), findsOneWidget);
     },
   );
+
+  testWidgets('offline PII snapshot is labeled and remains read-only', (
+    tester,
+  ) async {
+    final gateway = _MemoryGateway()
+      ..targets.add(
+        _plainTarget(
+          id: 'person-1',
+          type: PromotionTargetType.person,
+          name: '王小明',
+        ),
+      )
+      ..fromOfflineCache = true
+      ..authorizedAtUtc = DateTime.utc(2026, 8, 6, 12)
+      ..expiresAtUtc = DateTime.utc(2026, 8, 9, 12);
+
+    await tester.pumpWidget(
+      _app(gateway, clock: _FixedClock(DateTime.utc(2026, 8, 9, 11, 59))),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('离线加密快照'), findsOneWidget);
+    expect(find.textContaining('2026-08-06T12:00:00.000Z'), findsOneWidget);
+    final createButton = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('create-promotion-target')),
+    );
+    expect(createButton.onPressed, isNull);
+  });
+
+  testWidgets('offline PII is removed from an open page at expiry', (
+    tester,
+  ) async {
+    final gateway = _MemoryGateway()
+      ..targets.add(
+        _plainTarget(
+          id: 'person-1',
+          type: PromotionTargetType.person,
+          name: '到期前可见对象',
+        ),
+      )
+      ..fromOfflineCache = true
+      ..authorizedAtUtc = DateTime.utc(2026, 8, 6, 12)
+      ..expiresAtUtc = DateTime.utc(2026, 8, 9, 12);
+
+    await tester.pumpWidget(
+      _app(gateway, clock: _FixedClock(DateTime.utc(2026, 8, 9, 11, 59))),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('到期前可见对象'), findsOneWidget);
+
+    await tester.pump(const Duration(minutes: 1));
+
+    expect(find.text('到期前可见对象'), findsNothing);
+    expect(find.textContaining('没有可用的未过期加密快照'), findsOneWidget);
+  });
+
+  testWidgets('a rejected refresh removes target PII already on screen', (
+    tester,
+  ) async {
+    final gateway = _MemoryGateway()
+      ..targets.add(
+        _plainTarget(
+          id: 'person-1',
+          type: PromotionTargetType.person,
+          name: '撤权前可见对象',
+        ),
+      );
+    await tester.pumpWidget(_app(gateway));
+    await tester.pumpAndSettle();
+    expect(find.text('撤权前可见对象'), findsOneWidget);
+
+    gateway.listFailure = PromotionTargetFailureCode.forbidden;
+    await tester.tap(find.byKey(const ValueKey('refresh-promotion-targets')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('撤权前可见对象'), findsNothing);
+    expect(find.textContaining('没有可用的未过期加密快照'), findsOneWidget);
+  });
+
+  testWidgets('changing project scope removes the previous target list', (
+    tester,
+  ) async {
+    final firstGateway = _MemoryGateway()
+      ..targets.add(
+        _plainTarget(
+          id: 'person-old',
+          type: PromotionTargetType.person,
+          name: '上一项目对象',
+        ),
+      );
+    await tester.pumpWidget(
+      _app(firstGateway, scopeKey: 'workspace-1/project-1'),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('上一项目对象'), findsOneWidget);
+
+    final secondGateway = _MemoryGateway()
+      ..targets.add(
+        _plainTarget(
+          id: 'person-new',
+          type: PromotionTargetType.person,
+          name: '当前项目对象',
+        ),
+      );
+    await tester.pumpWidget(
+      _app(secondGateway, scopeKey: 'workspace-1/project-2'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('上一项目对象'), findsNothing);
+    expect(find.text('当前项目对象'), findsOneWidget);
+  });
 }
 
-Widget _app(PromotionTargetGateway gateway) => MaterialApp(
+Widget _app(
+  PromotionTargetGateway gateway, {
+  AppClock? clock,
+  String scopeKey = 'workspace-1/project-1',
+}) => MaterialApp(
   home: Scaffold(
     body: PromotionTargetDirectoryPage(
       text: const AppStrings('zh'),
       gateway: gateway,
       idGenerator: _FixedIds(),
+      clock: clock ?? _FixedClock(DateTime.utc(2026, 8, 6, 13)),
+      scopeKey: scopeKey,
       canCreate: true,
       canConfigureStageAliases: true,
       canManageRelationship: true,
@@ -219,10 +337,23 @@ final class _MemoryGateway implements PromotionTargetGateway {
   final institutionRelationships = <TargetInstitutionRelationship>[];
   TargetInstitutionRelationshipKind? createdInstitutionKind;
   String? endedInstitutionRelationshipId;
+  bool fromOfflineCache = false;
+  DateTime? authorizedAtUtc;
+  DateTime? expiresAtUtc;
+  PromotionTargetFailureCode? listFailure;
 
   @override
   Future<PromotionTargetResult<List<PromotionTargetProfile>>>
-  loadAssigned() async => PromotionTargetSuccess(List.of(targets));
+  loadAssigned() async {
+    final failure = listFailure;
+    if (failure != null) return PromotionTargetRejected(failure);
+    return PromotionTargetSuccess(
+      List.of(targets),
+      authorizedAtUtc: authorizedAtUtc,
+      expiresAtUtc: expiresAtUtc,
+      fromOfflineCache: fromOfflineCache,
+    );
+  }
 
   @override
   Future<PromotionTargetResult<PromotionTargetProfile>> create({
@@ -368,6 +499,15 @@ final class _MemoryGateway implements PromotionTargetGateway {
 
   @override
   Future<void> close() async {}
+}
+
+final class _FixedClock implements AppClock {
+  const _FixedClock(this.value);
+
+  final DateTime value;
+
+  @override
+  DateTime now() => value;
 }
 
 PromotionTargetProfile _plainTarget({
