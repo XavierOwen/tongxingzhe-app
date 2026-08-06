@@ -28,6 +28,12 @@ import {
   updateQuestionnaireDraft,
   type QuestionnaireAdministrationStore,
 } from "./questionnaire-administration.js";
+import {
+  listQuestionnaireMetricCompatibility,
+  recordQuestionnaireMetricCompatibility,
+  revokeQuestionnaireMetricCompatibility,
+  type QuestionnaireMetricCompatibilityStore,
+} from "./questionnaire-metric-compatibility.js";
 
 export interface BackendServerDependencies
   extends SessionContextHttpDependencies {
@@ -35,6 +41,8 @@ export interface BackendServerDependencies
   readonly regionResolutionStore?: RegionResolutionStore;
   readonly questionnaireStore?: QuestionnaireStore;
   readonly questionnaireAdministrationStore?: QuestionnaireAdministrationStore;
+  readonly questionnaireMetricCompatibilityStore?:
+    QuestionnaireMetricCompatibilityStore;
 }
 
 export function createBackendServer(
@@ -181,6 +189,98 @@ export function createBackendServer(
             },
           }),
         );
+      }
+      return;
+    }
+
+    if (
+      request.method === "GET" &&
+      requestUrl.pathname === "/v1/questionnaire-metrics"
+    ) {
+      if (dependencies.questionnaireMetricCompatibilityStore === undefined) {
+        response.statusCode = 503;
+        response.end(JSON.stringify({
+          error: {code: "questionnaire_metric_compatibility_unavailable"},
+        }));
+        return;
+      }
+      const result = await listQuestionnaireMetricCompatibility(
+        request.headers.authorization,
+        {
+          identityVerifier: dependencies.identityVerifier,
+          contextStore: dependencies.contextStore,
+          compatibilityStore:
+            dependencies.questionnaireMetricCompatibilityStore,
+        },
+      );
+      response.statusCode = result.status;
+      response.end(JSON.stringify(result.body));
+      return;
+    }
+
+    if (
+      request.method === "POST" &&
+      requestUrl.pathname === "/v1/questionnaire-metric-decisions"
+    ) {
+      if (dependencies.questionnaireMetricCompatibilityStore === undefined) {
+        response.statusCode = 503;
+        response.end(JSON.stringify({
+          error: {code: "questionnaire_metric_compatibility_unavailable"},
+        }));
+        return;
+      }
+      try {
+        const result = await recordQuestionnaireMetricCompatibility(
+          request.headers.authorization,
+          await readJsonBody(request),
+          {
+            identityVerifier: dependencies.identityVerifier,
+            contextStore: dependencies.contextStore,
+            compatibilityStore:
+              dependencies.questionnaireMetricCompatibilityStore,
+          },
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
+      }
+      return;
+    }
+
+    const metricRevocationMatch =
+      /^\/v1\/questionnaire-metric-decisions\/([^/]+)\/revoke$/
+        .exec(requestUrl.pathname);
+    if (request.method === "POST" && metricRevocationMatch !== null) {
+      if (dependencies.questionnaireMetricCompatibilityStore === undefined) {
+        response.statusCode = 503;
+        response.end(JSON.stringify({
+          error: {code: "questionnaire_metric_compatibility_unavailable"},
+        }));
+        return;
+      }
+      const eventId = metricRevocationMatch[1];
+      if (eventId === undefined) {
+        response.statusCode = 404;
+        response.end(JSON.stringify({error: {code: "not_found"}}));
+        return;
+      }
+      try {
+        const result = await revokeQuestionnaireMetricCompatibility(
+          request.headers.authorization,
+          eventId,
+          await readJsonBody(request),
+          {
+            identityVerifier: dependencies.identityVerifier,
+            contextStore: dependencies.contextStore,
+            compatibilityStore:
+              dependencies.questionnaireMetricCompatibilityStore,
+          },
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
       }
       return;
     }

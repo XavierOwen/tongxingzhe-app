@@ -158,9 +158,15 @@ jobs:
             --file backend/database/checks/verify_questionnaire_draft_upgrades.sql
           psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file backend/database/fixtures/0014_questionnaire_draft_upgrades.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_questionnaire_metric_compatibility.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0015_questionnaire_metric_compatibility.sql
 
       - name: Verify concurrent questionnaire publication
-        run: ./tool/verify_questionnaire_publish_concurrency.sh
+        run: |
+          ./tool/verify_questionnaire_publish_concurrency.sh
+          ./tool/verify_questionnaire_metric_concurrency.sh
 
       - name: Reject edited migration history
         run: |
@@ -238,6 +244,10 @@ jobs:
             --file backend/database/checks/verify_questionnaire_draft_upgrades.sql
           psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file backend/database/fixtures/0014_questionnaire_draft_upgrades.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_questionnaire_metric_compatibility.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0015_questionnaire_metric_compatibility.sql
 
   backend-server:
     name: Backend identity, context, and sync

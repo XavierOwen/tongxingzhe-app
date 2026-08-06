@@ -7,8 +7,10 @@ import '../../foundation/runtime_values.dart';
 import '../../l10n/app_strings.dart';
 import '../../questionnaires/questionnaire_administration.dart';
 import '../../questionnaires/questionnaire_contract.dart';
+import '../../questionnaires/questionnaire_metric_compatibility.dart';
 import '../contact_entry/questionnaire_form.dart';
 import 'questionnaire_admin_view_model.dart';
+import 'questionnaire_metric_compatibility_panel.dart';
 
 final class QuestionnaireAdminScreen extends StatefulWidget {
   const QuestionnaireAdminScreen({
@@ -209,6 +211,13 @@ final class _QuestionnaireAdminScreenState
                   child: Text(text.t('questionnaireCopyAsDraft')),
                 ),
               ),
+            ),
+          if (widget.gateway is QuestionnaireMetricCompatibilityGateway)
+            QuestionnaireMetricCompatibilityPanel(
+              text: text,
+              gateway:
+                  widget.gateway as QuestionnaireMetricCompatibilityGateway,
+              idGenerator: widget.idGenerator,
             ),
         ],
       ),

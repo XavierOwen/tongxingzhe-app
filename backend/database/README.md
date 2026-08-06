@@ -69,7 +69,16 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/checks/verify_questionnaire_publishing.sql
 psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/fixtures/0013_questionnaire_publishing.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_questionnaire_draft_upgrades.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0014_questionnaire_draft_upgrades.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_questionnaire_metric_compatibility.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0015_questionnaire_metric_compatibility.sql
 ./tool/verify_questionnaire_publish_concurrency.sh
+./tool/verify_questionnaire_metric_concurrency.sh
 ```
 
 第二次执行不是重复建库，而是验证已经记录的 checksum。若历史文件被修改，脚本会拒绝继续。
@@ -107,4 +116,8 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 `0013_questionnaire_publishing.sql` 保存管理草稿、发布者、发布说明和幂等请求。发布函数取得项目级 transaction lock，严格验证 JSON 定义，并在同一 transaction 中建立新版本、写入问题和选项、切换唯一 current 版本。管理端已发布定义受触发器保护，不能追加、修改或删除；回退只能复制旧版本并发布新版本。
 
-普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。`verify_questionnaire_publish_concurrency.sh` 必须另行运行，因为它会启动两个独立 `psql` 会话，同时发布同一项目的不同草稿。检查脚本只使用 synthetic 个人空间，并要求显式 `DATABASE_URL`。
+`0014_questionnaire_draft_upgrades.sql` 给私有草稿保存升级来源，要求新旧草稿属于同一用户、空间和项目，并绑定不同问卷版本。来源草稿可以作废，新草稿及审计来源保持不变。
+
+`0015_questionnaire_metric_compatibility.sql` 保存稳定问卷指标、当前版本成员和追加式兼容审计。确认前生成问题定义和样本影响快照；撤销追加事件并删除当前候选成员。runtime role 只能调用受控函数，不能直接读写指标表。
+
+普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。两个 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，分别并发发布问卷，以及确认和撤销同一兼容关系。检查脚本只使用 synthetic 个人空间，并要求显式 `DATABASE_URL`。

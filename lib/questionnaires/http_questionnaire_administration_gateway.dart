@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../identity/identity_session.dart';
 import 'questionnaire_administration.dart';
 import 'questionnaire_contract.dart';
+import 'questionnaire_metric_compatibility.dart';
 
 const _backendBaseUrl = String.fromEnvironment('BACKEND_BASE_URL');
 
@@ -23,7 +24,9 @@ QuestionnaireAdministrationGateway productionQuestionnaireAdministration(
 }
 
 final class DeferredQuestionnaireAdministrationGateway
-    implements QuestionnaireAdministrationGateway {
+    implements
+        QuestionnaireAdministrationGateway,
+        QuestionnaireMetricCompatibilityGateway {
   const DeferredQuestionnaireAdministrationGateway();
 
   @override
@@ -62,11 +65,50 @@ final class DeferredQuestionnaireAdministrationGateway
       null;
 
   @override
+  Future<
+    QuestionnaireAdministrationResult<QuestionnaireMetricCompatibilitySnapshot>
+  >
+  loadMetricCompatibility() async => const QuestionnaireAdministrationRejected(
+    QuestionnaireAdministrationFailureCode.networkUnavailable,
+  );
+
+  @override
+  Future<
+    QuestionnaireAdministrationResult<QuestionnaireMetricCompatibilityEvent>
+  >
+  recordMetricCompatibility({
+    required String metricId,
+    required String metricLabel,
+    required QuestionnaireMetricAnalysisOperation analysisOperation,
+    required QuestionnaireMetricQuestionReference reference,
+    required QuestionnaireMetricQuestionReference candidate,
+    required QuestionnaireMetricDecision decision,
+    required String reason,
+    required String requestId,
+  }) async => const QuestionnaireAdministrationRejected(
+    QuestionnaireAdministrationFailureCode.networkUnavailable,
+  );
+
+  @override
+  Future<
+    QuestionnaireAdministrationResult<QuestionnaireMetricCompatibilityEvent>
+  >
+  revokeMetricCompatibility({
+    required String eventId,
+    required String reason,
+    required String requestId,
+  }) async => const QuestionnaireAdministrationRejected(
+    QuestionnaireAdministrationFailureCode.networkUnavailable,
+  );
+
+  @override
   Future<void> close() async {}
 }
 
 final class HttpQuestionnaireAdministrationGateway
-    implements QuestionnaireAdministrationGateway {
+    implements
+        QuestionnaireAdministrationGateway,
+        QuestionnaireMetricCompatibilityGateway {
   factory HttpQuestionnaireAdministrationGateway({
     required Uri baseUri,
     required IdentitySession identitySession,
@@ -156,6 +198,62 @@ final class HttpQuestionnaireAdministrationGateway
       QuestionnaireAdministrationRejected() => null,
     };
   }
+
+  @override
+  Future<
+    QuestionnaireAdministrationResult<QuestionnaireMetricCompatibilitySnapshot>
+  >
+  loadMetricCompatibility() => _request(
+    method: 'GET',
+    path: '/v1/questionnaire-metrics',
+    parse: _parseMetricCompatibilitySnapshot,
+  );
+
+  @override
+  Future<
+    QuestionnaireAdministrationResult<QuestionnaireMetricCompatibilityEvent>
+  >
+  recordMetricCompatibility({
+    required String metricId,
+    required String metricLabel,
+    required QuestionnaireMetricAnalysisOperation analysisOperation,
+    required QuestionnaireMetricQuestionReference reference,
+    required QuestionnaireMetricQuestionReference candidate,
+    required QuestionnaireMetricDecision decision,
+    required String reason,
+    required String requestId,
+  }) => _request(
+    method: 'POST',
+    path: '/v1/questionnaire-metric-decisions',
+    body: {
+      'metric_id': metricId,
+      'metric_label': metricLabel,
+      'analysis_operation': analysisOperation.storageValue,
+      'reference': _metricReferenceToJson(reference),
+      'candidate': _metricReferenceToJson(candidate),
+      'decision': decision.storageValue,
+      'reason': reason,
+      'request_id': requestId,
+    },
+    parse: (root) => _parseMetricEvent(root['event']),
+  );
+
+  @override
+  Future<
+    QuestionnaireAdministrationResult<QuestionnaireMetricCompatibilityEvent>
+  >
+  revokeMetricCompatibility({
+    required String eventId,
+    required String reason,
+    required String requestId,
+  }) => _request(
+    method: 'POST',
+    path:
+        '/v1/questionnaire-metric-decisions/'
+        '${Uri.encodeComponent(eventId)}/revoke',
+    body: {'reason': reason, 'request_id': requestId},
+    parse: (root) => _parseMetricEvent(root['event']),
+  );
 
   Future<QuestionnaireAdministrationResult<T>> _request<T>({
     required String method,
@@ -338,6 +436,154 @@ int _positiveInt(Object? value) {
 
 bool _bool(Object? value) {
   if (value is! bool) throw const FormatException('expected boolean');
+  return value;
+}
+
+QuestionnaireMetricCompatibilitySnapshot _parseMetricCompatibilitySnapshot(
+  Map<String, Object?> root,
+) => QuestionnaireMetricCompatibilitySnapshot(
+  metrics: _list(root['metrics']).map((value) {
+    final metric = _object(value);
+    return QuestionnaireMetricDefinition(
+      id: _string(metric['metric_id']),
+      label: _string(metric['metric_label']),
+      analysisOperation: QuestionnaireMetricAnalysisOperation.values.firstWhere(
+        (candidate) =>
+            candidate.storageValue == _string(metric['analysis_operation']),
+      ),
+      activeMembers: _list(metric['active_members']).map(_parseMetricReference),
+    );
+  }),
+  availableQuestions: _list(root['available_questions']).map((value) {
+    final question = _object(value);
+    return QuestionnaireMetricQuestionCandidate(
+      reference: _parseMetricReference(question['reference']),
+      versionNumber: _positiveInt(question['version_number']),
+      comparison: _parseQuestionComparison(question['comparison_snapshot']),
+      sampleCount: _nonNegativeInt(question['sample_count']),
+      trendSeries: _list(question['trend_series']).map((value) {
+        final point = _object(value);
+        return QuestionnaireMetricQuestionTrendPoint(
+          periodStart: _string(point['period_start']),
+          sampleCount: _nonNegativeInt(point['sample_count']),
+        );
+      }),
+    );
+  }),
+  events: _list(root['events']).map(_parseMetricEvent),
+);
+
+QuestionnaireMetricCompatibilityEvent _parseMetricEvent(Object? value) {
+  final event = _object(value);
+  final impact = _object(event['impact_snapshot']);
+  return QuestionnaireMetricCompatibilityEvent(
+    id: _string(event['event_id']),
+    metricId: _string(event['metric_id']),
+    action: QuestionnaireMetricCompatibilityAction.values.firstWhere(
+      (candidate) => candidate.name == _string(event['action']),
+    ),
+    decision: QuestionnaireMetricDecision.values.firstWhere(
+      (candidate) => candidate.storageValue == _string(event['decision']),
+    ),
+    targetEventId: _nullableString(event['target_event_id']),
+    reference: _parseMetricReference(event['reference']),
+    candidate: _parseMetricReference(event['candidate']),
+    actorAppUserId: _string(event['actor_app_user_id']),
+    reason: _string(event['reason']),
+    impact: QuestionnaireMetricImpactSnapshot(
+      referenceSampleCount: _nonNegativeInt(impact['reference_sample_count']),
+      candidateSampleCount: _nonNegativeInt(impact['candidate_sample_count']),
+      combinedSampleCount: _nonNegativeInt(impact['combined_sample_count']),
+      separateSeries: _list(impact['separate_series']).map((value) {
+        final series = _object(value);
+        return QuestionnaireMetricImpactSeries(
+          questionnaireVersionId: _string(series['questionnaire_version_id']),
+          sampleCount: _nonNegativeInt(series['sample_count']),
+        );
+      }),
+      trendSeries: _list(impact['trend_series']).map((value) {
+        final point = _object(value);
+        return QuestionnaireMetricImpactTrendPoint(
+          periodStart: _string(point['period_start']),
+          referenceSampleCount: _nonNegativeInt(
+            point['reference_sample_count'],
+          ),
+          candidateSampleCount: _nonNegativeInt(
+            point['candidate_sample_count'],
+          ),
+          combinedSampleCount: _nonNegativeInt(point['combined_sample_count']),
+        );
+      }),
+    ),
+    createdAtUtc: DateTime.parse(_string(event['created_at'])).toUtc(),
+  );
+}
+
+QuestionnaireMetricQuestionReference _parseMetricReference(Object? value) {
+  final reference = _object(value);
+  return QuestionnaireMetricQuestionReference(
+    questionnaireVersionId: _string(reference['questionnaire_version_id']),
+    questionId: _string(reference['question_id']),
+  );
+}
+
+QuestionnaireMetricQuestionComparison _parseQuestionComparison(Object? value) {
+  final comparison = _object(value);
+  final definition = _object(comparison['definition']);
+  final timeScope = _object(comparison['time_scope']);
+  final answerMode = _object(comparison['answer_mode']);
+  return QuestionnaireMetricQuestionComparison(
+    prompt: _string(definition['prompt']),
+    questionType: _string(definition['question_type']),
+    options: _list(comparison['options']).map((value) {
+      final option = _object(value);
+      return QuestionnaireMetricOptionComparison(
+        id: _string(option['option_id']),
+        label: _string(option['label']),
+        position: _positiveInt(option['position']),
+      );
+    }),
+    timeScope: _string(timeScope['kind']),
+    required: _bool(definition['required']),
+    allowUnknown: _bool(answerMode['allow_unknown']),
+    allowRefused: _bool(answerMode['allow_refused']),
+    allowNotApplicable: _bool(answerMode['allow_not_applicable']),
+    minimumSelections: _nullableInt(answerMode['minimum_selections']),
+    maximumSelections: _nullableInt(answerMode['maximum_selections']),
+    numberKind: _nullableString(answerMode['number_kind']),
+    unit: _nullableString(answerMode['unit']),
+    minimum: _nullableNum(answerMode['minimum']),
+    maximum: _nullableNum(answerMode['maximum']),
+    maximumLength: _nullableInt(answerMode['maximum_length']),
+    displayRuleJson: definition['display_rule'] == null
+        ? null
+        : jsonEncode(definition['display_rule']),
+  );
+}
+
+Map<String, Object?> _metricReferenceToJson(
+  QuestionnaireMetricQuestionReference reference,
+) => {
+  'questionnaire_version_id': reference.questionnaireVersionId,
+  'question_id': reference.questionId,
+};
+
+int _nonNegativeInt(Object? value) {
+  if (value is! int || value < 0) {
+    throw const FormatException('expected non-negative integer');
+  }
+  return value;
+}
+
+int? _nullableInt(Object? value) {
+  if (value == null) return null;
+  if (value is! int) throw const FormatException('expected integer or null');
+  return value;
+}
+
+num? _nullableNum(Object? value) {
+  if (value == null) return null;
+  if (value is! num) throw const FormatException('expected number or null');
   return value;
 }
 

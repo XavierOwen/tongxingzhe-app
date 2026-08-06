@@ -178,7 +178,7 @@ Flutter 的 [`HttpContactRegionResolver`](../../lib/regions/contact_region_resol
 
 Flutter 测试使用真实内存 SQLite 和可控 Transport。它们覆盖 ACK、指数退避、jitter 上限、双 worker 租约、过期恢复、迟到 ACK、aggregate 顺序、永久失败隔离、批量部分成功、乱序结果、远端 batch 原子性、cursor 区分、同 ID 内容冲突，以及冲突快照恢复与解决 ACK。HTTP Adapter 测试固定 bearer header、路径、query、JSON、`Retry-After`、完整冲突对比和错误分类。
 
-Backend 测试使用 synthetic 身份和上下文。它们证明伪造项目在 Store 调用前被拒绝，固定 protocol v1 兼容 fixture，并验证批量单条失败。它们还证明 PostgreSQL 的无效 cursor 不会被误报成临时服务故障，问卷管理会重新取得 capability，并在发布前重读草稿 revision。PostgreSQL 16 验证从空库执行全部 migration，再次执行核对 checksum，运行 runtime 权限、接触修订、自动合并、同字段冲突、解决重放、区域循环、草稿冲突、跨用户隔离、问卷事务发布和共用指标 fixture，最后执行并发发布、`pg_dump` 与 `pg_restore` 检查。
+Backend 测试使用 synthetic 身份和上下文。它们证明伪造项目在 Store 调用前被拒绝，固定 protocol v1 兼容 fixture，并验证批量单条失败。它们还证明 PostgreSQL 的无效 cursor 不会被误报成临时服务故障，问卷管理和指标兼容决定都会重新取得 capability，并在发布前重读草稿 revision。PostgreSQL 16 验证从空库执行全部 migration，再次执行核对 checksum，运行 runtime 权限、接触修订、自动合并、同字段冲突、解决重放、区域循环、草稿冲突、跨用户隔离、问卷事务发布、问卷指标兼容和共用指标 fixture，最后执行并发发布、并发兼容确认与撤销、`pg_dump` 与 `pg_restore` 检查。
 
 这些测试分别回答不同问题。单元测试证明状态机，HTTP 测试证明协议转换，真实 PostgreSQL 证明 SQL 语法、权限、transaction 和恢复路径。某一类通过不能替代另一类。
 

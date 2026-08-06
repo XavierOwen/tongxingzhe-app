@@ -5,10 +5,13 @@ import 'package:drift/drift.dart';
 import '../data/local_database.dart';
 import 'questionnaire_administration.dart';
 import 'questionnaire_contract.dart';
+import 'questionnaire_metric_compatibility.dart';
 
 /// 在网络请求前保存管理者主动提交的工作副本，但不模拟服务端发布成功。
 final class CachedQuestionnaireAdministrationGateway
-    implements QuestionnaireAdministrationGateway {
+    implements
+        QuestionnaireAdministrationGateway,
+        QuestionnaireMetricCompatibilityGateway {
   factory CachedQuestionnaireAdministrationGateway({
     required LocalDatabase database,
     required QuestionnaireAdministrationGateway remote,
@@ -102,6 +105,73 @@ final class CachedQuestionnaireAdministrationGateway
   @override
   Future<QuestionnaireVersion?> readPublishedVersion(String versionId) =>
       _remote.readPublishedVersion(versionId);
+
+  QuestionnaireMetricCompatibilityGateway? get _metricRemote =>
+      _remote is QuestionnaireMetricCompatibilityGateway
+      ? _remote as QuestionnaireMetricCompatibilityGateway
+      : null;
+
+  @override
+  Future<
+    QuestionnaireAdministrationResult<QuestionnaireMetricCompatibilitySnapshot>
+  >
+  loadMetricCompatibility() =>
+      _metricRemote?.loadMetricCompatibility() ??
+      Future.value(
+        const QuestionnaireAdministrationRejected(
+          QuestionnaireAdministrationFailureCode.networkUnavailable,
+        ),
+      );
+
+  @override
+  Future<
+    QuestionnaireAdministrationResult<QuestionnaireMetricCompatibilityEvent>
+  >
+  recordMetricCompatibility({
+    required String metricId,
+    required String metricLabel,
+    required QuestionnaireMetricAnalysisOperation analysisOperation,
+    required QuestionnaireMetricQuestionReference reference,
+    required QuestionnaireMetricQuestionReference candidate,
+    required QuestionnaireMetricDecision decision,
+    required String reason,
+    required String requestId,
+  }) =>
+      _metricRemote?.recordMetricCompatibility(
+        metricId: metricId,
+        metricLabel: metricLabel,
+        analysisOperation: analysisOperation,
+        reference: reference,
+        candidate: candidate,
+        decision: decision,
+        reason: reason,
+        requestId: requestId,
+      ) ??
+      Future.value(
+        const QuestionnaireAdministrationRejected(
+          QuestionnaireAdministrationFailureCode.networkUnavailable,
+        ),
+      );
+
+  @override
+  Future<
+    QuestionnaireAdministrationResult<QuestionnaireMetricCompatibilityEvent>
+  >
+  revokeMetricCompatibility({
+    required String eventId,
+    required String reason,
+    required String requestId,
+  }) =>
+      _metricRemote?.revokeMetricCompatibility(
+        eventId: eventId,
+        reason: reason,
+        requestId: requestId,
+      ) ??
+      Future.value(
+        const QuestionnaireAdministrationRejected(
+          QuestionnaireAdministrationFailureCode.networkUnavailable,
+        ),
+      );
 
   Future<QuestionnaireDesignDraft> _mergeServerDraft(
     QuestionnaireDesignDraft serverDraft,
