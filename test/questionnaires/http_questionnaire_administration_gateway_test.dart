@@ -7,6 +7,7 @@ import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/questionnaires/http_questionnaire_administration_gateway.dart';
 import 'package:tongxingzhe_app/questionnaires/questionnaire_administration.dart';
 import 'package:tongxingzhe_app/questionnaires/questionnaire_contract.dart';
+import 'package:tongxingzhe_app/questionnaires/questionnaire_metric_compatibility.dart';
 
 import '../support/fake_identity_session.dart';
 
@@ -47,6 +48,7 @@ void main() {
             ],
           }),
           200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
         );
       }),
     );
@@ -95,7 +97,84 @@ void main() {
       QuestionnaireAdministrationFailureCode.revisionConflict,
     );
   });
+
+  test('loads stable metrics with comparison and sample previews', () async {
+    final gateway = HttpQuestionnaireAdministrationGateway(
+      baseUri: Uri.parse('https://backend.example.test'),
+      identitySession: _signedInIdentity(),
+      client: MockClient((request) async {
+        expect(request.url.path, '/v1/questionnaire-metrics');
+        return http.Response(
+          jsonEncode({
+            'metrics': [
+              {
+                'metric_id': 'metric-1',
+                'metric_label': '接触兴趣',
+                'analysis_operation': 'distribution',
+                'active_members': [
+                  {
+                    'questionnaire_version_id': 'version-1',
+                    'question_id': 'interest',
+                  },
+                ],
+              },
+            ],
+            'available_questions': [
+              {
+                'reference': {
+                  'questionnaire_version_id': 'version-1',
+                  'question_id': 'interest',
+                },
+                'version_number': 1,
+                'comparison_snapshot': _comparisonJson('兴趣程度'),
+                'sample_count': 12,
+                'trend_series': [
+                  {'period_start': '2026-07-01', 'sample_count': 12},
+                ],
+              },
+            ],
+            'events': [],
+          }),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }),
+    );
+
+    final result = await gateway.loadMetricCompatibility();
+    final snapshot =
+        (result
+                as QuestionnaireAdministrationSuccess<
+                  QuestionnaireMetricCompatibilitySnapshot
+                >)
+            .value;
+    expect(snapshot.metrics.single.id, 'metric-1');
+    expect(snapshot.availableQuestions.single.comparison.prompt, '兴趣程度');
+    expect(snapshot.availableQuestions.single.sampleCount, 12);
+    expect(
+      snapshot.availableQuestions.single.trendSeries.single.periodStart,
+      '2026-07-01',
+    );
+  });
 }
+
+Map<String, Object?> _comparisonJson(String prompt) => {
+  'definition': {
+    'prompt': prompt,
+    'question_type': 'single_choice',
+    'required': true,
+  },
+  'options': [
+    {'option_id': 'low', 'position': 1, 'label': '较低'},
+    {'option_id': 'high', 'position': 2, 'label': '较高'},
+  ],
+  'time_scope': {'kind': 'all_recorded_contacts'},
+  'answer_mode': {
+    'allow_unknown': true,
+    'allow_refused': true,
+    'allow_not_applicable': false,
+  },
+};
 
 final _emptyVersion = QuestionnaireVersion(
   id: 'draft-1',

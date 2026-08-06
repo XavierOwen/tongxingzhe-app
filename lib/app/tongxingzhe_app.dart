@@ -16,6 +16,8 @@ import '../identity/identity_session.dart';
 import '../l10n/app_strings.dart';
 import '../questionnaires/questionnaire_contract.dart';
 import '../questionnaires/questionnaire_administration.dart';
+import '../questionnaires/questionnaire_draft_upgrade.dart';
+import '../questionnaires/questionnaire_metric_compatibility.dart';
 import '../regions/contact_region_resolver.dart';
 import '../routing/app_route.dart';
 import '../routing/app_router.dart';
@@ -310,6 +312,7 @@ final class _ReadyAppState extends State<_ReadyApp> {
         timeZoneProvider: widget.timeZoneProvider,
         regionResolver: widget.regionResolver,
         questionnaireCatalog: widget.questionnaireCatalog,
+        questionnaireAdministration: widget.questionnaireAdministration,
         draftId: draftId,
         sourceAttemptId: sourceAttemptId,
       ),
@@ -393,6 +396,7 @@ final class _ContactEntryRoute extends StatefulWidget {
     required this.timeZoneProvider,
     required this.regionResolver,
     required this.questionnaireCatalog,
+    required this.questionnaireAdministration,
     required this.draftId,
     required this.sourceAttemptId,
   });
@@ -407,6 +411,7 @@ final class _ContactEntryRoute extends StatefulWidget {
   final DeviceTimeZoneProvider timeZoneProvider;
   final ContactRegionResolver regionResolver;
   final QuestionnaireCatalog questionnaireCatalog;
+  final QuestionnaireAdministrationGateway questionnaireAdministration;
   final String? draftId;
   final String? sourceAttemptId;
 
@@ -418,7 +423,7 @@ final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
   late Future<ContactDraft?> _draft;
   late Future<ContactAttempt?> _sourceAttempt;
   final Map<String, Future<QuestionnaireVersion?>> _questionnaires = {};
-  final Map<String, Future<List<QuestionnaireVersion?>>> _entryVersions = {};
+  final Map<String, Future<_EntryQuestionnaireBundle>> _entryVersions = {};
 
   @override
   void initState() {
@@ -511,19 +516,37 @@ final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
       () async {
         final sourceVersion = await questionnaire;
         if (versionId == currentVersionId) {
-          return [sourceVersion, sourceVersion];
+          return _EntryQuestionnaireBundle(
+            source: sourceVersion,
+            current: sourceVersion,
+            compatibilities: const [],
+          );
         }
         try {
-          return [sourceVersion, await currentQuestionnaire];
+          final targetVersion = await currentQuestionnaire;
+          return _EntryQuestionnaireBundle(
+            source: sourceVersion,
+            current: targetVersion,
+            compatibilities: sourceVersion == null || targetVersion == null
+                ? const []
+                : await _loadUpgradeCompatibilities(
+                    sourceVersion.id,
+                    targetVersion.id,
+                  ),
+          );
         } catch (_) {
           // The source definition is sufficient to keep editing and submit an
           // old draft offline. A missing current definition only removes the
           // optional upgrade action until a later route load can fetch it.
-          return [sourceVersion, null];
+          return _EntryQuestionnaireBundle(
+            source: sourceVersion,
+            current: null,
+            compatibilities: const [],
+          );
         }
       },
     );
-    return FutureBuilder<List<QuestionnaireVersion?>>(
+    return FutureBuilder<_EntryQuestionnaireBundle>(
       future: versions,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
@@ -531,8 +554,8 @@ final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        final version = snapshot.data?.first;
-        final currentVersion = snapshot.data?.last;
+        final version = snapshot.data?.source;
+        final currentVersion = snapshot.data?.current;
         if (snapshot.hasError || version == null) {
           final text = AppStrings(widget.controller.localeCode);
           return Scaffold(
@@ -578,9 +601,40 @@ final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
           sourceAttempt: sourceAttempt,
           questionnaireVersion: version,
           currentQuestionnaireVersion: currentVersion,
+          auditedUpgradeCompatibilities:
+              snapshot.data?.compatibilities ?? const [],
         );
       },
     );
+  }
+
+  Future<List<AuditedQuestionnaireAnswerCompatibility>>
+  _loadUpgradeCompatibilities(
+    String sourceVersionId,
+    String targetVersionId,
+  ) async {
+    final gateway = widget.questionnaireAdministration;
+    if (gateway is! QuestionnaireMetricCompatibilityGateway) return const [];
+    final result = await (gateway as QuestionnaireMetricCompatibilityGateway)
+        .loadMetricCompatibility();
+    if (result case QuestionnaireAdministrationSuccess<
+      QuestionnaireMetricCompatibilitySnapshot
+    >(
+      :final value,
+    )) {
+      return [
+        for (final mapping in value.activeMappings(
+          sourceVersionId: sourceVersionId,
+          targetVersionId: targetVersionId,
+        ))
+          AuditedQuestionnaireAnswerCompatibility(
+            decisionId: mapping.decisionId,
+            sourceQuestionId: mapping.source.questionId,
+            targetQuestionId: mapping.target.questionId,
+          ),
+      ];
+    }
+    return const [];
   }
 
   Future<ContactDraft?> _loadDraft() async {
@@ -614,6 +668,18 @@ final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
     final result = await widget.appSession.selectProject(attempt.projectId);
     return result is SessionContextSuccess ? attempt : null;
   }
+}
+
+final class _EntryQuestionnaireBundle {
+  const _EntryQuestionnaireBundle({
+    required this.source,
+    required this.current,
+    required this.compatibilities,
+  });
+
+  final QuestionnaireVersion? source;
+  final QuestionnaireVersion? current;
+  final List<AuditedQuestionnaireAnswerCompatibility> compatibilities;
 }
 
 final class _SessionFailureScreen extends StatelessWidget {

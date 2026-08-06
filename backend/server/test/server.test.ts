@@ -323,6 +323,63 @@ test("HTTP questionnaire administration route rechecks manager context", async (
   });
 });
 
+test("HTTP questionnaire metric route returns the trusted project catalog", async () => {
+  const server = createBackendServer({
+    identityVerifier: {
+      verify: async () => ({issuer: "issuer", subject: "subject"}),
+    },
+    contextStore: {
+      loadOrCreate: async () => ({
+        appUserId: "11111111-1111-4111-8111-111111111111",
+        current: {
+          workspace: {
+            id: "22222222-2222-4222-8222-222222222222",
+            kind: "personal",
+            name: "个人空间",
+          },
+          project: {
+            id: "33333333-3333-4333-8333-333333333333",
+            name: "校园推广",
+          },
+          questionnaireVersion: {
+            id: "44444444-4444-4444-8444-444444444444",
+            versionNumber: 2,
+          },
+        },
+        capabilities: ["manage_analysis_definitions"],
+      }),
+    },
+    questionnaireMetricCompatibilityStore: {
+      list: async () => ({
+        metrics: [],
+        availableQuestions: [],
+        events: [],
+      }),
+      record: async () => {
+        throw new Error("record must not run for a list request");
+      },
+      revoke: async () => {
+        throw new Error("revoke must not run for a list request");
+      },
+    },
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  test.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+
+  const response = await fetch(
+    `http://127.0.0.1:${address.port}/v1/questionnaire-metrics`,
+    {headers: {authorization: "Bearer token"}},
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    metrics: [],
+    available_questions: [],
+    events: [],
+  });
+});
+
 test("HTTP sync route parses JSON and returns a stable accepted result", async () => {
   const server = createBackendServer({
     identityVerifier: {

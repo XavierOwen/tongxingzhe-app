@@ -1,6 +1,6 @@
 import 'questionnaire_contract.dart';
 
-/// 由可信兼容目录返回的一条有效审计决定。兼容关系的创建与撤销属于后续切片。
+/// 由可信兼容目录返回的一条当前有效审计决定。
 final class AuditedQuestionnaireAnswerCompatibility {
   const AuditedQuestionnaireAnswerCompatibility({
     required this.decisionId,
