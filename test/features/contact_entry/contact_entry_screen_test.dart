@@ -14,6 +14,7 @@ import 'package:tongxingzhe_app/features/contact_journal/contact_journal.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/questionnaires/questionnaire_contract.dart';
+import 'package:tongxingzhe_app/questionnaires/questionnaire_draft_upgrade.dart';
 import 'package:tongxingzhe_app/services/location_service.dart';
 
 void main() {
@@ -77,6 +78,164 @@ void main() {
     await tester.tap(find.text('正式提交'));
     await tester.pumpAndSettle();
     expect(store.submitCalls, 2);
+  });
+
+  testWidgets('旧草稿显示创建时问卷版本并说明不会被新发布改写', (tester) async {
+    final currentContext = TrustedSessionContext(
+      appUserId: _context.appUserId,
+      workspace: _context.workspace,
+      project: _context.project,
+      questionnaireVersion: const QuestionnaireVersionContext(
+        id: 'questionnaire-2',
+        versionNumber: 2,
+      ),
+      capabilities: _context.capabilities,
+    );
+    final oldVersion = QuestionnaireVersion(
+      id: 'questionnaire-1',
+      projectId: 'project-1',
+      versionNumber: 1,
+      questions: const [],
+    );
+
+    await _pumpEntry(
+      tester,
+      store: _FakeEntryStore(),
+      initialDraft: _completeDraft,
+      questionnaireVersion: oldVersion,
+      context: currentContext,
+    );
+
+    expect(find.byKey(const ValueKey('old-questionnaire-version')), findsOne);
+    expect(find.text('使用旧问卷版本'), findsOne);
+    expect(find.text('问卷版本 1'), findsOne);
+    expect(find.text('问卷版本 2'), findsNothing);
+  });
+
+  testWidgets('旧草稿升级预览分类答案并在确认后新建草稿', (tester) async {
+    final fixture =
+        jsonDecode(
+              File(
+                'fixtures/questionnaire/questionnaire-draft-upgrade-contract-v1.json',
+              ).readAsStringSync(),
+            )
+            as Map<String, Object?>;
+    final sourceVersion = QuestionnaireContract.parseVersion(fixture['source']);
+    final targetVersion = QuestionnaireContract.parseVersion(fixture['target']);
+    final sourceAnswers = [
+      for (final value in fixture['source_answers']! as List<Object?>)
+        QuestionnaireContract.parseAnswer(value),
+    ];
+    final compatibilities = [
+      for (final value in fixture['audited_compatibilities']! as List<Object?>)
+        if (value case final Map<String, Object?> item)
+          AuditedQuestionnaireAnswerCompatibility(
+            decisionId: item['decision_id']! as String,
+            sourceQuestionId: item['source_question_id']! as String,
+            targetQuestionId: item['target_question_id']! as String,
+          ),
+    ];
+    final context = TrustedSessionContext(
+      appUserId: 'user-1',
+      workspace: _context.workspace,
+      project: ProjectContext(id: sourceVersion.projectId, name: '推广项目'),
+      questionnaireVersion: QuestionnaireVersionContext(
+        id: targetVersion.id,
+        versionNumber: targetVersion.versionNumber,
+      ),
+      capabilities: const {'record_contact'},
+    );
+    final sourceDraft = ContactDraft(
+      draftId: 'upgrade-source',
+      appUserId: context.appUserId,
+      workspaceId: context.workspace.id,
+      projectId: context.project.id,
+      questionnaireVersionId: sourceVersion.id,
+      createdAtUtc: DateTime.utc(2030, 1, 2, 3),
+      updatedAtUtc: DateTime.utc(2030, 1, 2, 4),
+      occurredAtUtc: DateTime.utc(2030, 1, 2, 3),
+      occurredTimeZone: 'America/Chicago',
+      channel: ContactChannel.videoCall,
+      channelDetail: null,
+      location: const NotApplicableContactLocation(),
+      reachCount: 2,
+      interestLevel: 3,
+      answers: sourceAnswers,
+      syncMode: ContactDraftSyncMode.accountPrivate,
+      localRevision: 1,
+      serverRevision: 1,
+      conflictOfDraftId: null,
+    );
+    var upgradeCalls = 0;
+    List<QuestionnaireAnswer>? receivedCopiedAnswers;
+
+    await _pumpEntry(
+      tester,
+      store: _FakeEntryStore(),
+      initialDraft: sourceDraft,
+      questionnaireVersion: sourceVersion,
+      currentQuestionnaireVersion: targetVersion,
+      auditedUpgradeCompatibilities: compatibilities,
+      context: context,
+      upgradeDraft:
+          ({
+            required sourceDraftId,
+            required appUserId,
+            required deviceId,
+            required targetVersion,
+            required copiedAnswers,
+          }) async {
+            upgradeCalls++;
+            receivedCopiedAnswers = copiedAnswers;
+            return ContactDraft(
+              draftId: 'upgrade-target',
+              appUserId: appUserId,
+              workspaceId: sourceDraft.workspaceId,
+              projectId: sourceDraft.projectId,
+              questionnaireVersionId: targetVersion.id,
+              createdAtUtc: DateTime.utc(2030, 1, 2, 5),
+              updatedAtUtc: DateTime.utc(2030, 1, 2, 5),
+              occurredAtUtc: sourceDraft.occurredAtUtc,
+              occurredTimeZone: sourceDraft.occurredTimeZone,
+              channel: sourceDraft.channel,
+              channelDetail: sourceDraft.channelDetail,
+              location: sourceDraft.location,
+              reachCount: sourceDraft.reachCount,
+              interestLevel: sourceDraft.interestLevel,
+              answers: copiedAnswers,
+              syncMode: ContactDraftSyncMode.accountPrivate,
+              localRevision: 1,
+              serverRevision: 0,
+              conflictOfDraftId: null,
+              upgradedFromDraftId: sourceDraftId,
+            );
+          },
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('preview-questionnaire-upgrade')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('升级到当前问卷'), findsOneWidget);
+    expect(find.text('经审计可保留的答案'), findsOneWidget);
+    expect(find.text('需要重新确认的新问卷问题'), findsOneWidget);
+    expect(find.text('不能复制的旧答案'), findsOneWidget);
+    expect(upgradeCalls, 0);
+
+    await tester.tap(
+      find.byKey(const ValueKey('confirm-questionnaire-upgrade')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(upgradeCalls, 1);
+    expect(receivedCopiedAnswers!.map((answer) => answer.questionId), [
+      'consent_v2',
+      'age',
+    ]);
+    expect(find.text('新草稿已创建'), findsOneWidget);
+    expect(sourceDraft.questionnaireVersionId, sourceVersion.id);
+    expect(sourceDraft.answers, sourceAnswers);
   });
 
   testWidgets('隐藏已答问题前先确认，确认后可撤销', (tester) async {
@@ -186,6 +345,10 @@ Future<void> _pumpEntry(
   ContactLocationCapture locationCapture = const _QueuedLocationCapture([]),
   ContactDraft? initialDraft,
   QuestionnaireVersion? questionnaireVersion,
+  QuestionnaireVersion? currentQuestionnaireVersion,
+  List<AuditedQuestionnaireAnswerCompatibility> auditedUpgradeCompatibilities =
+      const [],
+  ContactDraftUpgradeAction? upgradeDraft,
   TrustedSessionContext context = _context,
 }) async {
   tester.view.physicalSize = const Size(800, 1200);
@@ -217,6 +380,9 @@ Future<void> _pumpEntry(
         initialDraft: initialDraft,
         entryStore: store,
         questionnaireVersion: questionnaireVersion,
+        currentQuestionnaireVersion: currentQuestionnaireVersion,
+        auditedUpgradeCompatibilities: auditedUpgradeCompatibilities,
+        upgradeDraft: upgradeDraft,
       ),
     ),
   );

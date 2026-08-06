@@ -198,7 +198,28 @@ test("private draft upsert keeps trusted owner outside the client payload", asyn
   assert.equal(storedCommand?.type, "draft.upsert.v1");
   assert.equal(storedCommand?.baseRevision, 0);
   assert.equal(storedCommand?.payload.projectId, context.current.project.id);
+  assert.equal(
+    storedCommand?.payload.upgradedFromDraftId,
+    "source-draft-1",
+  );
   assert.equal("appUserId" in (storedCommand?.payload ?? {}), false);
+});
+
+test("draft upgrade source cannot point to the new draft itself", async () => {
+  const body = validDraftCommandBody();
+  const payload = body.typed_payload as Record<string, unknown>;
+  payload.upgraded_from_draft_id = payload.draft_id;
+
+  const response = await handleSyncCommand(
+    "Bearer synthetic-token",
+    body,
+    fakeDependencies(),
+  );
+
+  assert.deepEqual(response.body, {
+    result: "rejected",
+    error: { code: "invalid_draft_upgrade_source" },
+  });
 });
 
 test("contact attempt has no reach, interest, or questionnaire facts", async () => {
@@ -516,6 +537,7 @@ function validDraftCommandBody(): Record<string, unknown> {
       workspace_id: context.current.workspace.id,
       project_id: context.current.project.id,
       questionnaire_version_id: context.current.questionnaireVersion.id,
+      upgraded_from_draft_id: "source-draft-1",
       created_at_utc: "2030-01-08T18:00:00.000Z",
       updated_at_utc: "2030-01-08T18:30:00.000Z",
       occurred_at_utc: null,

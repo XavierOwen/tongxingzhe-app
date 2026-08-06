@@ -148,7 +148,7 @@ class LocalDatabase extends _$LocalDatabase {
       );
 
   @override
-  int get schemaVersion => 15;
+  int get schemaVersion => 16;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -288,6 +288,7 @@ class LocalDatabase extends _$LocalDatabase {
               dbContactDrafts.serverRevision,
               dbContactDrafts.conflictOfDraftId,
               dbContactDrafts.sourceAttemptId,
+              dbContactDrafts.upgradedFromDraftId,
             ]);
         await migrator.alterTable(
           TableMigration(dbContactDrafts, newColumns: draftColumns),
@@ -316,7 +317,13 @@ class LocalDatabase extends _$LocalDatabase {
         await migrator.createIndex(contactAttemptsPersonalPeriod);
         final draftColumns = await _missingColumns(
           dbContactDrafts.actualTableName,
-          [dbContactDrafts.sourceAttemptId],
+          [
+            dbContactDrafts.sourceAttemptId,
+            // A direct upgrade from v9 rebuilds against the current table
+            // definition here, so later draft columns must also be declared
+            // as new instead of selected from the v9 source table.
+            dbContactDrafts.upgradedFromDraftId,
+          ],
         );
         if (draftColumns.isNotEmpty) {
           await migrator.alterTable(
@@ -404,6 +411,19 @@ class LocalDatabase extends _$LocalDatabase {
         // v15 只缓存管理者主动保存的问卷工作副本。它不是发布凭据，不能
         // 改变当前版本；Backend 成功发布后会删除对应本机副本。
         await migrator.createTable(dbQuestionnaireDraftWorkingCopies);
+      }
+      if (from < 16) {
+        // v16 只记录明确升级生成的新草稿来源。旧数据没有可证明的升级关系，
+        // 因此新增 nullable 列，不根据问卷版本或草稿 ID 猜测回填。
+        final draftColumns = await _missingColumns(
+          dbContactDrafts.actualTableName,
+          [dbContactDrafts.upgradedFromDraftId],
+        );
+        if (draftColumns.isNotEmpty) {
+          await migrator.alterTable(
+            TableMigration(dbContactDrafts, newColumns: draftColumns),
+          );
+        }
       }
     },
   );

@@ -418,6 +418,7 @@ final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
   late Future<ContactDraft?> _draft;
   late Future<ContactAttempt?> _sourceAttempt;
   final Map<String, Future<QuestionnaireVersion?>> _questionnaires = {};
+  final Map<String, Future<List<QuestionnaireVersion?>>> _entryVersions = {};
 
   @override
   void initState() {
@@ -434,6 +435,7 @@ final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
         oldWidget.context.appUserId != widget.context.appUserId ||
         oldWidget.context.project.id != widget.context.project.id) {
       _questionnaires.clear();
+      _entryVersions.clear();
       _draft = _loadDraft();
       _sourceAttempt = _loadSourceAttempt();
     }
@@ -496,15 +498,41 @@ final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
         versionId: versionId,
       ),
     );
-    return FutureBuilder<QuestionnaireVersion?>(
-      future: questionnaire,
+    final currentVersionId = widget.context.questionnaireVersion.id;
+    final currentQuestionnaire = _questionnaires.putIfAbsent(
+      currentVersionId,
+      () => widget.questionnaireCatalog.resolvePublishedVersion(
+        projectId: widget.context.project.id,
+        versionId: currentVersionId,
+      ),
+    );
+    final versions = _entryVersions.putIfAbsent(
+      '$versionId→$currentVersionId',
+      () async {
+        final sourceVersion = await questionnaire;
+        if (versionId == currentVersionId) {
+          return [sourceVersion, sourceVersion];
+        }
+        try {
+          return [sourceVersion, await currentQuestionnaire];
+        } catch (_) {
+          // The source definition is sufficient to keep editing and submit an
+          // old draft offline. A missing current definition only removes the
+          // optional upgrade action until a later route load can fetch it.
+          return [sourceVersion, null];
+        }
+      },
+    );
+    return FutureBuilder<List<QuestionnaireVersion?>>(
+      future: versions,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        final version = snapshot.data;
+        final version = snapshot.data?.first;
+        final currentVersion = snapshot.data?.last;
         if (snapshot.hasError || version == null) {
           final text = AppStrings(widget.controller.localeCode);
           return Scaffold(
@@ -524,6 +552,8 @@ final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
                       onPressed: () {
                         setState(() {
                           _questionnaires.remove(versionId);
+                          _questionnaires.remove(currentVersionId);
+                          _entryVersions.remove('$versionId→$currentVersionId');
                         });
                       },
                       icon: const Icon(Icons.refresh_outlined),
@@ -547,6 +577,7 @@ final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
           regionResolver: widget.regionResolver,
           sourceAttempt: sourceAttempt,
           questionnaireVersion: version,
+          currentQuestionnaireVersion: currentVersion,
         );
       },
     );

@@ -150,6 +150,8 @@ PostgreSQL 内部用递增 `change_sequence` 排序，对客户端只暴露随�
 
 PostgreSQL 的草稿主键是 `(app_user_id, draft_id)`。即使两个用户提交相同 draft ID，也只会写各自的行。同一用户的既有 draft ID 不能改换 workspace、project 或问卷版本；upsert 和 delete 都核对创建时固定的 scope。runtime role 不能直接读取草稿表，只能通过按可信用户和项目过滤的函数访问。
 
+问卷升级不对旧行执行 upsert，而是用“来源草稿 ID + 目标问卷版本”生成稳定的新 draft ID。SQLite 和 PostgreSQL 都保存 `upgradedFromDraftId`。PostgreSQL 外键要求来源属于同一用户，触发器再核对 workspace、project 和不同问卷版本，并阻止后续改写来源关系。相同升级重试返回同一份新草稿；change feed 保留这个关系，因此另一台设备可同时恢复原草稿和新草稿。明确放弃原草稿只写来源的 tombstone，不会删除新草稿。
+
 已同步草稿切换为 `device_only` 时，本机发送带当前 server revision 的删除 command。服务器保存 tombstone，其他设备删除账号私有副本，发起切换的设备保留本机内容。若一个上传已经发出但 ACK 尚未确认，App 暂停模式切换；否则 ACK 丢失时，服务器可能已有副本，而本机却错误显示“仅本设备”。
 
 ## 区域树为什么同时有应用校验和数据库约束

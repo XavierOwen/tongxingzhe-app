@@ -35,6 +35,7 @@ class DbContactDrafts extends Table {
   IntColumn get serverRevision => integer().withDefault(const Constant(0))();
   TextColumn get sourceAttemptId => text().nullable()();
   TextColumn get conflictOfDraftId => text().nullable()();
+  TextColumn get upgradedFromDraftId => text().nullable()();
   DateTimeColumn get abandonedAtUtc => dateTime().nullable()();
   DateTimeColumn get undoUntilUtc => dateTime().nullable()();
 
@@ -83,6 +84,9 @@ class DbContactDrafts extends Table {
         'length(trim(source_attempt_id)) > 0)',
     'CHECK (conflict_of_draft_id IS NULL OR '
         'length(trim(conflict_of_draft_id)) > 0)',
+    'CHECK (upgraded_from_draft_id IS NULL OR '
+        '(length(trim(upgraded_from_draft_id)) > 0 AND '
+        'upgraded_from_draft_id <> draft_id))',
     'CHECK ((abandoned_at_utc IS NULL AND undo_until_utc IS NULL) OR '
         '(abandoned_at_utc IS NOT NULL AND undo_until_utc IS NOT NULL AND '
         'undo_until_utc >= abandoned_at_utc))',

@@ -204,6 +204,31 @@ void main() {
     }
   });
 
+  test('旧问卷草稿自动保存时继续使用创建时版本', () async {
+    final store = _FakeEntryStore();
+    final currentContext = TrustedSessionContext(
+      appUserId: _context.appUserId,
+      workspace: _context.workspace,
+      project: _context.project,
+      questionnaireVersion: const QuestionnaireVersionContext(
+        id: 'questionnaire-2',
+        versionNumber: 2,
+      ),
+      capabilities: _context.capabilities,
+    );
+    final viewModel = _viewModel(
+      store: store,
+      questionnaireVersion: _questionnaire,
+      context: currentContext,
+    );
+    await viewModel.initialize(draft: _draftWithAnswers(const []));
+
+    viewModel.setReachCountText('3');
+    await viewModel.flushDraft();
+
+    expect(store.savedDraft!.questionnaireVersionId, 'questionnaire-1');
+  });
+
   test('前置答案隐藏已答问题时先确认清除，并可撤销整次变更', () async {
     final fixture =
         jsonDecode(
@@ -271,12 +296,13 @@ ContactEntryViewModel _viewModel({
   ContactLocationCapture locationCapture = const _FakeLocationCapture([]),
   ContactRegionResolver regionResolver = const DeferredContactRegionResolver(),
   QuestionnaireVersion? questionnaireVersion,
+  TrustedSessionContext context = _context,
   Duration questionnaireUndoDuration = const Duration(seconds: 10),
 }) {
   return ContactEntryViewModel(
     clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
     timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
-    context: _context,
+    context: context,
     deviceId: 'device-1',
     store: store,
     locationCapture: locationCapture,

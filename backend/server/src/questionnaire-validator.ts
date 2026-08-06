@@ -344,6 +344,16 @@ export function previewQuestionnaireAnswerChange(
   };
 }
 
+export function parseQuestionnaireAnswer(value: unknown): ParsedAnswer {
+  return parseAnswer(value);
+}
+
+export function serializeQuestionnaireAnswer(
+  answer: ParsedAnswer,
+): Readonly<Record<string, unknown>> {
+  return serializeAnswer(answer);
+}
+
 export class QuestionnaireContractError extends Error {
   constructor(readonly code: string) {
     super(code);

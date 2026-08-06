@@ -5,6 +5,7 @@ import 'package:drift/drift.dart';
 import '../../data/local_database.dart';
 import '../../foundation/runtime_values.dart';
 import '../../questionnaires/questionnaire_answer_codec.dart';
+import '../../questionnaires/questionnaire_contract.dart';
 import '../../regions/region_catalog.dart';
 import '../../regions/region_models.dart';
 import 'contact_models.dart';

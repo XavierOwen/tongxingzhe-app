@@ -8,6 +8,7 @@ import '../../device/device_time_zone.dart';
 import '../../foundation/runtime_values.dart';
 import '../../l10n/app_strings.dart';
 import '../../questionnaires/questionnaire_contract.dart';
+import '../../questionnaires/questionnaire_draft_upgrade.dart';
 import '../../regions/contact_region_resolver.dart';
 import '../../services/location_service.dart';
 import '../contact_journal/contact_journal.dart';
@@ -15,6 +16,15 @@ import '../contact_journal/contact_models.dart';
 import 'contact_channel_label.dart';
 import 'contact_entry_view_model.dart';
 import 'questionnaire_form.dart';
+
+typedef ContactDraftUpgradeAction =
+    Future<ContactDraft> Function({
+      required String sourceDraftId,
+      required String appUserId,
+      required String deviceId,
+      required QuestionnaireVersion targetVersion,
+      required List<QuestionnaireAnswer> copiedAnswers,
+    });
 
 /// 正式接触表单的首个渐进式切片。
 ///
@@ -35,6 +45,9 @@ final class ContactEntryScreen extends StatefulWidget {
     this.regionResolver = const DeferredContactRegionResolver(),
     this.sourceAttempt,
     this.questionnaireVersion,
+    this.currentQuestionnaireVersion,
+    this.auditedUpgradeCompatibilities = const [],
+    this.upgradeDraft,
   });
 
   final AppController controller;
@@ -49,6 +62,10 @@ final class ContactEntryScreen extends StatefulWidget {
   final ContactRegionResolver regionResolver;
   final ContactAttempt? sourceAttempt;
   final QuestionnaireVersion? questionnaireVersion;
+  final QuestionnaireVersion? currentQuestionnaireVersion;
+  final List<AuditedQuestionnaireAnswerCompatibility>
+  auditedUpgradeCompatibilities;
+  final ContactDraftUpgradeAction? upgradeDraft;
 
   @override
   State<ContactEntryScreen> createState() => _ContactEntryScreenState();
@@ -62,6 +79,7 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
   var _allowPop = false;
   var _showingQuestionnaireClearDialog = false;
   var _questionnaireFormGeneration = 0;
+  var _isUpgradingQuestionnaire = false;
 
   @override
   void initState() {
@@ -134,7 +152,36 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
           // 可以完整滚到提交栏上方，在小屏幕和键盘弹出时仍可操作。
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
           children: [
-            _ContextCard(context: widget.context, text: text),
+            _ContextCard(
+              context: widget.context,
+              text: text,
+              questionnaireVersion: entryState.questionnaireVersion,
+            ),
+            if (widget.initialDraft != null &&
+                entryState.questionnaireVersion?.id !=
+                    widget.context.questionnaireVersion.id) ...[
+              const SizedBox(height: 12),
+              Card(
+                color: Theme.of(context).colorScheme.tertiaryContainer,
+                child: ListTile(
+                  key: const ValueKey('old-questionnaire-version'),
+                  leading: const Icon(Icons.history_outlined),
+                  title: Text(text.t('draftUsesOldQuestionnaire')),
+                  subtitle: Text(text.t('draftUsesOldQuestionnaireHelp')),
+                  trailing:
+                      widget.currentQuestionnaireVersion == null ||
+                          entryState.isConflictCopy
+                      ? null
+                      : FilledButton.tonal(
+                          key: const ValueKey('preview-questionnaire-upgrade'),
+                          onPressed: _isUpgradingQuestionnaire
+                              ? null
+                              : _previewQuestionnaireUpgrade,
+                          child: Text(text.t('questionnaireUpgradePreview')),
+                        ),
+                ),
+              ),
+            ],
             if (entryState.sourceAttemptId != null) ...[
               const SizedBox(height: 12),
               Card(
@@ -496,6 +543,160 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
     );
   }
 
+  Future<void> _previewQuestionnaireUpgrade() async {
+    if (_isUpgradingQuestionnaire) {
+      return;
+    }
+    setState(() => _isUpgradingQuestionnaire = true);
+    await _viewModel.flushDraft();
+    if (!mounted) {
+      return;
+    }
+    final state = _viewModel.state;
+    final sourceDraft = state.draft;
+    final sourceVersion = state.questionnaireVersion;
+    final targetVersion = widget.currentQuestionnaireVersion;
+    final text = AppStrings(widget.controller.localeCode);
+    if (sourceDraft == null ||
+        sourceVersion == null ||
+        targetVersion == null ||
+        state.saveState == ContactDraftSaveState.failed) {
+      setState(() => _isUpgradingQuestionnaire = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(text.t('questionnaireUpgradeSaveFirstFailed'))),
+      );
+      return;
+    }
+
+    final QuestionnaireDraftUpgradePlan plan;
+    try {
+      plan = QuestionnaireDraftUpgradePlanner.plan(
+        source: sourceVersion,
+        target: targetVersion,
+        sourceAnswers: sourceDraft.answers,
+        compatibilities: widget.auditedUpgradeCompatibilities,
+      );
+    } on FormatException {
+      setState(() => _isUpgradingQuestionnaire = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(text.t('questionnaireUpgradeUnavailable'))),
+      );
+      return;
+    }
+
+    final sourceQuestions = {
+      for (final question in sourceVersion.questions) question.id: question,
+    };
+    final targetQuestions = {
+      for (final question in targetVersion.questions) question.id: question,
+    };
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text(text.t('questionnaireUpgradeTitle')),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(text.t('questionnaireUpgradeKeepsOriginal')),
+              const SizedBox(height: 16),
+              _UpgradePlanSection(
+                title: text.t('questionnaireUpgradeRetained'),
+                emptyLabel: text.t('questionnaireUpgradeNoneRetained'),
+                items: [
+                  for (final retained in plan.retained)
+                    '${sourceQuestions[retained.sourceQuestionId]?.prompt ?? retained.sourceQuestionId} → '
+                        '${targetQuestions[retained.targetQuestionId]?.prompt ?? retained.targetQuestionId}',
+                ],
+              ),
+              const SizedBox(height: 12),
+              _UpgradePlanSection(
+                title: text.t('questionnaireUpgradeRequiresConfirmation'),
+                items: [
+                  for (final id in plan.requiresConfirmationQuestionIds)
+                    targetQuestions[id]?.prompt ?? id,
+                ],
+              ),
+              const SizedBox(height: 12),
+              _UpgradePlanSection(
+                title: text.t('questionnaireUpgradeCannotCopy'),
+                items: [
+                  for (final id in plan.cannotCopySourceQuestionIds)
+                    sourceQuestions[id]?.prompt ?? id,
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(text.t('cancel')),
+          ),
+          FilledButton(
+            key: const ValueKey('confirm-questionnaire-upgrade'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(text.t('questionnaireUpgradeCreateDraft')),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    if (confirmed != true) {
+      setState(() => _isUpgradingQuestionnaire = false);
+      return;
+    }
+
+    try {
+      final action = widget.upgradeDraft ?? widget.contactJournal.upgradeDraft;
+      await action(
+        sourceDraftId: sourceDraft.draftId,
+        appUserId: sourceDraft.appUserId,
+        deviceId: widget.deviceId,
+        targetVersion: targetVersion,
+        copiedAnswers: plan.copiedAnswers,
+      );
+      if (!mounted) {
+        return;
+      }
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: Text(text.t('questionnaireUpgradeCreated')),
+          content: Text(text.t('questionnaireUpgradeCreatedHelp')),
+          actions: [
+            FilledButton(
+              key: const ValueKey('finish-questionnaire-upgrade'),
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(text.t('questionnaireUpgradeBackToDrafts')),
+            ),
+          ],
+        ),
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isUpgradingQuestionnaire = false;
+        _allowPop = true;
+      });
+      Navigator.of(context).pop(false);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _isUpgradingQuestionnaire = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(text.t('questionnaireUpgradeFailed'))),
+      );
+    }
+  }
+
   String _locationLabel(AppStrings text, ContactLocation? location) {
     return switch (location) {
       NotApplicableContactLocation() => text.t('locationNotApplicable'),
@@ -541,6 +742,33 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
   }
 }
 
+final class _UpgradePlanSection extends StatelessWidget {
+  const _UpgradePlanSection({
+    required this.title,
+    required this.items,
+    this.emptyLabel,
+  });
+
+  final String title;
+  final List<String> items;
+  final String? emptyLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 4),
+        if (items.isEmpty)
+          Text(emptyLabel ?? '—')
+        else
+          for (final item in items) Text('• $item'),
+      ],
+    );
+  }
+}
+
 final class _ConflictDraftCard extends StatelessWidget {
   const _ConflictDraftCard({required this.text});
 
@@ -559,10 +787,15 @@ final class _ConflictDraftCard extends StatelessWidget {
 }
 
 final class _ContextCard extends StatelessWidget {
-  const _ContextCard({required this.context, required this.text});
+  const _ContextCard({
+    required this.context,
+    required this.text,
+    required this.questionnaireVersion,
+  });
 
   final TrustedSessionContext context;
   final AppStrings text;
+  final QuestionnaireVersion? questionnaireVersion;
 
   @override
   Widget build(BuildContext context) {
@@ -579,7 +812,7 @@ final class _ContextCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               '${text.t('questionnaireVersion')} '
-              '${this.context.questionnaireVersion.versionNumber}',
+              '${questionnaireVersion?.versionNumber ?? this.context.questionnaireVersion.versionNumber}',
             ),
           ],
         ),

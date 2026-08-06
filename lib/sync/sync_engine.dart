@@ -1106,8 +1106,13 @@ final class SyncEngine {
         answers.length) {
       throw const FormatException('remote answers contain duplicate IDs');
     }
+    final draftId = _requiredString(payload['draftId']);
+    final upgradedFromDraftId = _optionalString(payload['upgradedFromDraftId']);
+    if (upgradedFromDraftId == draftId) {
+      throw const FormatException('remote draft upgrade source is invalid');
+    }
     return _RemoteDraftUpsert(
-      draftId: _requiredString(payload['draftId']),
+      draftId: draftId,
       questionnaireVersionId: _requiredString(
         payload['questionnaireVersionId'],
       ),
@@ -1124,6 +1129,7 @@ final class SyncEngine {
       serverRevision: serverRevision,
       sourceDeviceId: _requiredString(payload['sourceDeviceId']),
       sourceAttemptId: _optionalString(payload['sourceAttemptId']),
+      upgradedFromDraftId: upgradedFromDraftId,
     );
   }
 
@@ -1571,6 +1577,7 @@ final class SyncEngine {
             localRevision: Value(draft.serverRevision),
             serverRevision: Value(draft.serverRevision),
             sourceAttemptId: Value(draft.sourceAttemptId),
+            upgradedFromDraftId: Value(draft.upgradedFromDraftId),
           ),
         );
     for (final answer in draft.answers) {
@@ -1609,6 +1616,7 @@ final class SyncEngine {
         existing.reachCount != draft.reachCount ||
         existing.interestLevel != draft.interestLevel ||
         existing.sourceAttemptId != draft.sourceAttemptId ||
+        existing.upgradedFromDraftId != draft.upgradedFromDraftId ||
         existing.abandonedAtUtc != null) {
       return false;
     }
@@ -1677,6 +1685,7 @@ final class SyncEngine {
             serverRevision: const Value(0),
             conflictOfDraftId: Value(existing.draftId),
             sourceAttemptId: Value(existing.sourceAttemptId),
+            upgradedFromDraftId: Value(existing.upgradedFromDraftId),
           ),
         );
     for (final answer in answers) {
@@ -2276,6 +2285,7 @@ final class _RemoteDraftUpsert extends _ParsedRemoteChange {
     required this.serverRevision,
     required this.sourceDeviceId,
     required this.sourceAttemptId,
+    required this.upgradedFromDraftId,
   });
 
   final String draftId;
@@ -2293,6 +2303,7 @@ final class _RemoteDraftUpsert extends _ParsedRemoteChange {
   final int serverRevision;
   final String sourceDeviceId;
   final String? sourceAttemptId;
+  final String? upgradedFromDraftId;
 }
 
 final class _RemoteDraftDelete extends _ParsedRemoteChange {

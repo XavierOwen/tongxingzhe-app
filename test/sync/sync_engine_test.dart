@@ -1298,6 +1298,65 @@ void main() {
     expect(drafts.single.isConflictCopy, isFalse);
   });
 
+  test('其他设备恢复问卷升级新草稿时保留原草稿关系', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    final transport = _QueueSyncTransport(
+      const [],
+      pullReplies: [
+        SyncPullSucceeded(
+          SyncPullBatch(
+            changes: [
+              SyncRemoteChange(
+                changeType: 'draft.upserted',
+                revisionNumber: 1,
+                payload: _remoteDraftPayload(
+                  draftId: 'source-draft',
+                  channel: 'voice_call',
+                ),
+              ),
+              SyncRemoteChange(
+                changeType: 'draft.upserted',
+                revisionNumber: 1,
+                payload: _remoteDraftPayload(
+                  draftId: 'upgraded-draft',
+                  channel: 'voice_call',
+                  questionnaireVersionId: 'questionnaire-v2',
+                  upgradedFromDraftId: 'source-draft',
+                ),
+              ),
+            ],
+            nextCursor: 'cursor-draft-upgrade',
+          ),
+        ),
+      ],
+    );
+
+    expect(
+      await fixture
+          .engine(workerId: 'worker-1', transport: transport)
+          .pullOnce(),
+      SyncPullApplyResult.applied,
+    );
+
+    final drafts = await ContactJournal(
+      database: fixture.database,
+      clock: fixture.clock,
+      idGenerator: _SequenceIdGenerator(const []),
+    ).listDrafts(appUserId: _Fixture.scope.appUserId);
+    expect(drafts, hasLength(2));
+    expect(
+      drafts
+          .singleWhere((draft) => draft.draftId == 'upgraded-draft')
+          .upgradedFromDraftId,
+      'source-draft',
+    );
+    expect(
+      drafts.singleWhere((draft) => draft.draftId == 'source-draft'),
+      isNotNull,
+    );
+  });
+
   test('离线分叉的远端草稿保留本机冲突副本而不做最后写入胜出', () async {
     final fixture = _Fixture();
     addTearDown(fixture.close);
@@ -1518,6 +1577,8 @@ Map<String, Object?> _remoteRevisionPayload({
 Map<String, Object?> _remoteDraftPayload({
   required String draftId,
   required String channel,
+  String questionnaireVersionId = 'questionnaire-v1',
+  String? upgradedFromDraftId,
   String createdAtUtc = '2030-01-08T18:00:00.000Z',
   String updatedAtUtc = '2030-01-08T18:30:00.000Z',
 }) {
@@ -1525,7 +1586,8 @@ Map<String, Object?> _remoteDraftPayload({
     'draftId': draftId,
     'workspaceId': _Fixture.scope.workspaceId,
     'projectId': _Fixture.scope.projectId,
-    'questionnaireVersionId': 'questionnaire-v1',
+    'questionnaireVersionId': questionnaireVersionId,
+    'upgradedFromDraftId': upgradedFromDraftId,
     'createdAtUtc': createdAtUtc,
     'updatedAtUtc': updatedAtUtc,
     'occurredAtUtc': null,

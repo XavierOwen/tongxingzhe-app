@@ -272,6 +272,13 @@ function parseSyncCommand(value: unknown): SyncCommand {
 
 function parseDraftUpsertPayload(value: unknown): DraftUpsertPayload {
   const payload = object(value, "invalid_draft_payload");
+  const draftId = string(payload.draft_id, "invalid_draft_id");
+  const upgradedFromDraftId = nullableString(
+    payload.upgraded_from_draft_id,
+  );
+  if (upgradedFromDraftId === draftId) {
+    throw new CommandValidationError("invalid_draft_upgrade_source");
+  }
   const createdAtUtc = utcDateString(
     payload.created_at_utc,
     "invalid_created_at",
@@ -317,7 +324,7 @@ function parseDraftUpsertPayload(value: unknown): DraftUpsertPayload {
     throw new CommandValidationError("duplicate_question_answer");
   }
   return {
-    draftId: string(payload.draft_id, "invalid_draft_id"),
+    draftId,
     workspaceId: uuid(payload.workspace_id, "invalid_workspace_id"),
     projectId: uuid(payload.project_id, "invalid_project_id"),
     questionnaireVersionId: uuid(
@@ -325,6 +332,7 @@ function parseDraftUpsertPayload(value: unknown): DraftUpsertPayload {
       "invalid_questionnaire_version_id",
     ),
     sourceAttemptId: nullableString(payload.source_attempt_id),
+    upgradedFromDraftId,
     createdAtUtc,
     updatedAtUtc,
     occurredAtUtc,

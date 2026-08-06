@@ -7099,6 +7099,17 @@ class $DbContactDraftsTable extends DbContactDrafts
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _upgradedFromDraftIdMeta =
+      const VerificationMeta('upgradedFromDraftId');
+  @override
+  late final GeneratedColumn<String> upgradedFromDraftId =
+      GeneratedColumn<String>(
+        'upgraded_from_draft_id',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _abandonedAtUtcMeta = const VerificationMeta(
     'abandonedAtUtc',
   );
@@ -7149,6 +7160,7 @@ class $DbContactDraftsTable extends DbContactDrafts
     serverRevision,
     sourceAttemptId,
     conflictOfDraftId,
+    upgradedFromDraftId,
     abandonedAtUtc,
     undoUntilUtc,
   ];
@@ -7376,6 +7388,15 @@ class $DbContactDraftsTable extends DbContactDrafts
         ),
       );
     }
+    if (data.containsKey('upgraded_from_draft_id')) {
+      context.handle(
+        _upgradedFromDraftIdMeta,
+        upgradedFromDraftId.isAcceptableOrUnknown(
+          data['upgraded_from_draft_id']!,
+          _upgradedFromDraftIdMeta,
+        ),
+      );
+    }
     if (data.containsKey('abandoned_at_utc')) {
       context.handle(
         _abandonedAtUtcMeta,
@@ -7503,6 +7524,10 @@ class $DbContactDraftsTable extends DbContactDrafts
         DriftSqlType.string,
         data['${effectivePrefix}conflict_of_draft_id'],
       ),
+      upgradedFromDraftId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}upgraded_from_draft_id'],
+      ),
       abandonedAtUtc: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}abandoned_at_utc'],
@@ -7546,6 +7571,7 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
   final int serverRevision;
   final String? sourceAttemptId;
   final String? conflictOfDraftId;
+  final String? upgradedFromDraftId;
   final DateTime? abandonedAtUtc;
   final DateTime? undoUntilUtc;
   const DbContactDraft({
@@ -7574,6 +7600,7 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
     required this.serverRevision,
     this.sourceAttemptId,
     this.conflictOfDraftId,
+    this.upgradedFromDraftId,
     this.abandonedAtUtc,
     this.undoUntilUtc,
   });
@@ -7636,6 +7663,9 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
     }
     if (!nullToAbsent || conflictOfDraftId != null) {
       map['conflict_of_draft_id'] = Variable<String>(conflictOfDraftId);
+    }
+    if (!nullToAbsent || upgradedFromDraftId != null) {
+      map['upgraded_from_draft_id'] = Variable<String>(upgradedFromDraftId);
     }
     if (!nullToAbsent || abandonedAtUtc != null) {
       map['abandoned_at_utc'] = Variable<DateTime>(abandonedAtUtc);
@@ -7703,6 +7733,9 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
       conflictOfDraftId: conflictOfDraftId == null && nullToAbsent
           ? const Value.absent()
           : Value(conflictOfDraftId),
+      upgradedFromDraftId: upgradedFromDraftId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(upgradedFromDraftId),
       abandonedAtUtc: abandonedAtUtc == null && nullToAbsent
           ? const Value.absent()
           : Value(abandonedAtUtc),
@@ -7751,6 +7784,9 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
       conflictOfDraftId: serializer.fromJson<String?>(
         json['conflictOfDraftId'],
       ),
+      upgradedFromDraftId: serializer.fromJson<String?>(
+        json['upgradedFromDraftId'],
+      ),
       abandonedAtUtc: serializer.fromJson<DateTime?>(json['abandonedAtUtc']),
       undoUntilUtc: serializer.fromJson<DateTime?>(json['undoUntilUtc']),
     );
@@ -7788,6 +7824,7 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
       'serverRevision': serializer.toJson<int>(serverRevision),
       'sourceAttemptId': serializer.toJson<String?>(sourceAttemptId),
       'conflictOfDraftId': serializer.toJson<String?>(conflictOfDraftId),
+      'upgradedFromDraftId': serializer.toJson<String?>(upgradedFromDraftId),
       'abandonedAtUtc': serializer.toJson<DateTime?>(abandonedAtUtc),
       'undoUntilUtc': serializer.toJson<DateTime?>(undoUntilUtc),
     };
@@ -7819,6 +7856,7 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
     int? serverRevision,
     Value<String?> sourceAttemptId = const Value.absent(),
     Value<String?> conflictOfDraftId = const Value.absent(),
+    Value<String?> upgradedFromDraftId = const Value.absent(),
     Value<DateTime?> abandonedAtUtc = const Value.absent(),
     Value<DateTime?> undoUntilUtc = const Value.absent(),
   }) => DbContactDraft(
@@ -7866,6 +7904,9 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
     conflictOfDraftId: conflictOfDraftId.present
         ? conflictOfDraftId.value
         : this.conflictOfDraftId,
+    upgradedFromDraftId: upgradedFromDraftId.present
+        ? upgradedFromDraftId.value
+        : this.upgradedFromDraftId,
     abandonedAtUtc: abandonedAtUtc.present
         ? abandonedAtUtc.value
         : this.abandonedAtUtc,
@@ -7932,6 +7973,9 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
       conflictOfDraftId: data.conflictOfDraftId.present
           ? data.conflictOfDraftId.value
           : this.conflictOfDraftId,
+      upgradedFromDraftId: data.upgradedFromDraftId.present
+          ? data.upgradedFromDraftId.value
+          : this.upgradedFromDraftId,
       abandonedAtUtc: data.abandonedAtUtc.present
           ? data.abandonedAtUtc.value
           : this.abandonedAtUtc,
@@ -7969,6 +8013,7 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
           ..write('serverRevision: $serverRevision, ')
           ..write('sourceAttemptId: $sourceAttemptId, ')
           ..write('conflictOfDraftId: $conflictOfDraftId, ')
+          ..write('upgradedFromDraftId: $upgradedFromDraftId, ')
           ..write('abandonedAtUtc: $abandonedAtUtc, ')
           ..write('undoUntilUtc: $undoUntilUtc')
           ..write(')'))
@@ -8002,6 +8047,7 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
     serverRevision,
     sourceAttemptId,
     conflictOfDraftId,
+    upgradedFromDraftId,
     abandonedAtUtc,
     undoUntilUtc,
   ]);
@@ -8034,6 +8080,7 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
           other.serverRevision == this.serverRevision &&
           other.sourceAttemptId == this.sourceAttemptId &&
           other.conflictOfDraftId == this.conflictOfDraftId &&
+          other.upgradedFromDraftId == this.upgradedFromDraftId &&
           other.abandonedAtUtc == this.abandonedAtUtc &&
           other.undoUntilUtc == this.undoUntilUtc);
 }
@@ -8064,6 +8111,7 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
   final Value<int> serverRevision;
   final Value<String?> sourceAttemptId;
   final Value<String?> conflictOfDraftId;
+  final Value<String?> upgradedFromDraftId;
   final Value<DateTime?> abandonedAtUtc;
   final Value<DateTime?> undoUntilUtc;
   final Value<int> rowid;
@@ -8093,6 +8141,7 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
     this.serverRevision = const Value.absent(),
     this.sourceAttemptId = const Value.absent(),
     this.conflictOfDraftId = const Value.absent(),
+    this.upgradedFromDraftId = const Value.absent(),
     this.abandonedAtUtc = const Value.absent(),
     this.undoUntilUtc = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -8123,6 +8172,7 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
     this.serverRevision = const Value.absent(),
     this.sourceAttemptId = const Value.absent(),
     this.conflictOfDraftId = const Value.absent(),
+    this.upgradedFromDraftId = const Value.absent(),
     this.abandonedAtUtc = const Value.absent(),
     this.undoUntilUtc = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -8159,6 +8209,7 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
     Expression<int>? serverRevision,
     Expression<String>? sourceAttemptId,
     Expression<String>? conflictOfDraftId,
+    Expression<String>? upgradedFromDraftId,
     Expression<DateTime>? abandonedAtUtc,
     Expression<DateTime>? undoUntilUtc,
     Expression<int>? rowid,
@@ -8191,6 +8242,8 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
       if (serverRevision != null) 'server_revision': serverRevision,
       if (sourceAttemptId != null) 'source_attempt_id': sourceAttemptId,
       if (conflictOfDraftId != null) 'conflict_of_draft_id': conflictOfDraftId,
+      if (upgradedFromDraftId != null)
+        'upgraded_from_draft_id': upgradedFromDraftId,
       if (abandonedAtUtc != null) 'abandoned_at_utc': abandonedAtUtc,
       if (undoUntilUtc != null) 'undo_until_utc': undoUntilUtc,
       if (rowid != null) 'rowid': rowid,
@@ -8223,6 +8276,7 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
     Value<int>? serverRevision,
     Value<String?>? sourceAttemptId,
     Value<String?>? conflictOfDraftId,
+    Value<String?>? upgradedFromDraftId,
     Value<DateTime?>? abandonedAtUtc,
     Value<DateTime?>? undoUntilUtc,
     Value<int>? rowid,
@@ -8255,6 +8309,7 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
       serverRevision: serverRevision ?? this.serverRevision,
       sourceAttemptId: sourceAttemptId ?? this.sourceAttemptId,
       conflictOfDraftId: conflictOfDraftId ?? this.conflictOfDraftId,
+      upgradedFromDraftId: upgradedFromDraftId ?? this.upgradedFromDraftId,
       abandonedAtUtc: abandonedAtUtc ?? this.abandonedAtUtc,
       undoUntilUtc: undoUntilUtc ?? this.undoUntilUtc,
       rowid: rowid ?? this.rowid,
@@ -8343,6 +8398,11 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
     if (conflictOfDraftId.present) {
       map['conflict_of_draft_id'] = Variable<String>(conflictOfDraftId.value);
     }
+    if (upgradedFromDraftId.present) {
+      map['upgraded_from_draft_id'] = Variable<String>(
+        upgradedFromDraftId.value,
+      );
+    }
     if (abandonedAtUtc.present) {
       map['abandoned_at_utc'] = Variable<DateTime>(abandonedAtUtc.value);
     }
@@ -8383,6 +8443,7 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
           ..write('serverRevision: $serverRevision, ')
           ..write('sourceAttemptId: $sourceAttemptId, ')
           ..write('conflictOfDraftId: $conflictOfDraftId, ')
+          ..write('upgradedFromDraftId: $upgradedFromDraftId, ')
           ..write('abandonedAtUtc: $abandonedAtUtc, ')
           ..write('undoUntilUtc: $undoUntilUtc, ')
           ..write('rowid: $rowid')
@@ -20356,6 +20417,7 @@ typedef $$DbContactDraftsTableCreateCompanionBuilder =
       Value<int> serverRevision,
       Value<String?> sourceAttemptId,
       Value<String?> conflictOfDraftId,
+      Value<String?> upgradedFromDraftId,
       Value<DateTime?> abandonedAtUtc,
       Value<DateTime?> undoUntilUtc,
       Value<int> rowid,
@@ -20387,6 +20449,7 @@ typedef $$DbContactDraftsTableUpdateCompanionBuilder =
       Value<int> serverRevision,
       Value<String?> sourceAttemptId,
       Value<String?> conflictOfDraftId,
+      Value<String?> upgradedFromDraftId,
       Value<DateTime?> abandonedAtUtc,
       Value<DateTime?> undoUntilUtc,
       Value<int> rowid,
@@ -20595,6 +20658,11 @@ class $$DbContactDraftsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get upgradedFromDraftId => $composableBuilder(
+    column: $table.upgradedFromDraftId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<DateTime> get abandonedAtUtc => $composableBuilder(
     column: $table.abandonedAtUtc,
     builder: (column) => ColumnFilters(column),
@@ -20793,6 +20861,11 @@ class $$DbContactDraftsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get upgradedFromDraftId => $composableBuilder(
+    column: $table.upgradedFromDraftId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get abandonedAtUtc => $composableBuilder(
     column: $table.abandonedAtUtc,
     builder: (column) => ColumnOrderings(column),
@@ -20922,6 +20995,11 @@ class $$DbContactDraftsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get upgradedFromDraftId => $composableBuilder(
+    column: $table.upgradedFromDraftId,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get abandonedAtUtc => $composableBuilder(
     column: $table.abandonedAtUtc,
     builder: (column) => column,
@@ -21044,6 +21122,7 @@ class $$DbContactDraftsTableTableManager
                 Value<int> serverRevision = const Value.absent(),
                 Value<String?> sourceAttemptId = const Value.absent(),
                 Value<String?> conflictOfDraftId = const Value.absent(),
+                Value<String?> upgradedFromDraftId = const Value.absent(),
                 Value<DateTime?> abandonedAtUtc = const Value.absent(),
                 Value<DateTime?> undoUntilUtc = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -21073,6 +21152,7 @@ class $$DbContactDraftsTableTableManager
                 serverRevision: serverRevision,
                 sourceAttemptId: sourceAttemptId,
                 conflictOfDraftId: conflictOfDraftId,
+                upgradedFromDraftId: upgradedFromDraftId,
                 abandonedAtUtc: abandonedAtUtc,
                 undoUntilUtc: undoUntilUtc,
                 rowid: rowid,
@@ -21104,6 +21184,7 @@ class $$DbContactDraftsTableTableManager
                 Value<int> serverRevision = const Value.absent(),
                 Value<String?> sourceAttemptId = const Value.absent(),
                 Value<String?> conflictOfDraftId = const Value.absent(),
+                Value<String?> upgradedFromDraftId = const Value.absent(),
                 Value<DateTime?> abandonedAtUtc = const Value.absent(),
                 Value<DateTime?> undoUntilUtc = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -21133,6 +21214,7 @@ class $$DbContactDraftsTableTableManager
                 serverRevision: serverRevision,
                 sourceAttemptId: sourceAttemptId,
                 conflictOfDraftId: conflictOfDraftId,
+                upgradedFromDraftId: upgradedFromDraftId,
                 abandonedAtUtc: abandonedAtUtc,
                 undoUntilUtc: undoUntilUtc,
                 rowid: rowid,
