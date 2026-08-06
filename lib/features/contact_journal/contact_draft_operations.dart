@@ -54,6 +54,7 @@ extension ContactDraftOperations on ContactJournal {
                 localRevision: const Value(localRevision),
                 serverRevision: const Value(serverRevision),
                 sourceAttemptId: Value(input.sourceAttemptId),
+                upgradedFromDraftId: Value(input.upgradedFromDraftId),
               ),
             );
         await _replaceDraftAnswers(draftId, input.answers);
@@ -98,6 +99,7 @@ extension ContactDraftOperations on ContactJournal {
       serverRevision: serverRevision,
       conflictOfDraftId: null,
       sourceAttemptId: input.sourceAttemptId,
+      upgradedFromDraftId: input.upgradedFromDraftId,
     );
   }
 
@@ -122,7 +124,8 @@ extension ContactDraftOperations on ContactJournal {
         if (existing.workspaceId != input.workspaceId ||
             existing.projectId != input.projectId ||
             existing.questionnaireVersionId != input.questionnaireVersionId ||
-            existing.sourceAttemptId != input.sourceAttemptId) {
+            existing.sourceAttemptId != input.sourceAttemptId ||
+            existing.upgradedFromDraftId != input.upgradedFromDraftId) {
           throw const ContactValidationException(
             'contact_draft_context_immutable',
           );
@@ -197,6 +200,7 @@ extension ContactDraftOperations on ContactJournal {
           serverRevision: existing.serverRevision,
           conflictOfDraftId: existing.conflictOfDraftId,
           sourceAttemptId: existing.sourceAttemptId,
+          upgradedFromDraftId: existing.upgradedFromDraftId,
         );
       });
     } on ContactValidationException {
@@ -265,6 +269,202 @@ extension ContactDraftOperations on ContactJournal {
       for (final row in rows)
         _draftFromRow(row, answersByDraftId[row.draftId] ?? const []),
     ];
+  }
+
+  /// 把本人旧问卷草稿复制为当前目标版本的新草稿，原草稿保持不变。
+  ///
+  /// [copiedAnswers] 必须先由问卷升级规划器按审计兼容关系产生。本方法再次
+  /// 对目标定义验证这些答案，并用来源草稿与目标版本生成稳定 ID，使中断后的
+  /// 重试返回同一份新草稿。
+  Future<ContactDraft> upgradeDraft({
+    required String sourceDraftId,
+    required String appUserId,
+    required String deviceId,
+    required QuestionnaireVersion targetVersion,
+    required List<QuestionnaireAnswer> copiedAnswers,
+  }) async {
+    if (sourceDraftId.trim().isEmpty ||
+        appUserId.trim().isEmpty ||
+        deviceId.trim().isEmpty) {
+      throw const ContactValidationException('contact_draft_upgrade_invalid');
+    }
+    final parsedTarget = QuestionnaireContract.parseVersion(
+      QuestionnaireContract.versionToJson(targetVersion),
+    );
+    final copiedIds = copiedAnswers.map((answer) => answer.questionId).toSet();
+    if (copiedIds.length != copiedAnswers.length) {
+      throw const ContactValidationException('duplicate_question_answer');
+    }
+    final evaluation = QuestionnaireCatalog.evaluate(
+      parsedTarget,
+      copiedAnswers,
+    );
+    if (evaluation.errors.any(
+          (error) => copiedIds.contains(error.questionId),
+        ) ||
+        evaluation.answers
+                .where(
+                  (answer) =>
+                      copiedIds.contains(answer.questionId) &&
+                      answer.stateReason != questionnaireRuleSkippedReason,
+                )
+                .length !=
+            copiedAnswers.length) {
+      throw const ContactValidationException(
+        'contact_draft_upgrade_answers_invalid',
+      );
+    }
+    final normalizedAnswers = [
+      for (final question in parsedTarget.questions)
+        for (final answer in evaluation.answers)
+          if (answer.questionId == question.id &&
+              copiedIds.contains(answer.questionId) &&
+              answer.stateReason != questionnaireRuleSkippedReason)
+            answer,
+    ];
+    final targetDraftId =
+        '$sourceDraftId:questionnaire-upgrade:${parsedTarget.id}';
+    final createdAtUtc = _clock.now().toUtc();
+    try {
+      return await _database.transaction(() async {
+        final sourceQuery = _database.select(_database.dbContactDrafts)
+          ..where(
+            (row) =>
+                row.draftId.equals(sourceDraftId) &
+                row.appUserId.equals(appUserId) &
+                row.abandonedAtUtc.isNull(),
+          );
+        final sourceRow = await sourceQuery.getSingleOrNull();
+        if (sourceRow == null) {
+          throw const ContactValidationException('contact_draft_not_found');
+        }
+        if (sourceRow.conflictOfDraftId != null ||
+            sourceRow.projectId != parsedTarget.projectId ||
+            sourceRow.questionnaireVersionId == parsedTarget.id) {
+          throw const ContactValidationException(
+            'contact_draft_upgrade_invalid',
+          );
+        }
+        final targetVersionQuery =
+            _database.select(_database.dbQuestionnaireVersions)..where(
+              (row) =>
+                  row.questionnaireVersionId.equals(parsedTarget.id) &
+                  row.projectId.equals(parsedTarget.projectId) &
+                  row.versionNumber.equals(parsedTarget.versionNumber) &
+                  row.status.equals('published'),
+            );
+        if (await targetVersionQuery.getSingleOrNull() == null) {
+          throw const ContactValidationException(
+            'questionnaire_target_not_installed',
+          );
+        }
+        final existingQuery = _database.select(_database.dbContactDrafts)
+          ..where(
+            (row) =>
+                row.draftId.equals(targetDraftId) &
+                row.appUserId.equals(appUserId) &
+                row.abandonedAtUtc.isNull(),
+          );
+        final existing = await existingQuery.getSingleOrNull();
+        if (existing != null) {
+          final answerQuery = _database.select(_database.dbContactDraftAnswers)
+            ..where((row) => row.draftId.equals(targetDraftId));
+          final answerRows = await answerQuery.get();
+          final answersById = {
+            for (final row in answerRows) row.questionId: row,
+          };
+          return _draftFromRow(existing, [
+            for (final question in parsedTarget.questions)
+              ?answersById[question.id],
+          ]);
+        }
+
+        final source = _draftFromRow(
+          sourceRow,
+          await (_database.select(
+            _database.dbContactDraftAnswers,
+          )..where((row) => row.draftId.equals(sourceDraftId))).get(),
+        );
+        final location = _contactLocationColumns(source.location);
+        const localRevision = 1;
+        const serverRevision = 0;
+        await _database
+            .into(_database.dbContactDrafts)
+            .insert(
+              DbContactDraftsCompanion.insert(
+                draftId: targetDraftId,
+                appUserId: source.appUserId,
+                workspaceId: source.workspaceId,
+                projectId: source.projectId,
+                questionnaireVersionId: parsedTarget.id,
+                createdAtUtc: createdAtUtc,
+                updatedAtUtc: createdAtUtc,
+                occurredAtUtc: Value(source.occurredAtUtc),
+                occurredTimeZone: Value(source.occurredTimeZone),
+                channel: Value(source.channel?.storageValue),
+                channelDetail: Value(source.channelDetail),
+                locationKind: Value(location.kind),
+                placeName: Value(location.placeName),
+                smallestRegionId: Value(location.smallestRegionId),
+                regionTreeVersion: Value(location.regionTreeVersion),
+                latitude: Value(location.latitude),
+                longitude: Value(location.longitude),
+                locationAccuracyMeters: Value(location.accuracyMeters),
+                reachCount: Value(source.reachCount),
+                interestLevel: Value(source.interestLevel),
+                syncMode: Value(source.syncMode.storageValue),
+                localRevision: const Value(localRevision),
+                serverRevision: const Value(serverRevision),
+                sourceAttemptId: Value(source.sourceAttemptId),
+                upgradedFromDraftId: Value(sourceDraftId),
+              ),
+            );
+        await _replaceDraftAnswers(targetDraftId, normalizedAnswers);
+        await _replaceDraftRegionAssignment(targetDraftId, source.location);
+        final upgraded = ContactDraft(
+          draftId: targetDraftId,
+          appUserId: source.appUserId,
+          workspaceId: source.workspaceId,
+          projectId: source.projectId,
+          questionnaireVersionId: parsedTarget.id,
+          createdAtUtc: createdAtUtc,
+          updatedAtUtc: createdAtUtc,
+          occurredAtUtc: source.occurredAtUtc,
+          occurredTimeZone: source.occurredTimeZone,
+          channel: source.channel,
+          channelDetail: source.channelDetail,
+          location: source.location,
+          reachCount: source.reachCount,
+          interestLevel: source.interestLevel,
+          answers: normalizedAnswers,
+          syncMode: source.syncMode,
+          localRevision: localRevision,
+          serverRevision: serverRevision,
+          conflictOfDraftId: null,
+          sourceAttemptId: source.sourceAttemptId,
+          upgradedFromDraftId: sourceDraftId,
+        );
+        if (upgraded.syncMode == ContactDraftSyncMode.accountPrivate) {
+          await _enqueueDraftUpsert(
+            input: _draftInputFromStored(upgraded, deviceId),
+            draftId: targetDraftId,
+            draftCreatedAtUtc: createdAtUtc,
+            createdAtUtc: createdAtUtc,
+            localRevision: localRevision,
+            baseRevision: serverRevision,
+          );
+        }
+        return upgraded;
+      });
+    } on ContactValidationException {
+      rethrow;
+    } catch (error, stackTrace) {
+      throw ContactPersistenceException(
+        code: 'contact_draft_upgrade_failed',
+        cause: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   /// 本人明确放弃一份草稿，并返回持久化的短时撤销期限。
@@ -393,6 +593,11 @@ extension ContactDraftOperations on ContactJournal {
         input.sourceAttemptId!.trim().isEmpty) {
       throw const ContactValidationException('source_attempt_id_invalid');
     }
+    if (input.upgradedFromDraftId != null &&
+        (input.upgradedFromDraftId!.trim().isEmpty ||
+            input.upgradedFromDraftId == input.draftId)) {
+      throw const ContactValidationException('upgraded_from_draft_id_invalid');
+    }
     if (input.occurredAtUtc != null && !input.occurredAtUtc!.isUtc) {
       throw const ContactValidationException('occurred_at_must_be_utc');
     }
@@ -449,6 +654,7 @@ extension ContactDraftOperations on ContactJournal {
       'project_id': input.projectId,
       'questionnaire_version_id': input.questionnaireVersionId,
       'source_attempt_id': input.sourceAttemptId,
+      'upgraded_from_draft_id': input.upgradedFromDraftId,
       'created_at_utc': draftCreatedAtUtc.toIso8601String(),
       'updated_at_utc': createdAtUtc.toIso8601String(),
       'occurred_at_utc': input.occurredAtUtc?.toIso8601String(),
@@ -576,6 +782,7 @@ extension ContactDraftOperations on ContactJournal {
       projectId: draft.projectId,
       questionnaireVersionId: draft.questionnaireVersionId,
       sourceAttemptId: draft.sourceAttemptId,
+      upgradedFromDraftId: draft.upgradedFromDraftId,
       occurredAtUtc: draft.occurredAtUtc,
       occurredTimeZone: draft.occurredTimeZone,
       channel: draft.channel,
@@ -656,6 +863,7 @@ extension ContactDraftOperations on ContactJournal {
       serverRevision: row.serverRevision,
       conflictOfDraftId: row.conflictOfDraftId,
       sourceAttemptId: row.sourceAttemptId,
+      upgradedFromDraftId: row.upgradedFromDraftId,
     );
   }
 

@@ -52,13 +52,13 @@ jobs:
       - name: Verify Markdown links
         run: dart run tool/check_markdown_links.dart
 
-      - name: Verify current Drift v15 schema snapshot
+      - name: Verify current Drift v16 schema snapshot
         run: |
           dart run drift_dev schema dump \
             lib/data/local_database.dart \
-            "${RUNNER_TEMP}/drift_schema_v15.json"
-          cmp drift_schemas/drift_schema_v15.json \
-            "${RUNNER_TEMP}/drift_schema_v15.json"
+            "${RUNNER_TEMP}/drift_schema_v16.json"
+          cmp drift_schemas/drift_schema_v16.json \
+            "${RUNNER_TEMP}/drift_schema_v16.json"
 
       - name: Verify Drift migration helpers are current
         run: |
@@ -154,6 +154,10 @@ jobs:
             --file backend/database/checks/verify_questionnaire_publishing.sql
           psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file backend/database/fixtures/0013_questionnaire_publishing.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_questionnaire_draft_upgrades.sql
+          psql "${DATABASE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0014_questionnaire_draft_upgrades.sql
 
       - name: Verify concurrent questionnaire publication
         run: ./tool/verify_questionnaire_publish_concurrency.sh
@@ -230,6 +234,10 @@ jobs:
             --file backend/database/checks/verify_questionnaire_publishing.sql
           psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
             --file backend/database/fixtures/0013_questionnaire_publishing.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/checks/verify_questionnaire_draft_upgrades.sql
+          psql "${PGRESTORE_URL}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+            --file backend/database/fixtures/0014_questionnaire_draft_upgrades.sql
 
   backend-server:
     name: Backend identity, context, and sync

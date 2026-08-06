@@ -213,6 +213,7 @@ final class ContactDraftInput {
     this.answers = const [],
     this.syncMode = ContactDraftSyncMode.accountPrivate,
     this.sourceAttemptId,
+    this.upgradedFromDraftId,
   });
 
   final String? draftId;
@@ -231,6 +232,7 @@ final class ContactDraftInput {
   final List<QuestionnaireAnswer> answers;
   final ContactDraftSyncMode syncMode;
   final String? sourceAttemptId;
+  final String? upgradedFromDraftId;
 }
 
 /// 已经落入 SQLite 的私有接触草稿。
@@ -256,6 +258,7 @@ final class ContactDraft {
     required this.serverRevision,
     required this.conflictOfDraftId,
     this.sourceAttemptId,
+    this.upgradedFromDraftId,
   });
 
   final String draftId;
@@ -278,6 +281,7 @@ final class ContactDraft {
   final int serverRevision;
   final String? conflictOfDraftId;
   final String? sourceAttemptId;
+  final String? upgradedFromDraftId;
 
   bool get isConflictCopy => conflictOfDraftId != null;
 
@@ -336,7 +340,8 @@ final class ContactDraft {
         other.localRevision == localRevision &&
         other.serverRevision == serverRevision &&
         other.conflictOfDraftId == conflictOfDraftId &&
-        other.sourceAttemptId == sourceAttemptId;
+        other.sourceAttemptId == sourceAttemptId &&
+        other.upgradedFromDraftId == upgradedFromDraftId;
   }
 
   @override
@@ -361,6 +366,7 @@ final class ContactDraft {
     serverRevision,
     conflictOfDraftId,
     sourceAttemptId,
+    upgradedFromDraftId,
   ]);
 }
 

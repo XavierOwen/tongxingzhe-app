@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/drift.dart' show Value;
@@ -7,6 +8,8 @@ import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_journal.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
+import 'package:tongxingzhe_app/questionnaires/questionnaire_contract.dart';
+import 'package:tongxingzhe_app/questionnaires/questionnaire_draft_upgrade.dart';
 
 void main() {
   test('空白接触页不创建草稿，首次有意义输入才创建', () async {
@@ -641,6 +644,143 @@ void main() {
     expect(await journal.listDrafts(appUserId: 'app-user-1'), isEmpty);
   });
 
+  test('问卷升级创建新草稿并保留原稿，重试不重复创建', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final journal = ContactJournal(
+      database: database,
+      clock: _FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
+      idGenerator: _SequenceIdGenerator(['source-draft']),
+    );
+    final fixture = _draftUpgradeFixture();
+    final catalog = QuestionnaireCatalog(database: database);
+    await catalog.installPublishedVersion(fixture.source);
+    await catalog.installPublishedVersion(fixture.target);
+    final source = await journal.saveDraft(
+      ContactDraftInput(
+        deviceId: 'device-1',
+        appUserId: 'app-user-1',
+        workspaceId: 'workspace-1',
+        projectId: fixture.source.projectId,
+        questionnaireVersionId: fixture.source.id,
+        channel: ContactChannel.videoCall,
+        answers: fixture.sourceAnswers,
+      ),
+    );
+    final plan = QuestionnaireDraftUpgradePlanner.plan(
+      source: fixture.source,
+      target: fixture.target,
+      sourceAnswers: fixture.sourceAnswers,
+      compatibilities: fixture.compatibilities,
+    );
+
+    final upgraded = await journal.upgradeDraft(
+      sourceDraftId: source!.draftId,
+      appUserId: source.appUserId,
+      deviceId: 'device-1',
+      targetVersion: fixture.target,
+      copiedAnswers: plan.copiedAnswers,
+    );
+    final retried = await journal.upgradeDraft(
+      sourceDraftId: source.draftId,
+      appUserId: source.appUserId,
+      deviceId: 'device-1',
+      targetVersion: fixture.target,
+      copiedAnswers: plan.copiedAnswers,
+    );
+
+    expect(retried, upgraded);
+    expect(
+      upgraded.draftId,
+      '${source.draftId}:questionnaire-upgrade:${fixture.target.id}',
+    );
+    expect(upgraded.questionnaireVersionId, fixture.target.id);
+    expect(upgraded.upgradedFromDraftId, source.draftId);
+    expect(upgraded.answers, plan.copiedAnswers);
+    final drafts = await journal.listDrafts(appUserId: source.appUserId);
+    expect(drafts, hasLength(2));
+    expect(
+      drafts.singleWhere((draft) => draft.draftId == source.draftId).answers,
+      unorderedEquals(fixture.sourceAnswers),
+    );
+    final targetCommands = await (database.select(
+      database.dbSyncOutbox,
+    )..where((row) => row.aggregateId.equals(upgraded.draftId))).get();
+    expect(targetCommands, hasLength(1));
+    expect(
+      targetCommands.single.payloadJson,
+      contains('"upgraded_from_draft_id":"${source.draftId}"'),
+    );
+  });
+
+  test('问卷升级不允许他人读取来源，失败时不改写原稿', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final journal = ContactJournal(
+      database: database,
+      clock: _FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
+      idGenerator: _SequenceIdGenerator(['source-private']),
+    );
+    final fixture = _draftUpgradeFixture();
+    final catalog = QuestionnaireCatalog(database: database);
+    await catalog.installPublishedVersion(fixture.source);
+    await catalog.installPublishedVersion(fixture.target);
+    final source = await journal.saveDraft(
+      ContactDraftInput(
+        deviceId: 'device-1',
+        appUserId: 'app-user-1',
+        workspaceId: 'workspace-1',
+        projectId: fixture.source.projectId,
+        questionnaireVersionId: fixture.source.id,
+        channel: ContactChannel.videoCall,
+        answers: fixture.sourceAnswers,
+      ),
+    );
+
+    await expectLater(
+      journal.upgradeDraft(
+        sourceDraftId: source!.draftId,
+        appUserId: 'app-user-2',
+        deviceId: 'device-2',
+        targetVersion: fixture.target,
+        copiedAnswers: const [],
+      ),
+      throwsA(
+        isA<ContactValidationException>().having(
+          (error) => error.code,
+          'code',
+          'contact_draft_not_found',
+        ),
+      ),
+    );
+    await expectLater(
+      journal.upgradeDraft(
+        sourceDraftId: source.draftId,
+        appUserId: source.appUserId,
+        deviceId: 'device-1',
+        targetVersion: fixture.target,
+        copiedAnswers: const [
+          ShortTextQuestionnaireAnswer(
+            questionId: 'missing-target-question',
+            value: 'invalid',
+          ),
+        ],
+      ),
+      throwsA(
+        isA<ContactValidationException>().having(
+          (error) => error.code,
+          'code',
+          'contact_draft_upgrade_answers_invalid',
+        ),
+      ),
+    );
+
+    final drafts = await journal.listDrafts(appUserId: source.appUserId);
+    expect(drafts, hasLength(1));
+    expect(drafts.single.draftId, source.draftId);
+    expect(drafts.single.answers, unorderedEquals(fixture.sourceAnswers));
+  });
+
   test('不完整草稿不能正式提交且不进入个人统计', () async {
     final journal = _journal(['draft-incomplete']);
     final draft = await journal.saveDraft(
@@ -681,6 +821,48 @@ void main() {
       'draft-incomplete',
     );
   });
+}
+
+({
+  QuestionnaireVersion source,
+  QuestionnaireVersion target,
+  List<QuestionnaireAnswer> sourceAnswers,
+  List<AuditedQuestionnaireAnswerCompatibility> compatibilities,
+})
+_draftUpgradeFixture() {
+  final raw =
+      jsonDecode(
+            File(
+              'fixtures/questionnaire/questionnaire-draft-upgrade-contract-v1.json',
+            ).readAsStringSync(),
+          )
+          as Map<String, Object?>;
+  final source = QuestionnaireContract.parseVersion(raw['source']);
+  final questionsById = {
+    for (final question in source.questions) question.id: question,
+  };
+  return (
+    source: source,
+    target: QuestionnaireContract.parseVersion(raw['target']),
+    sourceAnswers: [
+      for (final rawAnswer in raw['source_answers']! as List<Object?>)
+        if (QuestionnaireContract.parseAnswer(rawAnswer) case final answer)
+          QuestionnaireAnswerFactory.create(
+            question: questionsById[answer.questionId]!,
+            state: answer.state,
+            value: answer.value,
+          ),
+    ],
+    compatibilities: [
+      for (final value in raw['audited_compatibilities']! as List<Object?>)
+        if (value case final Map<String, Object?> item)
+          AuditedQuestionnaireAnswerCompatibility(
+            decisionId: item['decision_id']! as String,
+            sourceQuestionId: item['source_question_id']! as String,
+            targetQuestionId: item['target_question_id']! as String,
+          ),
+    ],
+  );
 }
 
 ContactJournal _journal(List<String> ids, {DateTime? now}) {

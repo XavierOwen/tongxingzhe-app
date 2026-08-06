@@ -225,6 +225,22 @@ const Map<String, Map<String, String>> _strings = {
     'draftSyncDeviceOnlyHelp': '只保存在这台设备，不上传未提交内容。',
     'draftConflictCopy': '冲突副本（仅本机）',
     'draftConflictHelp': '另一台设备已修改原草稿。此副本保留你的本机内容，不能直接提交；请对照后手动合并。',
+    'draftUsesOldQuestionnaire': '使用旧问卷版本',
+    'draftUsesOldQuestionnaireHelp': '这份草稿仍按创建时的问卷保存和提交；新发布不会改写已有答案。',
+    'questionnaireUpgradePreview': '升级预览',
+    'questionnaireUpgradeTitle': '升级到当前问卷',
+    'questionnaireUpgradeKeepsOriginal': '确认后会新建一份草稿。原草稿保持不变，直到你明确放弃它。',
+    'questionnaireUpgradeRetained': '经审计可保留的答案',
+    'questionnaireUpgradeNoneRetained': '没有答案可以自动保留。',
+    'questionnaireUpgradeRequiresConfirmation': '需要重新确认的新问卷问题',
+    'questionnaireUpgradeCannotCopy': '不能复制的旧答案',
+    'questionnaireUpgradeCreateDraft': '创建新版本草稿',
+    'questionnaireUpgradeCreated': '新草稿已创建',
+    'questionnaireUpgradeCreatedHelp': '原草稿仍可恢复和提交。新草稿只保留有明确兼容证据的答案。',
+    'questionnaireUpgradeBackToDrafts': '返回草稿列表',
+    'questionnaireUpgradeSaveFirstFailed': '无法在升级前保存当前草稿；请先重试保存。',
+    'questionnaireUpgradeUnavailable': '这份草稿现在不能升级到当前问卷。',
+    'questionnaireUpgradeFailed': '新版本草稿创建失败；原草稿没有改变，可以重试。',
     'submitContact': '正式提交',
     'contactSubmissionFailed': '接触提交失败；草稿仍已保存，可以重试。',
     'drafts': '草稿',
@@ -697,6 +713,30 @@ const Map<String, Map<String, String>> _strings = {
     'draftConflictCopy': 'Conflict copy (this device only)',
     'draftConflictHelp':
         'Another device changed the original draft. This copy keeps your local content for manual comparison and cannot be submitted directly.',
+    'draftUsesOldQuestionnaire': 'Using an older questionnaire version',
+    'draftUsesOldQuestionnaireHelp':
+        'This draft still saves and submits with its original questionnaire. A new publication does not rewrite its answers.',
+    'questionnaireUpgradePreview': 'Preview upgrade',
+    'questionnaireUpgradeTitle': 'Upgrade to the current questionnaire',
+    'questionnaireUpgradeKeepsOriginal':
+        'This creates a new draft. The original stays unchanged until you explicitly abandon it.',
+    'questionnaireUpgradeRetained': 'Audited answers that can be retained',
+    'questionnaireUpgradeNoneRetained':
+        'No answers can be retained automatically.',
+    'questionnaireUpgradeRequiresConfirmation':
+        'Current questionnaire answers to confirm again',
+    'questionnaireUpgradeCannotCopy': 'Old answers that cannot be copied',
+    'questionnaireUpgradeCreateDraft': 'Create current-version draft',
+    'questionnaireUpgradeCreated': 'New draft created',
+    'questionnaireUpgradeCreatedHelp':
+        'The original draft remains available. The new draft retains only answers with explicit compatibility evidence.',
+    'questionnaireUpgradeBackToDrafts': 'Back to drafts',
+    'questionnaireUpgradeSaveFirstFailed':
+        'The current draft could not be saved before the upgrade. Retry the save first.',
+    'questionnaireUpgradeUnavailable':
+        'This draft cannot be upgraded to the current questionnaire now.',
+    'questionnaireUpgradeFailed':
+        'The new draft could not be created. The original did not change, so you can retry.',
     'submitContact': 'Submit contact',
     'contactSubmissionFailed':
         'Contact submission failed. The saved draft is available to retry.',

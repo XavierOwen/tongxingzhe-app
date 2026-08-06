@@ -133,6 +133,7 @@ export interface DraftUpsertPayload {
   readonly interestLevel: number | null;
   readonly answers: readonly ContactAnswer[];
   readonly sourceAttemptId?: string | null;
+  readonly upgradedFromDraftId?: string | null;
 }
 
 export interface DraftDeletePayload {

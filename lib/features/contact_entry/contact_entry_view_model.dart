@@ -589,7 +589,10 @@ final class ContactEntryViewModel extends ChangeNotifier {
     appUserId: _context.appUserId,
     workspaceId: _context.workspace.id,
     projectId: _context.project.id,
-    questionnaireVersionId: _context.questionnaireVersion.id,
+    questionnaireVersionId:
+        _draft?.questionnaireVersionId ??
+        _questionnaireVersion?.id ??
+        _context.questionnaireVersion.id,
     occurredAtUtc: _occurredAtUtc,
     occurredTimeZone: _occurredTimeZone,
     channel: _channel,
