@@ -86,7 +86,7 @@ UI 只根据稳定 code 显示可恢复状态；原始 `cause` 和 `stackTrace` 
 
 SQLite 是设备内数据库；Drift 是 Dart 里的数据库工具。Drift 帮我们获得类型检查、migration 辅助和查询结果映射，但底层仍是 SQLite 和 SQL。
 
-保存的 v5 schema 只用于证明旧结构和升级起点，不代表现代领域模型。机器可读基线在 `drift_schemas/drift_schema_v5.json`，当前 v9 与升级过程见 [第 3 章](03-contact-journal-and-local-sql.md)，完整盘点见 [Legacy Drift v5 盘点](../migrations/legacy-v5-inventory.md)。
+保存的 v5 schema 只用于证明旧结构和升级起点，不代表现代领域模型。机器可读基线在 `drift_schemas/drift_schema_v5.json`，当前 v17 与升级过程见[第 3 章](03-contact-journal-and-local-sql.md)，完整盘点见 [Legacy Drift v5 盘点](../migrations/legacy-v5-inventory.md)。
 
 测试大致做三件事：
 
@@ -169,16 +169,19 @@ flutter run -t lib/main_demo.dart
 格式、静态分析与测试：
 
 ```bash
-dart format --output=none --set-exit-if-changed lib test
+dart format --output=none --set-exit-if-changed \
+  lib test integration_test test_driver tool
 dart analyze
-flutter test
+flutter test --no-pub
 ```
 
-Drift v5／v6／v8 到当前 v9 的 migration 测试：
+Drift v5／v6／v8 到当前 v17 的 migration 测试：
 
 ```bash
-flutter test test/data/local_database_migration_test.dart
+flutter test --no-pub test/data/local_database_migration_test.dart
 ```
+
+Docker、Backend 和 CI 的完整操作步骤见[第 9 章](09-local-docker-and-ci-testing.md)。
 
 macOS 网络和 Keychain entitlement 回归：
 
