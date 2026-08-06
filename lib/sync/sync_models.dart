@@ -63,6 +63,16 @@ final class SyncPushRetryable extends SyncPushResult {
   final Duration? retryAfter;
 }
 
+/// 批量上传中一条 command 的独立结果。
+///
+/// [commandId] 是本地归位 ACK 的唯一依据，不得使用列表位置。
+final class SyncCommandPushOutcome {
+  const SyncCommandPushOutcome({required this.commandId, required this.result});
+
+  final String commandId;
+  final SyncPushResult result;
+}
+
 final class SyncRemoteChange {
   const SyncRemoteChange({
     required this.changeType,
@@ -115,6 +125,8 @@ enum SyncDrainResult {
   permanentFailure,
   lostLease,
 }
+
+enum SyncBatchDrainResult { idle, busy, processed, lostLease }
 
 /// UI 可见的最小同步健康状态，不含 command payload 或自由文本。
 final class SyncHealth {

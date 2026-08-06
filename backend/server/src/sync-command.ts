@@ -54,6 +54,90 @@ export async function handleSyncCommand(
     return failure(503, "context_unavailable");
   }
 
+  return handleTrustedSyncCommand(context, body, dependencies);
+}
+
+export async function handleSyncCommandBatch(
+  authorization: string | undefined,
+  body: unknown,
+  dependencies: SyncCommandHttpDependencies,
+): Promise<SyncCommandHttpResult> {
+  const accessToken = bearerToken(authorization);
+  if (accessToken === null) {
+    return failure(401, "unauthenticated");
+  }
+
+  let context: SessionContext;
+  try {
+    const identity = await dependencies.identityVerifier.verify(accessToken);
+    context = await dependencies.contextStore.loadOrCreate(identity);
+  } catch (error) {
+    if (error instanceof IdentityVerificationError) {
+      return failure(401, "unauthenticated");
+    }
+    return failure(503, "context_unavailable");
+  }
+
+  let commands: readonly unknown[];
+  try {
+    const root = object(body, "invalid_batch");
+    if (!Array.isArray(root.commands) || root.commands.length < 1) {
+      throw new CommandValidationError("invalid_batch");
+    }
+    if (root.commands.length > 20) {
+      throw new CommandValidationError("batch_too_large");
+    }
+    commands = root.commands;
+  } catch (error) {
+    const code = error instanceof CommandValidationError
+      ? error.code
+      : "invalid_batch";
+    return commandFailure(422, "rejected", code);
+  }
+
+  let commandIds: string[];
+  try {
+    commandIds = commands.map(batchCommandId);
+  } catch (error) {
+    const code = error instanceof CommandValidationError
+      ? error.code
+      : "invalid_batch_command_id";
+    return commandFailure(422, "rejected", code);
+  }
+  if (new Set(commandIds).size !== commandIds.length) {
+    return commandFailure(422, "rejected", "duplicate_batch_command_id");
+  }
+
+  const results: Readonly<Record<string, unknown>>[] = [];
+  for (let index = 0; index < commands.length; index += 1) {
+    const commandId = commandIds[index];
+    const command = commands[index];
+    if (commandId === undefined || command === undefined) {
+      return commandFailure(422, "rejected", "invalid_batch_command_id");
+    }
+    const result = await handleTrustedSyncCommand(
+      context,
+      command,
+      dependencies,
+    );
+    if (result.status >= 500) {
+      results.push({
+        command_id: commandId,
+        result: "retryable",
+        error: result.body.error ?? { code: "sync_unavailable" },
+      });
+    } else {
+      results.push({ command_id: commandId, ...result.body });
+    }
+  }
+  return { status: 200, body: { results } };
+}
+
+async function handleTrustedSyncCommand(
+  context: SessionContext,
+  body: unknown,
+  dependencies: SyncCommandHttpDependencies,
+): Promise<SyncCommandHttpResult> {
   let command: SyncCommand;
   try {
     command = parseSyncCommand(body);
@@ -75,10 +159,17 @@ export async function handleSyncCommand(
   }
 
   try {
-    return serializeStoreResult(await dependencies.commandStore.apply(context, command));
+    return serializeStoreResult(
+      await dependencies.commandStore.apply(context, command),
+    );
   } catch {
     return failure(503, "sync_unavailable");
   }
+}
+
+function batchCommandId(value: unknown): string {
+  const root = object(value, "invalid_batch_command_id");
+  return string(root.command_id, "invalid_batch_command_id");
 }
 
 class CommandValidationError extends Error {

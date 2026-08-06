@@ -8,9 +8,9 @@ void main() {
   test('一次前台同步排空可发送命令，再拉取全部可应用批次', () async {
     final worker = _FakeSyncWorker(
       drains: [
-        SyncDrainResult.completed,
-        SyncDrainResult.completed,
-        SyncDrainResult.idle,
+        SyncBatchDrainResult.processed,
+        SyncBatchDrainResult.processed,
+        SyncBatchDrainResult.idle,
       ],
       pulls: [SyncPullApplyResult.applied, SyncPullApplyResult.idle],
     );
@@ -29,7 +29,7 @@ void main() {
   test('已有同步运行时把重复唤醒合并为一次串行补跑', () async {
     final gate = Completer<void>();
     final worker = _FakeSyncWorker(
-      drains: [SyncDrainResult.idle, SyncDrainResult.idle],
+      drains: [SyncBatchDrainResult.idle, SyncBatchDrainResult.idle],
       pulls: [SyncPullApplyResult.idle, SyncPullApplyResult.idle],
       gate: gate,
     );
@@ -64,13 +64,13 @@ void main() {
 
 final class _FakeSyncWorker implements ForegroundSyncWorker {
   _FakeSyncWorker({
-    List<SyncDrainResult> drains = const [SyncDrainResult.idle],
+    List<SyncBatchDrainResult> drains = const [SyncBatchDrainResult.idle],
     List<SyncPullApplyResult> pulls = const [SyncPullApplyResult.idle],
     this.gate,
   }) : _drains = [...drains],
        _pulls = [...pulls];
 
-  final List<SyncDrainResult> _drains;
+  final List<SyncBatchDrainResult> _drains;
   final List<SyncPullApplyResult> _pulls;
   final Completer<void>? gate;
   int drainCalls = 0;
@@ -79,7 +79,7 @@ final class _FakeSyncWorker implements ForegroundSyncWorker {
   int maximumConcurrentDrains = 0;
 
   @override
-  Future<SyncDrainResult> drainOnce() async {
+  Future<SyncBatchDrainResult> drainBatch() async {
     drainCalls++;
     concurrentDrains++;
     maximumConcurrentDrains = maximumConcurrentDrains < concurrentDrains

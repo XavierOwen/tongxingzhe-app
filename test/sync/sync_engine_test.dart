@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/data/local_database.dart';
@@ -109,6 +110,72 @@ void main() {
     expect(health.retryingCount, 0);
   });
 
+  test('同步健康不持久服务端自由文本或 PII 失败码', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    await fixture.submitContact();
+    final transport = _QueueSyncTransport([
+      const SyncPushRetryable(failureCode: 'failed for person@example.test'),
+    ]);
+    final engine = fixture.engine(workerId: 'worker-1', transport: transport);
+
+    expect(await engine.drainOnce(), SyncDrainResult.retryScheduled);
+
+    final health = await engine.health();
+    expect(health.lastFailureCode, 'unknown_sync_failure');
+  });
+
+  test('指数退避和 jitter 不超过五分钟本地上限', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    await fixture.submitContact();
+    await (fixture.database.update(fixture.database.dbSyncOutbox)
+          ..where((row) => row.commandId.equals('command-1')))
+        .write(const DbSyncOutboxCompanion(attemptCount: Value(20)));
+    final engine = fixture.engine(
+      workerId: 'worker-1',
+      transport: _QueueSyncTransport([
+        const SyncPushRetryable(failureCode: 'server_unavailable'),
+      ]),
+      jitter: const FixedSyncJitter(0.999999),
+    );
+
+    expect(await engine.drainOnce(), SyncDrainResult.retryScheduled);
+
+    final row = await fixture.database
+        .select(fixture.database.dbSyncOutbox)
+        .getSingle();
+    expect(
+      row.nextAttemptAtUtc.toUtc(),
+      fixture.clock.now().toUtc().add(const Duration(minutes: 5)),
+    );
+  });
+
+  test('可信 Retry-After 在状态机内最多延后一小时', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    await fixture.submitContact();
+    final engine = fixture.engine(
+      workerId: 'worker-1',
+      transport: _QueueSyncTransport([
+        const SyncPushRetryable(
+          failureCode: 'rate_limited',
+          retryAfter: Duration(hours: 2),
+        ),
+      ]),
+    );
+
+    expect(await engine.drainOnce(), SyncDrainResult.retryScheduled);
+
+    final row = await fixture.database
+        .select(fixture.database.dbSyncOutbox)
+        .getSingle();
+    expect(
+      row.nextAttemptAtUtc.toUtc(),
+      fixture.clock.now().toUtc().add(const Duration(hours: 1)),
+    );
+  });
+
   test('活动 drainer 阻止第二执行器，租约过期后可恢复命令', () async {
     final fixture = _Fixture();
     addTearDown(fixture.close);
@@ -199,6 +266,52 @@ void main() {
     final health = await engine.health();
     expect(health.permanentFailureCount, 1);
     expect(health.completedCount, 1);
+  });
+
+  test('批量部分成功按 command ID 归位，不重做已确认命令', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    await fixture.submitContact();
+    await fixture.submitContact(suffix: '2');
+    final transport = _BatchSyncTransport([
+      const [
+        SyncCommandPushOutcome(
+          commandId: 'command-2',
+          result: SyncPushAccepted(serverCursor: 'cursor-contact-2'),
+        ),
+        SyncCommandPushOutcome(
+          commandId: 'command-1',
+          result: SyncPushRetryable(failureCode: 'server_unavailable'),
+        ),
+      ],
+      const [
+        SyncCommandPushOutcome(
+          commandId: 'command-1',
+          result: SyncPushAccepted(serverCursor: 'cursor-contact-1'),
+        ),
+      ],
+    ]);
+    final engine = fixture.engine(workerId: 'worker-1', transport: transport);
+
+    expect(await engine.drainBatch(), SyncBatchDrainResult.processed);
+    var health = await engine.health();
+    expect(health.completedCount, 1);
+    expect(health.retryingCount, 1);
+    expect(health.lastFailureCode, 'server_unavailable');
+
+    fixture.clock.advance(const Duration(seconds: 2));
+    expect(await engine.drainBatch(), SyncBatchDrainResult.processed);
+    expect(
+      transport.batches.map((batch) => batch.map((item) => item.commandId)),
+      [
+        ['command-1', 'command-2'],
+        ['command-1'],
+      ],
+    );
+    health = await engine.health();
+    expect(health.completedCount, 2);
+    expect(health.retryingCount, 0);
+    expect(health.lastFailureCode, isNull);
   });
 
   test('远端 batch 原子写入本地事实后才推进不透明 cursor', () async {
@@ -923,6 +1036,7 @@ final class _Fixture {
   SyncEngine engine({
     required String workerId,
     required SyncTransport transport,
+    SyncJitter jitter = const FixedSyncJitter(0),
   }) {
     return SyncEngine(
       database: database,
@@ -930,7 +1044,7 @@ final class _Fixture {
       workerId: workerId,
       scope: scope,
       transport: transport,
-      jitter: const FixedSyncJitter(0),
+      jitter: jitter,
     );
   }
 }
@@ -1068,6 +1182,37 @@ final class _BlockingSyncTransport implements SyncTransport {
   Future<SyncPushResult> push(SyncCommand command) {
     commandReceived.complete();
     return reply;
+  }
+}
+
+final class _BatchSyncTransport implements SyncTransport, SyncBatchTransport {
+  _BatchSyncTransport(this._batchReplies);
+
+  final List<List<SyncCommandPushOutcome>> _batchReplies;
+  final List<List<SyncCommand>> batches = [];
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  Future<SyncPullResult> pull({
+    required SyncScope scope,
+    required String? cursor,
+    int limit = 100,
+  }) async =>
+      SyncPullSucceeded(SyncPullBatch(changes: const [], nextCursor: cursor));
+
+  @override
+  Future<SyncPushResult> push(SyncCommand command) {
+    throw UnimplementedError('batch transport must use pushBatch');
+  }
+
+  @override
+  Future<List<SyncCommandPushOutcome>> pushBatch(
+    List<SyncCommand> commands,
+  ) async {
+    batches.add(commands);
+    return _batchReplies.removeAt(0);
   }
 }
 
