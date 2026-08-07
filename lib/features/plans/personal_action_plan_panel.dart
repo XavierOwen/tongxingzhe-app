@@ -33,6 +33,9 @@ final class PersonalActionPlanPanel extends StatefulWidget {
 
 final class _PersonalActionPlanPanelState
     extends State<PersonalActionPlanPanel> {
+  final FocusNode _editActionFocusNode = FocusNode(
+    debugLabel: 'personal plan edit action',
+  );
   PersonalActionPlanSnapshot? _plan;
   PersonalActionPlanFailureCode? _failure;
   DateTime? _cachedAtUtc;
@@ -61,6 +64,12 @@ final class _PersonalActionPlanPanelState
   }
 
   @override
+  void dispose() {
+    _editActionFocusNode.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final text = widget.text;
     return Card(
@@ -70,33 +79,25 @@ final class _PersonalActionPlanPanelState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                const Icon(Icons.event_available_outlined),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    text.t('personalPlanTitle'),
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                if (_plan != null &&
-                    _plan!.pending == null &&
-                    !_fromOfflineCache)
-                  TextButton(
-                    key: const ValueKey('edit-personal-plan'),
-                    onPressed: _saving ? null : _edit,
-                    child: Text(text.t('edit')),
-                  ),
-              ],
+            _PlanPanelHeader(
+              text: text,
+              showAction:
+                  _plan != null && _plan!.pending == null && !_fromOfflineCache,
+              actionFocusNode: _editActionFocusNode,
+              onEdit: _saving ? null : _edit,
             ),
             const SizedBox(height: 4),
             Text(text.t('personalPlanPrivateHelp')),
             if (_fromOfflineCache) ...[
               const SizedBox(height: 8),
-              Text(
-                _offlineCacheText(text, _cachedAtUtc!),
-                key: const ValueKey('personal-plan-offline-cache'),
+              Semantics(
+                container: true,
+                label: _offlineCacheText(text, _cachedAtUtc!),
+                excludeSemantics: true,
+                child: Text(
+                  _offlineCacheText(text, _cachedAtUtc!),
+                  key: const ValueKey('personal-plan-offline-cache'),
+                ),
               ),
               if (_plan != null &&
                   !DateTime.now().toUtc().isBefore(
@@ -106,7 +107,11 @@ final class _PersonalActionPlanPanelState
             ],
             const SizedBox(height: 12),
             if (_loading)
-              const Center(child: CircularProgressIndicator())
+              Center(
+                child: CircularProgressIndicator(
+                  semanticsLabel: text.t('personalPlanLoading'),
+                ),
+              )
             else if (_failure != null)
               _PlanFailure(text: text, failure: _failure!, onRetry: _load)
             else if (_plan == null)
@@ -114,6 +119,7 @@ final class _PersonalActionPlanPanelState
                 alignment: Alignment.centerLeft,
                 child: FilledButton.icon(
                   key: const ValueKey('create-personal-plan'),
+                  focusNode: _editActionFocusNode,
                   onPressed: _saving || _fromOfflineCache ? null : _edit,
                   icon: const Icon(Icons.add_outlined),
                   label: Text(text.t('personalPlanCreate')),
@@ -127,7 +133,9 @@ final class _PersonalActionPlanPanelState
               ),
             if (_saving) ...[
               const SizedBox(height: 12),
-              const LinearProgressIndicator(),
+              LinearProgressIndicator(
+                semanticsLabel: text.t('personalPlanSaving'),
+              ),
             ],
           ],
         ),
@@ -189,13 +197,20 @@ final class _PersonalActionPlanPanelState
         (localeFirstDay == 0 ? DateTime.sunday : localeFirstDay);
     final draft = await showDialog<_PlanDraft>(
       context: context,
-      builder: (context) => _PlanDialog(
-        text: widget.text,
-        initialTarget: current?.weeklyContactTarget,
-        initialTimeZone: timeZone,
-        initialWeekStartIsoDay: initialWeekStart,
+      traversalEdgeBehavior: TraversalEdgeBehavior.closedLoop,
+      builder: (context) => FocusTraversalGroup(
+        policy: WidgetOrderTraversalPolicy(),
+        child: _PlanDialog(
+          text: widget.text,
+          initialTarget: current?.weeklyContactTarget,
+          initialTimeZone: timeZone,
+          initialWeekStartIsoDay: initialWeekStart,
+        ),
       ),
     );
+    if (mounted) {
+      _editActionFocusNode.requestFocus();
+    }
     if (draft == null || !mounted) return;
     setState(() {
       _saving = true;
@@ -225,6 +240,74 @@ final class _PersonalActionPlanPanelState
           _failure = code;
       }
     });
+  }
+}
+
+final class _PlanPanelHeader extends StatelessWidget {
+  const _PlanPanelHeader({
+    required this.text,
+    required this.showAction,
+    required this.actionFocusNode,
+    required this.onEdit,
+  });
+
+  final AppStrings text;
+  final bool showAction;
+  final FocusNode actionFocusNode;
+  final VoidCallback? onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = Semantics(
+      container: true,
+      header: true,
+      child: Text(
+        text.t('personalPlanTitle'),
+        style: Theme.of(context).textTheme.titleLarge,
+      ),
+    );
+    final action = showAction
+        ? TextButton(
+            key: const ValueKey('edit-personal-plan'),
+            focusNode: actionFocusNode,
+            onPressed: onEdit,
+            child: Text(text.t('edit')),
+          )
+        : null;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final largeText = MediaQuery.textScalerOf(context).scale(14) >= 21;
+        final compact = constraints.maxWidth < 320 || largeText;
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const ExcludeSemantics(
+                    child: Icon(Icons.event_available_outlined),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(child: title),
+                ],
+              ),
+              if (action != null)
+                Align(alignment: Alignment.centerLeft, child: action),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            const ExcludeSemantics(child: Icon(Icons.event_available_outlined)),
+            const SizedBox(width: 8),
+            Expanded(child: title),
+            ?action,
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -309,7 +392,9 @@ final class _PlanFact extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Semantics(
+      container: true,
       label: '$label $value',
+      excludeSemantics: true,
       child: Chip(label: Text('$label $value')),
     );
   }
@@ -338,9 +423,11 @@ final class _PlanFailure extends StatelessWidget {
       ),
       _ => text.t('personalPlanUnavailable'),
     };
-    return Row(
+    return Wrap(
+      spacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Expanded(child: Text(message)),
+        Semantics(container: true, liveRegion: true, child: Text(message)),
         TextButton(onPressed: onRetry, child: Text(text.t('retry'))),
       ],
     );
@@ -405,12 +492,15 @@ final class _PlanDialogState extends State<_PlanDialog> {
   Widget build(BuildContext context) {
     final text = widget.text;
     return AlertDialog(
+      semanticLabel: text.t('personalPlanEdit'),
       title: Text(text.t('personalPlanEdit')),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             SwitchListTile(
+              key: const ValueKey('personal-plan-target-enabled'),
+              autofocus: true,
               contentPadding: EdgeInsets.zero,
               value: _targetEnabled,
               onChanged: (value) => setState(() => _targetEnabled = value),
@@ -454,9 +544,14 @@ final class _PlanDialogState extends State<_PlanDialog> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(
-                _error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              Semantics(
+                container: true,
+                liveRegion: true,
+                child: Text(
+                  _error!,
+                  key: const ValueKey('personal-plan-validation-error'),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
               ),
             ],
           ],
@@ -464,10 +559,15 @@ final class _PlanDialogState extends State<_PlanDialog> {
       ),
       actions: [
         TextButton(
+          key: const ValueKey('cancel-personal-plan'),
           onPressed: () => Navigator.of(context).pop(),
           child: Text(text.t('cancel')),
         ),
-        FilledButton(onPressed: _submit, child: Text(text.t('save'))),
+        FilledButton(
+          key: const ValueKey('save-personal-plan'),
+          onPressed: _submit,
+          child: Text(text.t('save')),
+        ),
       ],
     );
   }

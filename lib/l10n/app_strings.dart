@@ -317,6 +317,8 @@ const Map<String, Map<String, String>> _strings = {
     'personalPlanConflict': '计划已在另一台设备更新，请重新载入。',
     'personalPlanInvalid': '请检查目标数、IANA 时区和周期起始日。',
     'personalPlanUnavailable': '私人计划暂时无法载入。',
+    'personalPlanLoading': '正在载入私人周计划',
+    'personalPlanSaving': '正在保存私人周计划',
     'personalPlanningOfflineReadOnly': '离线副本 · 上次同步 {time}。计划与提醒时间只读；联网后再修改。',
     'personalPlanOfflinePreviousCycle': '这是上一周期的缓存，需要联网刷新后才能作为当前进度使用。',
     'personalReminderTitle': '每日行动提醒',
@@ -326,6 +328,9 @@ const Map<String, Map<String, String>> _strings = {
     'personalReminderLocalTime': '按本设备当地时间触发；旅行后仍使用所在地的相同钟点。',
     'personalReminderSetTime': '设置提醒时间',
     'personalReminderEditTime': '修改提醒时间',
+    'personalReminderTimeActionSemantics': '{action}，当前提醒时间 {time}',
+    'personalReminderLoading': '正在载入私人提醒',
+    'personalReminderSaving': '正在保存私人提醒设置',
     'personalReminderClearTime': '清除提醒时间',
     'personalReminderDeviceToggle': '在本设备发送系统通知',
     'personalReminderDeviceOff': '新设备默认关闭。只有你在本设备明确开启后，系统才会申请通知权限。',
@@ -1030,6 +1035,8 @@ const Map<String, Map<String, String>> _strings = {
     'personalPlanInvalid':
         'Check the target, IANA time zone, and cycle start day.',
     'personalPlanUnavailable': 'Your private plan is temporarily unavailable.',
+    'personalPlanLoading': 'Loading private weekly plan',
+    'personalPlanSaving': 'Saving private weekly plan',
     'personalPlanningOfflineReadOnly':
         'Offline copy · last synced {time}. The plan and reminder time are read-only until you reconnect.',
     'personalPlanOfflinePreviousCycle':
@@ -1043,6 +1050,10 @@ const Map<String, Map<String, String>> _strings = {
         'Uses this device’s local time. The wall-clock time stays the same when you travel.',
     'personalReminderSetTime': 'Set reminder time',
     'personalReminderEditTime': 'Change reminder time',
+    'personalReminderTimeActionSemantics':
+        '{action}. Current reminder time: {time}',
+    'personalReminderLoading': 'Loading private reminder',
+    'personalReminderSaving': 'Saving private reminder settings',
     'personalReminderClearTime': 'Clear reminder time',
     'personalReminderDeviceToggle': 'Send system notifications on this device',
     'personalReminderDeviceOff':
