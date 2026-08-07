@@ -44,6 +44,12 @@ final class PersonalActionReminderPanel extends StatefulWidget {
 final class _PersonalActionReminderPanelState
     extends State<PersonalActionReminderPanel>
     with WidgetsBindingObserver {
+  final FocusNode _timeActionFocusNode = FocusNode(
+    debugLabel: 'personal reminder time action',
+  );
+  final FocusNode _detailToggleFocusNode = FocusNode(
+    debugLabel: 'personal reminder details',
+  );
   PersonalActionReminder? _reminder;
   DeviceReminderPreference _preference =
       const DeviceReminderPreference.disabled();
@@ -71,6 +77,8 @@ final class _PersonalActionReminderPanelState
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _timeActionFocusNode.dispose();
+    _detailToggleFocusNode.dispose();
     super.dispose();
   }
 
@@ -106,6 +114,17 @@ final class _PersonalActionReminderPanelState
   Widget build(BuildContext context) {
     final text = widget.text;
     final localTime = _reminder?.localTime;
+    final timeAction = text.t(
+      localTime == null
+          ? 'personalReminderSetTime'
+          : 'personalReminderEditTime',
+    );
+    final timeActionSemantics = localTime == null
+        ? timeAction
+        : text
+              .t('personalReminderTimeActionSemantics')
+              .replaceAll('{action}', timeAction)
+              .replaceAll('{time}', _formatTime(context, localTime));
     return Card(
       key: const ValueKey('personal-action-reminder-panel'),
       child: Padding(
@@ -113,42 +132,35 @@ final class _PersonalActionReminderPanelState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                const Icon(Icons.notifications_active_outlined),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    text.t('personalReminderTitle'),
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                if (!_loading)
-                  TextButton(
-                    key: const ValueKey('edit-personal-reminder'),
-                    onPressed: _saving || _fromOfflineCache ? null : _pickTime,
-                    child: Text(
-                      text.t(
-                        localTime == null
-                            ? 'personalReminderSetTime'
-                            : 'personalReminderEditTime',
-                      ),
-                    ),
-                  ),
-              ],
+            _ReminderPanelHeader(
+              text: text,
+              showAction: !_loading,
+              actionLabel: timeAction,
+              actionSemanticsLabel: timeActionSemantics,
+              actionFocusNode: _timeActionFocusNode,
+              onEdit: _saving || _fromOfflineCache ? null : _pickTime,
             ),
             const SizedBox(height: 4),
             Text(text.t('personalReminderPrivateHelp')),
             if (_fromOfflineCache) ...[
               const SizedBox(height: 8),
-              Text(
-                _offlineCacheText(text, _cachedAtUtc!),
-                key: const ValueKey('personal-reminder-offline-cache'),
+              Semantics(
+                container: true,
+                label: _offlineCacheText(text, _cachedAtUtc!),
+                excludeSemantics: true,
+                child: Text(
+                  _offlineCacheText(text, _cachedAtUtc!),
+                  key: const ValueKey('personal-reminder-offline-cache'),
+                ),
               ),
             ],
             const SizedBox(height: 12),
             if (_loading)
-              const Center(child: CircularProgressIndicator())
+              Center(
+                child: CircularProgressIndicator(
+                  semanticsLabel: text.t('personalReminderLoading'),
+                ),
+              )
             else ...[
               if (localTime == null)
                 Text(text.t('personalReminderNotSet'))
@@ -175,6 +187,7 @@ final class _PersonalActionReminderPanelState
               if (_preference.systemNotificationsEnabled)
                 SwitchListTile.adaptive(
                   key: const ValueKey('device-reminder-details'),
+                  focusNode: _detailToggleFocusNode,
                   contentPadding: EdgeInsets.zero,
                   title: Text(text.t('personalReminderDetailToggle')),
                   subtitle: Text(text.t('personalReminderDetailToggleHelp')),
@@ -204,10 +217,16 @@ final class _PersonalActionReminderPanelState
                 ),
               if (_failure case final failure?) ...[
                 const SizedBox(height: 8),
-                Text(
-                  text.t(_failureKey(failure)),
-                  key: const ValueKey('personal-reminder-failure'),
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                Semantics(
+                  container: true,
+                  liveRegion: true,
+                  child: Text(
+                    text.t(_failureKey(failure)),
+                    key: const ValueKey('personal-reminder-failure'),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
                 ),
                 TextButton(
                   onPressed: _saving ? null : _load,
@@ -217,7 +236,9 @@ final class _PersonalActionReminderPanelState
             ],
             if (_saving) ...[
               const SizedBox(height: 8),
-              const LinearProgressIndicator(),
+              LinearProgressIndicator(
+                semanticsLabel: text.t('personalReminderSaving'),
+              ),
             ],
           ],
         ),
@@ -286,6 +307,9 @@ final class _PersonalActionReminderPanelState
       ),
       helpText: widget.text.t('personalReminderSetTime'),
     );
+    if (mounted) {
+      _timeActionFocusNode.requestFocus();
+    }
     if (picked == null || !mounted) return;
     await _saveTime(
       LocalReminderTime.fromHourMinute(picked.hour, picked.minute),
@@ -486,33 +510,49 @@ final class _PersonalActionReminderPanelState
     setState(() => _saving = false);
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(widget.text.t('personalReminderDetailConfirmTitle')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(widget.text.t('personalReminderDetailConfirmHelp')),
-            const SizedBox(height: 12),
-            Text(content.title, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 4),
-            Text(content.body),
+      traversalEdgeBehavior: TraversalEdgeBehavior.closedLoop,
+      builder: (context) => FocusTraversalGroup(
+        policy: WidgetOrderTraversalPolicy(),
+        child: AlertDialog(
+          semanticLabel: widget.text.t('personalReminderDetailConfirmTitle'),
+          title: Text(widget.text.t('personalReminderDetailConfirmTitle')),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.text.t('personalReminderDetailConfirmHelp')),
+                const SizedBox(height: 12),
+                Text(
+                  content.title,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 4),
+                Text(content.body),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              key: const ValueKey('cancel-device-reminder-details'),
+              autofocus: true,
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(widget.text.t('cancel')),
+            ),
+            FilledButton(
+              key: const ValueKey('confirm-device-reminder-details'),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(widget.text.t('confirm')),
+            ),
           ],
         ),
-        actions: [
-          TextButton(
-            key: const ValueKey('cancel-device-reminder-details'),
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(widget.text.t('cancel')),
-          ),
-          FilledButton(
-            key: const ValueKey('confirm-device-reminder-details'),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(widget.text.t('confirm')),
-          ),
-        ],
       ),
     );
+    if (mounted &&
+        operationScheduleKey == _scheduleKey &&
+        operationProjectName == widget.projectName) {
+      _detailToggleFocusNode.requestFocus();
+    }
     if (confirmed != true ||
         !mounted ||
         operationScheduleKey != _scheduleKey ||
@@ -670,6 +710,84 @@ final class _PersonalActionReminderPanelState
       MaterialLocalizations.of(
         context,
       ).formatTimeOfDay(TimeOfDay(hour: value.hour, minute: value.minute));
+}
+
+final class _ReminderPanelHeader extends StatelessWidget {
+  const _ReminderPanelHeader({
+    required this.text,
+    required this.showAction,
+    required this.actionLabel,
+    required this.actionSemanticsLabel,
+    required this.actionFocusNode,
+    required this.onEdit,
+  });
+
+  final AppStrings text;
+  final bool showAction;
+  final String actionLabel;
+  final String actionSemanticsLabel;
+  final FocusNode actionFocusNode;
+  final VoidCallback? onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = Semantics(
+      container: true,
+      header: true,
+      child: Text(
+        text.t('personalReminderTitle'),
+        style: Theme.of(context).textTheme.titleLarge,
+      ),
+    );
+    final action = showAction
+        ? TextButton(
+            key: const ValueKey('edit-personal-reminder'),
+            focusNode: actionFocusNode,
+            onPressed: onEdit,
+            child: Semantics(
+              label: actionSemanticsLabel,
+              excludeSemantics: true,
+              child: Text(actionLabel),
+            ),
+          )
+        : null;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final largeText = MediaQuery.textScalerOf(context).scale(14) >= 21;
+        final compact = constraints.maxWidth < 320 || largeText;
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const ExcludeSemantics(
+                    child: Icon(Icons.notifications_active_outlined),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(child: title),
+                ],
+              ),
+              if (action != null)
+                Align(alignment: Alignment.centerLeft, child: action),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            const ExcludeSemantics(
+              child: Icon(Icons.notifications_active_outlined),
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: title),
+            ?action,
+          ],
+        );
+      },
+    );
+  }
 }
 
 enum _ReminderPanelFailure {

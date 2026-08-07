@@ -122,6 +122,25 @@ Backend 只同步提醒钟点。它不接收设备 ID、通知权限或 UTC 触�
 
 [`PrivateSessionDataGuard`](../../lib/app/private_session_data_guard.dart) 监听可信 App session。登出、启动时未登录、账号切换或明确授权失败后，它会取消待发的私人提醒并清除计划缓存。单纯网络中断不会取消仍有效的提醒，也不会删除只读缓存。当前项目的提醒或计划读取失去授权时，gateway 会清缓存，面板也会取消该项目的旧调度。App 长期关闭期间无法立即得知远端撤权；这是本地重复调度的残余限制。
 
+## 紧凑屏幕和辅助技术怎样使用这些卡片
+
+手机外壳以 900 逻辑像素为分界。低于该宽度时，[`CompactProductionHomeScaffold`](../../lib/screens/production_home_shell.dart) 使用底部四项导航；宽屏继续使用 NavigationRail。紧凑外壳保留完整 workspace 和项目名称作为语义标签。视觉标题可以在空间不足时显示省略号，但屏幕阅读器读到的上下文不截断。
+
+提醒和计划卡片不使用固定高度。宽度不足或文字达到大字号时，图标与 heading 留在第一行，修改动作移到下一行。详细通知预览和计划编辑对话框的正文可以纵向滚动，因此 200% 文字不会把底部动作挤出可达区域。
+
+键盘焦点遵循页面视觉顺序：
+
+1. AppBar 项目操作；
+2. 当前页面中的提醒和计划操作；
+3. “记录接触”浮动按钮；
+4. 底部“今日、接触、对象、分析”导航。
+
+详细通知预览先聚焦“取消”，再聚焦“确认”。计划编辑依次经过周目标开关、条件目标输入、统计时区、周期起始日、取消和保存。对话框内的 Tab 与 Shift+Tab 闭环。Escape 只取消；关闭时间选择器或两个自定义对话框后，焦点返回原触发控件。关闭周目标后，已经隐藏的目标输入不再进入焦点路径。
+
+语义层把“每日行动提醒”和“私人周计划”标成 heading。开关继续使用 Material 的单一合并语义节点。计划数、已记录数和差额各有一个节点，不重复朗读。载入与保存进度有具体名称，异步错误和表单校验错误使用 live region。离线说明同时包含“离线副本”、上次同步时间和只读状态，不依赖灰色或禁用外观传达含义。
+
+Widget 测试固定检查 `320 × 568`、`360 × 640` 和 `320 × 568` 配合 200% 文字三种状态。测试会发送真实 Tab、Shift+Tab、Enter、Space 和 Escape 键盘事件，并读取 Flutter semantics tree。这些测试在本机 Flutter 测试渲染器中运行，不需要模拟器、真机或 Docker。它们能证明 Widget 合同，不能代替 VoiceOver、TalkBack、NVDA 和六平台真机验收。
+
 ## 怎样运行这条切片的测试
 
 先运行快速测试：
@@ -130,8 +149,11 @@ Backend 只同步提醒钟点。它不接收设备 ID、通知权限或 UTC 触�
 flutter test --no-pub \
   test/plans/drift_personal_planning_cache_test.dart \
   test/features/plans/personal_action_plan_panel_test.dart \
+  test/features/plans/personal_action_plan_panel_accessibility_test.dart \
   test/plans/http_personal_action_plan_gateway_test.dart \
   test/features/reminders/personal_action_reminder_panel_test.dart \
+  test/features/reminders/personal_action_reminder_panel_accessibility_test.dart \
+  test/features/home/production_home_shell_accessibility_test.dart \
   test/app/private_session_data_guard_test.dart \
   test/reminders
 

@@ -244,103 +244,77 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
       ),
     ];
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          '${widget.context.workspace.name} → ${widget.context.project.name}',
-        ),
-        actions: [
-          PopupMenuButton<String>(
-            key: const ValueKey('project-context-menu'),
-            tooltip: strings.t('projectMenu'),
-            onSelected: _handleProjectMenuSelection,
-            itemBuilder: (context) => [
-              for (final option in homeState.projectOptions)
-                PopupMenuItem<String>(
-                  value: option.id,
-                  child: Row(
-                    children: [
-                      if (option.isSelected)
-                        const Padding(
-                          padding: EdgeInsets.only(right: 8),
-                          child: Icon(Icons.check, size: 18),
-                        )
-                      else
-                        const SizedBox(width: 26),
-                      Text(option.name),
-                    ],
-                  ),
-                ),
-              const PopupMenuDivider(),
-              PopupMenuItem<String>(
-                value: _createProjectMenuValue,
-                child: Row(
-                  children: [
-                    const Icon(Icons.add, size: 18),
-                    const SizedBox(width: 8),
-                    Text(strings.t('createProject')),
-                  ],
-                ),
+    final contextLabel =
+        '${widget.context.workspace.name} → ${widget.context.project.name}';
+    final appBarActions = [
+      PopupMenuButton<String>(
+        key: const ValueKey('project-context-menu'),
+        tooltip: strings.t('projectMenu'),
+        onSelected: _handleProjectMenuSelection,
+        itemBuilder: (context) => [
+          for (final option in homeState.projectOptions)
+            PopupMenuItem<String>(
+              value: option.id,
+              child: Row(
+                children: [
+                  if (option.isSelected)
+                    const Padding(
+                      padding: EdgeInsets.only(right: 8),
+                      child: Icon(Icons.check, size: 18),
+                    )
+                  else
+                    const SizedBox(width: 26),
+                  Text(option.name),
+                ],
               ),
-              if (widget.context.capabilities.contains(
-                questionnaireManagementCapability,
-              )) ...[
-                const PopupMenuDivider(),
-                PopupMenuItem<String>(
-                  value: _manageQuestionnaireMenuValue,
-                  child: Row(
-                    children: [
-                      const Icon(Icons.schema_outlined, size: 18),
-                      const SizedBox(width: 8),
-                      Text(strings.t('questionnaireManage')),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-            icon: const Icon(Icons.swap_horiz_outlined),
-          ),
-        ],
-      ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth >= 900) {
-            return Row(
+            ),
+          const PopupMenuDivider(),
+          PopupMenuItem<String>(
+            value: _createProjectMenuValue,
+            child: Row(
               children: [
-                NavigationRail(
-                  selectedIndex: widget.selectedIndex,
-                  onDestinationSelected: _select,
-                  labelType: NavigationRailLabelType.all,
-                  destinations: [
-                    for (final destination in destinations)
-                      NavigationRailDestination(
-                        icon: Icon(destination.icon),
-                        label: Text(destination.label),
-                      ),
-                  ],
-                ),
-                const VerticalDivider(width: 1),
-                Expanded(child: pages[widget.selectedIndex]),
+                const Icon(Icons.add, size: 18),
+                const SizedBox(width: 8),
+                Text(strings.t('createProject')),
               ],
-            );
-          }
-          return pages[widget.selectedIndex];
-        },
+            ),
+          ),
+          if (widget.context.capabilities.contains(
+            questionnaireManagementCapability,
+          )) ...[
+            const PopupMenuDivider(),
+            PopupMenuItem<String>(
+              value: _manageQuestionnaireMenuValue,
+              child: Row(
+                children: [
+                  const Icon(Icons.schema_outlined, size: 18),
+                  const SizedBox(width: 8),
+                  Text(strings.t('questionnaireManage')),
+                ],
+              ),
+            ),
+          ],
+        ],
+        icon: const Icon(Icons.swap_horiz_outlined),
       ),
-      floatingActionButton:
-          widget.context.capabilities.contains('record_contact')
-          ? FloatingActionButton.extended(
-              onPressed: () => _openContactEntry(null),
-              icon: const Icon(Icons.add_comment_outlined),
-              label: Text(strings.t('recordContact')),
-            )
-          : null,
-      bottomNavigationBar: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth >= 900) {
-            return const SizedBox.shrink();
-          }
-          return NavigationBar(
+    ];
+    final floatingActionButton =
+        widget.context.capabilities.contains('record_contact')
+        ? FloatingActionButton.extended(
+            onPressed: () => _openContactEntry(null),
+            icon: const Icon(Icons.add_comment_outlined),
+            label: Text(strings.t('recordContact')),
+          )
+        : null;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 900) {
+          return CompactProductionHomeScaffold(
+            contextLabel: contextLabel,
+            appBarActions: appBarActions,
+            body: pages[widget.selectedIndex],
+            floatingActionButton: floatingActionButton,
             selectedIndex: widget.selectedIndex,
             onDestinationSelected: _select,
             destinations: [
@@ -351,8 +325,33 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
                 ),
             ],
           );
-        },
-      ),
+        }
+        return Scaffold(
+          appBar: AppBar(
+            title: _ProductionContextTitle(label: contextLabel),
+            actions: appBarActions,
+          ),
+          body: Row(
+            children: [
+              NavigationRail(
+                selectedIndex: widget.selectedIndex,
+                onDestinationSelected: _select,
+                labelType: NavigationRailLabelType.all,
+                destinations: [
+                  for (final destination in destinations)
+                    NavigationRailDestination(
+                      icon: Icon(destination.icon),
+                      label: Text(destination.label),
+                    ),
+                ],
+              ),
+              const VerticalDivider(width: 1),
+              Expanded(child: pages[widget.selectedIndex]),
+            ],
+          ),
+          floatingActionButton: floatingActionButton,
+        );
+      },
     );
   }
 
@@ -514,6 +513,72 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
     return first.appUserId == second.appUserId &&
         first.workspace.id == second.workspace.id &&
         first.project.id == second.project.id;
+  }
+}
+
+/// 小于 900 逻辑像素时使用的无业务逻辑外壳。
+///
+/// 独立组件让关键手机宽度可以直接验证 AppBar、页面、记录入口和底部导航的
+/// 布局与焦点顺序，不需要在 Widget 测试中重建整套 session 与 gateway。
+final class CompactProductionHomeScaffold extends StatelessWidget {
+  const CompactProductionHomeScaffold({
+    super.key,
+    required this.contextLabel,
+    required this.appBarActions,
+    required this.body,
+    required this.floatingActionButton,
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+    required this.destinations,
+  });
+
+  final String contextLabel;
+  final List<Widget> appBarActions;
+  final Widget body;
+  final Widget? floatingActionButton;
+  final int selectedIndex;
+  final ValueChanged<int> onDestinationSelected;
+  final List<NavigationDestination> destinations;
+
+  @override
+  Widget build(BuildContext context) {
+    final scaledLabelSize = MediaQuery.textScalerOf(context).scale(14);
+    final extraNavigationHeight =
+        (scaledLabelSize - 14).clamp(0, 14).toDouble() * 2;
+    return FocusTraversalGroup(
+      policy: ReadingOrderTraversalPolicy(),
+      child: Scaffold(
+        appBar: AppBar(
+          title: _ProductionContextTitle(label: contextLabel),
+          actions: appBarActions,
+        ),
+        body: body,
+        floatingActionButton: floatingActionButton,
+        bottomNavigationBar: NavigationBar(
+          height: 80 + extraNavigationHeight,
+          selectedIndex: selectedIndex,
+          onDestinationSelected: onDestinationSelected,
+          destinations: destinations,
+        ),
+      ),
+    );
+  }
+}
+
+final class _ProductionContextTitle extends StatelessWidget {
+  const _ProductionContextTitle({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      header: true,
+      label: label,
+      excludeSemantics: true,
+      child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+    );
   }
 }
 
