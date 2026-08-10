@@ -2,7 +2,7 @@
 
 个人分析和管理分析处理不同的信任边界。个人页可以立即显示本人设备上的事实，并说明哪些接触尚未同步。管理分析只能使用后端已接受的数据，还必须先降低小群体披露风险。
 
-当前实现完成管理隐私政策的基础模块和跨层 fixture。它没有开放管理 HTTP 端点，也没有授予任何账号查看团队汇总的权限。组织成员关系、管理 capability 和项目报告时区完成后，才能把该政策接入生产查询。
+当前实现完成管理隐私政策、固定报告请求合同和跨层 fixture。它没有开放管理 HTTP 端点，也没有授予任何账号查看团队汇总的权限。组织成员关系、管理 capability 和项目报告时区完成后，才能把这些模块接入生产查询。
 
 ## 先确定统计单位
 
@@ -67,6 +67,33 @@ Dart 测试验证 `MetricResult` 和固定顺序。PostgreSQL fixture 把相同�
 
 SQL 函数位于 `app_private` schema。`tongxingzhe_runtime` 没有 schema 使用权或函数执行权。这个权限边界防止 Backend 在成员授权和报告时区尚未完成时，把测试基础误接成生产管理端点。
 
+## 固定报告请求为什么只有两个字段
+
+第一版客户端只能提交以下 JSON：
+
+```json
+{
+  "report_id": "contact_sessions_by_channel_two_periods",
+  "report_version": 1
+}
+```
+
+客户端不能提交项目 ID、时区、日期范围、维度、筛选或导出字段。项目和请求者来自已验证的 Backend 上下文。项目报告时区和数据截止时间也必须由服务端决定。若客户端可以指定这些字段，它就能制造许多重叠查询，并扩大通过比较结果恢复小样本的机会。
+
+[`canonicalizeManagementReportRequest`](../../backend/server/src/management-report-contract.ts) 把有效输入映射为一份固定定义。定义包含 `contact_sessions` v1、渠道维度、周粒度、相邻两期、隐私政策版本和 `view_anonymous_analytics` capability。任何额外字段、未知报告或未知版本都返回稳定的拒绝结果。
+
+PostgreSQL 在 [`0024_management_report_contract.sql`](../../backend/database/migrations/0024_management_report_contract.sql) 中保存同一份不可变定义。私有规范化函数返回稳定的 `query_fingerprint`：
+
+```text
+management-report:contact_sessions_by_channel_two_periods:v1
+```
+
+这个指纹用于审计和对账。它不是密码、token 或匿名化手段，也不授权任何查询。
+
+审计信封只保存请求者内部 ID、项目 ID、报告 ID 与版本、查询指纹、UTC 请求时间和结果状态。它不保存报表格值、贡献者数量、最大贡献值或隐藏的精确值。当前代码只固定信封结构。持久审计必须在未来授权后的执行事务中写入。
+
+TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../backend/database/fixtures/shared/management_report_requests_v1.csv)。fixture 包含有效请求、未知报告、未知版本，以及客户端伪造项目、时区、日期、维度、筛选和导出字段的负向场景。
+
 ## 在 Docker 中验证
 
 先启动 Docker Desktop。然后在仓库根目录运行：
@@ -83,6 +110,14 @@ SQL 函数位于 `app_private` schema。`tongxingzhe_runtime` 没有 schema 使�
 flutter test --no-pub test/features/contact_metrics/management_privacy_policy_test.dart
 ```
 
+只想验证 Backend 请求合同时运行：
+
+```bash
+cd backend/server
+npm ci
+npm test
+```
+
 Docker 的安装、输出解释和失败容器保留方法见[第 9 章](09-local-docker-and-ci-testing.md)。
 
 ## 当前证据不能证明什么
@@ -94,7 +129,7 @@ Docker 的安装、输出解释和失败容器保留方法见[第 9 章](09-loca
 - 组织和项目成员关系；
 - 独立的管理分析 capability；
 - 项目固定报告 IANA 时区；
-- 服务端固定报告注册、请求 canonicalization 和审计；
+- 授权后的固定报告执行、持久审计和快照；
 - 区域与时间重叠的重识别演练；
 - 只接收抑制后结果的 API、缓存、图表和导出。
 
