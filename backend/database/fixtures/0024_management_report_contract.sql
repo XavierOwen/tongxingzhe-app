@@ -65,6 +65,7 @@ BEGIN
     'dimension', 'channel',
     'period_grain', 'week',
     'comparison_period_count', 2,
+    'period_boundary_id', 'iso_week_monday_v1',
     'privacy_policy', 'management_contact_session_privacy_v1',
     'required_capability', 'view_anonymous_analytics',
     'query_fingerprint',

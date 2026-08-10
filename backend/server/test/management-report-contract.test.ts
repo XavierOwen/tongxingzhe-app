@@ -24,6 +24,7 @@ test("registered report request becomes one stable canonical query", () => {
       dimension: "channel",
       periodGrain: "week",
       comparisonPeriodCount: 2,
+      periodBoundaryId: "iso_week_monday_v1",
       privacyPolicy: "management_contact_session_privacy_v1",
       requiredCapability: "view_anonymous_analytics",
       queryFingerprint:
