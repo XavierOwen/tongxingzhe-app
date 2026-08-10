@@ -2,6 +2,7 @@ import '../../app_session/session_context_gateway.dart';
 import '../../sync/sync_models.dart';
 import '../contact_journal/contact_journal.dart';
 import '../contact_journal/contact_models.dart';
+import 'metric_contract.dart';
 
 /// 首页支持的两个稳定统计窗口。
 enum PersonalSummaryPeriod { today, recentSevenDays }
@@ -16,22 +17,101 @@ final class UtcMetricPeriod {
 
 /// 汇总页需要的事实和已统一单位的同步覆盖。
 final class PersonalSummarySnapshot {
-  const PersonalSummarySnapshot({
+  PersonalSummarySnapshot({
     required this.period,
     required this.fromUtc,
     required this.untilUtc,
     required this.summary,
-  });
+    required List<MetricResult> metrics,
+  }) : metrics = List.unmodifiable(metrics);
 
   final PersonalSummaryPeriod period;
   final DateTime fromUtc;
   final DateTime untilUtc;
   final PersonalContactSummary summary;
+  final List<MetricResult> metrics;
 
   int get syncedContactSessionCount =>
       summary.contactSessionCount - summary.pendingSyncCount;
 
   int get syncCoverageDenominator => summary.contactSessionCount;
+
+  MetricResult metric(MetricReference reference) =>
+      metrics.singleWhere((result) => result.definition.reference == reference);
+}
+
+/// 把本地个人事实映射到版本化结果合同。
+///
+/// 页面和导出层不得自行重算这些值或补造结果元数据。
+abstract final class PersonalContactMetricMapper {
+  static List<MetricResult> map({
+    required PersonalContactSummary summary,
+    required MetricPeriod period,
+    required DateTime dataCutoffUtc,
+  }) {
+    _validateSummary(summary);
+    final coverage = MetricSyncCoverage(
+      statisticalUnit: MetricStatisticalUnit.contactSession,
+      totalCount: summary.contactSessionCount,
+      pendingCount: summary.pendingSyncCount,
+    );
+    MetricResult result(MetricDefinition definition, MetricValue value) =>
+        MetricResult(
+          definition: definition,
+          value: value,
+          period: period,
+          timeZone: 'UTC',
+          dataCutoffUtc: dataCutoffUtc,
+          sourceTier: MetricSourceTier.localOperational,
+          syncCoverage: coverage,
+          privacyStatus: MetricPrivacyStatus.personalFact,
+        );
+
+    return List.unmodifiable([
+      result(
+        CoreMetricCatalog.contactSessions,
+        CountMetricValue(summary.contactSessionCount),
+      ),
+      result(
+        CoreMetricCatalog.reachedPeople,
+        CountMetricValue(summary.reachCount),
+      ),
+      result(
+        CoreMetricCatalog.interestDistribution,
+        MetricDistributionValue(
+          labels: CoreMetricCatalog.interestDistribution.bucketLabels,
+          counts: summary.interestDistribution,
+        ),
+      ),
+      result(
+        CoreMetricCatalog.channelDistribution,
+        MetricDistributionValue(
+          labels: CoreMetricCatalog.channelDistribution.bucketLabels,
+          counts: summary.channelDistribution,
+        ),
+      ),
+    ]);
+  }
+
+  static void _validateSummary(PersonalContactSummary summary) {
+    if (summary.contactSessionCount < 0 ||
+        summary.reachCount < 0 ||
+        summary.pendingSyncCount < 0 ||
+        summary.pendingSyncCount > summary.contactSessionCount ||
+        summary.interestDistribution.length != 5 ||
+        summary.channelDistribution.length != ContactChannel.values.length ||
+        summary.interestDistribution.any((count) => count < 0) ||
+        summary.channelDistribution.any((count) => count < 0) ||
+        summary.interestDistribution.fold<int>(
+              0,
+              (sum, count) => sum + count,
+            ) !=
+            summary.contactSessionCount ||
+        summary.channelDistribution.fold<int>(0, (sum, count) => sum + count) !=
+            summary.contactSessionCount) {
+      throw StateError('invalid_personal_contact_summary');
+    }
+  }
 }
 
 /// 接触列表页的一致读取快照。
@@ -174,12 +254,20 @@ final class PersonalContactOverviewRepository {
       fromUtc: bounds.fromUtc,
       untilUtc: bounds.untilUtc,
     );
-    _validateSummary(summary);
+    final metricPeriod = MetricPeriod(
+      fromUtc: bounds.fromUtc,
+      untilUtc: bounds.untilUtc,
+    );
     return PersonalSummarySnapshot(
       period: period,
       fromUtc: bounds.fromUtc,
       untilUtc: bounds.untilUtc,
       summary: summary,
+      metrics: PersonalContactMetricMapper.map(
+        summary: summary,
+        period: metricPeriod,
+        dataCutoffUtc: _now().toUtc(),
+      ),
     );
   }
 
@@ -209,16 +297,5 @@ final class PersonalContactOverviewRepository {
       todaySummary: today.summary,
       syncHealth: health,
     );
-  }
-
-  void _validateSummary(PersonalContactSummary summary) {
-    if (summary.contactSessionCount < 0 ||
-        summary.reachCount < 0 ||
-        summary.pendingSyncCount < 0 ||
-        summary.pendingSyncCount > summary.contactSessionCount ||
-        summary.interestDistribution.length != 5 ||
-        summary.channelDistribution.length != ContactChannel.values.length) {
-      throw StateError('invalid_personal_contact_summary');
-    }
   }
 }
