@@ -24,6 +24,7 @@ final class PersonalActionReminderPanel extends StatefulWidget {
     required this.scheduler,
     required this.timeZoneProvider,
     required this.idGenerator,
+    this.planningRevision = 0,
   });
 
   final AppStrings text;
@@ -35,6 +36,7 @@ final class PersonalActionReminderPanel extends StatefulWidget {
   final ReminderNotificationScheduler scheduler;
   final DeviceTimeZoneProvider timeZoneProvider;
   final IdGenerator idGenerator;
+  final int planningRevision;
 
   @override
   State<PersonalActionReminderPanel> createState() =>
@@ -58,6 +60,7 @@ final class _PersonalActionReminderPanelState
   var _fromOfflineCache = false;
   var _loading = true;
   var _saving = false;
+  var _scopeGeneration = 0;
 
   String get _scheduleKey => personalActionReminderScheduleKey(widget.scope);
 
@@ -94,19 +97,25 @@ final class _PersonalActionReminderPanelState
   @override
   void didUpdateWidget(covariant PersonalActionReminderPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!_sameScope(oldWidget.scope, widget.scope) ||
+    final scopeChanged =
+        !_sameScope(oldWidget.scope, widget.scope) ||
         oldWidget.gateway != widget.gateway ||
         oldWidget.planGateway != widget.planGateway ||
         oldWidget.projectName != widget.projectName ||
         oldWidget.preferenceStore != widget.preferenceStore ||
-        oldWidget.scheduler != widget.scheduler) {
+        oldWidget.scheduler != widget.scheduler;
+    if (scopeChanged) {
+      _scopeGeneration++;
       _reminder = null;
       _preference = const DeviceReminderPreference.disabled();
       _failure = null;
       _cachedAtUtc = null;
       _fromOfflineCache = false;
       _loading = true;
+      _saving = false;
       unawaited(_load());
+    } else if (oldWidget.planningRevision != widget.planningRevision) {
+      unawaited(_reconcile(showFailure: true));
     }
   }
 
@@ -247,6 +256,10 @@ final class _PersonalActionReminderPanelState
   }
 
   Future<void> _load() async {
+    final generation = _scopeGeneration;
+    final scope = widget.scope;
+    final preferenceStore = widget.preferenceStore;
+    final gateway = widget.gateway;
     if (mounted) {
       setState(() {
         _loading = true;
@@ -254,9 +267,10 @@ final class _PersonalActionReminderPanelState
       });
     }
     try {
-      final preference = await widget.preferenceStore.load(widget.scope);
-      final result = await widget.gateway.load();
-      if (!mounted) return;
+      final preference = await preferenceStore.load(scope);
+      if (!_isCurrentScope(generation)) return;
+      final result = await gateway.load();
+      if (!_isCurrentScope(generation)) return;
       switch (result) {
         case PersonalActionReminderSuccess<PersonalActionReminder?>(
           :final value,
@@ -274,7 +288,7 @@ final class _PersonalActionReminderPanelState
             if (value?.localTime == null) {
               await _cancelScheduled(showFailure: true);
             } else {
-              await _reconcile(showFailure: true);
+              await _reconcile(showFailure: true, scopeGeneration: generation);
             }
           }
         case PersonalActionReminderRejected<PersonalActionReminder?>():
@@ -287,7 +301,7 @@ final class _PersonalActionReminderPanelState
           });
       }
     } on Object {
-      if (!mounted) return;
+      if (!_isCurrentScope(generation)) return;
       setState(() {
         _fromOfflineCache = false;
         _cachedAtUtc = null;
@@ -595,13 +609,18 @@ final class _PersonalActionReminderPanelState
     }
   }
 
-  Future<void> _reconcile({required bool showFailure}) async {
+  Future<void> _reconcile({
+    required bool showFailure,
+    int? scopeGeneration,
+  }) async {
+    final generation = scopeGeneration ?? _scopeGeneration;
     final localTime = _reminder?.localTime;
     if (localTime == null || !_preference.systemNotificationsEnabled) return;
     final content = await _contentFor(_preference);
+    if (!_isCurrentScope(generation)) return;
     if (content == null) {
       await _cancelScheduled(showFailure: false);
-      if (mounted && showFailure) {
+      if (_isCurrentScope(generation) && showFailure) {
         setState(() => _failure = _ReminderPanelFailure.detailUnavailable);
       }
       return;
@@ -611,10 +630,15 @@ final class _PersonalActionReminderPanelState
       requestPermission: false,
       content: content,
     );
-    if (result is ReminderScheduleRejected && mounted && showFailure) {
+    if (result is ReminderScheduleRejected &&
+        _isCurrentScope(generation) &&
+        showFailure) {
       setState(() => _failure = _failureFor(result.failure));
     }
   }
+
+  bool _isCurrentScope(int generation) =>
+      mounted && generation == _scopeGeneration;
 
   Future<ReminderScheduleResult> _schedule(
     LocalReminderTime localTime, {
@@ -666,15 +690,21 @@ final class _PersonalActionReminderPanelState
       PersonalActionPlanSuccess<PersonalActionPlanSnapshot?>(
         :final value,
         :final fromOfflineCache,
+        :final offlineChange,
       ) =>
-        fromOfflineCache &&
-                value != null &&
-                !DateTime.now().toUtc().isBefore(value.progress.cycleUntilUtc)
+        offlineChange != null ||
+                (fromOfflineCache &&
+                    value != null &&
+                    !DateTime.now().toUtc().isBefore(
+                      value.progress.cycleUntilUtc,
+                    ))
             ? _genericContent
             : ReminderNotificationContent(
                 title: '${widget.text.t('appTitle')} · $projectName',
                 body: _detailedBody(value),
               ),
+      PersonalActionPlanQueued<PersonalActionPlanSnapshot?>() =>
+        _genericContent,
     };
   }
 

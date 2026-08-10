@@ -123,7 +123,7 @@ void main() {
           )
           .label,
       '离线副本 · 上次同步 2030-03-09T20:00:00.000Z。'
-      '计划与提醒时间只读；联网后再修改。',
+      '提醒时间只读；联网后再修改。',
     );
     semantics.dispose();
   });
@@ -301,7 +301,11 @@ final class _PlanGateway implements PersonalActionPlanGateway {
     required String statisticsTimeZone,
     required int weekStartIsoDay,
     required String mutationId,
+    bool replaceOfflineChange = false,
   }) async => throw UnimplementedError();
+
+  @override
+  Future<bool> discardOfflineChange() async => true;
 
   @override
   Future<void> close() async {}

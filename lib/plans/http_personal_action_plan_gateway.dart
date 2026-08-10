@@ -38,9 +38,13 @@ final class DeferredPersonalActionPlanGateway
     required String statisticsTimeZone,
     required int weekStartIsoDay,
     required String mutationId,
+    bool replaceOfflineChange = false,
   }) async => const PersonalActionPlanRejected(
     PersonalActionPlanFailureCode.notConfigured,
   );
+
+  @override
+  Future<bool> discardOfflineChange() async => true;
 
   @override
   Future<void> close() async {}
@@ -85,6 +89,7 @@ final class HttpPersonalActionPlanGateway implements PersonalActionPlanGateway {
     required String statisticsTimeZone,
     required int weekStartIsoDay,
     required String mutationId,
+    bool replaceOfflineChange = false,
   }) => _request(
     method: 'PUT',
     body: {
@@ -181,6 +186,9 @@ final class HttpPersonalActionPlanGateway implements PersonalActionPlanGateway {
       return PersonalActionPlanFailureCode.serverRejected;
     }
   }
+
+  @override
+  Future<bool> discardOfflineChange() async => true;
 
   @override
   Future<void> close() async => _client.close();

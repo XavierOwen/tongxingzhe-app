@@ -18,6 +18,7 @@ final class PersonalActionPlanPanel extends StatefulWidget {
     required this.gateway,
     required this.timeZoneProvider,
     required this.idGenerator,
+    this.onPlanningStateChanged,
   });
 
   final AppStrings text;
@@ -25,6 +26,7 @@ final class PersonalActionPlanPanel extends StatefulWidget {
   final PersonalActionPlanGateway gateway;
   final DeviceTimeZoneProvider timeZoneProvider;
   final IdGenerator idGenerator;
+  final VoidCallback? onPlanningStateChanged;
 
   @override
   State<PersonalActionPlanPanel> createState() =>
@@ -37,11 +39,14 @@ final class _PersonalActionPlanPanelState
     debugLabel: 'personal plan edit action',
   );
   PersonalActionPlanSnapshot? _plan;
+  PersonalActionPlanOfflineChange? _offlineChange;
+  PersonalActionPlanFailureCode? _offlineChangeFailure;
   PersonalActionPlanFailureCode? _failure;
   DateTime? _cachedAtUtc;
   var _fromOfflineCache = false;
   var _loading = true;
   var _saving = false;
+  var _scopeGeneration = 0;
 
   @override
   void initState() {
@@ -54,11 +59,15 @@ final class _PersonalActionPlanPanelState
     super.didUpdateWidget(oldWidget);
     if (oldWidget.scopeKey != widget.scopeKey ||
         oldWidget.gateway != widget.gateway) {
+      _scopeGeneration++;
       _plan = null;
+      _offlineChange = null;
+      _offlineChangeFailure = null;
       _failure = null;
       _cachedAtUtc = null;
       _fromOfflineCache = false;
       _loading = true;
+      _saving = false;
       unawaited(_load());
     }
   }
@@ -82,7 +91,9 @@ final class _PersonalActionPlanPanelState
             _PlanPanelHeader(
               text: text,
               showAction:
-                  _plan != null && _plan!.pending == null && !_fromOfflineCache,
+                  _plan != null &&
+                  _plan!.pending == null &&
+                  _offlineChange == null,
               actionFocusNode: _editActionFocusNode,
               onEdit: _saving ? null : _edit,
             ),
@@ -105,6 +116,17 @@ final class _PersonalActionPlanPanelState
                   ))
                 Text(text.t('personalPlanOfflinePreviousCycle')),
             ],
+            if (_offlineChange case final change?) ...[
+              const SizedBox(height: 12),
+              _OfflinePlanChange(
+                text: text,
+                change: change,
+                failure: _offlineChangeFailure,
+                onDiscard: _saving ? null : _discardOfflineChange,
+                onResubmit: _saving ? null : _resubmitOfflineChange,
+                onRetry: _saving ? null : _retryOfflineChange,
+              ),
+            ],
             const SizedBox(height: 12),
             if (_loading)
               Center(
@@ -120,7 +142,7 @@ final class _PersonalActionPlanPanelState
                 child: FilledButton.icon(
                   key: const ValueKey('create-personal-plan'),
                   focusNode: _editActionFocusNode,
-                  onPressed: _saving || _fromOfflineCache ? null : _edit,
+                  onPressed: _saving || _offlineChange != null ? null : _edit,
                   icon: const Icon(Icons.add_outlined),
                   label: Text(text.t('personalPlanCreate')),
                 ),
@@ -144,6 +166,7 @@ final class _PersonalActionPlanPanelState
   }
 
   Future<void> _load() async {
+    final generation = _scopeGeneration;
     if (mounted) {
       setState(() {
         _loading = true;
@@ -151,7 +174,7 @@ final class _PersonalActionPlanPanelState
       });
     }
     final result = await widget.gateway.load();
-    if (!mounted) return;
+    if (!mounted || generation != _scopeGeneration) return;
     setState(() {
       _loading = false;
       switch (result) {
@@ -164,18 +187,32 @@ final class _PersonalActionPlanPanelState
           _failure = null;
           _fromOfflineCache = fromOfflineCache;
           _cachedAtUtc = cachedAtUtc;
+          _offlineChange = result.offlineChange;
+          _offlineChangeFailure = result.offlineChangeFailure;
         case PersonalActionPlanRejected<PersonalActionPlanSnapshot?>(
           :final code,
         ):
           _failure = code;
           _fromOfflineCache = false;
           _cachedAtUtc = null;
+          _offlineChange = null;
+          _offlineChangeFailure = null;
+        case PersonalActionPlanQueued<PersonalActionPlanSnapshot?>():
+          _failure = PersonalActionPlanFailureCode.invalidResponse;
+          _fromOfflineCache = false;
+          _cachedAtUtc = null;
+          _offlineChange = null;
+          _offlineChangeFailure = null;
       }
     });
+    if (result is PersonalActionPlanSuccess<PersonalActionPlanSnapshot?>) {
+      widget.onPlanningStateChanged?.call();
+    }
   }
 
   Future<void> _edit() async {
-    if (_fromOfflineCache) return;
+    if (_offlineChange != null) return;
+    final generation = _scopeGeneration;
     final current = _plan?.current;
     late final String timeZone;
     try {
@@ -183,12 +220,12 @@ final class _PersonalActionPlanPanelState
           current?.statisticsTimeZone ??
           await widget.timeZoneProvider.currentIanaTimeZone();
     } catch (_) {
-      if (mounted) {
+      if (_isCurrentScope(generation)) {
         setState(() => _failure = PersonalActionPlanFailureCode.invalidRequest);
       }
       return;
     }
-    if (!mounted) return;
+    if (!mounted || generation != _scopeGeneration) return;
     final localeFirstDay = MaterialLocalizations.of(
       context,
     ).firstDayOfWeekIndex;
@@ -208,10 +245,10 @@ final class _PersonalActionPlanPanelState
         ),
       ),
     );
-    if (mounted) {
+    if (_isCurrentScope(generation)) {
       _editActionFocusNode.requestFocus();
     }
-    if (draft == null || !mounted) return;
+    if (draft == null || !_isCurrentScope(generation)) return;
     setState(() {
       _saving = true;
       _failure = null;
@@ -223,7 +260,7 @@ final class _PersonalActionPlanPanelState
       weekStartIsoDay: draft.weekStartIsoDay,
       mutationId: widget.idGenerator.next(),
     );
-    if (!mounted) return;
+    if (!_isCurrentScope(generation)) return;
     setState(() {
       _saving = false;
       switch (result) {
@@ -234,13 +271,227 @@ final class _PersonalActionPlanPanelState
           _failure = null;
           _fromOfflineCache = false;
           _cachedAtUtc = null;
+          _offlineChange = null;
+          _offlineChangeFailure = null;
         case PersonalActionPlanRejected<PersonalActionPlanMutation>(
           :final code,
         ):
           _failure = code;
+        case PersonalActionPlanQueued<PersonalActionPlanMutation>(
+          :final offlineChange,
+        ):
+          _failure = null;
+          _offlineChange = offlineChange;
+          _offlineChangeFailure = null;
       }
     });
+    if (result is PersonalActionPlanSuccess<PersonalActionPlanMutation> ||
+        result is PersonalActionPlanQueued<PersonalActionPlanMutation>) {
+      widget.onPlanningStateChanged?.call();
+    }
   }
+
+  Future<void> _discardOfflineChange() async {
+    final generation = _scopeGeneration;
+    setState(() => _saving = true);
+    final discarded = await widget.gateway.discardOfflineChange();
+    if (!_isCurrentScope(generation)) return;
+    setState(() {
+      _saving = false;
+      if (discarded) {
+        _offlineChange = null;
+        _offlineChangeFailure = null;
+      } else {
+        _offlineChangeFailure = PersonalActionPlanFailureCode.serverRejected;
+      }
+    });
+    if (discarded) widget.onPlanningStateChanged?.call();
+  }
+
+  Future<void> _resubmitOfflineChange() => _submitOfflineChange(
+    expectedRevision: _plan?.revision ?? 0,
+    mutationId: widget.idGenerator.next(),
+    replaceOfflineChange: true,
+  );
+
+  Future<void> _retryOfflineChange() {
+    final change = _offlineChange;
+    if (change == null) return Future<void>.value();
+    return _submitOfflineChange(
+      expectedRevision: change.expectedRevision,
+      mutationId: change.mutationId,
+    );
+  }
+
+  Future<void> _submitOfflineChange({
+    required int expectedRevision,
+    required String mutationId,
+    bool replaceOfflineChange = false,
+  }) async {
+    final change = _offlineChange;
+    if (change == null) return;
+    final generation = _scopeGeneration;
+    setState(() => _saving = true);
+    final result = await widget.gateway.save(
+      expectedRevision: expectedRevision,
+      weeklyContactTarget: change.weeklyContactTarget,
+      statisticsTimeZone: change.statisticsTimeZone,
+      weekStartIsoDay: change.weekStartIsoDay,
+      mutationId: mutationId,
+      replaceOfflineChange: replaceOfflineChange,
+    );
+    if (!_isCurrentScope(generation)) return;
+    var refreshConflict = false;
+    setState(() {
+      _saving = false;
+      switch (result) {
+        case PersonalActionPlanSuccess<PersonalActionPlanMutation>(
+          :final value,
+        ):
+          _plan = value.plan;
+          _offlineChange = null;
+          _offlineChangeFailure = null;
+          _failure = null;
+          _fromOfflineCache = false;
+          _cachedAtUtc = null;
+        case PersonalActionPlanQueued<PersonalActionPlanMutation>(
+          :final offlineChange,
+        ):
+          _offlineChange = offlineChange;
+          _offlineChangeFailure = null;
+        case PersonalActionPlanRejected<PersonalActionPlanMutation>(
+          :final code,
+        ):
+          _offlineChangeFailure = code;
+          refreshConflict = code == PersonalActionPlanFailureCode.conflict;
+      }
+    });
+    if (result is PersonalActionPlanSuccess<PersonalActionPlanMutation> ||
+        result is PersonalActionPlanQueued<PersonalActionPlanMutation>) {
+      widget.onPlanningStateChanged?.call();
+    }
+    if (refreshConflict && _isCurrentScope(generation)) await _load();
+  }
+
+  bool _isCurrentScope(int generation) =>
+      mounted && generation == _scopeGeneration;
+}
+
+final class _OfflinePlanChange extends StatelessWidget {
+  const _OfflinePlanChange({
+    required this.text,
+    required this.change,
+    required this.failure,
+    required this.onDiscard,
+    required this.onResubmit,
+    required this.onRetry,
+  });
+
+  final AppStrings text;
+  final PersonalActionPlanOfflineChange change;
+  final PersonalActionPlanFailureCode? failure;
+  final VoidCallback? onDiscard;
+  final VoidCallback? onResubmit;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    key: const ValueKey('personal-plan-offline-change'),
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      if (failure == PersonalActionPlanFailureCode.conflict) ...[
+        Semantics(
+          container: true,
+          liveRegion: true,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                text.t('personalPlanOfflineConflict'),
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              Text(text.t('personalPlanOfflineConflictHelp')),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+      ] else if (failure != null) ...[
+        Semantics(
+          container: true,
+          liveRegion: true,
+          child: Text(
+            failure == PersonalActionPlanFailureCode.pendingChange
+                ? text.t('personalPlanPendingLocked')
+                : text.t('personalPlanOfflineSyncFailed'),
+          ),
+        ),
+        const SizedBox(height: 8),
+      ] else ...[
+        Text(text.t('personalPlanOfflineWaiting')),
+        const SizedBox(height: 8),
+      ],
+      Semantics(
+        container: true,
+        label: '${text.t('personalPlanOfflineQueued')}\n$_description',
+        excludeSemantics: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              text.t('personalPlanOfflineQueued'),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            Text(_description),
+          ],
+        ),
+      ),
+      const SizedBox(height: 8),
+      if (failure == PersonalActionPlanFailureCode.conflict)
+        Wrap(
+          spacing: 8,
+          children: [
+            TextButton(
+              key: const ValueKey('discard-offline-plan-change'),
+              onPressed: onDiscard,
+              child: Text(text.t('personalPlanKeepServer')),
+            ),
+            FilledButton(
+              key: const ValueKey('resubmit-offline-plan-change'),
+              onPressed: onResubmit,
+              child: Text(text.t('personalPlanUseOfflineChange')),
+            ),
+          ],
+        )
+      else
+        Wrap(
+          spacing: 8,
+          children: [
+            FilledButton(
+              key: const ValueKey('retry-offline-plan-change'),
+              onPressed: onRetry,
+              child: Text(text.t('retry')),
+            ),
+            TextButton(
+              key: const ValueKey('discard-offline-plan-change'),
+              onPressed: onDiscard,
+              child: Text(text.t('personalPlanDiscardOfflineChange')),
+            ),
+          ],
+        ),
+    ],
+  );
+
+  String get _description => [
+    change.weeklyContactTarget == null
+        ? text.t('personalPlanOfflineTargetOff')
+        : '${text.t('personalPlanOfflineTarget')}'
+              '${change.weeklyContactTarget}',
+    '${text.t('personalPlanOfflineTimeZone')}${change.statisticsTimeZone}',
+    '${text.t('personalPlanOfflineWeekStart')}'
+        '${_weekDay(text, change.weekStartIsoDay)}',
+    '${text.t('personalPlanOfflineQueuedAt')}'
+        '${change.queuedAtUtc.toUtc().toIso8601String()}',
+  ].join('\n');
 }
 
 final class _PlanPanelHeader extends StatelessWidget {
@@ -594,5 +845,5 @@ final class _PlanDialogState extends State<_PlanDialog> {
 String _weekDay(AppStrings text, int isoDay) => text.t('weekDay.$isoDay');
 
 String _offlineCacheText(AppStrings text, DateTime cachedAtUtc) => text
-    .t('personalPlanningOfflineReadOnly')
+    .t('personalPlanOfflineEditable')
     .replaceAll('{time}', cachedAtUtc.toUtc().toIso8601String());

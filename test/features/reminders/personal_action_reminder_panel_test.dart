@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/device/device_time_zone.dart';
@@ -25,6 +27,45 @@ void main() {
       isFalse,
     );
     expect(scheduler.scheduleCount, 0);
+  });
+
+  testWidgets('提醒 scope 切换后忽略旧请求的延迟结果', (tester) async {
+    final store = _MemoryPreferenceStore();
+    final scheduler = _FakeScheduler();
+    final oldGateway = _DelayedReminderGateway();
+    await tester.pumpWidget(
+      _app(store: store, scheduler: scheduler, gateway: oldGateway),
+    );
+    await tester.pump();
+
+    final newGateway = _FakeGateway()
+      ..reminder = PersonalActionReminder(
+        reminderId: 'reminder-2',
+        revision: 1,
+        localTime: LocalReminderTime.fromHourMinute(21, 0),
+        updatedAtUtc: DateTime.utc(2030, 3, 9, 19),
+      );
+    await tester.pumpWidget(
+      _app(
+        store: store,
+        scheduler: scheduler,
+        gateway: newGateway,
+        scope: const DeviceReminderScope(
+          appUserId: 'user-1',
+          workspaceId: 'workspace-1',
+          projectId: 'project-2',
+          deviceId: 'device-1',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('9:00'), findsOneWidget);
+
+    oldGateway.complete();
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('9:00'), findsOneWidget);
+    expect(find.textContaining('7:00'), findsNothing);
   });
 
   testWidgets('离线副本禁止修改同步时间，但保留本机通知开关', (tester) async {
@@ -200,6 +241,58 @@ void main() {
     expect(scheduler.cancelKeys, hasLength(1));
   });
 
+  testWidgets('存在未同步计划修改时详细通知降级为通用文案', (tester) async {
+    final store = _MemoryPreferenceStore(
+      const DeviceReminderPreference(
+        systemNotificationsEnabled: true,
+        contentMode: ReminderNotificationContentMode.projectAndProgress,
+      ),
+    );
+    final scheduler = _FakeScheduler();
+    await tester.pumpWidget(
+      _app(
+        store: store,
+        scheduler: scheduler,
+        planGateway: _FakePlanGateway(offlineChange: _offlineChange),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(scheduler.lastContent?.title, '同行者');
+    expect(scheduler.lastContent?.body, isNot(contains('校园推广')));
+    expect(scheduler.lastContent?.body, isNot(contains('7')));
+  });
+
+  testWidgets('计划刚排队时立即把已安排的详细通知降级为通用文案', (tester) async {
+    final store = _MemoryPreferenceStore(
+      const DeviceReminderPreference(
+        systemNotificationsEnabled: true,
+        contentMode: ReminderNotificationContentMode.projectAndProgress,
+      ),
+    );
+    final scheduler = _FakeScheduler();
+    final planGateway = _FakePlanGateway();
+    await tester.pumpWidget(
+      _app(store: store, scheduler: scheduler, planGateway: planGateway),
+    );
+    await tester.pumpAndSettle();
+    expect(scheduler.lastContent?.title, contains('校园推广'));
+
+    planGateway.offlineChange = _offlineChange;
+    await tester.pumpWidget(
+      _app(
+        store: store,
+        scheduler: scheduler,
+        planGateway: planGateway,
+        planningRevision: 1,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(scheduler.lastContent?.title, '同行者');
+    expect(scheduler.lastContent?.body, isNot(contains('校园推广')));
+  });
+
   testWidgets('取消详细通知预览时不改变本机设置或系统调度', (tester) async {
     final store = _MemoryPreferenceStore(
       const DeviceReminderPreference(systemNotificationsEnabled: true),
@@ -314,18 +407,20 @@ void main() {
 Widget _app({
   required _MemoryPreferenceStore store,
   required _FakeScheduler scheduler,
-  _FakeGateway? gateway,
+  PersonalActionReminderGateway? gateway,
   _FakePlanGateway? planGateway,
+  int planningRevision = 0,
+  DeviceReminderScope scope = const DeviceReminderScope(
+    appUserId: 'user-1',
+    workspaceId: 'workspace-1',
+    projectId: 'project-1',
+    deviceId: 'device-1',
+  ),
 }) => MaterialApp(
   home: Scaffold(
     body: PersonalActionReminderPanel(
       text: const AppStrings('zh'),
-      scope: const DeviceReminderScope(
-        appUserId: 'user-1',
-        workspaceId: 'workspace-1',
-        projectId: 'project-1',
-        deviceId: 'device-1',
-      ),
+      scope: scope,
       gateway: gateway ?? _FakeGateway(),
       planGateway: planGateway ?? _FakePlanGateway(),
       projectName: '校园推广',
@@ -333,9 +428,42 @@ Widget _app({
       scheduler: scheduler,
       timeZoneProvider: const _TimeZoneProvider(),
       idGenerator: _IdGenerator(),
+      planningRevision: planningRevision,
     ),
   ),
 );
+
+final class _DelayedReminderGateway implements PersonalActionReminderGateway {
+  final _result =
+      Completer<PersonalActionReminderResult<PersonalActionReminder?>>();
+
+  void complete() {
+    _result.complete(
+      PersonalActionReminderSuccess(
+        PersonalActionReminder(
+          reminderId: 'reminder-1',
+          revision: 1,
+          localTime: LocalReminderTime.fromHourMinute(19, 0),
+          updatedAtUtc: DateTime.utc(2030, 3, 9, 18),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Future<PersonalActionReminderResult<PersonalActionReminder?>> load() =>
+      _result.future;
+
+  @override
+  Future<PersonalActionReminderResult<PersonalActionReminderMutation>> save({
+    required int expectedRevision,
+    required LocalReminderTime? localTime,
+    required String mutationId,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<void> close() async {}
+}
 
 final class _FakeGateway implements PersonalActionReminderGateway {
   _FakeGateway({this.fromOfflineCache = false, this.rejectLoad = false});
@@ -389,10 +517,15 @@ final class _FakeGateway implements PersonalActionReminderGateway {
 }
 
 final class _FakePlanGateway implements PersonalActionPlanGateway {
-  _FakePlanGateway({this.rejectLoad = false, this.noPlan = false});
+  _FakePlanGateway({
+    this.rejectLoad = false,
+    this.noPlan = false,
+    this.offlineChange,
+  });
 
   final bool rejectLoad;
   final bool noPlan;
+  PersonalActionPlanOfflineChange? offlineChange;
 
   @override
   Future<PersonalActionPlanResult<PersonalActionPlanSnapshot?>> load() async =>
@@ -400,7 +533,10 @@ final class _FakePlanGateway implements PersonalActionPlanGateway {
       ? const PersonalActionPlanRejected(
           PersonalActionPlanFailureCode.networkUnavailable,
         )
-      : PersonalActionPlanSuccess(noPlan ? null : _plan);
+      : PersonalActionPlanSuccess(
+          noPlan ? null : _plan,
+          offlineChange: offlineChange,
+        );
 
   @override
   Future<PersonalActionPlanResult<PersonalActionPlanMutation>> save({
@@ -409,7 +545,11 @@ final class _FakePlanGateway implements PersonalActionPlanGateway {
     required String statisticsTimeZone,
     required int weekStartIsoDay,
     required String mutationId,
+    bool replaceOfflineChange = false,
   }) => throw UnimplementedError();
+
+  @override
+  Future<bool> discardOfflineChange() async => true;
 
   @override
   Future<void> close() async {}
@@ -433,6 +573,15 @@ final _plan = PersonalActionPlanSnapshot(
     remainingContactSessions: 2,
     asOfUtc: DateTime.utc(2030, 3, 9),
   ),
+);
+
+final _offlineChange = PersonalActionPlanOfflineChange(
+  expectedRevision: 1,
+  weeklyContactTarget: 7,
+  statisticsTimeZone: 'Asia/Shanghai',
+  weekStartIsoDay: DateTime.sunday,
+  mutationId: 'offline-mutation-1',
+  queuedAtUtc: DateTime.utc(2030, 3, 9, 20),
 );
 
 final class _MemoryPreferenceStore implements DeviceReminderPreferenceStore {
