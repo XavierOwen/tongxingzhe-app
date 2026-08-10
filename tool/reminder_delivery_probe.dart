@@ -55,7 +55,9 @@ final class ReminderDeliveryProbeApp extends StatelessWidget {
 }
 
 final class ReminderDeliveryProbeScreen extends StatefulWidget {
-  const ReminderDeliveryProbeScreen({super.key});
+  const ReminderDeliveryProbeScreen({super.key, this.commit = _commit});
+
+  final String commit;
 
   @override
   State<ReminderDeliveryProbeScreen> createState() =>
@@ -78,7 +80,7 @@ final class _ReminderDeliveryProbeScreenState
     _recorder = ReminderDeliveryProbeRecorder(
       platform: Platform.operatingSystem,
       osVersion: Platform.operatingSystemVersion,
-      commit: _commit,
+      commit: widget.commit,
     );
     unawaited(_initialize());
   }
@@ -156,7 +158,13 @@ final class _ReminderDeliveryProbeScreenState
         ),
         onDidReceiveNotificationResponse: _recordInteraction,
       );
-      if (initialized != true) {
+      // Darwin returns the permission result from initialize. This probe
+      // deliberately defers that request until the user schedules a reminder.
+      final deferredApplePermission = switch (defaultTargetPlatform) {
+        TargetPlatform.iOS || TargetPlatform.macOS => initialized == false,
+        _ => false,
+      };
+      if (initialized != true && !deferredApplePermission) {
         _setStatus('通知插件初始化失败。', ready: false);
         return;
       }
