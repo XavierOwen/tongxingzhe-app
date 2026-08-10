@@ -192,6 +192,20 @@ sealed class MetricValue {
   const MetricValue();
 }
 
+/// 受管理隐私政策隐藏的值。
+///
+/// 此类型不保存真实值、贡献者数量或最大贡献值，避免 API 消费者从对象中恢复
+/// 已被隐藏的精确数据。
+final class SuppressedMetricValue extends MetricValue {
+  const SuppressedMetricValue();
+
+  @override
+  bool operator ==(Object other) => other is SuppressedMetricValue;
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+}
+
 final class CountMetricValue extends MetricValue {
   factory CountMetricValue(int value) {
     if (value < 0) throw ArgumentError('invalid_metric_count');
@@ -299,13 +313,22 @@ final class MetricResult {
     required String timeZone,
     required DateTime dataCutoffUtc,
     required MetricSourceTier sourceTier,
-    required MetricSyncCoverage syncCoverage,
+    MetricSyncCoverage? syncCoverage,
     required MetricPrivacyStatus privacyStatus,
   }) {
     if (timeZone.trim().isEmpty || !dataCutoffUtc.isUtc) {
       throw ArgumentError('invalid_metric_result_metadata');
     }
-    _validateValue(definition, value);
+    final isSuppressedValue = value is SuppressedMetricValue;
+    if ((privacyStatus == MetricPrivacyStatus.suppressed) !=
+            isSuppressedValue ||
+        (sourceTier == MetricSourceTier.localOperational) !=
+            (syncCoverage != null) ||
+        privacyStatus == MetricPrivacyStatus.personalFact &&
+            sourceTier != MetricSourceTier.localOperational) {
+      throw ArgumentError('invalid_metric_result_state');
+    }
+    if (!isSuppressedValue) _validateValue(definition, value);
     return MetricResult._(
       definition: definition,
       value: value,
@@ -335,7 +358,7 @@ final class MetricResult {
   final String timeZone;
   final DateTime dataCutoffUtc;
   final MetricSourceTier sourceTier;
-  final MetricSyncCoverage syncCoverage;
+  final MetricSyncCoverage? syncCoverage;
   final MetricPrivacyStatus privacyStatus;
 
   static void _validateValue(MetricDefinition definition, MetricValue value) {

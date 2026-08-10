@@ -180,7 +180,7 @@ Flutter 不把这四个数字当作无版本的页面字段。[`CoreMetricCatalo
 
 [`MetricResult`](../../lib/features/contact_metrics/metric_contract.dart) 把值与 UTC 半开期间、报告时区、数据截止时间、来源层、同步覆盖和隐私状态放在同一个结果合同中。当前个人页由 [`PersonalContactMetricMapper`](../../lib/features/contact_metrics/personal_contact_overview.dart) 把 Drift 汇总映射为 `localOperational + personalFact`；同步覆盖明确以接触场次为单位。即使指标值是触达人数，也不能用待同步场次数推算“已同步人数”。
 
-这一层没有授予管理权限，也没有把个人事实当成可公开的管理结果。管理查询仍需独立验证成员授权、报告时区和按真实统计单位执行的隐私抑制；在这些前置条件完成前，不得新增可绕过它们的任意指标端点。
+这一层没有授予管理权限，也没有把个人事实当成可公开的管理结果。后续加入的私有管理隐私政策见[第 11 章](11-management-metrics-and-privacy.md)。管理查询仍需独立验证成员授权和报告时区；在这些前置条件完成前，不得新增可绕过它们的任意指标端点。
 
 ## 为什么这样测试
 

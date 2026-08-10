@@ -208,6 +208,7 @@ docker exec "${container_name}" pg_dump \
   "${database_url}" \
   --format=custom \
   --schema=app_data \
+  --schema=app_private \
   --schema=app_migrations \
   --file=/tmp/tongxingzhe.dump
 docker exec "${container_name}" createdb \
