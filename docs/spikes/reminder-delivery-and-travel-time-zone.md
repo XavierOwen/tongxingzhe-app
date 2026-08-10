@@ -29,6 +29,8 @@ git rev-parse --short HEAD
 
 Android 和 iOS 的终止场景必须使用真机。模拟器可以先检查页面和权限流程，但不能作为发布证据。设备必须解锁，并允许开发电脑安装调试 App。
 
+Apple 设备还需要 Xcode 中的有效开发账号和匹配 bundle ID 的 Development 描述文件。只打开 iPhone Developer Mode 或只在钥匙串保存证书，仍不能安装测试 App。
+
 这项测试不需要 Docker、Backend 或测试账号。Docker 只能验证 PostgreSQL 和服务端合同，不能模拟系统通知中心、设备时区或 App 进程状态。
 
 ## 启动探针
@@ -113,11 +115,45 @@ macOS 的设备 ID 通常是 `macos`。iPhone 和 Android 的 ID 以 `flutter de
 
 | 平台 | 设备与 OS | 前台 | 后台 | 已终止 | 权限拒绝 | 旅行换时区 | 证据 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Android | 待填写 | pending | pending | pending | pending | pending | 待填写 |
-| iOS | 待填写 | pending | pending | pending | pending | pending | 待填写 |
-| macOS | 待填写 | pending | pending | pending | pending | pending | 待填写 |
+| Android | Android Studio Medium Phone AVD，Android 16 API 36（模拟器） | pending | pending | pending | pending | pending | 见 2026-08-10 诊断记录；模拟器不计发布证据 |
+| iOS | iPhone 14 Pro，iOS 26.5.2（签名阻塞） | pending | pending | pending | pending | pending | 见 2026-08-10 诊断记录 |
+| macOS | Apple silicon Mac，macOS 26.5.2（ad-hoc 诊断） | pending | pending | pending | pending | pending | 见 2026-08-10 诊断记录；缺少 Development 描述文件 |
 
 `pass` 表示观察结果符合当前合同，并且有截图和 JSON。`failed` 表示有可复现的合同偏差。没有设备或没有完成场景时保留 `pending`。
+
+### 2026-08-10 诊断记录
+
+以下记录说明本次实际运行结果。它们没有满足 `pass` 的设备、签名和附件条件，因此证据矩阵仍为 `pending`。
+
+#### Android 模拟器
+
+运行环境为 Medium Phone AVD、Android 16 API 36、系统构建 `BP22.250325.006`。探针对应 commit `eb8a09f`。
+
+- 首次授权后，探针安排 `08:56` 通知。系统在 `08:56:27` 记录通知发布，探针随后记录 `observed-active`，并在 `08:58:04` 记录 `interacted`。
+- 后台场景安排 `08:59` 通知。通知在 `09:00:34` 仍处于活跃状态，点击事件记录于 `09:00:55`，`launchedApp` 为 `false`。
+- 终止场景在 `09:01:51` 记录终止前 PID `3911`，终止后 PID 无输出。通知在 `09:05:52` 处于活跃状态。点击后恢复的 JSON 包含原 `scheduled` 事件和 `launchedApp: true` 的 `interacted` 事件。
+- 权限拒绝后，页面显示“系统没有授予通知权限”，JSON 的 `events` 为空。
+- 旅行换时区未执行。模拟器结果不能替代 Android 真机终止和旅行证据。
+
+通知截图只保存在本次本机临时目录，尚未形成可提交附件。系统发布日志也不能单独证明用户首次看到通知的时间。
+
+#### iOS 真机
+
+Flutter 识别到已连接的 iPhone 14 Pro，系统版本为 iOS 26.5.2。设备已打开 Developer Mode。
+
+指定真机的第一次 Xcode 构建在描述文件评估阶段触发 `EXC_BAD_ACCESS`。改用通用 iOS 目标后，Xcode 给出稳定错误：当前团队没有已登录账号，`com.tongxingzhe.app` 也没有可用的 iOS Development 描述文件。本次没有安装探针，全部 iOS 场景保持 `pending`。
+
+#### macOS 本机
+
+本机系统为 macOS 26.5.2。常规 Development 构建因缺少可用的 Mac Development 签名和描述文件而停止。
+
+为检查运行路径，本次另建 ad-hoc 签名诊断包。该包通过本机代码签名校验，但没有 `TeamIdentifier`，不能作为发布证据。诊断包对应 commit `41b28c9`。
+
+- 首次安排的通知计划于 `09:16` 显示。用户点击后，探针在 `09:16:02` 记录 `interacted`，`launchedApp` 为 `false`。系统同时显示“应用无法启动”。
+- LaunchServices 当时登记了多份相同 bundle ID 的旧调试包，其中三份未通过代码签名校验。取消这些失效登记后，后台复测在 `09:23:07` 再次记录 `interacted`。系统提示是否消失仍需人工确认。
+- 前台、后台、终止、权限拒绝和旅行场景都没有取得 Development 签名下的完整截图与 JSON，因此全部保持 `pending`。
+
+本次 macOS 运行还暴露了一个探针缺陷。Darwin 插件在初始化时延后权限请求会返回 `false`，旧代码将它误判为初始化失败。commit `41b28c9` 只在 iOS 和 macOS 接受这个预期返回值，并保留 Android 的失败关闭行为。回归测试覆盖该路径。
 
 ## Spike 的退出条件
 
