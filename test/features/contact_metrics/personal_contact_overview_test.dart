@@ -66,8 +66,8 @@ void main() {
             result.privacyStatus == MetricPrivacyStatus.personalFact &&
             result.timeZone == 'UTC' &&
             result.dataCutoffUtc == DateTime.utc(2030, 1, 8, 18, 30) &&
-            result.syncCoverage.totalCount == 5 &&
-            result.syncCoverage.pendingCount == 2,
+            result.syncCoverage!.totalCount == 5 &&
+            result.syncCoverage!.pendingCount == 2,
       ),
       isTrue,
     );

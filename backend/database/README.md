@@ -127,7 +127,7 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 `tongxingzhe_runtime` 是 `NOLOGIN` group role。实际 Backend login role 由部署环境管理，并只被授予这个 group role；Flutter 不知道 login role 或数据库密码。
 
-业务表进入 `app_data`。Supabase 默认 Data API 角色 `anon`／`authenticated` 没有获得这个 schema 的权限。`app_migrations` 只供部署身份读取。
+业务表进入 `app_data`。Supabase 默认 Data API 角色 `anon`／`authenticated` 没有获得这个 schema 的权限。`app_private` 保存尚未暴露给 runtime 的内部政策函数，`app_migrations` 只供部署身份读取。
 
 ## 写下一条 migration
 
@@ -173,5 +173,7 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 `0021_personal_action_plans.sql` 保存每位用户、每个项目的一份私人计划和追加式版本。首次设置采用当前自然周；后续目标、IANA 统计时区或周期起始日修改从下一周期生效。进度只计算当前有效、已提交且实际发生在周期内的接触。runtime role 只能用可信当前上下文读取或修改本人计划，不能直接读表，也没有管理员列表函数。
 
 `0022_personal_action_reminders.sql` 独立保存每位用户、每个项目的可选每日当地提醒钟点。版本只追加，提醒可在没有周目标时单独使用。服务端不会保存或开启设备通知权限；每台设备的 opt-in 只留在本机。runtime role 同样只能通过可信当前上下文读写本人提醒。
+
+`0023_management_contact_session_privacy.sql` 建立固定双期间渠道网格的私有隐私政策。函数执行 `k=10`、至少三位推广者、单人不超过一半和总计互补隐藏；隐藏结果不返回精确值。runtime role 没有 `app_private` 使用权或函数执行权，生产管理端点必须等待成员授权和项目报告时区。
 
 普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。四个 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，验证问卷发布、指标兼容、个人与机构活动关系和对象匿名化的并发不变量。检查脚本只使用 synthetic 个人空间，并要求显式 `DATABASE_URL`。

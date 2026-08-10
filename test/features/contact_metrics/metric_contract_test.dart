@@ -101,6 +101,57 @@ void main() {
       throwsArgumentError,
     );
   });
+
+  test('隐藏管理结果不携带精确值或伪造本地同步覆盖', () {
+    final suppressed = MetricResult(
+      definition: CoreMetricCatalog.contactSessions,
+      value: const SuppressedMetricValue(),
+      period: _period,
+      timeZone: 'UTC',
+      dataCutoffUtc: DateTime.utc(2030, 1, 9),
+      sourceTier: MetricSourceTier.backendOperational,
+      privacyStatus: MetricPrivacyStatus.suppressed,
+    );
+
+    expect(suppressed.value, const SuppressedMetricValue());
+    expect(suppressed.syncCoverage, isNull);
+    expect(
+      () => MetricResult(
+        definition: CoreMetricCatalog.contactSessions,
+        value: CountMetricValue(9),
+        period: _period,
+        timeZone: 'UTC',
+        dataCutoffUtc: DateTime.utc(2030, 1, 9),
+        sourceTier: MetricSourceTier.backendOperational,
+        privacyStatus: MetricPrivacyStatus.suppressed,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => MetricResult(
+        definition: CoreMetricCatalog.contactSessions,
+        value: const SuppressedMetricValue(),
+        period: _period,
+        timeZone: 'UTC',
+        dataCutoffUtc: DateTime.utc(2030, 1, 9),
+        sourceTier: MetricSourceTier.backendOperational,
+        privacyStatus: MetricPrivacyStatus.displayed,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => MetricResult(
+        definition: CoreMetricCatalog.contactSessions,
+        value: CountMetricValue(10),
+        period: _period,
+        timeZone: 'UTC',
+        dataCutoffUtc: DateTime.utc(2030, 1, 9),
+        sourceTier: MetricSourceTier.localOperational,
+        privacyStatus: MetricPrivacyStatus.personalFact,
+      ),
+      throwsArgumentError,
+    );
+  });
 }
 
 final _period = MetricPeriod(

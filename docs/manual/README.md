@@ -16,6 +16,7 @@
 8. [第 8 章：推广对象目录、资料保留、匿名化和限时离线资料](08-promotion-target-directory-and-pii.md)
 9. [第 9 章：在本机、Docker 与 CI 中运行测试](09-local-docker-and-ci-testing.md)
 10. [第 10 章：私人计划、当地提醒与每周周期](10-private-plans-and-weekly-cycles.md)
+11. [第 11 章：管理指标如何构造完整网格并隐藏小样本](11-management-metrics-and-privacy.md)
 
 当前认证验证状态见 [Supabase Auth 六平台 Spike](../spikes/supabase-auth-six-platform.md)。它会明确区分 package 声明、build 通过和真实设备流程通过。
 
@@ -23,7 +24,7 @@
 
 当地提醒的前台、后台、终止和旅行换时区验证见[提醒送达与旅行时区真机 Spike](../spikes/reminder-delivery-and-travel-time-zone.md)。
 
-后续章节会依次加入：管理统计与隐私、六平台能力、发布与恢复演练。
+后续章节会依次加入：六平台能力、发布与恢复演练。
 
 ## 文档与代码如何保持一致
 
