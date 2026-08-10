@@ -2,7 +2,7 @@
 
 个人分析和管理分析处理不同的信任边界。个人页可以立即显示本人设备上的事实，并说明哪些接触尚未同步。管理分析只能使用后端已接受的数据，还必须先降低小群体披露风险。
 
-当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定和跨层 fixture。它没有开放管理 HTTP 端点，也没有授予任何账号查看团队汇总的权限。组织成员关系、管理 capability 和项目报告时区配置完成后，才能把这些模块接入生产查询。
+当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定、不可变受保护快照和发布尝试审计。它没有开放管理 HTTP 端点，也没有授予任何账号查看团队汇总的权限。组织成员关系、管理 capability 和项目报告时区配置完成后，才能把这些模块接入生产查询。
 
 ## 先确定统计单位
 
@@ -90,7 +90,7 @@ management-report:contact_sessions_by_channel_two_periods:v1
 
 这个指纹用于审计和对账。它不是密码、token 或匿名化手段，也不授权任何查询。
 
-审计信封只保存请求者内部 ID、项目 ID、报告 ID 与版本、查询指纹、UTC 请求时间和结果状态。它不保存报表格值、贡献者数量、最大贡献值或隐藏的精确值。当前代码只固定信封结构。持久审计必须在未来授权后的执行事务中写入。
+审计信封只保存请求者内部 ID、项目 ID、报告 ID 与版本、查询指纹、UTC 请求时间和结果状态。它不保存报表格值、贡献者数量、最大贡献值或隐藏的精确值。后面的私有快照发布函数使用同样的最小化原则持久记录发布尝试。那份记录还不是生产访问审计，因为当前没有成员或 capability 校验入口。
 
 TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../backend/database/fixtures/shared/management_report_requests_v1.csv)。fixture 包含有效请求、未知报告、未知版本，以及客户端伪造项目、时区、日期、维度、筛选和导出字段的负向场景。
 
@@ -129,7 +129,7 @@ TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../
 
 `contact_attempts` 不在查询来源中。作废接触、右边界上的下一期接触、截止后才提交的接触和其他项目接触也不进入。`app_user_id` 只作为内部贡献者键，不会出现在结果中。输出格只有期间、渠道／总计、稳定顺序、可选数量和隐私状态；隐藏格的数量是 JSON `null`，不是先发送精确值再要求客户端隐藏。
 
-这个函数读取接触的当前投影，所以它形成动态报告，不是“截至过去某一时刻”的历史快照。数据截止点限制初次提交事实并说明本次查询的新鲜度，但不会倒转后来发生的修订。正式快照必须在后续切片固定修订版本、时区、指标、隐私规则和生成时间，不能把当前函数的旧截止参数伪装成历史复现。
+这个函数读取接触的当前投影，所以它形成动态报告，不是“截至过去某一时刻”的历史投影。数据截止点限制初次提交事实并说明本次查询的新鲜度，但不会倒转后来发生的修订。后面的快照会冻结本次受保护输出和来源 change sequence；它仍不能把旧截止参数变成可重新执行的 `as-of` 查询。
 
 `0026_management_report_execution.sql` 的 fixture 建立两个项目、三位 synthetic 推广者和两个完整周。每期十条合格语音通话按 `5 + 3 + 2` 分布，因此两个语音格显示 `10`；其他 14 格隐藏且值为 `null`。fixture 还混入上述排除记录，并检查整个 JSON 不含贡献者 ID、贡献者数量、最大贡献、触达人数、兴趣、地点或对象资料。
 
@@ -151,9 +151,36 @@ TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../
 
 稳定的一期或两期重叠可以返回 `approved`。数量变化返回 `shared_displayed_value_changed`，抑制状态变化返回 `shared_cell_privacy_status_changed`。审计判定不包含类别值、变化前后的数量或贡献者资料。
 
-这个函数只提供发布前判定，不会保存之前发布的报告。未来管理端点必须读取可信的既有快照或发布历史，在同一授权流程中执行判定并持久记录结果。当前函数仍位于 `app_private`，runtime role 无权执行。
+这个函数只提供发布前判定。`0028_management_report_snapshots.sql` 在同一私有事务中读取可信快照并强制执行它。两个函数都位于 `app_private`，runtime role 无权执行。
 
 `0027_management_report_pair_release.sql` 的 fixture 建立三个相邻周。稳定滚动报告共享一个周并通过；相同周期的重复报告共享两个周并通过。随后 fixture 加入两条补录，使一个共享格从 `10` 变成 `11`，另一个从 `suppressed` 变成 `displayed`，发布判定必须阻止。fixture 还验证互补隐藏、九个单位的稀疏格、无共享期间、伪造隐藏值、任意日期、区域维度和排除已知推广者等探针。
+
+## 快照发布为什么必须是一个事务
+
+[`release_management_report_snapshot_v1`](../../backend/database/migrations/0028_management_report_snapshots.sql) 不接受报告 JSON。它只接受未来授权层提供的内部用户、项目、固定报告身份、项目报告时区、数据截止时间、请求时间和 UUID 幂等键，然后直接调用私有执行管线。这样调用者不能提交一份形状正确、但没有真正经过贡献者保护的伪造报告。
+
+函数依次取得幂等请求锁和稳定 report lineage 锁。lineage 使用项目与逻辑报告身份，不因报告版本或时区改变而重新开始。取得锁以后，函数才读取最近的已发布快照。两个并发发布因此不能都把自己当作首次基线；后到的事务必须看见先提交的结果。
+
+发布事务按以下顺序工作：
+
+1. 相同幂等键和相同业务参数直接返回首次结果；重试时新的服务端时间不改变原审计，其他参数变化则拒绝复用；
+2. 在同一 SQL statement snapshot 中生成受保护报告并读取该项目的 `change_feed.change_sequence` 水位；
+3. 再次验证报告只有固定的 16 格，且每个隐藏格都是 JSON `null`；
+4. 没有历史时建立唯一的 `approved_baseline`；已有历史时调用 6F 比较；
+5. 只有 `approved_baseline` 或 `approved` 才写入 `management_report_snapshots`；
+6. 每个正常完成的尝试都写入 `management_report_release_attempts`，但 `blocked` 尝试不保存候选报告文档。
+
+快照表保存完整的受保护报告、报告和指标版本、查询指纹、隐私政策、实际 UTC 周边界、项目报告时区、数据截止时间、来源 change sequence、发布者和上一快照。发布尝试只保存请求上下文、比较／发布快照 ID、格数、结果和原因码。它没有候选 `cells`、`value_count`、贡献者数量、最大贡献或抑制前值。
+
+报告版本、查询指纹或时区与既有 lineage 不一致时，结果是 `release_lineage_context_changed`，不是另一份首次基线。同一 cutoff 不能用新幂等键重复发布。无共享期间、共享显示值改变或隐私状态改变也只留下阻断审计。
+
+两张表都用 trigger 拒绝普通 `UPDATE` 和 `DELETE`。这里的“不可变”表示产品操作不能静默覆盖历史，不表示资料可以永久绕过删除规则。未来账号或组织删除需要单独的窄权限清除流程；真正允许变化的更正版报告也需要新的威胁模型，不能通过关闭 6F 判定实现。
+
+来源 change sequence 说明生成时看见了哪一批运营变更，但它不是完整历史投影。当前执行函数仍读取 contact 的当前 projection，所以现阶段能证明的是“已发布的受保护输出不会漂移”，不能声称数据库可以按旧水位重新算出同一报告。
+
+当前 v1 把固定 `report_version` 和 `query_fingerprint` 作为计算合同身份。渠道接触场次报告不读取问卷兼容映射，也不读取区域视图，所以这两项在本报告中不适用。未来报告一旦依赖问卷或区域版本，必须把对应版本写入 protected document 并发布新报告版本，不能沿用当前身份。
+
+发布函数和读取函数仍没有 runtime 权限。未来 HTTP gateway 必须先从认证 token 解析内部用户，再检查有效成员关系、项目范围、`view_anonymous_analytics` capability、服务端项目时区和服务端 cutoff，最后才调用这个私有事务。
 
 ## 在 Docker 中验证
 
@@ -163,7 +190,7 @@ TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-脚本会建立临时 PostgreSQL 16 容器，执行全部 migration、权限检查和 fixture。它还会导出 `app_data`、`app_private` 与 migration 历史，再恢复到第二个空库重跑检查。脚本结束后自动删除容器。
+脚本会建立临时 PostgreSQL 16 容器，执行全部 migration、权限检查和 fixture。它另开两个数据库会话，证明并发滚动发布会等待基线事务并链接到唯一既有快照。随后脚本导出 `app_data`、`app_private` 与 migration 历史，恢复到第二个空库重跑检查。脚本结束后自动删除容器。
 
 只想验证 Dart 政策时运行：
 
@@ -190,7 +217,8 @@ Docker 的安装、输出解释和失败容器保留方法见[第 9 章](09-loca
 - 组织和项目成员关系；
 - 独立的管理分析 capability；
 - 项目固定报告 IANA 时区的保存、修改、生效时间和历史；
-- 授权后的固定报告端点、可信历史快照、发布历史、重叠判定强制执行和持久审计；
+- 授权后的固定报告端点和访问审计；
+- 可按历史 revision 水位重新执行的 `as-of` 投影、更正版取代关系和删除流程；
 - 父子区域与重叠区域报告的重识别演练；
 - 只接收抑制后结果的 API、缓存、图表和导出。
 

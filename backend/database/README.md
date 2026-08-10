@@ -135,10 +135,15 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/checks/verify_management_report_pair_release.sql
 psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/fixtures/0027_management_report_pair_release.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_report_snapshots.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0028_management_report_snapshots.sql
 ./tool/verify_questionnaire_publish_concurrency.sh
 ./tool/verify_questionnaire_metric_concurrency.sh
 ./tool/verify_person_institution_relationship_concurrency.sh
 ./tool/verify_promotion_target_retention_concurrency.sh
+./tool/verify_management_report_release_concurrency.sh
 ```
 
 第二次执行不是重复建库，而是验证已经记录的 checksum。若历史文件被修改，脚本会拒绝继续。
@@ -204,4 +209,6 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 `0027_management_report_pair_release.sql` 比较同一项目两份固定报告中实际 UTC 边界相同的期间。共享格的显示数量或隐私状态发生变化时返回 `blocked`，无共享期间也失败关闭。判定只返回版本、指纹、截止时间和原因码，不返回格值。该函数不保存旧报告、查询历史或授权结果，runtime role 仍不能执行。
 
-普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。四个 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，验证问卷发布、指标兼容、个人与机构活动关系和对象匿名化的并发不变量。检查脚本只使用 synthetic 个人空间，并要求显式 `DATABASE_URL`。
+`0028_management_report_snapshots.sql` 在一个私有事务中生成受保护报告、取得稳定 lineage 锁、比较最近已发布快照并追加发布历史。首次报告建立唯一基线；后续只有 6F 判定通过才保存候选 protected document。被阻止的尝试只保存原因码和请求元数据。快照另存项目 change sequence 水位；这冻结输出，但不提供历史 `as-of` 重算。版本或时区改变不能重置 lineage。runtime role 仍不能读取私有表或执行发布和读取函数。
+
+普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。全部 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，验证问卷发布、指标兼容、个人与机构活动关系、对象匿名化和管理报告 lineage 的并发不变量。Docker wrapper 会按文件名排序并自动复制、执行这些脚本。检查脚本只使用 synthetic 数据，并要求显式 `DATABASE_URL`。
