@@ -15,8 +15,6 @@ void main() {
   const timeZoneChannel = MethodChannel('flutter_timezone');
 
   setUp(() {
-    MacOSFlutterLocalNotificationsPlugin.registerWith();
-
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(notificationChannel, (call) async {
           return switch (call.method) {
@@ -49,21 +47,36 @@ void main() {
         .setMockMethodCallHandler(timeZoneChannel, null);
   });
 
-  testWidgets('Apple 初始化延后权限请求时探针仍进入就绪状态', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-    try {
-      await tester.pumpWidget(
-        const MaterialApp(home: ReminderDeliveryProbeScreen(commit: 'eb8a09f')),
-      );
-      await tester.pumpAndSettle();
+  for (final platform in <TargetPlatform>[
+    TargetPlatform.iOS,
+    TargetPlatform.macOS,
+  ]) {
+    testWidgets('Apple 初始化延后权限请求时探针仍进入就绪状态（${platform.name}）', (tester) async {
+      debugDefaultTargetPlatformOverride = platform;
+      switch (platform) {
+        case TargetPlatform.iOS:
+          IOSFlutterLocalNotificationsPlugin.registerWith();
+        case TargetPlatform.macOS:
+          MacOSFlutterLocalNotificationsPlugin.registerWith();
+        default:
+          throw StateError('unexpected Apple platform: $platform');
+      }
+      try {
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: ReminderDeliveryProbeScreen(commit: 'eb8a09f'),
+          ),
+        );
+        await tester.pumpAndSettle();
 
-      expect(find.textContaining('探针已就绪'), findsOneWidget);
-      final scheduleButton = tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, '安排约 3 分钟后的每日测试提醒'),
-      );
-      expect(scheduleButton.onPressed, isNotNull);
-    } finally {
-      debugDefaultTargetPlatformOverride = null;
-    }
-  });
+        expect(find.textContaining('探针已就绪'), findsOneWidget);
+        final scheduleButton = tester.widget<FilledButton>(
+          find.widgetWithText(FilledButton, '安排约 3 分钟后的每日测试提醒'),
+        );
+        expect(scheduleButton.onPressed, isNotNull);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+  }
 }
