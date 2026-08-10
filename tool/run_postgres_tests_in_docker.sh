@@ -89,16 +89,28 @@ docker exec "${container_name}" mkdir -p /workspace/backend /workspace/tool
 docker cp \
   "${repository_root}/backend/database" \
   "${container_name}:/workspace/backend/database"
-for tool_file in \
-  postgres_migrate.sh \
-  verify_questionnaire_publish_concurrency.sh \
-  verify_questionnaire_metric_concurrency.sh \
-  verify_person_institution_relationship_concurrency.sh \
-  verify_promotion_target_retention_concurrency.sh; do
+docker cp \
+  "${repository_root}/tool/postgres_migrate.sh" \
+  "${container_name}:/workspace/tool/postgres_migrate.sh"
+concurrency_script_count=0
+while IFS= read -r concurrency_script; do
+  tool_file="$(basename "${concurrency_script}")"
   docker cp \
-    "${repository_root}/tool/${tool_file}" \
+    "${concurrency_script}" \
     "${container_name}:/workspace/tool/${tool_file}"
-done
+  concurrency_script_count=$((concurrency_script_count + 1))
+done < <(
+  find "${repository_root}/tool" \
+    -maxdepth 1 \
+    -type f \
+    -name 'verify_*_concurrency.sh' \
+    -print \
+    | LC_ALL=C sort
+)
+if [[ "${concurrency_script_count}" -eq 0 ]]; then
+  echo '没有找到独立会话并发检查脚本。' >&2
+  exit 1
+fi
 
 run_migrations() {
   docker exec \
@@ -169,22 +181,20 @@ run_sql_files \
   'fixture'
 
 echo '用独立数据库会话验证并发不变量。'
-docker exec \
-  --env DATABASE_URL="${database_url}" \
-  "${container_name}" \
-  bash /workspace/tool/verify_questionnaire_publish_concurrency.sh
-docker exec \
-  --env DATABASE_URL="${database_url}" \
-  "${container_name}" \
-  bash /workspace/tool/verify_questionnaire_metric_concurrency.sh
-docker exec \
-  --env DATABASE_URL="${database_url}" \
-  "${container_name}" \
-  bash /workspace/tool/verify_person_institution_relationship_concurrency.sh
-docker exec \
-  --env DATABASE_URL="${database_url}" \
-  "${container_name}" \
-  bash /workspace/tool/verify_promotion_target_retention_concurrency.sh
+while IFS= read -r concurrency_script; do
+  tool_file="$(basename "${concurrency_script}")"
+  docker exec \
+    --env DATABASE_URL="${database_url}" \
+    "${container_name}" \
+    bash "/workspace/tool/${tool_file}"
+done < <(
+  find "${repository_root}/tool" \
+    -maxdepth 1 \
+    -type f \
+    -name 'verify_*_concurrency.sh' \
+    -print \
+    | LC_ALL=C sort
+)
 
 echo '确认 migration runner 会拒绝被改写的历史文件。'
 docker exec "${container_name}" bash -lc \
