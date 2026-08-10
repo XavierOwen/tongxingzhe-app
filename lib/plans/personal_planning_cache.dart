@@ -60,6 +60,30 @@ abstract interface class PersonalPlanningCache {
     DateTime cachedAtUtc,
   );
 
+  Future<PersonalActionPlanOfflineChange?> readOfflinePlanChange(
+    PersonalPlanningScope scope,
+  );
+
+  Future<void> writeOfflinePlanChange(
+    PersonalPlanningScope scope,
+    PersonalActionPlanOfflineChange change,
+  );
+
+  /// 原子地排队一项修改。返回 null 表示已有不同草稿且未授权替换。
+  Future<PersonalActionPlanOfflineChange?> queueOfflinePlanChange(
+    PersonalPlanningScope scope,
+    PersonalActionPlanOfflineChange change, {
+    required bool replaceExisting,
+  });
+
+  Future<void> clearOfflinePlanChange(PersonalPlanningScope scope);
+
+  Future<void> acceptPlan(
+    PersonalPlanningScope scope,
+    PersonalActionPlanSnapshot plan,
+    DateTime cachedAtUtc,
+  );
+
   Future<CachedPersonalPlanningValue<PersonalActionReminder?>?> readReminder(
     PersonalPlanningScope scope,
   );
@@ -105,6 +129,96 @@ final class DriftPersonalPlanningCache implements PersonalPlanningCache {
   );
 
   @override
+  Future<PersonalActionPlanOfflineChange?> readOfflinePlanChange(
+    PersonalPlanningScope scope,
+  ) async {
+    final query = database.select(database.dbAppSettings)
+      ..where((row) => row.key.equals(_offlinePlanChangeKey(scope)));
+    final row = await query.getSingleOrNull();
+    if (row == null) return null;
+    try {
+      final root = _object(jsonDecode(row.value));
+      _requireKeys(root, [
+        'schema_version',
+        'expected_revision',
+        'weekly_contact_target',
+        'statistics_time_zone',
+        'week_start_iso_day',
+        'mutation_id',
+        'queued_at_utc',
+      ]);
+      if (root['schema_version'] != 1) {
+        throw const FormatException('invalid offline plan change schema');
+      }
+      final target = root['weekly_contact_target'];
+      return PersonalActionPlanOfflineChange(
+        expectedRevision: _integer(root['expected_revision'], 0, 0x7fffffff),
+        weeklyContactTarget: target == null ? null : _integer(target, 1, 999),
+        statisticsTimeZone: _boundedString(
+          root['statistics_time_zone'],
+          maximumLength: 100,
+        ),
+        weekStartIsoDay: _integer(root['week_start_iso_day'], 1, 7),
+        mutationId: _boundedString(root['mutation_id'], maximumLength: 120),
+        queuedAtUtc: _timestamp(root['queued_at_utc']),
+      );
+    } on FormatException {
+      await clearOfflinePlanChange(scope);
+      return null;
+    }
+  }
+
+  @override
+  Future<void> writeOfflinePlanChange(
+    PersonalPlanningScope scope,
+    PersonalActionPlanOfflineChange change,
+  ) async {
+    await database
+        .into(database.dbAppSettings)
+        .insertOnConflictUpdate(
+          DbAppSettingsCompanion.insert(
+            key: _offlinePlanChangeKey(scope),
+            value: jsonEncode({
+              'schema_version': 1,
+              'expected_revision': change.expectedRevision,
+              'weekly_contact_target': change.weeklyContactTarget,
+              'statistics_time_zone': change.statisticsTimeZone,
+              'week_start_iso_day': change.weekStartIsoDay,
+              'mutation_id': change.mutationId,
+              'queued_at_utc': change.queuedAtUtc.toUtc().toIso8601String(),
+            }),
+          ),
+        );
+  }
+
+  @override
+  Future<PersonalActionPlanOfflineChange?> queueOfflinePlanChange(
+    PersonalPlanningScope scope,
+    PersonalActionPlanOfflineChange change, {
+    required bool replaceExisting,
+  }) => database.transaction(() async {
+    final existing = await readOfflinePlanChange(scope);
+    if (_sameOfflinePlanChange(existing, change)) return existing;
+    if (existing != null && !replaceExisting) return null;
+    await writeOfflinePlanChange(scope, change);
+    return change;
+  });
+
+  @override
+  Future<void> clearOfflinePlanChange(PersonalPlanningScope scope) =>
+      _delete(_offlinePlanChangeKey(scope));
+
+  @override
+  Future<void> acceptPlan(
+    PersonalPlanningScope scope,
+    PersonalActionPlanSnapshot plan,
+    DateTime cachedAtUtc,
+  ) => database.transaction(() async {
+    await writePlan(scope, plan, cachedAtUtc);
+    await clearOfflinePlanChange(scope);
+  });
+
+  @override
   Future<CachedPersonalPlanningValue<PersonalActionReminder?>?> readReminder(
     PersonalPlanningScope scope,
   ) => _read(
@@ -130,6 +244,7 @@ final class DriftPersonalPlanningCache implements PersonalPlanningCache {
       database.transaction(() async {
         await _delete(_planKey(scope));
         await _delete(_reminderKey(scope));
+        await _delete(_offlinePlanChangeKey(scope));
       });
 
   @override
@@ -137,7 +252,8 @@ final class DriftPersonalPlanningCache implements PersonalPlanningCache {
     await (database.delete(database.dbAppSettings)..where(
           (row) =>
               row.key.like('personal-plan-cache-v1:%') |
-              row.key.like('personal-reminder-cache-v1:%'),
+              row.key.like('personal-reminder-cache-v1:%') |
+              row.key.like('personal-plan-offline-change-v1:%'),
         ))
         .go();
   }
@@ -206,6 +322,13 @@ final class DriftPersonalPlanningCache implements PersonalPlanningCache {
     scope.workspaceId,
     scope.projectId,
   ].join(':');
+
+  String _offlinePlanChangeKey(PersonalPlanningScope scope) => [
+    'personal-plan-offline-change-v1',
+    scope.appUserId,
+    scope.workspaceId,
+    scope.projectId,
+  ].join(':');
 }
 
 final class CachedPersonalActionPlanGateway
@@ -231,10 +354,64 @@ final class CachedPersonalActionPlanGateway
     if (scope == null || scopeProvider() != scope) return result;
     switch (result) {
       case PersonalActionPlanSuccess<PersonalActionPlanSnapshot?>(:final value):
-        await _ignoreCacheFailure(
-          () => cache.writePlan(scope, value, clock.now().toUtc()),
+        PersonalActionPlanOfflineChange? offlineChange;
+        try {
+          offlineChange = await cache.readOfflinePlanChange(scope);
+        } on Object {
+          await _ignoreCacheFailure(
+            () => cache.writePlan(scope, value, clock.now().toUtc()),
+          );
+          return result;
+        }
+        if (offlineChange == null) {
+          await _ignoreCacheFailure(
+            () => cache.writePlan(scope, value, clock.now().toUtc()),
+          );
+          return result;
+        }
+        final replay = await remote.save(
+          expectedRevision: offlineChange.expectedRevision,
+          weeklyContactTarget: offlineChange.weeklyContactTarget,
+          statisticsTimeZone: offlineChange.statisticsTimeZone,
+          weekStartIsoDay: offlineChange.weekStartIsoDay,
+          mutationId: offlineChange.mutationId,
         );
-        return result;
+        if (scopeProvider() != scope) return result;
+        switch (replay) {
+          case PersonalActionPlanSuccess<PersonalActionPlanMutation>(
+            :final value,
+          ):
+            await _ignoreCacheFailure(
+              () => cache.acceptPlan(scope, value.plan, clock.now().toUtc()),
+            );
+            return PersonalActionPlanSuccess(value.plan);
+          case PersonalActionPlanRejected<PersonalActionPlanMutation>(
+            :final code,
+          ):
+            if (code == PersonalActionPlanFailureCode.unauthorized) {
+              await _revokeScopeAccess(cache, scope, onAuthorizationRevoked);
+              return PersonalActionPlanRejected(code);
+            }
+            await _ignoreCacheFailure(
+              () => cache.writePlan(scope, value, clock.now().toUtc()),
+            );
+            return PersonalActionPlanSuccess(
+              value,
+              offlineChange: offlineChange,
+              offlineChangeFailure:
+                  code == PersonalActionPlanFailureCode.networkUnavailable
+                  ? null
+                  : code,
+            );
+          case PersonalActionPlanQueued<PersonalActionPlanMutation>():
+            await _ignoreCacheFailure(
+              () => cache.writePlan(scope, value, clock.now().toUtc()),
+            );
+            return PersonalActionPlanSuccess(
+              value,
+              offlineChange: offlineChange,
+            );
+        }
       case PersonalActionPlanRejected<PersonalActionPlanSnapshot?>(:final code):
         if (code == PersonalActionPlanFailureCode.unauthorized) {
           await _revokeScopeAccess(cache, scope, onAuthorizationRevoked);
@@ -246,15 +423,19 @@ final class CachedPersonalActionPlanGateway
         try {
           final cached = await cache.readPlan(scope);
           if (cached != null) {
+            final offlineChange = await cache.readOfflinePlanChange(scope);
             return PersonalActionPlanSuccess(
               cached.value,
               fromOfflineCache: true,
               cachedAtUtc: cached.cachedAtUtc,
+              offlineChange: offlineChange,
             );
           }
         } on Object {
           return result;
         }
+      case PersonalActionPlanQueued<PersonalActionPlanSnapshot?>():
+        return result;
     }
     return result;
   }
@@ -266,8 +447,17 @@ final class CachedPersonalActionPlanGateway
     required String statisticsTimeZone,
     required int weekStartIsoDay,
     required String mutationId,
+    bool replaceOfflineChange = false,
   }) async {
     final scope = scopeProvider();
+    final offlineChange = PersonalActionPlanOfflineChange(
+      expectedRevision: expectedRevision,
+      weeklyContactTarget: weeklyContactTarget,
+      statisticsTimeZone: statisticsTimeZone,
+      weekStartIsoDay: weekStartIsoDay,
+      mutationId: mutationId,
+      queuedAtUtc: clock.now().toUtc(),
+    );
     final result = await remote.save(
       expectedRevision: expectedRevision,
       weeklyContactTarget: weeklyContactTarget,
@@ -279,15 +469,57 @@ final class CachedPersonalActionPlanGateway
     switch (result) {
       case PersonalActionPlanSuccess<PersonalActionPlanMutation>(:final value):
         await _ignoreCacheFailure(
-          () => cache.writePlan(scope, value.plan, clock.now().toUtc()),
+          () => cache.acceptPlan(scope, value.plan, clock.now().toUtc()),
         );
         return result;
       case PersonalActionPlanRejected<PersonalActionPlanMutation>(:final code):
         if (code == PersonalActionPlanFailureCode.unauthorized) {
           await _revokeScopeAccess(cache, scope, onAuthorizationRevoked);
+        } else if (code == PersonalActionPlanFailureCode.networkUnavailable) {
+          try {
+            final cached = await cache.readPlan(scope);
+            if (scopeProvider() != scope) return result;
+            final cachedRevision = cached?.value?.revision ?? 0;
+            if (cached == null || cachedRevision != expectedRevision) {
+              return result;
+            }
+            final queuedChange = await cache.queueOfflinePlanChange(
+              scope,
+              offlineChange,
+              replaceExisting: replaceOfflineChange,
+            );
+            if (scopeProvider() != scope) {
+              await _ignoreCacheFailure(
+                () => cache.clearOfflinePlanChange(scope),
+              );
+              return result;
+            }
+            if (queuedChange == null) {
+              return const PersonalActionPlanRejected(
+                PersonalActionPlanFailureCode.pendingChange,
+              );
+            }
+            return PersonalActionPlanQueued(queuedChange);
+          } on Object {
+            return result;
+          }
         }
+      case PersonalActionPlanQueued<PersonalActionPlanMutation>():
+        return result;
     }
     return result;
+  }
+
+  @override
+  Future<bool> discardOfflineChange() async {
+    final scope = scopeProvider();
+    if (scope == null) return false;
+    try {
+      await cache.clearOfflinePlanChange(scope);
+      return scopeProvider() == scope;
+    } on Object {
+      return false;
+    }
   }
 
   @override
@@ -379,6 +611,17 @@ final class CachedPersonalActionReminderGateway
   @override
   Future<void> close() => remote.close();
 }
+
+bool _sameOfflinePlanChange(
+  PersonalActionPlanOfflineChange? left,
+  PersonalActionPlanOfflineChange right,
+) =>
+    left != null &&
+    left.expectedRevision == right.expectedRevision &&
+    left.weeklyContactTarget == right.weeklyContactTarget &&
+    left.statisticsTimeZone == right.statisticsTimeZone &&
+    left.weekStartIsoDay == right.weekStartIsoDay &&
+    left.mutationId == right.mutationId;
 
 Future<void> _ignoreCacheFailure(Future<void> Function() operation) async {
   try {
@@ -530,6 +773,17 @@ String _string(Object? value) {
     throw const FormatException('invalid personal planning cache string');
   }
   return value;
+}
+
+String _boundedString(Object? value, {required int maximumLength}) {
+  if (value is! String) {
+    throw const FormatException('invalid personal planning cache string');
+  }
+  final result = value.trim();
+  if (result.isEmpty || result.length > maximumLength) {
+    throw const FormatException('invalid bounded personal planning string');
+  }
+  return result;
 }
 
 int _integer(Object? value, int minimum, int maximum) {

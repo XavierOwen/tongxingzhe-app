@@ -9,14 +9,15 @@ import '../reminders/personal_action_reminder.dart';
 /// 在可信会话失效后撤销本机仍可能显示的私人状态。
 ///
 /// 网络中断不会删除仍在授权期内的只读缓存，也不会取消已有系统提醒。
-/// 登出、账号切换或明确的授权失败会清除全部计划缓存并取消提醒。
+/// 离开 workspace 或项目时会删除旧 scope 的待同步草稿。登出、账号切换或
+/// 明确的授权失败会清除全部计划缓存并取消提醒。
 final class PrivateSessionDataGuard {
   PrivateSessionDataGuard._(this._scheduler, this._planningCache);
 
   final ReminderNotificationScheduler _scheduler;
   final PersonalPlanningCache _planningCache;
   StreamSubscription<AppSessionSnapshot>? _subscription;
-  String? _lastReadyAppUserId;
+  PersonalPlanningScope? _lastReadyScope;
 
   static Future<PrivateSessionDataGuard> start({
     required AppSession appSession,
@@ -33,18 +34,26 @@ final class PrivateSessionDataGuard {
 
   Future<void> _apply(AppSessionSnapshot snapshot) async {
     if (snapshot.stage == AppSessionStage.ready) {
-      final appUserId = snapshot.context!.appUserId;
-      final previousAppUserId = _lastReadyAppUserId;
-      _lastReadyAppUserId = appUserId;
-      if (previousAppUserId != null && previousAppUserId != appUserId) {
+      final context = snapshot.context!;
+      final scope = PersonalPlanningScope(
+        appUserId: context.appUserId,
+        workspaceId: context.workspace.id,
+        projectId: context.project.id,
+      );
+      final previousScope = _lastReadyScope;
+      _lastReadyScope = scope;
+      if (previousScope == null) return;
+      if (previousScope.appUserId != scope.appUserId) {
         await _revokeAll();
+      } else if (previousScope != scope) {
+        await _planningCache.clearOfflinePlanChange(previousScope);
       }
       return;
     }
 
     if (snapshot.stage == AppSessionStage.signedOut ||
         snapshot.stage == AppSessionStage.unavailable) {
-      _lastReadyAppUserId = null;
+      _lastReadyScope = null;
       await _revokeAll();
       return;
     }
@@ -54,7 +63,7 @@ final class PrivateSessionDataGuard {
 
     await _scheduler.cancelAll();
     if (_isAuthorizationFailure(snapshot)) {
-      _lastReadyAppUserId = null;
+      _lastReadyScope = null;
       await _planningCache.clearAll();
     }
   }

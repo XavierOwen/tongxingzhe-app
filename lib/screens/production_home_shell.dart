@@ -90,6 +90,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
   late ProductionHomeViewModel _viewModel;
   late int _handledContactPageEvent;
   var _handledNoticeId = 0;
+  var _planningRevision = 0;
 
   @override
   void initState() {
@@ -188,6 +189,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
               scheduler: widget.reminderNotificationScheduler,
               timeZoneProvider: widget.timeZoneProvider,
               idGenerator: widget.idGenerator,
+              planningRevision: _planningRevision,
             ),
             const SizedBox(height: 16),
             PersonalActionPlanPanel(
@@ -199,6 +201,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
               gateway: widget.personalActionPlanGateway,
               timeZoneProvider: widget.timeZoneProvider,
               idGenerator: widget.idGenerator,
+              onPlanningStateChanged: _planningStateChanged,
             ),
           ],
         ),
@@ -357,6 +360,11 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
 
   void _select(int index) {
     widget.onDestinationSelected(index);
+  }
+
+  void _planningStateChanged() {
+    if (!mounted) return;
+    setState(() => _planningRevision++);
   }
 
   Future<void> _openContactEntry(ContactDraft? draft) async {

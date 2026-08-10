@@ -98,7 +98,7 @@ void main() {
     expect(gateway.saveCount, 0);
   });
 
-  testWidgets('离线只读状态是单一节点，载入错误通过 live region 播报', (tester) async {
+  testWidgets('离线计划状态是单一节点，载入错误通过 live region 播报', (tester) async {
     final semantics = tester.ensureSemantics();
     await tester.pumpWidget(
       _app(
@@ -115,7 +115,7 @@ void main() {
           )
           .label,
       '离线副本 · 上次同步 2030-03-09T20:00:00.000Z。'
-      '计划与提醒时间只读；联网后再修改。',
+      '可以保存一项计划修改；提醒时间仍需联网修改。',
     );
 
     await tester.pumpWidget(
@@ -132,6 +132,38 @@ void main() {
       loadErrorNode.getSemanticsData().flagsCollection.isLiveRegion,
       isTrue,
     );
+    semantics.dispose();
+  });
+
+  testWidgets('离线冲突在 320 宽 200% 文字下保留独立按钮语义', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await _setCompactView(tester);
+    await tester.pumpWidget(
+      _app(
+        gateway: _PlanGateway(
+          plan: _plan,
+          offlineChange: _offlineChange,
+          offlineChangeFailure: PersonalActionPlanFailureCode.conflict,
+        ),
+        textScaler: TextScaler.linear(2),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    for (final key in [
+      'discard-offline-plan-change',
+      'resubmit-offline-plan-change',
+    ]) {
+      expect(
+        tester
+            .getSemantics(find.byKey(ValueKey(key)))
+            .getSemanticsData()
+            .flagsCollection
+            .isButton,
+        isTrue,
+      );
+    }
     semantics.dispose();
   });
 
@@ -231,11 +263,15 @@ final class _PlanGateway implements PersonalActionPlanGateway {
     this.plan,
     this.fromOfflineCache = false,
     this.rejectLoad = false,
+    this.offlineChange,
+    this.offlineChangeFailure,
   });
 
   PersonalActionPlanSnapshot? plan;
   final bool fromOfflineCache;
   final bool rejectLoad;
+  final PersonalActionPlanOfflineChange? offlineChange;
+  final PersonalActionPlanFailureCode? offlineChangeFailure;
   var saveCount = 0;
 
   @override
@@ -248,6 +284,8 @@ final class _PlanGateway implements PersonalActionPlanGateway {
           plan,
           fromOfflineCache: fromOfflineCache,
           cachedAtUtc: fromOfflineCache ? DateTime.utc(2030, 3, 9, 20) : null,
+          offlineChange: offlineChange,
+          offlineChangeFailure: offlineChangeFailure,
         );
 
   @override
@@ -257,10 +295,14 @@ final class _PlanGateway implements PersonalActionPlanGateway {
     required String statisticsTimeZone,
     required int weekStartIsoDay,
     required String mutationId,
+    bool replaceOfflineChange = false,
   }) async {
     saveCount += 1;
     throw UnimplementedError();
   }
+
+  @override
+  Future<bool> discardOfflineChange() async => true;
 
   @override
   Future<void> close() async {}
@@ -296,4 +338,13 @@ final _plan = PersonalActionPlanSnapshot(
     remainingContactSessions: 2,
     asOfUtc: DateTime.utc(2030, 3, 9, 18),
   ),
+);
+
+final _offlineChange = PersonalActionPlanOfflineChange(
+  expectedRevision: 1,
+  weeklyContactTarget: 7,
+  statisticsTimeZone: 'Asia/Shanghai',
+  weekStartIsoDay: DateTime.sunday,
+  mutationId: 'offline-mutation-1',
+  queuedAtUtc: DateTime.utc(2030, 3, 9, 20),
 );
