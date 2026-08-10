@@ -139,11 +139,16 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/checks/verify_management_report_snapshots.sql
 psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/fixtures/0028_management_report_snapshots.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_project_reporting_time_zone.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0029_project_reporting_time_zone.sql
 ./tool/verify_questionnaire_publish_concurrency.sh
 ./tool/verify_questionnaire_metric_concurrency.sh
 ./tool/verify_person_institution_relationship_concurrency.sh
 ./tool/verify_promotion_target_retention_concurrency.sh
 ./tool/verify_management_report_release_concurrency.sh
+./tool/verify_project_reporting_time_zone_concurrency.sh
 ```
 
 第二次执行不是重复建库，而是验证已经记录的 checksum。若历史文件被修改，脚本会拒绝继续。
@@ -199,7 +204,7 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 `0022_personal_action_reminders.sql` 独立保存每位用户、每个项目的可选每日当地提醒钟点。版本只追加，提醒可在没有周目标时单独使用。服务端不会保存或开启设备通知权限；每台设备的 opt-in 只留在本机。runtime role 同样只能通过可信当前上下文读写本人提醒。
 
-`0023_management_contact_session_privacy.sql` 建立固定双期间渠道网格的私有隐私政策。函数执行 `k=10`、至少三位推广者、单人不超过一半和总计互补隐藏；隐藏结果不返回精确值。runtime role 没有 `app_private` 使用权或函数执行权，生产管理端点必须等待成员授权和项目报告时区。
+`0023_management_contact_session_privacy.sql` 建立固定双期间渠道网格的私有隐私政策。函数执行 `k=10`、至少三位推广者、单人不超过一半和总计互补隐藏；隐藏结果不返回精确值。runtime role 没有 `app_private` 使用权或函数执行权，生产管理端点必须等待成员授权和可信发布 v2。
 
 `0024_management_report_contract.sql` 注册 `contact_sessions_by_channel_two_periods` v1，并只接受报告 ID 与版本。项目、时区、日期范围、维度、筛选和导出字段不能来自客户端。TypeScript 与 PostgreSQL 读取同一请求 fixture，对账规范查询指纹和失败结果。审计信封不含报表值。注册表和函数仍在 `app_private`，runtime role 没有读取或执行权。
 
@@ -211,4 +216,6 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 `0028_management_report_snapshots.sql` 在一个私有事务中生成受保护报告、取得稳定 lineage 锁、比较最近已发布快照并追加发布历史。首次报告建立唯一基线；后续只有 6F 判定通过才保存候选 protected document。被阻止的尝试只保存原因码和请求元数据。快照另存项目 change sequence 水位；这冻结输出，但不提供历史 `as-of` 重算。版本或时区改变不能重置 lineage。runtime role 仍不能读取私有表或执行发布和读取函数。
 
-普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。全部 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，验证问卷发布、指标兼容、个人与机构活动关系、对象匿名化和管理报告 lineage 的并发不变量。Docker wrapper 会按文件名排序并自动复制、执行这些脚本。检查脚本只使用 synthetic 数据，并要求显式 `DATABASE_URL`。
+`0029_project_reporting_time_zone.sql` 为组织项目保存追加式报告 IANA 时区版本。首次配置立即生效；后续配置由旧时区的下一个 ISO 周一边界生效。函数使用期望版本和 UUID 幂等键，并拒绝第二个待生效版本、个人项目、归档项目和无效时区。读取函数按可信 UTC 时间返回当前和待生效版本，未配置时不回退 UTC。该 migration 不改写 6G 发布函数，也不向 runtime 开放私有配置。
+
+普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。全部 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，验证问卷发布、指标兼容、个人与机构活动关系、对象匿名化、项目报告时区和管理报告 lineage 的并发不变量。Docker wrapper 会按文件名排序并自动复制、执行这些脚本。检查脚本只使用 synthetic 数据，并要求显式 `DATABASE_URL`。

@@ -2,7 +2,7 @@
 
 个人分析和管理分析处理不同的信任边界。个人页可以立即显示本人设备上的事实，并说明哪些接触尚未同步。管理分析只能使用后端已接受的数据，还必须先降低小群体披露风险。
 
-当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定、不可变受保护快照和发布尝试审计。它没有开放管理 HTTP 端点，也没有授予任何账号查看团队汇总的权限。组织成员关系、管理 capability 和项目报告时区配置完成后，才能把这些模块接入生产查询。
+当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定、不可变受保护快照、发布尝试审计和项目报告时区版本历史。它没有开放管理 HTTP 端点，也没有授予任何账号查看团队汇总的权限。组织成员关系、管理 capability 和可信发布 v2 完成后，才能把这些模块接入生产查询。
 
 ## 先确定统计单位
 
@@ -65,7 +65,7 @@ M = 单一推广者的最大贡献数
 
 Dart 测试验证 `MetricResult` 和固定顺序。PostgreSQL fixture 把相同贡献送入 [`protect_management_contact_session_grid_v1`](../../backend/database/migrations/0023_management_contact_session_privacy.sql)，核对相同的显示状态和值。
 
-SQL 函数位于 `app_private` schema。`tongxingzhe_runtime` 没有 schema 使用权或函数执行权。这个权限边界防止 Backend 在成员授权和报告时区尚未完成时，把测试基础误接成生产管理端点。
+SQL 函数位于 `app_private` schema。`tongxingzhe_runtime` 没有 schema 使用权或函数执行权。这个权限边界防止 Backend 在成员授权和可信发布 v2 尚未完成时，把测试基础误接成生产管理端点。
 
 ## 固定报告请求为什么只有两个字段
 
@@ -113,7 +113,7 @@ TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../
 
 `CST` 等缩写不合格，因为它可能指不同地区。空值、未知时区和无限截止点也会被拒绝。TypeScript 的 [`resolveManagementReportPeriods`](../../backend/server/src/management-report-periods.ts) 与 PostgreSQL 的私有 `resolve_management_report_periods_v1` 读取同一 fixture，对账边界、相邻性和时长。
 
-当前切片只固定读取合同。它没有决定项目时区保存在哪里、谁能修改、修改何时生效，也没有查询任何接触数据。PostgreSQL 函数仍在 `app_private`，runtime role 不能直接调用。
+`0025_management_report_periods.sql` 只固定期间读取合同，本身不保存项目时区。`0029_project_reporting_time_zone.sql` 后续增加私有版本历史和生效规则。两个 migration 都不开放 runtime 执行权。
 
 ## 私有执行管线如何筛选事实
 
@@ -157,7 +157,7 @@ TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../
 
 ## 快照发布为什么必须是一个事务
 
-[`release_management_report_snapshot_v1`](../../backend/database/migrations/0028_management_report_snapshots.sql) 不接受报告 JSON。它只接受未来授权层提供的内部用户、项目、固定报告身份、项目报告时区、数据截止时间、请求时间和 UUID 幂等键，然后直接调用私有执行管线。这样调用者不能提交一份形状正确、但没有真正经过贡献者保护的伪造报告。
+[`release_management_report_snapshot_v1`](../../backend/database/migrations/0028_management_report_snapshots.sql) 不接受报告 JSON。它接受私有调用方提供的内部用户、项目、固定报告身份、可信项目报告时区、数据截止时间、请求时间和 UUID 幂等键，然后直接调用私有执行管线。这样调用者不能提交一份形状正确、但没有真正经过贡献者保护的伪造报告。这个 v1 仍接收时区文本，因此不能作为未来生产 HTTP 入口。
 
 函数依次取得幂等请求锁和稳定 report lineage 锁。lineage 使用项目与逻辑报告身份，不因报告版本或时区改变而重新开始。取得锁以后，函数才读取最近的已发布快照。两个并发发布因此不能都把自己当作首次基线；后到的事务必须看见先提交的结果。
 
@@ -180,7 +180,19 @@ TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../
 
 当前 v1 把固定 `report_version` 和 `query_fingerprint` 作为计算合同身份。渠道接触场次报告不读取问卷兼容映射，也不读取区域视图，所以这两项在本报告中不适用。未来报告一旦依赖问卷或区域版本，必须把对应版本写入 protected document 并发布新报告版本，不能沿用当前身份。
 
-发布函数和读取函数仍没有 runtime 权限。未来 HTTP gateway 必须先从认证 token 解析内部用户，再检查有效成员关系、项目范围、`view_anonymous_analytics` capability、服务端项目时区和服务端 cutoff，最后才调用这个私有事务。
+发布函数和读取函数仍没有 runtime 权限。未来 HTTP gateway 必须先从认证 token 解析内部用户，再检查有效成员关系、项目范围和 `view_anonymous_analytics` capability。后续发布 v2 还必须按可信 cutoff 解析项目时区版本，把版本写入快照，再调用私有事务。
+
+## 项目报告时区如何保存和生效
+
+[`project_reporting_time_zone_versions`](../../backend/database/migrations/0029_project_reporting_time_zone.sql) 只为活动组织项目保存 IANA 时区。个人项目、归档项目和已删除 workspace 都不能建立管理报告时区。`CST` 等缩写、未知时区、`posix/*` 和 `right/*` 也会被拒绝。
+
+首次配置从服务端接受请求的时刻生效。系统不把配置倒写到本周周一，因为该版本在请求前并不存在。后续变更由当前旧时区结束自己的周期：系统把请求时刻转换到旧时区，计算下一个当地周一 `00:00`，再转换回 UTC。它不按固定 `168` 小时相加，所以芝加哥的春秋夏令时边界仍正确。
+
+每个项目最多有一个待生效版本。读取函数用半开时间边界选择版本：生效时刻之前返回旧版本和 pending，新边界时刻返回新版本。未配置项目会失败，不会静默采用 UTC、设备时区或客户端值。
+
+配置入口先取得变更请求锁，再取得项目时区锁。相同 UUID 和相同业务参数返回首次版本；重试产生的新服务端时间不会改变结果。两个并发请求使用同一期望版本时，只有一个可以追加下一版本。版本表另用 trigger 拒绝无效直接插入、`UPDATE` 和 `DELETE`。
+
+本切片没有修改历史 `0028` migration，也没有给既有快照回填时区版本。既有快照只能证明自身保存的时区文本和 UTC 边界，不能声称引用了后来建立的配置。无时区参数的发布 v2 必须同时固定配置 revision，并为跨时区后的稳定 lineage 建立新的隐私判定；在那之前，6G v1 保持私有且无 runtime 权限。
 
 ## 在 Docker 中验证
 
@@ -190,7 +202,7 @@ TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-脚本会建立临时 PostgreSQL 16 容器，执行全部 migration、权限检查和 fixture。它另开两个数据库会话，证明并发滚动发布会等待基线事务并链接到唯一既有快照。随后脚本导出 `app_data`、`app_private` 与 migration 历史，恢复到第二个空库重跑检查。脚本结束后自动删除容器。
+脚本会建立临时 PostgreSQL 16 容器，执行全部 migration、权限检查和 fixture。独立会话检查证明并发滚动发布会等待基线事务，也证明相同期望版本只能追加一个报告时区版本。随后脚本导出 `app_data`、`app_private` 与 migration 历史，恢复到第二个空库重跑检查。脚本结束后自动删除容器。
 
 只想验证 Dart 政策时运行：
 
@@ -216,7 +228,7 @@ Docker 的安装、输出解释和失败容器保留方法见[第 9 章](09-loca
 
 - 组织和项目成员关系；
 - 独立的管理分析 capability；
-- 项目固定报告 IANA 时区的保存、修改、生效时间和历史；
+- 保存时区配置 revision 的无时区参数发布 v2，以及跨时区 lineage 判定；
 - 授权后的固定报告端点和访问审计；
 - 可按历史 revision 水位重新执行的 `as-of` 投影、更正版取代关系和删除流程；
 - 父子区域与重叠区域报告的重识别演练；
