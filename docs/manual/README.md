@@ -21,6 +21,8 @@
 
 数据库、离线、同步、界面和认证的整体证据见 [六平台能力证据矩阵](../spikes/six-platform-capability-matrix.md)。
 
+当地提醒的前台、后台、终止和旅行换时区验证见[提醒送达与旅行时区真机 Spike](../spikes/reminder-delivery-and-travel-time-zone.md)。
+
 后续章节会依次加入：管理统计与隐私、六平台能力、发布与恢复演练。
 
 ## 文档与代码如何保持一致

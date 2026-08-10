@@ -240,6 +240,26 @@ fixture：0022_personal_action_reminders.sql
 
 `0022` fixture 会创建、读取、清除和重放提醒，并验证越界分钟、旧 revision 和跨用户读取都被拒绝。它不测试手机锁屏。系统权限弹窗、App 被终止后的实际触发、旅行换时区和 Android 厂商后台限制仍需真机测试。
 
+### 5.5 验证系统通知送达与旅行时区
+
+系统通知真机测试不使用 Docker。Docker 容器运行 PostgreSQL，不能模拟 Android、iOS 或 macOS 的通知中心、设备时区和 App 终止状态。
+
+仓库提供独立探针。它不连接 Backend，也不需要测试账号：
+
+```bash
+flutter devices
+git status --short
+git rev-parse --short HEAD
+flutter run \
+  -t tool/reminder_delivery_probe.dart \
+  -d <device-id> \
+  --dart-define=REMINDER_PROBE_COMMIT=<commit>
+```
+
+先取得设备 ID，并确认 `git status --short` 没有输出。随后取得 commit，再替换命令中的尖括号内容。探针拒绝缺失或无效的 commit。它只使用通用通知文案，分别记录安排、通知仍活跃的观察和用户交互，不把点击时间称为实际送达时间。
+
+完整的权限、前台、后台、终止和旅行测试步骤见[提醒送达与旅行时区真机 Spike](../spikes/reminder-delivery-and-travel-time-zone.md)。没有真机时保留 `pending`，不能用 build 或单元测试替代。
+
 ## 6. Docker PostgreSQL 套件怎样运行
 
 ### 6.1 最短用法
