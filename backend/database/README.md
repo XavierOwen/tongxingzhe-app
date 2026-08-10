@@ -127,6 +127,10 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/checks/verify_management_report_periods.sql
 psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/fixtures/0025_management_report_periods.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_report_execution.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0026_management_report_execution.sql
 ./tool/verify_questionnaire_publish_concurrency.sh
 ./tool/verify_questionnaire_metric_concurrency.sh
 ./tool/verify_person_institution_relationship_concurrency.sh
@@ -191,5 +195,7 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 `0024_management_report_contract.sql` 注册 `contact_sessions_by_channel_two_periods` v1，并只接受报告 ID 与版本。项目、时区、日期范围、维度、筛选和导出字段不能来自客户端。TypeScript 与 PostgreSQL 读取同一请求 fixture，对账规范查询指纹和失败结果。审计信封不含报表值。注册表和函数仍在 `app_private`，runtime role 没有读取或执行权。
 
 `0025_management_report_periods.sql` 给固定报告定义增加 `iso_week_monday_v1` 边界，并用项目可信 IANA 时区解析数据截止点之前最近两个完整周。函数按当地日历分别换算三个周一午夜，所以夏令时切换周可以是 167 或 169 小时。TypeScript 与 PostgreSQL 读取同一期间 fixture。该 migration 不保存项目时区，也不开放 runtime 执行权。
+
+`0026_management_report_execution.sql` 在一个私有函数中组合固定定义、完整期间、项目内有效接触和隐私网格。函数只读取截止点前已提交的当前活动接触；接触尝试、作废、期间外和其他项目记录不进入。按推广者形成的贡献只存在于函数内部，最终 JSON 固定为 16 个保护后格子。该函数仍无 runtime 执行权，也不提供历史快照。
 
 普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。四个 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，验证问卷发布、指标兼容、个人与机构活动关系和对象匿名化的并发不变量。检查脚本只使用 synthetic 个人空间，并要求显式 `DATABASE_URL`。
