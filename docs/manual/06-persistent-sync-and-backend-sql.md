@@ -176,6 +176,12 @@ Flutter 的 [`HttpContactRegionResolver`](../../lib/regions/contact_region_resol
 
 [`read_personal_contact_summary`](../../backend/database/migrations/0006_personal_contact_metrics.sql) 使用与 Drift 相同的 UTC 半开区间和 scope 条件。共用输入可以发现两套 SQL 的筛选或单位漂移；它不表示两种 SQL 方言必须写成同一段代码。
 
+Flutter 不把这四个数字当作无版本的页面字段。[`CoreMetricCatalog`](../../lib/features/contact_metrics/metric_contract.dart) 为接触场次、触达人数、兴趣分布和渠道分布固定 `metric_id + version`、统计单位、值形状、实际发生时间口径、排除项和管理隐私规则。修改任何口径时必须新增版本，不能静默覆盖 v1。
+
+[`MetricResult`](../../lib/features/contact_metrics/metric_contract.dart) 把值与 UTC 半开期间、报告时区、数据截止时间、来源层、同步覆盖和隐私状态放在同一个结果合同中。当前个人页由 [`PersonalContactMetricMapper`](../../lib/features/contact_metrics/personal_contact_overview.dart) 把 Drift 汇总映射为 `localOperational + personalFact`；同步覆盖明确以接触场次为单位。即使指标值是触达人数，也不能用待同步场次数推算“已同步人数”。
+
+这一层没有授予管理权限，也没有把个人事实当成可公开的管理结果。管理查询仍需独立验证成员授权、报告时区和按真实统计单位执行的隐私抑制；在这些前置条件完成前，不得新增可绕过它们的任意指标端点。
+
 ## 为什么这样测试
 
 Flutter 测试使用真实内存 SQLite 和可控 Transport。它们覆盖 ACK、指数退避、jitter 上限、双 worker 租约、过期恢复、迟到 ACK、aggregate 顺序、永久失败隔离、批量部分成功、乱序结果、远端 batch 原子性、cursor 区分、同 ID 内容冲突，以及冲突快照恢复与解决 ACK。HTTP Adapter 测试固定 bearer header、路径、query、JSON、`Retry-After`、完整冲突对比和错误分类。

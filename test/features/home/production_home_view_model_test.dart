@@ -416,8 +416,9 @@ PersonalContactSummary _summary({int contactSessionCount = 5}) {
   return PersonalContactSummary(
     contactSessionCount: contactSessionCount,
     reachCount: 9,
-    interestDistribution: const [1, 1, 1, 1, 1],
+    interestDistribution: [contactSessionCount - 4, 1, 1, 1, 1],
     pendingSyncCount: 2,
+    channelDistribution: [contactSessionCount, 0, 0, 0, 0, 0, 0],
   );
 }
 

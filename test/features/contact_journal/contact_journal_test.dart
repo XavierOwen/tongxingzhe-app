@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_journal.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
+import 'package:tongxingzhe_app/features/contact_metrics/metric_contract.dart';
+import 'package:tongxingzhe_app/features/contact_metrics/personal_contact_overview.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/regions/region_catalog.dart';
 import 'package:tongxingzhe_app/regions/region_models.dart';
@@ -430,6 +432,63 @@ void main() {
       expected
           .map((row) => row.occurredAtUtc)
           .reduce((first, second) => first.isAfter(second) ? first : second),
+    );
+
+    final metricResults = PersonalContactMetricMapper.map(
+      summary: summary,
+      period: MetricPeriod(
+        fromUtc: DateTime.utc(2030, 1, 8),
+        untilUtc: DateTime.utc(2030, 1, 15),
+      ),
+      dataCutoffUtc: DateTime.utc(2030, 1, 15, 18, 30),
+    );
+    expect(
+      metricResults
+          .singleWhere(
+            (result) =>
+                result.definition.reference ==
+                CoreMetricCatalog.contactSessions.reference,
+          )
+          .value,
+      CountMetricValue(expected.length),
+    );
+    expect(
+      metricResults
+          .singleWhere(
+            (result) =>
+                result.definition.reference ==
+                CoreMetricCatalog.reachedPeople.reference,
+          )
+          .value,
+      CountMetricValue(
+        expected.fold(0, (total, row) => total + row.reachCount),
+      ),
+    );
+    expect(
+      metricResults
+          .singleWhere(
+            (result) =>
+                result.definition.reference ==
+                CoreMetricCatalog.interestDistribution.reference,
+          )
+          .value,
+      MetricDistributionValue(
+        labels: CoreMetricCatalog.interestDistribution.bucketLabels,
+        counts: expectedInterest,
+      ),
+    );
+    expect(
+      metricResults
+          .singleWhere(
+            (result) =>
+                result.definition.reference ==
+                CoreMetricCatalog.channelDistribution.reference,
+          )
+          .value,
+      MetricDistributionValue(
+        labels: CoreMetricCatalog.channelDistribution.bucketLabels,
+        counts: expectedChannels,
+      ),
     );
   });
 
