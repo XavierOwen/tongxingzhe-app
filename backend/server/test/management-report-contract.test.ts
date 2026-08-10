@@ -77,6 +77,11 @@ test("unknown reports and caller-controlled query fields fail closed", () => {
       report_version: 1,
       export_fields: ["value_count"],
     },
+    {
+      report_id: "contact_sessions_by_channel_two_periods",
+      report_version: 1,
+      exclude_app_user_id: "11111111-1111-4111-8111-111111111111",
+    },
   ];
 
   for (const value of invalidRequests) {
