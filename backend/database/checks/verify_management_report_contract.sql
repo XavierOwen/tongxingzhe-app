@@ -39,6 +39,7 @@ BEGIN
       AND dimension_key = 'channel'
       AND period_grain = 'week'
       AND comparison_period_count = 2
+      AND period_boundary_id = 'iso_week_monday_v1'
       AND privacy_policy = 'management_contact_session_privacy_v1'
       AND required_capability = 'view_anonymous_analytics'
       AND query_fingerprint =

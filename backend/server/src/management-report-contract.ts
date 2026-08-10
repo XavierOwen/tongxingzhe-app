@@ -6,6 +6,7 @@ export interface CanonicalManagementReportRequest {
   readonly dimension: "channel";
   readonly periodGrain: "week";
   readonly comparisonPeriodCount: 2;
+  readonly periodBoundaryId: "iso_week_monday_v1";
   readonly privacyPolicy: "management_contact_session_privacy_v1";
   readonly requiredCapability: "view_anonymous_analytics";
   readonly queryFingerprint:
@@ -52,6 +53,7 @@ const contactSessionsByChannelTwoPeriods = Object.freeze({
   dimension: "channel",
   periodGrain: "week",
   comparisonPeriodCount: 2,
+  periodBoundaryId: "iso_week_monday_v1",
   privacyPolicy: "management_contact_session_privacy_v1",
   requiredCapability: "view_anonymous_analytics",
   queryFingerprint:

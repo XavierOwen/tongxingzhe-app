@@ -2,7 +2,7 @@
 
 个人分析和管理分析处理不同的信任边界。个人页可以立即显示本人设备上的事实，并说明哪些接触尚未同步。管理分析只能使用后端已接受的数据，还必须先降低小群体披露风险。
 
-当前实现完成管理隐私政策、固定报告请求合同和跨层 fixture。它没有开放管理 HTTP 端点，也没有授予任何账号查看团队汇总的权限。组织成员关系、管理 capability 和项目报告时区完成后，才能把这些模块接入生产查询。
+当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析和跨层 fixture。它没有开放管理 HTTP 端点，也没有授予任何账号查看团队汇总的权限。组织成员关系、管理 capability 和项目报告时区配置完成后，才能把这些模块接入生产查询。
 
 ## 先确定统计单位
 
@@ -94,6 +94,27 @@ management-report:contact_sessions_by_channel_two_periods:v1
 
 TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../backend/database/fixtures/shared/management_report_requests_v1.csv)。fixture 包含有效请求、未知报告、未知版本，以及客户端伪造项目、时区、日期、维度、筛选和导出字段的负向场景。
 
+## 两个完整周如何确定
+
+固定报告定义包含 `iso_week_monday_v1` 边界版本。这个字段来自服务端注册表，不是客户端参数。未来的授权执行层必须从项目配置取得报告 IANA 时区，并用后端已经接受数据的 UTC 截止点调用期间解析器。
+
+解析器先在项目报告时区中找到不晚于截止点的最近一个周一 `00:00`，再向前取两个完整当地自然周。`previous` 是较早一周，`current` 是较晚一周。这里的 `current` 不表示正在进行、尚未结束的本周。两个区间都采用 `[start, until)` 半开形式，因此前一期的 `until` 必须等于后一期的 `start`，边界上的一条接触只会进入一期。
+
+数据截止点和 `current.until` 是不同概念。截止点说明后端事实新鲜到何时；`current.until` 是最近一个已经完成的周边界。只取完整周可以避免把七天完整数据与三天的进行中数据直接比较。
+
+不能先算一个 UTC 边界，再固定减去 `168` 小时。正确做法是分别把每个当地周一午夜转换为 UTC。共享 fixture [`management_report_periods_v1.csv`](../../backend/database/fixtures/shared/management_report_periods_v1.csv) 包含以下证据：
+
+| 项目报告时区 | 场景 | 较早一周 | 较晚一周 |
+| --- | --- | ---: | ---: |
+| `UTC` | 普通周 | 168 小时 | 168 小时 |
+| `Asia/Shanghai` | 无夏令时 | 168 小时 | 168 小时 |
+| `America/Chicago` | 春季进入夏令时 | 167 小时 | 168 小时 |
+| `America/Chicago` | 秋季退出夏令时 | 169 小时 | 168 小时 |
+
+`CST` 等缩写不合格，因为它可能指不同地区。空值、未知时区和无限截止点也会被拒绝。TypeScript 的 [`resolveManagementReportPeriods`](../../backend/server/src/management-report-periods.ts) 与 PostgreSQL 的私有 `resolve_management_report_periods_v1` 读取同一 fixture，对账边界、相邻性和时长。
+
+当前切片只固定读取合同。它没有决定项目时区保存在哪里、谁能修改、修改何时生效，也没有查询任何接触数据。PostgreSQL 函数仍在 `app_private`，runtime role 不能直接调用。
+
 ## 在 Docker 中验证
 
 先启动 Docker Desktop。然后在仓库根目录运行：
@@ -110,7 +131,7 @@ TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../
 flutter test --no-pub test/features/contact_metrics/management_privacy_policy_test.dart
 ```
 
-只想验证 Backend 请求合同时运行：
+只想验证 Backend 请求和期间合同时运行：
 
 ```bash
 cd backend/server
@@ -128,7 +149,7 @@ Docker 的安装、输出解释和失败容器保留方法见[第 9 章](09-loca
 
 - 组织和项目成员关系；
 - 独立的管理分析 capability；
-- 项目固定报告 IANA 时区；
+- 项目固定报告 IANA 时区的保存、修改、生效时间和历史；
 - 授权后的固定报告执行、持久审计和快照；
 - 区域与时间重叠的重识别演练；
 - 只接收抑制后结果的 API、缓存、图表和导出。
