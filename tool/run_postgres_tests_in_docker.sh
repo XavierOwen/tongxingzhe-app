@@ -181,6 +181,9 @@ run_sql_files \
   'fixture'
 
 echo '用独立数据库会话验证并发不变量。'
+# Concurrency scripts commit their synthetic rows, and the later pg_dump keeps
+# them. Fixture files run again after restore, so concurrency and rollback
+# fixtures must use non-overlapping synthetic primary-key namespaces.
 while IFS= read -r concurrency_script; do
   tool_file="$(basename "${concurrency_script}")"
   docker exec \

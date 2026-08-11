@@ -209,7 +209,7 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 `0022_personal_action_reminders.sql` 独立保存每位用户、每个项目的可选每日当地提醒钟点。版本只追加，提醒可在没有周目标时单独使用。服务端不会保存或开启设备通知权限；每台设备的 opt-in 只留在本机。runtime role 同样只能通过可信当前上下文读写本人提醒。
 
-`0023_management_contact_session_privacy.sql` 建立固定双期间渠道网格的私有隐私政策。函数执行 `k=10`、至少三位推广者、单人不超过一半和总计互补隐藏；隐藏结果不返回精确值。runtime role 没有 `app_private` 使用权或函数执行权，生产管理端点必须等待成员授权和可信发布 v2。
+`0023_management_contact_session_privacy.sql` 建立固定双期间渠道网格的私有隐私政策。函数执行 `k=10`、至少三位推广者、单人不超过一半和总计互补隐藏；隐藏结果不返回精确值。runtime role 没有 `app_private` 使用权或函数执行权；`0031` 只在私有事务中组合授权和发布，尚未开放生产管理端点。
 
 `0024_management_report_contract.sql` 注册 `contact_sessions_by_channel_two_periods` v1，并只接受报告 ID 与版本。项目、时区、日期范围、维度、筛选和导出字段不能来自客户端。TypeScript 与 PostgreSQL 读取同一请求 fixture，对账规范查询指纹和失败结果。审计信封不含报表值。注册表和函数仍在 `app_private`，runtime role 没有读取或执行权。
 
@@ -225,4 +225,8 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 `0030_management_report_authorization.sql` 保存互相独立的组织成员关系、项目成员关系和项目管理报告能力。私有解析器只在活动账号、组织、项目和三级授权事实同时有效时返回最小证据。查看固定使用 `view_anonymous_analytics`，发布固定使用 `release_management_reports`，二者互不包含。解析器取得三层 transaction lock 后使用可信数据库时间，并与关系撤权共享这些锁；证据只能在同一数据库事务内消费。当前没有生产授予、撤销、HTTP 或 Flutter 入口，runtime role 不能直接访问新表或私有函数。
 
+`0031_trusted_management_report_release.sql` 提供无时区、无截止时间参数的私有发布 v2。函数在组织／项目／发布能力、请求、项目时区和报告 lineage 锁全部取得后重新授权，以该数据库时间选择准确的时区 revision 并调用既有受保护快照发布。独立不可变表保存最小授权和 revision provenance；旧 v1 快照、缺失 provenance 或 revision 变化都在生成候选报告前失败关闭。runtime role 仍不能执行发布或读取证据。
+
 普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。全部 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，验证问卷发布、指标兼容、个人与机构活动关系、对象匿名化、管理授权写入与撤权、项目报告时区和管理报告 lineage 的并发不变量。Docker wrapper 会按文件名排序并自动复制、执行这些脚本。检查脚本只使用 synthetic 数据，并要求显式 `DATABASE_URL`。
+
+并发脚本的 synthetic 数据会提交，并进入随后生成的 `pg_dump`。普通 fixture 会回滚，但会在恢复库再执行一次。因此并发脚本和 fixture 必须使用不同的主键命名空间；否则第一次 fixture 会通过，恢复后的第二次 fixture 会因重复主键失败。
