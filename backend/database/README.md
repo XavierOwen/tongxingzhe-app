@@ -143,10 +143,15 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/checks/verify_project_reporting_time_zone.sql
 psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/fixtures/0029_project_reporting_time_zone.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_report_authorization.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0030_management_report_authorization.sql
 ./tool/verify_questionnaire_publish_concurrency.sh
 ./tool/verify_questionnaire_metric_concurrency.sh
 ./tool/verify_person_institution_relationship_concurrency.sh
 ./tool/verify_promotion_target_retention_concurrency.sh
+./tool/verify_management_report_authorization_concurrency.sh
 ./tool/verify_management_report_release_concurrency.sh
 ./tool/verify_project_reporting_time_zone_concurrency.sh
 ```
@@ -218,4 +223,6 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 `0029_project_reporting_time_zone.sql` 为组织项目保存追加式报告 IANA 时区版本。首次配置立即生效；后续配置由旧时区的下一个 ISO 周一边界生效。函数使用期望版本和 UUID 幂等键，并拒绝第二个待生效版本、个人项目、归档项目和无效时区。读取函数按可信 UTC 时间返回当前和待生效版本，未配置时不回退 UTC。该 migration 不改写 6G 发布函数，也不向 runtime 开放私有配置。
 
-普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。全部 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，验证问卷发布、指标兼容、个人与机构活动关系、对象匿名化、项目报告时区和管理报告 lineage 的并发不变量。Docker wrapper 会按文件名排序并自动复制、执行这些脚本。检查脚本只使用 synthetic 数据，并要求显式 `DATABASE_URL`。
+`0030_management_report_authorization.sql` 保存互相独立的组织成员关系、项目成员关系和项目管理报告能力。私有解析器只在活动账号、组织、项目和三级授权事实同时有效时返回最小证据。查看固定使用 `view_anonymous_analytics`，发布固定使用 `release_management_reports`，二者互不包含。解析器取得三层 transaction lock 后使用可信数据库时间，并与关系撤权共享这些锁；证据只能在同一数据库事务内消费。当前没有生产授予、撤销、HTTP 或 Flutter 入口，runtime role 不能直接访问新表或私有函数。
+
+普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。全部 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，验证问卷发布、指标兼容、个人与机构活动关系、对象匿名化、管理授权写入与撤权、项目报告时区和管理报告 lineage 的并发不变量。Docker wrapper 会按文件名排序并自动复制、执行这些脚本。检查脚本只使用 synthetic 数据，并要求显式 `DATABASE_URL`。
