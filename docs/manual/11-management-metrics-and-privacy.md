@@ -2,7 +2,7 @@
 
 个人分析和管理分析处理不同的信任边界。个人页可以立即显示本人设备上的事实，并说明哪些接触尚未同步。管理分析只能使用后端已接受的数据，还必须先降低小群体披露风险。
 
-当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定、不可变受保护快照、发布尝试审计、项目报告时区版本历史，以及私有的组织成员、项目成员和管理报告能力授权合同。它仍没有生产成员管理入口、管理 HTTP 端点或可信发布 v2，也没有向 runtime role 授予查看团队汇总的权限。
+当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定、不可变受保护快照、项目报告时区版本历史、管理报告能力授权，以及组合这些合同的可信发布 v2。它仍没有生产成员管理入口、管理 HTTP／读取端点，也没有向 runtime role 授予查看或发布团队汇总的权限。
 
 ## 先确定统计单位
 
@@ -65,7 +65,7 @@ M = 单一推广者的最大贡献数
 
 Dart 测试验证 `MetricResult` 和固定顺序。PostgreSQL fixture 把相同贡献送入 [`protect_management_contact_session_grid_v1`](../../backend/database/migrations/0023_management_contact_session_privacy.sql)，核对相同的显示状态和值。
 
-SQL 函数位于 `app_private` schema。`tongxingzhe_runtime` 没有 schema 使用权或函数执行权。这个权限边界防止 Backend 在成员授权和可信发布 v2 尚未完成时，把测试基础误接成生产管理端点。
+SQL 函数位于 `app_private` schema。`tongxingzhe_runtime` 没有 schema 使用权或函数执行权。可信发布 v2 已在同一私有 schema 中组合这些政策，但生产 HTTP 和读取入口尚未建立，Backend 仍不能把测试基础直接接成管理端点。
 
 ## 固定报告请求为什么只有两个字段
 
@@ -90,13 +90,13 @@ management-report:contact_sessions_by_channel_two_periods:v1
 
 这个指纹用于审计和对账。它不是密码、token 或匿名化手段，也不授权任何查询。
 
-审计信封只保存请求者内部 ID、项目 ID、报告 ID 与版本、查询指纹、UTC 请求时间和结果状态。它不保存报表格值、贡献者数量、最大贡献值或隐藏的精确值。后面的私有快照发布函数使用同样的最小化原则持久记录发布尝试。那份记录还不是生产访问审计，因为当前没有成员或 capability 校验入口。
+审计信封只保存请求者内部 ID、项目 ID、报告 ID 与版本、查询指纹、UTC 请求时间和结果状态。它不保存报表格值、贡献者数量、最大贡献值或隐藏的精确值。可信发布 v2 使用同样的最小化原则，并另存当次授权关系、能力 grant、时区 revision 和底层快照关联。它仍不是生产访问审计，因为当前没有 HTTP 读取或发布入口。
 
 TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../backend/database/fixtures/shared/management_report_requests_v1.csv)。fixture 包含有效请求、未知报告、未知版本，以及客户端伪造项目、时区、日期、维度、筛选和导出字段的负向场景。
 
 ## 两个完整周如何确定
 
-固定报告定义包含 `iso_week_monday_v1` 边界版本。这个字段来自服务端注册表，不是客户端参数。未来的授权执行层必须从项目配置取得报告 IANA 时区，并用后端已经接受数据的 UTC 截止点调用期间解析器。
+固定报告定义包含 `iso_week_monday_v1` 边界版本。这个字段来自服务端注册表，不是客户端参数。可信发布 v2 从项目配置取得报告 IANA 时区，并用数据库固定的 UTC 截止点调用期间解析器。
 
 解析器先在项目报告时区中找到不晚于截止点的最近一个周一 `00:00`，再向前取两个完整当地自然周。`previous` 是较早一周，`current` 是较晚一周。这里的 `current` 不表示正在进行、尚未结束的本周。两个区间都采用 `[start, until)` 半开形式，因此前一期的 `until` 必须等于后一期的 `start`，边界上的一条接触只会进入一期。
 
@@ -180,7 +180,7 @@ TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../
 
 当前 v1 把固定 `report_version` 和 `query_fingerprint` 作为计算合同身份。渠道接触场次报告不读取问卷兼容映射，也不读取区域视图，所以这两项在本报告中不适用。未来报告一旦依赖问卷或区域版本，必须把对应版本写入 protected document 并发布新报告版本，不能沿用当前身份。
 
-发布函数和读取函数仍没有 runtime 权限。`0030` 已固定成员与能力授权解析器，但还没有把历史 `6G` 发布函数接到这条授权链。未来 HTTP gateway 必须先从认证 token 解析内部用户，再在同一数据库事务中检查项目范围和所需能力。后续发布 v2 还必须按可信 cutoff 解析项目时区版本，把版本写入快照，再调用私有发布事务。
+历史 v1 发布和读取函数仍没有 runtime 权限。`0031` 的私有 v2 已把 `0030` 授权、`0029` 时区 revision 和历史 `6G` 发布函数接在同一事务中。未来 HTTP gateway 仍必须先从认证 token 解析内部用户，再调用受控的服务层；不能获得 `app_private` 的通用执行权。
 
 ## 项目报告时区如何保存和生效
 
@@ -192,7 +192,7 @@ TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../
 
 配置入口先取得变更请求锁，再取得项目时区锁。相同 UUID 和相同业务参数返回首次版本；重试产生的新服务端时间不会改变结果。两个并发请求使用同一期望版本时，只有一个可以追加下一版本。版本表另用 trigger 拒绝无效直接插入、`UPDATE` 和 `DELETE`。
 
-本切片没有修改历史 `0028` migration，也没有给既有快照回填时区版本。既有快照只能证明自身保存的时区文本和 UTC 边界，不能声称引用了后来建立的配置。无时区参数的发布 v2 必须同时固定配置 revision，并为跨时区后的稳定 lineage 建立新的隐私判定；在那之前，6G v1 保持私有且无 runtime 权限。
+`0031` 没有修改历史 `0028` migration，也没有给既有快照回填时区版本。它用独立的不可变尝试记录把新发布关联到准确 revision。既有 v1 快照只能证明自身保存的时区文本和 UTC 边界；v2 遇到这种 legacy lineage 会在生成候选报告前失败关闭。6G v1 继续保持私有且无 runtime 权限。
 
 ## 管理报告授权链如何工作
 
@@ -209,7 +209,7 @@ TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../
 第一版只有两个管理报告能力：
 
 - `view_anonymous_analytics` 允许未来的受保护读取入口查看匿名管理分析；
-- `release_management_reports` 允许未来的可信发布入口尝试建立正式报告。
+- `release_management_reports` 允许私有可信发布入口尝试建立正式报告。
 
 两项能力互不包含。项目管理员角色、组织所有者角色、当前项目选择和登录账号都不是替代凭证。发布入口若以后还要在响应中返回报告内容，必须同时检查发布与查看能力。
 
@@ -217,7 +217,19 @@ TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../
 
 “在同一事务中消费”是安全要求，不是性能建议。解析器与成员／能力撤权使用相同的 transaction lock。若受保护操作先取得锁，撤权会等该操作提交；若撤权先提交，后来的解析会看见结束边界并失败。调用方若先解析、提交事务，再在另一个事务执行报告操作，就会重新制造检查与使用之间的空窗。
 
-当前 Slice 只建立私有合同。Flutter 不能读这些表，`tongxingzhe_runtime` 也不能执行解析器。组织邀请、生产授予与撤销、角色组合、权限变更审计和受保护报告端点仍须由后续 Slice 实现。
+Flutter 不能读这些表，`tongxingzhe_runtime` 也不能执行解析器。可信发布 v2 在同一事务中消费授权证据；组织邀请、生产授予与撤销、角色组合、权限变更审计和受保护报告端点仍须由后续 Slice 实现。
+
+## 可信发布 v2 如何组合三条私有合同
+
+[`release_management_report_snapshot_v2`](../../backend/database/migrations/0031_trusted_management_report_release.sql) 只有五个参数：幂等请求 ID、内部用户、项目、固定报告 ID 和版本。调用方没有位置可以提交 capability、时区、数据截止点、授权时间或报告 JSON。
+
+函数按固定顺序取得授权、请求、项目时区和报告 lineage 的 transaction lock。等待全部结束后，它再次检查 `release_management_reports`。第二次检查返回的数据库时间同时成为授权参考时间和数据截止点；函数再从不可变时区历史中选择当时有效的 revision。这样，发布在等待 lineage 或时区配置期间跨过能力结束边界时，不能继续使用较早的授权结果。
+
+每次正常 v2 尝试把授权关系 ID、能力 grant、授权参考时间、时区 revision、截止点、比较快照、发布快照、状态和原因码写入 `management_report_release_v2_attempts`。这张表不保存候选报告、格值或贡献者。授权失败和未配置时区会回滚，不留下尝试；lineage 失败只写最小原因，不调用 6G 生成器。
+
+没有历史快照时，v2 可以建立一次基线。有历史时，最近快照必须由 v2 建立，而且时区 revision 必须相同。IANA 文本相同也不够：项目从 UTC 改到其他时区再改回 UTC，revision 已改变，发布仍返回 `release_time_zone_revision_changed`。当前合同不自动建立跨时区新基线，因为那会让两套不同期间边界的报告绕过重叠保护。如何安全恢复发布需另行设计。
+
+相同 v2 请求重试会先重新授权，再返回首次最小结果。已经被 v1 使用的 UUID 不可补记为 v2 provenance。发布能力也不自动授予查看能力；返回值只有报告身份、时区 revision、截止点、快照关联、状态和原因码，不含报告内容。
 
 ## 在 Docker 中验证
 
@@ -227,7 +239,9 @@ TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-脚本会建立临时 PostgreSQL 16 容器，执行全部 migration、权限检查和 fixture。独立会话检查还会证明三层授权的重叠写入各只有一个成功、授权消费与撤权按事务顺序完成、并发滚动发布等待基线事务，以及相同期望版本只能追加一个报告时区版本。随后脚本导出 `app_data`、`app_private` 与 migration 历史，恢复到第二个空库重跑检查。脚本结束后自动删除容器。
+脚本会建立临时 PostgreSQL 16 容器，执行全部 migration、权限检查和 fixture。独立会话检查还会证明三层授权的重叠写入各只有一个成功、授权消费与撤权按事务顺序完成、并发滚动发布等待基线事务，以及相同期望版本只能追加一个报告时区版本。v2 检查另会让发布等待到能力自然到期，并验证“发布先取得时区锁”和“配置先取得时区锁”两种顺序。随后脚本导出 `app_data`、`app_private` 与 migration 历史，恢复到第二个空库重跑检查。脚本结束后自动删除容器。
+
+并发脚本会提交 synthetic 数据，这些行会进入后面的 dump；普通 fixture 虽然回滚，却会在恢复库再运行一次。新增测试时，两类文件必须使用不同的 synthetic UUID 前缀。若第一次 fixture 通过、恢复后的同一 fixture 报重复主键，先检查命名空间是否与某个并发脚本重叠。
 
 只想验证 Dart 政策时运行：
 
@@ -253,7 +267,7 @@ Docker 的安装、输出解释和失败容器保留方法见[第 9 章](09-loca
 
 - 组织邀请、项目分配、角色组合，以及生产成员和能力授予／撤销入口；
 - 权限变更审计和可信的当前组织／项目上下文；
-- 保存时区配置 revision 的无时区参数发布 v2，以及跨时区 lineage 判定；
+- 跨时区 revision 后重新建立基线或更正版的隐私判定；
 - 授权后的固定报告端点和访问审计；
 - 可按历史 revision 水位重新执行的 `as-of` 投影、更正版取代关系和删除流程；
 - 父子区域与重叠区域报告的重识别演练；
