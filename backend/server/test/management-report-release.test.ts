@@ -176,13 +176,27 @@ test("strict path, query, and body validation follows authentication", async () 
     hasQuery: false,
   };
   const requests = [
-    {...baseRequest, projectId: "not-a-uuid", body: {release_request_id: releaseRequestId}},
-    {...baseRequest, hasQuery: true, body: {release_request_id: releaseRequestId}},
-    {...baseRequest, body: {}},
-    {...baseRequest, body: {release_request_id: releaseRequestId, extra: true}},
-    {...baseRequest, body: {release_request_id: "not-a-uuid"}},
-    {...baseRequest, body: []},
-    {...baseRequest, body: null},
+    {
+      ...baseRequest,
+      projectId: "not-a-uuid",
+      readBody: async () => ({release_request_id: releaseRequestId}),
+    },
+    {
+      ...baseRequest,
+      hasQuery: true,
+      readBody: async () => ({release_request_id: releaseRequestId}),
+    },
+    {...baseRequest, readBody: async () => ({})},
+    {
+      ...baseRequest,
+      readBody: async () => ({release_request_id: releaseRequestId, extra: true}),
+    },
+    {
+      ...baseRequest,
+      readBody: async () => ({release_request_id: "not-a-uuid"}),
+    },
+    {...baseRequest, readBody: async () => []},
+    {...baseRequest, readBody: async () => null},
   ];
 
   for (const request of requests) {
@@ -240,7 +254,7 @@ test("typed database outcomes map to stable value-free HTTP errors", async () =>
         authorization: "Bearer token",
         projectId,
         hasQuery: false,
-        body: {release_request_id: releaseRequestId},
+        readBody: async () => ({release_request_id: releaseRequestId}),
       },
       {
         identityVerifier: {verify: async () => identity},

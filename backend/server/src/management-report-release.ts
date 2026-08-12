@@ -48,9 +48,7 @@ export interface ManagementReportReleaseRequest {
   readonly projectId: string;
   readonly hasQuery: boolean;
   /** Read the JSON body only after authentication and route validation. */
-  readonly readBody?: () => Promise<unknown>;
-  /** A parsed body is supported for callers that already own body parsing. */
-  readonly body?: unknown;
+  readonly readBody: () => Promise<unknown>;
 }
 
 export interface ManagementReportReleaseHttpResult {
@@ -107,15 +105,7 @@ export async function releaseManagementReportSnapshot(
     return failure(503, "management_report_release_unavailable");
   }
 
-  const bodyReader = request.readBody ??
-    (typeof request.body === "function"
-      ? request.body as () => Promise<unknown>
-      : undefined);
-  const body = bodyReader !== undefined
-    ? await bodyReader()
-    : "body" in request
-    ? request.body
-    : undefined;
+  const body = await request.readBody();
   const parsedBody = parseManagementReportReleaseBody(body);
   if (parsedBody === null) {
     return failure(400, "invalid_management_report_release_request");
