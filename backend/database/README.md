@@ -19,6 +19,8 @@
 
 脚本建立隔离的 PostgreSQL 16 容器，运行 migration、check、fixture、并发和 dump／restore，最后自动删除容器。第一次使用 Docker、需要保留失败容器或理解输出时，阅读[本机、Docker 与 CI 测试指南](../../docs/manual/09-local-docker-and-ci-testing.md)。
 
+schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime` 和无登录、无成员的 `tongxingzhe_region_publisher`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
+
 ## 使用已有 PostgreSQL 测试库
 
 先创建一个专用 PostgreSQL 测试库，再显式传入连接地址：
@@ -147,6 +149,10 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/checks/verify_management_report_authorization.sql
 psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/fixtures/0030_management_report_authorization.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_frozen_canonical_region_tree_releases.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0038_frozen_canonical_region_tree_releases.sql
 ./tool/verify_questionnaire_publish_concurrency.sh
 ./tool/verify_questionnaire_metric_concurrency.sh
 ./tool/verify_person_institution_relationship_concurrency.sh
@@ -154,6 +160,7 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 ./tool/verify_management_report_authorization_concurrency.sh
 ./tool/verify_management_report_release_concurrency.sh
 ./tool/verify_project_reporting_time_zone_concurrency.sh
+./tool/verify_canonical_region_tree_release_concurrency.sh
 ```
 
 第二次执行不是重复建库，而是验证已经记录的 checksum。若历史文件被修改，脚本会拒绝继续。
@@ -239,6 +246,8 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 `0037_management_region_privacy_probe.sql` 增加私有、fixture-first 的区域隐私威胁探针。它只接受固定 synthetic 候选形状，用类型化原因识别父子、其他查询集合或跨版本重叠、历史格变化、错误显示的小样本、互补恢复、外部已知事实、缺失原始来源或当前区域映射，以及把待解析或 `N/A` 当成区域格。输出没有坐标、贡献者或隐藏值。该 migration 不注册生产区域报告，也不向 runtime 或 Backend 开放函数。
 
-普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。全部 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，验证问卷发布、指标兼容、个人与机构活动关系、对象匿名化、管理授权写入与撤权、管理上下文选择、快照目录访问、项目报告时区和管理报告 lineage 的并发不变量。Docker wrapper 会按文件名排序并自动复制、执行这些脚本。检查脚本只使用 synthetic 数据，并要求显式 `DATABASE_URL`。
+`0038_freeze_published_canonical_region_trees.sql` 给规范区域树增加 `draft`／`published` 生命周期和发布冻结。历史 release 迁移为 `published`，新草稿只能由 `app_private.publish_canonical_region_tree_v1(text, boolean)` 在同一事务中验证严格单父、无环、城市父链和边界后发布。函数按固定排序和规范编码生成内容指纹；发布后节点、父级、名称、`kind`、`attributes`、边界、版本、发布时间和指纹都不能直接改写。成为 `current` 只改变唯一当前投影，并追加选择历史，不覆盖旧版本。`tongxingzhe_runtime` 仍只能执行区域解析函数，不能读取区域表、选择历史或发布函数。
+
+普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。`0038_frozen_canonical_region_tree_releases.sql` 还验证草稿编辑、成功发布、发布后节点和边界写入失败、内容指纹复算、current 切换和旧版本保留。全部 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，验证问卷发布、指标兼容、个人与机构活动关系、对象匿名化、管理授权写入与撤权、管理上下文选择、快照目录访问、项目报告时区、管理报告 lineage 和区域树 current 发布的并发不变量。Docker wrapper 会按文件名排序并自动复制、执行这些脚本。检查脚本只使用 synthetic 数据，并要求显式 `DATABASE_URL`。
 
 普通 fixture 会回滚，独立并发脚本会提交 synthetic 数据；并发数据还会进入 dump，并在恢复库中与全部 fixture 再次相遇。因此两类测试必须使用不同的 synthetic UUID 前缀，且 fixture 的数量断言应限定到自己的用户或项目。若测试只在 dump/restore 后失败，先检查 UUID 命名空间与全表计数，不要把持久并发行当成产品缺陷。
