@@ -27,6 +27,14 @@ FROM app_data.create_personal_project_context(
 
 RESET ROLE;
 
+-- 6R 后区域节点必须属于一个已发布、带边界的 canonical release。
+-- 先建立草稿，再由受保护的发布函数计算指纹并选择 current；不能把
+-- synthetic-v1 作为无 release 的孤立节点插入，否则 resolved revision
+-- 不能通过当前区域树约束。
+INSERT INTO app_data.canonical_region_tree_releases (
+  tree_version, lifecycle_state, is_current
+) VALUES ('synthetic-v1', 'draft', false);
+
 INSERT INTO app_data.canonical_region_versions (
   region_id, tree_version, parent_region_id, canonical_name, kind
 ) VALUES
@@ -34,6 +42,15 @@ INSERT INTO app_data.canonical_region_versions (
   ('illinois', 'synthetic-v1', 'us', 'Illinois', 'admin_area'),
   ('chicago', 'synthetic-v1', 'illinois', 'Chicago', 'city'),
   ('uchicago', 'synthetic-v1', 'chicago', 'University of Chicago', 'institution');
+
+INSERT INTO app_data.canonical_region_boundaries (
+  boundary_id, region_id, tree_version, boundary
+) VALUES (
+  'synthetic-v1-uchicago-boundary',
+  'uchicago',
+  'synthetic-v1',
+  polygon '((-87.61,41.78),(-87.58,41.78),(-87.58,41.80),(-87.61,41.80))'
+);
 
 DO $region_check$
 BEGIN
@@ -49,6 +66,8 @@ BEGIN
   END;
 END
 $region_check$;
+
+SELECT app_private.publish_canonical_region_tree_v1('synthetic-v1', true);
 
 SET LOCAL ROLE tongxingzhe_runtime;
 
