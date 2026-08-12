@@ -243,7 +243,22 @@ Flutter 不能读这些表，`tongxingzhe_runtime` 也不能执行解析器。�
 
 读取与撤权使用同一组 transaction lock。读取先取得锁时，撤权等到报告和审计提交；撤权先取得锁时，读取等待后看见失效边界，以 `42501` 结束且不写审计。如果调用方在显式外层事务中取得报告后主动 `ROLLBACK`，访问事件也会回滚。因此 `0033` production store 把读取作为单条自动提交操作，并在数据库调用成功以后才把报告交给客户端。
 
-`0032` 仍位于 `app_private`。`tongxingzhe_runtime` 和 `PUBLIC` 对函数与审计表都没有权限。唯一生产入口是 `0033` 位于 `app_data` 的四参数 bridge；没有 organization session context、Flutter、缓存、导出、报告列表或 latest 查询。不能把私有函数直接授予通用 runtime role。
+`0032` 仍位于 `app_private`。`tongxingzhe_runtime` 和 `PUBLIC` 对函数与审计表都没有权限。唯一报告读取入口是 `0033` 位于 `app_data` 的四参数 bridge；`0034` 的独立导航上下文不能读取报告。当前仍没有一般 organization session、Flutter 管理页、缓存、导出、报告列表或 latest 查询。不能把私有函数直接授予通用 runtime role。
+
+## 如何发现并选择管理分析项目
+
+管理分析不复用个人 `SessionContext`。个人上下文会被联系人、同步、问卷和私人计划使用；把组织报告项目混入其中，可能让这些业务误用尚未授权的组织范围。生产 Backend 因此使用两个独立操作：
+
+```text
+GET /v1/management-analysis/context
+PUT /v1/management-analysis/context
+```
+
+GET 只列出当前活动账号、组织、组织成员、项目、项目成员和 `view_anonymous_analytics` grant 同时有效的项目。只有发布能力的项目不会出现。没有有效保存选择时，`current_context` 返回 `null`，即使列表只有一项也不自动选择。
+
+PUT 只接受 `project_id`。数据库在同一事务中调用 6I 解析器，再保存 app user、组织、组织成员、项目、项目成员和查看 grant 的精确 ID。选择与撤权共享三层锁。若选择先取得锁，撤权等待选择提交；若撤权先提交，选择失败且不改写原记录。
+
+列表每次都把保存证据与当前有效链逐项比较。旧 grant 撤销后，即使同一项目后来获得新 grant，旧选择也不会复活。响应只含组织和项目名称与 ID，并用 `authorization: must_reauthorize` 提醒调用方：这是导航偏好，不是授权 token。6L 读取仍按显式项目和快照重新授权。
 
 ## Backend 如何在提交审计后交付报告
 
@@ -253,7 +268,7 @@ Flutter 不能读这些表，`tongxingzhe_runtime` 也不能执行解析器。�
 GET /v1/projects/:projectId/management-report-snapshots/:snapshotId
 ```
 
-路径只含项目和快照 UUID，不接受 body 或 query。调用者不能提交内部用户、capability、报告 ID、时区、截止时间或筛选。显式项目范围不是授权证据，也不表示 Backend 已建立当前组织上下文；数据库仍按 6I 的组织成员、项目成员和查看能力逐层检查。
+路径只含项目和快照 UUID，不接受 body 或 query。调用者不能提交内部用户、capability、报告 ID、时区、截止时间或筛选。显式项目范围和 6M 导航选择都不是授权证据；数据库仍按 6I 的组织成员、项目成员和查看能力逐层检查。
 
 Backend 先验证 Bearer token，得到可信 issuer 和 subject。[`0033_runtime_authorized_management_report_snapshot_read.sql`](../../backend/database/migrations/0033_runtime_authorized_management_report_snapshot_read.sql) 的 `SECURITY DEFINER` bridge 只把它们映射到既有活动内部用户，不调用个人上下文 bootstrap。未知身份不会创建 app user、workspace 或 project。bridge 随后调用 6K 三参数读取；runtime 只获得这个 bridge 的 `EXECUTE`，不能使用 `app_private` 或直接读快照和审计。
 
@@ -269,7 +284,7 @@ HTTP 只把数据库结果缩成稳定合同：可信快照返回 `200`、access
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-脚本会建立临时 PostgreSQL 16 容器，执行全部 migration、权限检查和 fixture。独立会话检查还会证明三层授权的重叠写入各只有一个成功、授权消费与撤权按事务顺序完成、并发滚动发布等待基线事务，以及相同期望版本只能追加一个报告时区版本。v2 发布检查另会让发布等待到能力自然到期，并验证“发布先取得时区锁”和“配置先取得时区锁”两种顺序；授权读取检查覆盖“读取先于撤权”和“撤权先于读取”。随后脚本导出 `app_data`、`app_private` 与 migration 历史，恢复到第二个空库重跑检查。脚本结束后自动删除容器。
+脚本会建立临时 PostgreSQL 16 容器，执行全部 migration、权限检查和 fixture。独立会话检查还会证明三层授权的重叠写入各只有一个成功、授权消费与撤权按事务顺序完成、管理上下文选择与撤权线性化、并发滚动发布等待基线事务，以及相同期望版本只能追加一个报告时区版本。v2 发布检查另会让发布等待到能力自然到期，并验证“发布先取得时区锁”和“配置先取得时区锁”两种顺序；授权读取检查覆盖“读取先于撤权”和“撤权先于读取”。随后脚本导出 `app_data`、`app_private` 与 migration 历史，恢复到第二个空库重跑检查。脚本结束后自动删除容器。
 
 并发脚本会提交 synthetic 数据，这些行会进入后面的 dump；普通 fixture 虽然回滚，却会在恢复库再运行一次。新增测试时，两类文件必须使用不同的 synthetic UUID 前缀。若第一次 fixture 通过、恢复后的同一 fixture 报重复主键，先检查命名空间是否与某个并发脚本重叠。
 
@@ -296,9 +311,9 @@ Docker 的安装、输出解释和失败容器保留方法见[第 9 章](09-loca
 生产管理报表仍需完成：
 
 - 组织邀请、项目分配、角色组合，以及生产成员和能力授予／撤销入口；
-- 权限变更审计和可信的当前组织／项目上下文；
+- 权限变更审计和一般组织业务上下文；
 - 跨时区 revision 后重新建立基线或更正版的隐私判定；
-- 组织项目发现、可信 organization session context 和项目选择持久化；
+- Flutter 管理分析项目选择与当前导航展示；
 - 可按历史 revision 水位重新执行的 `as-of` 投影、更正版取代关系和删除流程；
 - 父子区域与重叠区域报告的重识别演练；
 - 读取现有快照以外的动态 API、缓存、图表和导出。
