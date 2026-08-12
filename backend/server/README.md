@@ -1,6 +1,6 @@
 # Backend 身份上下文、项目与接触同步
 
-这个模块提供可信个人 session context、个人推广项目选择／创建、规范区域解析、问卷管理发布、问卷指标兼容审计、同步 command、change feed、独立的管理分析导航上下文，以及受保护管理报告快照目录和单份读取。所有受保护端点都先验证 Supabase access token。大部分业务使用可信个人上下文；管理分析项目发现和报告读取使用独立的组织授权边界。同步协议处理已提交接触、追加更正、带原因作废、跨设备更正的自动合并与显式解决、未获回应尝试和账号私有草稿；设备专用草稿不会离开本机。
+这个模块提供可信个人 session context、个人推广项目选择／创建、规范区域解析、问卷管理发布、问卷指标兼容审计、同步 command、change feed、独立的管理分析导航上下文，以及受保护管理报告的发布、目录和单份读取。所有受保护端点都先验证 Supabase access token。大部分业务使用可信个人上下文；管理报告使用独立的组织授权边界。同步协议处理已提交接触、追加更正、带原因作废、跨设备更正的自动合并与显式解决、未获回应尝试和账号私有草稿；设备专用草稿不会离开本机。
 
 客户端不能提交 `app_user_id`、role 或 capability。上传会把 payload 的 workspace 和 project 与可信上下文交叉核对。拉取也会核对 query 范围，并只接受属于同一范围的不透明 cursor。响应不返回外部 subject、email 或 token。所有受保护入口共用严格的 bearer header 解析器，防止端点之间出现不同的认证规则。
 
@@ -85,6 +85,14 @@ Backend 不接受客户端提供的用户、空间或项目范围。每次请求
 读取和写入不要求管理 capability，也没有组织或管理员列表入口。PostgreSQL 只计算当前有效的已提交接触，按实际发生时间使用半开周期边界。版本冲突返回 `409 personal_action_plan_conflict`；已有待生效版本时返回 `409 personal_action_plan_pending_change`。
 
 提醒时间和周目标可独立使用。提醒 API 只接受 `0` 至 `1439` 的当地分钟、expected revision 和 mutation ID。它不接受设备 ID、设备权限或 UTC 触发时刻。系统通知 opt-in 只保存在各设备本地，新设备不会因同步提醒时间而自动启用。
+
+## 管理报告发布合同
+
+`POST /v1/projects/:projectId/management-report-snapshots` 只接受项目 UUID 和精确的 `{ "release_request_id": "UUID" }`。Backend 固定发布 `contact_sessions_by_channel_two_periods` v1；客户端不能提交报告定义、时区、数据截止点、筛选、capability、内部用户、报告 JSON 或格值。
+
+Backend 验证 Bearer token 后，通过 [`0036_runtime_trusted_management_report_release.sql`](../database/migrations/0036_runtime_trusted_management_report_release.sql) 的唯一 bridge 调用 6J。runtime 只能执行 bridge，不能进入 `app_private`。production store 只执行一条参数化 `pool.query`；数据库提交发布尝试或幂等重放后，HTTP 才返回不含格值的最小结果。
+
+无效 token 返回 `401`，无效 path／body 返回 `400`，无权返回 `403`，幂等／时区／合同冲突返回 `409`，数据库异常返回 `503`。`approved_baseline`、`approved` 与 `blocked` 成功结果都不含报告格、贡献者或授权证据。
 
 ## 管理报告快照读取合同
 
@@ -176,6 +184,8 @@ npm run check
 管理分析导航上下文见 [`0034_management_analysis_contexts.sql`](../database/migrations/0034_management_analysis_contexts.sql)。对应 fixture 与独立会话脚本验证项目发现、完整选择证据、撤权失效、重新授予不复活、view/release 分离、未知身份不 bootstrap，以及选择与撤权的两种并发顺序。
 
 管理报告快照目录见 [`0035_management_report_snapshot_directory.sql`](../database/migrations/0035_management_report_snapshot_directory.sql)。对应 fixture 与独立会话脚本验证可信 v2 来源、20 项上限、稳定降序、空目录审计、最小 runtime 权限，以及目录访问与撤权的两种并发顺序。
+
+管理报告生产发布见 [`0036_runtime_trusted_management_report_release.sql`](../database/migrations/0036_runtime_trusted_management_report_release.sql)。对应 fixture 与独立会话脚本验证既有身份映射、固定报告定义、发布与查看能力分离、幂等重放、冲突失败关闭、最小返回值，以及发布与撤权／时区配置的事务顺序。
 
 ## 运行
 

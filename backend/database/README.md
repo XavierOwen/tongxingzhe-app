@@ -209,7 +209,7 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 `0022_personal_action_reminders.sql` 独立保存每位用户、每个项目的可选每日当地提醒钟点。版本只追加，提醒可在没有周目标时单独使用。服务端不会保存或开启设备通知权限；每台设备的 opt-in 只留在本机。runtime role 同样只能通过可信当前上下文读写本人提醒。
 
-`0023_management_contact_session_privacy.sql` 建立固定双期间渠道网格的私有隐私政策。函数执行 `k=10`、至少三位推广者、单人不超过一半和总计互补隐藏；隐藏结果不返回精确值。runtime role 没有 `app_private` 使用权或函数执行权；`0031` 只在私有事务中组合授权和发布，尚未开放生产管理端点。
+`0023_management_contact_session_privacy.sql` 建立固定双期间渠道网格的私有隐私政策。函数执行 `k=10`、至少三位推广者、单人不超过一半和总计互补隐藏；隐藏结果不返回精确值。runtime role 没有 `app_private` 使用权或函数执行权；`0031` 只在私有事务中组合授权和发布，`0036` 再通过固定报告 bridge 调用它。
 
 `0024_management_report_contract.sql` 注册 `contact_sessions_by_channel_two_periods` v1，并只接受报告 ID 与版本。项目、时区、日期范围、维度、筛选和导出字段不能来自客户端。TypeScript 与 PostgreSQL 读取同一请求 fixture，对账规范查询指纹和失败结果。审计信封不含报表值。注册表和函数仍在 `app_private`，runtime role 没有读取或执行权。
 
@@ -234,6 +234,8 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 `0034_management_analysis_contexts.sql` 提供独立于个人 session 的管理分析项目发现与选择。列表只返回当前完整授权链含 `view_anonymous_analytics` 的组织项目。选择在同一事务中消费 `0030` 解析器，并保存组织成员、项目成员和 grant 的精确证据；撤权或以新关系重新加入后旧选择不会复活。runtime 只能执行两个窄函数，不能直接读取选择或授权表。
 
 `0035_management_report_snapshot_directory.sql` 提供按显式项目列出可信 v2 管理报告快照的只读目录。数据库在同一事务中重新检查完整 `view_anonymous_analytics` 授权链，只返回至多 20 项固定元数据，并按数据截至时间、发布时间和快照 ID 降序排列。每次成功访问都追加一条不可变目录审计；审计保存精确授权证据和返回数量，但不保存快照 ID、报告元数据或格值。runtime 只能执行一个窄 bridge。目录不判断“当前”或“最新有效”，也不提供筛选、分页或任意历史查询。
+
+`0036_runtime_trusted_management_report_release.sql` 是生产 Backend 唯一可执行的管理报告发布 bridge。它只接收已验证 token 的 issuer、subject、显式项目和请求幂等 UUID，并固定发布 `contact_sessions_by_channel_two_periods` v1。未知或停用身份不会 bootstrap 个人上下文。runtime 只能执行这个 `SECURITY DEFINER` 函数，仍不能进入 `app_private`、读取发布记录或接触事实。bridge 在同一 statement 中调用 `0031`，因此发布继续使用相同的授权、时区和 lineage 锁。
 
 普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。全部 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，验证问卷发布、指标兼容、个人与机构活动关系、对象匿名化、管理授权写入与撤权、管理上下文选择、快照目录访问、项目报告时区和管理报告 lineage 的并发不变量。Docker wrapper 会按文件名排序并自动复制、执行这些脚本。检查脚本只使用 synthetic 数据，并要求显式 `DATABASE_URL`。
 

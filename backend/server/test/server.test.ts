@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import test from "node:test";
 
 import {IdentityVerificationError} from "../src/identity.js";
+import type {ManagementReportReleaseResult} from "../src/management-report-release.js";
 import { createBackendServer } from "../src/server.js";
 
 test("HTTP context route requires bearer token and disables caching", async () => {
@@ -325,6 +326,162 @@ test("HTTP directory authentication hides invalid input and missing store", asyn
   assert.deepEqual(bodyResponse.body, {
     error: {code: "unauthenticated"},
   });
+});
+
+test("HTTP management release authenticates before reading an invalid body", async () => {
+  const server = createBackendServer({
+    identityVerifier: {
+      verify: async () => {throw new IdentityVerificationError();},
+    },
+    contextStore: {
+      loadOrCreate: async () => {throw new Error("context is not expected");},
+    },
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  test.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+
+  const response = await rawHttpRequest(
+    address.port,
+    "POST",
+    "/v1/projects/not-a-uuid/management-report-snapshots?report=forged",
+    {
+      authorization: "Bearer invalid",
+      "content-type": "application/json",
+    },
+    "{",
+  );
+
+  assert.equal(response.status, 401);
+  assert.deepEqual(response.body, {error: {code: "unauthenticated"}});
+});
+
+test("HTTP management release waits for the committed value-free result", async () => {
+  const projectId = "33333333-3333-4333-8333-333333333333";
+  const releaseRequestId = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+  const snapshotId = "88888888-8888-4888-8888-888888888888";
+  let finishRelease: (() => void) | undefined;
+  const releaseGate = new Promise<void>((resolve) => {finishRelease = resolve;});
+  const releaseResult: ManagementReportReleaseResult = {
+    releaseContractId: "trusted_management_report_snapshot_release_v2",
+    releaseRequestId,
+    projectId,
+    releaseLineageId:
+      "management-report:contact_sessions_by_channel_two_periods",
+    reportId: "contact_sessions_by_channel_two_periods",
+    reportVersion: 1,
+    queryFingerprint:
+      "management-report:contact_sessions_by_channel_two_periods:v1",
+    reportingTimeZoneVersionNumber: 1,
+    reportingTimeZone: "UTC",
+    dataCutoffUtc: "2026-08-10T00:00:00.000Z",
+    comparedSnapshotId: null,
+    releasedSnapshotId: snapshotId,
+    resultStatus: "approved_baseline",
+    reasonCodes: [],
+  };
+  const server = createBackendServer({
+    identityVerifier: {
+      verify: async () => ({issuer: "issuer", subject: "subject"}),
+    },
+    contextStore: {
+      loadOrCreate: async () => {
+        throw new Error("personal context must not authorize release");
+      },
+    },
+    managementReportReleaseStore: {
+      release: async (identity, receivedProjectId, receivedRequestId) => {
+        assert.deepEqual(identity, {issuer: "issuer", subject: "subject"});
+        assert.equal(receivedProjectId, projectId);
+        assert.equal(receivedRequestId, releaseRequestId);
+        await releaseGate;
+        return releaseResult;
+      },
+    },
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  test.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+
+  let responseSettled = false;
+  const responsePromise = fetch(
+    `http://127.0.0.1:${address.port}/v1/projects/${projectId}/management-report-snapshots`,
+    {
+      method: "POST",
+      headers: {
+        authorization: "Bearer token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({release_request_id: releaseRequestId}),
+    },
+  ).then((response) => {
+    responseSettled = true;
+    return response;
+  });
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(responseSettled, false);
+
+  finishRelease?.();
+  const response = await responsePromise;
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  const body = await response.json();
+  assert.deepEqual(body, {
+    release_contract_id: "trusted_management_report_snapshot_release_v2",
+    release_request_id: releaseRequestId,
+    project_id: projectId,
+    release_lineage_id:
+      "management-report:contact_sessions_by_channel_two_periods",
+    report_id: "contact_sessions_by_channel_two_periods",
+    report_version: 1,
+    query_fingerprint:
+      "management-report:contact_sessions_by_channel_two_periods:v1",
+    reporting_time_zone_version_number: 1,
+    reporting_time_zone: "UTC",
+    data_cutoff_utc: "2026-08-10T00:00:00.000Z",
+    compared_snapshot_id: null,
+    released_snapshot_id: snapshotId,
+    result_status: "approved_baseline",
+    reason_codes: [],
+  });
+  assert.doesNotMatch(JSON.stringify(body), /cells|protected_report|app_user/);
+});
+
+test("HTTP management release rejects malformed JSON after authentication", async () => {
+  const projectId = "33333333-3333-4333-8333-333333333333";
+  let storeCalls = 0;
+  const server = createBackendServer({
+    identityVerifier: {
+      verify: async () => ({issuer: "issuer", subject: "subject"}),
+    },
+    contextStore: {
+      loadOrCreate: async () => {throw new Error("context is not expected");},
+    },
+    managementReportReleaseStore: {
+      release: async () => {
+        storeCalls += 1;
+        throw new Error("store must not run");
+      },
+    },
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  test.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+
+  const response = await rawHttpRequest(
+    address.port,
+    "POST",
+    `/v1/projects/${projectId}/management-report-snapshots`,
+    {
+      authorization: "Bearer token",
+      "content-type": "application/json",
+    },
+    "{",
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(response.body, {error: {code: "invalid_json"}});
+  assert.equal(storeCalls, 0);
 });
 
 test("HTTP management analysis context is separate from personal context", async () => {

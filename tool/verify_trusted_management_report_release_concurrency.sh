@@ -76,6 +76,43 @@ wait_for_ready() {
     ('f1000000-0000-4000-8000-000000000004'::uuid, 'active'),
     ('f1000000-0000-4000-8000-000000000005'::uuid, 'active');
 
+  INSERT INTO app_data.external_identities (
+    external_identity_id,
+    issuer,
+    subject,
+    app_user_id
+  ) VALUES
+    (
+      'f0e00000-0000-4000-8000-000000000001'::uuid,
+      'https://concurrent-runtime-release.synthetic/auth/v1',
+      'member-1',
+      'f1000000-0000-4000-8000-000000000001'::uuid
+    ),
+    (
+      'f0e00000-0000-4000-8000-000000000002'::uuid,
+      'https://concurrent-runtime-release.synthetic/auth/v1',
+      'member-2',
+      'f1000000-0000-4000-8000-000000000002'::uuid
+    ),
+    (
+      'f0e00000-0000-4000-8000-000000000003'::uuid,
+      'https://concurrent-runtime-release.synthetic/auth/v1',
+      'member-3',
+      'f1000000-0000-4000-8000-000000000003'::uuid
+    ),
+    (
+      'f0e00000-0000-4000-8000-000000000004'::uuid,
+      'https://concurrent-runtime-release.synthetic/auth/v1',
+      'member-4',
+      'f1000000-0000-4000-8000-000000000004'::uuid
+    ),
+    (
+      'f0e00000-0000-4000-8000-000000000005'::uuid,
+      'https://concurrent-runtime-release.synthetic/auth/v1',
+      'member-5',
+      'f1000000-0000-4000-8000-000000000005'::uuid
+    );
+
   INSERT INTO app_data.workspaces (
     workspace_id, workspace_kind, display_name
   ) VALUES (
@@ -291,12 +328,12 @@ release_before_revocation_ready='trusted-release-ready:release-before-revocation
 "${psql_base[@]}" --command="
   SET statement_timeout = '20s';
   BEGIN;
-  SELECT app_private.release_management_report_snapshot_v2(
+  SET LOCAL ROLE tongxingzhe_runtime;
+  SELECT app_data.release_management_report_snapshot_v1(
+    'https://concurrent-runtime-release.synthetic/auth/v1',
+    'member-4',
     'f8000000-0000-4000-8000-000000000004'::uuid,
-    'f1000000-0000-4000-8000-000000000004'::uuid,
-    'f3000000-0000-4000-8000-000000000004'::uuid,
-    'contact_sessions_by_channel_two_periods',
-    1
+    'f3000000-0000-4000-8000-000000000004'::uuid
   );
   SELECT pg_advisory_lock(
     hashtextextended('${release_before_revocation_ready}', 0)
@@ -477,13 +514,14 @@ wait_for_ready \
 "${psql_base[@]}" --command="
   SET lock_timeout = '10s';
   SET statement_timeout = '20s';
-  SELECT app_private.release_management_report_snapshot_v2(
+  SET ROLE tongxingzhe_runtime;
+  SELECT app_data.release_management_report_snapshot_v1(
+    'https://concurrent-runtime-release.synthetic/auth/v1',
+    'member-5',
     'f8000000-0000-4000-8000-000000000005'::uuid,
-    'f1000000-0000-4000-8000-000000000005'::uuid,
-    'f3000000-0000-4000-8000-000000000005'::uuid,
-    'contact_sessions_by_channel_two_periods',
-    1
+    'f3000000-0000-4000-8000-000000000005'::uuid
   );
+  RESET ROLE;
 " >"${release_after_revocation_output}" 2>&1 &
 release_after_revocation_pid=$!
 
@@ -576,13 +614,14 @@ wait_for_ready "${expiry_ready}" "${expiry_holder_pid}" "${expiry_holder_output}
 "${psql_base[@]}" --command="
   SET lock_timeout = '10s';
   SET statement_timeout = '20s';
-  SELECT app_private.release_management_report_snapshot_v2(
+  SET ROLE tongxingzhe_runtime;
+  SELECT app_data.release_management_report_snapshot_v1(
+    'https://concurrent-runtime-release.synthetic/auth/v1',
+    'member-1',
     'f8000000-0000-4000-8000-000000000001'::uuid,
-    'f1000000-0000-4000-8000-000000000001'::uuid,
-    'f3000000-0000-4000-8000-000000000001'::uuid,
-    'contact_sessions_by_channel_two_periods',
-    1
+    'f3000000-0000-4000-8000-000000000001'::uuid
   );
+  RESET ROLE;
 " >"${expiry_release_output}" 2>&1 &
 expiry_release_pid=$!
 
@@ -628,12 +667,12 @@ release_first_ready='trusted-release-ready:release-first'
 "${psql_base[@]}" --command="
   SET statement_timeout = '20s';
   BEGIN;
-  SELECT app_private.release_management_report_snapshot_v2(
+  SET LOCAL ROLE tongxingzhe_runtime;
+  SELECT app_data.release_management_report_snapshot_v1(
+    'https://concurrent-runtime-release.synthetic/auth/v1',
+    'member-2',
     'f8000000-0000-4000-8000-000000000002'::uuid,
-    'f1000000-0000-4000-8000-000000000002'::uuid,
-    'f3000000-0000-4000-8000-000000000002'::uuid,
-    'contact_sessions_by_channel_two_periods',
-    1
+    'f3000000-0000-4000-8000-000000000002'::uuid
   );
   SELECT pg_advisory_lock(hashtextextended('${release_first_ready}', 0));
   DO \$wait\$
@@ -759,13 +798,14 @@ wait_for_ready "${replay_ready}" "${replay_holder_pid}" "${replay_holder_output}
 "${psql_base[@]}" --command="
   SET lock_timeout = '10s';
   SET statement_timeout = '20s';
-  SELECT app_private.release_management_report_snapshot_v2(
+  SET ROLE tongxingzhe_runtime;
+  SELECT app_data.release_management_report_snapshot_v1(
+    'https://concurrent-runtime-release.synthetic/auth/v1',
+    'member-2',
     'f8000000-0000-4000-8000-000000000002'::uuid,
-    'f1000000-0000-4000-8000-000000000002'::uuid,
-    'f3000000-0000-4000-8000-000000000002'::uuid,
-    'contact_sessions_by_channel_two_periods',
-    1
+    'f3000000-0000-4000-8000-000000000002'::uuid
   );
+  RESET ROLE;
 " >"${replay_release_output}" 2>&1 &
 replay_release_pid=$!
 
@@ -847,13 +887,14 @@ wait_for_ready \
 "${psql_base[@]}" --command="
   SET lock_timeout = '10s';
   SET statement_timeout = '20s';
-  SELECT app_private.release_management_report_snapshot_v2(
+  SET ROLE tongxingzhe_runtime;
+  SELECT app_data.release_management_report_snapshot_v1(
+    'https://concurrent-runtime-release.synthetic/auth/v1',
+    'member-3',
     'f8000000-0000-4000-8000-000000000003'::uuid,
-    'f1000000-0000-4000-8000-000000000003'::uuid,
-    'f3000000-0000-4000-8000-000000000003'::uuid,
-    'contact_sessions_by_channel_two_periods',
-    1
+    'f3000000-0000-4000-8000-000000000003'::uuid
   );
+  RESET ROLE;
 " >"${release_second_output}" 2>&1 &
 release_second_pid=$!
 
@@ -885,4 +926,4 @@ if [[ "${configuration_first_state}" != '2|Asia/Shanghai|approved_baseline' ]]; 
   exit 1
 fi
 
-echo '可信报告发布并发检查通过：发布、重试、撤权和时区配置均按事务顺序完成。'
+echo 'runtime bridge 可信报告发布并发检查通过：发布、重试、撤权和时区配置均按事务顺序完成。'

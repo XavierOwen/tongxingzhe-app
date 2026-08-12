@@ -239,6 +239,17 @@ flutter test --no-pub \
 
 第一次使用 Docker 时，从第 6.1 节开始操作。Docker 套件证明数据库授权、最小访问审计、撤权并发和恢复后合同；Flutter synthetic 测试证明客户端状态与显示规则。两类证据不能互相替代。
 
+管理报告发布端点同时改动 Backend 和 PostgreSQL bridge。开发时先运行：
+
+```bash
+npm --prefix backend/server run build
+node --test backend/server/dist/test/management-report-release.test.js
+
+./tool/run_postgres_tests_in_docker.sh
+```
+
+Backend 测试检查认证优先、精确 JSON、稳定错误和单 statement store；Docker 套件检查真实身份映射、固定报告、发布能力、幂等、撤权／时区并发以及 dump／restore。两者都不证明生产成员已经获得发布能力，也不等同于运行了自动发布调度。
+
 只读离线计划缓存复用现有 `db_app_settings`，没有修改 Drift schema，因此不需要生成新的 Drift snapshot。`drift_personal_planning_cache_test.dart` 在测试进程的内存 SQLite 中检查 scope 隔离、远端空值、损坏缓存、仅网络故障回退，以及 `401/403` 后清除。只修改这层缓存时不需要启动 Docker；改动 Backend 或 PostgreSQL 周期函数时仍必须运行 Docker 套件。
 
 ### 5.5 验证同步提醒和逐设备通知开关
