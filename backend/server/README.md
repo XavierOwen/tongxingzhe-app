@@ -1,6 +1,6 @@
 # Backend 身份上下文、项目与接触同步
 
-这个模块提供可信个人 session context、个人推广项目选择／创建、规范区域解析、问卷管理发布、问卷指标兼容审计、同步 command、change feed、独立的管理分析导航上下文，以及受保护管理报告快照读取。所有受保护端点都先验证 Supabase access token。大部分业务使用可信个人上下文；管理分析项目发现和报告读取使用独立的组织授权边界。同步协议处理已提交接触、追加更正、带原因作废、跨设备更正的自动合并与显式解决、未获回应尝试和账号私有草稿；设备专用草稿不会离开本机。
+这个模块提供可信个人 session context、个人推广项目选择／创建、规范区域解析、问卷管理发布、问卷指标兼容审计、同步 command、change feed、独立的管理分析导航上下文，以及受保护管理报告快照目录和单份读取。所有受保护端点都先验证 Supabase access token。大部分业务使用可信个人上下文；管理分析项目发现和报告读取使用独立的组织授权边界。同步协议处理已提交接触、追加更正、带原因作废、跨设备更正的自动合并与显式解决、未获回应尝试和账号私有草稿；设备专用草稿不会离开本机。
 
 客户端不能提交 `app_user_id`、role 或 capability。上传会把 payload 的 workspace 和 project 与可信上下文交叉核对。拉取也会核对 query 范围，并只接受属于同一范围的不透明 cursor。响应不返回外部 subject、email 或 token。所有受保护入口共用严格的 bearer header 解析器，防止端点之间出现不同的认证规则。
 
@@ -105,6 +105,18 @@ production store 只执行一条参数化 `pool.query`。PostgreSQL 提交这条
 
 所有响应使用 `Cache-Control: no-store`。错误不包含报告格、授权关系、external subject 或 PostgreSQL 消息。runtime 只能执行 `app_data` bridge，不能使用 `app_private`。
 
+## 管理报告快照目录合同
+
+`GET /v1/projects/:projectId/management-report-snapshots` 只接受一个显式项目 UUID。它不接受 body、query、筛选、分页、报告 ID、时区、capability 或内部用户 ID。6M 保存的管理分析选择只帮助导航，不是授权，也不会替代 path 中的项目。
+
+Backend 先验证 Bearer token，再检查路径和请求形状。production store 只执行一条参数化 `pool.query`，调用 `app_data.list_authorized_management_report_snapshots_v1`。数据库映射既有活动用户，重新检查组织成员、项目成员和 `view_anonymous_analytics`，再返回至多 20 项可信 v2 快照元数据。结果按 `data_cutoff_utc`、`released_at_utc` 和 `snapshot_id` 降序排列。
+
+成功响应包含 `access_event_id`、`project_id` 和 `snapshots`。每项只含 `snapshot_id`、`report_id`、`report_version`、`reporting_time_zone`、`data_cutoff_utc` 和 `released_at_utc`。空目录仍返回 `200` 并写入返回数量为 0 的访问审计。访问审计不保存快照 ID、报告元数据或报告格。
+
+无权返回 `403 management_report_snapshot_directory_forbidden`；输入无效返回 `400 invalid_management_report_snapshot_directory_request`；数据库或返回合同异常返回 `503 management_report_snapshot_directory_unavailable`。token 缺失或无效始终先返回 `401 unauthenticated`。所有响应使用 `Cache-Control: no-store`。
+
+目录第一项只是在固定排序下最靠前。当前合同没有更正、取代或“最新有效”语义，因此调用方不得把第一项标为当前报告。目录也不替代单份快照端点的再次授权和访问审计。
+
 ## 管理分析导航上下文
 
 管理项目发现和选择使用独立入口，不改变个人 `/v1/session/context`：
@@ -162,6 +174,8 @@ npm run check
 管理报告快照的生产 bridge 见 [`0033_runtime_authorized_management_report_snapshot_read.sql`](../database/migrations/0033_runtime_authorized_management_report_snapshot_read.sql)。对应 fixture 验证既有身份映射、未知身份不 bootstrap、view/release 能力分离、跨项目隐藏、legacy provenance 和逐次访问审计。
 
 管理分析导航上下文见 [`0034_management_analysis_contexts.sql`](../database/migrations/0034_management_analysis_contexts.sql)。对应 fixture 与独立会话脚本验证项目发现、完整选择证据、撤权失效、重新授予不复活、view/release 分离、未知身份不 bootstrap，以及选择与撤权的两种并发顺序。
+
+管理报告快照目录见 [`0035_management_report_snapshot_directory.sql`](../database/migrations/0035_management_report_snapshot_directory.sql)。对应 fixture 与独立会话脚本验证可信 v2 来源、20 项上限、稳定降序、空目录审计、最小 runtime 权限，以及目录访问与撤权的两种并发顺序。
 
 ## 运行
 

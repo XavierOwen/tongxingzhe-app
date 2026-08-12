@@ -13,6 +13,7 @@ import { PostgresTargetInstitutionRelationshipStore } from "./target-institution
 import { PostgresPersonalActionPlanStore } from "./personal-action-plans.js";
 import { PostgresPersonalActionReminderStore } from "./personal-action-reminders.js";
 import { PostgresManagementReportSnapshotStore } from "./management-report-snapshots.js";
+import { PostgresManagementReportSnapshotDirectoryStore } from "./management-report-snapshot-directory.js";
 import { PostgresManagementAnalysisContextStore } from "./management-analysis-contexts.js";
 
 const databaseUrl = requireEnvironment("DATABASE_URL");
@@ -67,6 +68,10 @@ const managementReportSnapshotStore =
   new PostgresManagementReportSnapshotStore(
     async (text, values) => pool.query(text, [...values]),
   );
+const managementReportSnapshotDirectoryStore =
+  new PostgresManagementReportSnapshotDirectoryStore(
+    async (text, values) => pool.query(text, [...values]),
+  );
 const managementAnalysisContextStore =
   new PostgresManagementAnalysisContextStore(
     async (text, values) => pool.query(text, [...values]),
@@ -85,6 +90,7 @@ const server = createBackendServer({
   personalActionPlanStore,
   personalActionReminderStore,
   managementReportSnapshotStore,
+  managementReportSnapshotDirectoryStore,
   managementAnalysisContextStore,
 });
 

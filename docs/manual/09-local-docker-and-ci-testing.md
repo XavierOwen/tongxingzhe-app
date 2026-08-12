@@ -231,7 +231,7 @@ node --test backend/server/dist/test/personal-action-reminders.test.js
 
 第一条命令不启动手机模拟器。它在测试进程中检查：新设备默认关闭、权限拒绝不写假成功、详细内容必须预览确认、旧版设置降级为通用通知、登出后取消私人提醒、不同项目通知不互相覆盖、旅行后按新设备时区计算，以及 Web／Linux／Windows 的明确降级。第二组命令检查 Backend 只使用可信当前上下文，客户端不能伪造用户、项目或设备字段。
 
-最后一条命令才启动 Docker。没有用过 Docker 也不需要先创建数据库：脚本会下载 PostgreSQL 16 镜像、启动临时容器、从 `0001` 运行到 `0022`、执行全部 check 和 fixture、导出并恢复数据库，然后删除容器。看到以下两行表示提醒数据库合同正在执行：
+最后一条命令才启动 Docker。没有用过 Docker 也不需要先创建数据库：脚本会下载 PostgreSQL 16 镜像、启动临时容器、从 `0001` 运行到当前最高 migration、执行全部 check 和 fixture、导出并恢复数据库，然后删除容器。看到以下两行表示提醒数据库合同正在执行：
 
 ```text
 check：verify_personal_action_reminders.sql
@@ -279,10 +279,10 @@ flutter run \
 1. 确认 Docker CLI 和 daemon 可用；
 2. 建立名称含当前进程号的临时容器；
 3. 等待 PostgreSQL 健康检查通过；
-4. 把数据库目录和四个正式并发脚本复制到容器；
+4. 把数据库目录和全部正式并发脚本复制到容器；
 5. 从空库执行全部 migration，再执行一次 checksum 重放；
 6. 运行全部 schema／权限 check 和可回滚 synthetic fixture；
-7. 用独立数据库会话检查问卷发布、指标兼容、个人与机构关系和对象匿名化并发；
+7. 按文件名运行全部正式并发脚本，用独立数据库会话检查锁、撤权和唯一性合同；
 8. 修改 migration 的临时副本，确认 runner 拒绝 checksum 漂移；
 9. 执行 `pg_dump`，恢复到第二个空库，再运行全部 check 和 fixture；
 10. 成功后删除临时容器。
@@ -394,6 +394,30 @@ export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_t
 `0021_personal_action_plans.sql` 展示另一类时间边界测试。计划保存固定 IANA 时区和 ISO 周起始日；SQL 先在当地日历中找周期边界，再转换为 UTC。这样夏令时切换周可以是 167 或 169 小时，而不是错误地固定成 168 小时。`verify_personal_action_plans.sql` 检查函数和最小权限，`0021` fixture 检查版本、重放、跨用户拒绝和下一周期生效。它不需要独立并发脚本，因为第一次创建用 scope advisory lock 串行化，fixture 与函数约束已覆盖本切片的写入合同。
 
 `0022_personal_action_reminders.sql` 保存可选的每日当地分钟，不保存 UTC 触发时刻。`verify_personal_action_reminders.sql` 检查 runtime role 不能直接读表，也不能调用内部 document 函数。`0022` fixture 检查提醒可以独立于周目标使用、清除写成新版本、mutation 可重放、旧 revision 被拒绝，且另一位用户不能读取。设备 opt-in 不进入 PostgreSQL；它由 Flutter 测试覆盖。
+
+### 7.2 用快照目录理解串行测试和并发测试的分工
+
+`0035_management_report_snapshot_directory.sql` 同时有 check、fixture 和并发脚本。三者验证不同问题：
+
+1. `verify_management_report_snapshot_directory.sql` 检查表、函数、触发器、固定 search path 和最小权限；
+2. `0035_management_report_snapshot_directory.sql` fixture 建立 21 份可信 v2 快照和一份 legacy 快照，确认只返回排序后的前 20 项，并检查空目录、无权、未知身份和审计不可修改；
+3. `verify_management_report_snapshot_directory_concurrency.sh` 开两个独立数据库会话，让目录访问与撤权竞争，确认锁顺序不会把已撤销权限误当成仍有效。
+
+从仓库根目录运行完整套件即可覆盖三者：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+不需要手工建立数据库、用户或测试资料。脚本会启动隔离的 PostgreSQL 16 容器，自动执行 migration、check、fixture、并发和 dump／restore，然后删除容器。输出中应依次看到：
+
+```text
+check：verify_management_report_snapshot_directory.sql
+fixture：0035_management_report_snapshot_directory.sql
+并发：verify_management_report_snapshot_directory_concurrency.sh
+```
+
+并发脚本不能直接在没有准备的空数据库中运行。只有在完整套件失败并保留了容器时，才按 6.4 节的方法进入该测试库单独调查。目录并发测试使用 `pg_locks` 等待实际锁，不用固定休眠猜测请求先后；若它偶尔失败，应先检查锁合同和 synthetic UUID 是否冲突，不要只增加等待秒数。
 
 ## 8. Drift v17 生成文件怎样检查
 

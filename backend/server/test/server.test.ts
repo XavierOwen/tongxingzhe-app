@@ -236,6 +236,97 @@ test("HTTP management snapshot route rejects query fields and missing store", as
   });
 });
 
+test("HTTP management snapshot directory waits for its committed audit", async () => {
+  const projectId = "33333333-3333-4333-8333-333333333333";
+  let finishList: (() => void) | undefined;
+  const listGate = new Promise<void>((resolve) => {finishList = resolve;});
+  const server = createBackendServer({
+    identityVerifier: {
+      verify: async () => ({issuer: "issuer", subject: "subject"}),
+    },
+    contextStore: {
+      loadOrCreate: async () => {
+        throw new Error("personal context must not authorize directory access");
+      },
+    },
+    managementReportSnapshotDirectoryStore: {
+      list: async (identity, receivedProjectId) => {
+        assert.deepEqual(identity, {issuer: "issuer", subject: "subject"});
+        assert.equal(receivedProjectId, projectId);
+        await listGate;
+        return {
+          accessEventId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          projectId,
+          snapshots: [],
+        };
+      },
+    },
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  test.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+
+  let responseSettled = false;
+  const responsePromise = fetch(
+    `http://127.0.0.1:${address.port}/v1/projects/${projectId}/management-report-snapshots`,
+    {headers: {authorization: "Bearer token"}},
+  ).then((response) => {
+    responseSettled = true;
+    return response;
+  });
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(responseSettled, false);
+
+  finishList?.();
+  const response = await responsePromise;
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.deepEqual(await response.json(), {
+    access_event_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    project_id: projectId,
+    snapshots: [],
+  });
+});
+
+test("HTTP directory authentication hides invalid input and missing store", async () => {
+  const server = createBackendServer({
+    identityVerifier: {
+      verify: async () => {throw new IdentityVerificationError();},
+    },
+    contextStore: {
+      loadOrCreate: async () => {throw new Error("context is not expected");},
+    },
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  test.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+  const endpoint =
+    `http://127.0.0.1:${address.port}/v1/projects/not-a-uuid/management-report-snapshots?limit=20`;
+
+  const queryResponse = await fetch(endpoint, {
+    headers: {authorization: "Bearer invalid"},
+  });
+  assert.equal(queryResponse.status, 401);
+  assert.deepEqual(await queryResponse.json(), {
+    error: {code: "unauthenticated"},
+  });
+
+  const bodyResponse = await rawHttpRequest(
+    address.port,
+    "GET",
+    "/v1/projects/not-a-uuid/management-report-snapshots",
+    {
+      authorization: "Bearer invalid",
+      "content-type": "application/json",
+    },
+    "{}",
+  );
+  assert.equal(bodyResponse.status, 401);
+  assert.deepEqual(bodyResponse.body, {
+    error: {code: "unauthenticated"},
+  });
+});
+
 test("HTTP management analysis context is separate from personal context", async () => {
   const projectId = "33333333-3333-4333-8333-333333333333";
   let personalContextCalls = 0;

@@ -264,12 +264,14 @@ INSERT INTO app_data.management_report_capability_grants (
   project_membership_id,
   capability_id,
   active_from_utc
-) VALUES (
+) SELECT
   '6d600000-0000-4000-8000-000000000010'::uuid,
   '6d500000-0000-4000-8000-000000000001'::uuid,
   'view_anonymous_analytics',
-  clock_timestamp()
-);
+  previous_grant.inactive_from_utc
+FROM app_data.management_report_capability_grants AS previous_grant
+WHERE previous_grant.capability_grant_id =
+  '6d600000-0000-4000-8000-000000000001'::uuid;
 
 SET LOCAL ROLE tongxingzhe_runtime;
 
