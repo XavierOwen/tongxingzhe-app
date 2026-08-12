@@ -247,7 +247,7 @@ production store 使用一次参数化 `pool.query`。PostgreSQL 完成该 state
 
 `approved_baseline`、`approved` 和 `blocked` 都是已经提交的业务结果。响应只含请求、项目、固定报告身份、查询指纹、可信时区 revision、数据截止、比较／发布快照 ID、状态和类型化原因。它不含 `protected_report`、`cells`、计数、贡献者或内部授权证据。调用者若要读取已发布快照，仍须拥有独立查看能力并调用单份读取端点。
 
-缺少或无效 token 返回 `401`；无权返回 `403`；无效 path／body 返回 `400`；幂等冲突、时区未配置和不可信合同返回稳定 `409`；数据库或 bridge 异常返回 `503`。错误响应不回显 PostgreSQL 消息。服务器对所有响应设置 `Cache-Control: no-store`。
+缺少或无效 token 返回 `401`；无权返回 `403`；无效 path／body 返回 `400`；请求 UUID 跨项目冲突或项目未配置时区返回稳定 `409`。lineage、时区 revision 或重叠隐私阻断是已提交的 `blocked` 业务结果，使用 `200` 返回原因码。Backend 检测到返回合同漂移、数据库或 bridge 异常时返回 `503`。错误响应不回显 PostgreSQL 消息。服务器对所有响应设置 `Cache-Control: no-store`。
 
 ## 授权快照读取如何避免绕过发布来源
 

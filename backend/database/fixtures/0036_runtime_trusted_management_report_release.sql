@@ -267,6 +267,36 @@ SELECT app_private.configure_project_reporting_time_zone_v1(
   transaction_timestamp() - interval '30 days'
 );
 
+SELECT app_private.configure_project_reporting_time_zone_v1(
+  '8f900000-0000-4000-8000-000000000002'::uuid,
+  '8f100000-0000-4000-8000-000000000001'::uuid,
+  '8f300000-0000-4000-8000-000000000002'::uuid,
+  0,
+  'UTC',
+  transaction_timestamp() - interval '30 days'
+);
+
+-- 先通过历史 v1 私有函数为第二个项目建立没有 v2 provenance 的
+-- lineage。后面的 runtime bridge 请求必须返回 value-free blocked，且
+-- 不得为候选报告调用 v1 发布函数。
+DO $legacy_setup$
+DECLARE
+  legacy_cutoff timestamp with time zone :=
+    date_trunc('milliseconds', transaction_timestamp());
+BEGIN
+  PERFORM app_private.release_management_report_snapshot_v1(
+    '8f800000-0000-4000-8000-000000000010'::uuid,
+    '8f100000-0000-4000-8000-000000000001'::uuid,
+    '8f300000-0000-4000-8000-000000000002'::uuid,
+    'contact_sessions_by_channel_two_periods',
+    1,
+    'UTC',
+    legacy_cutoff,
+    legacy_cutoff
+  );
+END
+$legacy_setup$;
+
 CREATE TEMP TABLE runtime_trusted_release_before_counts
 ON COMMIT DROP AS
 SELECT
@@ -281,6 +311,7 @@ DO $fixture$
 DECLARE
   baseline jsonb;
   replay jsonb;
+  legacy_blocked jsonb;
 BEGIN
   baseline = app_data.release_management_report_snapshot_v1(
     'https://runtime-release.synthetic/auth/v1',
@@ -323,6 +354,23 @@ BEGIN
     OR baseline::text ~* 'contact_count|shared_period|assessed_cell|organization_membership|app_user'
   THEN
     RAISE EXCEPTION 'runtime trusted release result is not fixed and value-free';
+  END IF;
+
+  legacy_blocked = app_data.release_management_report_snapshot_v1(
+    'https://runtime-release.synthetic/auth/v1',
+    'release-member',
+    '8f800000-0000-4000-8000-000000000011'::uuid,
+    '8f300000-0000-4000-8000-000000000002'::uuid
+  );
+  IF legacy_blocked->>'result_status' <> 'blocked'
+    OR legacy_blocked->'reason_codes' <>
+      '["release_lineage_missing_v2_provenance"]'::jsonb
+    OR legacy_blocked->>'compared_snapshot_id' IS NULL
+    OR legacy_blocked->>'released_snapshot_id' IS NOT NULL
+    OR legacy_blocked ? 'protected_report'
+    OR legacy_blocked ? 'cells'
+  THEN
+    RAISE EXCEPTION 'runtime trusted release accepted a legacy lineage';
   END IF;
 
   -- 同一 request UUID 不能换项目；6J 应在已有 attempt 上 fail closed，且
@@ -443,6 +491,26 @@ BEGIN
       AND attempt.delegated_release_request_id = attempt.release_request_id
   ) THEN
     RAISE EXCEPTION 'runtime trusted release evidence is incomplete';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM app_private.management_report_release_v2_attempts AS attempt
+    WHERE attempt.release_request_id =
+        '8f800000-0000-4000-8000-000000000011'::uuid
+      AND attempt.project_id =
+        '8f300000-0000-4000-8000-000000000002'::uuid
+      AND attempt.result_status = 'blocked'
+      AND attempt.reason_codes =
+        '["release_lineage_missing_v2_provenance"]'::jsonb
+      AND attempt.delegated_release_request_id IS NULL
+  ) OR EXISTS (
+    SELECT 1
+    FROM app_private.management_report_release_attempts
+    WHERE release_request_id =
+      '8f800000-0000-4000-8000-000000000011'::uuid
+  ) THEN
+    RAISE EXCEPTION 'runtime legacy lineage block evidence is incomplete';
   END IF;
 END
 $stored_checks$;

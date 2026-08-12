@@ -92,7 +92,7 @@ Backend 不接受客户端提供的用户、空间或项目范围。每次请求
 
 Backend 验证 Bearer token 后，通过 [`0036_runtime_trusted_management_report_release.sql`](../database/migrations/0036_runtime_trusted_management_report_release.sql) 的唯一 bridge 调用 6J。runtime 只能执行 bridge，不能进入 `app_private`。production store 只执行一条参数化 `pool.query`；数据库提交发布尝试或幂等重放后，HTTP 才返回不含格值的最小结果。
 
-无效 token 返回 `401`，无效 path／body 返回 `400`，无权返回 `403`，幂等／时区／合同冲突返回 `409`，数据库异常返回 `503`。`approved_baseline`、`approved` 与 `blocked` 成功结果都不含报告格、贡献者或授权证据。
+无效 token 返回 `401`，无效 path／body 返回 `400`，无权返回 `403`，请求 UUID 跨项目冲突或项目未配置时区返回 `409`。Backend 检测到返回合同漂移或数据库异常时返回 `503`。6J 的 lineage、时区 revision 和重叠隐私阻断仍是已提交的 `blocked` 业务结果，使用 `200` 返回。`approved_baseline`、`approved` 与 `blocked` 都不含报告格、贡献者或授权证据。
 
 ## 管理报告快照读取合同
 
