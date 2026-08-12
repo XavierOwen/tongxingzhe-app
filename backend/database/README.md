@@ -19,7 +19,7 @@
 
 脚本建立隔离的 PostgreSQL 16 容器，运行 migration、check、fixture、并发和 dump／restore，最后自动删除容器。第一次使用 Docker、需要保留失败容器或理解输出时，阅读[本机、Docker 与 CI 测试指南](../../docs/manual/09-local-docker-and-ci-testing.md)。
 
-schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime` 和无登录、无成员的 `tongxingzhe_region_publisher`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
+schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher` 和 `tongxingzhe_contact_provenance_writer`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
 
 ## 使用已有 PostgreSQL 测试库
 
@@ -253,7 +253,7 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 `0038_freeze_published_canonical_region_trees.sql` 给规范区域树增加 `draft`／`published` 生命周期和发布冻结。历史 release 迁移为 `published`，新草稿只能由 `app_private.publish_canonical_region_tree_v1(text, boolean)` 在同一事务中验证严格单父、无环、城市父链和边界后发布。函数按固定排序和规范编码生成内容指纹；发布后节点、父级、名称、`kind`、`attributes`、边界、版本、发布时间和指纹都不能直接改写。成为 `current` 只改变唯一当前投影，并追加选择历史，不覆盖旧版本。`tongxingzhe_runtime` 仍只能执行区域解析函数，不能读取区域表、选择历史或发布函数。
 
-`0039_contact_location_provenance.sql` 为已接受接触 revision 建立追加式地点来源合同。每个 `contact_id + revision_number` 最多一条来源记录；`resolved` 必须引用已发布区域树、城市父链和 0038 内容指纹，且可明确区分有原始坐标与 `region-only`。`pending_resolution` 只保存合法坐标，`not_applicable` 不保存坐标或区域；历史无法解释的行保持 `incomplete`／`unknown`。来源记录不能 `UPDATE`／`DELETE`，也不能由 `contact_region_assignments` 当前投影伪造历史。回填只读取每个 `contact_revisions.snapshot.location`，不改写既有 contact、revision 或 assignment。精确坐标留在受限 `app_data`，不进入管理报告、日志、错误响应或 warehouse；`tongxingzhe_runtime` 没有来源表、sequence 或维护函数直接权限。该 migration 只固定 PostgreSQL 合同、历史回填和 fixture-first 证据，不表示 Flutter／Drift、Backend HTTP 或生产写入 bridge 已接入。
+`0039_contact_location_provenance.sql` 为已接受接触 revision 建立追加式地点来源合同。每个 `contact_id + revision_number` 最多一条来源记录；`resolved` 必须引用已发布区域树、城市父链和 0038 内容指纹，且可明确区分有原始坐标与 `region-only`。`pending_resolution` 只保存合法坐标，`not_applicable` 不保存坐标或区域；历史无法解释的行保持 `incomplete`／`unknown`。来源记录不能 `UPDATE`／`DELETE`，也不能由 `contact_region_assignments` 当前投影伪造历史。回填只读取每个 revision 自己的 `snapshot.location` 和可选 `snapshot.locationSource`，不改写既有 contact、revision 或 assignment。三路修订把 location 与 source 作为同一事实组，避免旧坐标与新区域误配。精确坐标留在受限 `app_data`；warehouse outbox 的边界 trigger 会移除 location 和 source，防止修订或作废路径把它们送入分析层。`tongxingzhe_runtime` 没有来源表、sequence 或维护函数直接权限。该 migration 只固定 PostgreSQL 合同、历史回填和 fixture-first 证据，不表示 Flutter／Drift、Backend HTTP 或生产写入 bridge 已接入。
 
 普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。`0038_frozen_canonical_region_tree_releases.sql` 还验证草稿编辑、成功发布、发布后节点和边界写入失败、内容指纹复算、current 切换和旧版本保留。全部 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，验证问卷发布、指标兼容、个人与机构活动关系、对象匿名化、管理授权写入与撤权、管理上下文选择、快照目录访问、项目报告时区、管理报告 lineage 和区域树 current 发布的并发不变量。Docker wrapper 会按文件名排序并自动复制、执行这些脚本。检查脚本只使用 synthetic 数据，并要求显式 `DATABASE_URL`。
 

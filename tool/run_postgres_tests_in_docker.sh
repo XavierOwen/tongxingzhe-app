@@ -277,6 +277,135 @@ docker exec "${container_name}" psql \
     FROM upgrade_contact_context;
   " \
   >/dev/null
+
+# 先单独应用 0038，再模拟一个已能携带冻结 release 指纹、但尚未安装
+# 0039 provenance 表的 revision。这样升级测试同时覆盖有、无 source metadata。
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/region-freeze-only && \
+   cp /workspace/backend/database/migrations/0038_*.sql \
+     /tmp/region-freeze-only/"
+docker exec \
+  --env DATABASE_URL="${upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/region-freeze-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh \
+  >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    INSERT INTO app_data.contacts (
+      contact_id, app_user_id, workspace_id, project_id,
+      questionnaire_version_id, occurred_at_utc, occurred_time_zone,
+      channel, location_kind, place_name, smallest_region_id,
+      region_tree_version, reach_count, interest_level
+    )
+    SELECT
+      'upgrade-coordinate-provenance-contact',
+      app_user_id,
+      workspace_id,
+      project_id,
+      questionnaire_version_id,
+      occurred_at_utc,
+      occurred_time_zone,
+      channel,
+      location_kind,
+      place_name,
+      smallest_region_id,
+      region_tree_version,
+      reach_count,
+      interest_level
+    FROM app_data.contacts
+    WHERE contact_id = 'upgrade-provenance-contact';
+    INSERT INTO app_data.contact_revisions (
+      contact_id, revision_number, revision_kind, revised_by_app_user_id,
+      snapshot
+    )
+    SELECT
+      'upgrade-coordinate-provenance-contact',
+      1,
+      'submitted',
+      revised_by_app_user_id,
+      jsonb_build_object(
+        'location', jsonb_build_object(
+          'kind', 'resolved',
+          'placeName', 'Upgrade Venue',
+          'smallestRegionId', 'upgrade-venue',
+          'regionTreeVersion', 'upgrade-existing-v1'
+        ),
+        'locationSource', jsonb_build_object(
+          'kind', 'captured_coordinates',
+          'latitude', 41.7897,
+          'longitude', -87.5997,
+          'accuracyMeters', 8.5,
+          'resolverContractVersion', 'canonical-region-resolution:v1',
+          'regionTreeContentFingerprint', (
+            SELECT content_fingerprint
+            FROM app_data.canonical_region_tree_releases
+            WHERE tree_version = 'upgrade-existing-v1'
+          )
+        )
+      )
+    FROM app_data.contact_revisions
+    WHERE contact_id = 'upgrade-provenance-contact'
+      AND revision_number = 1;
+    INSERT INTO app_data.contacts (
+      contact_id, app_user_id, workspace_id, project_id,
+      questionnaire_version_id, occurred_at_utc, occurred_time_zone,
+      channel, location_kind, place_name, smallest_region_id,
+      region_tree_version, reach_count, interest_level
+    )
+    SELECT
+      'upgrade-malformed-provenance-contact',
+      app_user_id,
+      workspace_id,
+      project_id,
+      questionnaire_version_id,
+      occurred_at_utc,
+      occurred_time_zone,
+      channel,
+      location_kind,
+      place_name,
+      smallest_region_id,
+      region_tree_version,
+      reach_count,
+      interest_level
+    FROM app_data.contacts
+    WHERE contact_id = 'upgrade-provenance-contact';
+    INSERT INTO app_data.contact_revisions (
+      contact_id, revision_number, revision_kind, revised_by_app_user_id,
+      snapshot
+    )
+    SELECT
+      'upgrade-malformed-provenance-contact',
+      1,
+      'submitted',
+      revised_by_app_user_id,
+      jsonb_build_object(
+        'location', jsonb_build_object(
+          'kind', 'pending_resolution',
+          'latitude', 1e400::numeric,
+          'longitude', -87.5997
+        ),
+        'locationSource', jsonb_build_object(
+          'kind', 'captured_coordinates',
+          'latitude', 41.7897,
+          'longitude', -87.5997,
+          'resolverContractVersion', 'canonical-region-resolution:v1',
+          'regionTreeContentFingerprint', (
+            SELECT content_fingerprint
+            FROM app_data.canonical_region_tree_releases
+            WHERE tree_version = 'upgrade-existing-v1'
+          )
+        )
+      )
+    FROM app_data.contact_revisions
+    WHERE contact_id = 'upgrade-provenance-contact'
+      AND revision_number = 1;
+  " \
+  >/dev/null
 run_migrations_for_url "${upgrade_url}" >/dev/null
 docker exec "${container_name}" psql \
   -U postgres \
@@ -327,6 +456,44 @@ docker exec "${container_name}" psql \
         SELECT count(*)
         FROM app_data.contact_location_provenance AS provenance
         WHERE provenance.contact_id = 'upgrade-provenance-contact'
+          AND provenance.revision_number = 1
+      ) <> 1 OR NOT EXISTS (
+        SELECT 1
+        FROM app_data.contact_location_provenance AS provenance
+        JOIN app_data.canonical_region_tree_releases AS release_row
+          ON release_row.tree_version = provenance.region_tree_version
+        WHERE provenance.contact_id = 'upgrade-coordinate-provenance-contact'
+          AND provenance.revision_number = 1
+          AND provenance.revision_kind = 'submitted'
+          AND provenance.location_kind = 'resolved'
+          AND provenance.evidence_kind = 'resolved_from_coordinates'
+          AND provenance.smallest_region_id = 'upgrade-venue'
+          AND provenance.region_tree_version = 'upgrade-existing-v1'
+          AND provenance.region_tree_content_fingerprint = release_row.content_fingerprint
+          AND provenance.resolver_contract_version = 'canonical-region-resolution:v1'
+          AND provenance.latitude = 41.7897
+          AND provenance.longitude = -87.5997
+          AND provenance.accuracy_meters = 8.5
+      ) OR (
+        SELECT count(*)
+        FROM app_data.contact_location_provenance AS provenance
+        WHERE provenance.contact_id = 'upgrade-coordinate-provenance-contact'
+          AND provenance.revision_number = 1
+      ) <> 1 OR NOT EXISTS (
+        SELECT 1
+        FROM app_data.contact_location_provenance AS provenance
+        WHERE provenance.contact_id = 'upgrade-malformed-provenance-contact'
+          AND provenance.revision_number = 1
+          AND provenance.location_kind = 'unknown'
+          AND provenance.evidence_kind = 'legacy_incomplete'
+          AND provenance.latitude IS NULL
+          AND provenance.longitude IS NULL
+          AND provenance.smallest_region_id IS NULL
+          AND provenance.region_tree_version IS NULL
+      ) OR (
+        SELECT count(*)
+        FROM app_data.contact_location_provenance AS provenance
+        WHERE provenance.contact_id = 'upgrade-malformed-provenance-contact'
           AND provenance.revision_number = 1
       ) <> 1 THEN
         RAISE EXCEPTION '0039 did not preserve historical resolved provenance';

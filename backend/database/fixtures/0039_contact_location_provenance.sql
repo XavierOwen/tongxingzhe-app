@@ -557,6 +557,31 @@ BEGIN
   IF NOT failed THEN
     RAISE EXCEPTION 'mismatched fingerprint did not fail';
   END IF;
+
+  failed := false;
+  BEGIN
+    INSERT INTO app_data.contact_revisions (
+      contact_id, revision_number, revision_kind, revised_by_app_user_id,
+      reason, snapshot
+    )
+    SELECT
+      'provenance-pending-contact', 2, 'corrected', app_user_id,
+      'Reject float overflow',
+      jsonb_build_object(
+        'location', jsonb_build_object(
+          'kind', 'pending_resolution',
+          'latitude', 1e400::numeric,
+          'longitude', -87.5997
+        )
+      )
+    FROM provenance_owner_context;
+    RAISE EXCEPTION 'out-of-range jsonb coordinate was accepted';
+  EXCEPTION WHEN SQLSTATE '23514' THEN
+    failed := true;
+  END;
+  IF NOT failed THEN
+    RAISE EXCEPTION 'out-of-range jsonb coordinate did not fail closed';
+  END IF;
 END
 $invalid_shape_check$;
 
@@ -648,6 +673,435 @@ BEGIN
   END IF;
 END
 $idempotency_check$;
+
+-- v3 revise/void paths must keep location provenance in the revision history,
+-- while the warehouse boundary removes both the location and its exact source
+-- coordinates. The conflict path also treats location plus locationSource as
+-- one fact: an unrelated stale edit may merge, but a stale location branch
+-- must conflict and preserve both sides for an explicit resolution.
+CREATE TEMP TABLE provenance_v3_submit AS
+SELECT *
+FROM app_data.apply_contact_submit_v3(
+  (SELECT app_user_id FROM provenance_owner_context),
+  'provenance-v3-location-submit',
+  1,
+  'contact.submit.v1',
+  'synthetic-provenance-v3-device-a',
+  'provenance-v3-location-contact',
+  0,
+  jsonb_build_object(
+    'contactId', 'provenance-v3-location-contact',
+    'workspaceId', (SELECT workspace_id FROM provenance_owner_context),
+    'projectId', (SELECT project_id FROM provenance_owner_context),
+    'questionnaireVersionId',
+      (SELECT questionnaire_version_id FROM provenance_owner_context),
+    'occurredAtUtc', '2030-02-02T12:00:00Z',
+    'occurredTimeZone', 'America/Chicago',
+    'channel', 'face_to_face',
+    'location', jsonb_build_object(
+      'kind', 'resolved',
+      'placeName', 'Provenance Venue',
+      'smallestRegionId', 'provenance-v1-venue',
+      'regionTreeVersion', 'provenance-v1'
+    ),
+    'locationSource', jsonb_build_object(
+      'kind', 'captured_coordinates',
+      'latitude', 41.7897,
+      'longitude', -87.5997,
+      'accuracyMeters', 8.5,
+      'resolverContractVersion', 'canonical-region-resolution:v1',
+      'regionTreeContentFingerprint',
+        (SELECT v1_fingerprint FROM provenance_release_fingerprints)
+    ),
+    'reachCount', 1,
+    'interestLevel', 2,
+    'answers', '[]'::jsonb,
+    'targetLinks', '[]'::jsonb
+  )
+);
+
+CREATE TEMP TABLE provenance_v3_location_revise AS
+SELECT *
+FROM app_data.apply_contact_revise_v3(
+  (SELECT app_user_id FROM provenance_owner_context),
+  'provenance-v3-location-revise',
+  1,
+  'contact.revise.v1',
+  'synthetic-provenance-v3-device-a',
+  'provenance-v3-location-contact',
+  1,
+  jsonb_build_object(
+    'contactId', 'provenance-v3-location-contact',
+    'workspaceId', (SELECT workspace_id FROM provenance_owner_context),
+    'projectId', (SELECT project_id FROM provenance_owner_context),
+    'reason', 'Move to the v2 venue',
+    'occurredAtUtc', '2030-02-02T12:00:00Z',
+    'occurredTimeZone', 'America/Chicago',
+    'channel', 'face_to_face',
+    'location', jsonb_build_object(
+      'kind', 'resolved',
+      'placeName', 'Provenance Venue V2',
+      'smallestRegionId', 'provenance-v2-venue',
+      'regionTreeVersion', 'provenance-v2'
+    ),
+    'locationSource', jsonb_build_object(
+      'kind', 'captured_coordinates',
+      'latitude', 41.7901,
+      'longitude', -87.5991,
+      'accuracyMeters', 9.1,
+      'resolverContractVersion', 'canonical-region-resolution:v1',
+      'regionTreeContentFingerprint',
+        (SELECT v2_fingerprint FROM provenance_release_fingerprints)
+    ),
+    'reachCount', 1,
+    'interestLevel', 2,
+    'answers', '[]'::jsonb,
+    'targetLinks', '[]'::jsonb
+  )
+);
+
+-- This stale edit changes only interestLevel. Its old location/source pair
+-- must not overwrite the concurrent v2 location/source pair.
+CREATE TEMP TABLE provenance_v3_location_auto_merge AS
+SELECT *
+FROM app_data.apply_contact_revise_v3(
+  (SELECT app_user_id FROM provenance_owner_context),
+  'provenance-v3-location-auto-merge',
+  1,
+  'contact.revise.v1',
+  'synthetic-provenance-v3-device-b',
+  'provenance-v3-location-contact',
+  1,
+  jsonb_build_object(
+    'contactId', 'provenance-v3-location-contact',
+    'workspaceId', (SELECT workspace_id FROM provenance_owner_context),
+    'projectId', (SELECT project_id FROM provenance_owner_context),
+    'reason', 'Update interest from a stale editor',
+    'occurredAtUtc', '2030-02-02T12:00:00Z',
+    'occurredTimeZone', 'America/Chicago',
+    'channel', 'face_to_face',
+    'location', jsonb_build_object(
+      'kind', 'resolved',
+      'placeName', 'Provenance Venue',
+      'smallestRegionId', 'provenance-v1-venue',
+      'regionTreeVersion', 'provenance-v1'
+    ),
+    'locationSource', jsonb_build_object(
+      'kind', 'captured_coordinates',
+      'latitude', 41.7897,
+      'longitude', -87.5997,
+      'accuracyMeters', 8.5,
+      'resolverContractVersion', 'canonical-region-resolution:v1',
+      'regionTreeContentFingerprint',
+        (SELECT v1_fingerprint FROM provenance_release_fingerprints)
+    ),
+    'reachCount', 1,
+    'interestLevel', 4,
+    'answers', '[]'::jsonb,
+    'targetLinks', '[]'::jsonb
+  )
+);
+
+CREATE TEMP TABLE provenance_v3_location_conflict AS
+SELECT *
+FROM app_data.apply_contact_revise_v3(
+  (SELECT app_user_id FROM provenance_owner_context),
+  'provenance-v3-location-conflict',
+  1,
+  'contact.revise.v1',
+  'synthetic-provenance-v3-device-c',
+  'provenance-v3-location-contact',
+  1,
+  jsonb_build_object(
+    'contactId', 'provenance-v3-location-contact',
+    'workspaceId', (SELECT workspace_id FROM provenance_owner_context),
+    'projectId', (SELECT project_id FROM provenance_owner_context),
+    'reason', 'Competing location branch',
+    'occurredAtUtc', '2030-02-02T12:00:00Z',
+    'occurredTimeZone', 'America/Chicago',
+    'channel', 'face_to_face',
+    'location', jsonb_build_object(
+      'kind', 'resolved',
+      'placeName', 'Conflict Candidate Venue',
+      'smallestRegionId', 'provenance-v2-venue',
+      'regionTreeVersion', 'provenance-v2'
+    ),
+    'locationSource', jsonb_build_object(
+      'kind', 'captured_coordinates',
+      'latitude', 41.7902,
+      'longitude', -87.5992,
+      'accuracyMeters', 9.2,
+      'resolverContractVersion', 'canonical-region-resolution:v1',
+      'regionTreeContentFingerprint',
+        (SELECT v2_fingerprint FROM provenance_release_fingerprints)
+    ),
+    'reachCount', 1,
+    'interestLevel', 2,
+    'answers', '[]'::jsonb,
+    'targetLinks', '[]'::jsonb
+  )
+);
+
+CREATE TEMP TABLE provenance_v3_location_conflict_read AS
+SELECT *
+FROM app_data.read_contact_revision_conflict(
+  (SELECT app_user_id FROM provenance_owner_context),
+  (SELECT workspace_id FROM provenance_owner_context),
+  (SELECT project_id FROM provenance_owner_context),
+  'provenance-v3-location-conflict'
+);
+
+CREATE TEMP TABLE provenance_v3_location_resolution AS
+SELECT *
+FROM app_data.apply_contact_conflict_resolution_v3(
+  (SELECT app_user_id FROM provenance_owner_context),
+  'provenance-v3-location-resolution',
+  1,
+  'contact.resolve.v1',
+  'synthetic-provenance-v3-device-c',
+  'provenance-v3-location-contact',
+  3,
+  jsonb_build_object(
+    'conflictId', (
+      SELECT conflict_payload->>'conflictId'
+      FROM provenance_v3_location_conflict_read
+    ),
+    'contactId', 'provenance-v3-location-contact',
+    'workspaceId', (SELECT workspace_id FROM provenance_owner_context),
+    'projectId', (SELECT project_id FROM provenance_owner_context),
+    'reason', 'Resolve with the competing location branch',
+    'occurredAtUtc', '2030-02-02T12:00:00Z',
+    'occurredTimeZone', 'America/Chicago',
+    'channel', 'face_to_face',
+    'location', jsonb_build_object(
+      'kind', 'resolved',
+      'placeName', 'Conflict Candidate Venue',
+      'smallestRegionId', 'provenance-v2-venue',
+      'regionTreeVersion', 'provenance-v2'
+    ),
+    'locationSource', jsonb_build_object(
+      'kind', 'captured_coordinates',
+      'latitude', 41.7902,
+      'longitude', -87.5992,
+      'accuracyMeters', 9.2,
+      'resolverContractVersion', 'canonical-region-resolution:v1',
+      'regionTreeContentFingerprint',
+        (SELECT v2_fingerprint FROM provenance_release_fingerprints)
+    ),
+    'reachCount', 1,
+    'interestLevel', 2,
+    'answers', '[]'::jsonb,
+    'targetLinks', '[]'::jsonb
+  )
+);
+
+-- A malformed source is rejected before a revision or provenance row can be
+-- committed. This protects the seam independently of conflict handling.
+DO $provenance_v3_rejected_source_check$
+DECLARE
+  failed boolean := false;
+BEGIN
+  BEGIN
+    PERFORM app_data.apply_contact_revise_v3(
+      (SELECT app_user_id FROM provenance_owner_context),
+      'provenance-v3-location-rejected-source',
+      1,
+      'contact.revise.v1',
+      'synthetic-provenance-v3-device-d',
+      'provenance-v3-location-contact',
+      4,
+      jsonb_build_object(
+        'contactId', 'provenance-v3-location-contact',
+        'workspaceId', (SELECT workspace_id FROM provenance_owner_context),
+        'projectId', (SELECT project_id FROM provenance_owner_context),
+        'reason', 'Reject a mismatched source fingerprint',
+        'occurredAtUtc', '2030-02-02T12:00:00Z',
+        'occurredTimeZone', 'America/Chicago',
+        'channel', 'face_to_face',
+        'location', jsonb_build_object(
+          'kind', 'resolved',
+          'placeName', 'Conflict Candidate Venue',
+          'smallestRegionId', 'provenance-v2-venue',
+          'regionTreeVersion', 'provenance-v2'
+        ),
+        'locationSource', jsonb_build_object(
+          'kind', 'captured_coordinates',
+          'latitude', 41.7902,
+          'longitude', -87.5992,
+          'accuracyMeters', 9.2,
+          'resolverContractVersion', 'canonical-region-resolution:v1',
+          'regionTreeContentFingerprint', repeat('0', 64)
+        ),
+        'reachCount', 1,
+        'interestLevel', 2,
+        'answers', '[]'::jsonb,
+        'targetLinks', '[]'::jsonb
+      )
+    );
+    RAISE EXCEPTION 'mismatched location source was accepted';
+  EXCEPTION WHEN SQLSTATE '23514' THEN
+    failed := true;
+  END;
+
+  IF NOT failed THEN
+    RAISE EXCEPTION 'mismatched location source did not fail closed';
+  END IF;
+END
+$provenance_v3_rejected_source_check$;
+
+CREATE TEMP TABLE provenance_v3_location_void AS
+SELECT *
+FROM app_data.apply_contact_void_v3(
+  (SELECT app_user_id FROM provenance_owner_context),
+  'provenance-v3-location-void',
+  1,
+  'contact.void.v1',
+  'synthetic-provenance-v3-device-c',
+  'provenance-v3-location-contact',
+  4,
+  jsonb_build_object(
+    'contactId', 'provenance-v3-location-contact',
+    'workspaceId', (SELECT workspace_id FROM provenance_owner_context),
+    'projectId', (SELECT project_id FROM provenance_owner_context),
+    'reason', 'Void the synthetic location contact'
+  )
+);
+
+RESET ROLE;
+
+DO $provenance_v3_location_checks$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM provenance_v3_submit WHERE result_code = 'accepted'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM provenance_v3_location_revise
+    WHERE result_code = 'accepted'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM provenance_v3_location_auto_merge
+    WHERE result_code = 'accepted'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM provenance_v3_location_conflict
+    WHERE result_code = 'conflict'
+      AND failure_code = 'contact_revision_conflict'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM provenance_v3_location_resolution
+    WHERE result_code = 'accepted'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM provenance_v3_location_void
+    WHERE result_code = 'accepted'
+  ) THEN
+    RAISE EXCEPTION 'v3 location revise/void/conflict paths returned an unexpected result';
+  END IF;
+
+  IF (
+    SELECT count(*)
+    FROM app_data.contact_revisions
+    WHERE contact_id = 'provenance-v3-location-contact'
+  ) <> 5 OR (
+    SELECT count(*)
+    FROM app_data.contact_location_provenance
+    WHERE contact_id = 'provenance-v3-location-contact'
+  ) <> 5 THEN
+    RAISE EXCEPTION 'accepted v3 revisions did not append one source row each';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM app_data.contact_revisions AS revision_row
+    JOIN app_data.contact_location_provenance AS provenance
+      ON provenance.contact_id = revision_row.contact_id
+     AND provenance.revision_number = revision_row.revision_number
+    WHERE revision_row.contact_id = 'provenance-v3-location-contact'
+      AND revision_row.revision_number = 3
+      AND revision_row.snapshot->'location' = jsonb_build_object(
+        'kind', 'resolved',
+        'placeName', 'Provenance Venue V2',
+        'smallestRegionId', 'provenance-v2-venue',
+        'regionTreeVersion', 'provenance-v2'
+      )
+      AND revision_row.snapshot->'locationSource' = jsonb_build_object(
+        'kind', 'captured_coordinates',
+        'latitude', 41.7901,
+        'longitude', -87.5991,
+        'accuracyMeters', 9.1,
+        'resolverContractVersion', 'canonical-region-resolution:v1',
+        'regionTreeContentFingerprint',
+          (SELECT v2_fingerprint FROM provenance_release_fingerprints)
+      )
+      AND provenance.latitude = 41.7901
+      AND provenance.longitude = -87.5991
+      AND provenance.region_tree_version = 'provenance-v2'
+  ) THEN
+    RAISE EXCEPTION 'automatic merge paired a stale location with a new source';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM provenance_v3_location_conflict_read
+    WHERE conflict_payload->'conflictingFields' = '["location"]'::jsonb
+      AND conflict_payload->'currentSnapshot'->'locationSource' = jsonb_build_object(
+        'kind', 'captured_coordinates',
+        'latitude', 41.7901,
+        'longitude', -87.5991,
+        'accuracyMeters', 9.1,
+        'resolverContractVersion', 'canonical-region-resolution:v1',
+        'regionTreeContentFingerprint',
+          (SELECT v2_fingerprint FROM provenance_release_fingerprints)
+      )
+      AND conflict_payload->'proposedSnapshot'->'locationSource' = jsonb_build_object(
+        'kind', 'captured_coordinates',
+        'latitude', 41.7902,
+        'longitude', -87.5992,
+        'accuracyMeters', 9.2,
+        'resolverContractVersion', 'canonical-region-resolution:v1',
+        'regionTreeContentFingerprint',
+          (SELECT v2_fingerprint FROM provenance_release_fingerprints)
+      )
+  ) THEN
+    RAISE EXCEPTION 'location conflict did not preserve both source pairs';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM app_data.contact_revisions AS revision_row
+    JOIN app_data.contact_location_provenance AS provenance
+      ON provenance.contact_id = revision_row.contact_id
+     AND provenance.revision_number = revision_row.revision_number
+    WHERE revision_row.contact_id = 'provenance-v3-location-contact'
+      AND revision_row.revision_number = 4
+      AND revision_row.snapshot->'locationSource'->>'latitude' = '41.7902'
+      AND revision_row.snapshot->'locationSource'->>'longitude' = '-87.5992'
+      AND provenance.latitude = 41.7902
+      AND provenance.longitude = -87.5992
+      AND provenance.region_tree_version = 'provenance-v2'
+  ) THEN
+    RAISE EXCEPTION 'conflict resolution did not preserve an atomic source pair';
+  END IF;
+
+  IF (
+    SELECT count(*)
+    FROM app_data.warehouse_outbox
+    WHERE contact_id = 'provenance-v3-location-contact'
+  ) <> 5 OR EXISTS (
+    SELECT 1
+    FROM app_data.warehouse_outbox
+    WHERE contact_id = 'provenance-v3-location-contact'
+      AND (
+        analytics_payload ?| ARRAY[
+          'location', 'locationSource', 'location_source'
+        ]
+        OR analytics_payload::text LIKE '%41.7897%'
+        OR analytics_payload::text LIKE '%-87.5997%'
+        OR analytics_payload::text LIKE '%41.7901%'
+        OR analytics_payload::text LIKE '%-87.5991%'
+        OR analytics_payload::text LIKE '%41.7902%'
+        OR analytics_payload::text LIKE '%-87.5992%'
+      )
+  ) THEN
+    RAISE EXCEPTION 'warehouse outbox retained contact location evidence';
+  END IF;
+END
+$provenance_v3_location_checks$;
 
 RESET ROLE;
 

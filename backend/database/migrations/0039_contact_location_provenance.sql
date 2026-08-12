@@ -157,6 +157,35 @@ REVOKE ALL PRIVILEGES
   ON app_data.contact_location_provenance
   FROM PUBLIC, tongxingzhe_runtime;
 
+-- jsonb 的 numeric 范围大于 float8。历史 payload 可能含可解析为 numeric、
+-- 但转为 double precision 会溢出的值；回填必须把它当作不完整证据，
+-- 新写入则由调用者给出稳定 shape 错误，不能让转换异常中断整次 migration。
+CREATE FUNCTION app_private.contact_location_jsonb_float8_v1(
+  numeric_value jsonb
+)
+RETURNS double precision
+LANGUAGE plpgsql
+IMMUTABLE
+STRICT
+SET search_path = pg_catalog
+AS $function$
+BEGIN
+  IF jsonb_typeof(numeric_value) <> 'number' THEN
+    RETURN NULL;
+  END IF;
+  BEGIN
+    RETURN (numeric_value #>> '{}')::double precision;
+  EXCEPTION
+    WHEN numeric_value_out_of_range OR invalid_text_representation THEN
+      RETURN NULL;
+  END;
+END
+$function$;
+
+REVOKE ALL
+  ON FUNCTION app_private.contact_location_jsonb_float8_v1(jsonb)
+  FROM PUBLIC, tongxingzhe_runtime;
+
 -- 历史回填只读各 revision 自己的 snapshot。该路径发生在 INSERT
 -- guard 安装之前，且 migration 已锁定 revision 写入窗口。
 WITH revision_evidence AS (
@@ -164,7 +193,8 @@ WITH revision_evidence AS (
     revision_row.contact_id,
     revision_row.revision_number,
     revision_row.revision_kind,
-    revision_row.snapshot->'location' AS location_value
+    revision_row.snapshot->'location' AS location_value,
+    revision_row.snapshot->'locationSource' AS source_value
   FROM app_data.contact_revisions AS revision_row
 ), classified AS (
   SELECT
@@ -173,6 +203,7 @@ WITH revision_evidence AS (
     CASE
       WHEN jsonb_typeof(evidence.location_value) = 'object'
         AND evidence.location_value->>'kind' = 'not_applicable'
+        AND evidence.source_value IS NULL
         AND NOT EXISTS (
           SELECT 1
           FROM jsonb_object_keys(evidence.location_value)
@@ -182,18 +213,25 @@ WITH revision_evidence AS (
       THEN 'not_applicable'
       WHEN jsonb_typeof(evidence.location_value) = 'object'
         AND evidence.location_value->>'kind' = 'pending_resolution'
+        AND evidence.source_value IS NULL
         AND jsonb_typeof(evidence.location_value->'latitude') = 'number'
         AND jsonb_typeof(evidence.location_value->'longitude') = 'number'
-        AND (evidence.location_value->>'latitude')::double precision
+        AND app_private.contact_location_jsonb_float8_v1(
+          evidence.location_value->'latitude'
+        )
           BETWEEN -90 AND 90
-        AND (evidence.location_value->>'longitude')::double precision
+        AND app_private.contact_location_jsonb_float8_v1(
+          evidence.location_value->'longitude'
+        )
           BETWEEN -180 AND 180
         AND (
           evidence.location_value->'accuracyMeters' IS NULL
           OR evidence.location_value->'accuracyMeters' = 'null'::jsonb
           OR (
             jsonb_typeof(evidence.location_value->'accuracyMeters') = 'number'
-            AND (evidence.location_value->>'accuracyMeters')::double precision
+            AND app_private.contact_location_jsonb_float8_v1(
+              evidence.location_value->'accuracyMeters'
+            )
               >= 0
           )
         )
@@ -216,6 +254,83 @@ WITH revision_evidence AS (
         ), '') IS NOT NULL
         AND release_row.lifecycle_state = 'published'
         AND release_row.content_fingerprint ~ '^[0-9a-f]{64}$'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM jsonb_object_keys(evidence.location_value)
+            AS key_row(key_name)
+          WHERE key_name NOT IN (
+            'kind', 'placeName', 'smallestRegionId', 'regionTreeVersion'
+          )
+        )
+        AND jsonb_typeof(evidence.source_value) = 'object'
+        AND evidence.source_value->>'kind' = 'captured_coordinates'
+        AND jsonb_typeof(evidence.source_value->'latitude') = 'number'
+        AND jsonb_typeof(evidence.source_value->'longitude') = 'number'
+        AND app_private.contact_location_jsonb_float8_v1(
+          evidence.source_value->'latitude'
+        )
+          BETWEEN -90 AND 90
+        AND app_private.contact_location_jsonb_float8_v1(
+          evidence.source_value->'longitude'
+        )
+          BETWEEN -180 AND 180
+        AND (
+          evidence.source_value->'accuracyMeters' IS NULL
+          OR evidence.source_value->'accuracyMeters' = 'null'::jsonb
+          OR (
+            jsonb_typeof(evidence.source_value->'accuracyMeters') = 'number'
+            AND app_private.contact_location_jsonb_float8_v1(
+              evidence.source_value->'accuracyMeters'
+            )
+              >= 0
+          )
+        )
+        AND evidence.source_value->>'resolverContractVersion'
+          = 'canonical-region-resolution:v1'
+        AND evidence.source_value->>'regionTreeContentFingerprint'
+          = release_row.content_fingerprint
+        AND NOT EXISTS (
+          SELECT 1
+          FROM jsonb_object_keys(evidence.source_value)
+            AS key_row(key_name)
+          WHERE key_name NOT IN (
+            'kind', 'latitude', 'longitude', 'accuracyMeters',
+            'resolverContractVersion', 'regionTreeContentFingerprint'
+          )
+        )
+        AND EXISTS (
+          WITH RECURSIVE ancestors AS (
+            SELECT
+              node.region_id,
+              node.parent_region_id,
+              node.kind
+            FROM app_data.canonical_region_versions AS node
+            WHERE node.region_id =
+                evidence.location_value->>'smallestRegionId'
+              AND node.tree_version =
+                evidence.location_value->>'regionTreeVersion'
+            UNION ALL
+            SELECT parent.region_id, parent.parent_region_id, parent.kind
+            FROM app_data.canonical_region_versions AS parent
+            JOIN ancestors AS child
+              ON parent.region_id = child.parent_region_id
+            WHERE parent.tree_version =
+              evidence.location_value->>'regionTreeVersion'
+          )
+          SELECT 1 FROM ancestors WHERE kind = 'city'
+        )
+      THEN 'resolved_from_coordinates'
+      WHEN jsonb_typeof(evidence.location_value) = 'object'
+        AND evidence.location_value->>'kind' = 'resolved'
+        AND NULLIF(btrim(
+          evidence.location_value->>'smallestRegionId'
+        ), '') IS NOT NULL
+        AND NULLIF(btrim(
+          evidence.location_value->>'regionTreeVersion'
+        ), '') IS NOT NULL
+        AND release_row.lifecycle_state = 'published'
+        AND release_row.content_fingerprint ~ '^[0-9a-f]{64}$'
+        AND evidence.source_value IS NULL
         AND NOT EXISTS (
           SELECT 1
           FROM jsonb_object_keys(evidence.location_value)
@@ -265,50 +380,117 @@ INSERT INTO app_data.contact_location_provenance (
   accuracy_meters,
   smallest_region_id,
   region_tree_version,
-  region_tree_content_fingerprint
+  region_tree_content_fingerprint,
+  resolver_contract_version
 )
 SELECT
   classified.contact_id,
   classified.revision_number,
   classified.revision_kind,
   CASE classified.classified_kind
+    WHEN 'resolved_from_coordinates' THEN 'resolved'
     WHEN 'resolved_region_only' THEN 'resolved'
     WHEN 'pending_coordinates' THEN 'pending_resolution'
     WHEN 'not_applicable' THEN 'not_applicable'
     ELSE 'unknown'
   END,
   classified.classified_kind,
-  CASE WHEN classified.classified_kind = 'resolved_region_only'
+  CASE WHEN classified.classified_kind IN (
+      'resolved_from_coordinates', 'resolved_region_only'
+    )
     THEN NULLIF(btrim(classified.location_value->>'placeName'), '')
     ELSE NULL
   END,
-  CASE WHEN classified.classified_kind = 'pending_coordinates'
-    THEN (classified.location_value->>'latitude')::double precision
+  CASE WHEN classified.classified_kind = 'resolved_from_coordinates'
+    THEN app_private.contact_location_jsonb_float8_v1(
+      classified.source_value->'latitude'
+    )
+    WHEN classified.classified_kind = 'pending_coordinates'
+    THEN app_private.contact_location_jsonb_float8_v1(
+      classified.location_value->'latitude'
+    )
     ELSE NULL
   END,
-  CASE WHEN classified.classified_kind = 'pending_coordinates'
-    THEN (classified.location_value->>'longitude')::double precision
+  CASE WHEN classified.classified_kind = 'resolved_from_coordinates'
+    THEN app_private.contact_location_jsonb_float8_v1(
+      classified.source_value->'longitude'
+    )
+    WHEN classified.classified_kind = 'pending_coordinates'
+    THEN app_private.contact_location_jsonb_float8_v1(
+      classified.location_value->'longitude'
+    )
     ELSE NULL
   END,
-  CASE WHEN classified.classified_kind = 'pending_coordinates'
+  CASE WHEN classified.classified_kind = 'resolved_from_coordinates'
+      AND classified.source_value->'accuracyMeters' IS NOT NULL
+      AND classified.source_value->'accuracyMeters' <> 'null'::jsonb
+    THEN app_private.contact_location_jsonb_float8_v1(
+      classified.source_value->'accuracyMeters'
+    )
+    WHEN classified.classified_kind = 'pending_coordinates'
       AND classified.location_value->'accuracyMeters' IS NOT NULL
       AND classified.location_value->'accuracyMeters' <> 'null'::jsonb
-    THEN (classified.location_value->>'accuracyMeters')::double precision
+    THEN app_private.contact_location_jsonb_float8_v1(
+      classified.location_value->'accuracyMeters'
+    )
     ELSE NULL
   END,
-  CASE WHEN classified.classified_kind = 'resolved_region_only'
+  CASE WHEN classified.classified_kind IN (
+      'resolved_from_coordinates', 'resolved_region_only'
+    )
     THEN classified.location_value->>'smallestRegionId'
     ELSE NULL
   END,
-  CASE WHEN classified.classified_kind = 'resolved_region_only'
+  CASE WHEN classified.classified_kind IN (
+      'resolved_from_coordinates', 'resolved_region_only'
+    )
     THEN classified.location_value->>'regionTreeVersion'
     ELSE NULL
   END,
-  CASE WHEN classified.classified_kind = 'resolved_region_only'
+  CASE WHEN classified.classified_kind IN (
+      'resolved_from_coordinates', 'resolved_region_only'
+    )
     THEN classified.content_fingerprint
+    ELSE NULL
+  END,
+  CASE WHEN classified.classified_kind = 'resolved_from_coordinates'
+    THEN 'canonical-region-resolution:v1'
     ELSE NULL
   END
 FROM classified;
+
+-- Revision snapshots keep sensitive location evidence for sync and audit, but
+-- warehouse_outbox is an analytics boundary. Remove both the resolved source
+-- coordinates and pending coordinates at that boundary, including rows queued
+-- before this migration, and keep later helper updates from adding them back.
+UPDATE app_data.warehouse_outbox
+SET analytics_payload = analytics_payload
+  - 'location'
+  - 'locationSource'
+  - 'location_source'
+WHERE analytics_payload ?| ARRAY[
+  'location', 'locationSource', 'location_source'
+];
+
+CREATE FUNCTION app_private.scrub_contact_location_from_warehouse_v1()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, app_data
+AS $function$
+BEGIN
+  NEW.analytics_payload := NEW.analytics_payload
+    - 'location'
+    - 'locationSource'
+    - 'location_source';
+  RETURN NEW;
+END
+$function$;
+
+CREATE TRIGGER warehouse_outbox_scrub_contact_location
+BEFORE INSERT OR UPDATE OF analytics_payload
+ON app_data.warehouse_outbox
+FOR EACH ROW
+EXECUTE FUNCTION app_private.scrub_contact_location_from_warehouse_v1();
 
 CREATE FUNCTION app_private.reject_contact_location_provenance_mutation_v1()
 RETURNS trigger
@@ -405,8 +587,12 @@ BEGIN
         ERRCODE = '23514',
         MESSAGE = 'pending location requires coordinates only';
     END IF;
-    latitude_value := (location_value->>'latitude')::double precision;
-    longitude_value := (location_value->>'longitude')::double precision;
+    latitude_value := app_private.contact_location_jsonb_float8_v1(
+      location_value->'latitude'
+    );
+    longitude_value := app_private.contact_location_jsonb_float8_v1(
+      location_value->'longitude'
+    );
     IF location_value->'accuracyMeters' IS NOT NULL
       AND location_value->'accuracyMeters' <> 'null'::jsonb
     THEN
@@ -415,11 +601,19 @@ BEGIN
           ERRCODE = '23514',
           MESSAGE = 'location accuracy must be numeric';
       END IF;
-      accuracy_value :=
-        (location_value->>'accuracyMeters')::double precision;
+      accuracy_value := app_private.contact_location_jsonb_float8_v1(
+        location_value->'accuracyMeters'
+      );
     END IF;
-    IF latitude_value NOT BETWEEN -90 AND 90
+    IF latitude_value IS NULL
+      OR longitude_value IS NULL
+      OR latitude_value NOT BETWEEN -90 AND 90
       OR longitude_value NOT BETWEEN -180 AND 180
+      OR (
+        location_value->'accuracyMeters' IS NOT NULL
+        AND location_value->'accuracyMeters' <> 'null'::jsonb
+        AND accuracy_value IS NULL
+      )
       OR (accuracy_value IS NOT NULL AND accuracy_value < 0)
     THEN
       RAISE EXCEPTION USING
@@ -502,8 +696,12 @@ BEGIN
           ERRCODE = '23514',
           MESSAGE = 'resolved location source does not match the release';
       END IF;
-      latitude_value := (source_value->>'latitude')::double precision;
-      longitude_value := (source_value->>'longitude')::double precision;
+      latitude_value := app_private.contact_location_jsonb_float8_v1(
+        source_value->'latitude'
+      );
+      longitude_value := app_private.contact_location_jsonb_float8_v1(
+        source_value->'longitude'
+      );
       IF source_value->'accuracyMeters' IS NOT NULL
         AND source_value->'accuracyMeters' <> 'null'::jsonb
       THEN
@@ -512,11 +710,19 @@ BEGIN
             ERRCODE = '23514',
             MESSAGE = 'location source accuracy must be numeric';
         END IF;
-        accuracy_value :=
-          (source_value->>'accuracyMeters')::double precision;
+        accuracy_value := app_private.contact_location_jsonb_float8_v1(
+          source_value->'accuracyMeters'
+        );
       END IF;
-      IF latitude_value NOT BETWEEN -90 AND 90
+      IF latitude_value IS NULL
+        OR longitude_value IS NULL
+        OR latitude_value NOT BETWEEN -90 AND 90
         OR longitude_value NOT BETWEEN -180 AND 180
+        OR (
+          source_value->'accuracyMeters' IS NOT NULL
+          AND source_value->'accuracyMeters' <> 'null'::jsonb
+          AND accuracy_value IS NULL
+        )
         OR (accuracy_value IS NOT NULL AND accuracy_value < 0)
       THEN
         RAISE EXCEPTION USING
@@ -569,6 +775,7 @@ $function$;
 
 REVOKE ALL
   ON FUNCTION
+    app_private.scrub_contact_location_from_warehouse_v1(),
     app_private.reject_contact_location_provenance_mutation_v1(),
     app_private.require_contact_location_provenance_writer_v1(),
     app_private.capture_contact_location_provenance_v1()
@@ -579,6 +786,9 @@ GRANT USAGE ON SCHEMA app_data, app_private
 GRANT SELECT
   ON app_data.canonical_region_tree_releases,
      app_data.canonical_region_versions
+  TO tongxingzhe_contact_provenance_writer;
+GRANT EXECUTE
+  ON FUNCTION app_private.contact_location_jsonb_float8_v1(jsonb)
   TO tongxingzhe_contact_provenance_writer;
 GRANT INSERT
   ON app_data.contact_location_provenance
@@ -620,3 +830,196 @@ EXECUTE FUNCTION app_private.capture_contact_location_provenance_v1();
 
 COMMENT ON FUNCTION app_private.capture_contact_location_provenance_v1()
 IS 'Trusted trigger seam that appends one immutable location source with its accepted contact revision.';
+
+-- The location and its source metadata are one conflict fact. Comparing only
+-- location could pair stale coordinates with a newly selected region during a
+-- three-way merge. Replacing the fact must also replace (or remove) its source.
+CREATE OR REPLACE FUNCTION app_data.contact_revision_comparison_value(
+  snapshot jsonb,
+  field_name text
+)
+RETURNS jsonb
+LANGUAGE sql
+IMMUTABLE
+STRICT
+SET search_path = pg_catalog, app_data
+AS $function$
+  SELECT CASE field_name
+    WHEN 'occurredAt' THEN jsonb_build_array(
+      snapshot->'occurredAtUtc', snapshot->'occurredTimeZone'
+    )
+    WHEN 'channel' THEN jsonb_build_array(
+      snapshot->'channel', snapshot->'channelDetail'
+    )
+    WHEN 'location' THEN jsonb_build_array(
+      snapshot->'location', snapshot->'locationSource'
+    )
+    WHEN 'reachCount' THEN snapshot->'reachCount'
+    WHEN 'interestLevel' THEN snapshot->'interestLevel'
+    WHEN 'answers' THEN COALESCE(
+      (
+        SELECT jsonb_object_agg(
+          answer->>'questionId',
+          answer - 'questionId'
+          ORDER BY answer->>'questionId'
+        )
+        FROM jsonb_array_elements(
+          COALESCE(
+            snapshot->'_questionnaireAnswersV2',
+            snapshot->'answers',
+            '[]'::jsonb
+          )
+        ) AS answer_row(answer)
+      ),
+      '{}'::jsonb
+    )
+    WHEN 'targetLinks' THEN COALESCE(
+      (
+        SELECT jsonb_object_agg(
+          link->>'targetId',
+          link - 'targetId'
+          ORDER BY link->>'targetId'
+        )
+        FROM jsonb_array_elements(
+          COALESCE(snapshot->'targetLinks', '[]'::jsonb)
+        ) AS link_row(link)
+      ),
+      '{}'::jsonb
+    )
+    ELSE 'null'::jsonb
+  END;
+$function$;
+
+CREATE OR REPLACE FUNCTION app_data.merge_contact_revision_snapshots(
+  current_snapshot jsonb,
+  proposed_snapshot jsonb,
+  proposed_changed_fields text[]
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+IMMUTABLE
+STRICT
+SET search_path = pg_catalog, app_data
+AS $function$
+DECLARE
+  merged_snapshot jsonb := current_snapshot;
+  merged_answers jsonb;
+BEGIN
+  IF 'occurredAt' = ANY(proposed_changed_fields) THEN
+    merged_snapshot := merged_snapshot || jsonb_build_object(
+      'occurredAtUtc', proposed_snapshot->'occurredAtUtc',
+      'occurredTimeZone', proposed_snapshot->'occurredTimeZone'
+    );
+  END IF;
+  IF 'channel' = ANY(proposed_changed_fields) THEN
+    merged_snapshot := merged_snapshot || jsonb_build_object(
+      'channel', proposed_snapshot->'channel',
+      'channelDetail', proposed_snapshot->'channelDetail'
+    );
+  END IF;
+  IF 'location' = ANY(proposed_changed_fields) THEN
+    merged_snapshot := (merged_snapshot - 'locationSource')
+      || jsonb_build_object('location', proposed_snapshot->'location');
+    IF proposed_snapshot ? 'locationSource' THEN
+      merged_snapshot := merged_snapshot || jsonb_build_object(
+        'locationSource', proposed_snapshot->'locationSource'
+      );
+    END IF;
+  END IF;
+  IF 'reachCount' = ANY(proposed_changed_fields) THEN
+    merged_snapshot := merged_snapshot || jsonb_build_object(
+      'reachCount', proposed_snapshot->'reachCount'
+    );
+  END IF;
+  IF 'interestLevel' = ANY(proposed_changed_fields) THEN
+    merged_snapshot := merged_snapshot || jsonb_build_object(
+      'interestLevel', proposed_snapshot->'interestLevel'
+    );
+  END IF;
+  IF 'answers' = ANY(proposed_changed_fields) THEN
+    merged_snapshot := merged_snapshot || jsonb_build_object(
+      'answers', proposed_snapshot->'answers'
+    );
+  END IF;
+  IF 'targetLinks' = ANY(proposed_changed_fields) THEN
+    merged_snapshot := merged_snapshot || jsonb_build_object(
+      'targetLinks', proposed_snapshot->'targetLinks'
+    );
+  END IF;
+  IF proposed_snapshot ? '_questionnaireAnswersV2' THEN
+    merged_answers := COALESCE(
+      current_snapshot->'_questionnaireAnswersV2',
+      current_snapshot->'answers',
+      '[]'::jsonb
+    );
+    IF 'answers' = ANY(proposed_changed_fields) THEN
+      merged_answers := proposed_snapshot->'_questionnaireAnswersV2';
+    END IF;
+    merged_snapshot := jsonb_set(
+      merged_snapshot - '_questionnaireAnswersV2',
+      '{answers}',
+      '[]'::jsonb
+    ) || jsonb_build_object('_questionnaireAnswersV2', merged_answers);
+  END IF;
+  RETURN merged_snapshot;
+END
+$function$;
+
+CREATE OR REPLACE FUNCTION app_data.read_contact_revision_conflict(
+  trusted_app_user_id uuid,
+  trusted_workspace_id uuid,
+  trusted_project_id uuid,
+  client_command_id text
+)
+RETURNS TABLE (conflict_payload jsonb)
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = pg_catalog, app_data
+AS $function$
+  SELECT jsonb_build_object(
+    'conflictId', conflict_row.conflict_id,
+    'contactId', conflict_row.contact_id,
+    'baseRevision', conflict_row.base_revision,
+    'currentRevision', conflict_row.current_revision,
+    'conflictingFields', to_jsonb(conflict_row.conflicting_fields),
+    'questionnaireVersionId',
+      conflict_row.current_snapshot->'questionnaireVersionId',
+    'currentRevisionKind', conflict_row.current_snapshot->'revisionKind',
+    'currentRevisedAtUtc', conflict_row.current_snapshot->'revisedAtUtc',
+    'currentReason', conflict_row.current_snapshot->'reason',
+    'currentSnapshot', jsonb_build_object(
+      'occurredAtUtc', conflict_row.current_snapshot->'occurredAtUtc',
+      'occurredTimeZone', conflict_row.current_snapshot->'occurredTimeZone',
+      'channel', conflict_row.current_snapshot->'channel',
+      'channelDetail', conflict_row.current_snapshot->'channelDetail',
+      'location', conflict_row.current_snapshot->'location',
+      'locationSource', conflict_row.current_snapshot->'locationSource',
+      'reachCount', conflict_row.current_snapshot->'reachCount',
+      'interestLevel', conflict_row.current_snapshot->'interestLevel',
+      'answers', conflict_row.current_snapshot->'answers',
+      'targetLinks', COALESCE(
+        conflict_row.current_snapshot->'targetLinks', '[]'::jsonb
+      )
+    ),
+    'proposedSnapshot', jsonb_build_object(
+      'occurredAtUtc', conflict_row.proposed_snapshot->'occurredAtUtc',
+      'occurredTimeZone', conflict_row.proposed_snapshot->'occurredTimeZone',
+      'channel', conflict_row.proposed_snapshot->'channel',
+      'channelDetail', conflict_row.proposed_snapshot->'channelDetail',
+      'location', conflict_row.proposed_snapshot->'location',
+      'locationSource', conflict_row.proposed_snapshot->'locationSource',
+      'reachCount', conflict_row.proposed_snapshot->'reachCount',
+      'interestLevel', conflict_row.proposed_snapshot->'interestLevel',
+      'answers', conflict_row.proposed_snapshot->'answers',
+      'targetLinks', COALESCE(
+        conflict_row.proposed_snapshot->'targetLinks', '[]'::jsonb
+      )
+    )
+  )
+  FROM app_data.contact_revision_conflicts AS conflict_row
+  WHERE conflict_row.app_user_id = trusted_app_user_id
+    AND conflict_row.workspace_id = trusted_workspace_id
+    AND conflict_row.project_id = trusted_project_id
+    AND conflict_row.command_id = client_command_id;
+$function$;

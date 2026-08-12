@@ -26,6 +26,10 @@ revision 同一 transaction 中写入它。来源记录一旦提交不能 `UPDAT
 当前投影；来源记录不产生跨版本映射，也不把旧区域 ID 猜成新树中的相似
 城市。
 
+三路修订把 `location` 和 `locationSource` 视为同一事实组。自动合并替换地点时
+必须同时替换或移除来源；冲突读取把两者一起返回给有权解决者。这样旧坐标不会
+与新区域误配，待解析地点也不会残留上一版 resolved 来源。
+
 6S 的可信追加合同是私有、窄范围的 PostgreSQL 合同，供后续生产写入 bridge
 接入。`tongxingzhe_runtime` 没有来源表、sequence 或维护函数的直接权限；
 区域发布者和管理分析 capability 也不会因此获得接触来源或精确坐标读取权。
@@ -34,7 +38,8 @@ revision 同一 transaction 中写入它。来源记录一旦提交不能 `UPDAT
 
 ## 历史回填
 
-新增 migration 只从每个不可变 `contact_revisions.snapshot.location` 回填：
+新增 migration 只从每个不可变 revision 自己的 `snapshot.location` 和可选
+`snapshot.locationSource` 回填：
 
 - `pending_resolution` 复制该 revision 自己的坐标；
 - `resolved` 复制该 revision 的区域和树版本，并从 6R release 绑定内容指纹；
@@ -55,7 +60,8 @@ contact、revision 或 assignment，也不能把区域发布时间或 current �
 兼容性的 current projection；它不是历史来源。
 
 精确坐标属于敏感接触事实。来源表留在 `app_data`，不得进入管理报表、日志、
-错误响应或 warehouse。作废接触仍保留来源历史；普通路径不物理删除。账号、
+错误响应或 warehouse。`warehouse_outbox` 的写入边界会移除 location 与 source，
+包括修订和作废复制的完整 snapshot。作废接触仍保留来源历史；普通路径不物理删除。账号、
 空间删除和保留期遵循既有政策，不在本 ADR 新增一套清理语义。
 
 6S 只覆盖已提交 contact revisions。当前 `contact_attempts` 没有地点字段，

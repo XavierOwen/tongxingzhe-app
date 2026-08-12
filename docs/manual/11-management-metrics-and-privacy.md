@@ -456,13 +456,16 @@ current projection，也没有来源读取 API。
 - `not_applicable` 表示纯非线下接触，不保存坐标或区域。
 
 旧 revision 无法完整解释时标记 `incomplete`／`unknown`。服务端记录时间不能
-冒充设备采集时间，不能 reverse-geocode，不能把旧区域猜成当前城市。6S 回填
-只读每个不可变 `contact_revisions.snapshot.location`：pending 复制自己的坐标，
-resolved 复制自己的区域和树版本并绑定 6R fingerprint，旧 resolved 没有坐标
-就保留 `region-only`；不能从单一 current assignment 伪造历史。
+冒充设备采集时间，不能 reverse-geocode，不能把旧区域猜成当前城市。6S 只从
+每个不可变 revision 自己的 `snapshot.location` 和可选 `snapshot.locationSource`
+回填：pending 复制自己的坐标；resolved 复制自己的区域、树版本和 6R fingerprint，
+有合法 source 时保留采集坐标，没有时保留 `region-only`；矛盾或畸形 source
+保持 `incomplete`／`unknown`。回填不能从单一 current assignment 伪造历史。
 
 精确坐标是敏感接触事实。来源表留在受限 `app_data`，不进入管理报告、日志、
-错误响应或 warehouse；`tongxingzhe_runtime`、区域发布者和管理分析 capability
+错误响应或 warehouse。数据库会在 `warehouse_outbox` 写入边界移除 location
+和 source，防止修订、冲突解决或作废复制完整 snapshot 时泄漏坐标；
+`tongxingzhe_runtime`、区域发布者和管理分析 capability
 都不会因此获得来源读取权。作废保留来源历史，账号／空间删除与保留期继续遵循
 既有政策。该 slice 只覆盖已提交 contact revisions；当前没有地点字段的
 `contact_attempts` 另行处理。
