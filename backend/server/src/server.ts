@@ -69,6 +69,10 @@ import {
   type ManagementReportSnapshotDirectoryStore,
 } from "./management-report-snapshot-directory.js";
 import {
+  releaseManagementReportSnapshot,
+  type ManagementReportReleaseStore,
+} from "./management-report-release.js";
+import {
   authenticateManagementAnalysisContext,
   loadManagementAnalysisContextForIdentity,
   selectManagementAnalysisContextForIdentity,
@@ -92,6 +96,7 @@ export interface BackendServerDependencies
   readonly managementReportSnapshotStore?: ManagementReportSnapshotStore;
   readonly managementReportSnapshotDirectoryStore?:
     ManagementReportSnapshotDirectoryStore;
+  readonly managementReportReleaseStore?: ManagementReportReleaseStore;
   readonly managementAnalysisContextStore?: ManagementAnalysisContextStore;
 }
 
@@ -166,6 +171,31 @@ export function createBackendServer(
     const managementReportSnapshotDirectoryMatch = requestUrl.pathname.match(
       /^\/v1\/projects\/([^/]+)\/management-report-snapshots$/,
     );
+    if (
+      request.method === "POST" &&
+      managementReportSnapshotDirectoryMatch !== null
+    ) {
+      try {
+        const result = await releaseManagementReportSnapshot(
+          {
+            authorization: request.headers.authorization,
+            projectId: managementReportSnapshotDirectoryMatch[1] ?? "",
+            hasQuery: requestUrl.search.length > 0,
+            // The release handler authenticates before invoking this callback.
+            readBody: async () => readJsonBody(request),
+          },
+          {
+            identityVerifier: dependencies.identityVerifier,
+            releaseStore: dependencies.managementReportReleaseStore,
+          },
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
+      }
+      return;
+    }
     if (
       request.method === "GET" &&
       managementReportSnapshotDirectoryMatch !== null

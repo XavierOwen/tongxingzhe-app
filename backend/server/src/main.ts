@@ -14,6 +14,7 @@ import { PostgresPersonalActionPlanStore } from "./personal-action-plans.js";
 import { PostgresPersonalActionReminderStore } from "./personal-action-reminders.js";
 import { PostgresManagementReportSnapshotStore } from "./management-report-snapshots.js";
 import { PostgresManagementReportSnapshotDirectoryStore } from "./management-report-snapshot-directory.js";
+import { PostgresManagementReportReleaseStore } from "./management-report-release.js";
 import { PostgresManagementAnalysisContextStore } from "./management-analysis-contexts.js";
 
 const databaseUrl = requireEnvironment("DATABASE_URL");
@@ -72,6 +73,11 @@ const managementReportSnapshotDirectoryStore =
   new PostgresManagementReportSnapshotDirectoryStore(
     async (text, values) => pool.query(text, [...values]),
   );
+// One pool query is also the transaction boundary for the trusted release.
+// Awaiting it keeps the HTTP response behind PostgreSQL commit acknowledgement.
+const managementReportReleaseStore = new PostgresManagementReportReleaseStore(
+  async (text, values) => pool.query(text, [...values]),
+);
 const managementAnalysisContextStore =
   new PostgresManagementAnalysisContextStore(
     async (text, values) => pool.query(text, [...values]),
@@ -91,6 +97,7 @@ const server = createBackendServer({
   personalActionReminderStore,
   managementReportSnapshotStore,
   managementReportSnapshotDirectoryStore,
+  managementReportReleaseStore,
   managementAnalysisContextStore,
 });
 

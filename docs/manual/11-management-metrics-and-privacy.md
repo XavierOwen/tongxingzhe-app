@@ -2,7 +2,7 @@
 
 个人分析和管理分析处理不同的信任边界。个人页可以立即显示本人设备上的事实，并说明哪些接触尚未同步。管理分析只能使用后端已接受的数据，还必须先降低小群体披露风险。
 
-当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定、不可变受保护快照、项目报告时区版本历史、管理报告能力授权、可信发布 v2、管理项目发现与选择、可信快照目录、带最小访问审计的授权快照读取、窄 HTTPS 端点，以及 Flutter 只读管理报告页面。它仍没有生产成员管理或报告发布端点。
+当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定、不可变受保护快照、项目报告时区版本历史、管理报告能力授权、可信发布 v2、管理项目发现与选择、可信快照目录、窄 HTTPS 发布与读取端点，以及 Flutter 只读管理报告页面。它仍没有生产成员管理或自动发布调度。
 
 ## 先确定统计单位
 
@@ -65,7 +65,7 @@ M = 单一推广者的最大贡献数
 
 Dart 测试验证 `MetricResult` 和固定顺序。PostgreSQL fixture 把相同贡献送入 [`protect_management_contact_session_grid_v1`](../../backend/database/migrations/0023_management_contact_session_privacy.sql)，核对相同的显示状态和值。
 
-隐私政策 SQL 位于 `app_private` schema。`tongxingzhe_runtime` 没有 schema 使用权或政策函数执行权。可信发布 v2 在同一私有 schema 中组合这些政策；生产 Backend 只能通过 `0033` 的窄 `app_data` bridge 读取已经发布的受保护快照，不能直接执行政策或动态报告。
+隐私政策 SQL 位于 `app_private` schema。`tongxingzhe_runtime` 没有 schema 使用权或政策函数执行权。可信发布 v2 在同一私有 schema 中组合这些政策；生产 Backend 只能通过 `0036` 的固定报告发布 bridge 和 `0033` 的单份读取 bridge 使用它，不能直接执行政策或动态报告。
 
 ## 固定报告请求为什么只有两个字段
 
@@ -90,7 +90,7 @@ management-report:contact_sessions_by_channel_two_periods:v1
 
 这个指纹用于审计和对账。它不是密码、token 或匿名化手段，也不授权任何查询。
 
-审计信封只保存请求者内部 ID、项目 ID、报告 ID 与版本、查询指纹、UTC 请求时间和结果状态。它不保存报表格值、贡献者数量、最大贡献值或隐藏的精确值。可信发布 v2 使用同样的最小化原则，并另存当次授权关系、能力 grant、时区 revision 和底层快照关联。`0032` 增加私有快照访问审计，`0033` 的生产读取端点复用该审计；报告发布仍没有 HTTP 入口。
+审计信封只保存请求者内部 ID、项目 ID、报告 ID 与版本、查询指纹、UTC 请求时间和结果状态。它不保存报表格值、贡献者数量、最大贡献值或隐藏的精确值。可信发布 v2 使用同样的最小化原则，并另存当次授权关系、能力 grant、时区 revision 和底层快照关联。`0036` 只把已经验证的身份和幂等键交给该合同。`0032` 增加私有快照访问审计，`0033` 的生产读取端点复用该审计。
 
 TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../backend/database/fixtures/shared/management_report_requests_v1.csv)。fixture 包含有效请求、未知报告、未知版本，以及客户端伪造项目、时区、日期、维度、筛选和导出字段的负向场景。
 
@@ -180,7 +180,7 @@ TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../
 
 当前 v1 把固定 `report_version` 和 `query_fingerprint` 作为计算合同身份。渠道接触场次报告不读取问卷兼容映射，也不读取区域视图，所以这两项在本报告中不适用。未来报告一旦依赖问卷或区域版本，必须把对应版本写入 protected document 并发布新报告版本，不能沿用当前身份。
 
-历史 v1 发布和读取函数仍没有 runtime 权限。`0031` 的私有 v2 已把 `0030` 授权、`0029` 时区 revision 和历史 `6G` 发布函数接在同一事务中。`0033` 的 HTTP gateway 先验证认证 token，再由窄 bridge 映射内部用户；runtime 始终没有 `app_private` 的通用执行权。
+历史 v1 发布和读取函数仍没有 runtime 权限。`0031` 的私有 v2 已把 `0030` 授权、`0029` 时区 revision 和历史 `6G` 发布函数接在同一事务中。`0036` 与 `0033` 的 HTTP gateway 都先验证认证 token，再由各自的窄 bridge 映射内部用户；runtime 始终没有 `app_private` 的通用执行权。
 
 ## 项目报告时区如何保存和生效
 
@@ -217,7 +217,7 @@ TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../
 
 “在同一事务中消费”是安全要求，不是性能建议。解析器与成员／能力撤权使用相同的 transaction lock。若受保护操作先取得锁，撤权会等该操作提交；若撤权先提交，后来的解析会看见结束边界并失败。调用方若先解析、提交事务，再在另一个事务执行报告操作，就会重新制造检查与使用之间的空窗。
 
-Flutter 不能读这些表，`tongxingzhe_runtime` 也不能执行解析器。可信发布 v2 在同一事务中消费发布授权；`0033` 的窄读取 bridge 在同一 statement 中消费查看授权。组织邀请、生产授予与撤销、角色组合、权限变更审计和一般组织业务上下文仍须由后续 Slice 实现。
+Flutter 不能读这些表，`tongxingzhe_runtime` 也不能执行解析器。`0036` 的窄发布 bridge 在同一 statement 中调用可信发布 v2 并消费发布授权；`0033` 的窄读取 bridge 在同一 statement 中消费查看授权。组织邀请、生产授予与撤销、角色组合、权限变更审计和一般组织业务上下文仍须由后续 Slice 实现。
 
 ## 可信发布 v2 如何组合三条私有合同
 
@@ -230,6 +230,24 @@ Flutter 不能读这些表，`tongxingzhe_runtime` 也不能执行解析器。�
 没有历史快照时，v2 可以建立一次基线。有历史时，最近快照必须由 v2 建立，而且时区 revision 必须相同。IANA 文本相同也不够：项目从 UTC 改到其他时区再改回 UTC，revision 已改变，发布仍返回 `release_time_zone_revision_changed`。当前合同不自动建立跨时区新基线，因为那会让两套不同期间边界的报告绕过重叠保护。如何安全恢复发布需另行设计。
 
 相同 v2 请求重试会先重新授权，再返回首次最小结果。已经被 v1 使用的 UUID 不可补记为 v2 provenance。发布能力也不自动授予查看能力；返回值只有报告身份、时区 revision、截止点、快照关联、状态和原因码，不含报告内容。
+
+## Backend 如何发布固定报告
+
+生产发布端点是：
+
+```text
+POST /v1/projects/:projectId/management-report-snapshots
+```
+
+路径只含显式项目 UUID，请求体只含 UUID 幂等键 `release_request_id`。端点不接受 query、报告 ID／版本、时区、数据截止点、范围、筛选、capability、内部用户或报告 JSON。Backend 固定发布 `contact_sessions_by_channel_two_periods` v1，因此客户端不能把该入口变成任意查询面。
+
+Backend 必须先验证 Bearer token，才读取并解析 JSON body。[`0036_runtime_trusted_management_report_release.sql`](../../backend/database/migrations/0036_runtime_trusted_management_report_release.sql) 的 `SECURITY DEFINER` bridge 把可信 issuer 与 subject 映射到既有活动用户，然后以固定报告 ID／版本调用 6J。未知或停用身份不会 bootstrap 账号、workspace 或项目。runtime 只获得这一函数的 `EXECUTE`，不能进入 `app_private` 或直接读取发布尝试、快照、成员关系与接触事实。
+
+production store 使用一次参数化 `pool.query`。PostgreSQL 完成该 statement 的隐式事务后，query promise 才解决；HTTP handler 随后才发送最小发布结果。若提交后网络中断，客户端以同一 `release_request_id` 重试；数据库先重新授权，再返回首次结果，不增加发布尝试或快照。
+
+`approved_baseline`、`approved` 和 `blocked` 都是已经提交的业务结果。响应只含请求、项目、固定报告身份、查询指纹、可信时区 revision、数据截止、比较／发布快照 ID、状态和类型化原因。它不含 `protected_report`、`cells`、计数、贡献者或内部授权证据。调用者若要读取已发布快照，仍须拥有独立查看能力并调用单份读取端点。
+
+缺少或无效 token 返回 `401`；无权返回 `403`；无效 path／body 返回 `400`；请求 UUID 跨项目冲突或项目未配置时区返回稳定 `409`。lineage、时区 revision 或重叠隐私阻断是已提交的 `blocked` 业务结果，使用 `200` 返回原因码。Backend 检测到返回合同漂移、数据库或 bridge 异常时返回 `503`。错误响应不回显 PostgreSQL 消息。服务器对所有响应设置 `Cache-Control: no-store`。
 
 ## 授权快照读取如何避免绕过发布来源
 
@@ -318,7 +336,7 @@ HTTP 只把数据库结果缩成稳定合同：可信快照返回 `200`、access
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-脚本会建立临时 PostgreSQL 16 容器，执行全部 migration、权限检查和 fixture。独立会话检查还会证明三层授权的重叠写入各只有一个成功、授权消费与撤权按事务顺序完成、管理上下文选择与撤权线性化、并发滚动发布等待基线事务，以及相同期望版本只能追加一个报告时区版本。v2 发布检查另会让发布等待到能力自然到期，并验证“发布先取得时区锁”和“配置先取得时区锁”两种顺序；单份读取和快照目录检查都覆盖“读取先于撤权”和“撤权先于读取”。随后脚本导出 `app_data`、`app_private` 与 migration 历史，恢复到第二个空库重跑检查。脚本结束后自动删除容器。
+脚本会建立临时 PostgreSQL 16 容器，执行全部 migration、权限检查和 fixture。独立会话检查还会证明三层授权的重叠写入各只有一个成功、授权消费与撤权按事务顺序完成、管理上下文选择与撤权线性化、并发滚动发布等待基线事务，以及相同期望版本只能追加一个报告时区版本。v2 发布与 runtime bridge 检查会让发布等待到能力自然到期，并验证“发布先取得时区锁”和“配置先取得时区锁”两种顺序；单份读取和快照目录检查都覆盖“读取先于撤权”和“撤权先于读取”。随后脚本导出 `app_data`、`app_private` 与 migration 历史，恢复到第二个空库重跑检查。脚本结束后自动删除容器。
 
 并发脚本会提交 synthetic 数据，这些行会进入后面的 dump；普通 fixture 虽然回滚，却会在恢复库再运行一次。新增测试时，两类文件必须使用不同的 synthetic UUID 前缀。若第一次 fixture 通过、恢复后的同一 fixture 报重复主键，先检查命名空间是否与某个并发脚本重叠。
 
