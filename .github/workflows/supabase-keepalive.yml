@@ -1,0 +1,76 @@
+name: Supabase keepalive
+
+on:
+  # Free projects can pause after 7 days. Five days leaves room for cron delays.
+  schedule:
+    - cron: '17 8 */5 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  keepalive:
+    name: Query Supabase Auth database
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_AUTH_TEST_URL: ${{ secrets.SUPABASE_AUTH_TEST_URL }}
+      SUPABASE_AUTH_TEST_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_AUTH_TEST_PUBLISHABLE_KEY }}
+      SUPABASE_AUTH_TEST_EMAIL: ${{ secrets.SUPABASE_AUTH_TEST_EMAIL }}
+      SUPABASE_AUTH_TEST_PASSWORD: ${{ secrets.SUPABASE_AUTH_TEST_PASSWORD }}
+    steps:
+      - name: Sign in the isolated test user
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          required_secrets=(
+            SUPABASE_AUTH_TEST_URL
+            SUPABASE_AUTH_TEST_PUBLISHABLE_KEY
+            SUPABASE_AUTH_TEST_EMAIL
+            SUPABASE_AUTH_TEST_PASSWORD
+          )
+          for secret_name in "${required_secrets[@]}"; do
+            if [[ -z "${!secret_name:-}" ]]; then
+              echo "::error title=Missing GitHub Secret::${secret_name} is not set."
+              exit 1
+            fi
+          done
+
+          case "${SUPABASE_AUTH_TEST_URL}" in
+            https://lwezxnjofwpfugvmxdmn.supabase.co | \
+              https://lwezxnjofwpfugvmxdmn.supabase.co/)
+              ;;
+            *)
+              echo "::error title=Unexpected Supabase project::The URL must target tongxingzhe-auth-test."
+              exit 1
+              ;;
+          esac
+
+          request_body=$(jq -nc \
+            --arg email "${SUPABASE_AUTH_TEST_EMAIL}" \
+            --arg password "${SUPABASE_AUTH_TEST_PASSWORD}" \
+            '{email: $email, password: $password}')
+
+          response=$(curl \
+            --silent \
+            --show-error \
+            --fail-with-body \
+            --connect-timeout 10 \
+            --max-time 30 \
+            --request POST \
+            --header "apikey: ${SUPABASE_AUTH_TEST_PUBLISHABLE_KEY}" \
+            --header 'Content-Type: application/json' \
+            --data "${request_body}" \
+            "${SUPABASE_AUTH_TEST_URL%/}/auth/v1/token?grant_type=password")
+
+          if ! jq -e \
+            '(.access_token | type == "string" and length > 0) and
+             (.user.id | type == "string" and length > 0)' \
+            >/dev/null <<<"${response}"; then
+            echo "::error title=Unexpected Supabase response::Authentication succeeded without the expected session fields."
+            exit 1
+          fi
+
+          echo "Supabase Auth database activity completed successfully."
