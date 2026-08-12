@@ -227,6 +227,8 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 `0031_trusted_management_report_release.sql` 提供无时区、无截止时间参数的私有发布 v2。函数在组织／项目／发布能力、请求、项目时区和报告 lineage 锁全部取得后重新授权，以该数据库时间选择准确的时区 revision 并调用既有受保护快照发布。独立不可变表保存最小授权和 revision provenance；旧 v1 快照、缺失 provenance 或 revision 变化都在生成候选报告前失败关闭。runtime role 仍不能执行发布或读取证据。
 
+`0032_authorized_management_report_snapshot_read.sql` 提供只有内部用户、项目和快照 ID 的私有读取入口。函数固定检查 `view_anonymous_analytics`，只返回属于请求项目且由成功 v2 发布记录准确指向的不可变 `protected_report`。每次已授权尝试在同一事务中追加不含报告格值的不可变访问事件；未知与跨项目快照统一为 `not_found`，legacy provenance 失败关闭。runtime 与 PUBLIC 不能读取新表或执行新函数。
+
 普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。全部 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，验证问卷发布、指标兼容、个人与机构活动关系、对象匿名化、管理授权写入与撤权、项目报告时区和管理报告 lineage 的并发不变量。Docker wrapper 会按文件名排序并自动复制、执行这些脚本。检查脚本只使用 synthetic 数据，并要求显式 `DATABASE_URL`。
 
-并发脚本的 synthetic 数据会提交，并进入随后生成的 `pg_dump`。普通 fixture 会回滚，但会在恢复库再执行一次。因此并发脚本和 fixture 必须使用不同的主键命名空间；否则第一次 fixture 会通过，恢复后的第二次 fixture 会因重复主键失败。
+普通 fixture 会回滚，独立并发脚本会提交 synthetic 数据；并发数据还会进入 dump，并在恢复库中与全部 fixture 再次相遇。因此两类测试必须使用不同的 synthetic UUID 前缀，且 fixture 的数量断言应限定到自己的用户或项目。若测试只在 dump/restore 后失败，先检查 UUID 命名空间与全表计数，不要把持久并发行当成产品缺陷。
