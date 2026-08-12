@@ -143,6 +143,97 @@ test("HTTP personal project creation returns the new trusted context", async () 
   assert.equal(body.current_context.project.name, "校园推广");
 });
 
+test("HTTP management snapshot route waits for the committed store result", async () => {
+  const projectId = "33333333-3333-4333-8333-333333333333";
+  const snapshotId = "88888888-8888-4888-8888-888888888888";
+  const accessEventId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  let finishRead: (() => void) | undefined;
+  const readGate = new Promise<void>((resolve) => {finishRead = resolve;});
+  const server = createBackendServer({
+    identityVerifier: {
+      verify: async () => ({issuer: "issuer", subject: "subject"}),
+    },
+    contextStore: {
+      loadOrCreate: async () => {
+        throw new Error("personal context must not authorize management read");
+      },
+    },
+    managementReportSnapshotStore: {
+      read: async (identity, receivedProjectId, receivedSnapshotId) => {
+        assert.deepEqual(identity, {issuer: "issuer", subject: "subject"});
+        assert.equal(receivedProjectId, projectId);
+        assert.equal(receivedSnapshotId, snapshotId);
+        await readGate;
+        return {
+          status: "completed",
+          accessEventId,
+          requestedSnapshotId: snapshotId,
+          resolvedSnapshotId: snapshotId,
+          protectedReport: {cells: []},
+        };
+      },
+    },
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  test.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+
+  let responseSettled = false;
+  const responsePromise = fetch(
+    `http://127.0.0.1:${address.port}/v1/projects/${projectId}/management-report-snapshots/${snapshotId}`,
+    {headers: {authorization: "Bearer token"}},
+  ).then((response) => {
+    responseSettled = true;
+    return response;
+  });
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(responseSettled, false);
+
+  finishRead?.();
+  const response = await responsePromise;
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.deepEqual(await response.json(), {
+    access_event_id: accessEventId,
+    snapshot_id: snapshotId,
+    report: {cells: []},
+  });
+});
+
+test("HTTP management snapshot route rejects query fields and missing store", async () => {
+  const projectId = "33333333-3333-4333-8333-333333333333";
+  const snapshotId = "88888888-8888-4888-8888-888888888888";
+  const server = createBackendServer({
+    identityVerifier: {
+      verify: async () => ({issuer: "issuer", subject: "subject"}),
+    },
+    contextStore: {
+      loadOrCreate: async () => {
+        throw new Error("context is not expected");
+      },
+    },
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  test.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+  const endpoint =
+    `http://127.0.0.1:${address.port}/v1/projects/${projectId}/management-report-snapshots/${snapshotId}`;
+
+  const queryResponse = await fetch(`${endpoint}?from_utc=2030-01-01`);
+  assert.equal(queryResponse.status, 400);
+  assert.deepEqual(await queryResponse.json(), {
+    error: {code: "invalid_management_report_snapshot_request"},
+  });
+
+  const unavailableResponse = await fetch(endpoint, {
+    headers: {authorization: "Bearer token"},
+  });
+  assert.equal(unavailableResponse.status, 503);
+  assert.deepEqual(await unavailableResponse.json(), {
+    error: {code: "management_report_snapshot_unavailable"},
+  });
+});
+
 test("HTTP region resolution returns a trusted canonical match", async () => {
   const server = createBackendServer({
     identityVerifier: {

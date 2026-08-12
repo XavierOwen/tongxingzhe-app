@@ -12,6 +12,7 @@ import { PostgresPromotionTargetStore } from "./promotion-targets.js";
 import { PostgresTargetInstitutionRelationshipStore } from "./target-institution-relationships.js";
 import { PostgresPersonalActionPlanStore } from "./personal-action-plans.js";
 import { PostgresPersonalActionReminderStore } from "./personal-action-reminders.js";
+import { PostgresManagementReportSnapshotStore } from "./management-report-snapshots.js";
 
 const databaseUrl = requireEnvironment("DATABASE_URL");
 const authIssuer = requireEnvironment("AUTH_ISSUER");
@@ -59,6 +60,12 @@ const personalActionPlanStore = new PostgresPersonalActionPlanStore(
 const personalActionReminderStore = new PostgresPersonalActionReminderStore(
   async (text, values) => pool.query(text, [...values]),
 );
+// A direct pool query is intentional: PostgreSQL commits its implicit
+// transaction before this promise resolves and before the HTTP response starts.
+const managementReportSnapshotStore =
+  new PostgresManagementReportSnapshotStore(
+    async (text, values) => pool.query(text, [...values]),
+  );
 const server = createBackendServer({
   identityVerifier,
   contextStore,
@@ -72,6 +79,7 @@ const server = createBackendServer({
   targetInstitutionRelationshipStore,
   personalActionPlanStore,
   personalActionReminderStore,
+  managementReportSnapshotStore,
 });
 
 server.listen(port, "0.0.0.0");
