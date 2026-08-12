@@ -9,6 +9,8 @@ import '../features/contact_journal/contact_journal.dart';
 import '../foundation/runtime_values.dart';
 import '../identity/identity_session.dart';
 import '../identity/supabase/supabase_identity_session.dart';
+import '../management_reports/http_management_report_gateway.dart';
+import '../management_reports/management_report_gateway.dart';
 import '../platform/platform_capabilities.dart';
 import '../plans/http_personal_action_plan_gateway.dart';
 import '../plans/personal_action_plan.dart';
@@ -59,6 +61,7 @@ final class AppDependencies {
     this.promotionTargetGatewayBuilder,
     this.personalActionPlanGatewayBuilder,
     this.personalActionReminderGatewayBuilder,
+    this.managementReportGatewayBuilder,
     this.reminderSchedulerBuilder = productionReminderNotificationScheduler,
     this.offlinePiiSecureStore,
     this.legacyDemoAccess,
@@ -86,6 +89,7 @@ final class AppDependencies {
       personalActionPlanGatewayBuilder: productionPersonalActionPlanGateway,
       personalActionReminderGatewayBuilder:
           productionPersonalActionReminderGateway,
+      managementReportGatewayBuilder: productionManagementReportGateway,
       offlinePiiSecureStore: secureStore,
     );
   }
@@ -111,6 +115,8 @@ final class AppDependencies {
   personalActionPlanGatewayBuilder;
   final PersonalActionReminderGateway Function(IdentitySession)?
   personalActionReminderGatewayBuilder;
+  final ManagementReportGateway Function(IdentitySession)?
+  managementReportGatewayBuilder;
   final ReminderNotificationScheduler Function(AppPlatform)
   reminderSchedulerBuilder;
   final SecureValueStore? offlinePiiSecureStore;
@@ -129,6 +135,7 @@ final class AppDependencies {
     PromotionTargetGateway? promotionTargetGateway;
     PersonalActionPlanGateway? personalActionPlanGateway;
     PersonalActionReminderGateway? personalActionReminderGateway;
+    ManagementReportGateway? managementReportGateway;
     ReminderNotificationScheduler? reminderNotificationScheduler;
     PrivateSessionDataGuard? privateSessionDataGuard;
     OfflinePiiVault? offlinePiiVault;
@@ -219,6 +226,9 @@ final class AppDependencies {
         offlinePiiVault: offlinePiiVault,
       );
       await appSession.start();
+      managementReportGateway =
+          managementReportGatewayBuilder?.call(identitySession) ??
+          const DeferredManagementReportGateway();
       final remoteTargetGateway =
           promotionTargetGatewayBuilder?.call(identitySession) ??
           const DeferredPromotionTargetGateway();
@@ -314,6 +324,7 @@ final class AppDependencies {
         promotionTargetGateway: promotionTargetGateway,
         personalActionPlanGateway: personalActionPlanGateway,
         personalActionReminderGateway: personalActionReminderGateway,
+        managementReportGateway: managementReportGateway,
         deviceReminderPreferenceStore: DriftDeviceReminderPreferenceStore(
           database,
         ),
@@ -330,6 +341,7 @@ final class AppDependencies {
       await promotionTargetGateway?.close();
       await personalActionPlanGateway?.close();
       await personalActionReminderGateway?.close();
+      await managementReportGateway?.close();
       await privateSessionDataGuard?.close();
       await reminderNotificationScheduler?.close();
       await appSession?.close();
@@ -371,6 +383,7 @@ final class AppStartupReady extends AppStartupResult {
     required this.promotionTargetGateway,
     required this.personalActionPlanGateway,
     required this.personalActionReminderGateway,
+    required this.managementReportGateway,
     required this.deviceReminderPreferenceStore,
     required this.reminderNotificationScheduler,
     required this.privateSessionDataGuard,
@@ -394,6 +407,7 @@ final class AppStartupReady extends AppStartupResult {
   final PromotionTargetGateway promotionTargetGateway;
   final PersonalActionPlanGateway personalActionPlanGateway;
   final PersonalActionReminderGateway personalActionReminderGateway;
+  final ManagementReportGateway managementReportGateway;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
   final ReminderNotificationScheduler reminderNotificationScheduler;
   final PrivateSessionDataGuard privateSessionDataGuard;

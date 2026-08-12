@@ -14,6 +14,7 @@ import '../features/contact_revision/contact_revision_screen.dart';
 import '../foundation/runtime_values.dart';
 import '../identity/identity_session.dart';
 import '../l10n/app_strings.dart';
+import '../management_reports/management_report_gateway.dart';
 import '../plans/personal_action_plan.dart';
 import '../reminders/personal_action_reminder.dart';
 import '../questionnaires/questionnaire_contract.dart';
@@ -69,6 +70,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
   PromotionTargetGateway? _promotionTargetGateway;
   PersonalActionPlanGateway? _personalActionPlanGateway;
   PersonalActionReminderGateway? _personalActionReminderGateway;
+  ManagementReportGateway? _managementReportGateway;
   ReminderNotificationScheduler? _reminderNotificationScheduler;
   PrivateSessionDataGuard? _privateSessionDataGuard;
 
@@ -91,6 +93,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       :final promotionTargetGateway,
       :final personalActionPlanGateway,
       :final personalActionReminderGateway,
+      :final managementReportGateway,
       :final reminderNotificationScheduler,
       :final privateSessionDataGuard,
     )) {
@@ -104,6 +107,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       _promotionTargetGateway = promotionTargetGateway;
       _personalActionPlanGateway = personalActionPlanGateway;
       _personalActionReminderGateway = personalActionReminderGateway;
+      _managementReportGateway = managementReportGateway;
       _reminderNotificationScheduler = reminderNotificationScheduler;
       _privateSessionDataGuard = privateSessionDataGuard;
     }
@@ -121,6 +125,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
     unawaited(_promotionTargetGateway?.close());
     unawaited(_personalActionPlanGateway?.close());
     unawaited(_personalActionReminderGateway?.close());
+    unawaited(_managementReportGateway?.close());
     unawaited(_privateSessionDataGuard?.close());
     unawaited(_reminderNotificationScheduler?.close());
     _controller?.dispose();
@@ -156,6 +161,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
             :final promotionTargetGateway,
             :final personalActionPlanGateway,
             :final personalActionReminderGateway,
+            :final managementReportGateway,
             :final deviceReminderPreferenceStore,
             :final reminderNotificationScheduler,
             :final idGenerator,
@@ -176,6 +182,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
               promotionTargetGateway: promotionTargetGateway,
               personalActionPlanGateway: personalActionPlanGateway,
               personalActionReminderGateway: personalActionReminderGateway,
+              managementReportGateway: managementReportGateway,
               deviceReminderPreferenceStore: deviceReminderPreferenceStore,
               reminderNotificationScheduler: reminderNotificationScheduler,
               idGenerator: idGenerator,
@@ -208,6 +215,7 @@ class _ReadyApp extends StatefulWidget {
     required this.promotionTargetGateway,
     required this.personalActionPlanGateway,
     required this.personalActionReminderGateway,
+    required this.managementReportGateway,
     required this.deviceReminderPreferenceStore,
     required this.reminderNotificationScheduler,
     required this.idGenerator,
@@ -230,6 +238,7 @@ class _ReadyApp extends StatefulWidget {
   final PromotionTargetGateway promotionTargetGateway;
   final PersonalActionPlanGateway personalActionPlanGateway;
   final PersonalActionReminderGateway personalActionReminderGateway;
+  final ManagementReportGateway managementReportGateway;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
   final ReminderNotificationScheduler reminderNotificationScheduler;
   final IdGenerator idGenerator;
@@ -319,6 +328,7 @@ final class _ReadyAppState extends State<_ReadyApp> {
         promotionTargetGateway: widget.promotionTargetGateway,
         personalActionPlanGateway: widget.personalActionPlanGateway,
         personalActionReminderGateway: widget.personalActionReminderGateway,
+        managementReportGateway: widget.managementReportGateway,
         deviceReminderPreferenceStore: widget.deviceReminderPreferenceStore,
         reminderNotificationScheduler: widget.reminderNotificationScheduler,
         idGenerator: widget.idGenerator,

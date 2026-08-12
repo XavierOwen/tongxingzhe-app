@@ -18,7 +18,9 @@ import '../features/reminders/personal_action_reminder_panel.dart';
 import '../features/questionnaire_admin/questionnaire_admin_screen.dart';
 import '../features/targets/promotion_target_directory_page.dart';
 import '../features/contact_metrics/personal_contact_overview.dart';
+import '../features/management_reports/management_report_browser.dart';
 import '../l10n/app_strings.dart';
+import '../management_reports/management_report_gateway.dart';
 import '../plans/personal_action_plan.dart';
 import '../reminders/personal_action_reminder.dart';
 import '../questionnaires/questionnaire_administration.dart';
@@ -49,6 +51,7 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.promotionTargetGateway,
     required this.personalActionPlanGateway,
     required this.personalActionReminderGateway,
+    required this.managementReportGateway,
     required this.deviceReminderPreferenceStore,
     required this.reminderNotificationScheduler,
     required this.idGenerator,
@@ -73,6 +76,7 @@ final class ProductionHomeShell extends StatefulWidget {
   final PromotionTargetGateway promotionTargetGateway;
   final PersonalActionPlanGateway personalActionPlanGateway;
   final PersonalActionReminderGateway personalActionReminderGateway;
+  final ManagementReportGateway managementReportGateway;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
   final ReminderNotificationScheduler reminderNotificationScheduler;
   final IdGenerator idGenerator;
@@ -237,13 +241,20 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
           'manage_assigned_target_relations',
         ),
       ),
-      _PersonalSummaryPage(
-        controller: widget.controller,
-        period: PersonalSummaryPeriod.recentSevenDays,
-        snapshot: homeState.recentSevenDays,
-        isLoading: homeState.isLoading,
-        loadFailed: homeState.loadFailed,
-        personalPlanPanel: null,
+      _AnalysisPage(
+        text: strings,
+        personalSummary: _PersonalSummaryPage(
+          controller: widget.controller,
+          period: PersonalSummaryPeriod.recentSevenDays,
+          snapshot: homeState.recentSevenDays,
+          isLoading: homeState.isLoading,
+          loadFailed: homeState.loadFailed,
+          personalPlanPanel: null,
+        ),
+        managementReports: ManagementReportBrowser(
+          text: strings,
+          gateway: widget.managementReportGateway,
+        ),
       ),
     ];
 
@@ -521,6 +532,67 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
     return first.appUserId == second.appUserId &&
         first.workspace.id == second.workspace.id &&
         first.project.id == second.project.id;
+  }
+}
+
+final class _AnalysisPage extends StatefulWidget {
+  const _AnalysisPage({
+    required this.text,
+    required this.personalSummary,
+    required this.managementReports,
+  });
+
+  final AppStrings text;
+  final Widget personalSummary;
+  final Widget managementReports;
+
+  @override
+  State<_AnalysisPage> createState() => _AnalysisPageState();
+}
+
+final class _AnalysisPageState extends State<_AnalysisPage> {
+  var _showManagementReports = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ChoiceChip(
+                  key: const ValueKey('personal-analysis-view'),
+                  label: Text(widget.text.t('recentSevenDays')),
+                  selected: !_showManagementReports,
+                  onSelected: (_) => setState(() {
+                    _showManagementReports = false;
+                  }),
+                ),
+                ChoiceChip(
+                  key: const ValueKey('management-report-view'),
+                  label: Text(widget.text.t('managementReportTitle')),
+                  selected: _showManagementReports,
+                  onSelected: (_) => setState(() {
+                    _showManagementReports = true;
+                  }),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Expanded(
+          child: _showManagementReports
+              ? widget.managementReports
+              : widget.personalSummary,
+        ),
+      ],
+    );
   }
 }
 
