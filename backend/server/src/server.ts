@@ -65,6 +65,10 @@ import {
   type ManagementReportSnapshotStore,
 } from "./management-report-snapshots.js";
 import {
+  listManagementReportSnapshotDirectory,
+  type ManagementReportSnapshotDirectoryStore,
+} from "./management-report-snapshot-directory.js";
+import {
   authenticateManagementAnalysisContext,
   loadManagementAnalysisContextForIdentity,
   selectManagementAnalysisContextForIdentity,
@@ -86,6 +90,8 @@ export interface BackendServerDependencies
   readonly personalActionPlanStore?: PersonalActionPlanStore;
   readonly personalActionReminderStore?: PersonalActionReminderStore;
   readonly managementReportSnapshotStore?: ManagementReportSnapshotStore;
+  readonly managementReportSnapshotDirectoryStore?:
+    ManagementReportSnapshotDirectoryStore;
   readonly managementAnalysisContextStore?: ManagementAnalysisContextStore;
 }
 
@@ -154,6 +160,30 @@ export function createBackendServer(
       } catch (error) {
         writeBodyError(response, error);
       }
+      return;
+    }
+
+    const managementReportSnapshotDirectoryMatch = requestUrl.pathname.match(
+      /^\/v1\/projects\/([^/]+)\/management-report-snapshots$/,
+    );
+    if (
+      request.method === "GET" &&
+      managementReportSnapshotDirectoryMatch !== null
+    ) {
+      const result = await listManagementReportSnapshotDirectory(
+        {
+          authorization: request.headers.authorization,
+          projectId: managementReportSnapshotDirectoryMatch[1] ?? "",
+          hasQuery: requestUrl.search.length > 0,
+          hasBody: requestDeclaresBody(request.headers),
+        },
+        {
+          identityVerifier: dependencies.identityVerifier,
+          directoryStore: dependencies.managementReportSnapshotDirectoryStore,
+        },
+      );
+      response.statusCode = result.status;
+      response.end(JSON.stringify(result.body));
       return;
     }
 

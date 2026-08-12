@@ -233,6 +233,8 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 `0034_management_analysis_contexts.sql` 提供独立于个人 session 的管理分析项目发现与选择。列表只返回当前完整授权链含 `view_anonymous_analytics` 的组织项目。选择在同一事务中消费 `0030` 解析器，并保存组织成员、项目成员和 grant 的精确证据；撤权或以新关系重新加入后旧选择不会复活。runtime 只能执行两个窄函数，不能直接读取选择或授权表。
 
-普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。全部 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，验证问卷发布、指标兼容、个人与机构活动关系、对象匿名化、管理授权写入与撤权、管理上下文选择、项目报告时区和管理报告 lineage 的并发不变量。Docker wrapper 会按文件名排序并自动复制、执行这些脚本。检查脚本只使用 synthetic 数据，并要求显式 `DATABASE_URL`。
+`0035_management_report_snapshot_directory.sql` 提供按显式项目列出可信 v2 管理报告快照的只读目录。数据库在同一事务中重新检查完整 `view_anonymous_analytics` 授权链，只返回至多 20 项固定元数据，并按数据截至时间、发布时间和快照 ID 降序排列。每次成功访问都追加一条不可变目录审计；审计保存精确授权证据和返回数量，但不保存快照 ID、报告元数据或格值。runtime 只能执行一个窄 bridge。目录不判断“当前”或“最新有效”，也不提供筛选、分页或任意历史查询。
+
+普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。全部 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，验证问卷发布、指标兼容、个人与机构活动关系、对象匿名化、管理授权写入与撤权、管理上下文选择、快照目录访问、项目报告时区和管理报告 lineage 的并发不变量。Docker wrapper 会按文件名排序并自动复制、执行这些脚本。检查脚本只使用 synthetic 数据，并要求显式 `DATABASE_URL`。
 
 普通 fixture 会回滚，独立并发脚本会提交 synthetic 数据；并发数据还会进入 dump，并在恢复库中与全部 fixture 再次相遇。因此两类测试必须使用不同的 synthetic UUID 前缀，且 fixture 的数量断言应限定到自己的用户或项目。若测试只在 dump/restore 后失败，先检查 UUID 命名空间与全表计数，不要把持久并发行当成产品缺陷。
