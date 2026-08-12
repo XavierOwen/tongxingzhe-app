@@ -60,6 +60,10 @@ import {
   savePersonalActionReminder,
   type PersonalActionReminderStore,
 } from "./personal-action-reminders.js";
+import {
+  readManagementReportSnapshot,
+  type ManagementReportSnapshotStore,
+} from "./management-report-snapshots.js";
 
 export interface BackendServerDependencies
   extends SessionContextHttpDependencies {
@@ -75,6 +79,7 @@ export interface BackendServerDependencies
     TargetInstitutionRelationshipStore;
   readonly personalActionPlanStore?: PersonalActionPlanStore;
   readonly personalActionReminderStore?: PersonalActionReminderStore;
+  readonly managementReportSnapshotStore?: ManagementReportSnapshotStore;
 }
 
 export function createBackendServer(
@@ -88,6 +93,41 @@ export function createBackendServer(
     if (request.method === "GET" && request.url === "/healthz") {
       response.statusCode = 200;
       response.end(JSON.stringify({ status: "ok" }));
+      return;
+    }
+
+    const managementReportSnapshotMatch = requestUrl.pathname.match(
+      /^\/v1\/projects\/([^/]+)\/management-report-snapshots\/([^/]+)$/,
+    );
+    if (
+      request.method === "GET" &&
+      managementReportSnapshotMatch !== null
+    ) {
+      if (requestUrl.search.length > 0) {
+        response.statusCode = 400;
+        response.end(JSON.stringify({
+          error: {code: "invalid_management_report_snapshot_request"},
+        }));
+        return;
+      }
+      if (dependencies.managementReportSnapshotStore === undefined) {
+        response.statusCode = 503;
+        response.end(JSON.stringify({
+          error: {code: "management_report_snapshot_unavailable"},
+        }));
+        return;
+      }
+      const result = await readManagementReportSnapshot(
+        request.headers.authorization,
+        managementReportSnapshotMatch[1] ?? "",
+        managementReportSnapshotMatch[2] ?? "",
+        {
+          identityVerifier: dependencies.identityVerifier,
+          snapshotStore: dependencies.managementReportSnapshotStore,
+        },
+      );
+      response.statusCode = result.status;
+      response.end(JSON.stringify(result.body));
       return;
     }
 

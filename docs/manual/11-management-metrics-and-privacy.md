@@ -2,7 +2,7 @@
 
 个人分析和管理分析处理不同的信任边界。个人页可以立即显示本人设备上的事实，并说明哪些接触尚未同步。管理分析只能使用后端已接受的数据，还必须先降低小群体披露风险。
 
-当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定、不可变受保护快照、项目报告时区版本历史、管理报告能力授权、可信发布 v2，以及带最小访问审计的私有授权快照读取。它仍没有生产成员管理入口、管理 HTTP 端点，也没有向 runtime role 授予查看或发布团队汇总的权限。
+当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定、不可变受保护快照、项目报告时区版本历史、管理报告能力授权、可信发布 v2、带最小访问审计的授权快照读取，以及窄 HTTPS 读取端点。它仍没有生产成员管理、组织项目发现、报告发布端点或 Flutter 管理分析页面。
 
 ## 先确定统计单位
 
@@ -65,7 +65,7 @@ M = 单一推广者的最大贡献数
 
 Dart 测试验证 `MetricResult` 和固定顺序。PostgreSQL fixture 把相同贡献送入 [`protect_management_contact_session_grid_v1`](../../backend/database/migrations/0023_management_contact_session_privacy.sql)，核对相同的显示状态和值。
 
-SQL 函数位于 `app_private` schema。`tongxingzhe_runtime` 没有 schema 使用权或函数执行权。可信发布 v2 已在同一私有 schema 中组合这些政策，但生产 HTTP 和读取入口尚未建立，Backend 仍不能把测试基础直接接成管理端点。
+隐私政策 SQL 位于 `app_private` schema。`tongxingzhe_runtime` 没有 schema 使用权或政策函数执行权。可信发布 v2 在同一私有 schema 中组合这些政策；生产 Backend 只能通过 `0033` 的窄 `app_data` bridge 读取已经发布的受保护快照，不能直接执行政策或动态报告。
 
 ## 固定报告请求为什么只有两个字段
 
@@ -90,7 +90,7 @@ management-report:contact_sessions_by_channel_two_periods:v1
 
 这个指纹用于审计和对账。它不是密码、token 或匿名化手段，也不授权任何查询。
 
-审计信封只保存请求者内部 ID、项目 ID、报告 ID 与版本、查询指纹、UTC 请求时间和结果状态。它不保存报表格值、贡献者数量、最大贡献值或隐藏的精确值。可信发布 v2 使用同样的最小化原则，并另存当次授权关系、能力 grant、时区 revision 和底层快照关联。`0032` 又增加私有快照访问审计，但当前仍没有生产 HTTP 读取或发布入口。
+审计信封只保存请求者内部 ID、项目 ID、报告 ID 与版本、查询指纹、UTC 请求时间和结果状态。它不保存报表格值、贡献者数量、最大贡献值或隐藏的精确值。可信发布 v2 使用同样的最小化原则，并另存当次授权关系、能力 grant、时区 revision 和底层快照关联。`0032` 增加私有快照访问审计，`0033` 的生产读取端点复用该审计；报告发布仍没有 HTTP 入口。
 
 TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../backend/database/fixtures/shared/management_report_requests_v1.csv)。fixture 包含有效请求、未知报告、未知版本，以及客户端伪造项目、时区、日期、维度、筛选和导出字段的负向场景。
 
@@ -180,7 +180,7 @@ TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../
 
 当前 v1 把固定 `report_version` 和 `query_fingerprint` 作为计算合同身份。渠道接触场次报告不读取问卷兼容映射，也不读取区域视图，所以这两项在本报告中不适用。未来报告一旦依赖问卷或区域版本，必须把对应版本写入 protected document 并发布新报告版本，不能沿用当前身份。
 
-历史 v1 发布和读取函数仍没有 runtime 权限。`0031` 的私有 v2 已把 `0030` 授权、`0029` 时区 revision 和历史 `6G` 发布函数接在同一事务中。未来 HTTP gateway 仍必须先从认证 token 解析内部用户，再调用受控的服务层；不能获得 `app_private` 的通用执行权。
+历史 v1 发布和读取函数仍没有 runtime 权限。`0031` 的私有 v2 已把 `0030` 授权、`0029` 时区 revision 和历史 `6G` 发布函数接在同一事务中。`0033` 的 HTTP gateway 先验证认证 token，再由窄 bridge 映射内部用户；runtime 始终没有 `app_private` 的通用执行权。
 
 ## 项目报告时区如何保存和生效
 
@@ -208,7 +208,7 @@ TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../
 
 第一版只有两个管理报告能力：
 
-- `view_anonymous_analytics` 允许未来的受保护读取入口查看匿名管理分析；
+- `view_anonymous_analytics` 允许受保护读取入口查看匿名管理分析；
 - `release_management_reports` 允许私有可信发布入口尝试建立正式报告。
 
 两项能力互不包含。项目管理员角色、组织所有者角色、当前项目选择和登录账号都不是替代凭证。发布入口若以后还要在响应中返回报告内容，必须同时检查发布与查看能力。
@@ -217,7 +217,7 @@ TypeScript 与 PostgreSQL 都读取 [`management_report_requests_v1.csv`](../../
 
 “在同一事务中消费”是安全要求，不是性能建议。解析器与成员／能力撤权使用相同的 transaction lock。若受保护操作先取得锁，撤权会等该操作提交；若撤权先提交，后来的解析会看见结束边界并失败。调用方若先解析、提交事务，再在另一个事务执行报告操作，就会重新制造检查与使用之间的空窗。
 
-Flutter 不能读这些表，`tongxingzhe_runtime` 也不能执行解析器。可信发布 v2 在同一事务中消费授权证据；组织邀请、生产授予与撤销、角色组合、权限变更审计和受保护报告端点仍须由后续 Slice 实现。
+Flutter 不能读这些表，`tongxingzhe_runtime` 也不能执行解析器。可信发布 v2 在同一事务中消费发布授权；`0033` 的窄读取 bridge 在同一 statement 中消费查看授权。组织邀请、生产授予与撤销、角色组合、权限变更审计和组织项目上下文仍须由后续 Slice 实现。
 
 ## 可信发布 v2 如何组合三条私有合同
 
@@ -241,9 +241,25 @@ Flutter 不能读这些表，`tongxingzhe_runtime` 也不能执行解析器。�
 
 每次已授权调用都会生成新的访问事件。审计保存授权关系、固定查看能力 grant、请求和命中的快照、报告身份、数据库访问时间、状态和原因码，但不保存 `protected_report`、`cells`、贡献者、触达人数、兴趣度或抑制前数值。事件只可追加；插入 trigger 会重新核对授权区间、项目归属和精确 v2 provenance，普通 `UPDATE` 与 `DELETE` 都被拒绝。未授权调用不写访问事件，因为整个 statement 以 `42501` 失败。
 
-读取与撤权使用同一组 transaction lock。读取先取得锁时，撤权等到报告和审计提交；撤权先取得锁时，读取等待后看见失效边界，以 `42501` 结束且不写审计。这里还有一个必须由未来服务层遵守的边界：如果调用方在显式外层事务中取得报告后主动 `ROLLBACK`，访问事件也会回滚。因此生产 runtime bridge 必须把读取作为单条自动提交操作，或在数据库事务成功提交以后才把报告交给客户端。
+读取与撤权使用同一组 transaction lock。读取先取得锁时，撤权等到报告和审计提交；撤权先取得锁时，读取等待后看见失效边界，以 `42501` 结束且不写审计。如果调用方在显式外层事务中取得报告后主动 `ROLLBACK`，访问事件也会回滚。因此 `0033` production store 把读取作为单条自动提交操作，并在数据库调用成功以后才把报告交给客户端。
 
-`0032` 仍位于 `app_private`。`tongxingzhe_runtime` 和 `PUBLIC` 对函数与审计表都没有权限；没有生产 session context、HTTP、Flutter、缓存、导出、报告列表或 latest 查询。不能把这个私有函数直接授予通用 runtime role。
+`0032` 仍位于 `app_private`。`tongxingzhe_runtime` 和 `PUBLIC` 对函数与审计表都没有权限。唯一生产入口是 `0033` 位于 `app_data` 的四参数 bridge；没有 organization session context、Flutter、缓存、导出、报告列表或 latest 查询。不能把私有函数直接授予通用 runtime role。
+
+## Backend 如何在提交审计后交付报告
+
+生产端点是：
+
+```text
+GET /v1/projects/:projectId/management-report-snapshots/:snapshotId
+```
+
+路径只含项目和快照 UUID，不接受 body 或 query。调用者不能提交内部用户、capability、报告 ID、时区、截止时间或筛选。显式项目范围不是授权证据，也不表示 Backend 已建立当前组织上下文；数据库仍按 6I 的组织成员、项目成员和查看能力逐层检查。
+
+Backend 先验证 Bearer token，得到可信 issuer 和 subject。[`0033_runtime_authorized_management_report_snapshot_read.sql`](../../backend/database/migrations/0033_runtime_authorized_management_report_snapshot_read.sql) 的 `SECURITY DEFINER` bridge 只把它们映射到既有活动内部用户，不调用个人上下文 bootstrap。未知身份不会创建 app user、workspace 或 project。bridge 随后调用 6K 三参数读取；runtime 只获得这个 bridge 的 `EXECUTE`，不能使用 `app_private` 或直接读快照和审计。
+
+production adapter 使用一次参数化 `pool.query`。PostgreSQL 完成该 statement 的隐式事务后，query promise 才解决；HTTP handler 在 `await` 之后才写响应。提交后若网络中断，访问审计仍然保留。客户端重试会重新授权并追加另一条访问事件，不复用前一次 event ID。
+
+HTTP 只把数据库结果缩成稳定合同：可信快照返回 `200`、access event ID、快照 ID 和受保护报告；未知与跨项目统一返回 `404`；同项目 legacy provenance 返回 `409`；无权返回 `403`。错误响应没有报告格、授权关系、外部 subject 或 PostgreSQL 错误文字。服务器对全部响应设置 `Cache-Control: no-store`。
 
 ## 在 Docker 中验证
 
@@ -282,9 +298,9 @@ Docker 的安装、输出解释和失败容器保留方法见[第 9 章](09-loca
 - 组织邀请、项目分配、角色组合，以及生产成员和能力授予／撤销入口；
 - 权限变更审计和可信的当前组织／项目上下文；
 - 跨时区 revision 后重新建立基线或更正版的隐私判定；
-- 生产 session context、窄 runtime bridge，以及提交成功后才交付报告的 HTTP 读取端点；
+- 组织项目发现、可信 organization session context 和项目选择持久化；
 - 可按历史 revision 水位重新执行的 `as-of` 投影、更正版取代关系和删除流程；
 - 父子区域与重叠区域报告的重识别演练；
-- 只接收抑制后结果的 API、缓存、图表和导出。
+- 读取现有快照以外的动态 API、缓存、图表和导出。
 
 在这些前置条件完成前，不得删除个人指标 SQL 的 `app_user_id` 条件来制造团队汇总，也不得向 `tongxingzhe_runtime` 授予私有政策函数的执行权。

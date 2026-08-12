@@ -1,6 +1,6 @@
 # Backend 身份上下文、项目与接触同步
 
-这个模块提供可信 session context、个人推广项目选择／创建、规范区域解析、问卷管理发布、问卷指标兼容审计、同步 command 和 change feed。所有端点都先验证 Supabase access token，再取得内部用户和允许访问的项目。同步协议处理已提交接触、追加更正、带原因作废、跨设备更正的自动合并与显式解决、未获回应尝试和账号私有草稿；设备专用草稿不会离开本机。
+这个模块提供可信个人 session context、个人推广项目选择／创建、规范区域解析、问卷管理发布、问卷指标兼容审计、同步 command、change feed，以及受保护管理报告快照读取。所有受保护端点都先验证 Supabase access token。大部分业务使用可信个人上下文；管理快照端点把显式项目交给数据库的组织成员授权链重新验证。同步协议处理已提交接触、追加更正、带原因作废、跨设备更正的自动合并与显式解决、未获回应尝试和账号私有草稿；设备专用草稿不会离开本机。
 
 客户端不能提交 `app_user_id`、role 或 capability。上传会把 payload 的 workspace 和 project 与可信上下文交叉核对。拉取也会核对 query 范围，并只接受属于同一范围的不透明 cursor。响应不返回外部 subject、email 或 token。所有受保护入口共用严格的 bearer header 解析器，防止端点之间出现不同的认证规则。
 
@@ -86,6 +86,25 @@ Backend 不接受客户端提供的用户、空间或项目范围。每次请求
 
 提醒时间和周目标可独立使用。提醒 API 只接受 `0` 至 `1439` 的当地分钟、expected revision 和 mutation ID。它不接受设备 ID、设备权限或 UTC 触发时刻。系统通知 opt-in 只保存在各设备本地，新设备不会因同步提醒时间而自动启用。
 
+## 管理报告快照读取合同
+
+`GET /v1/projects/:projectId/management-report-snapshots/:snapshotId` 只接受两个 UUID path 参数。它不接受 body、query、报告 ID、时区、截止时间、筛选、capability 或内部用户 ID。这个显式项目范围不等于“当前组织上下文”；组织项目列表与选择尚未开放。
+
+Backend 验证 Bearer token 后，把 issuer、subject、project ID 和 snapshot ID 交给 [`0033_runtime_authorized_management_report_snapshot_read.sql`](../database/migrations/0033_runtime_authorized_management_report_snapshot_read.sql)。数据库只映射既有活动用户，再由 6K 重新检查组织成员、项目成员和 `view_anonymous_analytics`。个人 `SessionContext.capabilities` 不参与管理报告授权。
+
+production store 只执行一条参数化 `pool.query`。PostgreSQL 提交这条 statement 的隐式事务后 promise 才解决；handler 随后才写 HTTP 响应。不要把 store query 放进可由上层稍后回滚的显式事务。若提交后网络中断，访问审计会保留；客户端重试会追加新的访问事件。
+
+| 结果 | HTTP 合同 |
+| --- | --- |
+| 可信 v2 快照 | `200`，返回 `access_event_id`、`snapshot_id` 和受保护报告 |
+| 未知或跨项目快照 | `404 management_report_snapshot_not_found` |
+| 同项目 legacy／不可信 provenance | `409 management_report_snapshot_untrusted` |
+| 无权 | `403 management_report_snapshot_forbidden` |
+| token 缺失或无效 | `401 unauthenticated` |
+| bridge、数据库或返回合同异常 | `503 management_report_snapshot_unavailable` |
+
+所有响应使用 `Cache-Control: no-store`。错误不包含报告格、授权关系、external subject 或 PostgreSQL 消息。runtime 只能执行 `app_data` bridge，不能使用 `app_private`。
+
 ## 配置
 
 Backend 需要以下环境变量：
@@ -124,6 +143,8 @@ npm run check
 私人周计划见 [`0021_personal_action_plans.sql`](../database/migrations/0021_personal_action_plans.sql)。对应 fixture 验证固定 IANA 时区、任意周起始日、夏令时周期、下一周期版本、重放、revision 冲突、跨用户拒绝和恢复库权限。
 
 私人每日提醒见 [`0022_personal_action_reminders.sql`](../database/migrations/0022_personal_action_reminders.sql)。对应 fixture 验证提醒可独立创建、当地分钟边界、清除、幂等重放、revision 冲突、跨用户拒绝和恢复库权限。
+
+管理报告快照的生产 bridge 见 [`0033_runtime_authorized_management_report_snapshot_read.sql`](../database/migrations/0033_runtime_authorized_management_report_snapshot_read.sql)。对应 fixture 验证既有身份映射、未知身份不 bootstrap、view/release 能力分离、跨项目隐藏、legacy provenance 和逐次访问审计。
 
 ## 运行
 
