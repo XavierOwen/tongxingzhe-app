@@ -6,16 +6,28 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repository_root="$(cd "${script_dir}/.." && pwd)"
 postgres_image="${POSTGRES_TEST_IMAGE:-postgres:16}"
 container_name="${POSTGRES_TEST_CONTAINER:-tongxingzhe-postgres-test-$$}"
+restore_container_name="${container_name}-restore"
 keep_failed_container="${KEEP_POSTGRES_TEST_CONTAINER:-0}"
 test_database='tongxingzhe_test'
 restore_database='tongxingzhe_restore'
+upgrade_database='tongxingzhe_region_upgrade'
 database_url="postgresql://postgres:postgres@127.0.0.1:5432/${test_database}"
-restore_url="postgresql://postgres:postgres@127.0.0.1:5432/${restore_database}"
+upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${upgrade_database}"
 container_started=0
+restore_container_started=0
+restore_temporary_directory=''
 
 cleanup() {
   local status=$?
   trap - EXIT
+  if [[ "${restore_container_started}" -eq 1 ]]; then
+    if [[ "${status}" -ne 0 && "${keep_failed_container}" == '1' ]]; then
+      echo "恢复测试失败；保留独立容器：${restore_container_name}" >&2
+    else
+      docker rm --force "${restore_container_name}" >/dev/null 2>&1 || true
+      echo "已删除恢复 PostgreSQL 容器：${restore_container_name}"
+    fi
+  fi
   if [[ "${container_started}" -eq 1 ]]; then
     if [[ "${status}" -ne 0 && "${keep_failed_container}" == '1' ]]; then
       echo "PostgreSQL 测试失败；保留容器：${container_name}" >&2
@@ -26,6 +38,10 @@ cleanup() {
       docker rm --force "${container_name}" >/dev/null 2>&1 || true
       echo "已删除临时 PostgreSQL 容器：${container_name}"
     fi
+  fi
+  if [[ -n "${restore_temporary_directory}" ]]; then
+    rm -f "${restore_temporary_directory}/tongxingzhe.dump"
+    rmdir "${restore_temporary_directory}"
   fi
   exit "${status}"
 }
@@ -43,6 +59,10 @@ fi
 
 if docker container inspect "${container_name}" >/dev/null 2>&1; then
   echo "容器名已存在，测试没有开始：${container_name}" >&2
+  exit 1
+fi
+if docker container inspect "${restore_container_name}" >/dev/null 2>&1; then
+  echo "恢复容器名已存在，测试没有开始：${restore_container_name}" >&2
   exit 1
 fi
 
@@ -92,6 +112,9 @@ docker cp \
 docker cp \
   "${repository_root}/tool/postgres_migrate.sh" \
   "${container_name}:/workspace/tool/postgres_migrate.sh"
+docker cp \
+  "${repository_root}/tool/postgres_prepare_restore_roles.sh" \
+  "${container_name}:/workspace/tool/postgres_prepare_restore_roles.sh"
 concurrency_script_count=0
 while IFS= read -r concurrency_script; do
   tool_file="$(basename "${concurrency_script}")"
@@ -113,18 +136,24 @@ if [[ "${concurrency_script_count}" -eq 0 ]]; then
 fi
 
 run_migrations() {
+  run_migrations_for_url "${database_url}"
+}
+
+run_migrations_for_url() {
+  local target_database_url="$1"
   docker exec \
-    --env DATABASE_URL="${database_url}" \
+    --env DATABASE_URL="${target_database_url}" \
     "${container_name}" \
     bash /workspace/tool/postgres_migrate.sh
 }
 
 run_sql_files() {
-  local database_name="$1"
-  local local_directory="$2"
-  local container_directory="$3"
-  local file_pattern="$4"
-  local label="$5"
+  local target_container="$1"
+  local database_name="$2"
+  local local_directory="$3"
+  local container_directory="$4"
+  local file_pattern="$5"
+  local label="$6"
   local file_count=0
   local source_file
   local file_name
@@ -134,7 +163,7 @@ run_sql_files() {
     echo "${label}：${file_name}"
     docker exec \
       --workdir /workspace \
-      "${container_name}" \
+      "${target_container}" \
       psql \
       -U postgres \
       -d "${database_name}" \
@@ -158,6 +187,84 @@ run_sql_files() {
   fi
 }
 
+echo '验证 0038 会把已有 current 区域树迁移为冻结发布版本。'
+docker exec "${container_name}" createdb \
+  -U postgres \
+  "${upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/pre-region-freeze-migrations && \
+   cp /workspace/backend/database/migrations/00{01..37}_*.sql \
+     /tmp/pre-region-freeze-migrations/ && \
+   test \"\$(find /tmp/pre-region-freeze-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 37"
+docker exec \
+  --env DATABASE_URL="${upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/pre-region-freeze-migrations \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh \
+  >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    INSERT INTO app_data.canonical_region_versions (
+      region_id, tree_version, parent_region_id, canonical_name, kind
+    ) VALUES
+      ('upgrade-country', 'upgrade-existing-v1', NULL, 'Country', 'country'),
+      ('upgrade-city', 'upgrade-existing-v1', 'upgrade-country', 'City', 'city'),
+      ('upgrade-venue', 'upgrade-existing-v1', 'upgrade-city', 'Venue', 'venue');
+    INSERT INTO app_data.canonical_region_tree_releases (
+      tree_version, published_at_utc, is_current
+    ) VALUES ('upgrade-existing-v1', '2029-01-02T03:04:05Z', true);
+    INSERT INTO app_data.canonical_region_boundaries (
+      boundary_id, region_id, tree_version, boundary
+    ) VALUES (
+      'upgrade-boundary', 'upgrade-venue', 'upgrade-existing-v1',
+      polygon '((-87.61,41.78),(-87.58,41.78),(-87.58,41.80),(-87.61,41.80))'
+    );
+  " \
+  >/dev/null
+run_migrations_for_url "${upgrade_url}" >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$upgrade\$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM app_data.canonical_region_tree_releases
+        WHERE tree_version = 'upgrade-existing-v1'
+          AND lifecycle_state = 'published'
+          AND published_at_utc = '2029-01-02T03:04:05Z'
+          AND is_current
+          AND content_fingerprint ~ '^[0-9a-f]{64}\$'
+      ) OR NOT EXISTS (
+        SELECT 1
+        FROM app_data.canonical_region_tree_current_selections
+        WHERE selected_tree_version = 'upgrade-existing-v1'
+          AND previous_tree_version IS NULL
+          AND selected_at_utc IS NULL
+          AND recorded_at_utc IS NOT NULL
+          AND selection_source = 'migration_baseline'
+      ) OR NOT EXISTS (
+        SELECT 1
+        FROM app_data.resolve_canonical_region(41.7897, -87.5997)
+        WHERE tree_version = 'upgrade-existing-v1'
+          AND region_id = 'upgrade-venue'
+      ) THEN
+        RAISE EXCEPTION 'existing canonical region release was not frozen';
+      END IF;
+    END
+    \$upgrade\$;
+  " \
+  >/dev/null
+echo '已有区域树升级为冻结发布版本：通过。'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 
@@ -166,6 +273,7 @@ run_migrations
 
 echo '验证 schema、函数与最小权限。'
 run_sql_files \
+  "${container_name}" \
   "${test_database}" \
   "${repository_root}/backend/database/checks" \
   '/workspace/backend/database/checks' \
@@ -174,6 +282,7 @@ run_sql_files \
 
 echo '运行可回滚 synthetic fixture。'
 run_sql_files \
+  "${container_name}" \
   "${test_database}" \
   "${repository_root}/backend/database/fixtures" \
   '/workspace/backend/database/fixtures' \
@@ -216,7 +325,7 @@ if docker exec \
 fi
 echo 'checksum 漂移已按预期被拒绝。'
 
-echo '导出 schema，恢复到第二个空库，再重跑检查与 fixture。'
+echo '导出 schema，恢复到没有源 cluster roles 的独立 PostgreSQL 容器。'
 docker exec "${container_name}" pg_dump \
   "${database_url}" \
   --format=custom \
@@ -224,21 +333,74 @@ docker exec "${container_name}" pg_dump \
   --schema=app_private \
   --schema=app_migrations \
   --file=/tmp/tongxingzhe.dump
-docker exec "${container_name}" createdb \
-  -U postgres \
-  "${restore_database}"
-docker exec "${container_name}" pg_restore \
-  --dbname="${restore_url}" \
+restore_temporary_directory="$(mktemp -d)"
+docker cp \
+  "${container_name}:/tmp/tongxingzhe.dump" \
+  "${restore_temporary_directory}/tongxingzhe.dump"
+docker run \
+  --detach \
+  --rm \
+  --name "${restore_container_name}" \
+  --env POSTGRES_USER=postgres \
+  --env POSTGRES_PASSWORD=postgres \
+  --env POSTGRES_DB="${restore_database}" \
+  --health-cmd="pg_isready -U postgres -d ${restore_database}" \
+  --health-interval=1s \
+  --health-timeout=5s \
+  --health-retries=30 \
+  "${postgres_image}" >/dev/null
+restore_container_started=1
+restore_health_status='starting'
+for _ in $(seq 1 45); do
+  restore_health_status="$(
+    docker container inspect \
+      --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}starting{{end}}' \
+      "${restore_container_name}"
+  )"
+  if [[ "${restore_health_status}" == 'healthy' ]]; then
+    break
+  fi
+  if [[ "${restore_health_status}" == 'unhealthy' ]]; then
+    echo '恢复 PostgreSQL 容器健康检查失败。' >&2
+    docker logs "${restore_container_name}" >&2
+    exit 1
+  fi
+  sleep 1
+done
+if [[ "${restore_health_status}" != 'healthy' ]]; then
+  echo '等待恢复 PostgreSQL 容器就绪超时。' >&2
+  docker logs "${restore_container_name}" >&2
+  exit 1
+fi
+docker exec "${restore_container_name}" mkdir -p /workspace/backend /workspace/tool
+docker cp \
+  "${repository_root}/backend/database" \
+  "${restore_container_name}:/workspace/backend/database"
+docker cp \
+  "${repository_root}/tool/postgres_prepare_restore_roles.sh" \
+  "${restore_container_name}:/workspace/tool/postgres_prepare_restore_roles.sh"
+docker cp \
+  "${restore_temporary_directory}/tongxingzhe.dump" \
+  "${restore_container_name}:/tmp/tongxingzhe.dump"
+docker exec \
+  --env DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5432/${restore_database}" \
+  "${restore_container_name}" \
+  bash /workspace/tool/postgres_prepare_restore_roles.sh
+docker exec "${restore_container_name}" pg_restore \
+  --username=postgres \
+  --dbname="${restore_database}" \
   --exit-on-error \
   /tmp/tongxingzhe.dump
 
 run_sql_files \
+  "${restore_container_name}" \
   "${restore_database}" \
   "${repository_root}/backend/database/checks" \
   '/workspace/backend/database/checks' \
   'verify_*.sql' \
   'restore check'
 run_sql_files \
+  "${restore_container_name}" \
   "${restore_database}" \
   "${repository_root}/backend/database/fixtures" \
   '/workspace/backend/database/fixtures' \

@@ -17,9 +17,8 @@
 ├── Flutter 与 Dart：格式、静态分析、SQLite、Widget、同步和工具测试
 ├── Node.js：Backend TypeScript 检查和 HTTP／命令合同测试
 └── Docker daemon
-    └── 临时 PostgreSQL 16 容器
-        ├── tongxingzhe_test：空库重建、权限、fixture、并发
-        └── tongxingzhe_restore：dump 后恢复验证
+    ├── 源 PostgreSQL 16 容器：空库重建、权限、fixture、并发和 dump
+    └── 恢复 PostgreSQL 16 容器：预置 cluster roles 后恢复和复验
 
 GitHub Actions
 ├── 重复 Flutter、Backend 和 PostgreSQL 检查
@@ -33,10 +32,10 @@ Flutter 的设备数据库是 Drift／SQLite。它随 `flutter test` 在测试�
 | 名词 | 含义 | 本项目中的例子 |
 | --- | --- | --- |
 | image（镜像） | 建立容器的只读模板 | `postgres:16` |
-| container（容器） | 从镜像启动的隔离进程和文件系统 | `tongxingzhe-postgres-test-进程号` |
+| container（容器） | 从镜像启动的隔离进程和文件系统 | `tongxingzhe-postgres-test-进程号` 及其 `-restore` 容器 |
 | database（数据库） | PostgreSQL 进程中的一个逻辑数据库 | `tongxingzhe_test` |
 
-删除临时容器会删除其中的两个测试数据库。这是预期行为。测试只使用 synthetic 数据，脚本不挂载持久 volume，也不公开 PostgreSQL 端口。
+删除两个临时容器会删除其中的测试数据库。这是预期行为。测试只使用 synthetic 数据，脚本不挂载持久 volume，也不公开 PostgreSQL 端口。
 
 ### 2.2 PostgreSQL 容器与 Supabase 本地栈不是同一项
 
@@ -326,8 +325,9 @@ flutter run \
 6. 运行全部 schema／权限 check 和可回滚 synthetic fixture；
 7. 按文件名运行全部正式并发脚本，用独立数据库会话检查锁、撤权和唯一性合同；
 8. 修改 migration 的临时副本，确认 runner 拒绝 checksum 漂移；
-9. 执行 `pg_dump`，恢复到第二个空库，再运行全部 check 和 fixture；
-10. 成功后删除临时容器。
+9. 执行 `pg_dump`，启动没有源 cluster roles 的第二个 PostgreSQL 容器；
+10. 用 `postgres_prepare_restore_roles.sh` 建立 archive 所需的无登录角色，恢复后再运行全部 check 和 fixture；
+11. 成功后删除两个临时容器和本机临时 dump。
 
 这组步骤同时验证新安装、重复部署、并发、最小权限和备份恢复。fixture 内使用 `BEGIN` 与 `ROLLBACK`，不会把合成业务资料留在测试库。
 
@@ -451,7 +451,7 @@ export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_t
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-不需要手工建立数据库、用户或测试资料。脚本会启动隔离的 PostgreSQL 16 容器，自动执行 migration、check、fixture、并发和 dump／restore，然后删除容器。输出中应依次看到：
+不需要手工建立数据库、用户或测试资料。脚本会启动两个隔离的 PostgreSQL 16 容器，自动执行 migration、check、fixture、并发和跨 cluster dump／restore，然后删除容器。输出中应依次看到：
 
 ```text
 check：verify_management_report_snapshot_directory.sql

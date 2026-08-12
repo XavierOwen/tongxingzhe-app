@@ -2,7 +2,7 @@
 
 个人分析和管理分析处理不同的信任边界。个人页可以立即显示本人设备上的事实，并说明哪些接触尚未同步。管理分析只能使用后端已接受的数据，还必须先降低小群体披露风险。
 
-当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定、不可变受保护快照、项目报告时区版本历史、管理报告能力授权、可信发布 v2、管理项目发现与选择、可信快照目录、窄 HTTPS 发布与读取端点、Flutter 只读管理报告页面，以及私有区域隐私威胁探针。它仍没有生产成员管理、自动发布调度或生产区域报告。
+当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定、不可变受保护快照、项目报告时区版本历史、管理报告能力授权、可信发布 v2、管理项目发现与选择、可信快照目录、窄 HTTPS 发布与读取端点、Flutter 只读管理报告页面、私有区域隐私威胁探针，以及已发布规范区域树和边界版本的冻结。它仍没有生产成员管理、自动发布调度或生产区域报告。
 
 ## 先确定统计单位
 
@@ -401,6 +401,44 @@ flutter test test/features/contact_metrics/
 ```
 
 第一次使用 Docker 时，先按[第 9 章](09-local-docker-and-ci-testing.md)确认 Docker Desktop 已启动。测试通过只说明当前列出的 synthetic 攻击被稳定识别；它不能证明真实世界中不存在其他外部资料或跨账号组合方式。
+
+## 已发布区域树如何冻结
+
+区域隐私探针依赖一个稳定的区域版本。Slice 6R 给规范树版本增加 `draft` 和 `published` 生命周期。迁移会把已有 release 解释为已发布版本，并保留原节点、边界、接触区域 ID 和解析版本。旧 schema 没有 current 的实际选择时间；迁移基线会把实际选择时间保留为空，只记录迁移观察时间，不能把旧发布时间当作选择时间。新版本先作为草稿编辑，草稿可以增加或修改节点和边界。
+
+私有函数 [`publish_canonical_region_tree_v1`](../../backend/database/migrations/0038_freeze_published_canonical_region_trees.sql) 只接受完整的 `tree_version` 和是否成为 `current` 的标志。它在一个事务中检查严格单父、无环、城市父链和至少一条可解析边界，再按 `C` 排序、固定浮点输出和规范 JSON 编码计算内容指纹。指纹覆盖节点父级、名称、`kind`、`attributes` 和边界，不随 session 的浮点输出设置变化。相同内容重算得到相同指纹，任一内容变化都会改变指纹。
+
+发布成功后，属于该 `tree_version` 的节点和边界不能直接插入、修改或删除。release 的版本、发布时间和内容指纹不能改写。草稿编辑和发布共用一把事务锁；发布开始验证后，新编辑只能等待，并在发布提交后因版本已冻结而失败。`current` 是解析器读取的单值投影，不是对旧事实的覆盖。发布新 current 时，旧版本只失去投影位置，节点、边界和发布时间仍可读；数据库同时追加一条选择记录，保存顺序、前后版本、选择时间、记录时间、来源和内容指纹。唯一 current 约束、发布锁和重复版本的稳定 `55000` 冲突一起防止双 current、交叉指纹或半个发布。
+
+运行时仍只执行 [`resolve_canonical_region`](../../backend/database/migrations/0007_canonical_region_resolution.sql)。`tongxingzhe_runtime` 不能直接读取或写入区域表、release 选择历史，也不能执行私有发布函数。发布函数由无登录、无成员的专用数据库角色执行；trigger 检查这个函数身份，维护会话不能用 session 设置绕过冻结。区域维护身份应在发布前先完成 check、fixture 和并发验证。
+
+### 如何验证冻结合同
+
+没有 PostgreSQL 时，从仓库根目录运行完整 Docker 套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+第一次使用 Docker 时先启动 Docker Desktop。脚本不要求本机安装 `psql`，也不连接 production 数据库。
+
+脚本会启动临时 PostgreSQL 16 容器，从空库运行 migration 两次，第二次检查历史 checksum。它按文件名运行所有 check、fixture 和并发脚本，所以会包含 [`verify_frozen_canonical_region_tree_releases.sql`](../../backend/database/checks/verify_frozen_canonical_region_tree_releases.sql)、[`0038_frozen_canonical_region_tree_releases.sql`](../../backend/database/fixtures/0038_frozen_canonical_region_tree_releases.sql) 和 [`verify_canonical_region_tree_release_concurrency.sh`](../../tool/verify_canonical_region_tree_release_concurrency.sh)。脚本还会导出 schema，在没有源 cluster roles 的第二个 PostgreSQL 容器中运行 [`postgres_prepare_restore_roles.sh`](../../tool/postgres_prepare_restore_roles.sh)，再恢复 archive 并重复 check 和 fixture。成功后脚本自动删除两个容器。
+
+如果只需要在已经运行的测试库检查这一票，先运行 migration，再按以下顺序执行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_frozen_canonical_region_tree_releases.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0038_frozen_canonical_region_tree_releases.sql
+./tool/verify_canonical_region_tree_release_concurrency.sh
+```
+
+这些文件只使用 synthetic 数据。并发脚本会提交自己的测试行，普通 fixture 会回滚；不要把测试库当作生产库，也不要把 Docker 通过写成真实维护者发布或六平台验收。
+
+冻结版本是 6S 地点 provenance 的前置条件，不是 provenance 本身。6S 仍需追加保存解析来源、原始坐标或可验证的跨版本映射。生产区域报告还必须另行确定完整网格、互补隐藏、授权、快照 lineage 和自己的重识别 fixture。本节不增加区域报告 API、管理 UI、缓存或导出。
 
 ## 当前证据不能证明什么
 
