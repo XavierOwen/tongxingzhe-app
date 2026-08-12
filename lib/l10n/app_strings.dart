@@ -310,6 +310,7 @@ const Map<String, Map<String, String>> _strings = {
     'managementReportNotFound': '这个报告已不存在。',
     'managementReportUntrusted': '报告来源无法验证。',
     'managementReportInvalidResponse': '管理报告服务返回了无效结果。',
+    'managementReportNotConfigured': '管理报告服务尚未配置。',
     'managementReportFailed': '管理报告暂时无法载入，请重试。',
     'managementReportRetry': '重试',
     'managementReportBackToDirectory': '返回报告目录',
@@ -1071,6 +1072,8 @@ const Map<String, Map<String, String>> _strings = {
     'managementReportUntrusted': 'The report source could not be verified.',
     'managementReportInvalidResponse':
         'The management report service returned an invalid response.',
+    'managementReportNotConfigured':
+        'The management report service is not configured.',
     'managementReportFailed':
         'The management report could not load. Retry the request.',
     'managementReportRetry': 'Retry',

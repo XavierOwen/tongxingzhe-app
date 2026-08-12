@@ -208,6 +208,35 @@ void main() {
   });
 
   test(
+    'a network failure while refreshing a 401 stays a network failure',
+    () async {
+      var requestCount = 0;
+      final identity = _signedInIdentity();
+      final gateway = HttpManagementReportGateway(
+        baseUri: Uri.parse('https://backend.example.test'),
+        identitySession: identity,
+        client: MockClient((request) async {
+          requestCount += 1;
+          identity.rejectNextAccessTokenWith = const IdentityFailure(
+            code: IdentityFailureCode.networkUnavailable,
+          );
+          return http.Response('', 401);
+        }),
+      );
+      addTearDown(gateway.close);
+
+      final result = await gateway.loadContext();
+
+      expect(
+        _rejectedCode(result),
+        ManagementReportFailureCode.networkUnavailable,
+      );
+      expect(requestCount, 1);
+      expect(identity.accessTokenForceRefreshValues, [false, true]);
+    },
+  );
+
+  test(
     'identity failures stay outside HTTP and retain stable categories',
     () async {
       for (final entry in <(IdentityFailureCode, ManagementReportFailureCode)>[
@@ -325,6 +354,10 @@ void main() {
       (_directorySnapshots(offsetTimestamp).first
               as Map<String, Object?>)['data_cutoff_utc'] =
           '2030-03-10T23:00:00.000-06:00';
+      final unknownTimeZone = _mutableJson(_directoryBody);
+      (_directorySnapshots(unknownTimeZone).first
+              as Map<String, Object?>)['reporting_time_zone'] =
+          'Mars/Olympus_Mons';
 
       for (final body in [
         unbounded,
@@ -332,6 +365,7 @@ void main() {
         unordered,
         foreign,
         offsetTimestamp,
+        unknownTimeZone,
       ]) {
         final result = await _listDirectoryBody(body);
         expect(

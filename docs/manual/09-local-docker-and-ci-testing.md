@@ -38,6 +38,14 @@ Flutter 的设备数据库是 Drift／SQLite。它随 `flutter test` 在测试�
 
 删除临时容器会删除其中的两个测试数据库。这是预期行为。测试只使用 synthetic 数据，脚本不挂载持久 volume，也不公开 PostgreSQL 端口。
 
+### 2.2 PostgreSQL 容器与 Supabase 本地栈不是同一项
+
+本章的自动 Docker 套件只启动 `postgres:16`。它验证 migration、SQL 权限、fixture、并发和备份恢复，不启动 Supabase Auth、Mailpit 或其他 Supabase 服务。
+
+普通 Flutter、Widget 和管理报告客户端改动不需要本地 Supabase 栈。只有改动或验证 Supabase 登录接线、注册确认邮件、密码恢复、会话回调、本地 Auth／JWKS 或 Mailpit 时，才需要 Supabase CLI 的本地 Docker 栈。当前仓库尚未把这套环境接入自动 runner；具体状态和替代验证见 [Supabase Auth 六平台 Spike](../spikes/supabase-auth-six-platform.md)。
+
+若没有实际运行本地 Supabase 或隔离 staging，不得把 fake 身份测试、PostgreSQL Docker 通过或 App build 写成“Supabase 认证集成已通过”。这些证据只能分别证明客户端状态、数据库合同或平台可编译。
+
 ## 3. 第一次准备开发电脑
 
 所有命令都从仓库根目录运行。先确认当前目录：

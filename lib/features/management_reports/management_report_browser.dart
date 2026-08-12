@@ -541,7 +541,7 @@ final class _WideReportGrid extends StatelessWidget {
         DataColumn(label: Text(text.t('managementReportLaterCompleteWeek'))),
       ],
       rows: [
-        for (final categoryKey in _managementReportCategories)
+        for (final categoryKey in managementReportCategoryKeys)
           DataRow(
             cells: [
               DataCell(Text(_categoryLabel(text, categoryKey))),
@@ -603,7 +603,8 @@ final class _FailurePanel extends StatelessWidget {
         'managementReportNetworkUnavailable',
       ManagementReportFailureCode.invalidResponse =>
         'managementReportInvalidResponse',
-      ManagementReportFailureCode.notConfigured ||
+      ManagementReportFailureCode.notConfigured =>
+        'managementReportNotConfigured',
       ManagementReportFailureCode.serverRejected => 'managementReportFailed',
     });
     return Padding(
@@ -664,14 +665,3 @@ String _categoryLabel(AppStrings text, String categoryKey) {
 }
 
 String _formatUtc(DateTime value) => value.toUtc().toIso8601String();
-
-const _managementReportCategories = [
-  'all',
-  'face_to_face',
-  'voice_call',
-  'video_call',
-  'instant_text',
-  'asynchronous_message',
-  'mixed',
-  'other_direct',
-];

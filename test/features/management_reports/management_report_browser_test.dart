@@ -131,6 +131,25 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('Backend 未配置时显示明确状态', (tester) async {
+    await tester.pumpWidget(
+      _app(
+        _Gateway(
+          contextResult: const ManagementReportRejected(
+            ManagementReportFailureCode.notConfigured,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('管理报告服务尚未配置。'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('management-report-retry')),
+      findsOneWidget,
+    );
+  });
 }
 
 Widget _app(_Gateway gateway, {TextScaler textScaler = TextScaler.noScaling}) =>

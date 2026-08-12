@@ -2,13 +2,16 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:timezone/data/latest_all.dart' as time_zone_data;
+import 'package:timezone/timezone.dart' as time_zone;
 
-import '../features/contact_journal/contact_models.dart';
 import '../identity/identity_session.dart';
 import 'management_report_gateway.dart';
 
 const _backendBaseUrl = String.fromEnvironment('BACKEND_BASE_URL');
 
+/// 正式入口只从构建配置取得 Backend 地址，并复用登录会话取得短期 bearer。
+/// 地址未配置时返回可显示的降级实现，不尝试访问网络。
 ManagementReportGateway productionManagementReportGateway(
   IdentitySession identitySession,
 ) {
@@ -22,6 +25,10 @@ ManagementReportGateway productionManagementReportGateway(
   );
 }
 
+/// 6M、6N、6L 的窄 HTTP adapter。
+///
+/// Backend 仍负责授权和隐私抑制；此类只提交显式项目/快照坐标，并把任何协议漂移
+/// 作为整份不可信响应拒绝。成功报告不会在本地持久化。
 final class HttpManagementReportGateway implements ManagementReportGateway {
   factory HttpManagementReportGateway({
     required Uri baseUri,
@@ -101,6 +108,7 @@ final class HttpManagementReportGateway implements ManagementReportGateway {
     required Future<http.Response> Function(IdentityAccessToken token) send,
     required T Function(Map<String, Object?> root) parse,
   }) async {
+    // 401 只允许强制刷新一次。第二次 401 或刷新失败都停止，避免认证重试循环。
     try {
       var access = await _identitySession.accessToken();
       if (access is! IdentitySuccess<IdentityAccessToken>) {
@@ -110,9 +118,7 @@ final class HttpManagementReportGateway implements ManagementReportGateway {
       if (response.statusCode == 401) {
         access = await _identitySession.accessToken(forceRefresh: true);
         if (access is! IdentitySuccess<IdentityAccessToken>) {
-          return const ManagementReportRejected(
-            ManagementReportFailureCode.unauthorized,
-          );
+          return ManagementReportRejected(_identityFailure(access));
         }
         response = await send(access.value).timeout(_timeout);
       }
@@ -198,6 +204,7 @@ List<ManagementReportSnapshotSummary> _parseSnapshotDirectory(
   Map<String, Object?> root,
   String requestedProjectId,
 ) {
+  // 目录排序是服务端合同的一部分；客户端只验证，不重排，也不推断第一项“最新”。
   _requireExactKeys(root, const ['access_event_id', 'project_id', 'snapshots']);
   _uuid(root['access_event_id']);
   if (_uuid(root['project_id']) != _uuid(requestedProjectId)) {
@@ -235,10 +242,7 @@ ManagementReportSnapshotSummary _parseSnapshotSummary(Object? value) {
   if (reportId != _fixedReportId || reportVersion != _fixedReportVersion) {
     throw const FormatException('snapshot report is unsupported');
   }
-  final timeZone = _nonEmptyString(root['reporting_time_zone']);
-  if (!_timeZonePattern.hasMatch(timeZone)) {
-    throw const FormatException('snapshot time zone is invalid');
-  }
+  final timeZone = _ianaTimeZone(root['reporting_time_zone']);
   final dataCutoffUtc = _utcTimestamp(root['data_cutoff_utc']);
   final releasedAtUtc = _utcTimestamp(root['released_at_utc']);
   if (releasedAtUtc.isBefore(dataCutoffUtc)) {
@@ -288,6 +292,7 @@ ProtectedManagementReport _parseProtectedReport(
   String requestedProjectId,
   ManagementReportSnapshotSummary summary,
 ) {
+  // 报告形状是 allowlist，不是通用分析 JSON。元数据或坐标有一项变化就拒绝整份。
   final root = _object(value);
   _requireExactKeys(root, const [
     'cells',
@@ -378,9 +383,8 @@ _parsePeriods(Object? value) {
     'reporting_time_zone',
   ]);
   final periodBoundaryId = _nonEmptyString(root['period_boundary_id']);
-  final reportingTimeZone = _nonEmptyString(root['reporting_time_zone']);
-  if (periodBoundaryId != _fixedPeriodBoundaryId ||
-      !_timeZonePattern.hasMatch(reportingTimeZone)) {
+  final reportingTimeZone = _ianaTimeZone(root['reporting_time_zone']);
+  if (periodBoundaryId != _fixedPeriodBoundaryId) {
     throw const FormatException('protected report period metadata is invalid');
   }
   final dataCutoffUtc = _utcTimestamp(root['data_cutoff_utc']);
@@ -422,7 +426,7 @@ ProtectedManagementReportCell _parseCell(Object? value, int expectedOrder) {
   if (root['cell_order'] != expectedOrder) {
     throw const FormatException('protected report cell order is invalid');
   }
-  final expectedPeriod = expectedOrder < 8
+  final expectedPeriod = expectedOrder < managementReportCategoryKeys.length
       ? ManagementReportPeriodKey.previous
       : ManagementReportPeriodKey.current;
   final periodKey = switch (_nonEmptyString(root['period_key'])) {
@@ -430,7 +434,9 @@ ProtectedManagementReportCell _parseCell(Object? value, int expectedOrder) {
     'current' => ManagementReportPeriodKey.current,
     _ => throw const FormatException('protected report period key is invalid'),
   };
-  final expectedCategory = _orderedCategoryKeys[expectedOrder % 8];
+  final expectedCategory =
+      managementReportCategoryKeys[expectedOrder %
+          managementReportCategoryKeys.length];
   final categoryKey = _nonEmptyString(root['category_key']);
   if (periodKey != expectedPeriod ||
       categoryKey != expectedCategory ||
@@ -447,6 +453,7 @@ ProtectedManagementReportCell _parseCell(Object? value, int expectedOrder) {
     ),
   };
   final valueCount = root['value_count'];
+  // suppressed 的 null 是隐私结果，不是缺失计数；客户端不能把它变成 0。
   if (privacyStatus == ManagementReportPrivacyStatus.displayed) {
     if (valueCount is! int || valueCount < 0) {
       throw const FormatException('displayed report cell needs a count');
@@ -531,6 +538,23 @@ DateTime _utcTimestamp(Object? value) {
   return parsed.toUtc();
 }
 
+String _ianaTimeZone(Object? value) {
+  final name = _nonEmptyString(value);
+  if (!_timeZonePattern.hasMatch(name)) {
+    throw const FormatException('time zone is invalid');
+  }
+  if (!_timeZonesInitialized) {
+    time_zone_data.initializeTimeZones();
+    _timeZonesInitialized = true;
+  }
+  try {
+    time_zone.getLocation(name);
+  } on time_zone.LocationNotFoundException {
+    throw const FormatException('time zone is unknown');
+  }
+  return name;
+}
+
 String _uuid(Object? value) {
   final text = _nonEmptyString(value);
   if (!_uuidPattern.hasMatch(text)) {
@@ -575,6 +599,7 @@ final _rfc3339Pattern = RegExp(
   r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$',
 );
 final _timeZonePattern = RegExp(r'^[A-Za-z0-9._+/-]+$');
+var _timeZonesInitialized = false;
 const _fixedReportId = 'contact_sessions_by_channel_two_periods';
 const _fixedReportVersion = 1;
 const _fixedMetricId = 'contact_sessions';
@@ -585,11 +610,4 @@ const _fixedQueryFingerprint =
 const _fixedPrivacyPolicy = 'management_contact_session_privacy_v1';
 const _fixedSourceScope = 'backend_accepted_contacts';
 const _fixedPeriodBoundaryId = 'iso_week_monday_v1';
-final _supportedCategoryKeys = {
-  'all',
-  ...ContactChannel.values.map((channel) => channel.storageValue),
-};
-final _orderedCategoryKeys = [
-  'all',
-  ...ContactChannel.values.map((channel) => channel.storageValue),
-];
+final _supportedCategoryKeys = managementReportCategoryKeys.toSet();

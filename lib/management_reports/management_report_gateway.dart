@@ -3,15 +3,22 @@
 /// 该接口不暴露 bearer token、授权关系或客户端隐私计算。每次调用都由远端
 /// 重新授权；实现也不得把管理报告写入离线缓存。
 abstract interface class ManagementReportGateway {
+  /// 重新授权并读取可用项目和已保存的管理导航选择。
   Future<ManagementReportResult<ManagementAnalysisContextSnapshot>>
   loadContext();
 
+  /// 把来自 [loadContext] 的项目 ID 保存为导航选择；选择本身不授予报告权限。
   Future<ManagementReportResult<ManagementAnalysisContextSnapshot>>
   selectContext(String projectId);
 
+  /// 重新授权并读取显式 [projectId] 的有界目录；返回顺序不代表“当前有效”。
   Future<ManagementReportResult<List<ManagementReportSnapshotSummary>>>
   listSnapshots(String projectId);
 
+  /// 重新授权并读取 [summary] 指定的报告。
+  ///
+  /// 6L 单份响应没有发布时间，因此实现必须把目录摘要与报告逐项对照，不能自行
+  /// 补造该时间。成功结果只存在于调用方内存，不得写入离线缓存。
   Future<ManagementReportResult<ManagementReportSnapshot>> readSnapshot({
     required String projectId,
     required ManagementReportSnapshotSummary summary,
@@ -19,6 +26,18 @@ abstract interface class ManagementReportGateway {
 
   Future<void> close();
 }
+
+/// 固定报告的协议坐标顺序。HTTP 解码和宽屏表格共同使用这一份定义，避免两边漂移。
+const managementReportCategoryKeys = <String>[
+  'all',
+  'face_to_face',
+  'voice_call',
+  'video_call',
+  'instant_text',
+  'asynchronous_message',
+  'mixed',
+  'other_direct',
+];
 
 enum ManagementReportFailureCode {
   notConfigured,
