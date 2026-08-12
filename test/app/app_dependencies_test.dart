@@ -7,6 +7,7 @@ import 'package:tongxingzhe_app/device/device_identity_store.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/legacy_demo/legacy_demo_dependencies.dart';
+import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
 import 'package:tongxingzhe_app/privacy/drift_offline_pii_lock_store.dart';
 import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
 import 'package:tongxingzhe_app/targets/promotion_target.dart';
@@ -84,6 +85,26 @@ void main() {
       'platform_capability_detection_failed',
     );
     expect(identity.isClosed, isTrue);
+  });
+
+  test('composition root 装配管理报告 gateway 并在后续启动失败时关闭', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final gateway = _TrackingManagementReportGateway();
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      managementReportGatewayBuilder: (_) => gateway,
+      reminderSchedulerBuilder: (_) => throw StateError('synthetic failure'),
+    );
+
+    final startup = await dependencies.start();
+
+    expect(startup, isA<AppStartupFailed>());
+    expect(gateway.closeCount, 1);
   });
 
   test('能力通过时 composition root 装配离线对象 gateway', () async {
@@ -220,4 +241,34 @@ final class _MemorySecureValueStore implements SecureValueStore {
 
   @override
   Future<void> write(String key, String value) async => values[key] = value;
+}
+
+final class _TrackingManagementReportGateway
+    implements ManagementReportGateway {
+  var closeCount = 0;
+
+  @override
+  Future<void> close() async => closeCount++;
+
+  @override
+  Future<ManagementReportResult<ManagementAnalysisContextSnapshot>>
+  loadContext() async =>
+      const ManagementReportRejected(ManagementReportFailureCode.notConfigured);
+
+  @override
+  Future<ManagementReportResult<List<ManagementReportSnapshotSummary>>>
+  listSnapshots(String projectId) async =>
+      const ManagementReportRejected(ManagementReportFailureCode.notConfigured);
+
+  @override
+  Future<ManagementReportResult<ManagementReportSnapshot>> readSnapshot({
+    required String projectId,
+    required ManagementReportSnapshotSummary summary,
+  }) async =>
+      const ManagementReportRejected(ManagementReportFailureCode.notConfigured);
+
+  @override
+  Future<ManagementReportResult<ManagementAnalysisContextSnapshot>>
+  selectContext(String projectId) async =>
+      const ManagementReportRejected(ManagementReportFailureCode.notConfigured);
 }

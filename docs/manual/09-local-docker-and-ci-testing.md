@@ -208,9 +208,32 @@ node --test backend/server/dist/test/personal-action-plans.test.js
 
 看到 `fixture：0021_personal_action_plans.sql` 表示脚本正在检查私人计划。该 fixture 会验证美国夏令时切换周只有 167 小时、后续设置在下一周期生效、边界采用半开区间、mutation 可安全重放，以及另一位用户不能读取计划。Docker 脚本还会在恢复库再次运行相同 fixture。
 
+### 5.4 验证 Flutter 管理报告浏览
+
+管理报告浏览页只消费已经交付的管理项目、快照目录和单份读取端点。开发页面或 HTTP adapter 时，先运行：
+
+```bash
+flutter test --no-pub \
+  test/management_reports/http_management_report_gateway_test.dart \
+  test/features/management_reports/management_report_browser_view_model_test.dart \
+  test/features/management_reports/management_report_browser_test.dart \
+  test/app/app_dependencies_test.dart \
+  test/app/tongxingzhe_app_test.dart
+```
+
+这组测试不需要启动 Docker。它用可控响应检查 Bearer token、`401` 单次刷新、严格报告合同、项目切换、迟到响应、320 px、200% 字号、键盘焦点和屏幕阅读器语义。
+
+如果改动只在 Flutter 层，提交前运行第 4 节的完整 Flutter 检查即可。若同时改动 6M、6N、6L 的 Backend store、PostgreSQL bridge、权限、访问审计或 fixture，则还必须运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+第一次使用 Docker 时，从第 6.1 节开始操作。Docker 套件证明数据库授权、最小访问审计、撤权并发和恢复后合同；Flutter synthetic 测试证明客户端状态与显示规则。两类证据不能互相替代。
+
 只读离线计划缓存复用现有 `db_app_settings`，没有修改 Drift schema，因此不需要生成新的 Drift snapshot。`drift_personal_planning_cache_test.dart` 在测试进程的内存 SQLite 中检查 scope 隔离、远端空值、损坏缓存、仅网络故障回退，以及 `401/403` 后清除。只修改这层缓存时不需要启动 Docker；改动 Backend 或 PostgreSQL 周期函数时仍必须运行 Docker 套件。
 
-### 5.4 验证同步提醒和逐设备通知开关
+### 5.5 验证同步提醒和逐设备通知开关
 
 提醒测试分四层。第一次接触项目时，可以按以下顺序运行：
 
@@ -240,7 +263,7 @@ fixture：0022_personal_action_reminders.sql
 
 `0022` fixture 会创建、读取、清除和重放提醒，并验证越界分钟、旧 revision 和跨用户读取都被拒绝。它不测试手机锁屏。系统权限弹窗、App 被终止后的实际触发、旅行换时区和 Android 厂商后台限制仍需真机测试。
 
-### 5.5 验证系统通知送达与旅行时区
+### 5.6 验证系统通知送达与旅行时区
 
 系统通知真机测试不使用 Docker。Docker 容器运行 PostgreSQL，不能模拟 Android、iOS 或 macOS 的通知中心、设备时区和 App 终止状态。
 

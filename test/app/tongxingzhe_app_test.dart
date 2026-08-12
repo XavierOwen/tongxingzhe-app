@@ -10,6 +10,7 @@ import 'package:tongxingzhe_app/device/device_time_zone.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
+import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
 import 'package:tongxingzhe_app/questionnaires/questionnaire_contract.dart';
 import 'package:tongxingzhe_app/regions/contact_region_resolver.dart';
 import 'package:tongxingzhe_app/regions/region_catalog.dart';
@@ -44,6 +45,8 @@ void main() {
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
+      managementReportGatewayBuilder: (_) =>
+          const _EmptyManagementReportGateway(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -58,6 +61,12 @@ void main() {
     expect(find.text('分析'), findsOneWidget);
     expect(find.text('记录接触'), findsOneWidget);
     expect(find.text('正式认证尚未配置'), findsNothing);
+
+    await tester.tap(find.text('分析'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('management-report-view')));
+    await tester.pumpAndSettle();
+    expect(find.text('没有可读取管理报告的项目。'), findsOneWidget);
   });
 
   testWidgets('项目菜单切换可信项目并采用该项目的问卷上下文', (tester) async {
@@ -756,6 +765,11 @@ void main() {
     expect(find.text('最近七日接触场次 1'), findsOneWidget);
     expect(find.text('最近七日触达人数 2'), findsOneWidget);
     expect(find.text('兴趣 3：1 场'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('视频通话：1 场'),
+      120,
+      scrollable: find.byType(Scrollable).last,
+    );
     expect(find.text('视频通话：1 场'), findsOneWidget);
     await tester.drag(find.byType(ListView), const Offset(0, -220));
     await tester.pumpAndSettle();
@@ -1105,6 +1119,35 @@ void main() {
     expect(find.text('这条接触来自一次较早的未接通尝试'), findsOneWidget);
     expect(find.textContaining('不会把尝试改写成接触'), findsOneWidget);
   });
+}
+
+final class _EmptyManagementReportGateway implements ManagementReportGateway {
+  const _EmptyManagementReportGateway();
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  Future<ManagementReportResult<ManagementAnalysisContextSnapshot>>
+  loadContext() async => ManagementReportSuccess(
+    ManagementAnalysisContextSnapshot(current: null, available: const []),
+  );
+
+  @override
+  Future<ManagementReportResult<List<ManagementReportSnapshotSummary>>>
+  listSnapshots(String projectId) async => const ManagementReportSuccess([]);
+
+  @override
+  Future<ManagementReportResult<ManagementReportSnapshot>> readSnapshot({
+    required String projectId,
+    required ManagementReportSnapshotSummary summary,
+  }) async =>
+      const ManagementReportRejected(ManagementReportFailureCode.notFound);
+
+  @override
+  Future<ManagementReportResult<ManagementAnalysisContextSnapshot>>
+  selectContext(String projectId) async =>
+      const ManagementReportRejected(ManagementReportFailureCode.unauthorized);
 }
 
 final class _SingleDatabaseFactory implements LocalDatabaseFactory {

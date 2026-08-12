@@ -2,7 +2,7 @@
 
 个人分析和管理分析处理不同的信任边界。个人页可以立即显示本人设备上的事实，并说明哪些接触尚未同步。管理分析只能使用后端已接受的数据，还必须先降低小群体披露风险。
 
-当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定、不可变受保护快照、项目报告时区版本历史、管理报告能力授权、可信发布 v2、管理项目发现与选择、可信快照目录、带最小访问审计的授权快照读取，以及窄 HTTPS 端点。它仍没有生产成员管理、报告发布端点或 Flutter 管理分析页面。
+当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定、不可变受保护快照、项目报告时区版本历史、管理报告能力授权、可信发布 v2、管理项目发现与选择、可信快照目录、带最小访问审计的授权快照读取、窄 HTTPS 端点，以及 Flutter 只读管理报告页面。它仍没有生产成员管理或报告发布端点。
 
 ## 先确定统计单位
 
@@ -243,7 +243,7 @@ Flutter 不能读这些表，`tongxingzhe_runtime` 也不能执行解析器。�
 
 读取与撤权使用同一组 transaction lock。读取先取得锁时，撤权等到报告和审计提交；撤权先取得锁时，读取等待后看见失效边界，以 `42501` 结束且不写审计。如果调用方在显式外层事务中取得报告后主动 `ROLLBACK`，访问事件也会回滚。因此 `0033` production store 把读取作为单条自动提交操作，并在数据库调用成功以后才把报告交给客户端。
 
-`0032` 仍位于 `app_private`。`tongxingzhe_runtime` 和 `PUBLIC` 对函数与审计表都没有权限。唯一单份报告读取入口是 `0033` 位于 `app_data` 的四参数 bridge；`0034` 的独立导航上下文不能读取报告。当前仍没有一般 organization session、Flutter 管理页、缓存、导出或 latest 查询。不能把私有函数直接授予通用 runtime role。
+`0032` 仍位于 `app_private`。`tongxingzhe_runtime` 和 `PUBLIC` 对函数与审计表都没有权限。唯一单份报告读取入口是 `0033` 位于 `app_data` 的四参数 bridge；`0034` 的独立导航上下文不能读取报告。当前仍没有一般 organization session、缓存、导出或 latest 查询。不能把私有函数直接授予通用 runtime role。
 
 ## 如何发现并选择管理分析项目
 
@@ -292,6 +292,24 @@ production adapter 使用一次参数化 `pool.query`。PostgreSQL 完成该 sta
 
 HTTP 只把数据库结果缩成稳定合同：可信快照返回 `200`、access event ID、快照 ID 和受保护报告；未知与跨项目统一返回 `404`；同项目 legacy provenance 返回 `409`；无权返回 `403`。错误响应没有报告格、授权关系、外部 subject 或 PostgreSQL 错误文字。服务器对全部响应设置 `Cache-Control: no-store`。
 
+## Flutter 如何浏览受保护报告
+
+“分析”页保留原有的个人最近七日事实，并增加“管理报告”视图。两个视图使用独立范围：个人视图继续读取个人 `SessionContext`，管理视图只读取 6M 的管理分析上下文。切换管理项目不会切换接触记录、问卷、私人计划或提醒所在的个人项目。
+
+管理视图按以下顺序工作：
+
+1. 调用 `GET /v1/management-analysis/context`。没有保存选择时，页面等待用户明确选择，不因列表只有一项而自动选择。
+2. 用户选择项目后调用 `PUT /v1/management-analysis/context`。页面立即清除旧项目的目录和详情，再等待服务端确认。
+3. 调用 6N 目录端点。空数组显示“没有可读取的管理报告”，不是错误。
+4. 用户选择目录项后，把完整目录摘要交给 6L 读取。单份响应没有发布时间，所以 Flutter 不补造该值；它还会核对快照 ID、报告版本、时区和截止时间与目录项一致。
+5. 页面只渲染服务端返回的 16 格。`displayed` 必须带非负整数；`suppressed` 必须带 `null`，页面显示“已隐藏”，不显示 `0`，也不运行客户端隐私算法。
+
+[`HttpManagementReportGateway`](../../lib/management_reports/http_management_report_gateway.dart) 每次请求前取得身份 access token。遇到 `401` 时，它只强制刷新并重试一次。`403`、`404`、`409`、网络失败和无效合同分别进入稳定页面状态。响应只存在于当前 Widget 内存；当前实现没有 Drift 表、文件缓存、通知内容或报告值日志。
+
+目录保留服务端顺序，但界面不把第一项称为“最新”“当前”或“有效”。当前数据模型没有更正版取代关系。用户离开详情后，键盘焦点回到刚才选择的目录项；选择另一项目后，旧项目的迟到响应会被 generation 检查丢弃。
+
+紧凑宽度和大字号使用逐期间列表，每格有独立的期间、渠道和值／隐藏状态语义。宽屏和正常字号使用三列表格。两种布局显示相同的服务端结果，不在客户端重排或聚合报告值。
+
 ## 在 Docker 中验证
 
 先启动 Docker Desktop。然后在仓库根目录运行：
@@ -309,6 +327,17 @@ HTTP 只把数据库结果缩成稳定合同：可信快照返回 `200`、access
 ```bash
 flutter test --no-pub test/features/contact_metrics/management_privacy_policy_test.dart
 ```
+
+只想验证 Flutter 管理报告浏览时运行：
+
+```bash
+flutter test --no-pub \
+  test/management_reports/http_management_report_gateway_test.dart \
+  test/features/management_reports/management_report_browser_view_model_test.dart \
+  test/features/management_reports/management_report_browser_test.dart
+```
+
+第一项固定身份 token、三条端点和严格 JSON 合同。第二项固定项目切换、迟到响应和重试状态。第三项固定 320 px、200% 字号、键盘焦点和屏幕阅读器语义。这些测试使用 synthetic HTTP 响应，不证明真实账号拥有报告权限，也不替代服务端的 PostgreSQL 授权与审计测试。
 
 只想验证 Backend 请求和期间合同时运行：
 
@@ -329,7 +358,6 @@ Docker 的安装、输出解释和失败容器保留方法见[第 9 章](09-loca
 - 组织邀请、项目分配、角色组合，以及生产成员和能力授予／撤销入口；
 - 权限变更审计和一般组织业务上下文；
 - 跨时区 revision 后重新建立基线或更正版的隐私判定；
-- Flutter 管理分析项目选择与当前导航展示；
 - 可按历史 revision 水位重新执行的 `as-of` 投影、更正版取代关系和删除流程；
 - 父子区域与重叠区域报告的重识别演练；
 - 快照目录与单份读取以外的动态 API、缓存、图表和导出。
