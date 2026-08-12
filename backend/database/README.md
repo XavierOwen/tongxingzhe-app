@@ -237,6 +237,8 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 `0036_runtime_trusted_management_report_release.sql` 是生产 Backend 唯一可执行的管理报告发布 bridge。它只接收已验证 token 的 issuer、subject、显式项目和请求幂等 UUID，并固定发布 `contact_sessions_by_channel_two_periods` v1。未知或停用身份不会 bootstrap 个人上下文。runtime 只能执行这个 `SECURITY DEFINER` 函数，仍不能进入 `app_private`、读取发布记录或接触事实。bridge 在同一 statement 中调用 `0031`，因此发布继续使用相同的授权、时区和 lineage 锁。
 
+`0037_management_region_privacy_probe.sql` 增加私有、fixture-first 的区域隐私威胁探针。它只接受固定 synthetic 候选形状，用类型化原因识别父子、其他查询集合或跨版本重叠、历史格变化、错误显示的小样本、互补恢复、外部已知事实、缺失原始来源或当前区域映射，以及把待解析或 `N/A` 当成区域格。输出没有坐标、贡献者或隐藏值。该 migration 不注册生产区域报告，也不向 runtime 或 Backend 开放函数。
+
 普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。全部 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，验证问卷发布、指标兼容、个人与机构活动关系、对象匿名化、管理授权写入与撤权、管理上下文选择、快照目录访问、项目报告时区和管理报告 lineage 的并发不变量。Docker wrapper 会按文件名排序并自动复制、执行这些脚本。检查脚本只使用 synthetic 数据，并要求显式 `DATABASE_URL`。
 
 普通 fixture 会回滚，独立并发脚本会提交 synthetic 数据；并发数据还会进入 dump，并在恢复库中与全部 fixture 再次相遇。因此两类测试必须使用不同的 synthetic UUID 前缀，且 fixture 的数量断言应限定到自己的用户或项目。若测试只在 dump/restore 后失败，先检查 UUID 命名空间与全表计数，不要把持久并发行当成产品缺陷。
