@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import {request as httpRequest} from "node:http";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
 
+import {IdentityVerificationError} from "../src/identity.js";
 import { createBackendServer } from "../src/server.js";
 
 test("HTTP context route requires bearer token and disables caching", async () => {
@@ -231,6 +233,190 @@ test("HTTP management snapshot route rejects query fields and missing store", as
   assert.equal(unavailableResponse.status, 503);
   assert.deepEqual(await unavailableResponse.json(), {
     error: {code: "management_report_snapshot_unavailable"},
+  });
+});
+
+test("HTTP management analysis context is separate from personal context", async () => {
+  const projectId = "33333333-3333-4333-8333-333333333333";
+  let personalContextCalls = 0;
+  let loadCalls = 0;
+  let selectedProjectId: string | undefined;
+  const navigationContext = {
+    organization: {
+      id: "22222222-2222-4222-8222-222222222222",
+      name: "Synthetic organization",
+    },
+    project: {id: projectId, name: "Synthetic project"},
+  };
+  const server = createBackendServer({
+    identityVerifier: {
+      verify: async () => ({issuer: "issuer", subject: "subject"}),
+    },
+    contextStore: {
+      loadOrCreate: async () => {
+        personalContextCalls += 1;
+        throw new Error("personal context must not authorize management navigation");
+      },
+    },
+    managementAnalysisContextStore: {
+      load: async () => {
+        loadCalls += 1;
+        return {current: null, available: [navigationContext]};
+      },
+      select: async (_identity, receivedProjectId) => {
+        selectedProjectId = receivedProjectId;
+        return {
+          current: navigationContext,
+          available: [navigationContext],
+        };
+      },
+    },
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  test.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+  const endpoint =
+    `http://127.0.0.1:${address.port}/v1/management-analysis/context`;
+
+  const getResponse = await fetch(endpoint, {
+    headers: {authorization: "Bearer token"},
+  });
+  assert.equal(getResponse.status, 200);
+  assert.equal(getResponse.headers.get("cache-control"), "no-store");
+  assert.deepEqual(await getResponse.json(), {
+    current_context: null,
+    available_contexts: [{
+      organization: {
+        workspace_id: navigationContext.organization.id,
+        name: navigationContext.organization.name,
+      },
+      project: {project_id: projectId, name: navigationContext.project.name},
+    }],
+    authorization: "must_reauthorize",
+  });
+
+  const putResponse = await fetch(endpoint, {
+    method: "PUT",
+    headers: {
+      authorization: "Bearer token",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({project_id: projectId}),
+  });
+  assert.equal(putResponse.status, 200);
+  assert.equal(putResponse.headers.get("cache-control"), "no-store");
+  assert.equal(selectedProjectId, projectId);
+  assert.equal(loadCalls, 1);
+  assert.equal(personalContextCalls, 0);
+});
+
+test("HTTP management context rejects query and GET body before the store", async () => {
+  let storeCalls = 0;
+  const server = createBackendServer({
+    identityVerifier: {
+      verify: async () => ({issuer: "issuer", subject: "subject"}),
+    },
+    contextStore: {
+      loadOrCreate: async () => {throw new Error("context is not expected");},
+    },
+    managementAnalysisContextStore: {
+      load: async () => {
+        storeCalls += 1;
+        return {current: null, available: []};
+      },
+      select: async () => {
+        storeCalls += 1;
+        return {current: null, available: []};
+      },
+    },
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  test.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+  const endpoint = `/v1/management-analysis/context`;
+
+  const queryResponse = await fetch(
+    `http://127.0.0.1:${address.port}${endpoint}?project_id=forged`,
+    {headers: {authorization: "Bearer token"}},
+  );
+  assert.equal(queryResponse.status, 400);
+
+  const bodyResponse = await rawHttpRequest(
+    address.port,
+    "GET",
+    endpoint,
+    {
+      authorization: "Bearer token",
+      "content-type": "application/json",
+    },
+    "{}",
+  );
+  assert.equal(bodyResponse.status, 400);
+  assert.deepEqual(bodyResponse.body, {
+    error: {code: "invalid_management_analysis_context"},
+  });
+  assert.equal(storeCalls, 0);
+});
+
+test("HTTP management context authenticates before request validation", async () => {
+  const server = createBackendServer({
+    identityVerifier: {
+      verify: async () => {throw new IdentityVerificationError();},
+    },
+    contextStore: {
+      loadOrCreate: async () => {throw new Error("context is not expected");},
+    },
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  test.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+  const endpoint =
+    `http://127.0.0.1:${address.port}/v1/management-analysis/context`;
+
+  const queryResponse = await fetch(`${endpoint}?project_id=forged`, {
+    headers: {authorization: "Bearer invalid"},
+  });
+  assert.equal(queryResponse.status, 401);
+  assert.deepEqual(await queryResponse.json(), {
+    error: {code: "unauthenticated"},
+  });
+
+  const bodyResponse = await rawHttpRequest(
+    address.port,
+    "PUT",
+    "/v1/management-analysis/context",
+    {
+      authorization: "Bearer invalid",
+      "content-type": "application/json",
+    },
+    "{",
+  );
+  assert.equal(bodyResponse.status, 401);
+  assert.deepEqual(bodyResponse.body, {
+    error: {code: "unauthenticated"},
+  });
+});
+
+test("HTTP management context reports a missing store", async () => {
+  const server = createBackendServer({
+    identityVerifier: {
+      verify: async () => ({issuer: "issuer", subject: "subject"}),
+    },
+    contextStore: {
+      loadOrCreate: async () => {throw new Error("context is not expected");},
+    },
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  test.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+
+  const response = await fetch(
+    `http://127.0.0.1:${address.port}/v1/management-analysis/context`,
+    {headers: {authorization: "Bearer token"}},
+  );
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    error: {code: "management_analysis_context_unavailable"},
   });
 });
 
@@ -995,6 +1181,33 @@ test("HTTP personal reminder route exposes only the verified user's schedule", a
   assert.equal(appUserId, "11111111-1111-4111-8111-111111111111");
   assert.deepEqual(await response.json(), {reminder: null});
 });
+
+function rawHttpRequest(
+  port: number,
+  method: string,
+  path: string,
+  headers: Readonly<Record<string, string>>,
+  body: string,
+): Promise<{status: number; body: unknown}> {
+  return new Promise((resolve, reject) => {
+    const request = httpRequest({
+      host: "127.0.0.1",
+      port,
+      method,
+      path,
+      headers: {...headers, "content-length": Buffer.byteLength(body)},
+    }, (response) => {
+      const chunks: Buffer[] = [];
+      response.on("data", (chunk: Buffer) => chunks.push(chunk));
+      response.on("end", () => resolve({
+        status: response.statusCode ?? 0,
+        body: JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown,
+      }));
+    });
+    request.on("error", reject);
+    request.end(body);
+  });
+}
 
 function validCommandBody(): Record<string, unknown> {
   return {

@@ -13,6 +13,7 @@ import { PostgresTargetInstitutionRelationshipStore } from "./target-institution
 import { PostgresPersonalActionPlanStore } from "./personal-action-plans.js";
 import { PostgresPersonalActionReminderStore } from "./personal-action-reminders.js";
 import { PostgresManagementReportSnapshotStore } from "./management-report-snapshots.js";
+import { PostgresManagementAnalysisContextStore } from "./management-analysis-contexts.js";
 
 const databaseUrl = requireEnvironment("DATABASE_URL");
 const authIssuer = requireEnvironment("AUTH_ISSUER");
@@ -66,6 +67,10 @@ const managementReportSnapshotStore =
   new PostgresManagementReportSnapshotStore(
     async (text, values) => pool.query(text, [...values]),
   );
+const managementAnalysisContextStore =
+  new PostgresManagementAnalysisContextStore(
+    async (text, values) => pool.query(text, [...values]),
+  );
 const server = createBackendServer({
   identityVerifier,
   contextStore,
@@ -80,6 +85,7 @@ const server = createBackendServer({
   personalActionPlanStore,
   personalActionReminderStore,
   managementReportSnapshotStore,
+  managementAnalysisContextStore,
 });
 
 server.listen(port, "0.0.0.0");

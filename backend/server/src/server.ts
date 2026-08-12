@@ -64,6 +64,12 @@ import {
   readManagementReportSnapshot,
   type ManagementReportSnapshotStore,
 } from "./management-report-snapshots.js";
+import {
+  authenticateManagementAnalysisContext,
+  loadManagementAnalysisContextForIdentity,
+  selectManagementAnalysisContextForIdentity,
+  type ManagementAnalysisContextStore,
+} from "./management-analysis-contexts.js";
 
 export interface BackendServerDependencies
   extends SessionContextHttpDependencies {
@@ -80,6 +86,7 @@ export interface BackendServerDependencies
   readonly personalActionPlanStore?: PersonalActionPlanStore;
   readonly personalActionReminderStore?: PersonalActionReminderStore;
   readonly managementReportSnapshotStore?: ManagementReportSnapshotStore;
+  readonly managementAnalysisContextStore?: ManagementAnalysisContextStore;
 }
 
 export function createBackendServer(
@@ -93,6 +100,60 @@ export function createBackendServer(
     if (request.method === "GET" && request.url === "/healthz") {
       response.statusCode = 200;
       response.end(JSON.stringify({ status: "ok" }));
+      return;
+    }
+
+    if (
+      requestUrl.pathname === "/v1/management-analysis/context" &&
+      (request.method === "GET" || request.method === "PUT")
+    ) {
+      const authentication = await authenticateManagementAnalysisContext(
+        request.headers.authorization,
+        dependencies.identityVerifier,
+      );
+      if (authentication.status === "rejected") {
+        response.statusCode = authentication.result.status;
+        response.end(JSON.stringify(authentication.result.body));
+        return;
+      }
+      if (
+        requestUrl.search.length > 0 ||
+        (request.method === "GET" && requestDeclaresBody(request.headers))
+      ) {
+        response.statusCode = 400;
+        response.end(JSON.stringify({
+          error: {code: "invalid_management_analysis_context"},
+        }));
+        return;
+      }
+      if (dependencies.managementAnalysisContextStore === undefined) {
+        response.statusCode = 503;
+        response.end(JSON.stringify({
+          error: {code: "management_analysis_context_unavailable"},
+        }));
+        return;
+      }
+      if (request.method === "GET") {
+        const result = await loadManagementAnalysisContextForIdentity(
+          authentication.identity,
+          dependencies.managementAnalysisContextStore,
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+        return;
+      }
+      try {
+        const body = await readJsonBody(request);
+        const result = await selectManagementAnalysisContextForIdentity(
+          authentication.identity,
+          body,
+          dependencies.managementAnalysisContextStore,
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
+      }
       return;
     }
 
@@ -849,6 +910,14 @@ export function createBackendServer(
 }
 
 class PayloadTooLargeError extends Error {}
+
+function requestDeclaresBody(
+  headers: Readonly<Record<string, string | string[] | undefined>>,
+): boolean {
+  return headers["transfer-encoding"] !== undefined ||
+    (headers["content-length"] !== undefined &&
+      headers["content-length"] !== "0");
+}
 
 function writeBodyError(
   response: {statusCode: number; end(value: string): void},
