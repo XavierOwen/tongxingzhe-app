@@ -20,6 +20,9 @@ test("region resolver returns the matched node and installable parent path", asy
           regionId: "uchicago",
           treeVersion: "synthetic-v1",
           canonicalName: "University of Chicago",
+          contentFingerprint:
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          resolverContractVersion: "canonical-region-resolution:v1",
           regionPath: [
             {
               regionId: "chicago",
@@ -52,6 +55,9 @@ test("region resolver returns the matched node and installable parent path", asy
     },
     region_tree: {
       version: "synthetic-v1",
+      content_fingerprint:
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      resolver_contract_version: "canonical-region-resolution:v1",
       nodes: [
         {
           region_id: "chicago",
@@ -144,6 +150,9 @@ test("PostgreSQL adapter uses the bounded resolver function", async () => {
           region_id: "chicago",
           tree_version: "synthetic-v1",
           canonical_name: "Chicago",
+          content_fingerprint:
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          resolver_contract_version: "canonical-region-resolution:v1",
           region_path: [
             {
               regionId: "chicago",
@@ -161,6 +170,49 @@ test("PostgreSQL adapter uses the bounded resolver function", async () => {
   const resolved = await store.resolve(41.88, -87.63);
 
   assert.equal(resolved?.regionId, "chicago");
+  assert.equal(
+    resolved?.contentFingerprint,
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  );
+  assert.equal(
+    resolved?.resolverContractVersion,
+    "canonical-region-resolution:v1",
+  );
   assert.deepEqual(calls[0]?.values, [41.88, -87.63]);
-  assert.match(calls[0]?.text ?? "", /resolve_canonical_region/);
+  assert.match(
+    calls[0]?.text ?? "",
+    /resolve_canonical_region_with_provenance/,
+  );
+});
+
+test("PostgreSQL adapter rejects an untrusted fingerprint or resolver contract", async () => {
+  const invalidRows = [
+    {
+      content_fingerprint: "not-a-fingerprint",
+      resolver_contract_version: "canonical-region-resolution:v1",
+    },
+    {
+      content_fingerprint:
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      resolver_contract_version: "resolver-v2",
+    },
+  ];
+  for (const invalid of invalidRows) {
+    const store = new PostgresRegionResolutionStore(async () => ({
+      rows: [{
+        region_id: "chicago",
+        tree_version: "synthetic-v1",
+        canonical_name: "Chicago",
+        ...invalid,
+        region_path: [{
+          regionId: "chicago",
+          parentRegionId: null,
+          canonicalName: "Chicago",
+          kind: "city",
+          attributes: [],
+        }],
+      }],
+    }));
+    await assert.rejects(store.resolve(41.88, -87.63));
+  }
 });

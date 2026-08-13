@@ -9,6 +9,23 @@ export type ContactChannel =
   | "mixed"
   | "other_direct";
 
+/**
+ * Coordinates captured before the resolver selected the frozen region tree.
+ *
+ * The source is deliberately a separate fact from `ContactLocation`: a
+ * resolved location can be retained without coordinates for legacy or manual
+ * region-only entries, while a coordinate-backed result must retain the
+ * resolver contract and release fingerprint that produced it.
+ */
+export interface ContactLocationSource {
+  readonly kind: "captured_coordinates";
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly accuracyMeters: number | null;
+  readonly resolverContractVersion: "canonical-region-resolution:v1";
+  readonly regionTreeContentFingerprint: string;
+}
+
 export type ContactLocation =
   | { readonly kind: "not_applicable" }
   | {
@@ -69,6 +86,7 @@ export interface ContactSubmitPayload {
   readonly channel: ContactChannel;
   readonly channelDetail: string | null;
   readonly location: ContactLocation;
+  readonly locationSource?: ContactLocationSource;
   readonly reachCount: number;
   readonly interestLevel: number;
   readonly answers: readonly ContactAnswer[];
@@ -86,6 +104,7 @@ export interface ContactRevisionPayload {
   readonly channel: ContactChannel;
   readonly channelDetail: string | null;
   readonly location: ContactLocation;
+  readonly locationSource?: ContactLocationSource;
   readonly reachCount: number;
   readonly interestLevel: number;
   readonly answers: readonly ContactAnswer[];
@@ -145,6 +164,7 @@ export interface DraftUpsertPayload {
   readonly channel: ContactChannel | null;
   readonly channelDetail: string | null;
   readonly location: ContactLocation | null;
+  readonly locationSource?: ContactLocationSource;
   readonly reachCount: number | null;
   readonly interestLevel: number | null;
   readonly answers: readonly ContactAnswer[];
@@ -445,6 +465,7 @@ function parseConflictSnapshot(value: unknown): ContactConflictSnapshot {
   const snapshot = record(value, "Revision conflict snapshot is invalid");
   const channel = snapshot.channel;
   const location = snapshot.location;
+  const locationSource = snapshot.locationSource;
   const answers = snapshot.answers;
   const targetLinks = snapshot.targetLinks ?? [];
   if (
@@ -457,6 +478,7 @@ function parseConflictSnapshot(value: unknown): ContactConflictSnapshot {
   ) {
     throw new Error("Revision conflict snapshot facts are invalid");
   }
+  const parsedLocation = parseStoredConflictLocation(location, locationSource);
   return {
     occurredAtUtc: requiredString(snapshot.occurredAtUtc, "occurred at"),
     occurredTimeZone: requiredString(
@@ -465,12 +487,198 @@ function parseConflictSnapshot(value: unknown): ContactConflictSnapshot {
     ),
     channel,
     channelDetail: nullableResultString(snapshot.channelDetail),
-    location: location as ContactLocation,
+    location: parsedLocation.location,
+    ...(parsedLocation.locationSource === undefined
+      ? {}
+      : { locationSource: parsedLocation.locationSource }),
     reachCount: positiveInteger(snapshot.reachCount, "reach count"),
     interestLevel: boundedInteger(snapshot.interestLevel, 0, 4, "interest"),
     answers: answers as ContactAnswer[],
     targetLinks: targetLinks.map(parseConflictTargetLink),
   };
+}
+
+function parseStoredConflictLocation(
+  value: unknown,
+  sourceValue: unknown,
+): {
+  readonly location: ContactLocation;
+  readonly locationSource: ContactLocationSource | undefined;
+} {
+  const location = record(value, "Revision conflict location is invalid");
+  const allowedLocationKeys = new Set([
+    "kind",
+    "placeName",
+    "smallestRegionId",
+    "regionTreeVersion",
+    "latitude",
+    "longitude",
+    "accuracyMeters",
+  ]);
+  for (const key of Object.keys(location)) {
+    if (!allowedLocationKeys.has(key)) {
+      throw new Error("Revision conflict location shape is invalid");
+    }
+  }
+  let parsedLocation: ContactLocation;
+  if (location.kind === "not_applicable") {
+    assertStoredNullOrMissing(location, [
+      "placeName",
+      "smallestRegionId",
+      "regionTreeVersion",
+      "latitude",
+      "longitude",
+      "accuracyMeters",
+    ]);
+    parsedLocation = { kind: "not_applicable" };
+  } else if (location.kind === "resolved") {
+    assertStoredNullOrMissing(location, [
+      "latitude",
+      "longitude",
+      "accuracyMeters",
+    ]);
+    parsedLocation = {
+      kind: "resolved",
+      placeName: storedRequiredString(location.placeName, "place name"),
+      smallestRegionId: storedRequiredString(
+        location.smallestRegionId,
+        "region ID",
+      ),
+      regionTreeVersion: storedRequiredString(
+        location.regionTreeVersion,
+        "region tree version",
+      ),
+    };
+  } else if (location.kind === "pending_resolution") {
+    assertStoredNullOrMissing(location, [
+      "placeName",
+      "smallestRegionId",
+      "regionTreeVersion",
+    ]);
+    const latitude = storedFiniteNumber(location.latitude, "latitude");
+    const longitude = storedFiniteNumber(location.longitude, "longitude");
+    const accuracy = storedNullableFiniteNumber(
+      location.accuracyMeters,
+      "location accuracy",
+    );
+    if (
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180 ||
+      (accuracy !== null && accuracy < 0)
+    ) {
+      throw new Error("Revision conflict location coordinates are invalid");
+    }
+    parsedLocation = {
+      kind: "pending_resolution",
+      latitude,
+      longitude,
+      accuracyMeters: accuracy,
+    };
+  } else {
+    throw new Error("Revision conflict location kind is invalid");
+  }
+
+  const locationSource = parseStoredConflictLocationSource(sourceValue);
+  if (locationSource !== undefined && parsedLocation.kind !== "resolved") {
+    throw new Error("Revision conflict location source is not applicable");
+  }
+  return { location: parsedLocation, locationSource };
+}
+
+function parseStoredConflictLocationSource(
+  value: unknown,
+): ContactLocationSource | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  const source = record(
+    value,
+    "Revision conflict location source is invalid",
+  );
+  const allowedKeys = new Set([
+    "kind",
+    "latitude",
+    "longitude",
+    "accuracyMeters",
+    "resolverContractVersion",
+    "regionTreeContentFingerprint",
+  ]);
+  for (const key of Object.keys(source)) {
+    if (!allowedKeys.has(key)) {
+      throw new Error("Revision conflict location source shape is invalid");
+    }
+  }
+  if (source.kind !== "captured_coordinates") {
+    throw new Error("Revision conflict location source kind is invalid");
+  }
+  const latitude = storedFiniteNumber(source.latitude, "source latitude");
+  const longitude = storedFiniteNumber(source.longitude, "source longitude");
+  const accuracy = storedNullableFiniteNumber(
+    source.accuracyMeters,
+    "source accuracy",
+  );
+  if (
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180 ||
+    (accuracy !== null && accuracy < 0)
+  ) {
+    throw new Error("Revision conflict source coordinates are invalid");
+  }
+  if (source.resolverContractVersion !== "canonical-region-resolution:v1") {
+    throw new Error("Revision conflict location source contract is invalid");
+  }
+  const fingerprint = source.regionTreeContentFingerprint;
+  if (typeof fingerprint !== "string" || !/^[0-9a-f]{64}$/.test(fingerprint)) {
+    throw new Error("Revision conflict location source fingerprint is invalid");
+  }
+  return {
+    kind: "captured_coordinates",
+    latitude,
+    longitude,
+    accuracyMeters: accuracy,
+    resolverContractVersion: "canonical-region-resolution:v1",
+    regionTreeContentFingerprint: fingerprint,
+  };
+}
+
+function assertStoredNullOrMissing(
+  value: Record<string, unknown>,
+  fields: readonly string[],
+): void {
+  for (const field of fields) {
+    const candidate = value[field];
+    if (candidate !== undefined && candidate !== null) {
+      throw new Error("Revision conflict location shape is invalid");
+    }
+  }
+}
+
+function storedRequiredString(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`Revision conflict ${label} is invalid`);
+  }
+  return value;
+}
+
+function storedFiniteNumber(value: unknown, label: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`Revision conflict ${label} is invalid`);
+  }
+  return value;
+}
+
+function storedNullableFiniteNumber(
+  value: unknown,
+  label: string,
+): number | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  return storedFiniteNumber(value, label);
 }
 
 function parseConflictTargetLink(value: unknown): ContactTargetLink {

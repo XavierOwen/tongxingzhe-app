@@ -16,6 +16,8 @@ export interface ResolvedCanonicalRegion {
   readonly regionId: string;
   readonly treeVersion: string;
   readonly canonicalName: string;
+  readonly contentFingerprint: string;
+  readonly resolverContractVersion: "canonical-region-resolution:v1";
   readonly regionPath: readonly CanonicalRegionNode[];
 }
 
@@ -77,6 +79,8 @@ export async function resolveContactRegion(
         },
         region_tree: {
           version: resolved.treeVersion,
+          content_fingerprint: resolved.contentFingerprint,
+          resolver_contract_version: resolved.resolverContractVersion,
           nodes: resolved.regionPath.map((node) => ({
             region_id: node.regionId,
             parent_region_id: node.parentRegionId,
@@ -104,6 +108,8 @@ interface RegionResolutionRow {
   readonly region_id: unknown;
   readonly tree_version: unknown;
   readonly canonical_name: unknown;
+  readonly content_fingerprint: unknown;
+  readonly resolver_contract_version: unknown;
   readonly region_path: unknown;
 }
 
@@ -115,8 +121,9 @@ export class PostgresRegionResolutionStore implements RegionResolutionStore {
     longitude: number,
   ): Promise<ResolvedCanonicalRegion | null> {
     const result = await this.query(
-      `SELECT region_id, tree_version, canonical_name, region_path
-       FROM app_data.resolve_canonical_region(
+      `SELECT region_id, tree_version, canonical_name,
+              content_fingerprint, resolver_contract_version, region_path
+       FROM app_data.resolve_canonical_region_with_provenance(
          $1::double precision,
          $2::double precision
        )`,
@@ -167,10 +174,21 @@ function parseResolutionRow(value: unknown): ResolvedCanonicalRegion {
   const regionId = requiredString(row.region_id, "region_id");
   const treeVersion = requiredString(row.tree_version, "tree_version");
   const canonicalName = requiredString(row.canonical_name, "canonical_name");
+  const contentFingerprint = requiredFingerprint(row.content_fingerprint);
+  const resolverContractVersion = requiredResolverContract(
+    row.resolver_contract_version,
+  );
   if (regionPath.at(-1)?.regionId !== regionId) {
     throw new Error("Region resolver path does not end at the matched node");
   }
-  return { regionId, treeVersion, canonicalName, regionPath };
+  return {
+    regionId,
+    treeVersion,
+    canonicalName,
+    contentFingerprint,
+    resolverContractVersion,
+    regionPath,
+  };
 }
 
 function parseRegionNode(value: unknown): CanonicalRegionNode {
@@ -199,6 +217,22 @@ function parseRegionNode(value: unknown): CanonicalRegionNode {
 function requiredString(value: unknown, name: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new Error(`Region resolver returned invalid ${name}`);
+  }
+  return value;
+}
+
+function requiredFingerprint(value: unknown): string {
+  if (typeof value !== "string" || !/^[0-9a-f]{64}$/.test(value)) {
+    throw new Error("Region resolver returned an invalid content fingerprint");
+  }
+  return value;
+}
+
+function requiredResolverContract(
+  value: unknown,
+): "canonical-region-resolution:v1" {
+  if (value !== "canonical-region-resolution:v1") {
+    throw new Error("Region resolver returned an unsupported resolver contract");
   }
   return value;
 }

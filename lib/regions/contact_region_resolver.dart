@@ -101,7 +101,7 @@ final class HttpContactRegionResolver implements ContactRegionResolver {
       if (response.statusCode != 200) {
         return location;
       }
-      return await _parseResolved(response.body);
+      return await _parseResolved(response.body, location);
     } on TimeoutException {
       return location;
     } on http.ClientException {
@@ -133,7 +133,10 @@ final class HttpContactRegionResolver implements ContactRegionResolver {
         .timeout(_timeout);
   }
 
-  Future<ResolvedContactLocation> _parseResolved(String responseBody) async {
+  Future<ResolvedContactLocation> _parseResolved(
+    String responseBody,
+    PendingContactLocation locationSource,
+  ) async {
     final root = _object(jsonDecode(responseBody), 'response');
     if (root['result'] != 'resolved') {
       throw const FormatException('region result must be resolved');
@@ -141,6 +144,17 @@ final class HttpContactRegionResolver implements ContactRegionResolver {
     final location = _object(root['location'], 'location');
     final tree = _object(root['region_tree'], 'region_tree');
     final version = _nonEmptyString(tree['version'], 'region tree version');
+    final contentFingerprint = _sha256Fingerprint(
+      tree['content_fingerprint'],
+      'region tree content fingerprint',
+    );
+    final resolverContractVersion = _nonEmptyString(
+      tree['resolver_contract_version'],
+      'resolver contract version',
+    );
+    if (resolverContractVersion != 'canonical-region-resolution:v1') {
+      throw const FormatException('resolver contract version is unsupported');
+    }
     final nodeValues = tree['nodes'];
     if (nodeValues is! List<Object?> || nodeValues.isEmpty) {
       throw const FormatException('region tree nodes must be a non-empty list');
@@ -170,6 +184,13 @@ final class HttpContactRegionResolver implements ContactRegionResolver {
       placeName: _nonEmptyString(location['place_name'], 'place name'),
       smallestRegionId: regionId,
       regionTreeVersion: version,
+      source: CapturedCoordinatesLocationSource(
+        latitude: locationSource.latitude,
+        longitude: locationSource.longitude,
+        accuracyMeters: locationSource.accuracyMeters,
+        resolverContractVersion: resolverContractVersion,
+        regionTreeContentFingerprint: contentFingerprint,
+      ),
     );
   }
 
@@ -218,6 +239,14 @@ String _nonEmptyString(Object? value, String name) {
     throw FormatException('$name must be a non-empty string');
   }
   return value;
+}
+
+String _sha256Fingerprint(Object? value, String name) {
+  final fingerprint = _nonEmptyString(value, name);
+  if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(fingerprint)) {
+    throw FormatException('$name must be lowercase SHA-256');
+  }
+  return fingerprint;
 }
 
 Uri _validatedBaseUri(Uri value) {

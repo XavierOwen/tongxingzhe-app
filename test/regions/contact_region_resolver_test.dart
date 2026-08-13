@@ -44,6 +44,14 @@ void main() {
         placeName: 'University of Chicago',
         smallestRegionId: 'uchicago',
         regionTreeVersion: 'synthetic-v1',
+        source: CapturedCoordinatesLocationSource(
+          latitude: 41.7897,
+          longitude: -87.5997,
+          accuracyMeters: 8.5,
+          resolverContractVersion: 'canonical-region-resolution:v1',
+          regionTreeContentFingerprint:
+              '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+        ),
       ),
     );
     final path = await RegionCatalog(
@@ -119,6 +127,68 @@ void main() {
 
     expect(await resolver.resolve(_pending), same(_pending));
   });
+
+  test('Backend 没有冻结地区指纹时保留原坐标', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final resolver = HttpContactRegionResolver(
+      baseUri: Uri.parse('https://backend.example.test'),
+      identitySession: _signedInIdentity(),
+      regionCatalog: RegionCatalog(database),
+      client: MockClient((_) async {
+        final body = Map<String, Object?>.from(_resolvedBody);
+        body['region_tree'] = Map<String, Object?>.from(
+          _resolvedBody['region_tree']! as Map<String, Object?>,
+        )..remove('content_fingerprint');
+        return http.Response(jsonEncode(body), 200);
+      }),
+    );
+    addTearDown(resolver.close);
+
+    expect(await resolver.resolve(_pending), same(_pending));
+  });
+
+  test('Backend 返回非小写 SHA-256 地区指纹时保留原坐标', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final resolver = HttpContactRegionResolver(
+      baseUri: Uri.parse('https://backend.example.test'),
+      identitySession: _signedInIdentity(),
+      regionCatalog: RegionCatalog(database),
+      client: MockClient((_) async {
+        final body = Map<String, Object?>.from(_resolvedBody);
+        body['region_tree'] = {
+          ..._resolvedBody['region_tree']! as Map<String, Object?>,
+          'content_fingerprint': 'ABC123',
+        };
+        return http.Response(jsonEncode(body), 200);
+      }),
+    );
+    addTearDown(resolver.close);
+
+    expect(await resolver.resolve(_pending), same(_pending));
+  });
+
+  test('Backend 返回未知解析合同版本时保留原坐标', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final resolver = HttpContactRegionResolver(
+      baseUri: Uri.parse('https://backend.example.test'),
+      identitySession: _signedInIdentity(),
+      regionCatalog: RegionCatalog(database),
+      client: MockClient((_) async {
+        final body = Map<String, Object?>.from(_resolvedBody);
+        body['region_tree'] = {
+          ..._resolvedBody['region_tree']! as Map<String, Object?>,
+          'resolver_contract_version': 'unknown-resolver:v9',
+        };
+        return http.Response(jsonEncode(body), 200);
+      }),
+    );
+    addTearDown(resolver.close);
+
+    expect(await resolver.resolve(_pending), same(_pending));
+  });
 }
 
 FakeIdentitySession _signedInIdentity() => FakeIdentitySession(
@@ -148,6 +218,9 @@ const _resolvedBody = <String, Object?>{
   },
   'region_tree': {
     'version': 'synthetic-v1',
+    'content_fingerprint':
+        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+    'resolver_contract_version': 'canonical-region-resolution:v1',
     'nodes': [
       {
         'region_id': 'chicago',

@@ -70,6 +70,215 @@ test("verified command uses internal context and returns accepted cursor", async
   assert.equal("appUserId" in (storedCommand ?? {}), false);
 });
 
+test("captured location source round-trips from snake_case wire payload", async () => {
+  let storedCommand: SyncCommand | undefined;
+  const body = validCommandBody();
+  (body.typed_payload as Record<string, unknown>).location = {
+    kind: "resolved",
+    place_name: "University of Chicago",
+    smallest_region_id: "uchicago",
+    region_tree_version: "synthetic-v1",
+  };
+  (body.typed_payload as Record<string, unknown>).location_source = {
+    kind: "captured_coordinates",
+    latitude: 41.7897,
+    longitude: -87.5997,
+    accuracy_meters: 8.5,
+    resolver_contract_version: "canonical-region-resolution:v1",
+    region_tree_content_fingerprint:
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  };
+
+  const response = await handleSyncCommand(
+    "Bearer synthetic-token",
+    body,
+    fakeDependencies({
+      apply: async (_resolvedContext, command) => {
+        storedCommand = command;
+        return { result: "accepted", serverCursor: "opaque-source" };
+      },
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(storedCommand?.type, "contact.submit.v1");
+  if (storedCommand?.type === "contact.submit.v1") {
+    assert.deepEqual(storedCommand.payload.location, {
+      kind: "resolved",
+      placeName: "University of Chicago",
+      smallestRegionId: "uchicago",
+      regionTreeVersion: "synthetic-v1",
+    });
+    assert.deepEqual(storedCommand.payload.locationSource, {
+      kind: "captured_coordinates",
+      latitude: 41.7897,
+      longitude: -87.5997,
+      accuracyMeters: 8.5,
+      resolverContractVersion: "canonical-region-resolution:v1",
+      regionTreeContentFingerprint:
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    });
+  }
+});
+
+test("location source rejects unknown keys without echoing coordinates", async () => {
+  const body = validCommandBody();
+  (body.typed_payload as Record<string, unknown>).location = {
+    kind: "resolved",
+    place_name: "University of Chicago",
+    smallest_region_id: "uchicago",
+    region_tree_version: "synthetic-v1",
+  };
+  (body.typed_payload as Record<string, unknown>).location_source = {
+    kind: "captured_coordinates",
+    latitude: 41.7897,
+    longitude: -87.5997,
+    accuracy_meters: 8.5,
+    resolver_contract_version: "canonical-region-resolution:v1",
+    region_tree_content_fingerprint:
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    unexpected: "must-reject",
+  };
+
+  const response = await handleSyncCommand(
+    "Bearer synthetic-token",
+    body,
+    fakeDependencies(),
+  );
+
+  assert.deepEqual(response.body, {
+    result: "rejected",
+    error: { code: "invalid_location_source_shape" },
+  });
+  assert.equal(JSON.stringify(response.body).includes("41.7897"), false);
+  assert.equal(JSON.stringify(response.body).includes("-87.5997"), false);
+});
+
+test("pending and not-applicable locations cannot carry a captured source", async () => {
+  const source = {
+    kind: "captured_coordinates",
+    latitude: 41.7897,
+    longitude: -87.5997,
+    accuracy_meters: null,
+    resolver_contract_version: "canonical-region-resolution:v1",
+    region_tree_content_fingerprint:
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  };
+  const pending = validCommandBody();
+  const pendingPayload = pending.typed_payload as Record<string, unknown>;
+  pendingPayload.location = {
+    kind: "pending_resolution",
+    latitude: 41.7897,
+    longitude: -87.5997,
+    accuracy_meters: 8.5,
+  };
+  pendingPayload.location_source = source;
+  const pendingResponse = await handleSyncCommand(
+    "Bearer synthetic-token",
+    pending,
+    fakeDependencies(),
+  );
+  assert.deepEqual(pendingResponse.body, {
+    result: "rejected",
+    error: { code: "location_source_forbidden" },
+  });
+
+  const notApplicable = validCommandBody();
+  const notApplicablePayload = notApplicable.typed_payload as Record<string, unknown>;
+  notApplicablePayload.location_source = source;
+  const notApplicableResponse = await handleSyncCommand(
+    "Bearer synthetic-token",
+    notApplicable,
+    fakeDependencies(),
+  );
+  assert.deepEqual(notApplicableResponse.body, {
+    result: "rejected",
+    error: { code: "location_source_forbidden" },
+  });
+});
+
+test("non-finite source coordinates are rejected without leaking their values", async () => {
+  const body = validCommandBody();
+  const payload = body.typed_payload as Record<string, unknown>;
+  payload.location = {
+    kind: "resolved",
+    place_name: "University of Chicago",
+    smallest_region_id: "uchicago",
+    region_tree_version: "synthetic-v1",
+  };
+  payload.location_source = {
+    kind: "captured_coordinates",
+    latitude: Number.POSITIVE_INFINITY,
+    longitude: -87.5997,
+    accuracy_meters: 8.5,
+    resolver_contract_version: "canonical-region-resolution:v1",
+    region_tree_content_fingerprint:
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  };
+
+  const response = await handleSyncCommand(
+    "Bearer synthetic-token",
+    body,
+    fakeDependencies(),
+  );
+
+  assert.deepEqual(response.body, {
+    result: "rejected",
+    error: { code: "invalid_location_source_coordinates" },
+  });
+  assert.equal(JSON.stringify(response.body).includes("Infinity"), false);
+  assert.equal(JSON.stringify(response.body).includes("-87.5997"), false);
+});
+
+test("location rejects unknown keys even when the source is absent", async () => {
+  const body = validCommandBody();
+  const payload = body.typed_payload as Record<string, unknown>;
+  payload.location = {
+    kind: "resolved",
+    place_name: "University of Chicago",
+    smallest_region_id: "uchicago",
+    region_tree_version: "synthetic-v1",
+    latitude: null,
+    longitude: null,
+    accuracy_meters: null,
+    undocumented: "must-reject",
+  };
+  const response = await handleSyncCommand(
+    "Bearer synthetic-token",
+    body,
+    fakeDependencies(),
+  );
+  assert.deepEqual(response.body, {
+    result: "rejected",
+    error: { code: "invalid_location_shape" },
+  });
+});
+
+test("pending location rejects resolved-region fields", async () => {
+  const body = validCommandBody();
+  const payload = body.typed_payload as Record<string, unknown>;
+  payload.location = {
+    kind: "pending_resolution",
+    latitude: 41.7897,
+    longitude: -87.5997,
+    accuracy_meters: 8.5,
+    place_name: "must-not-be-ignored",
+    smallest_region_id: "must-not-be-ignored",
+    region_tree_version: "must-not-be-ignored",
+  };
+
+  const response = await handleSyncCommand(
+    "Bearer synthetic-token",
+    body,
+    fakeDependencies(),
+  );
+
+  assert.deepEqual(response.body, {
+    result: "rejected",
+    error: { code: "invalid_location" },
+  });
+});
+
 test("sync parser preserves all controlled answer value shapes", async () => {
   let storedCommand: SyncCommand | undefined;
   const body = validCommandBody();
@@ -313,6 +522,69 @@ test("private draft upsert keeps trusted owner outside the client payload", asyn
   assert.equal("appUserId" in (storedCommand?.payload ?? {}), false);
 });
 
+test("draft upsert preserves a resolved location source and normalizes null", async () => {
+  let storedCommand: SyncCommand | undefined;
+  const body = validDraftCommandBody();
+  const payload = body.typed_payload as Record<string, unknown>;
+  payload.location = {
+    kind: "resolved",
+    place_name: "University of Chicago",
+    smallest_region_id: "uchicago",
+    region_tree_version: "synthetic-v1",
+  };
+  payload.location_source = {
+    kind: "captured_coordinates",
+    latitude: 41.7897,
+    longitude: -87.5997,
+    accuracy_meters: null,
+    resolver_contract_version: "canonical-region-resolution:v1",
+    region_tree_content_fingerprint:
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  };
+  const response = await handleSyncCommand(
+    "Bearer synthetic-token",
+    body,
+    fakeDependencies({
+      apply: async (_resolvedContext, command) => {
+        storedCommand = command;
+        return { result: "accepted", serverCursor: "opaque-draft-source" };
+      },
+    }),
+  );
+  assert.equal(response.status, 200);
+  assert.equal(storedCommand?.type, "draft.upsert.v1");
+  if (storedCommand?.type === "draft.upsert.v1") {
+    assert.deepEqual(storedCommand.payload.locationSource, {
+      kind: "captured_coordinates",
+      latitude: 41.7897,
+      longitude: -87.5997,
+      accuracyMeters: null,
+      resolverContractVersion: "canonical-region-resolution:v1",
+      regionTreeContentFingerprint:
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    });
+  }
+
+  const nullSource = validDraftCommandBody();
+  const nullPayload = nullSource.typed_payload as Record<string, unknown>;
+  nullPayload.location_source = null;
+  const nullResponse = await handleSyncCommand(
+    "Bearer synthetic-token",
+    nullSource,
+    fakeDependencies({
+      apply: async (_resolvedContext, command) => {
+        storedCommand = command;
+        return { result: "accepted", serverCursor: "opaque-draft-null-source" };
+      },
+    }),
+  );
+  assert.equal(nullResponse.status, 200);
+  assert.equal(storedCommand?.type, "draft.upsert.v1");
+  if (storedCommand?.type === "draft.upsert.v1") {
+    assert.equal("locationSource" in storedCommand.payload, false);
+  }
+});
+
 test("draft upgrade source cannot point to the new draft itself", async () => {
   const body = validDraftCommandBody();
   const payload = body.typed_payload as Record<string, unknown>;
@@ -404,6 +676,59 @@ test("contact revision requires a reason and keeps its base revision", async () 
     result: "rejected",
     error: { code: "contact_reason_required" },
   });
+});
+
+test("revise and conflict-resolution commands share the location source codec", async () => {
+  const source = {
+    kind: "captured_coordinates",
+    latitude: 41.7897,
+    longitude: -87.5997,
+    accuracy_meters: 8.5,
+    resolver_contract_version: "canonical-region-resolution:v1",
+    region_tree_content_fingerprint:
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  };
+  for (const commandType of ["contact.revise.v1", "contact.resolve.v1"] as const) {
+    let storedCommand: SyncCommand | undefined;
+    const body = commandType === "contact.revise.v1"
+      ? validRevisionCommandBody()
+      : validResolutionCommandBody();
+    const payload = body.typed_payload as Record<string, unknown>;
+    payload.location = {
+      kind: "resolved",
+      place_name: "University of Chicago",
+      smallest_region_id: "uchicago",
+      region_tree_version: "synthetic-v1",
+    };
+    payload.location_source = source;
+    const response = await handleSyncCommand(
+      "Bearer synthetic-token",
+      body,
+      fakeDependencies({
+        apply: async (_resolvedContext, command) => {
+          storedCommand = command;
+          return {
+            result: "accepted",
+            serverCursor: `opaque-${commandType}`,
+          };
+        },
+      }),
+    );
+    assert.equal(response.status, 200);
+    assert.equal(storedCommand?.type, commandType);
+    assert.deepEqual(
+      storedCommand?.payload.locationSource,
+      {
+        kind: "captured_coordinates",
+        latitude: 41.7897,
+        longitude: -87.5997,
+        accuracyMeters: 8.5,
+        resolverContractVersion: "canonical-region-resolution:v1",
+        regionTreeContentFingerprint:
+          "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      },
+    );
+  }
 });
 
 test("same-field conflict returns only the authorized comparison contract", async () => {
@@ -526,6 +851,33 @@ test("contact void accepts only a positive base revision", async () => {
     result: "rejected",
     error: { code: "invalid_base_revision" },
   });
+});
+
+test("contact void rejects a client-supplied location or location source", async () => {
+  const body = validVoidCommandBody();
+  const payload = body.typed_payload as Record<string, unknown>;
+  payload.location_source = {
+    kind: "captured_coordinates",
+    latitude: 41.7897,
+    longitude: -87.5997,
+    accuracy_meters: null,
+    resolver_contract_version: "canonical-region-resolution:v1",
+    region_tree_content_fingerprint:
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  };
+
+  const response = await handleSyncCommand(
+    "Bearer synthetic-token",
+    body,
+    fakeDependencies(),
+  );
+
+  assert.deepEqual(response.body, {
+    result: "rejected",
+    error: { code: "contact_void_location_forbidden" },
+  });
+  assert.equal(JSON.stringify(response.body).includes("41.7897"), false);
+  assert.equal(JSON.stringify(response.body).includes("-87.5997"), false);
 });
 
 test("legacy v1 fixture stays accepted and unsupported protocol is stable", async () => {

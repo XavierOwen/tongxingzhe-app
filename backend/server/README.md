@@ -8,15 +8,19 @@ cursor 不存在或不属于当前用户、空间和项目时，端点返回 `40
 
 ## 规范区域解析合同
 
-`POST /v1/regions/resolve` 接受 bearer token 与合法的 `latitude`、`longitude`。Backend 调用受限的 PostgreSQL 函数，只查询当前发布的区域树版本。
+`POST /v1/regions/resolve` 接受 bearer token 与合法的 `latitude`、`longitude`。Backend 调用 `resolve_canonical_region_with_provenance`，只查询当前已发布的区域树版本。runtime 只能执行该窄函数，不能直接读取 release 表。
 
-- 命中时返回 `200`、最小规范区域和从根到该节点的父链；
+- 命中时返回 `200`、最小规范区域、父链、64 位小写 SHA-256 内容指纹和固定合同 `canonical-region-resolution:v1`；
 - 没有命中时返回 `202` 和 `pending`；
 - 坐标无效返回 `400 invalid_coordinates`；
 - 身份无效返回 `401 unauthenticated`；
 - 数据库或服务不可用返回 `503 region_resolution_unavailable`。
 
-响应不回显 token、外部 subject 或 email。Flutter 必须先原子安装返回的父链，再把地点改成已解析状态。任何失败都保留原坐标，不能改写成 `N/A`。
+响应不回显 token、外部 subject、email 或输入坐标。Flutter 必须先验证指纹和合同，再原子安装返回的父链，并把原始坐标绑定到已解析状态。任何失败都保留原坐标，不能改写成 `N/A`。
+
+同步命令里的 `location_source` 是可选对象。只有 `resolved` 地点可带 `captured_coordinates` 来源；来源必须含原始坐标、可选非负精度、同一固定合同和发布指纹。resolved 没有来源表示兼容的 region-only 记录。pending 的坐标保存在 `location`，`not_applicable` 和空草稿地点不带来源。submit、revise、resolve-conflict 和 draft 共用 exact-key codec；void 不接受地点或来源。
+
+本合同还未把来源写入 Flutter Drift／Outbox 或 PostgreSQL 接触来源表。完成后续持久化和四层对账前，不得把 parser 通过解释为端到端来源已交付。
 
 ## 问卷管理合同
 

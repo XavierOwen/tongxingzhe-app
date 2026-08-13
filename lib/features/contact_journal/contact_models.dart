@@ -46,29 +46,70 @@ sealed class ContactLocation {
   const ContactLocation();
 }
 
+/// 已解析地点所依据的原始坐标和冻结解析合同。
+///
+/// 该对象只与 [ResolvedContactLocation] 一起存在。待解析地点继续把坐标保存
+/// 在地点本身；只有地区选择和不适用地点不伪造坐标来源。
+final class CapturedCoordinatesLocationSource {
+  const CapturedCoordinatesLocationSource({
+    required this.latitude,
+    required this.longitude,
+    this.accuracyMeters,
+    required this.resolverContractVersion,
+    required this.regionTreeContentFingerprint,
+  });
+
+  final double latitude;
+  final double longitude;
+  final double? accuracyMeters;
+  final String resolverContractVersion;
+  final String regionTreeContentFingerprint;
+
+  @override
+  bool operator ==(Object other) =>
+      other is CapturedCoordinatesLocationSource &&
+      other.latitude == latitude &&
+      other.longitude == longitude &&
+      other.accuracyMeters == accuracyMeters &&
+      other.resolverContractVersion == resolverContractVersion &&
+      other.regionTreeContentFingerprint == regionTreeContentFingerprint;
+
+  @override
+  int get hashCode => Object.hash(
+    latitude,
+    longitude,
+    accuracyMeters,
+    resolverContractVersion,
+    regionTreeContentFingerprint,
+  );
+}
+
 /// 已经确定具体地点和最小规范区域的线下地点。
 final class ResolvedContactLocation extends ContactLocation {
   const ResolvedContactLocation({
     required this.placeName,
     required this.smallestRegionId,
     required this.regionTreeVersion,
+    this.source,
   });
 
   final String placeName;
   final String smallestRegionId;
   final String regionTreeVersion;
+  final CapturedCoordinatesLocationSource? source;
 
   @override
   bool operator ==(Object other) {
     return other is ResolvedContactLocation &&
         other.placeName == placeName &&
         other.smallestRegionId == smallestRegionId &&
-        other.regionTreeVersion == regionTreeVersion;
+        other.regionTreeVersion == regionTreeVersion &&
+        other.source == source;
   }
 
   @override
   int get hashCode =>
-      Object.hash(placeName, smallestRegionId, regionTreeVersion);
+      Object.hash(placeName, smallestRegionId, regionTreeVersion, source);
 }
 
 /// 纯非线下接触明确记录的“不适用”地点。

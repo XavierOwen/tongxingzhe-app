@@ -410,7 +410,7 @@ flutter test test/features/contact_metrics/
 
 发布成功后，属于该 `tree_version` 的节点和边界不能直接插入、修改或删除。release 的版本、发布时间和内容指纹不能改写。草稿编辑和发布共用一把事务锁；发布开始验证后，新编辑只能等待，并在发布提交后因版本已冻结而失败。`current` 是解析器读取的单值投影，不是对旧事实的覆盖。发布新 current 时，旧版本只失去投影位置，节点、边界和发布时间仍可读；数据库同时追加一条选择记录，保存顺序、前后版本、选择时间、记录时间、来源和内容指纹。唯一 current 约束、发布锁和重复版本的稳定 `55000` 冲突一起防止双 current、交叉指纹或半个发布。
 
-运行时仍只执行 [`resolve_canonical_region`](../../backend/database/migrations/0007_canonical_region_resolution.sql)。`tongxingzhe_runtime` 不能直接读取或写入区域表、release 选择历史，也不能执行私有发布函数。发布函数由无登录、无成员的专用数据库角色执行；trigger 检查这个函数身份，维护会话不能用 session 设置绕过冻结。区域维护身份应在发布前先完成 check、fixture 和并发验证。
+运行时通过 6T 的窄函数 `resolve_canonical_region_with_provenance` 取得解析结果、发布内容指纹和固定解析器合同。该函数复用 [`resolve_canonical_region`](../../backend/database/migrations/0007_canonical_region_resolution.sql) 的匹配结果，只补充这两项来源证据。`tongxingzhe_runtime` 不能直接读取或写入区域表、release 选择历史，也不能执行私有发布函数。发布函数由无登录、无成员的专用数据库角色执行；trigger 检查这个函数身份，维护会话不能用 session 设置绕过冻结。区域维护身份应在发布前先完成 check、fixture 和并发验证。
 
 ### 如何验证冻结合同
 

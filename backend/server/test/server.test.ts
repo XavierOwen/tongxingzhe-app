@@ -686,6 +686,9 @@ test("HTTP region resolution returns a trusted canonical match", async () => {
         regionId: "chicago",
         treeVersion: "synthetic-v1",
         canonicalName: "Chicago",
+        contentFingerprint:
+          "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        resolverContractVersion: "canonical-region-resolution:v1",
         regionPath: [
           {
             regionId: "chicago",
