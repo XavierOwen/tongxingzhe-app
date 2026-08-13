@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
+import 'current_relationship_stage_tables.dart';
 import '../features/contact_journal/contact_tables.dart';
 import '../regions/region_tables.dart';
 import '../questionnaires/questionnaire_tables.dart';
@@ -133,6 +134,8 @@ class DbSecurityEvents extends Table {
     DbQuestionnaireDraftWorkingCopies,
     DbContactTargetLinks,
     DbContactDraftTargetLinks,
+    DbCurrentRelationshipStageProjections,
+    DbCurrentRelationshipStageSnapshots,
   ],
 )
 class LocalDatabase extends _$LocalDatabase {
@@ -150,7 +153,7 @@ class LocalDatabase extends _$LocalDatabase {
       );
 
   @override
-  int get schemaVersion => 18;
+  int get schemaVersion => 19;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -514,6 +517,13 @@ class LocalDatabase extends _$LocalDatabase {
         await migrator.alterTable(
           TableMigration(dbContactDrafts, newColumns: draftSourceColumns),
         );
+      }
+      if (from < 19) {
+        // v19 只安装不含 PII 的当前关系快照表。旧本机事实不足以证明当前
+        // 分配、关系生命周期或对象状态，因此不推测、不回填任何投影。
+        await migrator.createTable(dbCurrentRelationshipStageProjections);
+        await migrator.createTable(dbCurrentRelationshipStageSnapshots);
+        await migrator.createIndex(currentRelationshipStageScopeStage);
       }
     },
   );

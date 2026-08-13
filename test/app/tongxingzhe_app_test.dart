@@ -9,6 +9,7 @@ import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/data/local_database_factory.dart';
 import 'package:tongxingzhe_app/device/device_time_zone.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
+import 'package:tongxingzhe_app/features/contact_metrics/current_relationship_stage.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
@@ -48,6 +49,8 @@ void main() {
           const _EmptyPublishedQuestionnaireSource(),
       managementReportGatewayBuilder: (_) =>
           const _EmptyManagementReportGateway(),
+      currentRelationshipStageGatewayBuilder: (_) =>
+          const _OneRelationshipStageGateway(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -64,6 +67,17 @@ void main() {
     expect(find.text('正式认证尚未配置'), findsNothing);
 
     await tester.tap(find.text('分析'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('current-relationship-stage-panel')),
+      300,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('当前关系阶段'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('management-report-view')),
+      -300,
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('management-report-view')));
     await tester.pumpAndSettle();
@@ -1496,6 +1510,44 @@ final class _EmptyManagementReportGateway implements ManagementReportGateway {
   Future<ManagementReportResult<ManagementAnalysisContextSnapshot>>
   selectContext(String projectId) async =>
       const ManagementReportRejected(ManagementReportFailureCode.unauthorized);
+}
+
+final class _OneRelationshipStageGateway
+    implements CurrentRelationshipStageGateway {
+  const _OneRelationshipStageGateway();
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  Future<CurrentRelationshipStageGatewayResult> load({
+    required CurrentRelationshipStageScope scope,
+  }) async {
+    final snapshotAt = DateTime.utc(2030, 1, 2, 3);
+    return CurrentRelationshipStageGatewaySuccess(
+      CurrentRelationshipStageSnapshot(
+        scope: scope,
+        snapshotAsOfUtc: snapshotAt,
+        sourceDataCutoffUtc: snapshotAt,
+        authorizedAtUtc: snapshotAt,
+        lastSuccessfulSyncAtUtc: snapshotAt,
+        coverage: CurrentRelationshipStageCoverage.known(
+          totalCount: 1,
+          pendingCount: 0,
+        ),
+        rows: [
+          CurrentRelationshipStageRow(
+            targetId: 'synthetic-target-1',
+            relationshipProjectId: scope.projectId,
+            assignedAppUserId: scope.appUserId,
+            stage: 2,
+            currentRevision: 1,
+            updatedAtUtc: snapshotAt,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 Future<void> _seedTargetResponseFacts(LocalDatabase database) async {

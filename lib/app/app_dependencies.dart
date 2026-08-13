@@ -3,9 +3,12 @@ import '../app_session/http_session_context_gateway.dart';
 import '../app_session/session_context_gateway.dart';
 import '../data/local_database.dart';
 import '../data/local_database_factory.dart';
+import '../data/drift_current_relationship_stage_snapshot_store.dart';
 import '../device/device_identity_store.dart';
 import '../device/device_time_zone.dart';
 import '../features/contact_journal/contact_journal.dart';
+import '../features/contact_metrics/current_relationship_stage.dart';
+import '../features/contact_metrics/current_relationship_stage_gateway.dart';
 import '../foundation/runtime_values.dart';
 import '../identity/identity_session.dart';
 import '../identity/supabase/supabase_identity_session.dart';
@@ -62,6 +65,7 @@ final class AppDependencies {
     this.personalActionPlanGatewayBuilder,
     this.personalActionReminderGatewayBuilder,
     this.managementReportGatewayBuilder,
+    this.currentRelationshipStageGatewayBuilder,
     this.reminderSchedulerBuilder = productionReminderNotificationScheduler,
     this.offlinePiiSecureStore,
     this.legacyDemoAccess,
@@ -90,6 +94,8 @@ final class AppDependencies {
       personalActionReminderGatewayBuilder:
           productionPersonalActionReminderGateway,
       managementReportGatewayBuilder: productionManagementReportGateway,
+      currentRelationshipStageGatewayBuilder:
+          productionCurrentRelationshipStageGateway,
       offlinePiiSecureStore: secureStore,
     );
   }
@@ -117,6 +123,8 @@ final class AppDependencies {
   personalActionReminderGatewayBuilder;
   final ManagementReportGateway Function(IdentitySession)?
   managementReportGatewayBuilder;
+  final CurrentRelationshipStageGateway Function(IdentitySession)?
+  currentRelationshipStageGatewayBuilder;
   final ReminderNotificationScheduler Function(AppPlatform)
   reminderSchedulerBuilder;
   final SecureValueStore? offlinePiiSecureStore;
@@ -136,6 +144,7 @@ final class AppDependencies {
     PersonalActionPlanGateway? personalActionPlanGateway;
     PersonalActionReminderGateway? personalActionReminderGateway;
     ManagementReportGateway? managementReportGateway;
+    CurrentRelationshipStageGateway? currentRelationshipStageGateway;
     ReminderNotificationScheduler? reminderNotificationScheduler;
     PrivateSessionDataGuard? privateSessionDataGuard;
     OfflinePiiVault? offlinePiiVault;
@@ -229,6 +238,14 @@ final class AppDependencies {
       managementReportGateway =
           managementReportGatewayBuilder?.call(identitySession) ??
           const DeferredManagementReportGateway();
+      currentRelationshipStageGateway =
+          currentRelationshipStageGatewayBuilder?.call(identitySession) ??
+          const DeferredCurrentRelationshipStageGateway();
+      final currentRelationshipStageRepository =
+          CurrentRelationshipStageRepository(
+            gateway: currentRelationshipStageGateway,
+            store: DriftCurrentRelationshipStageSnapshotStore(database),
+          );
       final remoteTargetGateway =
           promotionTargetGatewayBuilder?.call(identitySession) ??
           const DeferredPromotionTargetGateway();
@@ -325,6 +342,8 @@ final class AppDependencies {
         personalActionPlanGateway: personalActionPlanGateway,
         personalActionReminderGateway: personalActionReminderGateway,
         managementReportGateway: managementReportGateway,
+        currentRelationshipStageGateway: currentRelationshipStageGateway,
+        currentRelationshipStageRepository: currentRelationshipStageRepository,
         deviceReminderPreferenceStore: DriftDeviceReminderPreferenceStore(
           database,
         ),
@@ -342,6 +361,7 @@ final class AppDependencies {
       await personalActionPlanGateway?.close();
       await personalActionReminderGateway?.close();
       await managementReportGateway?.close();
+      await currentRelationshipStageGateway?.close();
       await privateSessionDataGuard?.close();
       await reminderNotificationScheduler?.close();
       await appSession?.close();
@@ -384,6 +404,8 @@ final class AppStartupReady extends AppStartupResult {
     required this.personalActionPlanGateway,
     required this.personalActionReminderGateway,
     required this.managementReportGateway,
+    required this.currentRelationshipStageGateway,
+    required this.currentRelationshipStageRepository,
     required this.deviceReminderPreferenceStore,
     required this.reminderNotificationScheduler,
     required this.privateSessionDataGuard,
@@ -408,6 +430,8 @@ final class AppStartupReady extends AppStartupResult {
   final PersonalActionPlanGateway personalActionPlanGateway;
   final PersonalActionReminderGateway personalActionReminderGateway;
   final ManagementReportGateway managementReportGateway;
+  final CurrentRelationshipStageGateway currentRelationshipStageGateway;
+  final CurrentRelationshipStageRepository currentRelationshipStageRepository;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
   final ReminderNotificationScheduler reminderNotificationScheduler;
   final PrivateSessionDataGuard privateSessionDataGuard;

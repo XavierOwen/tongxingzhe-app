@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
+import 'package:tongxingzhe_app/features/contact_metrics/current_relationship_stage.dart';
 import 'package:tongxingzhe_app/features/contact_metrics/personal_contact_overview.dart';
 import 'package:tongxingzhe_app/features/home/production_home_view_model.dart';
 import 'package:tongxingzhe_app/sync/foreground_sync_coordinator.dart';
@@ -57,6 +58,38 @@ void main() {
     expect(fixture.viewModel.state.today?.summary.contactSessionCount, 5);
     expect(fixture.viewModel.state.recentSevenDays?.syncCoverageDenominator, 5);
     expect(fixture.viewModel.state.contacts?.syncHealth, _health);
+  });
+
+  test('当前关系快照与首页接触汇总一起发布', () async {
+    final fixture = _Fixture(
+      relationshipResult: CurrentRelationshipStageGatewaySuccess(
+        _relationshipSnapshot(),
+      ),
+    );
+
+    await fixture.viewModel.initialize();
+
+    expect(fixture.viewModel.state.loadFailed, isFalse);
+    expect(fixture.viewModel.state.relationshipStageLoadFailed, isFalse);
+    expect(
+      fixture.viewModel.state.currentRelationshipStage?.snapshot.stageCounts,
+      [0, 0, 1, 0, 0],
+    );
+  });
+
+  test('当前关系读取失败不遮蔽既有个人接触汇总', () async {
+    final fixture = _Fixture(
+      relationshipResult: const CurrentRelationshipStageGatewayRejected(
+        CurrentRelationshipStageGatewayFailureCode.networkUnavailable,
+      ),
+    );
+
+    await fixture.viewModel.initialize();
+
+    expect(fixture.viewModel.state.loadFailed, isFalse);
+    expect(fixture.viewModel.state.today, isNotNull);
+    expect(fixture.viewModel.state.relationshipStageLoadFailed, isTrue);
+    expect(fixture.viewModel.state.currentRelationshipStage, isNull);
   });
 
   test('提交事件发布提示并在同步后刷新首页快照', () async {
@@ -218,7 +251,10 @@ void main() {
 }
 
 final class _Fixture {
-  _Fixture({Completer<void>? gate}) {
+  _Fixture({
+    Completer<void>? gate,
+    CurrentRelationshipStageGatewayResult? relationshipResult,
+  }) {
     worker = _FakeSyncWorker(gate: gate);
     syncCoordinator = ForegroundSyncCoordinator(worker: worker);
     source = _FakeOverviewSource();
@@ -235,6 +271,12 @@ final class _Fixture {
         now: () => DateTime.utc(2030, 1, 8, 18, 30),
         loadSyncHealth: syncCoordinator.health,
       ),
+      relationshipStageRepository: relationshipResult == null
+          ? null
+          : CurrentRelationshipStageRepository(
+              gateway: _FakeRelationshipStageGateway(relationshipResult),
+              store: _MemoryRelationshipStageStore(),
+            ),
       syncCoordinator: syncCoordinator,
     );
     addTearDown(viewModel.dispose);
@@ -246,6 +288,41 @@ final class _Fixture {
   late final _FakeDraftStore draftStore;
   late final _FakeSessionActions sessionActions;
   late final ProductionHomeViewModel viewModel;
+}
+
+final class _FakeRelationshipStageGateway
+    implements CurrentRelationshipStageGateway {
+  const _FakeRelationshipStageGateway(this.result);
+
+  final CurrentRelationshipStageGatewayResult result;
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  Future<CurrentRelationshipStageGatewayResult> load({
+    required CurrentRelationshipStageScope scope,
+  }) async => result;
+}
+
+final class _MemoryRelationshipStageStore
+    implements CurrentRelationshipStageSnapshotStore {
+  CurrentRelationshipStageSnapshot? snapshot;
+
+  @override
+  Future<void> clear({required CurrentRelationshipStageScope scope}) async {
+    if (snapshot?.scope == scope) snapshot = null;
+  }
+
+  @override
+  Future<CurrentRelationshipStageSnapshot?> read({
+    required CurrentRelationshipStageScope scope,
+  }) async => snapshot?.scope == scope ? snapshot : null;
+
+  @override
+  Future<void> replace(CurrentRelationshipStageSnapshot snapshot) async {
+    this.snapshot = snapshot;
+  }
 }
 
 final class _FakeSessionActions implements ProductionHomeSessionActions {
@@ -434,6 +511,31 @@ const _health = SyncHealth(
   lastFailureCode: null,
   serverCursor: null,
 );
+
+CurrentRelationshipStageSnapshot _relationshipSnapshot() {
+  final scope = CurrentRelationshipStageScope.fromContext(_context);
+  return CurrentRelationshipStageSnapshot(
+    scope: scope,
+    snapshotAsOfUtc: DateTime.utc(2030, 1, 8, 18),
+    sourceDataCutoffUtc: DateTime.utc(2030, 1, 8, 17, 55),
+    authorizedAtUtc: DateTime.utc(2030, 1, 8, 17, 59),
+    lastSuccessfulSyncAtUtc: DateTime.utc(2030, 1, 8, 18, 1),
+    coverage: CurrentRelationshipStageCoverage.known(
+      totalCount: 1,
+      pendingCount: 0,
+    ),
+    rows: [
+      CurrentRelationshipStageRow(
+        targetId: 'target-2',
+        relationshipProjectId: scope.projectId,
+        assignedAppUserId: scope.appUserId,
+        stage: 2,
+        currentRevision: 1,
+        updatedAtUtc: DateTime.utc(2030, 1, 8, 17),
+      ),
+    ],
+  );
+}
 
 final _draft = ContactDraft(
   draftId: 'draft-1',

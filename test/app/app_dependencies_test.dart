@@ -4,6 +4,7 @@ import 'package:tongxingzhe_app/app/app_dependencies.dart';
 import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/data/local_database_factory.dart';
 import 'package:tongxingzhe_app/device/device_identity_store.dart';
+import 'package:tongxingzhe_app/features/contact_metrics/current_relationship_stage.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/legacy_demo/legacy_demo_dependencies.dart';
@@ -87,9 +88,10 @@ void main() {
     expect(identity.isClosed, isTrue);
   });
 
-  test('composition root 装配管理报告 gateway 并在后续启动失败时关闭', () async {
+  test('composition root 在后续启动失败时关闭已经装配的 gateways', () async {
     final database = LocalDatabase(NativeDatabase.memory());
     final gateway = _TrackingManagementReportGateway();
+    final relationshipGateway = _TrackingCurrentRelationshipStageGateway();
     final dependencies = AppDependencies(
       databaseFactory: _SingleDatabaseFactory(database),
       clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
@@ -98,6 +100,7 @@ void main() {
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       managementReportGatewayBuilder: (_) => gateway,
+      currentRelationshipStageGatewayBuilder: (_) => relationshipGateway,
       reminderSchedulerBuilder: (_) => throw StateError('synthetic failure'),
     );
 
@@ -105,6 +108,7 @@ void main() {
 
     expect(startup, isA<AppStartupFailed>());
     expect(gateway.closeCount, 1);
+    expect(relationshipGateway.closeCount, 1);
   });
 
   test('能力通过时 composition root 装配离线对象 gateway', () async {
@@ -271,4 +275,19 @@ final class _TrackingManagementReportGateway
   Future<ManagementReportResult<ManagementAnalysisContextSnapshot>>
   selectContext(String projectId) async =>
       const ManagementReportRejected(ManagementReportFailureCode.notConfigured);
+}
+
+final class _TrackingCurrentRelationshipStageGateway
+    implements CurrentRelationshipStageGateway {
+  var closeCount = 0;
+
+  @override
+  Future<void> close() async => closeCount++;
+
+  @override
+  Future<CurrentRelationshipStageGatewayResult> load({
+    required CurrentRelationshipStageScope scope,
+  }) async => const CurrentRelationshipStageGatewayRejected(
+    CurrentRelationshipStageGatewayFailureCode.notConfigured,
+  );
 }

@@ -10,6 +10,7 @@ import '../device/device_time_zone.dart';
 import '../features/contact_journal/contact_journal.dart';
 import '../features/contact_journal/contact_models.dart';
 import '../features/contact_entry/contact_entry_screen.dart';
+import '../features/contact_metrics/current_relationship_stage.dart';
 import '../features/contact_revision/contact_revision_screen.dart';
 import '../foundation/runtime_values.dart';
 import '../identity/identity_session.dart';
@@ -71,6 +72,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
   PersonalActionPlanGateway? _personalActionPlanGateway;
   PersonalActionReminderGateway? _personalActionReminderGateway;
   ManagementReportGateway? _managementReportGateway;
+  CurrentRelationshipStageGateway? _currentRelationshipStageGateway;
   ReminderNotificationScheduler? _reminderNotificationScheduler;
   PrivateSessionDataGuard? _privateSessionDataGuard;
 
@@ -94,6 +96,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       :final personalActionPlanGateway,
       :final personalActionReminderGateway,
       :final managementReportGateway,
+      :final currentRelationshipStageGateway,
       :final reminderNotificationScheduler,
       :final privateSessionDataGuard,
     )) {
@@ -108,6 +111,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       _personalActionPlanGateway = personalActionPlanGateway;
       _personalActionReminderGateway = personalActionReminderGateway;
       _managementReportGateway = managementReportGateway;
+      _currentRelationshipStageGateway = currentRelationshipStageGateway;
       _reminderNotificationScheduler = reminderNotificationScheduler;
       _privateSessionDataGuard = privateSessionDataGuard;
     }
@@ -126,6 +130,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
     unawaited(_personalActionPlanGateway?.close());
     unawaited(_personalActionReminderGateway?.close());
     unawaited(_managementReportGateway?.close());
+    unawaited(_currentRelationshipStageGateway?.close());
     unawaited(_privateSessionDataGuard?.close());
     unawaited(_reminderNotificationScheduler?.close());
     _controller?.dispose();
@@ -162,6 +167,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
             :final personalActionPlanGateway,
             :final personalActionReminderGateway,
             :final managementReportGateway,
+            :final currentRelationshipStageRepository,
             :final deviceReminderPreferenceStore,
             :final reminderNotificationScheduler,
             :final idGenerator,
@@ -183,6 +189,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
               personalActionPlanGateway: personalActionPlanGateway,
               personalActionReminderGateway: personalActionReminderGateway,
               managementReportGateway: managementReportGateway,
+              currentRelationshipStageRepository:
+                  currentRelationshipStageRepository,
               deviceReminderPreferenceStore: deviceReminderPreferenceStore,
               reminderNotificationScheduler: reminderNotificationScheduler,
               idGenerator: idGenerator,
@@ -216,6 +224,7 @@ class _ReadyApp extends StatefulWidget {
     required this.personalActionPlanGateway,
     required this.personalActionReminderGateway,
     required this.managementReportGateway,
+    required this.currentRelationshipStageRepository,
     required this.deviceReminderPreferenceStore,
     required this.reminderNotificationScheduler,
     required this.idGenerator,
@@ -239,6 +248,7 @@ class _ReadyApp extends StatefulWidget {
   final PersonalActionPlanGateway personalActionPlanGateway;
   final PersonalActionReminderGateway personalActionReminderGateway;
   final ManagementReportGateway managementReportGateway;
+  final CurrentRelationshipStageRepository currentRelationshipStageRepository;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
   final ReminderNotificationScheduler reminderNotificationScheduler;
   final IdGenerator idGenerator;
@@ -329,6 +339,8 @@ final class _ReadyAppState extends State<_ReadyApp> {
         personalActionPlanGateway: widget.personalActionPlanGateway,
         personalActionReminderGateway: widget.personalActionReminderGateway,
         managementReportGateway: widget.managementReportGateway,
+        currentRelationshipStageRepository:
+            widget.currentRelationshipStageRepository,
         deviceReminderPreferenceStore: widget.deviceReminderPreferenceStore,
         reminderNotificationScheduler: widget.reminderNotificationScheduler,
         idGenerator: widget.idGenerator,

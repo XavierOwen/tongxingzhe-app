@@ -18372,6 +18372,1156 @@ class DbQuestionnaireDraftWorkingCopiesCompanion
   }
 }
 
+class $DbCurrentRelationshipStageProjectionsTable
+    extends DbCurrentRelationshipStageProjections
+    with
+        TableInfo<
+          $DbCurrentRelationshipStageProjectionsTable,
+          DbCurrentRelationshipStageProjection
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DbCurrentRelationshipStageProjectionsTable(
+    this.attachedDatabase, [
+    this._alias,
+  ]);
+  static const VerificationMeta _appUserIdMeta = const VerificationMeta(
+    'appUserId',
+  );
+  @override
+  late final GeneratedColumn<String> appUserId = GeneratedColumn<String>(
+    'app_user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _workspaceIdMeta = const VerificationMeta(
+    'workspaceId',
+  );
+  @override
+  late final GeneratedColumn<String> workspaceId = GeneratedColumn<String>(
+    'workspace_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<String> projectId = GeneratedColumn<String>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _targetKeyMeta = const VerificationMeta(
+    'targetKey',
+  );
+  @override
+  late final GeneratedColumn<String> targetKey = GeneratedColumn<String>(
+    'target_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _relationshipStageMeta = const VerificationMeta(
+    'relationshipStage',
+  );
+  @override
+  late final GeneratedColumn<int> relationshipStage = GeneratedColumn<int>(
+    'relationship_stage',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _relationshipRevisionMeta =
+      const VerificationMeta('relationshipRevision');
+  @override
+  late final GeneratedColumn<int> relationshipRevision = GeneratedColumn<int>(
+    'relationship_revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _relationshipUpdatedAtUtcMeta =
+      const VerificationMeta('relationshipUpdatedAtUtc');
+  @override
+  late final GeneratedColumn<DateTime> relationshipUpdatedAtUtc =
+      GeneratedColumn<DateTime>(
+        'relationship_updated_at_utc',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      );
+  @override
+  List<GeneratedColumn> get $columns => [
+    appUserId,
+    workspaceId,
+    projectId,
+    targetKey,
+    relationshipStage,
+    relationshipRevision,
+    relationshipUpdatedAtUtc,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'db_current_relationship_stage_projections';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DbCurrentRelationshipStageProjection> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('app_user_id')) {
+      context.handle(
+        _appUserIdMeta,
+        appUserId.isAcceptableOrUnknown(data['app_user_id']!, _appUserIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_appUserIdMeta);
+    }
+    if (data.containsKey('workspace_id')) {
+      context.handle(
+        _workspaceIdMeta,
+        workspaceId.isAcceptableOrUnknown(
+          data['workspace_id']!,
+          _workspaceIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_workspaceIdMeta);
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('target_key')) {
+      context.handle(
+        _targetKeyMeta,
+        targetKey.isAcceptableOrUnknown(data['target_key']!, _targetKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_targetKeyMeta);
+    }
+    if (data.containsKey('relationship_stage')) {
+      context.handle(
+        _relationshipStageMeta,
+        relationshipStage.isAcceptableOrUnknown(
+          data['relationship_stage']!,
+          _relationshipStageMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_relationshipStageMeta);
+    }
+    if (data.containsKey('relationship_revision')) {
+      context.handle(
+        _relationshipRevisionMeta,
+        relationshipRevision.isAcceptableOrUnknown(
+          data['relationship_revision']!,
+          _relationshipRevisionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_relationshipRevisionMeta);
+    }
+    if (data.containsKey('relationship_updated_at_utc')) {
+      context.handle(
+        _relationshipUpdatedAtUtcMeta,
+        relationshipUpdatedAtUtc.isAcceptableOrUnknown(
+          data['relationship_updated_at_utc']!,
+          _relationshipUpdatedAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_relationshipUpdatedAtUtcMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {
+    appUserId,
+    workspaceId,
+    projectId,
+    targetKey,
+  };
+  @override
+  DbCurrentRelationshipStageProjection map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DbCurrentRelationshipStageProjection(
+      appUserId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}app_user_id'],
+      )!,
+      workspaceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}workspace_id'],
+      )!,
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}project_id'],
+      )!,
+      targetKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}target_key'],
+      )!,
+      relationshipStage: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}relationship_stage'],
+      )!,
+      relationshipRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}relationship_revision'],
+      )!,
+      relationshipUpdatedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}relationship_updated_at_utc'],
+      )!,
+    );
+  }
+
+  @override
+  $DbCurrentRelationshipStageProjectionsTable createAlias(String alias) {
+    return $DbCurrentRelationshipStageProjectionsTable(attachedDatabase, alias);
+  }
+}
+
+class DbCurrentRelationshipStageProjection extends DataClass
+    implements Insertable<DbCurrentRelationshipStageProjection> {
+  final String appUserId;
+  final String workspaceId;
+  final String projectId;
+  final String targetKey;
+  final int relationshipStage;
+  final int relationshipRevision;
+  final DateTime relationshipUpdatedAtUtc;
+  const DbCurrentRelationshipStageProjection({
+    required this.appUserId,
+    required this.workspaceId,
+    required this.projectId,
+    required this.targetKey,
+    required this.relationshipStage,
+    required this.relationshipRevision,
+    required this.relationshipUpdatedAtUtc,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['app_user_id'] = Variable<String>(appUserId);
+    map['workspace_id'] = Variable<String>(workspaceId);
+    map['project_id'] = Variable<String>(projectId);
+    map['target_key'] = Variable<String>(targetKey);
+    map['relationship_stage'] = Variable<int>(relationshipStage);
+    map['relationship_revision'] = Variable<int>(relationshipRevision);
+    map['relationship_updated_at_utc'] = Variable<DateTime>(
+      relationshipUpdatedAtUtc,
+    );
+    return map;
+  }
+
+  DbCurrentRelationshipStageProjectionsCompanion toCompanion(
+    bool nullToAbsent,
+  ) {
+    return DbCurrentRelationshipStageProjectionsCompanion(
+      appUserId: Value(appUserId),
+      workspaceId: Value(workspaceId),
+      projectId: Value(projectId),
+      targetKey: Value(targetKey),
+      relationshipStage: Value(relationshipStage),
+      relationshipRevision: Value(relationshipRevision),
+      relationshipUpdatedAtUtc: Value(relationshipUpdatedAtUtc),
+    );
+  }
+
+  factory DbCurrentRelationshipStageProjection.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DbCurrentRelationshipStageProjection(
+      appUserId: serializer.fromJson<String>(json['appUserId']),
+      workspaceId: serializer.fromJson<String>(json['workspaceId']),
+      projectId: serializer.fromJson<String>(json['projectId']),
+      targetKey: serializer.fromJson<String>(json['targetKey']),
+      relationshipStage: serializer.fromJson<int>(json['relationshipStage']),
+      relationshipRevision: serializer.fromJson<int>(
+        json['relationshipRevision'],
+      ),
+      relationshipUpdatedAtUtc: serializer.fromJson<DateTime>(
+        json['relationshipUpdatedAtUtc'],
+      ),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'appUserId': serializer.toJson<String>(appUserId),
+      'workspaceId': serializer.toJson<String>(workspaceId),
+      'projectId': serializer.toJson<String>(projectId),
+      'targetKey': serializer.toJson<String>(targetKey),
+      'relationshipStage': serializer.toJson<int>(relationshipStage),
+      'relationshipRevision': serializer.toJson<int>(relationshipRevision),
+      'relationshipUpdatedAtUtc': serializer.toJson<DateTime>(
+        relationshipUpdatedAtUtc,
+      ),
+    };
+  }
+
+  DbCurrentRelationshipStageProjection copyWith({
+    String? appUserId,
+    String? workspaceId,
+    String? projectId,
+    String? targetKey,
+    int? relationshipStage,
+    int? relationshipRevision,
+    DateTime? relationshipUpdatedAtUtc,
+  }) => DbCurrentRelationshipStageProjection(
+    appUserId: appUserId ?? this.appUserId,
+    workspaceId: workspaceId ?? this.workspaceId,
+    projectId: projectId ?? this.projectId,
+    targetKey: targetKey ?? this.targetKey,
+    relationshipStage: relationshipStage ?? this.relationshipStage,
+    relationshipRevision: relationshipRevision ?? this.relationshipRevision,
+    relationshipUpdatedAtUtc:
+        relationshipUpdatedAtUtc ?? this.relationshipUpdatedAtUtc,
+  );
+  DbCurrentRelationshipStageProjection copyWithCompanion(
+    DbCurrentRelationshipStageProjectionsCompanion data,
+  ) {
+    return DbCurrentRelationshipStageProjection(
+      appUserId: data.appUserId.present ? data.appUserId.value : this.appUserId,
+      workspaceId: data.workspaceId.present
+          ? data.workspaceId.value
+          : this.workspaceId,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      targetKey: data.targetKey.present ? data.targetKey.value : this.targetKey,
+      relationshipStage: data.relationshipStage.present
+          ? data.relationshipStage.value
+          : this.relationshipStage,
+      relationshipRevision: data.relationshipRevision.present
+          ? data.relationshipRevision.value
+          : this.relationshipRevision,
+      relationshipUpdatedAtUtc: data.relationshipUpdatedAtUtc.present
+          ? data.relationshipUpdatedAtUtc.value
+          : this.relationshipUpdatedAtUtc,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbCurrentRelationshipStageProjection(')
+          ..write('appUserId: $appUserId, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('projectId: $projectId, ')
+          ..write('targetKey: $targetKey, ')
+          ..write('relationshipStage: $relationshipStage, ')
+          ..write('relationshipRevision: $relationshipRevision, ')
+          ..write('relationshipUpdatedAtUtc: $relationshipUpdatedAtUtc')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    appUserId,
+    workspaceId,
+    projectId,
+    targetKey,
+    relationshipStage,
+    relationshipRevision,
+    relationshipUpdatedAtUtc,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DbCurrentRelationshipStageProjection &&
+          other.appUserId == this.appUserId &&
+          other.workspaceId == this.workspaceId &&
+          other.projectId == this.projectId &&
+          other.targetKey == this.targetKey &&
+          other.relationshipStage == this.relationshipStage &&
+          other.relationshipRevision == this.relationshipRevision &&
+          other.relationshipUpdatedAtUtc == this.relationshipUpdatedAtUtc);
+}
+
+class DbCurrentRelationshipStageProjectionsCompanion
+    extends UpdateCompanion<DbCurrentRelationshipStageProjection> {
+  final Value<String> appUserId;
+  final Value<String> workspaceId;
+  final Value<String> projectId;
+  final Value<String> targetKey;
+  final Value<int> relationshipStage;
+  final Value<int> relationshipRevision;
+  final Value<DateTime> relationshipUpdatedAtUtc;
+  final Value<int> rowid;
+  const DbCurrentRelationshipStageProjectionsCompanion({
+    this.appUserId = const Value.absent(),
+    this.workspaceId = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.targetKey = const Value.absent(),
+    this.relationshipStage = const Value.absent(),
+    this.relationshipRevision = const Value.absent(),
+    this.relationshipUpdatedAtUtc = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DbCurrentRelationshipStageProjectionsCompanion.insert({
+    required String appUserId,
+    required String workspaceId,
+    required String projectId,
+    required String targetKey,
+    required int relationshipStage,
+    required int relationshipRevision,
+    required DateTime relationshipUpdatedAtUtc,
+    this.rowid = const Value.absent(),
+  }) : appUserId = Value(appUserId),
+       workspaceId = Value(workspaceId),
+       projectId = Value(projectId),
+       targetKey = Value(targetKey),
+       relationshipStage = Value(relationshipStage),
+       relationshipRevision = Value(relationshipRevision),
+       relationshipUpdatedAtUtc = Value(relationshipUpdatedAtUtc);
+  static Insertable<DbCurrentRelationshipStageProjection> custom({
+    Expression<String>? appUserId,
+    Expression<String>? workspaceId,
+    Expression<String>? projectId,
+    Expression<String>? targetKey,
+    Expression<int>? relationshipStage,
+    Expression<int>? relationshipRevision,
+    Expression<DateTime>? relationshipUpdatedAtUtc,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (appUserId != null) 'app_user_id': appUserId,
+      if (workspaceId != null) 'workspace_id': workspaceId,
+      if (projectId != null) 'project_id': projectId,
+      if (targetKey != null) 'target_key': targetKey,
+      if (relationshipStage != null) 'relationship_stage': relationshipStage,
+      if (relationshipRevision != null)
+        'relationship_revision': relationshipRevision,
+      if (relationshipUpdatedAtUtc != null)
+        'relationship_updated_at_utc': relationshipUpdatedAtUtc,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DbCurrentRelationshipStageProjectionsCompanion copyWith({
+    Value<String>? appUserId,
+    Value<String>? workspaceId,
+    Value<String>? projectId,
+    Value<String>? targetKey,
+    Value<int>? relationshipStage,
+    Value<int>? relationshipRevision,
+    Value<DateTime>? relationshipUpdatedAtUtc,
+    Value<int>? rowid,
+  }) {
+    return DbCurrentRelationshipStageProjectionsCompanion(
+      appUserId: appUserId ?? this.appUserId,
+      workspaceId: workspaceId ?? this.workspaceId,
+      projectId: projectId ?? this.projectId,
+      targetKey: targetKey ?? this.targetKey,
+      relationshipStage: relationshipStage ?? this.relationshipStage,
+      relationshipRevision: relationshipRevision ?? this.relationshipRevision,
+      relationshipUpdatedAtUtc:
+          relationshipUpdatedAtUtc ?? this.relationshipUpdatedAtUtc,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (appUserId.present) {
+      map['app_user_id'] = Variable<String>(appUserId.value);
+    }
+    if (workspaceId.present) {
+      map['workspace_id'] = Variable<String>(workspaceId.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<String>(projectId.value);
+    }
+    if (targetKey.present) {
+      map['target_key'] = Variable<String>(targetKey.value);
+    }
+    if (relationshipStage.present) {
+      map['relationship_stage'] = Variable<int>(relationshipStage.value);
+    }
+    if (relationshipRevision.present) {
+      map['relationship_revision'] = Variable<int>(relationshipRevision.value);
+    }
+    if (relationshipUpdatedAtUtc.present) {
+      map['relationship_updated_at_utc'] = Variable<DateTime>(
+        relationshipUpdatedAtUtc.value,
+      );
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbCurrentRelationshipStageProjectionsCompanion(')
+          ..write('appUserId: $appUserId, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('projectId: $projectId, ')
+          ..write('targetKey: $targetKey, ')
+          ..write('relationshipStage: $relationshipStage, ')
+          ..write('relationshipRevision: $relationshipRevision, ')
+          ..write('relationshipUpdatedAtUtc: $relationshipUpdatedAtUtc, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $DbCurrentRelationshipStageSnapshotsTable
+    extends DbCurrentRelationshipStageSnapshots
+    with
+        TableInfo<
+          $DbCurrentRelationshipStageSnapshotsTable,
+          DbCurrentRelationshipStageSnapshot
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DbCurrentRelationshipStageSnapshotsTable(
+    this.attachedDatabase, [
+    this._alias,
+  ]);
+  static const VerificationMeta _appUserIdMeta = const VerificationMeta(
+    'appUserId',
+  );
+  @override
+  late final GeneratedColumn<String> appUserId = GeneratedColumn<String>(
+    'app_user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _workspaceIdMeta = const VerificationMeta(
+    'workspaceId',
+  );
+  @override
+  late final GeneratedColumn<String> workspaceId = GeneratedColumn<String>(
+    'workspace_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<String> projectId = GeneratedColumn<String>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotAsOfUtcMeta = const VerificationMeta(
+    'snapshotAsOfUtc',
+  );
+  @override
+  late final GeneratedColumn<DateTime> snapshotAsOfUtc =
+      GeneratedColumn<DateTime>(
+        'snapshot_as_of_utc',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _sourceCutoffUtcMeta = const VerificationMeta(
+    'sourceCutoffUtc',
+  );
+  @override
+  late final GeneratedColumn<DateTime> sourceCutoffUtc =
+      GeneratedColumn<DateTime>(
+        'source_cutoff_utc',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _authorizedAtUtcMeta = const VerificationMeta(
+    'authorizedAtUtc',
+  );
+  @override
+  late final GeneratedColumn<DateTime> authorizedAtUtc =
+      GeneratedColumn<DateTime>(
+        'authorized_at_utc',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _lastSuccessfulSyncAtUtcMeta =
+      const VerificationMeta('lastSuccessfulSyncAtUtc');
+  @override
+  late final GeneratedColumn<DateTime> lastSuccessfulSyncAtUtc =
+      GeneratedColumn<DateTime>(
+        'last_successful_sync_at_utc',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _totalCountMeta = const VerificationMeta(
+    'totalCount',
+  );
+  @override
+  late final GeneratedColumn<int> totalCount = GeneratedColumn<int>(
+    'total_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _pendingSyncCountMeta = const VerificationMeta(
+    'pendingSyncCount',
+  );
+  @override
+  late final GeneratedColumn<int> pendingSyncCount = GeneratedColumn<int>(
+    'pending_sync_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    appUserId,
+    workspaceId,
+    projectId,
+    snapshotAsOfUtc,
+    sourceCutoffUtc,
+    authorizedAtUtc,
+    lastSuccessfulSyncAtUtc,
+    totalCount,
+    pendingSyncCount,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'db_current_relationship_stage_snapshots';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DbCurrentRelationshipStageSnapshot> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('app_user_id')) {
+      context.handle(
+        _appUserIdMeta,
+        appUserId.isAcceptableOrUnknown(data['app_user_id']!, _appUserIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_appUserIdMeta);
+    }
+    if (data.containsKey('workspace_id')) {
+      context.handle(
+        _workspaceIdMeta,
+        workspaceId.isAcceptableOrUnknown(
+          data['workspace_id']!,
+          _workspaceIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_workspaceIdMeta);
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('snapshot_as_of_utc')) {
+      context.handle(
+        _snapshotAsOfUtcMeta,
+        snapshotAsOfUtc.isAcceptableOrUnknown(
+          data['snapshot_as_of_utc']!,
+          _snapshotAsOfUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotAsOfUtcMeta);
+    }
+    if (data.containsKey('source_cutoff_utc')) {
+      context.handle(
+        _sourceCutoffUtcMeta,
+        sourceCutoffUtc.isAcceptableOrUnknown(
+          data['source_cutoff_utc']!,
+          _sourceCutoffUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceCutoffUtcMeta);
+    }
+    if (data.containsKey('authorized_at_utc')) {
+      context.handle(
+        _authorizedAtUtcMeta,
+        authorizedAtUtc.isAcceptableOrUnknown(
+          data['authorized_at_utc']!,
+          _authorizedAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_authorizedAtUtcMeta);
+    }
+    if (data.containsKey('last_successful_sync_at_utc')) {
+      context.handle(
+        _lastSuccessfulSyncAtUtcMeta,
+        lastSuccessfulSyncAtUtc.isAcceptableOrUnknown(
+          data['last_successful_sync_at_utc']!,
+          _lastSuccessfulSyncAtUtcMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_lastSuccessfulSyncAtUtcMeta);
+    }
+    if (data.containsKey('total_count')) {
+      context.handle(
+        _totalCountMeta,
+        totalCount.isAcceptableOrUnknown(data['total_count']!, _totalCountMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_totalCountMeta);
+    }
+    if (data.containsKey('pending_sync_count')) {
+      context.handle(
+        _pendingSyncCountMeta,
+        pendingSyncCount.isAcceptableOrUnknown(
+          data['pending_sync_count']!,
+          _pendingSyncCountMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_pendingSyncCountMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {appUserId, workspaceId, projectId};
+  @override
+  DbCurrentRelationshipStageSnapshot map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DbCurrentRelationshipStageSnapshot(
+      appUserId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}app_user_id'],
+      )!,
+      workspaceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}workspace_id'],
+      )!,
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}project_id'],
+      )!,
+      snapshotAsOfUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}snapshot_as_of_utc'],
+      )!,
+      sourceCutoffUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}source_cutoff_utc'],
+      )!,
+      authorizedAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}authorized_at_utc'],
+      )!,
+      lastSuccessfulSyncAtUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_successful_sync_at_utc'],
+      )!,
+      totalCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}total_count'],
+      )!,
+      pendingSyncCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}pending_sync_count'],
+      )!,
+    );
+  }
+
+  @override
+  $DbCurrentRelationshipStageSnapshotsTable createAlias(String alias) {
+    return $DbCurrentRelationshipStageSnapshotsTable(attachedDatabase, alias);
+  }
+}
+
+class DbCurrentRelationshipStageSnapshot extends DataClass
+    implements Insertable<DbCurrentRelationshipStageSnapshot> {
+  final String appUserId;
+  final String workspaceId;
+  final String projectId;
+  final DateTime snapshotAsOfUtc;
+  final DateTime sourceCutoffUtc;
+  final DateTime authorizedAtUtc;
+  final DateTime lastSuccessfulSyncAtUtc;
+  final int totalCount;
+  final int pendingSyncCount;
+  const DbCurrentRelationshipStageSnapshot({
+    required this.appUserId,
+    required this.workspaceId,
+    required this.projectId,
+    required this.snapshotAsOfUtc,
+    required this.sourceCutoffUtc,
+    required this.authorizedAtUtc,
+    required this.lastSuccessfulSyncAtUtc,
+    required this.totalCount,
+    required this.pendingSyncCount,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['app_user_id'] = Variable<String>(appUserId);
+    map['workspace_id'] = Variable<String>(workspaceId);
+    map['project_id'] = Variable<String>(projectId);
+    map['snapshot_as_of_utc'] = Variable<DateTime>(snapshotAsOfUtc);
+    map['source_cutoff_utc'] = Variable<DateTime>(sourceCutoffUtc);
+    map['authorized_at_utc'] = Variable<DateTime>(authorizedAtUtc);
+    map['last_successful_sync_at_utc'] = Variable<DateTime>(
+      lastSuccessfulSyncAtUtc,
+    );
+    map['total_count'] = Variable<int>(totalCount);
+    map['pending_sync_count'] = Variable<int>(pendingSyncCount);
+    return map;
+  }
+
+  DbCurrentRelationshipStageSnapshotsCompanion toCompanion(bool nullToAbsent) {
+    return DbCurrentRelationshipStageSnapshotsCompanion(
+      appUserId: Value(appUserId),
+      workspaceId: Value(workspaceId),
+      projectId: Value(projectId),
+      snapshotAsOfUtc: Value(snapshotAsOfUtc),
+      sourceCutoffUtc: Value(sourceCutoffUtc),
+      authorizedAtUtc: Value(authorizedAtUtc),
+      lastSuccessfulSyncAtUtc: Value(lastSuccessfulSyncAtUtc),
+      totalCount: Value(totalCount),
+      pendingSyncCount: Value(pendingSyncCount),
+    );
+  }
+
+  factory DbCurrentRelationshipStageSnapshot.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DbCurrentRelationshipStageSnapshot(
+      appUserId: serializer.fromJson<String>(json['appUserId']),
+      workspaceId: serializer.fromJson<String>(json['workspaceId']),
+      projectId: serializer.fromJson<String>(json['projectId']),
+      snapshotAsOfUtc: serializer.fromJson<DateTime>(json['snapshotAsOfUtc']),
+      sourceCutoffUtc: serializer.fromJson<DateTime>(json['sourceCutoffUtc']),
+      authorizedAtUtc: serializer.fromJson<DateTime>(json['authorizedAtUtc']),
+      lastSuccessfulSyncAtUtc: serializer.fromJson<DateTime>(
+        json['lastSuccessfulSyncAtUtc'],
+      ),
+      totalCount: serializer.fromJson<int>(json['totalCount']),
+      pendingSyncCount: serializer.fromJson<int>(json['pendingSyncCount']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'appUserId': serializer.toJson<String>(appUserId),
+      'workspaceId': serializer.toJson<String>(workspaceId),
+      'projectId': serializer.toJson<String>(projectId),
+      'snapshotAsOfUtc': serializer.toJson<DateTime>(snapshotAsOfUtc),
+      'sourceCutoffUtc': serializer.toJson<DateTime>(sourceCutoffUtc),
+      'authorizedAtUtc': serializer.toJson<DateTime>(authorizedAtUtc),
+      'lastSuccessfulSyncAtUtc': serializer.toJson<DateTime>(
+        lastSuccessfulSyncAtUtc,
+      ),
+      'totalCount': serializer.toJson<int>(totalCount),
+      'pendingSyncCount': serializer.toJson<int>(pendingSyncCount),
+    };
+  }
+
+  DbCurrentRelationshipStageSnapshot copyWith({
+    String? appUserId,
+    String? workspaceId,
+    String? projectId,
+    DateTime? snapshotAsOfUtc,
+    DateTime? sourceCutoffUtc,
+    DateTime? authorizedAtUtc,
+    DateTime? lastSuccessfulSyncAtUtc,
+    int? totalCount,
+    int? pendingSyncCount,
+  }) => DbCurrentRelationshipStageSnapshot(
+    appUserId: appUserId ?? this.appUserId,
+    workspaceId: workspaceId ?? this.workspaceId,
+    projectId: projectId ?? this.projectId,
+    snapshotAsOfUtc: snapshotAsOfUtc ?? this.snapshotAsOfUtc,
+    sourceCutoffUtc: sourceCutoffUtc ?? this.sourceCutoffUtc,
+    authorizedAtUtc: authorizedAtUtc ?? this.authorizedAtUtc,
+    lastSuccessfulSyncAtUtc:
+        lastSuccessfulSyncAtUtc ?? this.lastSuccessfulSyncAtUtc,
+    totalCount: totalCount ?? this.totalCount,
+    pendingSyncCount: pendingSyncCount ?? this.pendingSyncCount,
+  );
+  DbCurrentRelationshipStageSnapshot copyWithCompanion(
+    DbCurrentRelationshipStageSnapshotsCompanion data,
+  ) {
+    return DbCurrentRelationshipStageSnapshot(
+      appUserId: data.appUserId.present ? data.appUserId.value : this.appUserId,
+      workspaceId: data.workspaceId.present
+          ? data.workspaceId.value
+          : this.workspaceId,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      snapshotAsOfUtc: data.snapshotAsOfUtc.present
+          ? data.snapshotAsOfUtc.value
+          : this.snapshotAsOfUtc,
+      sourceCutoffUtc: data.sourceCutoffUtc.present
+          ? data.sourceCutoffUtc.value
+          : this.sourceCutoffUtc,
+      authorizedAtUtc: data.authorizedAtUtc.present
+          ? data.authorizedAtUtc.value
+          : this.authorizedAtUtc,
+      lastSuccessfulSyncAtUtc: data.lastSuccessfulSyncAtUtc.present
+          ? data.lastSuccessfulSyncAtUtc.value
+          : this.lastSuccessfulSyncAtUtc,
+      totalCount: data.totalCount.present
+          ? data.totalCount.value
+          : this.totalCount,
+      pendingSyncCount: data.pendingSyncCount.present
+          ? data.pendingSyncCount.value
+          : this.pendingSyncCount,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbCurrentRelationshipStageSnapshot(')
+          ..write('appUserId: $appUserId, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('projectId: $projectId, ')
+          ..write('snapshotAsOfUtc: $snapshotAsOfUtc, ')
+          ..write('sourceCutoffUtc: $sourceCutoffUtc, ')
+          ..write('authorizedAtUtc: $authorizedAtUtc, ')
+          ..write('lastSuccessfulSyncAtUtc: $lastSuccessfulSyncAtUtc, ')
+          ..write('totalCount: $totalCount, ')
+          ..write('pendingSyncCount: $pendingSyncCount')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    appUserId,
+    workspaceId,
+    projectId,
+    snapshotAsOfUtc,
+    sourceCutoffUtc,
+    authorizedAtUtc,
+    lastSuccessfulSyncAtUtc,
+    totalCount,
+    pendingSyncCount,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DbCurrentRelationshipStageSnapshot &&
+          other.appUserId == this.appUserId &&
+          other.workspaceId == this.workspaceId &&
+          other.projectId == this.projectId &&
+          other.snapshotAsOfUtc == this.snapshotAsOfUtc &&
+          other.sourceCutoffUtc == this.sourceCutoffUtc &&
+          other.authorizedAtUtc == this.authorizedAtUtc &&
+          other.lastSuccessfulSyncAtUtc == this.lastSuccessfulSyncAtUtc &&
+          other.totalCount == this.totalCount &&
+          other.pendingSyncCount == this.pendingSyncCount);
+}
+
+class DbCurrentRelationshipStageSnapshotsCompanion
+    extends UpdateCompanion<DbCurrentRelationshipStageSnapshot> {
+  final Value<String> appUserId;
+  final Value<String> workspaceId;
+  final Value<String> projectId;
+  final Value<DateTime> snapshotAsOfUtc;
+  final Value<DateTime> sourceCutoffUtc;
+  final Value<DateTime> authorizedAtUtc;
+  final Value<DateTime> lastSuccessfulSyncAtUtc;
+  final Value<int> totalCount;
+  final Value<int> pendingSyncCount;
+  final Value<int> rowid;
+  const DbCurrentRelationshipStageSnapshotsCompanion({
+    this.appUserId = const Value.absent(),
+    this.workspaceId = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.snapshotAsOfUtc = const Value.absent(),
+    this.sourceCutoffUtc = const Value.absent(),
+    this.authorizedAtUtc = const Value.absent(),
+    this.lastSuccessfulSyncAtUtc = const Value.absent(),
+    this.totalCount = const Value.absent(),
+    this.pendingSyncCount = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DbCurrentRelationshipStageSnapshotsCompanion.insert({
+    required String appUserId,
+    required String workspaceId,
+    required String projectId,
+    required DateTime snapshotAsOfUtc,
+    required DateTime sourceCutoffUtc,
+    required DateTime authorizedAtUtc,
+    required DateTime lastSuccessfulSyncAtUtc,
+    required int totalCount,
+    required int pendingSyncCount,
+    this.rowid = const Value.absent(),
+  }) : appUserId = Value(appUserId),
+       workspaceId = Value(workspaceId),
+       projectId = Value(projectId),
+       snapshotAsOfUtc = Value(snapshotAsOfUtc),
+       sourceCutoffUtc = Value(sourceCutoffUtc),
+       authorizedAtUtc = Value(authorizedAtUtc),
+       lastSuccessfulSyncAtUtc = Value(lastSuccessfulSyncAtUtc),
+       totalCount = Value(totalCount),
+       pendingSyncCount = Value(pendingSyncCount);
+  static Insertable<DbCurrentRelationshipStageSnapshot> custom({
+    Expression<String>? appUserId,
+    Expression<String>? workspaceId,
+    Expression<String>? projectId,
+    Expression<DateTime>? snapshotAsOfUtc,
+    Expression<DateTime>? sourceCutoffUtc,
+    Expression<DateTime>? authorizedAtUtc,
+    Expression<DateTime>? lastSuccessfulSyncAtUtc,
+    Expression<int>? totalCount,
+    Expression<int>? pendingSyncCount,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (appUserId != null) 'app_user_id': appUserId,
+      if (workspaceId != null) 'workspace_id': workspaceId,
+      if (projectId != null) 'project_id': projectId,
+      if (snapshotAsOfUtc != null) 'snapshot_as_of_utc': snapshotAsOfUtc,
+      if (sourceCutoffUtc != null) 'source_cutoff_utc': sourceCutoffUtc,
+      if (authorizedAtUtc != null) 'authorized_at_utc': authorizedAtUtc,
+      if (lastSuccessfulSyncAtUtc != null)
+        'last_successful_sync_at_utc': lastSuccessfulSyncAtUtc,
+      if (totalCount != null) 'total_count': totalCount,
+      if (pendingSyncCount != null) 'pending_sync_count': pendingSyncCount,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DbCurrentRelationshipStageSnapshotsCompanion copyWith({
+    Value<String>? appUserId,
+    Value<String>? workspaceId,
+    Value<String>? projectId,
+    Value<DateTime>? snapshotAsOfUtc,
+    Value<DateTime>? sourceCutoffUtc,
+    Value<DateTime>? authorizedAtUtc,
+    Value<DateTime>? lastSuccessfulSyncAtUtc,
+    Value<int>? totalCount,
+    Value<int>? pendingSyncCount,
+    Value<int>? rowid,
+  }) {
+    return DbCurrentRelationshipStageSnapshotsCompanion(
+      appUserId: appUserId ?? this.appUserId,
+      workspaceId: workspaceId ?? this.workspaceId,
+      projectId: projectId ?? this.projectId,
+      snapshotAsOfUtc: snapshotAsOfUtc ?? this.snapshotAsOfUtc,
+      sourceCutoffUtc: sourceCutoffUtc ?? this.sourceCutoffUtc,
+      authorizedAtUtc: authorizedAtUtc ?? this.authorizedAtUtc,
+      lastSuccessfulSyncAtUtc:
+          lastSuccessfulSyncAtUtc ?? this.lastSuccessfulSyncAtUtc,
+      totalCount: totalCount ?? this.totalCount,
+      pendingSyncCount: pendingSyncCount ?? this.pendingSyncCount,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (appUserId.present) {
+      map['app_user_id'] = Variable<String>(appUserId.value);
+    }
+    if (workspaceId.present) {
+      map['workspace_id'] = Variable<String>(workspaceId.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<String>(projectId.value);
+    }
+    if (snapshotAsOfUtc.present) {
+      map['snapshot_as_of_utc'] = Variable<DateTime>(snapshotAsOfUtc.value);
+    }
+    if (sourceCutoffUtc.present) {
+      map['source_cutoff_utc'] = Variable<DateTime>(sourceCutoffUtc.value);
+    }
+    if (authorizedAtUtc.present) {
+      map['authorized_at_utc'] = Variable<DateTime>(authorizedAtUtc.value);
+    }
+    if (lastSuccessfulSyncAtUtc.present) {
+      map['last_successful_sync_at_utc'] = Variable<DateTime>(
+        lastSuccessfulSyncAtUtc.value,
+      );
+    }
+    if (totalCount.present) {
+      map['total_count'] = Variable<int>(totalCount.value);
+    }
+    if (pendingSyncCount.present) {
+      map['pending_sync_count'] = Variable<int>(pendingSyncCount.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DbCurrentRelationshipStageSnapshotsCompanion(')
+          ..write('appUserId: $appUserId, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('projectId: $projectId, ')
+          ..write('snapshotAsOfUtc: $snapshotAsOfUtc, ')
+          ..write('sourceCutoffUtc: $sourceCutoffUtc, ')
+          ..write('authorizedAtUtc: $authorizedAtUtc, ')
+          ..write('lastSuccessfulSyncAtUtc: $lastSuccessfulSyncAtUtc, ')
+          ..write('totalCount: $totalCount, ')
+          ..write('pendingSyncCount: $pendingSyncCount, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$LocalDatabase extends GeneratedDatabase {
   _$LocalDatabase(QueryExecutor e) : super(e);
   $LocalDatabaseManager get managers => $LocalDatabaseManager(this);
@@ -18449,6 +19599,16 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
   late final $DbQuestionnaireDraftWorkingCopiesTable
   dbQuestionnaireDraftWorkingCopies = $DbQuestionnaireDraftWorkingCopiesTable(
     this,
+  );
+  late final $DbCurrentRelationshipStageProjectionsTable
+  dbCurrentRelationshipStageProjections =
+      $DbCurrentRelationshipStageProjectionsTable(this);
+  late final $DbCurrentRelationshipStageSnapshotsTable
+  dbCurrentRelationshipStageSnapshots =
+      $DbCurrentRelationshipStageSnapshotsTable(this);
+  late final Index currentRelationshipStageScopeStage = Index(
+    'current_relationship_stage_scope_stage',
+    'CREATE INDEX current_relationship_stage_scope_stage ON db_current_relationship_stage_projections (app_user_id, workspace_id, project_id, relationship_stage)',
   );
   Selectable<DbSyncOutboxData> readReadySyncCommand(
     String appUserId,
@@ -18621,6 +19781,9 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
     dbQuestionnaireQuestions,
     dbQuestionnaireOptions,
     dbQuestionnaireDraftWorkingCopies,
+    dbCurrentRelationshipStageProjections,
+    dbCurrentRelationshipStageSnapshots,
+    currentRelationshipStageScopeStage,
   ];
 }
 
@@ -30408,6 +31571,586 @@ typedef $$DbQuestionnaireDraftWorkingCopiesTableProcessedTableManager =
       DbQuestionnaireDraftWorkingCopy,
       PrefetchHooks Function()
     >;
+typedef $$DbCurrentRelationshipStageProjectionsTableCreateCompanionBuilder =
+    DbCurrentRelationshipStageProjectionsCompanion Function({
+      required String appUserId,
+      required String workspaceId,
+      required String projectId,
+      required String targetKey,
+      required int relationshipStage,
+      required int relationshipRevision,
+      required DateTime relationshipUpdatedAtUtc,
+      Value<int> rowid,
+    });
+typedef $$DbCurrentRelationshipStageProjectionsTableUpdateCompanionBuilder =
+    DbCurrentRelationshipStageProjectionsCompanion Function({
+      Value<String> appUserId,
+      Value<String> workspaceId,
+      Value<String> projectId,
+      Value<String> targetKey,
+      Value<int> relationshipStage,
+      Value<int> relationshipRevision,
+      Value<DateTime> relationshipUpdatedAtUtc,
+      Value<int> rowid,
+    });
+
+class $$DbCurrentRelationshipStageProjectionsTableFilterComposer
+    extends
+        Composer<_$LocalDatabase, $DbCurrentRelationshipStageProjectionsTable> {
+  $$DbCurrentRelationshipStageProjectionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get appUserId => $composableBuilder(
+    column: $table.appUserId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get projectId => $composableBuilder(
+    column: $table.projectId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get targetKey => $composableBuilder(
+    column: $table.targetKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get relationshipStage => $composableBuilder(
+    column: $table.relationshipStage,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get relationshipRevision => $composableBuilder(
+    column: $table.relationshipRevision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get relationshipUpdatedAtUtc => $composableBuilder(
+    column: $table.relationshipUpdatedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DbCurrentRelationshipStageProjectionsTableOrderingComposer
+    extends
+        Composer<_$LocalDatabase, $DbCurrentRelationshipStageProjectionsTable> {
+  $$DbCurrentRelationshipStageProjectionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get appUserId => $composableBuilder(
+    column: $table.appUserId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get projectId => $composableBuilder(
+    column: $table.projectId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get targetKey => $composableBuilder(
+    column: $table.targetKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get relationshipStage => $composableBuilder(
+    column: $table.relationshipStage,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get relationshipRevision => $composableBuilder(
+    column: $table.relationshipRevision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get relationshipUpdatedAtUtc => $composableBuilder(
+    column: $table.relationshipUpdatedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DbCurrentRelationshipStageProjectionsTableAnnotationComposer
+    extends
+        Composer<_$LocalDatabase, $DbCurrentRelationshipStageProjectionsTable> {
+  $$DbCurrentRelationshipStageProjectionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get appUserId =>
+      $composableBuilder(column: $table.appUserId, builder: (column) => column);
+
+  GeneratedColumn<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get projectId =>
+      $composableBuilder(column: $table.projectId, builder: (column) => column);
+
+  GeneratedColumn<String> get targetKey =>
+      $composableBuilder(column: $table.targetKey, builder: (column) => column);
+
+  GeneratedColumn<int> get relationshipStage => $composableBuilder(
+    column: $table.relationshipStage,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get relationshipRevision => $composableBuilder(
+    column: $table.relationshipRevision,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get relationshipUpdatedAtUtc => $composableBuilder(
+    column: $table.relationshipUpdatedAtUtc,
+    builder: (column) => column,
+  );
+}
+
+class $$DbCurrentRelationshipStageProjectionsTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $DbCurrentRelationshipStageProjectionsTable,
+          DbCurrentRelationshipStageProjection,
+          $$DbCurrentRelationshipStageProjectionsTableFilterComposer,
+          $$DbCurrentRelationshipStageProjectionsTableOrderingComposer,
+          $$DbCurrentRelationshipStageProjectionsTableAnnotationComposer,
+          $$DbCurrentRelationshipStageProjectionsTableCreateCompanionBuilder,
+          $$DbCurrentRelationshipStageProjectionsTableUpdateCompanionBuilder,
+          (
+            DbCurrentRelationshipStageProjection,
+            BaseReferences<
+              _$LocalDatabase,
+              $DbCurrentRelationshipStageProjectionsTable,
+              DbCurrentRelationshipStageProjection
+            >,
+          ),
+          DbCurrentRelationshipStageProjection,
+          PrefetchHooks Function()
+        > {
+  $$DbCurrentRelationshipStageProjectionsTableTableManager(
+    _$LocalDatabase db,
+    $DbCurrentRelationshipStageProjectionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DbCurrentRelationshipStageProjectionsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$DbCurrentRelationshipStageProjectionsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$DbCurrentRelationshipStageProjectionsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> appUserId = const Value.absent(),
+                Value<String> workspaceId = const Value.absent(),
+                Value<String> projectId = const Value.absent(),
+                Value<String> targetKey = const Value.absent(),
+                Value<int> relationshipStage = const Value.absent(),
+                Value<int> relationshipRevision = const Value.absent(),
+                Value<DateTime> relationshipUpdatedAtUtc = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbCurrentRelationshipStageProjectionsCompanion(
+                appUserId: appUserId,
+                workspaceId: workspaceId,
+                projectId: projectId,
+                targetKey: targetKey,
+                relationshipStage: relationshipStage,
+                relationshipRevision: relationshipRevision,
+                relationshipUpdatedAtUtc: relationshipUpdatedAtUtc,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String appUserId,
+                required String workspaceId,
+                required String projectId,
+                required String targetKey,
+                required int relationshipStage,
+                required int relationshipRevision,
+                required DateTime relationshipUpdatedAtUtc,
+                Value<int> rowid = const Value.absent(),
+              }) => DbCurrentRelationshipStageProjectionsCompanion.insert(
+                appUserId: appUserId,
+                workspaceId: workspaceId,
+                projectId: projectId,
+                targetKey: targetKey,
+                relationshipStage: relationshipStage,
+                relationshipRevision: relationshipRevision,
+                relationshipUpdatedAtUtc: relationshipUpdatedAtUtc,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DbCurrentRelationshipStageProjectionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $DbCurrentRelationshipStageProjectionsTable,
+      DbCurrentRelationshipStageProjection,
+      $$DbCurrentRelationshipStageProjectionsTableFilterComposer,
+      $$DbCurrentRelationshipStageProjectionsTableOrderingComposer,
+      $$DbCurrentRelationshipStageProjectionsTableAnnotationComposer,
+      $$DbCurrentRelationshipStageProjectionsTableCreateCompanionBuilder,
+      $$DbCurrentRelationshipStageProjectionsTableUpdateCompanionBuilder,
+      (
+        DbCurrentRelationshipStageProjection,
+        BaseReferences<
+          _$LocalDatabase,
+          $DbCurrentRelationshipStageProjectionsTable,
+          DbCurrentRelationshipStageProjection
+        >,
+      ),
+      DbCurrentRelationshipStageProjection,
+      PrefetchHooks Function()
+    >;
+typedef $$DbCurrentRelationshipStageSnapshotsTableCreateCompanionBuilder =
+    DbCurrentRelationshipStageSnapshotsCompanion Function({
+      required String appUserId,
+      required String workspaceId,
+      required String projectId,
+      required DateTime snapshotAsOfUtc,
+      required DateTime sourceCutoffUtc,
+      required DateTime authorizedAtUtc,
+      required DateTime lastSuccessfulSyncAtUtc,
+      required int totalCount,
+      required int pendingSyncCount,
+      Value<int> rowid,
+    });
+typedef $$DbCurrentRelationshipStageSnapshotsTableUpdateCompanionBuilder =
+    DbCurrentRelationshipStageSnapshotsCompanion Function({
+      Value<String> appUserId,
+      Value<String> workspaceId,
+      Value<String> projectId,
+      Value<DateTime> snapshotAsOfUtc,
+      Value<DateTime> sourceCutoffUtc,
+      Value<DateTime> authorizedAtUtc,
+      Value<DateTime> lastSuccessfulSyncAtUtc,
+      Value<int> totalCount,
+      Value<int> pendingSyncCount,
+      Value<int> rowid,
+    });
+
+class $$DbCurrentRelationshipStageSnapshotsTableFilterComposer
+    extends
+        Composer<_$LocalDatabase, $DbCurrentRelationshipStageSnapshotsTable> {
+  $$DbCurrentRelationshipStageSnapshotsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get appUserId => $composableBuilder(
+    column: $table.appUserId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get projectId => $composableBuilder(
+    column: $table.projectId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get snapshotAsOfUtc => $composableBuilder(
+    column: $table.snapshotAsOfUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get sourceCutoffUtc => $composableBuilder(
+    column: $table.sourceCutoffUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get authorizedAtUtc => $composableBuilder(
+    column: $table.authorizedAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastSuccessfulSyncAtUtc => $composableBuilder(
+    column: $table.lastSuccessfulSyncAtUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get totalCount => $composableBuilder(
+    column: $table.totalCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get pendingSyncCount => $composableBuilder(
+    column: $table.pendingSyncCount,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DbCurrentRelationshipStageSnapshotsTableOrderingComposer
+    extends
+        Composer<_$LocalDatabase, $DbCurrentRelationshipStageSnapshotsTable> {
+  $$DbCurrentRelationshipStageSnapshotsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get appUserId => $composableBuilder(
+    column: $table.appUserId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get projectId => $composableBuilder(
+    column: $table.projectId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get snapshotAsOfUtc => $composableBuilder(
+    column: $table.snapshotAsOfUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get sourceCutoffUtc => $composableBuilder(
+    column: $table.sourceCutoffUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get authorizedAtUtc => $composableBuilder(
+    column: $table.authorizedAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastSuccessfulSyncAtUtc => $composableBuilder(
+    column: $table.lastSuccessfulSyncAtUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get totalCount => $composableBuilder(
+    column: $table.totalCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get pendingSyncCount => $composableBuilder(
+    column: $table.pendingSyncCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DbCurrentRelationshipStageSnapshotsTableAnnotationComposer
+    extends
+        Composer<_$LocalDatabase, $DbCurrentRelationshipStageSnapshotsTable> {
+  $$DbCurrentRelationshipStageSnapshotsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get appUserId =>
+      $composableBuilder(column: $table.appUserId, builder: (column) => column);
+
+  GeneratedColumn<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get projectId =>
+      $composableBuilder(column: $table.projectId, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get snapshotAsOfUtc => $composableBuilder(
+    column: $table.snapshotAsOfUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get sourceCutoffUtc => $composableBuilder(
+    column: $table.sourceCutoffUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get authorizedAtUtc => $composableBuilder(
+    column: $table.authorizedAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get lastSuccessfulSyncAtUtc => $composableBuilder(
+    column: $table.lastSuccessfulSyncAtUtc,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get totalCount => $composableBuilder(
+    column: $table.totalCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get pendingSyncCount => $composableBuilder(
+    column: $table.pendingSyncCount,
+    builder: (column) => column,
+  );
+}
+
+class $$DbCurrentRelationshipStageSnapshotsTableTableManager
+    extends
+        RootTableManager<
+          _$LocalDatabase,
+          $DbCurrentRelationshipStageSnapshotsTable,
+          DbCurrentRelationshipStageSnapshot,
+          $$DbCurrentRelationshipStageSnapshotsTableFilterComposer,
+          $$DbCurrentRelationshipStageSnapshotsTableOrderingComposer,
+          $$DbCurrentRelationshipStageSnapshotsTableAnnotationComposer,
+          $$DbCurrentRelationshipStageSnapshotsTableCreateCompanionBuilder,
+          $$DbCurrentRelationshipStageSnapshotsTableUpdateCompanionBuilder,
+          (
+            DbCurrentRelationshipStageSnapshot,
+            BaseReferences<
+              _$LocalDatabase,
+              $DbCurrentRelationshipStageSnapshotsTable,
+              DbCurrentRelationshipStageSnapshot
+            >,
+          ),
+          DbCurrentRelationshipStageSnapshot,
+          PrefetchHooks Function()
+        > {
+  $$DbCurrentRelationshipStageSnapshotsTableTableManager(
+    _$LocalDatabase db,
+    $DbCurrentRelationshipStageSnapshotsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DbCurrentRelationshipStageSnapshotsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$DbCurrentRelationshipStageSnapshotsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$DbCurrentRelationshipStageSnapshotsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> appUserId = const Value.absent(),
+                Value<String> workspaceId = const Value.absent(),
+                Value<String> projectId = const Value.absent(),
+                Value<DateTime> snapshotAsOfUtc = const Value.absent(),
+                Value<DateTime> sourceCutoffUtc = const Value.absent(),
+                Value<DateTime> authorizedAtUtc = const Value.absent(),
+                Value<DateTime> lastSuccessfulSyncAtUtc = const Value.absent(),
+                Value<int> totalCount = const Value.absent(),
+                Value<int> pendingSyncCount = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DbCurrentRelationshipStageSnapshotsCompanion(
+                appUserId: appUserId,
+                workspaceId: workspaceId,
+                projectId: projectId,
+                snapshotAsOfUtc: snapshotAsOfUtc,
+                sourceCutoffUtc: sourceCutoffUtc,
+                authorizedAtUtc: authorizedAtUtc,
+                lastSuccessfulSyncAtUtc: lastSuccessfulSyncAtUtc,
+                totalCount: totalCount,
+                pendingSyncCount: pendingSyncCount,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String appUserId,
+                required String workspaceId,
+                required String projectId,
+                required DateTime snapshotAsOfUtc,
+                required DateTime sourceCutoffUtc,
+                required DateTime authorizedAtUtc,
+                required DateTime lastSuccessfulSyncAtUtc,
+                required int totalCount,
+                required int pendingSyncCount,
+                Value<int> rowid = const Value.absent(),
+              }) => DbCurrentRelationshipStageSnapshotsCompanion.insert(
+                appUserId: appUserId,
+                workspaceId: workspaceId,
+                projectId: projectId,
+                snapshotAsOfUtc: snapshotAsOfUtc,
+                sourceCutoffUtc: sourceCutoffUtc,
+                authorizedAtUtc: authorizedAtUtc,
+                lastSuccessfulSyncAtUtc: lastSuccessfulSyncAtUtc,
+                totalCount: totalCount,
+                pendingSyncCount: pendingSyncCount,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DbCurrentRelationshipStageSnapshotsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LocalDatabase,
+      $DbCurrentRelationshipStageSnapshotsTable,
+      DbCurrentRelationshipStageSnapshot,
+      $$DbCurrentRelationshipStageSnapshotsTableFilterComposer,
+      $$DbCurrentRelationshipStageSnapshotsTableOrderingComposer,
+      $$DbCurrentRelationshipStageSnapshotsTableAnnotationComposer,
+      $$DbCurrentRelationshipStageSnapshotsTableCreateCompanionBuilder,
+      $$DbCurrentRelationshipStageSnapshotsTableUpdateCompanionBuilder,
+      (
+        DbCurrentRelationshipStageSnapshot,
+        BaseReferences<
+          _$LocalDatabase,
+          $DbCurrentRelationshipStageSnapshotsTable,
+          DbCurrentRelationshipStageSnapshot
+        >,
+      ),
+      DbCurrentRelationshipStageSnapshot,
+      PrefetchHooks Function()
+    >;
 
 class $LocalDatabaseManager {
   final _$LocalDatabase _db;
@@ -30489,6 +32232,18 @@ class $LocalDatabaseManager {
       $$DbQuestionnaireDraftWorkingCopiesTableTableManager(
         _db,
         _db.dbQuestionnaireDraftWorkingCopies,
+      );
+  $$DbCurrentRelationshipStageProjectionsTableTableManager
+  get dbCurrentRelationshipStageProjections =>
+      $$DbCurrentRelationshipStageProjectionsTableTableManager(
+        _db,
+        _db.dbCurrentRelationshipStageProjections,
+      );
+  $$DbCurrentRelationshipStageSnapshotsTableTableManager
+  get dbCurrentRelationshipStageSnapshots =>
+      $$DbCurrentRelationshipStageSnapshotsTableTableManager(
+        _db,
+        _db.dbCurrentRelationshipStageSnapshots,
       );
 }
 

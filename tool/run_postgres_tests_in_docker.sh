@@ -552,8 +552,9 @@ docker run \
      cd backend/server &&
      npm ci --ignore-scripts &&
      npm run build &&
-     node --enable-source-maps \
-       dist/test/contact-location-evidence.integration.js'
+     node --enable-source-maps --test \
+       dist/test/contact-location-evidence.integration.js \
+       dist/test/personal-current-relationship-stage.integration.js'
 
 echo '用独立数据库会话验证并发不变量。'
 # Concurrency scripts commit their synthetic rows, and the later pg_dump keeps
