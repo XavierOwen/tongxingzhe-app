@@ -26,6 +26,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
 
+    expect(find.textContaining('N/A（非线下接触）'), findsOneWidget);
     expect(find.text('草稿保存失败，请重试'), findsOneWidget);
     expect(find.byKey(const ValueKey('retry-draft-save')), findsOneWidget);
 
@@ -39,7 +40,11 @@ void main() {
   testWidgets('定位权限失败后可在同一表单重试并恢复', (tester) async {
     final capture = _QueuedLocationCapture([
       const LocationSnapshot(error: 'location_permission_denied'),
-      const LocationSnapshot(latitude: 41.79, longitude: -87.6),
+      const LocationSnapshot(
+        latitude: 41.79,
+        longitude: -87.6,
+        accuracyMeters: 13.75,
+      ),
     ]);
     await _pumpEntry(
       tester,
@@ -58,8 +63,23 @@ void main() {
 
     await tester.tap(locationButton);
     await tester.pumpAndSettle();
-    expect(find.textContaining('41.790000, -87.600000'), findsOneWidget);
     expect(find.textContaining('待匹配规范区域'), findsOneWidget);
+    expect(find.textContaining('41.790000'), findsNothing);
+    expect(find.textContaining('-87.600000'), findsNothing);
+    expect(find.textContaining('13.8'), findsNothing);
+  });
+
+  testWidgets('重新打开待解析草稿时不显示精确坐标或精度', (tester) async {
+    await _pumpEntry(
+      tester,
+      store: _FakeEntryStore(),
+      initialDraft: _pendingLocationDraft,
+    );
+
+    expect(find.textContaining('待匹配规范区域'), findsOneWidget);
+    expect(find.textContaining('32.123456'), findsNothing);
+    expect(find.textContaining('-96.654321'), findsNothing);
+    expect(find.textContaining('6.4'), findsNothing);
   });
 
   testWidgets('提交失败保留可提交草稿，第二次提交可成功', (tester) async {
@@ -417,6 +437,32 @@ final _completeDraft = ContactDraft(
   channel: ContactChannel.videoCall,
   channelDetail: null,
   location: const NotApplicableContactLocation(),
+  reachCount: 2,
+  interestLevel: 3,
+  answers: const [],
+  syncMode: ContactDraftSyncMode.accountPrivate,
+  localRevision: 1,
+  serverRevision: 1,
+  conflictOfDraftId: null,
+);
+
+final _pendingLocationDraft = ContactDraft(
+  draftId: 'draft-pending-location',
+  appUserId: 'user-1',
+  workspaceId: 'workspace-1',
+  projectId: 'project-1',
+  questionnaireVersionId: 'questionnaire-1',
+  createdAtUtc: DateTime.utc(2030, 1, 2, 3),
+  updatedAtUtc: DateTime.utc(2030, 1, 2, 4),
+  occurredAtUtc: DateTime.utc(2030, 1, 2, 3),
+  occurredTimeZone: 'America/Chicago',
+  channel: ContactChannel.faceToFace,
+  channelDetail: null,
+  location: const PendingContactLocation(
+    latitude: 32.123456,
+    longitude: -96.654321,
+    accuracyMeters: 6.4,
+  ),
   reachCount: 2,
   interestLevel: 3,
   answers: const [],

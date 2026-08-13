@@ -660,6 +660,18 @@ final class SyncEngine {
             latitude: Value(currentLocation.latitude),
             longitude: Value(currentLocation.longitude),
             locationAccuracyMeters: Value(currentLocation.accuracyMeters),
+            locationSourceKind: Value(currentLocation.sourceKind),
+            locationSourceLatitude: Value(currentLocation.sourceLatitude),
+            locationSourceLongitude: Value(currentLocation.sourceLongitude),
+            locationSourceAccuracyMeters: Value(
+              currentLocation.sourceAccuracyMeters,
+            ),
+            locationSourceResolverContractVersion: Value(
+              currentLocation.sourceResolverContractVersion,
+            ),
+            locationSourceRegionTreeContentFingerprint: Value(
+              currentLocation.sourceRegionTreeContentFingerprint,
+            ),
             reachCount: conflict.currentSnapshot.reachCount,
             interestLevel: conflict.currentSnapshot.interestLevel,
           ),
@@ -691,6 +703,18 @@ final class SyncEngine {
         latitude: Value(currentLocation.latitude),
         longitude: Value(currentLocation.longitude),
         locationAccuracyMeters: Value(currentLocation.accuracyMeters),
+        locationSourceKind: Value(currentLocation.sourceKind),
+        locationSourceLatitude: Value(currentLocation.sourceLatitude),
+        locationSourceLongitude: Value(currentLocation.sourceLongitude),
+        locationSourceAccuracyMeters: Value(
+          currentLocation.sourceAccuracyMeters,
+        ),
+        locationSourceResolverContractVersion: Value(
+          currentLocation.sourceResolverContractVersion,
+        ),
+        locationSourceRegionTreeContentFingerprint: Value(
+          currentLocation.sourceRegionTreeContentFingerprint,
+        ),
         reachCount: Value(conflict.currentSnapshot.reachCount),
         interestLevel: Value(conflict.currentSnapshot.interestLevel),
         currentRevision: Value(conflict.currentRevision),
@@ -760,6 +784,14 @@ final class SyncEngine {
         stored.latitude != location.latitude ||
         stored.longitude != location.longitude ||
         stored.locationAccuracyMeters != location.accuracyMeters ||
+        stored.locationSourceKind != location.sourceKind ||
+        stored.locationSourceLatitude != location.sourceLatitude ||
+        stored.locationSourceLongitude != location.sourceLongitude ||
+        stored.locationSourceAccuracyMeters != location.sourceAccuracyMeters ||
+        stored.locationSourceResolverContractVersion !=
+            location.sourceResolverContractVersion ||
+        stored.locationSourceRegionTreeContentFingerprint !=
+            location.sourceRegionTreeContentFingerprint ||
         stored.reachCount != snapshot.reachCount ||
         stored.interestLevel != snapshot.interestLevel) {
       return false;
@@ -807,6 +839,7 @@ final class SyncEngine {
         'longitude': location.longitude,
         'accuracyMeters': location.accuracyMeters,
       },
+      'locationSource': _remoteLocationSourcePayload(snapshot.location),
       'reachCount': snapshot.reachCount,
       'interestLevel': snapshot.interestLevel,
       'answers': [
@@ -975,7 +1008,10 @@ final class SyncEngine {
     if (channel == ContactChannel.otherDirect && channelDetail == null) {
       throw const FormatException('remote channel detail is required');
     }
-    final location = _remoteLocation(payload['location']);
+    final location = _remoteLocation(
+      payload['location'],
+      payload['locationSource'],
+    );
     if (channel == ContactChannel.faceToFace &&
         location is NotApplicableContactLocation) {
       throw const FormatException('invalid remote contact location');
@@ -1036,7 +1072,10 @@ final class SyncEngine {
     if (channel == ContactChannel.otherDirect && channelDetail == null) {
       throw const FormatException('remote channel detail is required');
     }
-    final location = _remoteLocation(payload['location']);
+    final location = _remoteLocation(
+      payload['location'],
+      payload['locationSource'],
+    );
     if (channel == ContactChannel.faceToFace &&
         location is NotApplicableContactLocation) {
       throw const FormatException('invalid remote contact location');
@@ -1124,7 +1163,10 @@ final class SyncEngine {
     final locationValue = payload['location'];
     final location = locationValue == null
         ? null
-        : _remoteLocation(locationValue);
+        : _remoteLocation(locationValue, payload['locationSource']);
+    if (locationValue == null && payload['locationSource'] != null) {
+      throw const FormatException('remote draft source requires a location');
+    }
     final reachCount = _optionalInteger(payload['reachCount']);
     final interestLevel = _optionalInteger(payload['interestLevel']);
     if ((reachCount != null && reachCount < 1) ||
@@ -1230,6 +1272,16 @@ final class SyncEngine {
             latitude: Value(location.latitude),
             longitude: Value(location.longitude),
             locationAccuracyMeters: Value(location.accuracyMeters),
+            locationSourceKind: Value(location.sourceKind),
+            locationSourceLatitude: Value(location.sourceLatitude),
+            locationSourceLongitude: Value(location.sourceLongitude),
+            locationSourceAccuracyMeters: Value(location.sourceAccuracyMeters),
+            locationSourceResolverContractVersion: Value(
+              location.sourceResolverContractVersion,
+            ),
+            locationSourceRegionTreeContentFingerprint: Value(
+              location.sourceRegionTreeContentFingerprint,
+            ),
             reachCount: contact.reachCount,
             interestLevel: contact.interestLevel,
             currentRevision: 1,
@@ -1264,6 +1316,16 @@ final class SyncEngine {
             latitude: Value(location.latitude),
             longitude: Value(location.longitude),
             locationAccuracyMeters: Value(location.accuracyMeters),
+            locationSourceKind: Value(location.sourceKind),
+            locationSourceLatitude: Value(location.sourceLatitude),
+            locationSourceLongitude: Value(location.sourceLongitude),
+            locationSourceAccuracyMeters: Value(location.sourceAccuracyMeters),
+            locationSourceResolverContractVersion: Value(
+              location.sourceResolverContractVersion,
+            ),
+            locationSourceRegionTreeContentFingerprint: Value(
+              location.sourceRegionTreeContentFingerprint,
+            ),
             reachCount: contact.reachCount,
             interestLevel: contact.interestLevel,
           ),
@@ -1378,6 +1440,16 @@ final class SyncEngine {
             latitude: Value(location.latitude),
             longitude: Value(location.longitude),
             locationAccuracyMeters: Value(location.accuracyMeters),
+            locationSourceKind: Value(location.sourceKind),
+            locationSourceLatitude: Value(location.sourceLatitude),
+            locationSourceLongitude: Value(location.sourceLongitude),
+            locationSourceAccuracyMeters: Value(location.sourceAccuracyMeters),
+            locationSourceResolverContractVersion: Value(
+              location.sourceResolverContractVersion,
+            ),
+            locationSourceRegionTreeContentFingerprint: Value(
+              location.sourceRegionTreeContentFingerprint,
+            ),
             reachCount: revision.reachCount,
             interestLevel: revision.interestLevel,
           ),
@@ -1409,6 +1481,16 @@ final class SyncEngine {
         latitude: Value(location.latitude),
         longitude: Value(location.longitude),
         locationAccuracyMeters: Value(location.accuracyMeters),
+        locationSourceKind: Value(location.sourceKind),
+        locationSourceLatitude: Value(location.sourceLatitude),
+        locationSourceLongitude: Value(location.sourceLongitude),
+        locationSourceAccuracyMeters: Value(location.sourceAccuracyMeters),
+        locationSourceResolverContractVersion: Value(
+          location.sourceResolverContractVersion,
+        ),
+        locationSourceRegionTreeContentFingerprint: Value(
+          location.sourceRegionTreeContentFingerprint,
+        ),
         reachCount: Value(revision.reachCount),
         interestLevel: Value(revision.interestLevel),
         currentRevision: Value(revision.revisionNumber),
@@ -1623,6 +1705,16 @@ final class SyncEngine {
             latitude: Value(location.latitude),
             longitude: Value(location.longitude),
             locationAccuracyMeters: Value(location.accuracyMeters),
+            locationSourceKind: Value(location.sourceKind),
+            locationSourceLatitude: Value(location.sourceLatitude),
+            locationSourceLongitude: Value(location.sourceLongitude),
+            locationSourceAccuracyMeters: Value(location.sourceAccuracyMeters),
+            locationSourceResolverContractVersion: Value(
+              location.sourceResolverContractVersion,
+            ),
+            locationSourceRegionTreeContentFingerprint: Value(
+              location.sourceRegionTreeContentFingerprint,
+            ),
             reachCount: Value(draft.reachCount),
             interestLevel: Value(draft.interestLevel),
             syncMode: const Value('account_private'),
@@ -1666,6 +1758,15 @@ final class SyncEngine {
         existing.latitude != location.latitude ||
         existing.longitude != location.longitude ||
         existing.locationAccuracyMeters != location.accuracyMeters ||
+        existing.locationSourceKind != location.sourceKind ||
+        existing.locationSourceLatitude != location.sourceLatitude ||
+        existing.locationSourceLongitude != location.sourceLongitude ||
+        existing.locationSourceAccuracyMeters !=
+            location.sourceAccuracyMeters ||
+        existing.locationSourceResolverContractVersion !=
+            location.sourceResolverContractVersion ||
+        existing.locationSourceRegionTreeContentFingerprint !=
+            location.sourceRegionTreeContentFingerprint ||
         existing.reachCount != draft.reachCount ||
         existing.interestLevel != draft.interestLevel ||
         existing.sourceAttemptId != draft.sourceAttemptId ||
@@ -1735,6 +1836,18 @@ final class SyncEngine {
             latitude: Value(existing.latitude),
             longitude: Value(existing.longitude),
             locationAccuracyMeters: Value(existing.locationAccuracyMeters),
+            locationSourceKind: Value(existing.locationSourceKind),
+            locationSourceLatitude: Value(existing.locationSourceLatitude),
+            locationSourceLongitude: Value(existing.locationSourceLongitude),
+            locationSourceAccuracyMeters: Value(
+              existing.locationSourceAccuracyMeters,
+            ),
+            locationSourceResolverContractVersion: Value(
+              existing.locationSourceResolverContractVersion,
+            ),
+            locationSourceRegionTreeContentFingerprint: Value(
+              existing.locationSourceRegionTreeContentFingerprint,
+            ),
             reachCount: Value(existing.reachCount),
             interestLevel: Value(existing.interestLevel),
             syncMode: const Value('device_only'),
@@ -1874,6 +1987,15 @@ final class SyncEngine {
         storedRevision.latitude != location.latitude ||
         storedRevision.longitude != location.longitude ||
         storedRevision.locationAccuracyMeters != location.accuracyMeters ||
+        storedRevision.locationSourceKind != location.sourceKind ||
+        storedRevision.locationSourceLatitude != location.sourceLatitude ||
+        storedRevision.locationSourceLongitude != location.sourceLongitude ||
+        storedRevision.locationSourceAccuracyMeters !=
+            location.sourceAccuracyMeters ||
+        storedRevision.locationSourceResolverContractVersion !=
+            location.sourceResolverContractVersion ||
+        storedRevision.locationSourceRegionTreeContentFingerprint !=
+            location.sourceRegionTreeContentFingerprint ||
         storedRevision.reachCount != contact.reachCount ||
         storedRevision.interestLevel != contact.interestLevel) {
       return false;
@@ -1929,6 +2051,14 @@ final class SyncEngine {
         stored.latitude != location.latitude ||
         stored.longitude != location.longitude ||
         stored.locationAccuracyMeters != location.accuracyMeters ||
+        stored.locationSourceKind != location.sourceKind ||
+        stored.locationSourceLatitude != location.sourceLatitude ||
+        stored.locationSourceLongitude != location.sourceLongitude ||
+        stored.locationSourceAccuracyMeters != location.sourceAccuracyMeters ||
+        stored.locationSourceResolverContractVersion !=
+            location.sourceResolverContractVersion ||
+        stored.locationSourceRegionTreeContentFingerprint !=
+            location.sourceRegionTreeContentFingerprint ||
         stored.reachCount != revision.reachCount ||
         stored.interestLevel != revision.interestLevel) {
       return false;
@@ -1979,25 +2109,142 @@ final class SyncEngine {
         existing.latitude == location.latitude &&
         existing.longitude == location.longitude &&
         existing.locationAccuracyMeters == location.accuracyMeters &&
+        existing.locationSourceKind == location.sourceKind &&
+        existing.locationSourceLatitude == location.sourceLatitude &&
+        existing.locationSourceLongitude == location.sourceLongitude &&
+        existing.locationSourceAccuracyMeters ==
+            location.sourceAccuracyMeters &&
+        existing.locationSourceResolverContractVersion ==
+            location.sourceResolverContractVersion &&
+        existing.locationSourceRegionTreeContentFingerprint ==
+            location.sourceRegionTreeContentFingerprint &&
         existing.reachCount == revision.reachCount &&
         existing.interestLevel == revision.interestLevel &&
         (ignoreLifecycle || existing.lifecycleStatus == expectedLifecycle);
   }
 
-  ContactLocation _remoteLocation(Object? value) {
+  ContactLocation _remoteLocation(Object? value, [Object? sourceValue]) {
     if (value is! Map<String, Object?>) {
       throw const FormatException('remote location must be an object');
     }
-    return switch (value['kind']) {
-      'not_applicable' => const NotApplicableContactLocation(),
-      'resolved' => ResolvedContactLocation(
-        placeName: _requiredString(value['placeName']),
-        smallestRegionId: _requiredString(value['smallestRegionId']),
-        regionTreeVersion: _requiredString(value['regionTreeVersion']),
-      ),
-      'pending_resolution' => _pendingRemoteLocation(value),
+    const allowedKeys = {
+      'kind',
+      'placeName',
+      'smallestRegionId',
+      'regionTreeVersion',
+      'latitude',
+      'longitude',
+      'accuracyMeters',
+    };
+    if (value.keys.any((key) => !allowedKeys.contains(key))) {
+      throw const FormatException('remote location shape is invalid');
+    }
+    final source = _remoteLocationSource(sourceValue);
+    final location = switch (value['kind']) {
+      'not_applicable' => _remoteNotApplicableLocation(value),
+      'resolved' => _remoteResolvedLocation(value, source),
+      'pending_resolution' => _remotePendingLocation(value, source),
       _ => throw const FormatException('unsupported remote location'),
     };
+    if (source != null && location is! ResolvedContactLocation) {
+      throw const FormatException('remote location source is not applicable');
+    }
+    return location;
+  }
+
+  NotApplicableContactLocation _remoteNotApplicableLocation(
+    Map<String, Object?> value,
+  ) {
+    if (!_remoteLocationFieldsNull(value, const [
+      'placeName',
+      'smallestRegionId',
+      'regionTreeVersion',
+      'latitude',
+      'longitude',
+      'accuracyMeters',
+    ])) {
+      throw const FormatException('remote N/A location shape is invalid');
+    }
+    return const NotApplicableContactLocation();
+  }
+
+  bool _remoteLocationFieldsNull(
+    Map<String, Object?> value,
+    List<String> keys,
+  ) => keys.every((key) => value[key] == null);
+
+  ResolvedContactLocation _remoteResolvedLocation(
+    Map<String, Object?> value,
+    CapturedCoordinatesLocationSource? source,
+  ) {
+    if (!_remoteLocationFieldsNull(value, const [
+      'latitude',
+      'longitude',
+      'accuracyMeters',
+    ])) {
+      throw const FormatException('remote resolved location shape is invalid');
+    }
+    return ResolvedContactLocation(
+      placeName: _requiredString(value['placeName']),
+      smallestRegionId: _requiredString(value['smallestRegionId']),
+      regionTreeVersion: _requiredString(value['regionTreeVersion']),
+      source: source,
+    );
+  }
+
+  PendingContactLocation _remotePendingLocation(
+    Map<String, Object?> value,
+    CapturedCoordinatesLocationSource? source,
+  ) {
+    if (source != null ||
+        !_remoteLocationFieldsNull(value, const [
+          'placeName',
+          'smallestRegionId',
+          'regionTreeVersion',
+        ])) {
+      throw const FormatException('remote pending location shape is invalid');
+    }
+    return _pendingRemoteLocation(value);
+  }
+
+  CapturedCoordinatesLocationSource? _remoteLocationSource(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is! Map<String, Object?>) {
+      throw const FormatException('remote location source must be an object');
+    }
+    const allowedKeys = {
+      'kind',
+      'latitude',
+      'longitude',
+      'accuracyMeters',
+      'resolverContractVersion',
+      'regionTreeContentFingerprint',
+    };
+    if (value.keys.any((key) => !allowedKeys.contains(key))) {
+      throw const FormatException('remote location source shape is invalid');
+    }
+    if (value['kind'] != 'captured_coordinates') {
+      throw const FormatException('remote location source kind is invalid');
+    }
+    final contract = _requiredString(value['resolverContractVersion']);
+    if (contract != 'canonical-region-resolution:v1') {
+      throw const FormatException('remote location source contract is invalid');
+    }
+    final fingerprint = _requiredString(value['regionTreeContentFingerprint']);
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(fingerprint)) {
+      throw const FormatException(
+        'remote location source fingerprint is invalid',
+      );
+    }
+    return CapturedCoordinatesLocationSource(
+      latitude: _boundedRemoteNumber(value['latitude'], -90, 90),
+      longitude: _boundedRemoteNumber(value['longitude'], -180, 180),
+      accuracyMeters: _optionalNonNegativeRemoteNumber(value['accuracyMeters']),
+      resolverContractVersion: contract,
+      regionTreeContentFingerprint: fingerprint,
+    );
   }
 
   ContactChannel _remoteChannel(String value) {
@@ -2314,6 +2561,12 @@ final class SyncEngine {
     double? latitude,
     double? longitude,
     double? accuracyMeters,
+    String? sourceKind,
+    double? sourceLatitude,
+    double? sourceLongitude,
+    double? sourceAccuracyMeters,
+    String? sourceResolverContractVersion,
+    String? sourceRegionTreeContentFingerprint,
   })
   _remoteLocationColumns(ContactLocation location) {
     return switch (location) {
@@ -2325,6 +2578,13 @@ final class SyncEngine {
         latitude: null,
         longitude: null,
         accuracyMeters: null,
+        sourceKind: resolved.source == null ? null : 'captured_coordinates',
+        sourceLatitude: resolved.source?.latitude,
+        sourceLongitude: resolved.source?.longitude,
+        sourceAccuracyMeters: resolved.source?.accuracyMeters,
+        sourceResolverContractVersion: resolved.source?.resolverContractVersion,
+        sourceRegionTreeContentFingerprint:
+            resolved.source?.regionTreeContentFingerprint,
       ),
       NotApplicableContactLocation() => (
         kind: 'not_applicable',
@@ -2334,6 +2594,12 @@ final class SyncEngine {
         latitude: null,
         longitude: null,
         accuracyMeters: null,
+        sourceKind: null,
+        sourceLatitude: null,
+        sourceLongitude: null,
+        sourceAccuracyMeters: null,
+        sourceResolverContractVersion: null,
+        sourceRegionTreeContentFingerprint: null,
       ),
       final PendingContactLocation pending => (
         kind: 'pending_resolution',
@@ -2343,6 +2609,12 @@ final class SyncEngine {
         latitude: pending.latitude,
         longitude: pending.longitude,
         accuracyMeters: pending.accuracyMeters,
+        sourceKind: null,
+        sourceLatitude: null,
+        sourceLongitude: null,
+        sourceAccuracyMeters: null,
+        sourceResolverContractVersion: null,
+        sourceRegionTreeContentFingerprint: null,
       ),
     };
   }
@@ -2355,6 +2627,12 @@ final class SyncEngine {
     double? latitude,
     double? longitude,
     double? accuracyMeters,
+    String? sourceKind,
+    double? sourceLatitude,
+    double? sourceLongitude,
+    double? sourceAccuracyMeters,
+    String? sourceResolverContractVersion,
+    String? sourceRegionTreeContentFingerprint,
   })
   _optionalRemoteLocationColumns(ContactLocation? location) {
     if (location == null) {
@@ -2366,6 +2644,12 @@ final class SyncEngine {
         latitude: null,
         longitude: null,
         accuracyMeters: null,
+        sourceKind: null,
+        sourceLatitude: null,
+        sourceLongitude: null,
+        sourceAccuracyMeters: null,
+        sourceResolverContractVersion: null,
+        sourceRegionTreeContentFingerprint: null,
       );
     }
     final resolved = _remoteLocationColumns(location);
@@ -2377,7 +2661,30 @@ final class SyncEngine {
       latitude: resolved.latitude,
       longitude: resolved.longitude,
       accuracyMeters: resolved.accuracyMeters,
+      sourceKind: resolved.sourceKind,
+      sourceLatitude: resolved.sourceLatitude,
+      sourceLongitude: resolved.sourceLongitude,
+      sourceAccuracyMeters: resolved.sourceAccuracyMeters,
+      sourceResolverContractVersion: resolved.sourceResolverContractVersion,
+      sourceRegionTreeContentFingerprint:
+          resolved.sourceRegionTreeContentFingerprint,
     );
+  }
+
+  Map<String, Object?>? _remoteLocationSourcePayload(ContactLocation location) {
+    if (location case final ResolvedContactLocation resolved
+        when resolved.source != null) {
+      final source = resolved.source!;
+      return {
+        'kind': 'captured_coordinates',
+        'latitude': source.latitude,
+        'longitude': source.longitude,
+        'accuracyMeters': source.accuracyMeters,
+        'resolverContractVersion': source.resolverContractVersion,
+        'regionTreeContentFingerprint': source.regionTreeContentFingerprint,
+      };
+    }
+    return null;
   }
 
   DateTime _utcDate(Object? value) {
@@ -2424,6 +2731,21 @@ final class SyncEngine {
 
   double? _optionalNumber(Object? value) {
     return value == null ? null : _number(value);
+  }
+
+  double _boundedRemoteNumber(Object? value, double minimum, double maximum) {
+    final parsed = _number(value);
+    if (parsed < minimum || parsed > maximum) {
+      throw const FormatException('remote source number is outside bounds');
+    }
+    return parsed;
+  }
+
+  double? _optionalNonNegativeRemoteNumber(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    return _boundedRemoteNumber(value, 0, double.maxFinite);
   }
 }
 

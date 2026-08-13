@@ -168,7 +168,9 @@ Flutter 的 [`HttpContactRegionResolver`](../../lib/regions/contact_region_resol
 
 同步 wire 中，`resolved` 可以不带 `location_source`，表示旧记录或人工选择的 region-only 地点。只有坐标解析得到的 `resolved` 可以带 `captured_coordinates` 来源；pending 的坐标仍保存在 `location`，`not_applicable` 和空草稿地点不能带来源。Backend 对 submit、revise、resolve-conflict 和 draft 共用严格 codec，并拒绝未知字段、错误数字和地点／来源矛盾。void 不接收新地点，只复制已接受 revision。
 
-本切片还没有把来源接入 Drift、Outbox 或 PostgreSQL 接触 revision。完成本机持久化和冲突原子性后，才可以声称离线来源不会丢失；完成四层对账后，才可以声称真实同步命令会写入 ADR-0112 的来源表。
+Drift v18 把来源保存到草稿、当前接触和 revision 的类型化列。ContactJournal、Outbox、pull apply 和冲突快照把地点与来源作为一个事实组：更正会同时替换或清空两者，作废复制上一条已接受 revision，来源单边变化也参与冲突判断。pending、N/A 和冲突界面只显示状态或地点名称，不回显精确坐标。v17 旧行升级后来源保持未知，不根据当前区域投影补造历史。
+
+这组设备测试证明草稿重启、排队重试、pull 和冲突处理不会静默丢失合法来源。它还不是四层端到端证据。只有 Slice 6V 对账 Flutter command、Backend store、PostgreSQL 来源表和 warehouse 清理后，才可以声称真实同步命令完整写入 ADR-0112 的来源记录。
 
 ## Drift 与 PostgreSQL 如何对账同一指标
 

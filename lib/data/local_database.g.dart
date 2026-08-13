@@ -1272,6 +1272,74 @@ class $DbContactRecordsTable extends DbContactRecords
         type: DriftSqlType.double,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _locationSourceKindMeta =
+      const VerificationMeta('locationSourceKind');
+  @override
+  late final GeneratedColumn<String> locationSourceKind =
+      GeneratedColumn<String>(
+        'location_source_kind',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _locationSourceLatitudeMeta =
+      const VerificationMeta('locationSourceLatitude');
+  @override
+  late final GeneratedColumn<double> locationSourceLatitude =
+      GeneratedColumn<double>(
+        'location_source_latitude',
+        aliasedName,
+        true,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _locationSourceLongitudeMeta =
+      const VerificationMeta('locationSourceLongitude');
+  @override
+  late final GeneratedColumn<double> locationSourceLongitude =
+      GeneratedColumn<double>(
+        'location_source_longitude',
+        aliasedName,
+        true,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _locationSourceAccuracyMetersMeta =
+      const VerificationMeta('locationSourceAccuracyMeters');
+  @override
+  late final GeneratedColumn<double> locationSourceAccuracyMeters =
+      GeneratedColumn<double>(
+        'location_source_accuracy_meters',
+        aliasedName,
+        true,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _locationSourceResolverContractVersionMeta =
+      const VerificationMeta('locationSourceResolverContractVersion');
+  @override
+  late final GeneratedColumn<String> locationSourceResolverContractVersion =
+      GeneratedColumn<String>(
+        'location_source_resolver_contract_version',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta
+  _locationSourceRegionTreeContentFingerprintMeta = const VerificationMeta(
+    'locationSourceRegionTreeContentFingerprint',
+  );
+  @override
+  late final GeneratedColumn<String>
+  locationSourceRegionTreeContentFingerprint = GeneratedColumn<String>(
+    'location_source_region_tree_content_fingerprint',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _reachCountMeta = const VerificationMeta(
     'reachCount',
   );
@@ -1335,6 +1403,12 @@ class $DbContactRecordsTable extends DbContactRecords
     latitude,
     longitude,
     locationAccuracyMeters,
+    locationSourceKind,
+    locationSourceLatitude,
+    locationSourceLongitude,
+    locationSourceAccuracyMeters,
+    locationSourceResolverContractVersion,
+    locationSourceRegionTreeContentFingerprint,
     reachCount,
     interestLevel,
     currentRevision,
@@ -1504,6 +1578,60 @@ class $DbContactRecordsTable extends DbContactRecords
         ),
       );
     }
+    if (data.containsKey('location_source_kind')) {
+      context.handle(
+        _locationSourceKindMeta,
+        locationSourceKind.isAcceptableOrUnknown(
+          data['location_source_kind']!,
+          _locationSourceKindMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_source_latitude')) {
+      context.handle(
+        _locationSourceLatitudeMeta,
+        locationSourceLatitude.isAcceptableOrUnknown(
+          data['location_source_latitude']!,
+          _locationSourceLatitudeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_source_longitude')) {
+      context.handle(
+        _locationSourceLongitudeMeta,
+        locationSourceLongitude.isAcceptableOrUnknown(
+          data['location_source_longitude']!,
+          _locationSourceLongitudeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_source_accuracy_meters')) {
+      context.handle(
+        _locationSourceAccuracyMetersMeta,
+        locationSourceAccuracyMeters.isAcceptableOrUnknown(
+          data['location_source_accuracy_meters']!,
+          _locationSourceAccuracyMetersMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_source_resolver_contract_version')) {
+      context.handle(
+        _locationSourceResolverContractVersionMeta,
+        locationSourceResolverContractVersion.isAcceptableOrUnknown(
+          data['location_source_resolver_contract_version']!,
+          _locationSourceResolverContractVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_source_region_tree_content_fingerprint')) {
+      context.handle(
+        _locationSourceRegionTreeContentFingerprintMeta,
+        locationSourceRegionTreeContentFingerprint.isAcceptableOrUnknown(
+          data['location_source_region_tree_content_fingerprint']!,
+          _locationSourceRegionTreeContentFingerprintMeta,
+        ),
+      );
+    }
     if (data.containsKey('reach_count')) {
       context.handle(
         _reachCountMeta,
@@ -1622,6 +1750,30 @@ class $DbContactRecordsTable extends DbContactRecords
         DriftSqlType.double,
         data['${effectivePrefix}location_accuracy_meters'],
       ),
+      locationSourceKind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}location_source_kind'],
+      ),
+      locationSourceLatitude: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}location_source_latitude'],
+      ),
+      locationSourceLongitude: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}location_source_longitude'],
+      ),
+      locationSourceAccuracyMeters: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}location_source_accuracy_meters'],
+      ),
+      locationSourceResolverContractVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}location_source_resolver_contract_version'],
+      ),
+      locationSourceRegionTreeContentFingerprint: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}location_source_region_tree_content_fingerprint'],
+      ),
       reachCount: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}reach_count'],
@@ -1665,6 +1817,12 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
   final double? latitude;
   final double? longitude;
   final double? locationAccuracyMeters;
+  final String? locationSourceKind;
+  final double? locationSourceLatitude;
+  final double? locationSourceLongitude;
+  final double? locationSourceAccuracyMeters;
+  final String? locationSourceResolverContractVersion;
+  final String? locationSourceRegionTreeContentFingerprint;
   final int reachCount;
   final int interestLevel;
   final int currentRevision;
@@ -1687,6 +1845,12 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
     this.latitude,
     this.longitude,
     this.locationAccuracyMeters,
+    this.locationSourceKind,
+    this.locationSourceLatitude,
+    this.locationSourceLongitude,
+    this.locationSourceAccuracyMeters,
+    this.locationSourceResolverContractVersion,
+    this.locationSourceRegionTreeContentFingerprint,
     required this.reachCount,
     required this.interestLevel,
     required this.currentRevision,
@@ -1726,6 +1890,34 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
     if (!nullToAbsent || locationAccuracyMeters != null) {
       map['location_accuracy_meters'] = Variable<double>(
         locationAccuracyMeters,
+      );
+    }
+    if (!nullToAbsent || locationSourceKind != null) {
+      map['location_source_kind'] = Variable<String>(locationSourceKind);
+    }
+    if (!nullToAbsent || locationSourceLatitude != null) {
+      map['location_source_latitude'] = Variable<double>(
+        locationSourceLatitude,
+      );
+    }
+    if (!nullToAbsent || locationSourceLongitude != null) {
+      map['location_source_longitude'] = Variable<double>(
+        locationSourceLongitude,
+      );
+    }
+    if (!nullToAbsent || locationSourceAccuracyMeters != null) {
+      map['location_source_accuracy_meters'] = Variable<double>(
+        locationSourceAccuracyMeters,
+      );
+    }
+    if (!nullToAbsent || locationSourceResolverContractVersion != null) {
+      map['location_source_resolver_contract_version'] = Variable<String>(
+        locationSourceResolverContractVersion,
+      );
+    }
+    if (!nullToAbsent || locationSourceRegionTreeContentFingerprint != null) {
+      map['location_source_region_tree_content_fingerprint'] = Variable<String>(
+        locationSourceRegionTreeContentFingerprint,
       );
     }
     map['reach_count'] = Variable<int>(reachCount);
@@ -1768,6 +1960,27 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
       locationAccuracyMeters: locationAccuracyMeters == null && nullToAbsent
           ? const Value.absent()
           : Value(locationAccuracyMeters),
+      locationSourceKind: locationSourceKind == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationSourceKind),
+      locationSourceLatitude: locationSourceLatitude == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationSourceLatitude),
+      locationSourceLongitude: locationSourceLongitude == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationSourceLongitude),
+      locationSourceAccuracyMeters:
+          locationSourceAccuracyMeters == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationSourceAccuracyMeters),
+      locationSourceResolverContractVersion:
+          locationSourceResolverContractVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationSourceResolverContractVersion),
+      locationSourceRegionTreeContentFingerprint:
+          locationSourceRegionTreeContentFingerprint == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationSourceRegionTreeContentFingerprint),
       reachCount: Value(reachCount),
       interestLevel: Value(interestLevel),
       currentRevision: Value(currentRevision),
@@ -1806,6 +2019,24 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
       locationAccuracyMeters: serializer.fromJson<double?>(
         json['locationAccuracyMeters'],
       ),
+      locationSourceKind: serializer.fromJson<String?>(
+        json['locationSourceKind'],
+      ),
+      locationSourceLatitude: serializer.fromJson<double?>(
+        json['locationSourceLatitude'],
+      ),
+      locationSourceLongitude: serializer.fromJson<double?>(
+        json['locationSourceLongitude'],
+      ),
+      locationSourceAccuracyMeters: serializer.fromJson<double?>(
+        json['locationSourceAccuracyMeters'],
+      ),
+      locationSourceResolverContractVersion: serializer.fromJson<String?>(
+        json['locationSourceResolverContractVersion'],
+      ),
+      locationSourceRegionTreeContentFingerprint: serializer.fromJson<String?>(
+        json['locationSourceRegionTreeContentFingerprint'],
+      ),
       reachCount: serializer.fromJson<int>(json['reachCount']),
       interestLevel: serializer.fromJson<int>(json['interestLevel']),
       currentRevision: serializer.fromJson<int>(json['currentRevision']),
@@ -1837,6 +2068,22 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
       'locationAccuracyMeters': serializer.toJson<double?>(
         locationAccuracyMeters,
       ),
+      'locationSourceKind': serializer.toJson<String?>(locationSourceKind),
+      'locationSourceLatitude': serializer.toJson<double?>(
+        locationSourceLatitude,
+      ),
+      'locationSourceLongitude': serializer.toJson<double?>(
+        locationSourceLongitude,
+      ),
+      'locationSourceAccuracyMeters': serializer.toJson<double?>(
+        locationSourceAccuracyMeters,
+      ),
+      'locationSourceResolverContractVersion': serializer.toJson<String?>(
+        locationSourceResolverContractVersion,
+      ),
+      'locationSourceRegionTreeContentFingerprint': serializer.toJson<String?>(
+        locationSourceRegionTreeContentFingerprint,
+      ),
       'reachCount': serializer.toJson<int>(reachCount),
       'interestLevel': serializer.toJson<int>(interestLevel),
       'currentRevision': serializer.toJson<int>(currentRevision),
@@ -1862,6 +2109,13 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
     Value<double?> latitude = const Value.absent(),
     Value<double?> longitude = const Value.absent(),
     Value<double?> locationAccuracyMeters = const Value.absent(),
+    Value<String?> locationSourceKind = const Value.absent(),
+    Value<double?> locationSourceLatitude = const Value.absent(),
+    Value<double?> locationSourceLongitude = const Value.absent(),
+    Value<double?> locationSourceAccuracyMeters = const Value.absent(),
+    Value<String?> locationSourceResolverContractVersion = const Value.absent(),
+    Value<String?> locationSourceRegionTreeContentFingerprint =
+        const Value.absent(),
     int? reachCount,
     int? interestLevel,
     int? currentRevision,
@@ -1893,6 +2147,26 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
     locationAccuracyMeters: locationAccuracyMeters.present
         ? locationAccuracyMeters.value
         : this.locationAccuracyMeters,
+    locationSourceKind: locationSourceKind.present
+        ? locationSourceKind.value
+        : this.locationSourceKind,
+    locationSourceLatitude: locationSourceLatitude.present
+        ? locationSourceLatitude.value
+        : this.locationSourceLatitude,
+    locationSourceLongitude: locationSourceLongitude.present
+        ? locationSourceLongitude.value
+        : this.locationSourceLongitude,
+    locationSourceAccuracyMeters: locationSourceAccuracyMeters.present
+        ? locationSourceAccuracyMeters.value
+        : this.locationSourceAccuracyMeters,
+    locationSourceResolverContractVersion:
+        locationSourceResolverContractVersion.present
+        ? locationSourceResolverContractVersion.value
+        : this.locationSourceResolverContractVersion,
+    locationSourceRegionTreeContentFingerprint:
+        locationSourceRegionTreeContentFingerprint.present
+        ? locationSourceRegionTreeContentFingerprint.value
+        : this.locationSourceRegionTreeContentFingerprint,
     reachCount: reachCount ?? this.reachCount,
     interestLevel: interestLevel ?? this.interestLevel,
     currentRevision: currentRevision ?? this.currentRevision,
@@ -1937,6 +2211,26 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
       locationAccuracyMeters: data.locationAccuracyMeters.present
           ? data.locationAccuracyMeters.value
           : this.locationAccuracyMeters,
+      locationSourceKind: data.locationSourceKind.present
+          ? data.locationSourceKind.value
+          : this.locationSourceKind,
+      locationSourceLatitude: data.locationSourceLatitude.present
+          ? data.locationSourceLatitude.value
+          : this.locationSourceLatitude,
+      locationSourceLongitude: data.locationSourceLongitude.present
+          ? data.locationSourceLongitude.value
+          : this.locationSourceLongitude,
+      locationSourceAccuracyMeters: data.locationSourceAccuracyMeters.present
+          ? data.locationSourceAccuracyMeters.value
+          : this.locationSourceAccuracyMeters,
+      locationSourceResolverContractVersion:
+          data.locationSourceResolverContractVersion.present
+          ? data.locationSourceResolverContractVersion.value
+          : this.locationSourceResolverContractVersion,
+      locationSourceRegionTreeContentFingerprint:
+          data.locationSourceRegionTreeContentFingerprint.present
+          ? data.locationSourceRegionTreeContentFingerprint.value
+          : this.locationSourceRegionTreeContentFingerprint,
       reachCount: data.reachCount.present
           ? data.reachCount.value
           : this.reachCount,
@@ -1972,6 +2266,18 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
           ..write('latitude: $latitude, ')
           ..write('longitude: $longitude, ')
           ..write('locationAccuracyMeters: $locationAccuracyMeters, ')
+          ..write('locationSourceKind: $locationSourceKind, ')
+          ..write('locationSourceLatitude: $locationSourceLatitude, ')
+          ..write('locationSourceLongitude: $locationSourceLongitude, ')
+          ..write(
+            'locationSourceAccuracyMeters: $locationSourceAccuracyMeters, ',
+          )
+          ..write(
+            'locationSourceResolverContractVersion: $locationSourceResolverContractVersion, ',
+          )
+          ..write(
+            'locationSourceRegionTreeContentFingerprint: $locationSourceRegionTreeContentFingerprint, ',
+          )
           ..write('reachCount: $reachCount, ')
           ..write('interestLevel: $interestLevel, ')
           ..write('currentRevision: $currentRevision, ')
@@ -1999,6 +2305,12 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
     latitude,
     longitude,
     locationAccuracyMeters,
+    locationSourceKind,
+    locationSourceLatitude,
+    locationSourceLongitude,
+    locationSourceAccuracyMeters,
+    locationSourceResolverContractVersion,
+    locationSourceRegionTreeContentFingerprint,
     reachCount,
     interestLevel,
     currentRevision,
@@ -2025,6 +2337,15 @@ class DbContactRecord extends DataClass implements Insertable<DbContactRecord> {
           other.latitude == this.latitude &&
           other.longitude == this.longitude &&
           other.locationAccuracyMeters == this.locationAccuracyMeters &&
+          other.locationSourceKind == this.locationSourceKind &&
+          other.locationSourceLatitude == this.locationSourceLatitude &&
+          other.locationSourceLongitude == this.locationSourceLongitude &&
+          other.locationSourceAccuracyMeters ==
+              this.locationSourceAccuracyMeters &&
+          other.locationSourceResolverContractVersion ==
+              this.locationSourceResolverContractVersion &&
+          other.locationSourceRegionTreeContentFingerprint ==
+              this.locationSourceRegionTreeContentFingerprint &&
           other.reachCount == this.reachCount &&
           other.interestLevel == this.interestLevel &&
           other.currentRevision == this.currentRevision &&
@@ -2049,6 +2370,12 @@ class DbContactRecordsCompanion extends UpdateCompanion<DbContactRecord> {
   final Value<double?> latitude;
   final Value<double?> longitude;
   final Value<double?> locationAccuracyMeters;
+  final Value<String?> locationSourceKind;
+  final Value<double?> locationSourceLatitude;
+  final Value<double?> locationSourceLongitude;
+  final Value<double?> locationSourceAccuracyMeters;
+  final Value<String?> locationSourceResolverContractVersion;
+  final Value<String?> locationSourceRegionTreeContentFingerprint;
   final Value<int> reachCount;
   final Value<int> interestLevel;
   final Value<int> currentRevision;
@@ -2072,6 +2399,12 @@ class DbContactRecordsCompanion extends UpdateCompanion<DbContactRecord> {
     this.latitude = const Value.absent(),
     this.longitude = const Value.absent(),
     this.locationAccuracyMeters = const Value.absent(),
+    this.locationSourceKind = const Value.absent(),
+    this.locationSourceLatitude = const Value.absent(),
+    this.locationSourceLongitude = const Value.absent(),
+    this.locationSourceAccuracyMeters = const Value.absent(),
+    this.locationSourceResolverContractVersion = const Value.absent(),
+    this.locationSourceRegionTreeContentFingerprint = const Value.absent(),
     this.reachCount = const Value.absent(),
     this.interestLevel = const Value.absent(),
     this.currentRevision = const Value.absent(),
@@ -2096,6 +2429,12 @@ class DbContactRecordsCompanion extends UpdateCompanion<DbContactRecord> {
     this.latitude = const Value.absent(),
     this.longitude = const Value.absent(),
     this.locationAccuracyMeters = const Value.absent(),
+    this.locationSourceKind = const Value.absent(),
+    this.locationSourceLatitude = const Value.absent(),
+    this.locationSourceLongitude = const Value.absent(),
+    this.locationSourceAccuracyMeters = const Value.absent(),
+    this.locationSourceResolverContractVersion = const Value.absent(),
+    this.locationSourceRegionTreeContentFingerprint = const Value.absent(),
     required int reachCount,
     required int interestLevel,
     required int currentRevision,
@@ -2133,6 +2472,12 @@ class DbContactRecordsCompanion extends UpdateCompanion<DbContactRecord> {
     Expression<double>? latitude,
     Expression<double>? longitude,
     Expression<double>? locationAccuracyMeters,
+    Expression<String>? locationSourceKind,
+    Expression<double>? locationSourceLatitude,
+    Expression<double>? locationSourceLongitude,
+    Expression<double>? locationSourceAccuracyMeters,
+    Expression<String>? locationSourceResolverContractVersion,
+    Expression<String>? locationSourceRegionTreeContentFingerprint,
     Expression<int>? reachCount,
     Expression<int>? interestLevel,
     Expression<int>? currentRevision,
@@ -2160,6 +2505,20 @@ class DbContactRecordsCompanion extends UpdateCompanion<DbContactRecord> {
       if (longitude != null) 'longitude': longitude,
       if (locationAccuracyMeters != null)
         'location_accuracy_meters': locationAccuracyMeters,
+      if (locationSourceKind != null)
+        'location_source_kind': locationSourceKind,
+      if (locationSourceLatitude != null)
+        'location_source_latitude': locationSourceLatitude,
+      if (locationSourceLongitude != null)
+        'location_source_longitude': locationSourceLongitude,
+      if (locationSourceAccuracyMeters != null)
+        'location_source_accuracy_meters': locationSourceAccuracyMeters,
+      if (locationSourceResolverContractVersion != null)
+        'location_source_resolver_contract_version':
+            locationSourceResolverContractVersion,
+      if (locationSourceRegionTreeContentFingerprint != null)
+        'location_source_region_tree_content_fingerprint':
+            locationSourceRegionTreeContentFingerprint,
       if (reachCount != null) 'reach_count': reachCount,
       if (interestLevel != null) 'interest_level': interestLevel,
       if (currentRevision != null) 'current_revision': currentRevision,
@@ -2186,6 +2545,12 @@ class DbContactRecordsCompanion extends UpdateCompanion<DbContactRecord> {
     Value<double?>? latitude,
     Value<double?>? longitude,
     Value<double?>? locationAccuracyMeters,
+    Value<String?>? locationSourceKind,
+    Value<double?>? locationSourceLatitude,
+    Value<double?>? locationSourceLongitude,
+    Value<double?>? locationSourceAccuracyMeters,
+    Value<String?>? locationSourceResolverContractVersion,
+    Value<String?>? locationSourceRegionTreeContentFingerprint,
     Value<int>? reachCount,
     Value<int>? interestLevel,
     Value<int>? currentRevision,
@@ -2212,6 +2577,19 @@ class DbContactRecordsCompanion extends UpdateCompanion<DbContactRecord> {
       longitude: longitude ?? this.longitude,
       locationAccuracyMeters:
           locationAccuracyMeters ?? this.locationAccuracyMeters,
+      locationSourceKind: locationSourceKind ?? this.locationSourceKind,
+      locationSourceLatitude:
+          locationSourceLatitude ?? this.locationSourceLatitude,
+      locationSourceLongitude:
+          locationSourceLongitude ?? this.locationSourceLongitude,
+      locationSourceAccuracyMeters:
+          locationSourceAccuracyMeters ?? this.locationSourceAccuracyMeters,
+      locationSourceResolverContractVersion:
+          locationSourceResolverContractVersion ??
+          this.locationSourceResolverContractVersion,
+      locationSourceRegionTreeContentFingerprint:
+          locationSourceRegionTreeContentFingerprint ??
+          this.locationSourceRegionTreeContentFingerprint,
       reachCount: reachCount ?? this.reachCount,
       interestLevel: interestLevel ?? this.interestLevel,
       currentRevision: currentRevision ?? this.currentRevision,
@@ -2280,6 +2658,34 @@ class DbContactRecordsCompanion extends UpdateCompanion<DbContactRecord> {
         locationAccuracyMeters.value,
       );
     }
+    if (locationSourceKind.present) {
+      map['location_source_kind'] = Variable<String>(locationSourceKind.value);
+    }
+    if (locationSourceLatitude.present) {
+      map['location_source_latitude'] = Variable<double>(
+        locationSourceLatitude.value,
+      );
+    }
+    if (locationSourceLongitude.present) {
+      map['location_source_longitude'] = Variable<double>(
+        locationSourceLongitude.value,
+      );
+    }
+    if (locationSourceAccuracyMeters.present) {
+      map['location_source_accuracy_meters'] = Variable<double>(
+        locationSourceAccuracyMeters.value,
+      );
+    }
+    if (locationSourceResolverContractVersion.present) {
+      map['location_source_resolver_contract_version'] = Variable<String>(
+        locationSourceResolverContractVersion.value,
+      );
+    }
+    if (locationSourceRegionTreeContentFingerprint.present) {
+      map['location_source_region_tree_content_fingerprint'] = Variable<String>(
+        locationSourceRegionTreeContentFingerprint.value,
+      );
+    }
     if (reachCount.present) {
       map['reach_count'] = Variable<int>(reachCount.value);
     }
@@ -2318,6 +2724,18 @@ class DbContactRecordsCompanion extends UpdateCompanion<DbContactRecord> {
           ..write('latitude: $latitude, ')
           ..write('longitude: $longitude, ')
           ..write('locationAccuracyMeters: $locationAccuracyMeters, ')
+          ..write('locationSourceKind: $locationSourceKind, ')
+          ..write('locationSourceLatitude: $locationSourceLatitude, ')
+          ..write('locationSourceLongitude: $locationSourceLongitude, ')
+          ..write(
+            'locationSourceAccuracyMeters: $locationSourceAccuracyMeters, ',
+          )
+          ..write(
+            'locationSourceResolverContractVersion: $locationSourceResolverContractVersion, ',
+          )
+          ..write(
+            'locationSourceRegionTreeContentFingerprint: $locationSourceRegionTreeContentFingerprint, ',
+          )
           ..write('reachCount: $reachCount, ')
           ..write('interestLevel: $interestLevel, ')
           ..write('currentRevision: $currentRevision, ')
@@ -3983,6 +4401,74 @@ class $DbContactRevisionsTable extends DbContactRevisions
         type: DriftSqlType.double,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _locationSourceKindMeta =
+      const VerificationMeta('locationSourceKind');
+  @override
+  late final GeneratedColumn<String> locationSourceKind =
+      GeneratedColumn<String>(
+        'location_source_kind',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _locationSourceLatitudeMeta =
+      const VerificationMeta('locationSourceLatitude');
+  @override
+  late final GeneratedColumn<double> locationSourceLatitude =
+      GeneratedColumn<double>(
+        'location_source_latitude',
+        aliasedName,
+        true,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _locationSourceLongitudeMeta =
+      const VerificationMeta('locationSourceLongitude');
+  @override
+  late final GeneratedColumn<double> locationSourceLongitude =
+      GeneratedColumn<double>(
+        'location_source_longitude',
+        aliasedName,
+        true,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _locationSourceAccuracyMetersMeta =
+      const VerificationMeta('locationSourceAccuracyMeters');
+  @override
+  late final GeneratedColumn<double> locationSourceAccuracyMeters =
+      GeneratedColumn<double>(
+        'location_source_accuracy_meters',
+        aliasedName,
+        true,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _locationSourceResolverContractVersionMeta =
+      const VerificationMeta('locationSourceResolverContractVersion');
+  @override
+  late final GeneratedColumn<String> locationSourceResolverContractVersion =
+      GeneratedColumn<String>(
+        'location_source_resolver_contract_version',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta
+  _locationSourceRegionTreeContentFingerprintMeta = const VerificationMeta(
+    'locationSourceRegionTreeContentFingerprint',
+  );
+  @override
+  late final GeneratedColumn<String>
+  locationSourceRegionTreeContentFingerprint = GeneratedColumn<String>(
+    'location_source_region_tree_content_fingerprint',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _reachCountMeta = const VerificationMeta(
     'reachCount',
   );
@@ -4025,6 +4511,12 @@ class $DbContactRevisionsTable extends DbContactRevisions
     latitude,
     longitude,
     locationAccuracyMeters,
+    locationSourceKind,
+    locationSourceLatitude,
+    locationSourceLongitude,
+    locationSourceAccuracyMeters,
+    locationSourceResolverContractVersion,
+    locationSourceRegionTreeContentFingerprint,
     reachCount,
     interestLevel,
   ];
@@ -4199,6 +4691,60 @@ class $DbContactRevisionsTable extends DbContactRevisions
         ),
       );
     }
+    if (data.containsKey('location_source_kind')) {
+      context.handle(
+        _locationSourceKindMeta,
+        locationSourceKind.isAcceptableOrUnknown(
+          data['location_source_kind']!,
+          _locationSourceKindMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_source_latitude')) {
+      context.handle(
+        _locationSourceLatitudeMeta,
+        locationSourceLatitude.isAcceptableOrUnknown(
+          data['location_source_latitude']!,
+          _locationSourceLatitudeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_source_longitude')) {
+      context.handle(
+        _locationSourceLongitudeMeta,
+        locationSourceLongitude.isAcceptableOrUnknown(
+          data['location_source_longitude']!,
+          _locationSourceLongitudeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_source_accuracy_meters')) {
+      context.handle(
+        _locationSourceAccuracyMetersMeta,
+        locationSourceAccuracyMeters.isAcceptableOrUnknown(
+          data['location_source_accuracy_meters']!,
+          _locationSourceAccuracyMetersMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_source_resolver_contract_version')) {
+      context.handle(
+        _locationSourceResolverContractVersionMeta,
+        locationSourceResolverContractVersion.isAcceptableOrUnknown(
+          data['location_source_resolver_contract_version']!,
+          _locationSourceResolverContractVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_source_region_tree_content_fingerprint')) {
+      context.handle(
+        _locationSourceRegionTreeContentFingerprintMeta,
+        locationSourceRegionTreeContentFingerprint.isAcceptableOrUnknown(
+          data['location_source_region_tree_content_fingerprint']!,
+          _locationSourceRegionTreeContentFingerprintMeta,
+        ),
+      );
+    }
     if (data.containsKey('reach_count')) {
       context.handle(
         _reachCountMeta,
@@ -4303,6 +4849,30 @@ class $DbContactRevisionsTable extends DbContactRevisions
         DriftSqlType.double,
         data['${effectivePrefix}location_accuracy_meters'],
       ),
+      locationSourceKind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}location_source_kind'],
+      ),
+      locationSourceLatitude: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}location_source_latitude'],
+      ),
+      locationSourceLongitude: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}location_source_longitude'],
+      ),
+      locationSourceAccuracyMeters: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}location_source_accuracy_meters'],
+      ),
+      locationSourceResolverContractVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}location_source_resolver_contract_version'],
+      ),
+      locationSourceRegionTreeContentFingerprint: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}location_source_region_tree_content_fingerprint'],
+      ),
       reachCount: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}reach_count'],
@@ -4340,6 +4910,12 @@ class DbContactRevision extends DataClass
   final double? latitude;
   final double? longitude;
   final double? locationAccuracyMeters;
+  final String? locationSourceKind;
+  final double? locationSourceLatitude;
+  final double? locationSourceLongitude;
+  final double? locationSourceAccuracyMeters;
+  final String? locationSourceResolverContractVersion;
+  final String? locationSourceRegionTreeContentFingerprint;
   final int reachCount;
   final int interestLevel;
   const DbContactRevision({
@@ -4361,6 +4937,12 @@ class DbContactRevision extends DataClass
     this.latitude,
     this.longitude,
     this.locationAccuracyMeters,
+    this.locationSourceKind,
+    this.locationSourceLatitude,
+    this.locationSourceLongitude,
+    this.locationSourceAccuracyMeters,
+    this.locationSourceResolverContractVersion,
+    this.locationSourceRegionTreeContentFingerprint,
     required this.reachCount,
     required this.interestLevel,
   });
@@ -4401,6 +4983,34 @@ class DbContactRevision extends DataClass
     if (!nullToAbsent || locationAccuracyMeters != null) {
       map['location_accuracy_meters'] = Variable<double>(
         locationAccuracyMeters,
+      );
+    }
+    if (!nullToAbsent || locationSourceKind != null) {
+      map['location_source_kind'] = Variable<String>(locationSourceKind);
+    }
+    if (!nullToAbsent || locationSourceLatitude != null) {
+      map['location_source_latitude'] = Variable<double>(
+        locationSourceLatitude,
+      );
+    }
+    if (!nullToAbsent || locationSourceLongitude != null) {
+      map['location_source_longitude'] = Variable<double>(
+        locationSourceLongitude,
+      );
+    }
+    if (!nullToAbsent || locationSourceAccuracyMeters != null) {
+      map['location_source_accuracy_meters'] = Variable<double>(
+        locationSourceAccuracyMeters,
+      );
+    }
+    if (!nullToAbsent || locationSourceResolverContractVersion != null) {
+      map['location_source_resolver_contract_version'] = Variable<String>(
+        locationSourceResolverContractVersion,
+      );
+    }
+    if (!nullToAbsent || locationSourceRegionTreeContentFingerprint != null) {
+      map['location_source_region_tree_content_fingerprint'] = Variable<String>(
+        locationSourceRegionTreeContentFingerprint,
       );
     }
     map['reach_count'] = Variable<int>(reachCount);
@@ -4444,6 +5054,27 @@ class DbContactRevision extends DataClass
       locationAccuracyMeters: locationAccuracyMeters == null && nullToAbsent
           ? const Value.absent()
           : Value(locationAccuracyMeters),
+      locationSourceKind: locationSourceKind == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationSourceKind),
+      locationSourceLatitude: locationSourceLatitude == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationSourceLatitude),
+      locationSourceLongitude: locationSourceLongitude == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationSourceLongitude),
+      locationSourceAccuracyMeters:
+          locationSourceAccuracyMeters == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationSourceAccuracyMeters),
+      locationSourceResolverContractVersion:
+          locationSourceResolverContractVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationSourceResolverContractVersion),
+      locationSourceRegionTreeContentFingerprint:
+          locationSourceRegionTreeContentFingerprint == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationSourceRegionTreeContentFingerprint),
       reachCount: Value(reachCount),
       interestLevel: Value(interestLevel),
     );
@@ -4479,6 +5110,24 @@ class DbContactRevision extends DataClass
       locationAccuracyMeters: serializer.fromJson<double?>(
         json['locationAccuracyMeters'],
       ),
+      locationSourceKind: serializer.fromJson<String?>(
+        json['locationSourceKind'],
+      ),
+      locationSourceLatitude: serializer.fromJson<double?>(
+        json['locationSourceLatitude'],
+      ),
+      locationSourceLongitude: serializer.fromJson<double?>(
+        json['locationSourceLongitude'],
+      ),
+      locationSourceAccuracyMeters: serializer.fromJson<double?>(
+        json['locationSourceAccuracyMeters'],
+      ),
+      locationSourceResolverContractVersion: serializer.fromJson<String?>(
+        json['locationSourceResolverContractVersion'],
+      ),
+      locationSourceRegionTreeContentFingerprint: serializer.fromJson<String?>(
+        json['locationSourceRegionTreeContentFingerprint'],
+      ),
       reachCount: serializer.fromJson<int>(json['reachCount']),
       interestLevel: serializer.fromJson<int>(json['interestLevel']),
     );
@@ -4507,6 +5156,22 @@ class DbContactRevision extends DataClass
       'locationAccuracyMeters': serializer.toJson<double?>(
         locationAccuracyMeters,
       ),
+      'locationSourceKind': serializer.toJson<String?>(locationSourceKind),
+      'locationSourceLatitude': serializer.toJson<double?>(
+        locationSourceLatitude,
+      ),
+      'locationSourceLongitude': serializer.toJson<double?>(
+        locationSourceLongitude,
+      ),
+      'locationSourceAccuracyMeters': serializer.toJson<double?>(
+        locationSourceAccuracyMeters,
+      ),
+      'locationSourceResolverContractVersion': serializer.toJson<String?>(
+        locationSourceResolverContractVersion,
+      ),
+      'locationSourceRegionTreeContentFingerprint': serializer.toJson<String?>(
+        locationSourceRegionTreeContentFingerprint,
+      ),
       'reachCount': serializer.toJson<int>(reachCount),
       'interestLevel': serializer.toJson<int>(interestLevel),
     };
@@ -4531,6 +5196,13 @@ class DbContactRevision extends DataClass
     Value<double?> latitude = const Value.absent(),
     Value<double?> longitude = const Value.absent(),
     Value<double?> locationAccuracyMeters = const Value.absent(),
+    Value<String?> locationSourceKind = const Value.absent(),
+    Value<double?> locationSourceLatitude = const Value.absent(),
+    Value<double?> locationSourceLongitude = const Value.absent(),
+    Value<double?> locationSourceAccuracyMeters = const Value.absent(),
+    Value<String?> locationSourceResolverContractVersion = const Value.absent(),
+    Value<String?> locationSourceRegionTreeContentFingerprint =
+        const Value.absent(),
     int? reachCount,
     int? interestLevel,
   }) => DbContactRevision(
@@ -4560,6 +5232,26 @@ class DbContactRevision extends DataClass
     locationAccuracyMeters: locationAccuracyMeters.present
         ? locationAccuracyMeters.value
         : this.locationAccuracyMeters,
+    locationSourceKind: locationSourceKind.present
+        ? locationSourceKind.value
+        : this.locationSourceKind,
+    locationSourceLatitude: locationSourceLatitude.present
+        ? locationSourceLatitude.value
+        : this.locationSourceLatitude,
+    locationSourceLongitude: locationSourceLongitude.present
+        ? locationSourceLongitude.value
+        : this.locationSourceLongitude,
+    locationSourceAccuracyMeters: locationSourceAccuracyMeters.present
+        ? locationSourceAccuracyMeters.value
+        : this.locationSourceAccuracyMeters,
+    locationSourceResolverContractVersion:
+        locationSourceResolverContractVersion.present
+        ? locationSourceResolverContractVersion.value
+        : this.locationSourceResolverContractVersion,
+    locationSourceRegionTreeContentFingerprint:
+        locationSourceRegionTreeContentFingerprint.present
+        ? locationSourceRegionTreeContentFingerprint.value
+        : this.locationSourceRegionTreeContentFingerprint,
     reachCount: reachCount ?? this.reachCount,
     interestLevel: interestLevel ?? this.interestLevel,
   );
@@ -4607,6 +5299,26 @@ class DbContactRevision extends DataClass
       locationAccuracyMeters: data.locationAccuracyMeters.present
           ? data.locationAccuracyMeters.value
           : this.locationAccuracyMeters,
+      locationSourceKind: data.locationSourceKind.present
+          ? data.locationSourceKind.value
+          : this.locationSourceKind,
+      locationSourceLatitude: data.locationSourceLatitude.present
+          ? data.locationSourceLatitude.value
+          : this.locationSourceLatitude,
+      locationSourceLongitude: data.locationSourceLongitude.present
+          ? data.locationSourceLongitude.value
+          : this.locationSourceLongitude,
+      locationSourceAccuracyMeters: data.locationSourceAccuracyMeters.present
+          ? data.locationSourceAccuracyMeters.value
+          : this.locationSourceAccuracyMeters,
+      locationSourceResolverContractVersion:
+          data.locationSourceResolverContractVersion.present
+          ? data.locationSourceResolverContractVersion.value
+          : this.locationSourceResolverContractVersion,
+      locationSourceRegionTreeContentFingerprint:
+          data.locationSourceRegionTreeContentFingerprint.present
+          ? data.locationSourceRegionTreeContentFingerprint.value
+          : this.locationSourceRegionTreeContentFingerprint,
       reachCount: data.reachCount.present
           ? data.reachCount.value
           : this.reachCount,
@@ -4637,6 +5349,18 @@ class DbContactRevision extends DataClass
           ..write('latitude: $latitude, ')
           ..write('longitude: $longitude, ')
           ..write('locationAccuracyMeters: $locationAccuracyMeters, ')
+          ..write('locationSourceKind: $locationSourceKind, ')
+          ..write('locationSourceLatitude: $locationSourceLatitude, ')
+          ..write('locationSourceLongitude: $locationSourceLongitude, ')
+          ..write(
+            'locationSourceAccuracyMeters: $locationSourceAccuracyMeters, ',
+          )
+          ..write(
+            'locationSourceResolverContractVersion: $locationSourceResolverContractVersion, ',
+          )
+          ..write(
+            'locationSourceRegionTreeContentFingerprint: $locationSourceRegionTreeContentFingerprint, ',
+          )
           ..write('reachCount: $reachCount, ')
           ..write('interestLevel: $interestLevel')
           ..write(')'))
@@ -4644,7 +5368,7 @@ class DbContactRevision extends DataClass
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     revisionId,
     contactId,
     revisionNumber,
@@ -4663,9 +5387,15 @@ class DbContactRevision extends DataClass
     latitude,
     longitude,
     locationAccuracyMeters,
+    locationSourceKind,
+    locationSourceLatitude,
+    locationSourceLongitude,
+    locationSourceAccuracyMeters,
+    locationSourceResolverContractVersion,
+    locationSourceRegionTreeContentFingerprint,
     reachCount,
     interestLevel,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -4688,6 +5418,15 @@ class DbContactRevision extends DataClass
           other.latitude == this.latitude &&
           other.longitude == this.longitude &&
           other.locationAccuracyMeters == this.locationAccuracyMeters &&
+          other.locationSourceKind == this.locationSourceKind &&
+          other.locationSourceLatitude == this.locationSourceLatitude &&
+          other.locationSourceLongitude == this.locationSourceLongitude &&
+          other.locationSourceAccuracyMeters ==
+              this.locationSourceAccuracyMeters &&
+          other.locationSourceResolverContractVersion ==
+              this.locationSourceResolverContractVersion &&
+          other.locationSourceRegionTreeContentFingerprint ==
+              this.locationSourceRegionTreeContentFingerprint &&
           other.reachCount == this.reachCount &&
           other.interestLevel == this.interestLevel);
 }
@@ -4711,6 +5450,12 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
   final Value<double?> latitude;
   final Value<double?> longitude;
   final Value<double?> locationAccuracyMeters;
+  final Value<String?> locationSourceKind;
+  final Value<double?> locationSourceLatitude;
+  final Value<double?> locationSourceLongitude;
+  final Value<double?> locationSourceAccuracyMeters;
+  final Value<String?> locationSourceResolverContractVersion;
+  final Value<String?> locationSourceRegionTreeContentFingerprint;
   final Value<int> reachCount;
   final Value<int> interestLevel;
   final Value<int> rowid;
@@ -4733,6 +5478,12 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
     this.latitude = const Value.absent(),
     this.longitude = const Value.absent(),
     this.locationAccuracyMeters = const Value.absent(),
+    this.locationSourceKind = const Value.absent(),
+    this.locationSourceLatitude = const Value.absent(),
+    this.locationSourceLongitude = const Value.absent(),
+    this.locationSourceAccuracyMeters = const Value.absent(),
+    this.locationSourceResolverContractVersion = const Value.absent(),
+    this.locationSourceRegionTreeContentFingerprint = const Value.absent(),
     this.reachCount = const Value.absent(),
     this.interestLevel = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -4756,6 +5507,12 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
     this.latitude = const Value.absent(),
     this.longitude = const Value.absent(),
     this.locationAccuracyMeters = const Value.absent(),
+    this.locationSourceKind = const Value.absent(),
+    this.locationSourceLatitude = const Value.absent(),
+    this.locationSourceLongitude = const Value.absent(),
+    this.locationSourceAccuracyMeters = const Value.absent(),
+    this.locationSourceResolverContractVersion = const Value.absent(),
+    this.locationSourceRegionTreeContentFingerprint = const Value.absent(),
     required int reachCount,
     required int interestLevel,
     this.rowid = const Value.absent(),
@@ -4789,6 +5546,12 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
     Expression<double>? latitude,
     Expression<double>? longitude,
     Expression<double>? locationAccuracyMeters,
+    Expression<String>? locationSourceKind,
+    Expression<double>? locationSourceLatitude,
+    Expression<double>? locationSourceLongitude,
+    Expression<double>? locationSourceAccuracyMeters,
+    Expression<String>? locationSourceResolverContractVersion,
+    Expression<String>? locationSourceRegionTreeContentFingerprint,
     Expression<int>? reachCount,
     Expression<int>? interestLevel,
     Expression<int>? rowid,
@@ -4814,6 +5577,20 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
       if (longitude != null) 'longitude': longitude,
       if (locationAccuracyMeters != null)
         'location_accuracy_meters': locationAccuracyMeters,
+      if (locationSourceKind != null)
+        'location_source_kind': locationSourceKind,
+      if (locationSourceLatitude != null)
+        'location_source_latitude': locationSourceLatitude,
+      if (locationSourceLongitude != null)
+        'location_source_longitude': locationSourceLongitude,
+      if (locationSourceAccuracyMeters != null)
+        'location_source_accuracy_meters': locationSourceAccuracyMeters,
+      if (locationSourceResolverContractVersion != null)
+        'location_source_resolver_contract_version':
+            locationSourceResolverContractVersion,
+      if (locationSourceRegionTreeContentFingerprint != null)
+        'location_source_region_tree_content_fingerprint':
+            locationSourceRegionTreeContentFingerprint,
       if (reachCount != null) 'reach_count': reachCount,
       if (interestLevel != null) 'interest_level': interestLevel,
       if (rowid != null) 'rowid': rowid,
@@ -4839,6 +5616,12 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
     Value<double?>? latitude,
     Value<double?>? longitude,
     Value<double?>? locationAccuracyMeters,
+    Value<String?>? locationSourceKind,
+    Value<double?>? locationSourceLatitude,
+    Value<double?>? locationSourceLongitude,
+    Value<double?>? locationSourceAccuracyMeters,
+    Value<String?>? locationSourceResolverContractVersion,
+    Value<String?>? locationSourceRegionTreeContentFingerprint,
     Value<int>? reachCount,
     Value<int>? interestLevel,
     Value<int>? rowid,
@@ -4863,6 +5646,19 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
       longitude: longitude ?? this.longitude,
       locationAccuracyMeters:
           locationAccuracyMeters ?? this.locationAccuracyMeters,
+      locationSourceKind: locationSourceKind ?? this.locationSourceKind,
+      locationSourceLatitude:
+          locationSourceLatitude ?? this.locationSourceLatitude,
+      locationSourceLongitude:
+          locationSourceLongitude ?? this.locationSourceLongitude,
+      locationSourceAccuracyMeters:
+          locationSourceAccuracyMeters ?? this.locationSourceAccuracyMeters,
+      locationSourceResolverContractVersion:
+          locationSourceResolverContractVersion ??
+          this.locationSourceResolverContractVersion,
+      locationSourceRegionTreeContentFingerprint:
+          locationSourceRegionTreeContentFingerprint ??
+          this.locationSourceRegionTreeContentFingerprint,
       reachCount: reachCount ?? this.reachCount,
       interestLevel: interestLevel ?? this.interestLevel,
       rowid: rowid ?? this.rowid,
@@ -4930,6 +5726,34 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
         locationAccuracyMeters.value,
       );
     }
+    if (locationSourceKind.present) {
+      map['location_source_kind'] = Variable<String>(locationSourceKind.value);
+    }
+    if (locationSourceLatitude.present) {
+      map['location_source_latitude'] = Variable<double>(
+        locationSourceLatitude.value,
+      );
+    }
+    if (locationSourceLongitude.present) {
+      map['location_source_longitude'] = Variable<double>(
+        locationSourceLongitude.value,
+      );
+    }
+    if (locationSourceAccuracyMeters.present) {
+      map['location_source_accuracy_meters'] = Variable<double>(
+        locationSourceAccuracyMeters.value,
+      );
+    }
+    if (locationSourceResolverContractVersion.present) {
+      map['location_source_resolver_contract_version'] = Variable<String>(
+        locationSourceResolverContractVersion.value,
+      );
+    }
+    if (locationSourceRegionTreeContentFingerprint.present) {
+      map['location_source_region_tree_content_fingerprint'] = Variable<String>(
+        locationSourceRegionTreeContentFingerprint.value,
+      );
+    }
     if (reachCount.present) {
       map['reach_count'] = Variable<int>(reachCount.value);
     }
@@ -4963,6 +5787,18 @@ class DbContactRevisionsCompanion extends UpdateCompanion<DbContactRevision> {
           ..write('latitude: $latitude, ')
           ..write('longitude: $longitude, ')
           ..write('locationAccuracyMeters: $locationAccuracyMeters, ')
+          ..write('locationSourceKind: $locationSourceKind, ')
+          ..write('locationSourceLatitude: $locationSourceLatitude, ')
+          ..write('locationSourceLongitude: $locationSourceLongitude, ')
+          ..write(
+            'locationSourceAccuracyMeters: $locationSourceAccuracyMeters, ',
+          )
+          ..write(
+            'locationSourceResolverContractVersion: $locationSourceResolverContractVersion, ',
+          )
+          ..write(
+            'locationSourceRegionTreeContentFingerprint: $locationSourceRegionTreeContentFingerprint, ',
+          )
           ..write('reachCount: $reachCount, ')
           ..write('interestLevel: $interestLevel, ')
           ..write('rowid: $rowid')
@@ -7018,6 +7854,74 @@ class $DbContactDraftsTable extends DbContactDrafts
         type: DriftSqlType.double,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _locationSourceKindMeta =
+      const VerificationMeta('locationSourceKind');
+  @override
+  late final GeneratedColumn<String> locationSourceKind =
+      GeneratedColumn<String>(
+        'location_source_kind',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _locationSourceLatitudeMeta =
+      const VerificationMeta('locationSourceLatitude');
+  @override
+  late final GeneratedColumn<double> locationSourceLatitude =
+      GeneratedColumn<double>(
+        'location_source_latitude',
+        aliasedName,
+        true,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _locationSourceLongitudeMeta =
+      const VerificationMeta('locationSourceLongitude');
+  @override
+  late final GeneratedColumn<double> locationSourceLongitude =
+      GeneratedColumn<double>(
+        'location_source_longitude',
+        aliasedName,
+        true,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _locationSourceAccuracyMetersMeta =
+      const VerificationMeta('locationSourceAccuracyMeters');
+  @override
+  late final GeneratedColumn<double> locationSourceAccuracyMeters =
+      GeneratedColumn<double>(
+        'location_source_accuracy_meters',
+        aliasedName,
+        true,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _locationSourceResolverContractVersionMeta =
+      const VerificationMeta('locationSourceResolverContractVersion');
+  @override
+  late final GeneratedColumn<String> locationSourceResolverContractVersion =
+      GeneratedColumn<String>(
+        'location_source_resolver_contract_version',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta
+  _locationSourceRegionTreeContentFingerprintMeta = const VerificationMeta(
+    'locationSourceRegionTreeContentFingerprint',
+  );
+  @override
+  late final GeneratedColumn<String>
+  locationSourceRegionTreeContentFingerprint = GeneratedColumn<String>(
+    'location_source_region_tree_content_fingerprint',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _reachCountMeta = const VerificationMeta(
     'reachCount',
   );
@@ -7153,6 +8057,12 @@ class $DbContactDraftsTable extends DbContactDrafts
     latitude,
     longitude,
     locationAccuracyMeters,
+    locationSourceKind,
+    locationSourceLatitude,
+    locationSourceLongitude,
+    locationSourceAccuracyMeters,
+    locationSourceResolverContractVersion,
+    locationSourceRegionTreeContentFingerprint,
     reachCount,
     interestLevel,
     syncMode,
@@ -7331,6 +8241,60 @@ class $DbContactDraftsTable extends DbContactDrafts
         ),
       );
     }
+    if (data.containsKey('location_source_kind')) {
+      context.handle(
+        _locationSourceKindMeta,
+        locationSourceKind.isAcceptableOrUnknown(
+          data['location_source_kind']!,
+          _locationSourceKindMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_source_latitude')) {
+      context.handle(
+        _locationSourceLatitudeMeta,
+        locationSourceLatitude.isAcceptableOrUnknown(
+          data['location_source_latitude']!,
+          _locationSourceLatitudeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_source_longitude')) {
+      context.handle(
+        _locationSourceLongitudeMeta,
+        locationSourceLongitude.isAcceptableOrUnknown(
+          data['location_source_longitude']!,
+          _locationSourceLongitudeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_source_accuracy_meters')) {
+      context.handle(
+        _locationSourceAccuracyMetersMeta,
+        locationSourceAccuracyMeters.isAcceptableOrUnknown(
+          data['location_source_accuracy_meters']!,
+          _locationSourceAccuracyMetersMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_source_resolver_contract_version')) {
+      context.handle(
+        _locationSourceResolverContractVersionMeta,
+        locationSourceResolverContractVersion.isAcceptableOrUnknown(
+          data['location_source_resolver_contract_version']!,
+          _locationSourceResolverContractVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location_source_region_tree_content_fingerprint')) {
+      context.handle(
+        _locationSourceRegionTreeContentFingerprintMeta,
+        locationSourceRegionTreeContentFingerprint.isAcceptableOrUnknown(
+          data['location_source_region_tree_content_fingerprint']!,
+          _locationSourceRegionTreeContentFingerprintMeta,
+        ),
+      );
+    }
     if (data.containsKey('reach_count')) {
       context.handle(
         _reachCountMeta,
@@ -7496,6 +8460,30 @@ class $DbContactDraftsTable extends DbContactDrafts
         DriftSqlType.double,
         data['${effectivePrefix}location_accuracy_meters'],
       ),
+      locationSourceKind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}location_source_kind'],
+      ),
+      locationSourceLatitude: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}location_source_latitude'],
+      ),
+      locationSourceLongitude: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}location_source_longitude'],
+      ),
+      locationSourceAccuracyMeters: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}location_source_accuracy_meters'],
+      ),
+      locationSourceResolverContractVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}location_source_resolver_contract_version'],
+      ),
+      locationSourceRegionTreeContentFingerprint: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}location_source_region_tree_content_fingerprint'],
+      ),
       reachCount: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}reach_count'],
@@ -7564,6 +8552,12 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
   final double? latitude;
   final double? longitude;
   final double? locationAccuracyMeters;
+  final String? locationSourceKind;
+  final double? locationSourceLatitude;
+  final double? locationSourceLongitude;
+  final double? locationSourceAccuracyMeters;
+  final String? locationSourceResolverContractVersion;
+  final String? locationSourceRegionTreeContentFingerprint;
   final int? reachCount;
   final int? interestLevel;
   final String syncMode;
@@ -7593,6 +8587,12 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
     this.latitude,
     this.longitude,
     this.locationAccuracyMeters,
+    this.locationSourceKind,
+    this.locationSourceLatitude,
+    this.locationSourceLongitude,
+    this.locationSourceAccuracyMeters,
+    this.locationSourceResolverContractVersion,
+    this.locationSourceRegionTreeContentFingerprint,
     this.reachCount,
     this.interestLevel,
     required this.syncMode,
@@ -7647,6 +8647,34 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
     if (!nullToAbsent || locationAccuracyMeters != null) {
       map['location_accuracy_meters'] = Variable<double>(
         locationAccuracyMeters,
+      );
+    }
+    if (!nullToAbsent || locationSourceKind != null) {
+      map['location_source_kind'] = Variable<String>(locationSourceKind);
+    }
+    if (!nullToAbsent || locationSourceLatitude != null) {
+      map['location_source_latitude'] = Variable<double>(
+        locationSourceLatitude,
+      );
+    }
+    if (!nullToAbsent || locationSourceLongitude != null) {
+      map['location_source_longitude'] = Variable<double>(
+        locationSourceLongitude,
+      );
+    }
+    if (!nullToAbsent || locationSourceAccuracyMeters != null) {
+      map['location_source_accuracy_meters'] = Variable<double>(
+        locationSourceAccuracyMeters,
+      );
+    }
+    if (!nullToAbsent || locationSourceResolverContractVersion != null) {
+      map['location_source_resolver_contract_version'] = Variable<String>(
+        locationSourceResolverContractVersion,
+      );
+    }
+    if (!nullToAbsent || locationSourceRegionTreeContentFingerprint != null) {
+      map['location_source_region_tree_content_fingerprint'] = Variable<String>(
+        locationSourceRegionTreeContentFingerprint,
       );
     }
     if (!nullToAbsent || reachCount != null) {
@@ -7718,6 +8746,27 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
       locationAccuracyMeters: locationAccuracyMeters == null && nullToAbsent
           ? const Value.absent()
           : Value(locationAccuracyMeters),
+      locationSourceKind: locationSourceKind == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationSourceKind),
+      locationSourceLatitude: locationSourceLatitude == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationSourceLatitude),
+      locationSourceLongitude: locationSourceLongitude == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationSourceLongitude),
+      locationSourceAccuracyMeters:
+          locationSourceAccuracyMeters == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationSourceAccuracyMeters),
+      locationSourceResolverContractVersion:
+          locationSourceResolverContractVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationSourceResolverContractVersion),
+      locationSourceRegionTreeContentFingerprint:
+          locationSourceRegionTreeContentFingerprint == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locationSourceRegionTreeContentFingerprint),
       reachCount: reachCount == null && nullToAbsent
           ? const Value.absent()
           : Value(reachCount),
@@ -7775,6 +8824,24 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
       locationAccuracyMeters: serializer.fromJson<double?>(
         json['locationAccuracyMeters'],
       ),
+      locationSourceKind: serializer.fromJson<String?>(
+        json['locationSourceKind'],
+      ),
+      locationSourceLatitude: serializer.fromJson<double?>(
+        json['locationSourceLatitude'],
+      ),
+      locationSourceLongitude: serializer.fromJson<double?>(
+        json['locationSourceLongitude'],
+      ),
+      locationSourceAccuracyMeters: serializer.fromJson<double?>(
+        json['locationSourceAccuracyMeters'],
+      ),
+      locationSourceResolverContractVersion: serializer.fromJson<String?>(
+        json['locationSourceResolverContractVersion'],
+      ),
+      locationSourceRegionTreeContentFingerprint: serializer.fromJson<String?>(
+        json['locationSourceRegionTreeContentFingerprint'],
+      ),
       reachCount: serializer.fromJson<int?>(json['reachCount']),
       interestLevel: serializer.fromJson<int?>(json['interestLevel']),
       syncMode: serializer.fromJson<String>(json['syncMode']),
@@ -7817,6 +8884,22 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
       'locationAccuracyMeters': serializer.toJson<double?>(
         locationAccuracyMeters,
       ),
+      'locationSourceKind': serializer.toJson<String?>(locationSourceKind),
+      'locationSourceLatitude': serializer.toJson<double?>(
+        locationSourceLatitude,
+      ),
+      'locationSourceLongitude': serializer.toJson<double?>(
+        locationSourceLongitude,
+      ),
+      'locationSourceAccuracyMeters': serializer.toJson<double?>(
+        locationSourceAccuracyMeters,
+      ),
+      'locationSourceResolverContractVersion': serializer.toJson<String?>(
+        locationSourceResolverContractVersion,
+      ),
+      'locationSourceRegionTreeContentFingerprint': serializer.toJson<String?>(
+        locationSourceRegionTreeContentFingerprint,
+      ),
       'reachCount': serializer.toJson<int?>(reachCount),
       'interestLevel': serializer.toJson<int?>(interestLevel),
       'syncMode': serializer.toJson<String>(syncMode),
@@ -7849,6 +8932,13 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
     Value<double?> latitude = const Value.absent(),
     Value<double?> longitude = const Value.absent(),
     Value<double?> locationAccuracyMeters = const Value.absent(),
+    Value<String?> locationSourceKind = const Value.absent(),
+    Value<double?> locationSourceLatitude = const Value.absent(),
+    Value<double?> locationSourceLongitude = const Value.absent(),
+    Value<double?> locationSourceAccuracyMeters = const Value.absent(),
+    Value<String?> locationSourceResolverContractVersion = const Value.absent(),
+    Value<String?> locationSourceRegionTreeContentFingerprint =
+        const Value.absent(),
     Value<int?> reachCount = const Value.absent(),
     Value<int?> interestLevel = const Value.absent(),
     String? syncMode,
@@ -7891,6 +8981,26 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
     locationAccuracyMeters: locationAccuracyMeters.present
         ? locationAccuracyMeters.value
         : this.locationAccuracyMeters,
+    locationSourceKind: locationSourceKind.present
+        ? locationSourceKind.value
+        : this.locationSourceKind,
+    locationSourceLatitude: locationSourceLatitude.present
+        ? locationSourceLatitude.value
+        : this.locationSourceLatitude,
+    locationSourceLongitude: locationSourceLongitude.present
+        ? locationSourceLongitude.value
+        : this.locationSourceLongitude,
+    locationSourceAccuracyMeters: locationSourceAccuracyMeters.present
+        ? locationSourceAccuracyMeters.value
+        : this.locationSourceAccuracyMeters,
+    locationSourceResolverContractVersion:
+        locationSourceResolverContractVersion.present
+        ? locationSourceResolverContractVersion.value
+        : this.locationSourceResolverContractVersion,
+    locationSourceRegionTreeContentFingerprint:
+        locationSourceRegionTreeContentFingerprint.present
+        ? locationSourceRegionTreeContentFingerprint.value
+        : this.locationSourceRegionTreeContentFingerprint,
     reachCount: reachCount.present ? reachCount.value : this.reachCount,
     interestLevel: interestLevel.present
         ? interestLevel.value
@@ -7954,6 +9064,26 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
       locationAccuracyMeters: data.locationAccuracyMeters.present
           ? data.locationAccuracyMeters.value
           : this.locationAccuracyMeters,
+      locationSourceKind: data.locationSourceKind.present
+          ? data.locationSourceKind.value
+          : this.locationSourceKind,
+      locationSourceLatitude: data.locationSourceLatitude.present
+          ? data.locationSourceLatitude.value
+          : this.locationSourceLatitude,
+      locationSourceLongitude: data.locationSourceLongitude.present
+          ? data.locationSourceLongitude.value
+          : this.locationSourceLongitude,
+      locationSourceAccuracyMeters: data.locationSourceAccuracyMeters.present
+          ? data.locationSourceAccuracyMeters.value
+          : this.locationSourceAccuracyMeters,
+      locationSourceResolverContractVersion:
+          data.locationSourceResolverContractVersion.present
+          ? data.locationSourceResolverContractVersion.value
+          : this.locationSourceResolverContractVersion,
+      locationSourceRegionTreeContentFingerprint:
+          data.locationSourceRegionTreeContentFingerprint.present
+          ? data.locationSourceRegionTreeContentFingerprint.value
+          : this.locationSourceRegionTreeContentFingerprint,
       reachCount: data.reachCount.present
           ? data.reachCount.value
           : this.reachCount,
@@ -8006,6 +9136,18 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
           ..write('latitude: $latitude, ')
           ..write('longitude: $longitude, ')
           ..write('locationAccuracyMeters: $locationAccuracyMeters, ')
+          ..write('locationSourceKind: $locationSourceKind, ')
+          ..write('locationSourceLatitude: $locationSourceLatitude, ')
+          ..write('locationSourceLongitude: $locationSourceLongitude, ')
+          ..write(
+            'locationSourceAccuracyMeters: $locationSourceAccuracyMeters, ',
+          )
+          ..write(
+            'locationSourceResolverContractVersion: $locationSourceResolverContractVersion, ',
+          )
+          ..write(
+            'locationSourceRegionTreeContentFingerprint: $locationSourceRegionTreeContentFingerprint, ',
+          )
           ..write('reachCount: $reachCount, ')
           ..write('interestLevel: $interestLevel, ')
           ..write('syncMode: $syncMode, ')
@@ -8040,6 +9182,12 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
     latitude,
     longitude,
     locationAccuracyMeters,
+    locationSourceKind,
+    locationSourceLatitude,
+    locationSourceLongitude,
+    locationSourceAccuracyMeters,
+    locationSourceResolverContractVersion,
+    locationSourceRegionTreeContentFingerprint,
     reachCount,
     interestLevel,
     syncMode,
@@ -8073,6 +9221,15 @@ class DbContactDraft extends DataClass implements Insertable<DbContactDraft> {
           other.latitude == this.latitude &&
           other.longitude == this.longitude &&
           other.locationAccuracyMeters == this.locationAccuracyMeters &&
+          other.locationSourceKind == this.locationSourceKind &&
+          other.locationSourceLatitude == this.locationSourceLatitude &&
+          other.locationSourceLongitude == this.locationSourceLongitude &&
+          other.locationSourceAccuracyMeters ==
+              this.locationSourceAccuracyMeters &&
+          other.locationSourceResolverContractVersion ==
+              this.locationSourceResolverContractVersion &&
+          other.locationSourceRegionTreeContentFingerprint ==
+              this.locationSourceRegionTreeContentFingerprint &&
           other.reachCount == this.reachCount &&
           other.interestLevel == this.interestLevel &&
           other.syncMode == this.syncMode &&
@@ -8104,6 +9261,12 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
   final Value<double?> latitude;
   final Value<double?> longitude;
   final Value<double?> locationAccuracyMeters;
+  final Value<String?> locationSourceKind;
+  final Value<double?> locationSourceLatitude;
+  final Value<double?> locationSourceLongitude;
+  final Value<double?> locationSourceAccuracyMeters;
+  final Value<String?> locationSourceResolverContractVersion;
+  final Value<String?> locationSourceRegionTreeContentFingerprint;
   final Value<int?> reachCount;
   final Value<int?> interestLevel;
   final Value<String> syncMode;
@@ -8134,6 +9297,12 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
     this.latitude = const Value.absent(),
     this.longitude = const Value.absent(),
     this.locationAccuracyMeters = const Value.absent(),
+    this.locationSourceKind = const Value.absent(),
+    this.locationSourceLatitude = const Value.absent(),
+    this.locationSourceLongitude = const Value.absent(),
+    this.locationSourceAccuracyMeters = const Value.absent(),
+    this.locationSourceResolverContractVersion = const Value.absent(),
+    this.locationSourceRegionTreeContentFingerprint = const Value.absent(),
     this.reachCount = const Value.absent(),
     this.interestLevel = const Value.absent(),
     this.syncMode = const Value.absent(),
@@ -8165,6 +9334,12 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
     this.latitude = const Value.absent(),
     this.longitude = const Value.absent(),
     this.locationAccuracyMeters = const Value.absent(),
+    this.locationSourceKind = const Value.absent(),
+    this.locationSourceLatitude = const Value.absent(),
+    this.locationSourceLongitude = const Value.absent(),
+    this.locationSourceAccuracyMeters = const Value.absent(),
+    this.locationSourceResolverContractVersion = const Value.absent(),
+    this.locationSourceRegionTreeContentFingerprint = const Value.absent(),
     this.reachCount = const Value.absent(),
     this.interestLevel = const Value.absent(),
     this.syncMode = const Value.absent(),
@@ -8202,6 +9377,12 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
     Expression<double>? latitude,
     Expression<double>? longitude,
     Expression<double>? locationAccuracyMeters,
+    Expression<String>? locationSourceKind,
+    Expression<double>? locationSourceLatitude,
+    Expression<double>? locationSourceLongitude,
+    Expression<double>? locationSourceAccuracyMeters,
+    Expression<String>? locationSourceResolverContractVersion,
+    Expression<String>? locationSourceRegionTreeContentFingerprint,
     Expression<int>? reachCount,
     Expression<int>? interestLevel,
     Expression<String>? syncMode,
@@ -8235,6 +9416,20 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
       if (longitude != null) 'longitude': longitude,
       if (locationAccuracyMeters != null)
         'location_accuracy_meters': locationAccuracyMeters,
+      if (locationSourceKind != null)
+        'location_source_kind': locationSourceKind,
+      if (locationSourceLatitude != null)
+        'location_source_latitude': locationSourceLatitude,
+      if (locationSourceLongitude != null)
+        'location_source_longitude': locationSourceLongitude,
+      if (locationSourceAccuracyMeters != null)
+        'location_source_accuracy_meters': locationSourceAccuracyMeters,
+      if (locationSourceResolverContractVersion != null)
+        'location_source_resolver_contract_version':
+            locationSourceResolverContractVersion,
+      if (locationSourceRegionTreeContentFingerprint != null)
+        'location_source_region_tree_content_fingerprint':
+            locationSourceRegionTreeContentFingerprint,
       if (reachCount != null) 'reach_count': reachCount,
       if (interestLevel != null) 'interest_level': interestLevel,
       if (syncMode != null) 'sync_mode': syncMode,
@@ -8269,6 +9464,12 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
     Value<double?>? latitude,
     Value<double?>? longitude,
     Value<double?>? locationAccuracyMeters,
+    Value<String?>? locationSourceKind,
+    Value<double?>? locationSourceLatitude,
+    Value<double?>? locationSourceLongitude,
+    Value<double?>? locationSourceAccuracyMeters,
+    Value<String?>? locationSourceResolverContractVersion,
+    Value<String?>? locationSourceRegionTreeContentFingerprint,
     Value<int?>? reachCount,
     Value<int?>? interestLevel,
     Value<String>? syncMode,
@@ -8302,6 +9503,19 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
       longitude: longitude ?? this.longitude,
       locationAccuracyMeters:
           locationAccuracyMeters ?? this.locationAccuracyMeters,
+      locationSourceKind: locationSourceKind ?? this.locationSourceKind,
+      locationSourceLatitude:
+          locationSourceLatitude ?? this.locationSourceLatitude,
+      locationSourceLongitude:
+          locationSourceLongitude ?? this.locationSourceLongitude,
+      locationSourceAccuracyMeters:
+          locationSourceAccuracyMeters ?? this.locationSourceAccuracyMeters,
+      locationSourceResolverContractVersion:
+          locationSourceResolverContractVersion ??
+          this.locationSourceResolverContractVersion,
+      locationSourceRegionTreeContentFingerprint:
+          locationSourceRegionTreeContentFingerprint ??
+          this.locationSourceRegionTreeContentFingerprint,
       reachCount: reachCount ?? this.reachCount,
       interestLevel: interestLevel ?? this.interestLevel,
       syncMode: syncMode ?? this.syncMode,
@@ -8377,6 +9591,34 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
         locationAccuracyMeters.value,
       );
     }
+    if (locationSourceKind.present) {
+      map['location_source_kind'] = Variable<String>(locationSourceKind.value);
+    }
+    if (locationSourceLatitude.present) {
+      map['location_source_latitude'] = Variable<double>(
+        locationSourceLatitude.value,
+      );
+    }
+    if (locationSourceLongitude.present) {
+      map['location_source_longitude'] = Variable<double>(
+        locationSourceLongitude.value,
+      );
+    }
+    if (locationSourceAccuracyMeters.present) {
+      map['location_source_accuracy_meters'] = Variable<double>(
+        locationSourceAccuracyMeters.value,
+      );
+    }
+    if (locationSourceResolverContractVersion.present) {
+      map['location_source_resolver_contract_version'] = Variable<String>(
+        locationSourceResolverContractVersion.value,
+      );
+    }
+    if (locationSourceRegionTreeContentFingerprint.present) {
+      map['location_source_region_tree_content_fingerprint'] = Variable<String>(
+        locationSourceRegionTreeContentFingerprint.value,
+      );
+    }
     if (reachCount.present) {
       map['reach_count'] = Variable<int>(reachCount.value);
     }
@@ -8436,6 +9678,18 @@ class DbContactDraftsCompanion extends UpdateCompanion<DbContactDraft> {
           ..write('latitude: $latitude, ')
           ..write('longitude: $longitude, ')
           ..write('locationAccuracyMeters: $locationAccuracyMeters, ')
+          ..write('locationSourceKind: $locationSourceKind, ')
+          ..write('locationSourceLatitude: $locationSourceLatitude, ')
+          ..write('locationSourceLongitude: $locationSourceLongitude, ')
+          ..write(
+            'locationSourceAccuracyMeters: $locationSourceAccuracyMeters, ',
+          )
+          ..write(
+            'locationSourceResolverContractVersion: $locationSourceResolverContractVersion, ',
+          )
+          ..write(
+            'locationSourceRegionTreeContentFingerprint: $locationSourceRegionTreeContentFingerprint, ',
+          )
           ..write('reachCount: $reachCount, ')
           ..write('interestLevel: $interestLevel, ')
           ..write('syncMode: $syncMode, ')
@@ -17834,6 +19088,12 @@ typedef $$DbContactRecordsTableCreateCompanionBuilder =
       Value<double?> latitude,
       Value<double?> longitude,
       Value<double?> locationAccuracyMeters,
+      Value<String?> locationSourceKind,
+      Value<double?> locationSourceLatitude,
+      Value<double?> locationSourceLongitude,
+      Value<double?> locationSourceAccuracyMeters,
+      Value<String?> locationSourceResolverContractVersion,
+      Value<String?> locationSourceRegionTreeContentFingerprint,
       required int reachCount,
       required int interestLevel,
       required int currentRevision,
@@ -17859,6 +19119,12 @@ typedef $$DbContactRecordsTableUpdateCompanionBuilder =
       Value<double?> latitude,
       Value<double?> longitude,
       Value<double?> locationAccuracyMeters,
+      Value<String?> locationSourceKind,
+      Value<double?> locationSourceLatitude,
+      Value<double?> locationSourceLongitude,
+      Value<double?> locationSourceAccuracyMeters,
+      Value<String?> locationSourceResolverContractVersion,
+      Value<String?> locationSourceRegionTreeContentFingerprint,
       Value<int> reachCount,
       Value<int> interestLevel,
       Value<int> currentRevision,
@@ -18149,6 +19415,38 @@ class $$DbContactRecordsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get locationSourceKind => $composableBuilder(
+    column: $table.locationSourceKind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get locationSourceLatitude => $composableBuilder(
+    column: $table.locationSourceLatitude,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get locationSourceLongitude => $composableBuilder(
+    column: $table.locationSourceLongitude,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get locationSourceAccuracyMeters => $composableBuilder(
+    column: $table.locationSourceAccuracyMeters,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get locationSourceResolverContractVersion =>
+      $composableBuilder(
+        column: $table.locationSourceResolverContractVersion,
+        builder: (column) => ColumnFilters(column),
+      );
+
+  ColumnFilters<String> get locationSourceRegionTreeContentFingerprint =>
+      $composableBuilder(
+        column: $table.locationSourceRegionTreeContentFingerprint,
+        builder: (column) => ColumnFilters(column),
+      );
+
   ColumnFilters<int> get reachCount => $composableBuilder(
     column: $table.reachCount,
     builder: (column) => ColumnFilters(column),
@@ -18418,6 +19716,39 @@ class $$DbContactRecordsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get locationSourceKind => $composableBuilder(
+    column: $table.locationSourceKind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get locationSourceLatitude => $composableBuilder(
+    column: $table.locationSourceLatitude,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get locationSourceLongitude => $composableBuilder(
+    column: $table.locationSourceLongitude,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get locationSourceAccuracyMeters =>
+      $composableBuilder(
+        column: $table.locationSourceAccuracyMeters,
+        builder: (column) => ColumnOrderings(column),
+      );
+
+  ColumnOrderings<String> get locationSourceResolverContractVersion =>
+      $composableBuilder(
+        column: $table.locationSourceResolverContractVersion,
+        builder: (column) => ColumnOrderings(column),
+      );
+
+  ColumnOrderings<String> get locationSourceRegionTreeContentFingerprint =>
+      $composableBuilder(
+        column: $table.locationSourceRegionTreeContentFingerprint,
+        builder: (column) => ColumnOrderings(column),
+      );
+
   ColumnOrderings<int> get reachCount => $composableBuilder(
     column: $table.reachCount,
     builder: (column) => ColumnOrderings(column),
@@ -18518,6 +19849,39 @@ class $$DbContactRecordsTableAnnotationComposer
     column: $table.locationAccuracyMeters,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get locationSourceKind => $composableBuilder(
+    column: $table.locationSourceKind,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get locationSourceLatitude => $composableBuilder(
+    column: $table.locationSourceLatitude,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get locationSourceLongitude => $composableBuilder(
+    column: $table.locationSourceLongitude,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get locationSourceAccuracyMeters =>
+      $composableBuilder(
+        column: $table.locationSourceAccuracyMeters,
+        builder: (column) => column,
+      );
+
+  GeneratedColumn<String> get locationSourceResolverContractVersion =>
+      $composableBuilder(
+        column: $table.locationSourceResolverContractVersion,
+        builder: (column) => column,
+      );
+
+  GeneratedColumn<String> get locationSourceRegionTreeContentFingerprint =>
+      $composableBuilder(
+        column: $table.locationSourceRegionTreeContentFingerprint,
+        builder: (column) => column,
+      );
 
   GeneratedColumn<int> get reachCount => $composableBuilder(
     column: $table.reachCount,
@@ -18755,6 +20119,15 @@ class $$DbContactRecordsTableTableManager
                 Value<double?> latitude = const Value.absent(),
                 Value<double?> longitude = const Value.absent(),
                 Value<double?> locationAccuracyMeters = const Value.absent(),
+                Value<String?> locationSourceKind = const Value.absent(),
+                Value<double?> locationSourceLatitude = const Value.absent(),
+                Value<double?> locationSourceLongitude = const Value.absent(),
+                Value<double?> locationSourceAccuracyMeters =
+                    const Value.absent(),
+                Value<String?> locationSourceResolverContractVersion =
+                    const Value.absent(),
+                Value<String?> locationSourceRegionTreeContentFingerprint =
+                    const Value.absent(),
                 Value<int> reachCount = const Value.absent(),
                 Value<int> interestLevel = const Value.absent(),
                 Value<int> currentRevision = const Value.absent(),
@@ -18778,6 +20151,14 @@ class $$DbContactRecordsTableTableManager
                 latitude: latitude,
                 longitude: longitude,
                 locationAccuracyMeters: locationAccuracyMeters,
+                locationSourceKind: locationSourceKind,
+                locationSourceLatitude: locationSourceLatitude,
+                locationSourceLongitude: locationSourceLongitude,
+                locationSourceAccuracyMeters: locationSourceAccuracyMeters,
+                locationSourceResolverContractVersion:
+                    locationSourceResolverContractVersion,
+                locationSourceRegionTreeContentFingerprint:
+                    locationSourceRegionTreeContentFingerprint,
                 reachCount: reachCount,
                 interestLevel: interestLevel,
                 currentRevision: currentRevision,
@@ -18803,6 +20184,15 @@ class $$DbContactRecordsTableTableManager
                 Value<double?> latitude = const Value.absent(),
                 Value<double?> longitude = const Value.absent(),
                 Value<double?> locationAccuracyMeters = const Value.absent(),
+                Value<String?> locationSourceKind = const Value.absent(),
+                Value<double?> locationSourceLatitude = const Value.absent(),
+                Value<double?> locationSourceLongitude = const Value.absent(),
+                Value<double?> locationSourceAccuracyMeters =
+                    const Value.absent(),
+                Value<String?> locationSourceResolverContractVersion =
+                    const Value.absent(),
+                Value<String?> locationSourceRegionTreeContentFingerprint =
+                    const Value.absent(),
                 required int reachCount,
                 required int interestLevel,
                 required int currentRevision,
@@ -18826,6 +20216,14 @@ class $$DbContactRecordsTableTableManager
                 latitude: latitude,
                 longitude: longitude,
                 locationAccuracyMeters: locationAccuracyMeters,
+                locationSourceKind: locationSourceKind,
+                locationSourceLatitude: locationSourceLatitude,
+                locationSourceLongitude: locationSourceLongitude,
+                locationSourceAccuracyMeters: locationSourceAccuracyMeters,
+                locationSourceResolverContractVersion:
+                    locationSourceResolverContractVersion,
+                locationSourceRegionTreeContentFingerprint:
+                    locationSourceRegionTreeContentFingerprint,
                 reachCount: reachCount,
                 interestLevel: interestLevel,
                 currentRevision: currentRevision,
@@ -19910,6 +21308,12 @@ typedef $$DbContactRevisionsTableCreateCompanionBuilder =
       Value<double?> latitude,
       Value<double?> longitude,
       Value<double?> locationAccuracyMeters,
+      Value<String?> locationSourceKind,
+      Value<double?> locationSourceLatitude,
+      Value<double?> locationSourceLongitude,
+      Value<double?> locationSourceAccuracyMeters,
+      Value<String?> locationSourceResolverContractVersion,
+      Value<String?> locationSourceRegionTreeContentFingerprint,
       required int reachCount,
       required int interestLevel,
       Value<int> rowid,
@@ -19934,6 +21338,12 @@ typedef $$DbContactRevisionsTableUpdateCompanionBuilder =
       Value<double?> latitude,
       Value<double?> longitude,
       Value<double?> locationAccuracyMeters,
+      Value<String?> locationSourceKind,
+      Value<double?> locationSourceLatitude,
+      Value<double?> locationSourceLongitude,
+      Value<double?> locationSourceAccuracyMeters,
+      Value<String?> locationSourceResolverContractVersion,
+      Value<String?> locationSourceRegionTreeContentFingerprint,
       Value<int> reachCount,
       Value<int> interestLevel,
       Value<int> rowid,
@@ -20066,6 +21476,38 @@ class $$DbContactRevisionsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get locationSourceKind => $composableBuilder(
+    column: $table.locationSourceKind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get locationSourceLatitude => $composableBuilder(
+    column: $table.locationSourceLatitude,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get locationSourceLongitude => $composableBuilder(
+    column: $table.locationSourceLongitude,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get locationSourceAccuracyMeters => $composableBuilder(
+    column: $table.locationSourceAccuracyMeters,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get locationSourceResolverContractVersion =>
+      $composableBuilder(
+        column: $table.locationSourceResolverContractVersion,
+        builder: (column) => ColumnFilters(column),
+      );
+
+  ColumnFilters<String> get locationSourceRegionTreeContentFingerprint =>
+      $composableBuilder(
+        column: $table.locationSourceRegionTreeContentFingerprint,
+        builder: (column) => ColumnFilters(column),
+      );
+
   ColumnFilters<int> get reachCount => $composableBuilder(
     column: $table.reachCount,
     builder: (column) => ColumnFilters(column),
@@ -20194,6 +21636,39 @@ class $$DbContactRevisionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get locationSourceKind => $composableBuilder(
+    column: $table.locationSourceKind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get locationSourceLatitude => $composableBuilder(
+    column: $table.locationSourceLatitude,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get locationSourceLongitude => $composableBuilder(
+    column: $table.locationSourceLongitude,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get locationSourceAccuracyMeters =>
+      $composableBuilder(
+        column: $table.locationSourceAccuracyMeters,
+        builder: (column) => ColumnOrderings(column),
+      );
+
+  ColumnOrderings<String> get locationSourceResolverContractVersion =>
+      $composableBuilder(
+        column: $table.locationSourceResolverContractVersion,
+        builder: (column) => ColumnOrderings(column),
+      );
+
+  ColumnOrderings<String> get locationSourceRegionTreeContentFingerprint =>
+      $composableBuilder(
+        column: $table.locationSourceRegionTreeContentFingerprint,
+        builder: (column) => ColumnOrderings(column),
+      );
+
   ColumnOrderings<int> get reachCount => $composableBuilder(
     column: $table.reachCount,
     builder: (column) => ColumnOrderings(column),
@@ -20312,6 +21787,39 @@ class $$DbContactRevisionsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get locationSourceKind => $composableBuilder(
+    column: $table.locationSourceKind,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get locationSourceLatitude => $composableBuilder(
+    column: $table.locationSourceLatitude,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get locationSourceLongitude => $composableBuilder(
+    column: $table.locationSourceLongitude,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get locationSourceAccuracyMeters =>
+      $composableBuilder(
+        column: $table.locationSourceAccuracyMeters,
+        builder: (column) => column,
+      );
+
+  GeneratedColumn<String> get locationSourceResolverContractVersion =>
+      $composableBuilder(
+        column: $table.locationSourceResolverContractVersion,
+        builder: (column) => column,
+      );
+
+  GeneratedColumn<String> get locationSourceRegionTreeContentFingerprint =>
+      $composableBuilder(
+        column: $table.locationSourceRegionTreeContentFingerprint,
+        builder: (column) => column,
+      );
+
   GeneratedColumn<int> get reachCount => $composableBuilder(
     column: $table.reachCount,
     builder: (column) => column,
@@ -20397,6 +21905,15 @@ class $$DbContactRevisionsTableTableManager
                 Value<double?> latitude = const Value.absent(),
                 Value<double?> longitude = const Value.absent(),
                 Value<double?> locationAccuracyMeters = const Value.absent(),
+                Value<String?> locationSourceKind = const Value.absent(),
+                Value<double?> locationSourceLatitude = const Value.absent(),
+                Value<double?> locationSourceLongitude = const Value.absent(),
+                Value<double?> locationSourceAccuracyMeters =
+                    const Value.absent(),
+                Value<String?> locationSourceResolverContractVersion =
+                    const Value.absent(),
+                Value<String?> locationSourceRegionTreeContentFingerprint =
+                    const Value.absent(),
                 Value<int> reachCount = const Value.absent(),
                 Value<int> interestLevel = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -20419,6 +21936,14 @@ class $$DbContactRevisionsTableTableManager
                 latitude: latitude,
                 longitude: longitude,
                 locationAccuracyMeters: locationAccuracyMeters,
+                locationSourceKind: locationSourceKind,
+                locationSourceLatitude: locationSourceLatitude,
+                locationSourceLongitude: locationSourceLongitude,
+                locationSourceAccuracyMeters: locationSourceAccuracyMeters,
+                locationSourceResolverContractVersion:
+                    locationSourceResolverContractVersion,
+                locationSourceRegionTreeContentFingerprint:
+                    locationSourceRegionTreeContentFingerprint,
                 reachCount: reachCount,
                 interestLevel: interestLevel,
                 rowid: rowid,
@@ -20443,6 +21968,15 @@ class $$DbContactRevisionsTableTableManager
                 Value<double?> latitude = const Value.absent(),
                 Value<double?> longitude = const Value.absent(),
                 Value<double?> locationAccuracyMeters = const Value.absent(),
+                Value<String?> locationSourceKind = const Value.absent(),
+                Value<double?> locationSourceLatitude = const Value.absent(),
+                Value<double?> locationSourceLongitude = const Value.absent(),
+                Value<double?> locationSourceAccuracyMeters =
+                    const Value.absent(),
+                Value<String?> locationSourceResolverContractVersion =
+                    const Value.absent(),
+                Value<String?> locationSourceRegionTreeContentFingerprint =
+                    const Value.absent(),
                 required int reachCount,
                 required int interestLevel,
                 Value<int> rowid = const Value.absent(),
@@ -20465,6 +21999,14 @@ class $$DbContactRevisionsTableTableManager
                 latitude: latitude,
                 longitude: longitude,
                 locationAccuracyMeters: locationAccuracyMeters,
+                locationSourceKind: locationSourceKind,
+                locationSourceLatitude: locationSourceLatitude,
+                locationSourceLongitude: locationSourceLongitude,
+                locationSourceAccuracyMeters: locationSourceAccuracyMeters,
+                locationSourceResolverContractVersion:
+                    locationSourceResolverContractVersion,
+                locationSourceRegionTreeContentFingerprint:
+                    locationSourceRegionTreeContentFingerprint,
                 reachCount: reachCount,
                 interestLevel: interestLevel,
                 rowid: rowid,
@@ -21640,6 +23182,12 @@ typedef $$DbContactDraftsTableCreateCompanionBuilder =
       Value<double?> latitude,
       Value<double?> longitude,
       Value<double?> locationAccuracyMeters,
+      Value<String?> locationSourceKind,
+      Value<double?> locationSourceLatitude,
+      Value<double?> locationSourceLongitude,
+      Value<double?> locationSourceAccuracyMeters,
+      Value<String?> locationSourceResolverContractVersion,
+      Value<String?> locationSourceRegionTreeContentFingerprint,
       Value<int?> reachCount,
       Value<int?> interestLevel,
       Value<String> syncMode,
@@ -21672,6 +23220,12 @@ typedef $$DbContactDraftsTableUpdateCompanionBuilder =
       Value<double?> latitude,
       Value<double?> longitude,
       Value<double?> locationAccuracyMeters,
+      Value<String?> locationSourceKind,
+      Value<double?> locationSourceLatitude,
+      Value<double?> locationSourceLongitude,
+      Value<double?> locationSourceAccuracyMeters,
+      Value<String?> locationSourceResolverContractVersion,
+      Value<String?> locationSourceRegionTreeContentFingerprint,
       Value<int?> reachCount,
       Value<int?> interestLevel,
       Value<String> syncMode,
@@ -21882,6 +23436,38 @@ class $$DbContactDraftsTableFilterComposer
     column: $table.locationAccuracyMeters,
     builder: (column) => ColumnFilters(column),
   );
+
+  ColumnFilters<String> get locationSourceKind => $composableBuilder(
+    column: $table.locationSourceKind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get locationSourceLatitude => $composableBuilder(
+    column: $table.locationSourceLatitude,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get locationSourceLongitude => $composableBuilder(
+    column: $table.locationSourceLongitude,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get locationSourceAccuracyMeters => $composableBuilder(
+    column: $table.locationSourceAccuracyMeters,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get locationSourceResolverContractVersion =>
+      $composableBuilder(
+        column: $table.locationSourceResolverContractVersion,
+        builder: (column) => ColumnFilters(column),
+      );
+
+  ColumnFilters<String> get locationSourceRegionTreeContentFingerprint =>
+      $composableBuilder(
+        column: $table.locationSourceRegionTreeContentFingerprint,
+        builder: (column) => ColumnFilters(column),
+      );
 
   ColumnFilters<int> get reachCount => $composableBuilder(
     column: $table.reachCount,
@@ -22113,6 +23699,39 @@ class $$DbContactDraftsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get locationSourceKind => $composableBuilder(
+    column: $table.locationSourceKind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get locationSourceLatitude => $composableBuilder(
+    column: $table.locationSourceLatitude,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get locationSourceLongitude => $composableBuilder(
+    column: $table.locationSourceLongitude,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get locationSourceAccuracyMeters =>
+      $composableBuilder(
+        column: $table.locationSourceAccuracyMeters,
+        builder: (column) => ColumnOrderings(column),
+      );
+
+  ColumnOrderings<String> get locationSourceResolverContractVersion =>
+      $composableBuilder(
+        column: $table.locationSourceResolverContractVersion,
+        builder: (column) => ColumnOrderings(column),
+      );
+
+  ColumnOrderings<String> get locationSourceRegionTreeContentFingerprint =>
+      $composableBuilder(
+        column: $table.locationSourceRegionTreeContentFingerprint,
+        builder: (column) => ColumnOrderings(column),
+      );
+
   ColumnOrderings<int> get reachCount => $composableBuilder(
     column: $table.reachCount,
     builder: (column) => ColumnOrderings(column),
@@ -22248,6 +23867,39 @@ class $$DbContactDraftsTableAnnotationComposer
     column: $table.locationAccuracyMeters,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get locationSourceKind => $composableBuilder(
+    column: $table.locationSourceKind,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get locationSourceLatitude => $composableBuilder(
+    column: $table.locationSourceLatitude,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get locationSourceLongitude => $composableBuilder(
+    column: $table.locationSourceLongitude,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get locationSourceAccuracyMeters =>
+      $composableBuilder(
+        column: $table.locationSourceAccuracyMeters,
+        builder: (column) => column,
+      );
+
+  GeneratedColumn<String> get locationSourceResolverContractVersion =>
+      $composableBuilder(
+        column: $table.locationSourceResolverContractVersion,
+        builder: (column) => column,
+      );
+
+  GeneratedColumn<String> get locationSourceRegionTreeContentFingerprint =>
+      $composableBuilder(
+        column: $table.locationSourceRegionTreeContentFingerprint,
+        builder: (column) => column,
+      );
 
   GeneratedColumn<int> get reachCount => $composableBuilder(
     column: $table.reachCount,
@@ -22430,6 +24082,15 @@ class $$DbContactDraftsTableTableManager
                 Value<double?> latitude = const Value.absent(),
                 Value<double?> longitude = const Value.absent(),
                 Value<double?> locationAccuracyMeters = const Value.absent(),
+                Value<String?> locationSourceKind = const Value.absent(),
+                Value<double?> locationSourceLatitude = const Value.absent(),
+                Value<double?> locationSourceLongitude = const Value.absent(),
+                Value<double?> locationSourceAccuracyMeters =
+                    const Value.absent(),
+                Value<String?> locationSourceResolverContractVersion =
+                    const Value.absent(),
+                Value<String?> locationSourceRegionTreeContentFingerprint =
+                    const Value.absent(),
                 Value<int?> reachCount = const Value.absent(),
                 Value<int?> interestLevel = const Value.absent(),
                 Value<String> syncMode = const Value.absent(),
@@ -22460,6 +24121,14 @@ class $$DbContactDraftsTableTableManager
                 latitude: latitude,
                 longitude: longitude,
                 locationAccuracyMeters: locationAccuracyMeters,
+                locationSourceKind: locationSourceKind,
+                locationSourceLatitude: locationSourceLatitude,
+                locationSourceLongitude: locationSourceLongitude,
+                locationSourceAccuracyMeters: locationSourceAccuracyMeters,
+                locationSourceResolverContractVersion:
+                    locationSourceResolverContractVersion,
+                locationSourceRegionTreeContentFingerprint:
+                    locationSourceRegionTreeContentFingerprint,
                 reachCount: reachCount,
                 interestLevel: interestLevel,
                 syncMode: syncMode,
@@ -22492,6 +24161,15 @@ class $$DbContactDraftsTableTableManager
                 Value<double?> latitude = const Value.absent(),
                 Value<double?> longitude = const Value.absent(),
                 Value<double?> locationAccuracyMeters = const Value.absent(),
+                Value<String?> locationSourceKind = const Value.absent(),
+                Value<double?> locationSourceLatitude = const Value.absent(),
+                Value<double?> locationSourceLongitude = const Value.absent(),
+                Value<double?> locationSourceAccuracyMeters =
+                    const Value.absent(),
+                Value<String?> locationSourceResolverContractVersion =
+                    const Value.absent(),
+                Value<String?> locationSourceRegionTreeContentFingerprint =
+                    const Value.absent(),
                 Value<int?> reachCount = const Value.absent(),
                 Value<int?> interestLevel = const Value.absent(),
                 Value<String> syncMode = const Value.absent(),
@@ -22522,6 +24200,14 @@ class $$DbContactDraftsTableTableManager
                 latitude: latitude,
                 longitude: longitude,
                 locationAccuracyMeters: locationAccuracyMeters,
+                locationSourceKind: locationSourceKind,
+                locationSourceLatitude: locationSourceLatitude,
+                locationSourceLongitude: locationSourceLongitude,
+                locationSourceAccuracyMeters: locationSourceAccuracyMeters,
+                locationSourceResolverContractVersion:
+                    locationSourceResolverContractVersion,
+                locationSourceRegionTreeContentFingerprint:
+                    locationSourceRegionTreeContentFingerprint,
                 reachCount: reachCount,
                 interestLevel: interestLevel,
                 syncMode: syncMode,

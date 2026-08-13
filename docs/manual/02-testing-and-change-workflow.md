@@ -282,7 +282,7 @@ iOS 第一次 `signup_request` 对原测试邮箱返回 HTTP 200，导出的 Sup
 
 ### 6.14 数据库 migration 为什么要做旧版本升级测试
 
-空库能按 v17 建成，只证明新安装可用，不能证明 v16 或更早版本的用户能安全升级。迁移测试先用保存的旧 schema 建库并写入 synthetic 数据，再运行正式 migration，核对原内容、默认值、索引、外键和新约束。
+空库能按 v18 建成，只证明新安装可用，不能证明 v17 或更早版本的用户能安全升级。迁移测试先用保存的旧 schema 建库并写入 synthetic 数据，再运行正式 migration，核对原内容、默认值、索引、外键和新约束。
 
 本项目遇到过两类典型 Red。第一类是新增列已经存在，但 SQLite 仍保留旧 `CHECK` 约束。仅执行 `ALTER TABLE ... ADD COLUMN` 无法更新整张表的约束，必须用 Drift `TableMigration` 重建表。第二类发生在跨多个版本升级时：重建步骤使用当前表定义，如果旧版本缺少当前列，就必须把该列放进 `newColumns`；否则复制数据时会引用不存在的源列。迁移测试检查的是“旧数据经过升级后的数据库”，不是只比较当前 Dart 类或新建表。
 
@@ -318,7 +318,7 @@ iOS 第一次 `signup_request` 对原测试邮箱返回 HTTP 200，导出的 Sup
 | 接触更正与作废 | 防止覆盖历史、错算发生期间或让作废事实继续计数 | 完整追加历史，原因必填，作废退出指标 | Red 后 Green，本地、Widget 与 PostgreSQL 测试保留 |
 | revision 历史重放 | 防止本机已到较新 revision 时拒绝服务端较早的已知历史 | 逐条核对已有快照，完整 batch 幂等落地并推进 cursor | Red 后 Green，同步回归测试保留 |
 | 跨设备接触更正 | 防止不同字段丢失，或同字段静默覆盖 | 不同事实组自动合并；同一事实组保留双方快照并由本人解决 | Red 后 Green，Flutter、Backend 与 PostgreSQL 测试保留 |
-| v5／v6／v8 至 v16→v17 migration | 证明旧数据升级后保留内容并采用新约束 | 旧接触、草稿、答案和问卷定义保留；新规则、升级来源和对象关联不猜测回填 | Red 后 Green，Drift migration 测试保留 |
+| v5／v6／v8 至 v17→v18 migration | 证明旧数据升级后保留内容并采用新约束 | 旧接触、草稿、答案和问卷定义保留；新规则、升级来源、对象关联和位置来源不猜测回填 | Red 后 Green，Drift migration 测试保留 |
 | 问卷三端合同 | 防止 Flutter、Backend 和 PostgreSQL 对题型、状态或显示规则产生不同解释 | 八题型、五状态、显示操作符、隐藏必填题、权限、离线草稿和服务端复验通过 | Red 后 Green，共享 fixture 与三端测试保留 |
 | 隐藏答案变更 | 防止前置答案改变时静默丢失旧值 | 取消不修改答案；确认后记录跳过原因；撤销恢复整次变更 | Red 后 Green，ViewModel 与 Widget 测试保留 |
 | 问卷管理与发布 | 防止草稿覆盖、静默定义变化、重复版本或两个 current 版本 | revision 冲突、差异、模拟、幂等、不可变与双会话并发检查通过 | Red 后 Green，Flutter、Backend 与 PostgreSQL 测试保留 |

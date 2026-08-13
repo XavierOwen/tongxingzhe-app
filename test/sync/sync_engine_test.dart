@@ -8,6 +8,8 @@ import 'package:tongxingzhe_app/features/contact_journal/contact_journal.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/questionnaires/questionnaire_contract.dart';
+import 'package:tongxingzhe_app/regions/region_catalog.dart';
+import 'package:tongxingzhe_app/regions/region_models.dart';
 import 'package:tongxingzhe_app/sync/sync_engine.dart';
 import 'package:tongxingzhe_app/sync/sync_models.dart';
 import 'package:tongxingzhe_app/sync/sync_transport.dart';
@@ -428,6 +430,79 @@ void main() {
         appUserId: _Fixture.scope.appUserId,
       ),
       isEmpty,
+    );
+  });
+
+  test('修订冲突 current/proposed snapshot 都保留 locationSource', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    await fixture.installResolvedRegion();
+    await fixture.submitResolvedContact();
+    final transport = _QueueSyncTransport([
+      const SyncPushAccepted(serverCursor: 'cursor-submit-source'),
+      SyncPushConflict(
+        failureCode: 'contact_revision_conflict',
+        conflict: SyncContactRevisionConflict(
+          conflictId: 'conflict-source-1',
+          contactId: 'contact-source-1',
+          baseRevision: 1,
+          currentRevision: 2,
+          conflictingFields: ['location'],
+          questionnaireVersionId: 'questionnaire-v1',
+          currentRevisionKind: ContactRevisionKind.corrected,
+          currentRevisedAtUtc: DateTime.utc(2030, 1, 8, 19),
+          currentReason: '另一台设备更新地点来源',
+          currentSnapshot: _resolvedConflictSnapshot(source: _sourceOne),
+          proposedSnapshot: _resolvedConflictSnapshot(source: _sourceTwo),
+        ),
+      ),
+    ]);
+    final engine = fixture.engine(workerId: 'worker-1', transport: transport);
+
+    expect(await engine.drainOnce(), SyncDrainResult.completed);
+    await ContactJournal(
+      database: fixture.database,
+      clock: fixture.clock,
+      idGenerator: _SequenceIdGenerator([
+        'revision-source-correction',
+        'command-source-correction',
+      ]),
+    ).correctContact(
+      ContactCorrectionSubmission(
+        contactId: 'contact-source-1',
+        appUserId: _Fixture.scope.appUserId,
+        workspaceId: _Fixture.scope.workspaceId,
+        projectId: _Fixture.scope.projectId,
+        deviceId: 'device-1',
+        baseRevision: 1,
+        reason: '本机更新地点来源',
+        occurredAtUtc: DateTime.utc(2030, 1, 8, 18),
+        occurredTimeZone: 'America/Chicago',
+        channel: ContactChannel.faceToFace,
+        location: _resolvedLocation(source: _sourceTwo),
+        reachCount: 2,
+        interestLevel: 3,
+      ),
+    );
+
+    expect(await engine.drainOnce(), SyncDrainResult.needsResolution);
+    final conflicts =
+        await ContactJournal(
+          database: fixture.database,
+          clock: fixture.clock,
+          idGenerator: _SequenceIdGenerator(const []),
+        ).listContactRevisionConflicts(
+          contactId: 'contact-source-1',
+          appUserId: _Fixture.scope.appUserId,
+        );
+    expect(conflicts, hasLength(1));
+    expect(
+      conflicts.single.currentSnapshot.location,
+      _resolvedLocation(source: _sourceOne),
+    );
+    expect(
+      conflicts.single.proposedSnapshot.location,
+      _resolvedLocation(source: _sourceTwo),
     );
   });
 
@@ -1158,6 +1233,211 @@ void main() {
     expect((await engine.health()).serverCursor, isNull);
   });
 
+  test('pull 的 camelCase locationSource 保存后可由新 Journal 读取', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    await fixture.installResolvedRegion();
+    final transport = _QueueSyncTransport(
+      const [],
+      pullReplies: [
+        SyncPullSucceeded(
+          SyncPullBatch(
+            nextCursor: 'cursor-source-1',
+            changes: [
+              SyncRemoteChange(
+                changeType: 'contact.submitted',
+                revisionNumber: 1,
+                payload: _remoteResolvedPayload(
+                  contactId: 'remote-source-contact',
+                  source: _sourceOne,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    final engine = fixture.engine(workerId: 'worker-1', transport: transport);
+
+    expect(await engine.pullOnce(), SyncPullApplyResult.applied);
+
+    // A fresh Journal instance models a process restart without relying on
+    // private SyncEngine state.
+    final restartedJournal = ContactJournal(
+      database: fixture.database,
+      clock: fixture.clock,
+      idGenerator: _SequenceIdGenerator(const []),
+    );
+    final contact = await restartedJournal.contactByIdForOwner(
+      contactId: 'remote-source-contact',
+      appUserId: _Fixture.scope.appUserId,
+    );
+    expect(contact?.location, _resolvedLocation(source: _sourceOne));
+    final revision = (await restartedJournal.listContactRevisions(
+      contactId: 'remote-source-contact',
+      appUserId: _Fixture.scope.appUserId,
+    )).single;
+    expect(revision.location, _resolvedLocation(source: _sourceOne));
+  });
+
+  test('locationSource 单边变化不能被当成同一远端事实', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    await fixture.installResolvedRegion();
+    final transport = _QueueSyncTransport(
+      const [],
+      pullReplies: [
+        SyncPullSucceeded(
+          SyncPullBatch(
+            nextCursor: 'cursor-source-1',
+            changes: [
+              SyncRemoteChange(
+                changeType: 'contact.submitted',
+                revisionNumber: 1,
+                payload: _remoteResolvedPayload(
+                  contactId: 'remote-source-conflict',
+                  source: _sourceOne,
+                ),
+              ),
+            ],
+          ),
+        ),
+        SyncPullSucceeded(
+          SyncPullBatch(
+            nextCursor: 'cursor-source-2',
+            changes: [
+              SyncRemoteChange(
+                changeType: 'contact.submitted',
+                revisionNumber: 1,
+                payload: _remoteResolvedPayload(
+                  contactId: 'remote-source-conflict',
+                  source: _sourceTwo,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    final engine = fixture.engine(workerId: 'worker-1', transport: transport);
+
+    expect(await engine.pullOnce(), SyncPullApplyResult.applied);
+    expect(await engine.pullOnce(), SyncPullApplyResult.permanentFailure);
+
+    final contact =
+        await ContactJournal(
+          database: fixture.database,
+          clock: fixture.clock,
+          idGenerator: _SequenceIdGenerator(const []),
+        ).contactByIdForOwner(
+          contactId: 'remote-source-conflict',
+          appUserId: _Fixture.scope.appUserId,
+        );
+    expect(contact?.location, _resolvedLocation(source: _sourceOne));
+    expect((await engine.health()).serverCursor, 'cursor-source-1');
+  });
+
+  test('pull 的 contact.revised 同样保存 locationSource', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    await fixture.installResolvedRegion();
+    final transport = _QueueSyncTransport(
+      const [],
+      pullReplies: [
+        SyncPullSucceeded(
+          SyncPullBatch(
+            nextCursor: 'cursor-source-revision',
+            changes: [
+              SyncRemoteChange(
+                changeType: 'contact.submitted',
+                revisionNumber: 1,
+                payload: _remoteResolvedPayload(
+                  contactId: 'remote-source-revision',
+                  source: _sourceOne,
+                ),
+              ),
+              SyncRemoteChange(
+                changeType: 'contact.revised',
+                revisionNumber: 2,
+                payload: _remoteRevisionPayload(
+                  contactId: 'remote-source-revision',
+                  revisionKind: 'corrected',
+                  reason: '更新地点来源',
+                  occurredAtUtc: '2030-01-08T18:00:00.000Z',
+                  reachCount: 2,
+                  location: _resolvedLocationPayload(),
+                  locationSource: _sourceTwo,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    final engine = fixture.engine(workerId: 'worker-1', transport: transport);
+
+    expect(await engine.pullOnce(), SyncPullApplyResult.applied);
+
+    final journal = ContactJournal(
+      database: fixture.database,
+      clock: fixture.clock,
+      idGenerator: _SequenceIdGenerator(const []),
+    );
+    final contact = await journal.contactByIdForOwner(
+      contactId: 'remote-source-revision',
+      appUserId: _Fixture.scope.appUserId,
+    );
+    expect(contact?.location, _resolvedLocation(source: _sourceTwo));
+    final history = await journal.listContactRevisions(
+      contactId: 'remote-source-revision',
+      appUserId: _Fixture.scope.appUserId,
+    );
+    expect(history.map((revision) => revision.revisionNumber), [2, 1]);
+    expect(history.first.location, _resolvedLocation(source: _sourceTwo));
+    expect(history.last.location, _resolvedLocation(source: _sourceOne));
+  });
+
+  test('pull 拒绝无效 locationSource，且不推进 cursor', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    await fixture.installResolvedRegion();
+    final invalid =
+        _remoteResolvedPayload(
+            contactId: 'remote-invalid-source',
+            source: _sourceOne,
+          )
+          ..['locationSource'] = {
+            'kind': 'captured_coordinates',
+            'latitude': 91,
+            'longitude': _sourceOne.longitude,
+            'accuracyMeters': null,
+            'resolverContractVersion': _sourceOne.resolverContractVersion,
+            'regionTreeContentFingerprint':
+                _sourceOne.regionTreeContentFingerprint,
+          };
+    final transport = _QueueSyncTransport(
+      const [],
+      pullReplies: [
+        SyncPullSucceeded(
+          SyncPullBatch(
+            nextCursor: 'cursor-invalid-source',
+            changes: [
+              SyncRemoteChange(
+                changeType: 'contact.submitted',
+                revisionNumber: 1,
+                payload: invalid,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    final engine = fixture.engine(workerId: 'worker-1', transport: transport);
+
+    expect(await engine.pullOnce(), SyncPullApplyResult.permanentFailure);
+    expect((await engine.health()).serverCursor, isNull);
+  });
+
   test('同 ID 但不同内容的远端接触不能被当成幂等重放', () async {
     final fixture = _Fixture();
     addTearDown(fixture.close);
@@ -1485,6 +1765,50 @@ void main() {
     expect(conflict.channel, ContactChannel.videoCall);
     expect(conflict.syncMode, ContactDraftSyncMode.deviceOnly);
   });
+
+  test('远端草稿分叉的 conflict copy 保留本机 locationSource', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    await fixture.installResolvedRegion();
+    await fixture.saveResolvedDraft();
+    final transport = _QueueSyncTransport(
+      const [],
+      pullReplies: [
+        SyncPullSucceeded(
+          SyncPullBatch(
+            changes: [
+              SyncRemoteChange(
+                changeType: 'draft.upserted',
+                revisionNumber: 1,
+                payload: _remoteDraftPayload(
+                  draftId: 'draft-source-1',
+                  channel: 'instant_text',
+                  location: _resolvedLocationPayload(),
+                  locationSource: _sourceTwo,
+                ),
+              ),
+            ],
+            nextCursor: 'cursor-draft-source-conflict',
+          ),
+        ),
+      ],
+    );
+    final engine = fixture.engine(workerId: 'worker-1', transport: transport);
+
+    expect(await engine.pullOnce(), SyncPullApplyResult.applied);
+
+    final drafts = await ContactJournal(
+      database: fixture.database,
+      clock: fixture.clock,
+      idGenerator: _SequenceIdGenerator(const []),
+    ).listDrafts(appUserId: _Fixture.scope.appUserId);
+    final conflict = drafts.singleWhere((draft) => draft.isConflictCopy);
+    expect(conflict.location, _resolvedLocation(source: _sourceOne));
+    expect(
+      drafts.singleWhere((draft) => draft.draftId == 'draft-source-1').location,
+      _resolvedLocation(source: _sourceTwo),
+    );
+  });
 }
 
 final class _Fixture {
@@ -1530,6 +1854,54 @@ final class _Fixture {
     );
   }
 
+  Future<void> installResolvedRegion() async {
+    await RegionCatalog(database).installSnapshot(
+      const CanonicalRegionSnapshot(
+        version: 'regions-test-v1',
+        nodes: [
+          CanonicalRegionNode(
+            regionId: 'region-chicago',
+            canonicalName: 'Chicago',
+            kind: RegionKind.city,
+          ),
+          CanonicalRegionNode(
+            regionId: 'region-university',
+            parentRegionId: 'region-chicago',
+            canonicalName: 'University of Chicago',
+            kind: RegionKind.institution,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> submitResolvedContact() async {
+    final journal = ContactJournal(
+      database: database,
+      clock: clock,
+      idGenerator: _SequenceIdGenerator([
+        'contact-source-1',
+        'revision-source-1',
+        'command-source-1',
+      ]),
+    );
+    await journal.submitAnonymousContact(
+      AnonymousContactSubmission(
+        appUserId: scope.appUserId,
+        workspaceId: scope.workspaceId,
+        projectId: scope.projectId,
+        questionnaireVersionId: 'questionnaire-v1',
+        deviceId: 'device-1',
+        occurredAtUtc: DateTime.utc(2030, 1, 8, 18),
+        occurredTimeZone: 'America/Chicago',
+        channel: ContactChannel.faceToFace,
+        location: _resolvedLocation(source: _sourceOne),
+        reachCount: 2,
+        interestLevel: 3,
+      ),
+    );
+  }
+
   Future<void> saveDraft() async {
     final journal = ContactJournal(
       database: database,
@@ -1544,6 +1916,29 @@ final class _Fixture {
         projectId: scope.projectId,
         questionnaireVersionId: 'questionnaire-v1',
         channel: ContactChannel.videoCall,
+      ),
+    );
+  }
+
+  Future<void> saveResolvedDraft() async {
+    final journal = ContactJournal(
+      database: database,
+      clock: clock,
+      idGenerator: _SequenceIdGenerator(['draft-source-1']),
+    );
+    await journal.saveDraft(
+      ContactDraftInput(
+        deviceId: 'device-1',
+        appUserId: scope.appUserId,
+        workspaceId: scope.workspaceId,
+        projectId: scope.projectId,
+        questionnaireVersionId: 'questionnaire-v1',
+        occurredAtUtc: DateTime.utc(2030, 1, 8, 18),
+        occurredTimeZone: 'America/Chicago',
+        channel: ContactChannel.faceToFace,
+        location: _resolvedLocation(source: _sourceOne),
+        reachCount: 2,
+        interestLevel: 3,
       ),
     );
   }
@@ -1618,6 +2013,66 @@ Map<String, Object?> _remotePayload({required String contactId}) {
   };
 }
 
+const _sourceFingerprint =
+    '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+
+const _sourceOne = CapturedCoordinatesLocationSource(
+  latitude: 41.7886,
+  longitude: -87.5987,
+  accuracyMeters: 12,
+  resolverContractVersion: 'canonical-region-resolution:v1',
+  regionTreeContentFingerprint: _sourceFingerprint,
+);
+
+const _sourceTwo = CapturedCoordinatesLocationSource(
+  latitude: 41.7886,
+  longitude: -87.5987,
+  accuracyMeters: 15,
+  resolverContractVersion: 'canonical-region-resolution:v1',
+  regionTreeContentFingerprint: _sourceFingerprint,
+);
+
+ResolvedContactLocation _resolvedLocation({
+  required CapturedCoordinatesLocationSource source,
+}) => ResolvedContactLocation(
+  placeName: 'University of Chicago',
+  smallestRegionId: 'region-university',
+  regionTreeVersion: 'regions-test-v1',
+  source: source,
+);
+
+Map<String, Object?> _resolvedLocationPayload() => {
+  'kind': 'resolved',
+  'placeName': 'University of Chicago',
+  'smallestRegionId': 'region-university',
+  'regionTreeVersion': 'regions-test-v1',
+};
+
+Map<String, Object?> _sourcePayload(CapturedCoordinatesLocationSource source) =>
+    {
+      'kind': 'captured_coordinates',
+      'latitude': source.latitude,
+      'longitude': source.longitude,
+      'accuracyMeters': source.accuracyMeters,
+      'resolverContractVersion': source.resolverContractVersion,
+      'regionTreeContentFingerprint': source.regionTreeContentFingerprint,
+    };
+
+Map<String, Object?> _remoteResolvedPayload({
+  required String contactId,
+  required CapturedCoordinatesLocationSource source,
+}) => {
+  ..._remotePayload(contactId: contactId),
+  'channel': 'face_to_face',
+  'location': {
+    'kind': 'resolved',
+    'placeName': 'University of Chicago',
+    'smallestRegionId': 'region-university',
+    'regionTreeVersion': 'regions-test-v1',
+  },
+  'locationSource': _sourcePayload(source),
+};
+
 ContactConflictSnapshot _conflictSnapshot({required int reachCount}) =>
     ContactConflictSnapshot(
       occurredAtUtc: DateTime.utc(2030, 1, 8, 18),
@@ -1630,12 +2085,27 @@ ContactConflictSnapshot _conflictSnapshot({required int reachCount}) =>
       answers: const [],
     );
 
+ContactConflictSnapshot _resolvedConflictSnapshot({
+  required CapturedCoordinatesLocationSource source,
+}) => ContactConflictSnapshot(
+  occurredAtUtc: DateTime.utc(2030, 1, 8, 18),
+  occurredTimeZone: 'America/Chicago',
+  channel: ContactChannel.faceToFace,
+  channelDetail: null,
+  location: _resolvedLocation(source: source),
+  reachCount: 2,
+  interestLevel: 3,
+  answers: const [],
+);
+
 Map<String, Object?> _remoteRevisionPayload({
   required String contactId,
   required String revisionKind,
   required String reason,
   required String occurredAtUtc,
   required int reachCount,
+  Map<String, Object?>? location,
+  CapturedCoordinatesLocationSource? locationSource,
 }) {
   return {
     'contactId': contactId,
@@ -1652,7 +2122,10 @@ Map<String, Object?> _remoteRevisionPayload({
     'reason': reason,
     'channel': 'voice_call',
     'channelDetail': null,
-    'location': {'kind': 'not_applicable'},
+    'location': location ?? {'kind': 'not_applicable'},
+    'locationSource': locationSource == null
+        ? null
+        : _sourcePayload(locationSource),
     'reachCount': reachCount,
     'interestLevel': 4,
     'answers': <Object?>[],
@@ -1662,6 +2135,8 @@ Map<String, Object?> _remoteRevisionPayload({
 Map<String, Object?> _remoteDraftPayload({
   required String draftId,
   required String channel,
+  Map<String, Object?>? location,
+  CapturedCoordinatesLocationSource? locationSource,
   String questionnaireVersionId = 'questionnaire-v1',
   String? upgradedFromDraftId,
   String createdAtUtc = '2030-01-08T18:00:00.000Z',
@@ -1679,7 +2154,10 @@ Map<String, Object?> _remoteDraftPayload({
     'occurredTimeZone': null,
     'channel': channel,
     'channelDetail': null,
-    'location': null,
+    'location': location,
+    'locationSource': locationSource == null
+        ? null
+        : _sourcePayload(locationSource),
     'reachCount': null,
     'interestLevel': null,
     'answers': <Object?>[],

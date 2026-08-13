@@ -17,6 +17,75 @@ import 'package:tongxingzhe_app/services/location_service.dart';
 import 'package:tongxingzhe_app/targets/promotion_target.dart';
 
 void main() {
+  testWidgets('待解析地点只显示状态，不显示精确坐标或精度', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final database = LocalDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final clock = _FixedClock(DateTime.utc(2030, 1, 10, 18));
+    final journal = ContactJournal(
+      database: database,
+      clock: clock,
+      idGenerator: _SequenceIdGenerator([
+        'contact-private-location',
+        'revision-private-location',
+        'command-private-location',
+      ]),
+    );
+    await journal.submitAnonymousContact(
+      AnonymousContactSubmission(
+        appUserId: _context.appUserId,
+        workspaceId: _context.workspace.id,
+        projectId: _context.project.id,
+        questionnaireVersionId: _context.questionnaireVersion.id,
+        deviceId: 'device-1',
+        occurredAtUtc: DateTime.utc(2030, 1, 9, 17),
+        occurredTimeZone: 'America/Chicago',
+        channel: ContactChannel.faceToFace,
+        location: const PendingContactLocation(
+          latitude: 12.345678,
+          longitude: -98.765432,
+          accuracyMeters: 7.25,
+        ),
+        reachCount: 1,
+        interestLevel: 2,
+      ),
+    );
+    final controller = AppController(
+      database: database,
+      clock: clock,
+      idGenerator: _SequenceIdGenerator(const []),
+    );
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ContactRevisionScreen(
+          controller: controller,
+          context: _context,
+          contactId: 'contact-private-location',
+          contactJournal: journal,
+          deviceId: 'device-1',
+          locationCapture: const _NoLocationCapture(),
+          timeZoneProvider: const _TimeZoneProvider(),
+          regionResolver: const _NoopRegionResolver(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    _expectLocationCoordinatesHidden(tester);
+    expect(find.textContaining('待匹配规范区域'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('correct-contact')));
+    await tester.pumpAndSettle();
+
+    _expectLocationCoordinatesHidden(tester);
+    expect(find.textContaining('待匹配规范区域'), findsWidgets);
+  });
+
   testWidgets('本人可查看历史、带原因更正并带原因作废', (tester) async {
     tester.view.physicalSize = const Size(800, 1200);
     tester.view.devicePixelRatio = 1;
@@ -85,6 +154,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('contact-revision-1')), findsOneWidget);
     expect(find.text('初次提交'), findsOneWidget);
+    expect(find.textContaining('N/A（非线下接触）'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('correct-contact')));
     await tester.pumpAndSettle();
@@ -167,8 +237,12 @@ void main() {
         deviceId: 'device-1',
         occurredAtUtc: DateTime.utc(2030, 1, 9, 17),
         occurredTimeZone: 'America/Chicago',
-        channel: ContactChannel.videoCall,
-        location: const NotApplicableContactLocation(),
+        channel: ContactChannel.faceToFace,
+        location: const PendingContactLocation(
+          latitude: 23.456789,
+          longitude: -87.654321,
+          accuracyMeters: 8.75,
+        ),
         reachCount: 1,
         interestLevel: 2,
         targetLinks: const [
@@ -192,8 +266,12 @@ void main() {
         reason: '另一台设备修正人数',
         occurredAtUtc: DateTime.utc(2030, 1, 9, 17),
         occurredTimeZone: 'America/Chicago',
-        channel: ContactChannel.videoCall,
-        location: const NotApplicableContactLocation(),
+        channel: ContactChannel.faceToFace,
+        location: const PendingContactLocation(
+          latitude: 23.456789,
+          longitude: -87.654321,
+          accuracyMeters: 8.75,
+        ),
         reachCount: 4,
         interestLevel: 2,
         targetLinks: const [
@@ -223,6 +301,7 @@ void main() {
             currentRevision: 2,
             conflictingFieldsJson: jsonEncode([
               'reachCount',
+              'location',
               'answers',
               'targetLinks',
             ]),
@@ -235,6 +314,11 @@ void main() {
                 reachCount: 4,
                 answerValue: true,
                 targetId: 'target-current',
+                location: _pendingLocation(
+                  latitude: 23.456789,
+                  longitude: -87.654321,
+                  accuracyMeters: 8.75,
+                ),
               ),
             ),
             proposedSnapshotJson: jsonEncode(
@@ -242,6 +326,11 @@ void main() {
                 reachCount: 3,
                 answerValue: false,
                 targetId: 'target-proposed',
+                location: _pendingLocation(
+                  latitude: 34.567891,
+                  longitude: -76.543219,
+                  accuracyMeters: 9.5,
+                ),
               ),
             ),
             createdAtUtc: clock.now(),
@@ -274,6 +363,17 @@ void main() {
     expect(find.textContaining('触达人数'), findsWidgets);
     expect(find.textContaining('服务器：4'), findsOne);
     expect(find.textContaining('本机：3'), findsOne);
+    expect(find.textContaining('待匹配规范区域'), findsWidgets);
+    for (final privateValue in [
+      '23.456789',
+      '-87.654321',
+      '8.75',
+      '34.567891',
+      '-76.543219',
+      '9.5',
+    ]) {
+      expect(find.textContaining(privateValue), findsNothing);
+    }
     expect(find.textContaining('follow_up: 是'), findsOne);
     expect(find.textContaining('follow_up: 否'), findsOne);
     expect(find.textContaining('关联推广对象'), findsWidgets);
@@ -335,24 +435,33 @@ void main() {
   });
 }
 
+void _expectLocationCoordinatesHidden(WidgetTester tester) {
+  expect(find.textContaining('12.345678'), findsNothing);
+  expect(find.textContaining('-98.765432'), findsNothing);
+  expect(find.textContaining('7.25'), findsNothing);
+}
+
 Map<String, Object?> _snapshot({
   required int reachCount,
   bool? answerValue,
   String? targetId,
+  Map<String, Object?>? location,
 }) => {
   'occurredAtUtc': '2030-01-09T17:00:00.000Z',
   'occurredTimeZone': 'America/Chicago',
-  'channel': 'video_call',
+  'channel': location == null ? 'video_call' : 'face_to_face',
   'channelDetail': null,
-  'location': {
-    'kind': 'not_applicable',
-    'placeName': null,
-    'smallestRegionId': null,
-    'regionTreeVersion': null,
-    'latitude': null,
-    'longitude': null,
-    'accuracyMeters': null,
-  },
+  'location':
+      location ??
+      {
+        'kind': 'not_applicable',
+        'placeName': null,
+        'smallestRegionId': null,
+        'regionTreeVersion': null,
+        'latitude': null,
+        'longitude': null,
+        'accuracyMeters': null,
+      },
   'reachCount': reachCount,
   'interestLevel': 2,
   'answers': answerValue == null
@@ -377,6 +486,20 @@ Map<String, Object?> _snapshot({
             'confirmStageZero': false,
           },
         ],
+};
+
+Map<String, Object?> _pendingLocation({
+  required double latitude,
+  required double longitude,
+  required double accuracyMeters,
+}) => {
+  'kind': 'pending_resolution',
+  'placeName': null,
+  'smallestRegionId': null,
+  'regionTreeVersion': null,
+  'latitude': latitude,
+  'longitude': longitude,
+  'accuracyMeters': accuracyMeters,
 };
 
 const _context = TrustedSessionContext(

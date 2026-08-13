@@ -150,7 +150,7 @@ class LocalDatabase extends _$LocalDatabase {
       );
 
   @override
-  int get schemaVersion => 17;
+  int get schemaVersion => 18;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -260,10 +260,16 @@ class LocalDatabase extends _$LocalDatabase {
         // v9 的新列同时参与 CHECK 约束，SQLite `ADD COLUMN` 不会更新旧表
         // 约束。因此这里重建四张表并复制旧数据。跨多版升级时，v6/v7
         // 可能已按当前定义创建新列；动态 newColumns 避免随后重复加列。
-        final contactRecordColumns = await _missingColumns(
-          dbContactRecords.actualTableName,
-          [dbContactRecords.regionTreeVersion],
-        );
+        final contactRecordColumns =
+            await _missingColumns(dbContactRecords.actualTableName, [
+              dbContactRecords.regionTreeVersion,
+              dbContactRecords.locationSourceKind,
+              dbContactRecords.locationSourceLatitude,
+              dbContactRecords.locationSourceLongitude,
+              dbContactRecords.locationSourceAccuracyMeters,
+              dbContactRecords.locationSourceResolverContractVersion,
+              dbContactRecords.locationSourceRegionTreeContentFingerprint,
+            ]);
         await migrator.alterTable(
           TableMigration(dbContactRecords, newColumns: contactRecordColumns),
         );
@@ -271,6 +277,12 @@ class LocalDatabase extends _$LocalDatabase {
           dbContactRevisions.actualTableName,
           [
             dbContactRevisions.regionTreeVersion,
+            dbContactRevisions.locationSourceKind,
+            dbContactRevisions.locationSourceLatitude,
+            dbContactRevisions.locationSourceLongitude,
+            dbContactRevisions.locationSourceAccuracyMeters,
+            dbContactRevisions.locationSourceResolverContractVersion,
+            dbContactRevisions.locationSourceRegionTreeContentFingerprint,
             // TableMigration uses the current table definition. Include
             // columns introduced after v9 so a direct upgrade from v6-v8
             // does not try to copy a column that the old table lacks.
@@ -291,6 +303,12 @@ class LocalDatabase extends _$LocalDatabase {
               dbContactDrafts.conflictOfDraftId,
               dbContactDrafts.sourceAttemptId,
               dbContactDrafts.upgradedFromDraftId,
+              dbContactDrafts.locationSourceKind,
+              dbContactDrafts.locationSourceLatitude,
+              dbContactDrafts.locationSourceLongitude,
+              dbContactDrafts.locationSourceAccuracyMeters,
+              dbContactDrafts.locationSourceResolverContractVersion,
+              dbContactDrafts.locationSourceRegionTreeContentFingerprint,
             ]);
         await migrator.alterTable(
           TableMigration(dbContactDrafts, newColumns: draftColumns),
@@ -325,6 +343,12 @@ class LocalDatabase extends _$LocalDatabase {
             // definition here, so later draft columns must also be declared
             // as new instead of selected from the v9 source table.
             dbContactDrafts.upgradedFromDraftId,
+            dbContactDrafts.locationSourceKind,
+            dbContactDrafts.locationSourceLatitude,
+            dbContactDrafts.locationSourceLongitude,
+            dbContactDrafts.locationSourceAccuracyMeters,
+            dbContactDrafts.locationSourceResolverContractVersion,
+            dbContactDrafts.locationSourceRegionTreeContentFingerprint,
           ],
         );
         if (draftColumns.isNotEmpty) {
@@ -336,10 +360,16 @@ class LocalDatabase extends _$LocalDatabase {
       if (from < 11) {
         // v11 把提交、更正和作废变成可约束的 revision 类型。该列参与
         // CHECK，必须重建表；只用 ADD COLUMN 会保留旧约束。
-        final revisionColumns = await _missingColumns(
-          dbContactRevisions.actualTableName,
-          [dbContactRevisions.revisionKind],
-        );
+        final revisionColumns =
+            await _missingColumns(dbContactRevisions.actualTableName, [
+              dbContactRevisions.revisionKind,
+              dbContactRevisions.locationSourceKind,
+              dbContactRevisions.locationSourceLatitude,
+              dbContactRevisions.locationSourceLongitude,
+              dbContactRevisions.locationSourceAccuracyMeters,
+              dbContactRevisions.locationSourceResolverContractVersion,
+              dbContactRevisions.locationSourceRegionTreeContentFingerprint,
+            ]);
         await migrator.alterTable(
           TableMigration(dbContactRevisions, newColumns: revisionColumns),
         );
@@ -417,10 +447,16 @@ class LocalDatabase extends _$LocalDatabase {
       if (from < 16) {
         // v16 只记录明确升级生成的新草稿来源。旧数据没有可证明的升级关系，
         // 因此新增 nullable 列，不根据问卷版本或草稿 ID 猜测回填。
-        final draftColumns = await _missingColumns(
-          dbContactDrafts.actualTableName,
-          [dbContactDrafts.upgradedFromDraftId],
-        );
+        final draftColumns =
+            await _missingColumns(dbContactDrafts.actualTableName, [
+              dbContactDrafts.upgradedFromDraftId,
+              dbContactDrafts.locationSourceKind,
+              dbContactDrafts.locationSourceLatitude,
+              dbContactDrafts.locationSourceLongitude,
+              dbContactDrafts.locationSourceAccuracyMeters,
+              dbContactDrafts.locationSourceResolverContractVersion,
+              dbContactDrafts.locationSourceRegionTreeContentFingerprint,
+            ]);
         if (draftColumns.isNotEmpty) {
           await migrator.alterTable(
             TableMigration(dbContactDrafts, newColumns: draftColumns),
@@ -432,6 +468,52 @@ class LocalDatabase extends _$LocalDatabase {
         // legacy 姓名、联系方式、触达人数或兴趣字段推断对象身份。
         await migrator.createTable(dbContactTargetLinks);
         await migrator.createTable(dbContactDraftTargetLinks);
+      }
+      if (from < 18) {
+        // v18 保存可选的已解析坐标来源。来源字段参与地点 CHECK，因此即使
+        // 旧表已经被早期升级步骤按当前列定义创建，也必须重建以刷新约束。
+        final contactRecordSourceColumns =
+            await _missingColumns(dbContactRecords.actualTableName, [
+              dbContactRecords.locationSourceKind,
+              dbContactRecords.locationSourceLatitude,
+              dbContactRecords.locationSourceLongitude,
+              dbContactRecords.locationSourceAccuracyMeters,
+              dbContactRecords.locationSourceResolverContractVersion,
+              dbContactRecords.locationSourceRegionTreeContentFingerprint,
+            ]);
+        await migrator.alterTable(
+          TableMigration(
+            dbContactRecords,
+            newColumns: contactRecordSourceColumns,
+          ),
+        );
+        final contactRevisionSourceColumns =
+            await _missingColumns(dbContactRevisions.actualTableName, [
+              dbContactRevisions.locationSourceKind,
+              dbContactRevisions.locationSourceLatitude,
+              dbContactRevisions.locationSourceLongitude,
+              dbContactRevisions.locationSourceAccuracyMeters,
+              dbContactRevisions.locationSourceResolverContractVersion,
+              dbContactRevisions.locationSourceRegionTreeContentFingerprint,
+            ]);
+        await migrator.alterTable(
+          TableMigration(
+            dbContactRevisions,
+            newColumns: contactRevisionSourceColumns,
+          ),
+        );
+        final draftSourceColumns =
+            await _missingColumns(dbContactDrafts.actualTableName, [
+              dbContactDrafts.locationSourceKind,
+              dbContactDrafts.locationSourceLatitude,
+              dbContactDrafts.locationSourceLongitude,
+              dbContactDrafts.locationSourceAccuracyMeters,
+              dbContactDrafts.locationSourceResolverContractVersion,
+              dbContactDrafts.locationSourceRegionTreeContentFingerprint,
+            ]);
+        await migrator.alterTable(
+          TableMigration(dbContactDrafts, newColumns: draftSourceColumns),
+        );
       }
     },
   );

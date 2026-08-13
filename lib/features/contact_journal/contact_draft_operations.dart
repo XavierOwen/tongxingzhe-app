@@ -48,6 +48,18 @@ extension ContactDraftOperations on ContactJournal {
                 latitude: Value(location.latitude),
                 longitude: Value(location.longitude),
                 locationAccuracyMeters: Value(location.accuracyMeters),
+                locationSourceKind: Value(location.sourceKind),
+                locationSourceLatitude: Value(location.sourceLatitude),
+                locationSourceLongitude: Value(location.sourceLongitude),
+                locationSourceAccuracyMeters: Value(
+                  location.sourceAccuracyMeters,
+                ),
+                locationSourceResolverContractVersion: Value(
+                  location.sourceResolverContractVersion,
+                ),
+                locationSourceRegionTreeContentFingerprint: Value(
+                  location.sourceRegionTreeContentFingerprint,
+                ),
                 reachCount: Value(input.reachCount),
                 interestLevel: Value(input.interestLevel),
                 syncMode: Value(input.syncMode.storageValue),
@@ -156,6 +168,16 @@ extension ContactDraftOperations on ContactJournal {
             latitude: Value(location.latitude),
             longitude: Value(location.longitude),
             locationAccuracyMeters: Value(location.accuracyMeters),
+            locationSourceKind: Value(location.sourceKind),
+            locationSourceLatitude: Value(location.sourceLatitude),
+            locationSourceLongitude: Value(location.sourceLongitude),
+            locationSourceAccuracyMeters: Value(location.sourceAccuracyMeters),
+            locationSourceResolverContractVersion: Value(
+              location.sourceResolverContractVersion,
+            ),
+            locationSourceRegionTreeContentFingerprint: Value(
+              location.sourceRegionTreeContentFingerprint,
+            ),
             reachCount: Value(input.reachCount),
             interestLevel: Value(input.interestLevel),
             syncMode: Value(input.syncMode.storageValue),
@@ -430,6 +452,18 @@ extension ContactDraftOperations on ContactJournal {
                 latitude: Value(location.latitude),
                 longitude: Value(location.longitude),
                 locationAccuracyMeters: Value(location.accuracyMeters),
+                locationSourceKind: Value(location.sourceKind),
+                locationSourceLatitude: Value(location.sourceLatitude),
+                locationSourceLongitude: Value(location.sourceLongitude),
+                locationSourceAccuracyMeters: Value(
+                  location.sourceAccuracyMeters,
+                ),
+                locationSourceResolverContractVersion: Value(
+                  location.sourceResolverContractVersion,
+                ),
+                locationSourceRegionTreeContentFingerprint: Value(
+                  location.sourceRegionTreeContentFingerprint,
+                ),
                 reachCount: Value(source.reachCount),
                 interestLevel: Value(source.interestLevel),
                 syncMode: Value(source.syncMode.storageValue),
@@ -700,6 +734,7 @@ extension ContactDraftOperations on ContactJournal {
               'longitude': location.longitude,
               'accuracy_meters': location.accuracyMeters,
             },
+      'location_source': _locationSourceWirePayload(input.location),
       'reach_count': input.reachCount,
       'interest_level': input.interestLevel,
       'answers': [
@@ -953,6 +988,15 @@ extension ContactDraftOperations on ContactJournal {
         placeName: row.placeName!,
         smallestRegionId: row.smallestRegionId!,
         regionTreeVersion: row.regionTreeVersion!,
+        source: _capturedSourceFromColumns(
+          kind: row.locationSourceKind,
+          latitude: row.locationSourceLatitude,
+          longitude: row.locationSourceLongitude,
+          accuracyMeters: row.locationSourceAccuracyMeters,
+          resolverContractVersion: row.locationSourceResolverContractVersion,
+          regionTreeContentFingerprint:
+              row.locationSourceRegionTreeContentFingerprint,
+        ),
       ),
       'not_applicable' => const NotApplicableContactLocation(),
       'pending_resolution' => PendingContactLocation(
@@ -974,6 +1018,12 @@ extension ContactDraftOperations on ContactJournal {
     double? latitude,
     double? longitude,
     double? accuracyMeters,
+    String? sourceKind,
+    double? sourceLatitude,
+    double? sourceLongitude,
+    double? sourceAccuracyMeters,
+    String? sourceResolverContractVersion,
+    String? sourceRegionTreeContentFingerprint,
   })
   _contactLocationColumns(ContactLocation? location) {
     return switch (location) {
@@ -985,6 +1035,12 @@ extension ContactDraftOperations on ContactJournal {
         latitude: null,
         longitude: null,
         accuracyMeters: null,
+        sourceKind: null,
+        sourceLatitude: null,
+        sourceLongitude: null,
+        sourceAccuracyMeters: null,
+        sourceResolverContractVersion: null,
+        sourceRegionTreeContentFingerprint: null,
       ),
       final ResolvedContactLocation resolved => (
         kind: 'resolved',
@@ -994,6 +1050,13 @@ extension ContactDraftOperations on ContactJournal {
         latitude: null,
         longitude: null,
         accuracyMeters: null,
+        sourceKind: resolved.source == null ? null : 'captured_coordinates',
+        sourceLatitude: resolved.source?.latitude,
+        sourceLongitude: resolved.source?.longitude,
+        sourceAccuracyMeters: resolved.source?.accuracyMeters,
+        sourceResolverContractVersion: resolved.source?.resolverContractVersion,
+        sourceRegionTreeContentFingerprint:
+            resolved.source?.regionTreeContentFingerprint,
       ),
       NotApplicableContactLocation() => (
         kind: 'not_applicable',
@@ -1003,6 +1066,12 @@ extension ContactDraftOperations on ContactJournal {
         latitude: null,
         longitude: null,
         accuracyMeters: null,
+        sourceKind: null,
+        sourceLatitude: null,
+        sourceLongitude: null,
+        sourceAccuracyMeters: null,
+        sourceResolverContractVersion: null,
+        sourceRegionTreeContentFingerprint: null,
       ),
       final PendingContactLocation pending => (
         kind: 'pending_resolution',
@@ -1012,8 +1081,59 @@ extension ContactDraftOperations on ContactJournal {
         latitude: pending.latitude,
         longitude: pending.longitude,
         accuracyMeters: pending.accuracyMeters,
+        sourceKind: null,
+        sourceLatitude: null,
+        sourceLongitude: null,
+        sourceAccuracyMeters: null,
+        sourceResolverContractVersion: null,
+        sourceRegionTreeContentFingerprint: null,
       ),
     };
+  }
+
+  Map<String, Object?>? _locationSourceWirePayload(ContactLocation? location) {
+    final source = switch (location) {
+      final ResolvedContactLocation resolved => resolved.source,
+      _ => null,
+    };
+    if (source == null) {
+      return null;
+    }
+    return {
+      'kind': 'captured_coordinates',
+      'latitude': source.latitude,
+      'longitude': source.longitude,
+      'accuracy_meters': source.accuracyMeters,
+      'resolver_contract_version': source.resolverContractVersion,
+      'region_tree_content_fingerprint': source.regionTreeContentFingerprint,
+    };
+  }
+
+  CapturedCoordinatesLocationSource? _capturedSourceFromColumns({
+    required String? kind,
+    required double? latitude,
+    required double? longitude,
+    required double? accuracyMeters,
+    required String? resolverContractVersion,
+    required String? regionTreeContentFingerprint,
+  }) {
+    if (kind == null) {
+      return null;
+    }
+    if (kind != 'captured_coordinates' ||
+        latitude == null ||
+        longitude == null ||
+        resolverContractVersion == null ||
+        regionTreeContentFingerprint == null) {
+      throw const FormatException('invalid stored contact location source');
+    }
+    return CapturedCoordinatesLocationSource(
+      latitude: latitude,
+      longitude: longitude,
+      accuracyMeters: accuracyMeters,
+      resolverContractVersion: resolverContractVersion,
+      regionTreeContentFingerprint: regionTreeContentFingerprint,
+    );
   }
 
   void _validateLocationWhenPresent(ContactLocation? location) {
@@ -1034,6 +1154,24 @@ extension ContactDraftOperations on ContactJournal {
           resolved.smallestRegionId.trim().isEmpty ||
           resolved.regionTreeVersion.trim().isEmpty) {
         throw const ContactValidationException('resolved_location_required');
+      }
+      final source = resolved.source;
+      if (source != null &&
+          (!source.latitude.isFinite ||
+              source.latitude < -90 ||
+              source.latitude > 90 ||
+              !source.longitude.isFinite ||
+              source.longitude < -180 ||
+              source.longitude > 180 ||
+              (source.accuracyMeters != null &&
+                  (!source.accuracyMeters!.isFinite ||
+                      source.accuracyMeters! < 0)) ||
+              source.resolverContractVersion !=
+                  'canonical-region-resolution:v1' ||
+              !RegExp(
+                r'^[0-9a-f]{64}$',
+              ).hasMatch(source.regionTreeContentFingerprint))) {
+        throw const ContactValidationException('invalid_location_source');
       }
     }
   }

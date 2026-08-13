@@ -1,4 +1,6 @@
 import 'package:drift_dev/api/migrations_native.dart';
+import 'package:drift/drift.dart' show Value;
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/data/local_database.dart';
 
@@ -14,18 +16,279 @@ import '../generated_migrations/schema_v13.dart' as v13;
 import '../generated_migrations/schema_v14.dart' as v14;
 import '../generated_migrations/schema_v15.dart' as v15;
 import '../generated_migrations/schema_v16.dart' as v16;
+import '../generated_migrations/schema_v17.dart' as v17;
 
 void main() {
-  test('保存的 schema v17 可以独立重建', () async {
+  test('保存的 schema v18 可以独立重建', () async {
     final verifier = SchemaVerifier(GeneratedHelper());
-    final connection = await verifier.startAt(17);
+    final connection = await verifier.startAt(18);
     final database = LocalDatabase(connection);
     addTearDown(database.close);
 
-    await verifier.migrateAndValidate(database, 17);
+    await verifier.migrateAndValidate(database, 18);
   });
 
-  test('v16 升级到 v17 时旧事实保持匿名零对象关联', () async {
+  test('v17 升级到 v18 不猜来源并保留 resolved、pending、N/A 旧行', () async {
+    final verifier = SchemaVerifier(GeneratedHelper());
+    final schema = await verifier.schemaAt(17);
+    addTearDown(schema.close);
+    final oldDatabase = v17.DatabaseAtV17(schema.newConnection());
+    await oldDatabase.customStatement('''
+      INSERT INTO db_contact_records (
+        contact_id, app_user_id, workspace_id, project_id,
+        questionnaire_version_id, occurred_at_utc, occurred_time_zone,
+        first_submitted_at_utc, channel, location_kind, place_name,
+        smallest_region_id, region_tree_version, reach_count,
+        interest_level, current_revision, lifecycle_status
+      ) VALUES (
+        'contact-before-v18', 'app-user-1', 'workspace-1', 'project-1',
+        'questionnaire-v1', 1894122000, 'America/Chicago', 1894123800,
+        'face_to_face', 'resolved', 'Campus', 'region-campus',
+        'regions-v1', 2, 3, 1, 'active'
+      )
+    ''');
+    await oldDatabase.customStatement('''
+      INSERT INTO db_contact_revisions (
+        revision_id, contact_id, revision_number, revision_kind,
+        revised_by_app_user_id, revised_at_utc, reason,
+        occurred_at_utc, occurred_time_zone, channel, location_kind,
+        place_name, smallest_region_id, region_tree_version, reach_count,
+        interest_level
+      ) VALUES (
+        'revision-before-v18', 'contact-before-v18', 1, 'submitted',
+        'app-user-1', 1894123800, NULL, 1894122000, 'America/Chicago',
+        'face_to_face', 'resolved', 'Campus', 'region-campus',
+        'regions-v1', 2, 3
+      )
+    ''');
+    await oldDatabase.customStatement('''
+      INSERT INTO db_contact_drafts (
+        draft_id, app_user_id, workspace_id, project_id,
+        questionnaire_version_id, created_at_utc, updated_at_utc,
+        channel, location_kind, place_name, smallest_region_id,
+        region_tree_version, latitude, longitude, location_accuracy_meters,
+        reach_count, interest_level
+      ) VALUES
+        ('draft-resolved-before-v18', 'app-user-1', 'workspace-1', 'project-1',
+         'questionnaire-v1', 1894122000, 1894122000, 'face_to_face',
+         'resolved', 'Campus', 'region-campus', 'regions-v1',
+         NULL, NULL, NULL, 2, 3),
+        ('draft-pending-before-v18', 'app-user-1', 'workspace-1', 'project-1',
+         'questionnaire-v1', 1894122000, 1894122000, 'face_to_face',
+         'pending_resolution', NULL, NULL, NULL, 41.7897, -87.5997, 12, 2, 3),
+        ('draft-na-before-v18', 'app-user-1', 'workspace-1', 'project-1',
+         'questionnaire-v1', 1894122000, 1894122000, 'video_call',
+         'not_applicable', NULL, NULL, NULL,
+         NULL, NULL, NULL, 1, 2)
+    ''');
+    await oldDatabase.close();
+
+    final database = LocalDatabase(schema.newConnection());
+    addTearDown(database.close);
+    await verifier.migrateAndValidate(database, 18);
+
+    final record = await database.select(database.dbContactRecords).getSingle();
+    expect(record.locationSourceKind, isNull);
+    expect(record.locationSourceLatitude, isNull);
+    expect(record.locationSourceRegionTreeContentFingerprint, isNull);
+    final revision = await database
+        .select(database.dbContactRevisions)
+        .getSingle();
+    expect(revision.locationSourceKind, isNull);
+    final drafts = await database.select(database.dbContactDrafts).get();
+    expect(drafts, hasLength(3));
+    expect(drafts.every((draft) => draft.locationSourceKind == null), isTrue);
+    expect(
+      drafts.every((draft) => draft.locationSourceLatitude == null),
+      isTrue,
+    );
+  });
+
+  test('v18 保存合法来源并拒绝地点与来源的非法组合', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    const fingerprint =
+        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+
+    await database
+        .into(database.dbContactRecords)
+        .insert(
+          DbContactRecordsCompanion.insert(
+            contactId: 'contact-with-source',
+            appUserId: 'app-user-1',
+            workspaceId: 'workspace-1',
+            projectId: 'project-1',
+            questionnaireVersionId: 'questionnaire-v1',
+            occurredAtUtc: DateTime.utc(2030, 1, 8, 17),
+            occurredTimeZone: 'America/Chicago',
+            firstSubmittedAtUtc: DateTime.utc(2030, 1, 8, 18),
+            channel: 'face_to_face',
+            locationKind: 'resolved',
+            placeName: const Value('Campus'),
+            smallestRegionId: const Value('region-campus'),
+            regionTreeVersion: const Value('regions-v1'),
+            locationSourceKind: const Value('captured_coordinates'),
+            locationSourceLatitude: const Value(41.7897),
+            locationSourceLongitude: const Value(-87.5997),
+            locationSourceAccuracyMeters: const Value(8.5),
+            locationSourceResolverContractVersion: const Value(
+              'canonical-region-resolution:v1',
+            ),
+            locationSourceRegionTreeContentFingerprint: const Value(
+              fingerprint,
+            ),
+            reachCount: 2,
+            interestLevel: 3,
+            currentRevision: 1,
+            lifecycleStatus: 'active',
+          ),
+        );
+    final stored = await database.select(database.dbContactRecords).getSingle();
+    expect(stored.locationSourceKind, 'captured_coordinates');
+    expect(stored.locationSourceLatitude, 41.7897);
+    expect(stored.locationSourceLongitude, -87.5997);
+    expect(stored.locationSourceAccuracyMeters, 8.5);
+    expect(
+      stored.locationSourceResolverContractVersion,
+      'canonical-region-resolution:v1',
+    );
+    expect(stored.locationSourceRegionTreeContentFingerprint, fingerprint);
+
+    await expectLater(
+      database.customStatement('''
+        INSERT INTO db_contact_drafts (
+          draft_id, app_user_id, workspace_id, project_id,
+          questionnaire_version_id, created_at_utc, updated_at_utc,
+          location_kind, longitude
+        ) VALUES (
+          'draft-pending-missing-latitude', 'app-user-1', 'workspace-1',
+          'project-1', 'questionnaire-v1', 1894122000, 1894122000,
+          'pending_resolution', -87.5997
+        )
+      '''),
+      throwsA(isA<Exception>()),
+    );
+    await expectLater(
+      database.customStatement('''
+        INSERT INTO db_contact_records (
+          contact_id, app_user_id, workspace_id, project_id,
+          questionnaire_version_id, occurred_at_utc, occurred_time_zone,
+          first_submitted_at_utc, channel, location_kind, place_name,
+          smallest_region_id, region_tree_version, latitude, longitude,
+          reach_count, interest_level, current_revision, lifecycle_status
+        ) VALUES (
+          'contact-resolved-with-coordinates', 'app-user-1', 'workspace-1',
+          'project-1', 'questionnaire-v1', 1894122000, 'America/Chicago',
+          1894123800, 'face_to_face', 'resolved', 'Campus', 'region-campus',
+          'regions-v1', 41.7897, -87.5997, 1, 2, 1, 'active'
+        )
+      '''),
+      throwsA(isA<Exception>()),
+    );
+    await expectLater(
+      database.customStatement('''
+        INSERT INTO db_contact_revisions (
+          revision_id, contact_id, revision_number, revision_kind,
+          revised_by_app_user_id, revised_at_utc, reason, occurred_at_utc,
+          occurred_time_zone, channel, location_kind, place_name, latitude,
+          longitude, reach_count, interest_level
+        ) VALUES (
+          'revision-pending-with-place', 'contact-with-source', 2, 'corrected',
+          'app-user-1', 1894123800, '地点待解析', 1894122000,
+          'America/Chicago', 'face_to_face', 'pending_resolution', 'Campus',
+          41.7897, -87.5997, 1, 2
+        )
+      '''),
+      throwsA(isA<Exception>()),
+    );
+
+    Future<void> insertInvalid(String contactId, String locationKind) {
+      return database.customStatement('''
+        INSERT INTO db_contact_records (
+          contact_id, app_user_id, workspace_id, project_id,
+          questionnaire_version_id, occurred_at_utc, occurred_time_zone,
+          first_submitted_at_utc, channel, location_kind, reach_count,
+          interest_level, current_revision, lifecycle_status,
+          location_source_kind, location_source_latitude,
+          location_source_longitude, location_source_resolver_contract_version,
+          location_source_region_tree_content_fingerprint
+        ) VALUES (
+          '$contactId', 'app-user-1', 'workspace-1', 'project-1',
+          'questionnaire-v1', 1894122000, 'America/Chicago', 1894123800,
+          'face_to_face', '$locationKind', 1, 2, 1, 'active',
+          'captured_coordinates', 41.7897, -87.5997,
+          'canonical-region-resolution:v1', '$fingerprint'
+        )
+      ''');
+    }
+
+    await expectLater(
+      insertInvalid('contact-pending-source', 'pending_resolution'),
+      throwsA(isA<Exception>()),
+    );
+    await expectLater(
+      database.customStatement('''
+        INSERT INTO db_contact_records (
+          contact_id, app_user_id, workspace_id, project_id,
+          questionnaire_version_id, occurred_at_utc, occurred_time_zone,
+          first_submitted_at_utc, channel, location_kind, place_name,
+          smallest_region_id, region_tree_version, reach_count,
+          interest_level, current_revision, lifecycle_status,
+          location_source_kind
+        ) VALUES (
+          'contact-partial-source', 'app-user-1', 'workspace-1', 'project-1',
+          'questionnaire-v1', 1894122000, 'America/Chicago', 1894123800,
+          'face_to_face', 'resolved', 'Campus', 'region-campus', 'regions-v1',
+          1, 2, 1, 'active', 'captured_coordinates'
+        )
+      '''),
+      throwsA(isA<Exception>()),
+    );
+    await expectLater(
+      database.customStatement('''
+        INSERT INTO db_contact_records (
+          contact_id, app_user_id, workspace_id, project_id,
+          questionnaire_version_id, occurred_at_utc, occurred_time_zone,
+          first_submitted_at_utc, channel, location_kind, place_name,
+          smallest_region_id, region_tree_version, reach_count,
+          interest_level, current_revision, lifecycle_status,
+          location_source_latitude, location_source_longitude,
+          location_source_resolver_contract_version,
+          location_source_region_tree_content_fingerprint
+        ) VALUES (
+          'contact-missing-source-kind', 'app-user-1', 'workspace-1',
+          'project-1', 'questionnaire-v1', 1894122000, 'America/Chicago',
+          1894123800, 'face_to_face', 'resolved', 'Campus', 'region-campus',
+          'regions-v1', 1, 2, 1, 'active', 41.7897, -87.5997,
+          'canonical-region-resolution:v1', '$fingerprint'
+        )
+      '''),
+      throwsA(isA<Exception>()),
+    );
+    await expectLater(
+      database.customStatement('''
+        INSERT INTO db_contact_records (
+          contact_id, app_user_id, workspace_id, project_id,
+          questionnaire_version_id, occurred_at_utc, occurred_time_zone,
+          first_submitted_at_utc, channel, location_kind, place_name,
+          smallest_region_id, region_tree_version, reach_count,
+          interest_level, current_revision, lifecycle_status,
+          location_source_kind, location_source_latitude,
+          location_source_longitude, location_source_resolver_contract_version,
+          location_source_region_tree_content_fingerprint
+        ) VALUES (
+          'contact-bad-fingerprint', 'app-user-1', 'workspace-1', 'project-1',
+          'questionnaire-v1', 1894122000, 'America/Chicago', 1894123800,
+          'face_to_face', 'resolved', 'Campus', 'region-campus', 'regions-v1',
+          1, 2, 1, 'active', 'captured_coordinates', 41.7897, -87.5997,
+          'canonical-region-resolution:v1', 'NOT-A-FINGERPRINT'
+        )
+      '''),
+      throwsA(isA<Exception>()),
+    );
+  });
+
+  test('v16 升级到 v18 时旧事实保持匿名零对象关联', () async {
     final verifier = SchemaVerifier(GeneratedHelper());
     final schema = await verifier.schemaAt(16);
     addTearDown(schema.close);
@@ -46,7 +309,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 17);
+    await verifier.migrateAndValidate(database, 18);
 
     expect(
       await database.select(database.dbContactRecords).get(),
@@ -59,7 +322,7 @@ void main() {
     );
   });
 
-  test('v15 升级到 v16 时保留旧草稿且不猜测升级来源', () async {
+  test('v15 升级到 v18 时保留旧草稿且不猜测升级来源', () async {
     final verifier = SchemaVerifier(GeneratedHelper());
     final schema = await verifier.schemaAt(15);
     addTearDown(schema.close);
@@ -79,7 +342,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 17);
+    await verifier.migrateAndValidate(database, 18);
 
     final draft = await database.select(database.dbContactDrafts).getSingle();
     expect(draft.draftId, 'draft-before-v16');
@@ -98,7 +361,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 17);
+    await verifier.migrateAndValidate(database, 18);
 
     expect(
       (await database.select(database.dbAppSettings).getSingle()).value,
@@ -156,7 +419,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 17);
+    await verifier.migrateAndValidate(database, 18);
 
     final answer = await database.select(database.dbContactAnswers).getSingle();
     expect(answer.booleanValue, isTrue);
@@ -227,7 +490,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 17);
+    await verifier.migrateAndValidate(database, 18);
 
     final submittedAnswer = await database
         .select(database.dbContactAnswers)
@@ -277,7 +540,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 17);
+    await verifier.migrateAndValidate(database, 18);
 
     expect(
       (await database.select(database.dbContactRecords).getSingle()).contactId,
@@ -322,7 +585,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 17);
+    await verifier.migrateAndValidate(database, 18);
 
     final revision = await database
         .select(database.dbContactRevisions)
@@ -369,7 +632,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 17);
+    await verifier.migrateAndValidate(database, 18);
 
     final draft = await database.select(database.dbContactDrafts).getSingle();
     expect(draft.draftId, 'draft-before-v10');
@@ -414,7 +677,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 17);
+    await verifier.migrateAndValidate(database, 18);
 
     final draft = await database.select(database.dbContactDrafts).getSingle();
     expect(draft.draftId, 'draft-before-v9');
@@ -487,7 +750,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 17);
+    await verifier.migrateAndValidate(database, 18);
 
     final contact = await database
         .select(database.dbContactRecords)
@@ -519,7 +782,7 @@ void main() {
 
     final database = LocalDatabase(schema.newConnection());
     addTearDown(database.close);
-    await verifier.migrateAndValidate(database, 17);
+    await verifier.migrateAndValidate(database, 18);
 
     final legacySetting = await (database.select(
       database.dbAppSettings,

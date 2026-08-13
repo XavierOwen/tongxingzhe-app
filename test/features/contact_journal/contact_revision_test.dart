@@ -6,6 +6,8 @@ import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_journal.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
+import 'package:tongxingzhe_app/regions/region_catalog.dart';
+import 'package:tongxingzhe_app/regions/region_models.dart';
 import 'package:tongxingzhe_app/targets/promotion_target.dart';
 
 void main() {
@@ -239,6 +241,134 @@ void main() {
     );
   });
 
+  test('作废继承最后一次已接受来源', () async {
+    final database = _database();
+    await RegionCatalog(database).installSnapshot(
+      const CanonicalRegionSnapshot(
+        version: 'regions-test-v1',
+        nodes: [
+          CanonicalRegionNode(
+            regionId: 'region-chicago',
+            canonicalName: 'Chicago',
+            kind: RegionKind.city,
+          ),
+        ],
+      ),
+    );
+    final journal = _journal(
+      database,
+      now: DateTime.utc(2030, 1, 10, 18),
+      ids: ['contact-source', 'revision-1', 'command-1'],
+    );
+    await journal.submitAnonymousContact(
+      _submission(
+        occurredAtUtc: DateTime.utc(2030, 1, 9, 17),
+        reachCount: 1,
+        interestLevel: 2,
+        channel: ContactChannel.faceToFace,
+        location: const ResolvedContactLocation(
+          placeName: 'Chicago',
+          smallestRegionId: 'region-chicago',
+          regionTreeVersion: 'regions-test-v1',
+          source: _locationSource,
+        ),
+      ),
+    );
+
+    final voidJournal = _journal(
+      database,
+      now: DateTime.utc(2030, 1, 11, 18),
+      ids: ['revision-2', 'command-2'],
+    );
+    await voidJournal.voidContact(
+      const ContactVoidSubmission(
+        contactId: 'contact-source',
+        appUserId: 'app-user-1',
+        workspaceId: 'workspace-1',
+        projectId: 'project-1',
+        deviceId: 'device-1',
+        baseRevision: 1,
+        reason: '重复录入',
+      ),
+    );
+    final voided = await voidJournal.listContactRevisions(
+      contactId: 'contact-source',
+      appUserId: 'app-user-1',
+    );
+    expect(
+      (voided.first.location as ResolvedContactLocation).source,
+      _locationSource,
+    );
+  });
+
+  test('更正到 N/A 时原子清除旧来源', () async {
+    final clearDatabase = _database();
+    await RegionCatalog(clearDatabase).installSnapshot(
+      const CanonicalRegionSnapshot(
+        version: 'regions-test-v1',
+        nodes: [
+          CanonicalRegionNode(
+            regionId: 'region-chicago',
+            canonicalName: 'Chicago',
+            kind: RegionKind.city,
+          ),
+        ],
+      ),
+    );
+    final clearJournal = _journal(
+      clearDatabase,
+      now: DateTime.utc(2030, 1, 10, 18),
+      ids: [
+        'contact-clear-source',
+        'revision-clear-1',
+        'command-clear-1',
+        'revision-clear-2',
+        'command-clear-2',
+      ],
+    );
+    await clearJournal.submitAnonymousContact(
+      _submission(
+        occurredAtUtc: DateTime.utc(2030, 1, 9, 17),
+        reachCount: 1,
+        interestLevel: 2,
+        channel: ContactChannel.faceToFace,
+        location: const ResolvedContactLocation(
+          placeName: 'Chicago',
+          smallestRegionId: 'region-chicago',
+          regionTreeVersion: 'regions-test-v1',
+          source: _locationSource,
+        ),
+      ),
+    );
+    await clearJournal.correctContact(
+      ContactCorrectionSubmission(
+        contactId: 'contact-clear-source',
+        appUserId: 'app-user-1',
+        workspaceId: 'workspace-1',
+        projectId: 'project-1',
+        deviceId: 'device-1',
+        baseRevision: 1,
+        reason: '改为线上接触',
+        occurredAtUtc: DateTime.utc(2030, 1, 9, 17),
+        occurredTimeZone: 'America/Chicago',
+        channel: ContactChannel.videoCall,
+        location: const NotApplicableContactLocation(),
+        reachCount: 1,
+        interestLevel: 2,
+      ),
+    );
+    expect(
+      (await clearJournal.contactById('contact-clear-source'))!.location,
+      const NotApplicableContactLocation(),
+    );
+    final stored = await clearDatabase
+        .select(clearDatabase.dbContactRecords)
+        .getSingle();
+    expect(stored.locationSourceKind, isNull);
+    expect(stored.locationSourceLatitude, isNull);
+    expect(stored.locationSourceRegionTreeContentFingerprint, isNull);
+  });
+
   test('对象关联随修订保存完整快照且不改变场次和触达', () async {
     final database = _database();
     final journal = _journal(
@@ -425,6 +555,8 @@ AnonymousContactSubmission _submission({
   required int interestLevel,
   List<QuestionnaireAnswer> answers = const [],
   List<ContactTargetLink> targetLinks = const [],
+  ContactChannel channel = ContactChannel.videoCall,
+  ContactLocation location = const NotApplicableContactLocation(),
 }) {
   return AnonymousContactSubmission(
     appUserId: 'app-user-1',
@@ -434,14 +566,23 @@ AnonymousContactSubmission _submission({
     deviceId: 'device-1',
     occurredAtUtc: occurredAtUtc,
     occurredTimeZone: 'America/Chicago',
-    channel: ContactChannel.videoCall,
-    location: const NotApplicableContactLocation(),
+    channel: channel,
+    location: location,
     reachCount: reachCount,
     interestLevel: interestLevel,
     answers: answers,
     targetLinks: targetLinks,
   );
 }
+
+const _locationSource = CapturedCoordinatesLocationSource(
+  latitude: 41.8781,
+  longitude: -87.6298,
+  accuracyMeters: 8,
+  resolverContractVersion: 'canonical-region-resolution:v1',
+  regionTreeContentFingerprint:
+      '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+);
 
 ContactCorrectionSubmission _correction({
   String appUserId = 'app-user-1',

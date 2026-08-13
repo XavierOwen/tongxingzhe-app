@@ -5,7 +5,7 @@
 ## 状态规则
 
 - ADR-0001 至 ADR-0095 作为 `TXZ-SPEC-001` 的首批决策集，于 2026-07-31 一并接受；文件另有状态时以文件为准。
-- ADR-0096、ADR-0097 于 2026-07-31 接受；ADR-0098、ADR-0099 于 2026-08-03 接受；ADR-0100 于 2026-08-05 接受；ADR-0101、ADR-0102 于 2026-08-10 接受；ADR-0103 至 ADR-0108 于 2026-08-11 接受；ADR-0109 至 ADR-0113 于 2026-08-12 接受。
+- ADR-0096、ADR-0097 于 2026-07-31 接受；ADR-0098、ADR-0099 于 2026-08-03 接受；ADR-0100 于 2026-08-05 接受；ADR-0101、ADR-0102 于 2026-08-10 接受；ADR-0103 至 ADR-0108 于 2026-08-11 接受；ADR-0109 至 ADR-0114 于 2026-08-12 接受。
 - 被取代的 ADR 保留原文和指向新 ADR 的状态，不再作为当前实现合同。
 - 新 ADR 默认只需一个清楚的决定段落。只有背景、备选和后果能帮助未来维护者避免误读时，才增加这些章节。
 - 可逆的 UI 细节、库选择和票内实现步骤留在 Spec 或 Issue，不为增加编号而创建 ADR。
@@ -35,6 +35,7 @@
 | [0111](./0111-freeze-published-canonical-region-tree-releases.md) | 已接受，2026-08-12 | Slice 6R；`REGION-005`–`REGION-009`、`ARCH-004`、`ARCH-006`、`ARCH-010`、`PRIVACY-010`、`TEST-003`、`TEST-005` | 草稿发布后冻结区域节点和边界；内容指纹稳定，current 切换保留追加式选择历史 |
 | [0112](./0112-contact-location-provenance-is-append-only-revision-evidence.md) | 已接受，2026-08-12 | Slice 6S；`CONTACT-010`、`REGION-001`、`REGION-002`、`REGION-005`、`REGION-007`–`REGION-009`、`ARCH-004`、`ARCH-006`–`ARCH-008`、`ARCH-010`、`AUTHZ-004`、`AUTHZ-006`、`PRIVACY-007`、`PRIVACY-010`、`PRIVACY-011`、`MIGRATION-001`–`MIGRATION-005`、`TEST-003`、`TEST-005` | 接触地点来源按 revision 追加保存；明确 pending／N/A、resolved region-only、历史回填和精确坐标边界 |
 | [0113](./0113-location-source-wire-contract-binds-resolution-provenance.md) | 已接受，2026-08-12 | Slice 6T；`REGION-001`、`REGION-002`、`REGION-005`、`REGION-007`–`REGION-009`、`ARCH-004`、`ARCH-006`–`ARCH-008`、`ARCH-010`、`PRIVACY-007`、`PRIVACY-010`、`PRIVACY-011`、`TEST-003`、`TEST-005` | 严格位置来源 wire 合同把原始坐标绑定到已发布区域树指纹；缺少可信证据时保留 pending |
+| [0114](./0114-device-location-source-is-an-atomic-typed-fact.md) | 已接受，2026-08-12 | Slice 6U；`REGION-001`、`REGION-002`、`REGION-005`、`REGION-007`–`REGION-009`、`ARCH-001`、`ARCH-004`、`ARCH-006`–`ARCH-008`、`ARCH-010`、`PRIVACY-007`、`PRIVACY-010`、`PRIVACY-011`、`MIGRATION-001`–`MIGRATION-005`、`TEST-003`、`TEST-005` | Drift v18 类型化保存来源；地点和来源在设备存储、队列、pull 与冲突中原子替换 |
 
 ## 按主题查找
 
