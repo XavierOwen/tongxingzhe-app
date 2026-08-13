@@ -2,7 +2,7 @@
 
 个人分析和管理分析处理不同的信任边界。个人页可以立即显示本人设备上的事实，并说明哪些接触尚未同步。管理分析只能使用后端已接受的数据，还必须先降低小群体披露风险。
 
-当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定、不可变受保护快照、项目报告时区版本历史、管理报告能力授权、可信发布 v2、管理项目发现与选择、可信快照目录、窄 HTTPS 发布与读取端点、Flutter 只读管理报告页面、私有区域隐私威胁探针，以及已发布规范区域树和边界版本的冻结。它仍没有生产成员管理、自动发布调度或生产区域报告。
+当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定、不可变受保护快照、项目报告时区版本历史、管理报告能力授权、可信发布 v2、管理项目发现与选择、可信快照目录、窄 HTTPS 发布与读取端点、Flutter 只读管理报告页面、私有区域隐私威胁探针，以及已发布规范区域树和边界版本的冻结。Slice 6S 只固定 PostgreSQL 地点来源合同、历史回填和 fixture-first 证据，不表示 Flutter／Drift、Backend HTTP 或生产写入 bridge 已接入。它仍没有生产成员管理、自动发布调度或生产区域报告。
 
 ## 先确定统计单位
 
@@ -387,7 +387,7 @@ Slice 6Q 因此没有给现有生产端点增加区域参数，也没有注册�
 
 `original` 视图使用接触事实保存的最小区域 ID 和区域树版本。它回答“记录当时归到哪里”。`current` 视图回答“按今天有效的规范区域应归到哪里”，所以必须有明确跨版本映射，或保留可以按当前边界重新解析的来源坐标。
 
-当前已解析地点只保存 `region_id + tree_version`，不保存解析前坐标；`contact_region_assignments` 还是随 revision 更新的当前投影。只有这两项证据时，系统不能可靠重算 `current`，也不能把旧区域 ID 猜成相似名称的新城市。探针把缺失映射作为失败关闭条件。本工作单元没有回填历史坐标，也没有声称已交付两种生产视图。
+现有 contact current projection 只保存 `region_id + tree_version`，不保存解析前坐标；`contact_region_assignments` 还是随 revision 更新的 current projection。只有这两项投影证据时，系统不能可靠重算 `current`，也不能把旧区域 ID 猜成相似名称的新城市。探针把缺失映射作为失败关闭条件。Slice 6S 的 PostgreSQL 合同另存每个 revision 的来源状态，但不生成 current 映射，也不声称已交付两种生产视图。
 
 `pending_resolution` 的含义不同：面对面接触已有坐标，但平台尚未给出规范区域。该记录保留坐标并排除在城市格之外。`not_applicable` 只适用于纯非线下接触，表示地点维度不适用。它不是解析失败、未知城市或零数量。
 
@@ -438,7 +438,56 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 这些文件只使用 synthetic 数据。并发脚本会提交自己的测试行，普通 fixture 会回滚；不要把测试库当作生产库，也不要把 Docker 通过写成真实维护者发布或六平台验收。
 
-冻结版本是 6S 地点 provenance 的前置条件，不是 provenance 本身。6S 仍需追加保存解析来源、原始坐标或可验证的跨版本映射。生产区域报告还必须另行确定完整网格、互补隐藏、授权、快照 lineage 和自己的重识别 fixture。本节不增加区域报告 API、管理 UI、缓存或导出。
+冻结版本是 6S 地点 provenance 的前置条件，不是 provenance 本身。Slice 6S 在 PostgreSQL 中追加保存解析来源和原始证据，但不接入 Flutter／Drift、Backend HTTP 或生产写入 bridge。生产区域报告还必须另行确定完整网格、互补隐藏、授权、快照 lineage 和自己的重识别 fixture。本节不增加区域报告 API、管理 UI、缓存或导出。
+
+## Slice 6S 如何固定地点来源合同
+
+Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和
+fixture-first 证据。每个已接受 `contact_id + revision_number` 最多保存一条
+追加式来源记录；可信追加与 revision 在同一 transaction 中提交，来源记录之后
+不能 `UPDATE` 或 `DELETE`。这张表不是 `contact_region_assignments` 的替代
+current projection，也没有来源读取 API。
+
+来源记录必须把三种地点状态分开：
+
+- `resolved` 保存最小区域、已发布 `tree_version`、6R 内容指纹和城市父链。它
+  还要明确是有原始坐标，还是只有历史区域版本的 `region-only`；
+- `pending_resolution` 保存合法经纬度和可选精度，不保存区域或区域树；
+- `not_applicable` 表示纯非线下接触，不保存坐标或区域。
+
+旧 revision 无法完整解释时标记 `incomplete`／`unknown`。服务端记录时间不能
+冒充设备采集时间，不能 reverse-geocode，不能把旧区域猜成当前城市。6S 只从
+每个不可变 revision 自己的 `snapshot.location` 和可选 `snapshot.locationSource`
+回填：pending 复制自己的坐标；resolved 复制自己的区域、树版本和 6R fingerprint，
+有合法 source 时保留采集坐标，没有时保留 `region-only`；矛盾或畸形 source
+保持 `incomplete`／`unknown`。回填不能从单一 current assignment 伪造历史。
+
+精确坐标是敏感接触事实。来源表留在受限 `app_data`，不进入管理报告、日志、
+错误响应或 warehouse。数据库会在 `warehouse_outbox` 写入边界移除 location
+和 source，防止修订、冲突解决或作废复制完整 snapshot 时泄漏坐标；
+`tongxingzhe_runtime`、区域发布者和管理分析 capability
+都不会因此获得来源读取权。作废保留来源历史，账号／空间删除与保留期继续遵循
+既有政策。该 slice 只覆盖已提交 contact revisions；当前没有地点字段的
+`contact_attempts` 另行处理。
+
+### 如何验证 6S PostgreSQL 合同
+
+完整 Docker 套件会在空库、checksum 重放、可回滚 fixture、独立并发会话和没有
+源 cluster roles 的 restore 集群中检查 0039 来源表。除完整套件外，可在已经运行
+的测试库执行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_contact_location_provenance.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0039_contact_location_provenance.sql
+./tool/verify_contact_location_provenance_concurrency.sh
+```
+
+这些检查只证明来源 shape、权限、历史回填和并发不变量；它们不证明 Flutter／
+Backend 生产写入、区域 current 映射或区域报告不可重识别。
 
 ## 当前证据不能证明什么
 
@@ -450,7 +499,7 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 - 权限变更审计和一般组织业务上下文；
 - 跨时区 revision 后重新建立基线或更正版的隐私判定；
 - 可按历史 revision 水位重新执行的 `as-of` 投影、更正版取代关系和删除流程；
-- 追加式区域来源证据、明确跨版本映射，以及生产区域报告自己的完整网格、互补隐藏、授权和快照 lineage；
+- 可验证的 current 跨版本映射，以及生产区域报告自己的完整网格、互补隐藏、授权和快照 lineage；
 - 快照目录与单份读取以外的动态 API、缓存、图表和导出。
 
 在这些前置条件完成前，不得删除个人指标 SQL 的 `app_user_id` 条件来制造团队汇总，也不得向 `tongxingzhe_runtime` 授予私有政策函数的执行权。
