@@ -5,7 +5,7 @@
 ## 状态规则
 
 - ADR-0001 至 ADR-0095 作为 `TXZ-SPEC-001` 的首批决策集，于 2026-07-31 一并接受；文件另有状态时以文件为准。
-- ADR-0096、ADR-0097 于 2026-07-31 接受；ADR-0098、ADR-0099 于 2026-08-03 接受；ADR-0100 于 2026-08-05 接受；ADR-0101、ADR-0102 于 2026-08-10 接受；ADR-0103 至 ADR-0108 于 2026-08-11 接受；ADR-0109 至 ADR-0112 于 2026-08-12 接受。
+- ADR-0096、ADR-0097 于 2026-07-31 接受；ADR-0098、ADR-0099 于 2026-08-03 接受；ADR-0100 于 2026-08-05 接受；ADR-0101、ADR-0102 于 2026-08-10 接受；ADR-0103 至 ADR-0108 于 2026-08-11 接受；ADR-0109 至 ADR-0113 于 2026-08-12 接受。
 - 被取代的 ADR 保留原文和指向新 ADR 的状态，不再作为当前实现合同。
 - 新 ADR 默认只需一个清楚的决定段落。只有背景、备选和后果能帮助未来维护者避免误读时，才增加这些章节。
 - 可逆的 UI 细节、库选择和票内实现步骤留在 Spec 或 Issue，不为增加编号而创建 ADR。
@@ -34,6 +34,7 @@
 | [0110](./0110-region-analytics-requires-provenance-before-production-reports.md) | 已接受，2026-08-12 | Slice 6Q；`REGION-005`–`REGION-009`、`PRIVACY-002`–`PRIVACY-006`、`PRIVACY-010` | 区域分析先固定来源语义和重叠威胁探针；证据不足时不猜测当前区域 |
 | [0111](./0111-freeze-published-canonical-region-tree-releases.md) | 已接受，2026-08-12 | Slice 6R；`REGION-005`–`REGION-009`、`ARCH-004`、`ARCH-006`、`ARCH-010`、`PRIVACY-010`、`TEST-003`、`TEST-005` | 草稿发布后冻结区域节点和边界；内容指纹稳定，current 切换保留追加式选择历史 |
 | [0112](./0112-contact-location-provenance-is-append-only-revision-evidence.md) | 已接受，2026-08-12 | Slice 6S；`CONTACT-010`、`REGION-001`、`REGION-002`、`REGION-005`、`REGION-007`–`REGION-009`、`ARCH-004`、`ARCH-006`–`ARCH-008`、`ARCH-010`、`AUTHZ-004`、`AUTHZ-006`、`PRIVACY-007`、`PRIVACY-010`、`PRIVACY-011`、`MIGRATION-001`–`MIGRATION-005`、`TEST-003`、`TEST-005` | 接触地点来源按 revision 追加保存；明确 pending／N/A、resolved region-only、历史回填和精确坐标边界 |
+| [0113](./0113-location-source-wire-contract-binds-resolution-provenance.md) | 已接受，2026-08-12 | Slice 6T；`REGION-001`、`REGION-002`、`REGION-005`、`REGION-007`–`REGION-009`、`ARCH-004`、`ARCH-006`–`ARCH-008`、`ARCH-010`、`PRIVACY-007`、`PRIVACY-010`、`PRIVACY-011`、`TEST-003`、`TEST-005` | 严格位置来源 wire 合同把原始坐标绑定到已发布区域树指纹；缺少可信证据时保留 pending |
 
 ## 按主题查找
 
@@ -45,7 +46,7 @@
 | 组织、保留、导入导出与合并 | [0030](./0030-allow-verified-users-to-create-organizations.md)–[0043](./0043-promotion-target-merges-are-reversible.md) | Slice 4、7；`ORG`、`TARGET`、`AUTHZ` |
 | 私人计划、通知与周期 | [0044](./0044-personal-action-plans-are-private-and-user-controlled.md)–[0052](./0052-late-entered-contacts-count-in-their-occurrence-period.md) | Slice 5；`PLAN`、`PLATFORM` |
 | 说明书与发布检查 | [0053](./0053-production-code-and-learning-materials-evolve-together.md)–[0059](./0059-documentation-and-statistics-checks-block-releases.md) | 全部 Slice；`MANUAL`、Definition of Done |
-| 指标、报告与隐私 | [0060](./0060-ordinal-scale-distributions-are-primary.md)–[0077](./0077-core-metrics-ship-with-code-and-project-metrics-use-safe-configuration.md)，另见 [0099](./0099-management-analytics-use-bounded-query-surfaces.md)、[0101](./0101-management-weekly-reports-use-two-complete-iso-weeks.md)–[0112](./0112-contact-location-provenance-is-append-only-revision-evidence.md) | Slice 6；`ANALYTICS`、`PRIVACY`、`AUTHZ`、`REGION`、`ARCH`、`TEST-005` |
+| 指标、报告与隐私 | [0060](./0060-ordinal-scale-distributions-are-primary.md)–[0077](./0077-core-metrics-ship-with-code-and-project-metrics-use-safe-configuration.md)，另见 [0099](./0099-management-analytics-use-bounded-query-surfaces.md)、[0101](./0101-management-weekly-reports-use-two-complete-iso-weeks.md)–[0113](./0113-location-source-wire-contract-binds-resolution-provenance.md) | Slice 6；`ANALYTICS`、`PRIVACY`、`AUTHZ`、`REGION`、`ARCH`、`TEST-005` |
 | 当前上下文、问卷、草稿与导航 | [0078](./0078-a-visible-project-context-scopes-default-work.md)–[0090](./0090-contact-entry-prioritizes-core-facts-with-progressive-disclosure.md) | Slice 1、3、5；`CTX`、`QUESTION`、`DRAFT`、`UI` |
 | 尝试、渠道、触达和机构关系 | [0091](./0091-unsuccessful-direct-outreach-is-a-contact-attempt.md)–[0095](./0095-person-to-institution-relationships-use-six-stable-kinds.md) | Slice 1、2、4；`CONTACT`、`TARGET` |
 | 基础设施 | [0097](./0097-use-supabase-postgresql-for-the-initial-stage.md) | Slice 0／发布门槛；`ARCH-003`–`ARCH-010` |

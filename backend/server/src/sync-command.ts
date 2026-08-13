@@ -13,6 +13,7 @@ import type {
   ContactChannel,
   ContactConflictResolutionPayload,
   ContactLocation,
+  ContactLocationSource,
   ContactRevisionPayload,
   ContactSubmitPayload,
   ContactTargetLink,
@@ -310,9 +311,9 @@ function parseDraftUpsertPayload(value: unknown): DraftUpsertPayload {
   const channel = rawChannel === null || rawChannel === undefined
     ? null
     : contactChannel(rawChannel);
-  const location = payload.location === null || payload.location === undefined
-    ? null
-    : parseLocation(payload.location);
+  const locationResult = payload.location === null || payload.location === undefined
+    ? parseNullableDraftLocationSource(payload.location_source)
+    : parseLocationWithSource(payload.location, payload.location_source);
   const reachCount = nullableInteger(payload.reach_count, "invalid_reach_count");
   const interestLevel = nullableInteger(
     payload.interest_level,
@@ -348,7 +349,10 @@ function parseDraftUpsertPayload(value: unknown): DraftUpsertPayload {
     occurredTimeZone,
     channel,
     channelDetail: nullableString(payload.channel_detail),
-    location,
+    location: locationResult.location,
+    ...(locationResult.locationSource === undefined
+      ? {}
+      : { locationSource: locationResult.locationSource }),
     reachCount,
     interestLevel,
     answers,
@@ -412,7 +416,11 @@ function parseContactFacts(
   if (interestLevel < 0 || interestLevel > 4) {
     throw new CommandValidationError("invalid_interest_level");
   }
-  const location = parseLocation(payload.location);
+  const locationResult = parseLocationWithSource(
+    payload.location,
+    payload.location_source,
+  );
+  const location = locationResult.location;
   if (channel === "face_to_face" && location.kind === "not_applicable") {
     throw new CommandValidationError("face_to_face_location_required");
   }
@@ -431,6 +439,9 @@ function parseContactFacts(
     channel,
     channelDetail,
     location,
+    ...(locationResult.locationSource === undefined
+      ? {}
+      : { locationSource: locationResult.locationSource }),
     reachCount,
     interestLevel,
     answers,
@@ -523,6 +534,9 @@ function parseContactConflictResolutionPayload(
 
 function parseContactVoidPayload(value: unknown): ContactVoidPayload {
   const payload = object(value, "invalid_contact_void_payload");
+  if ("location" in payload || "location_source" in payload) {
+    throw new CommandValidationError("contact_void_location_forbidden");
+  }
   return {
     contactId: string(payload.contact_id, "invalid_contact_id"),
     workspaceId: uuid(payload.workspace_id, "invalid_workspace_id"),
@@ -568,12 +582,61 @@ function parseContactAttemptPayload(
   };
 }
 
-function parseLocation(value: unknown): ContactLocation {
+const wireLocationKeys = new Set([
+  "kind",
+  "place_name",
+  "smallest_region_id",
+  "region_tree_version",
+  "latitude",
+  "longitude",
+  "accuracy_meters",
+]);
+
+function parseLocationWithSource(
+  locationValue: unknown,
+  sourceValue: unknown,
+): {
+  readonly location: ContactLocation;
+  readonly locationSource: ContactLocationSource | undefined;
+} {
+  const location = parseWireLocation(locationValue);
+  const locationSource = parseWireLocationSource(sourceValue);
+  if (locationSource !== undefined && location.kind !== "resolved") {
+    throw new CommandValidationError("location_source_forbidden");
+  }
+  return { location, locationSource };
+}
+
+function parseNullableDraftLocationSource(value: unknown): {
+  readonly location: null;
+  readonly locationSource: undefined;
+} {
+  if (value !== undefined && value !== null) {
+    throw new CommandValidationError("location_source_forbidden");
+  }
+  return { location: null, locationSource: undefined };
+}
+
+function parseWireLocation(value: unknown): ContactLocation {
   const location = object(value, "invalid_location");
+  assertExactKeys(location, wireLocationKeys, "invalid_location_shape");
   if (location.kind === "not_applicable") {
+    assertNullOrMissingLocationFields(location, [
+      "place_name",
+      "smallest_region_id",
+      "region_tree_version",
+      "latitude",
+      "longitude",
+      "accuracy_meters",
+    ]);
     return { kind: "not_applicable" };
   }
   if (location.kind === "resolved") {
+    assertNullOrMissingLocationFields(location, [
+      "latitude",
+      "longitude",
+      "accuracy_meters",
+    ]);
     return {
       kind: "resolved",
       placeName: string(location.place_name, "invalid_place_name"),
@@ -611,6 +674,95 @@ function parseLocation(value: unknown): ContactLocation {
     };
   }
   throw new CommandValidationError("invalid_location_kind");
+}
+
+function parseWireLocationSource(value: unknown): ContactLocationSource | undefined {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  const source = object(value, "invalid_location_source");
+  assertExactKeys(
+    source,
+    new Set([
+      "kind",
+      "latitude",
+      "longitude",
+      "accuracy_meters",
+      "resolver_contract_version",
+      "region_tree_content_fingerprint",
+    ]),
+    "invalid_location_source_shape",
+  );
+  if (source.kind !== "captured_coordinates") {
+    throw new CommandValidationError("invalid_location_source_kind");
+  }
+  const latitude = finiteNumber(
+    source.latitude,
+    "invalid_location_source_coordinates",
+  );
+  const longitude = finiteNumber(
+    source.longitude,
+    "invalid_location_source_coordinates",
+  );
+  const accuracy = nullableFiniteNumber(
+    source.accuracy_meters,
+    "invalid_location_source_accuracy",
+  );
+  if (
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180 ||
+    (accuracy !== null && accuracy < 0)
+  ) {
+    throw new CommandValidationError("invalid_location_source_coordinates");
+  }
+  const resolverContractVersion = string(
+    source.resolver_contract_version,
+    "invalid_location_source_contract",
+  );
+  if (resolverContractVersion !== "canonical-region-resolution:v1") {
+    throw new CommandValidationError("invalid_location_source_contract");
+  }
+  const fingerprint = string(
+    source.region_tree_content_fingerprint,
+    "invalid_location_source_fingerprint",
+  );
+  if (!/^[0-9a-f]{64}$/.test(fingerprint)) {
+    throw new CommandValidationError("invalid_location_source_fingerprint");
+  }
+  return {
+    kind: "captured_coordinates",
+    latitude,
+    longitude,
+    accuracyMeters: accuracy,
+    resolverContractVersion,
+    regionTreeContentFingerprint: fingerprint,
+  };
+}
+
+function assertExactKeys(
+  value: Record<string, unknown>,
+  allowed: ReadonlySet<string>,
+  message: string,
+): void {
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) {
+      throw new CommandValidationError(message);
+    }
+  }
+}
+
+function assertNullOrMissingLocationFields(
+  value: Record<string, unknown>,
+  fields: readonly string[],
+): void {
+  for (const field of fields) {
+    const candidate = value[field];
+    if (candidate !== undefined && candidate !== null) {
+      throw new CommandValidationError("invalid_location");
+    }
+  }
 }
 
 function parseAnswer(value: unknown): ContactAnswer {

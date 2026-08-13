@@ -162,7 +162,13 @@ PostgreSQL 的草稿主键是 `(app_user_id, draft_id)`。即使两个用户提�
 
 平台用 [`0007_canonical_region_resolution.sql`](../../backend/database/migrations/0007_canonical_region_resolution.sql) 发布唯一的当前区域树版本和边界。`resolve_canonical_region` 使用 PostgreSQL 内置 `point` 与 `polygon` 判断坐标归属，从所有命中项中选择层级最深的节点，并返回从根到该节点的父链。返回结果必须包含城市祖先；同层命中按稳定 ID 排序，避免相同数据产生不确定结果。
 
-Flutter 的 [`HttpContactRegionResolver`](../../lib/regions/contact_region_resolver.dart) 用 access token 调用 `POST /v1/regions/resolve`。`200` 表示已匹配；`202` 表示当前版本没有边界命中。超时、离线、认证失败、数据库不可用或无效父链都保持 `PendingContactLocation`。这个合同保留已经取得的位置事实，同时阻止客户端自行猜测区域。
+Slice 6T 的窄函数 `resolve_canonical_region_with_provenance` 在相同结果上增加已发布 release 的内容指纹和固定解析器合同。runtime 可以执行该函数，但不能直接读取 release 表。Backend 只接受一行、完整父链、64 位小写 SHA-256 指纹和 `canonical-region-resolution:v1`；返回合同漂移时失败关闭。
+
+Flutter 的 [`HttpContactRegionResolver`](../../lib/regions/contact_region_resolver.dart) 用 access token 调用 `POST /v1/regions/resolve`。`200` 表示已匹配；`202` 表示当前版本没有边界命中。成功响应还要包含可信指纹和解析器合同。Flutter 把输入坐标、可选精度、该指纹和合同绑定到 `ResolvedContactLocation`；任一证据缺失或不合法时仍保留原 `PendingContactLocation`。超时、离线、认证失败、数据库不可用、无效父链或未命中也保持 pending。这个合同保留已经取得的位置事实，同时阻止客户端自行猜测区域。
+
+同步 wire 中，`resolved` 可以不带 `location_source`，表示旧记录或人工选择的 region-only 地点。只有坐标解析得到的 `resolved` 可以带 `captured_coordinates` 来源；pending 的坐标仍保存在 `location`，`not_applicable` 和空草稿地点不能带来源。Backend 对 submit、revise、resolve-conflict 和 draft 共用严格 codec，并拒绝未知字段、错误数字和地点／来源矛盾。void 不接收新地点，只复制已接受 revision。
+
+本切片还没有把来源接入 Drift、Outbox 或 PostgreSQL 接触 revision。完成本机持久化和冲突原子性后，才可以声称离线来源不会丢失；完成四层对账后，才可以声称真实同步命令会写入 ADR-0112 的来源表。
 
 ## Drift 与 PostgreSQL 如何对账同一指标
 
