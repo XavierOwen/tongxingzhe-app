@@ -241,6 +241,8 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 `0017_contact_target_links.sql` 给每个接触 revision 保存零到多条对象关联快照，以及对象在当前项目中的独立关系阶段。关联只保存对象 ID、类型、可选当次反应和后续联系同意，不复制 PII，也不改变场次、触达人数或整体兴趣。新关联、阶段 0 确认、接触写入和 Outbox 在同一 transaction 中完成；修订、冲突解决和拉取都保留逐版本历史。Warehouse payload 只保留对象类型、当次反应和同意状态，不包含对象 ID。
 
+[`follow_up_consent_ratio_v1.csv`](./fixtures/shared/follow_up_consent_ratio_v1.csv) 是后续联系同意占比的实现前合同。它固定项目启用、当前有效 contact-target link、`yes / (yes + no)`、默认 `unknown` 作为未回答、half-up 基点和候选集排除边界。当前没有生产 SQL 消费它；项目启用存储、个人读取 bridge 和管理隐私报告必须在后续切片中分别交付。
+
 `0018_promotion_target_relationship_audit.sql` 把项目关系扩展为当前投影和追加 revision 历史。阶段仍固定为 `0–4`，生命周期独立保存；阶段、生命周期和共享跟进备注的每次修改都保留操作者、时间、原因和 mutation ID。旧 revision 通过 base snapshot 做字段级三方比较：不同字段自动合并，同字段把拟提交内容写入受保护冲突表，等待当前跟进者明确解决。阶段下降要求结构化原因。项目别名只覆盖显示名，双倍刻度只在响应中派生。runtime role 不能直接读取备注、冲突或历史表。
 
 `0019_person_institution_relationships.sql` 保存 workspace 内明确建立的个人与机构关系。六类性质固定；同一对对象可同时有不同性质，但同一种活动关系只允许一条。建立和结束都追加 revision 并使用 mutation ID。列表和写入都要求调用者仍同时获分配两端对象；关系本身不增加分配、成员资格、接触关联或 warehouse 事实。
