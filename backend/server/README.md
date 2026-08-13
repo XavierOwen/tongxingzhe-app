@@ -16,6 +16,18 @@
 
 cursor 不存在或不属于当前用户、空间和项目时，端点返回 `400 invalid_cursor`。未分类的数据库失败返回 `503 sync_unavailable`，不把内部 SQL 错误文字暴露给客户端。地点来源只有一个窄的永久拒绝例外，见下节。
 
+## 个人后续联系同意占比
+
+| 方法与路径 | 行为 |
+| --- | --- |
+| `GET /v1/personal/follow-up-consent-ratio?from_utc=...&until_utc=...` | 返回当前 personal project 在 UTC 半开期间内的固定 `follow_up_consent_ratio@1` 结果 |
+
+这个端点必须且只能收到一次 `from_utc` 和一次 `until_utc`。两者使用 UTC `Z` 时刻，可带一至九位小数秒。Backend 会截取到毫秒精度，并要求规范后的 `from_utc < until_utc`。GET body、偏移时区、重复／缺失／额外 query、客户端 project、workspace、user 或 metric 都会被拒绝。token 验证先于 query 校验；项目只来自已验证身份的当前 personal context。
+
+Store 把 verified issuer／subject、当前 project、固定 metric 和期间交给 `read_personal_follow_up_consent_ratio_v1`。PostgreSQL 会重新授权。未配置或当前停用时，`result` 只有合同、metric、project 和 `status: not_enabled`；它没有 `period` 或 `value`。启用后，`status: ready` 才带期间、`yes / (yes + no)`、各缺失状态和整数百分比基点。Backend 对两种结果执行 exact-key 和计数不变量检查，不接受返回合同漂移。
+
+缺失或无效 token 返回 `401 unauthenticated`；无效请求返回 `400 invalid_personal_follow_up_consent_ratio_request`；数据库重新授权失败返回 `403 personal_follow_up_consent_ratio_forbidden`；adapter 缺失、数据库错误或返回合同无效返回 `503 personal_follow_up_consent_ratio_unavailable`。所有响应使用 `Cache-Control: no-store`，错误不含 identity、接触事实或 PostgreSQL 消息。这个入口不提供项目开关写入、自由指标、管理报告、导出或 Flutter 离线缓存。
+
 ## 接触地点来源与同步错误边界
 
 接触同步的 wire payload 使用 snake_case `location_source`。只有 `resolved` 地点可以带 `captured_coordinates` 来源。`resolved` 没有来源表示 `region-only`；`pending_resolution` 把坐标保留在地点本身；`not_applicable` 不带来源或坐标。提交、更正和冲突解决共用这个 exact-key codec；作废命令不接收新地点，只复制已经接受的 revision。
@@ -199,7 +211,7 @@ npm run check
 
 接触对象关联见 [`0017_contact_target_links.sql`](../database/migrations/0017_contact_target_links.sql)。对应 fixture 验证零到多关联、阶段 0 确认、跨空间与未分配拒绝、机构代表约束、幂等重放、revision 历史、冲突比较和 warehouse PII 隔离。
 
-Node 24 Docker 阶段会在已迁移的 PostgreSQL 上运行 `contact-location-evidence.integration.ts`。它和 Flutter 测试读取同一份 `contact_location_source_v1.csv`，用于证明真实 Backend Store 与 SQL bridge 的结果分类、地点来源四种状态、修订／冲突／作废，以及 warehouse 和匿名管理报告的精确坐标边界。`npm test` 仍是无数据库的合同测试；它不能替代该阶段，也不能证明真机或生产环境。
+Node 24 Docker 阶段会在已迁移的 PostgreSQL 上运行地点来源、当前关系阶段和后续联系同意占比三条 integration。地点来源测试和 Flutter 读取同一份 `contact_location_source_v1.csv`；另外两条分别对账当前快照 bridge，以及同意占比的 `not_enabled`／`ready` union。`npm test` 仍是无数据库的合同测试；它不能替代该阶段，也不能证明真机或生产环境。
 
 项目关系审计见 [`0018_promotion_target_relationship_audit.sql`](../database/migrations/0018_promotion_target_relationship_audit.sql)。对应 fixture 验证双向阶段、独立生命周期、共享备注历史、结构化下降原因、mutation 重放、显式冲突、分配撤销、显示别名和 warehouse 文本隔离。
 

@@ -326,7 +326,7 @@ Node 24 容器使用与 PostgreSQL 容器相同的 network namespace。它通过
 4. 把数据库目录和全部正式并发脚本复制到容器；
 5. 从空库执行全部 migration，再执行一次 checksum 重放；
 6. 运行全部 schema／权限 check 和可回滚 synthetic fixture；
-7. 建立一次性的 Node 24 容器，编译 Backend，并运行地点来源与当前关系阶段两条 PostgreSQL adapter integration test；
+7. 建立一次性的 Node 24 容器，编译 Backend，并运行地点来源、当前关系阶段和后续联系同意占比三条 PostgreSQL adapter integration test；
 8. 按文件名运行全部正式并发脚本，用独立数据库会话检查锁、撤权和唯一性合同；
 9. 修改 migration 的临时副本，确认 runner 拒绝 checksum 漂移；
 10. 执行 `pg_dump`，启动没有源 cluster roles 的第二个 PostgreSQL 容器；
@@ -335,7 +335,7 @@ Node 24 容器使用与 PostgreSQL 容器相同的 network namespace。它通过
 
 这组步骤同时验证新安装、重复部署、Backend→PostgreSQL 结果分类、并发、最小权限和备份恢复。fixture 内使用 `BEGIN` 与 `ROLLBACK`，不会把合成业务资料留在测试库。并发脚本会提交自己的 synthetic 行，这些行会随 dump 进入恢复库；它们不是 production 数据。
 
-Node 阶段编译并运行 `backend/server/test/contact-location-evidence.integration.ts` 和 `backend/server/test/personal-current-relationship-stage.integration.ts`。如果入口缺失、编译失败或真实 Backend 到 PostgreSQL 的任一断言失败，脚本会在这一步停止；设置 `KEEP_POSTGRES_TEST_CONTAINER=1` 后，PostgreSQL 容器会保留供检查。不能把前面的 SQL 通过单独记为 Backend 集成通过。
+Node 阶段编译并运行 `backend/server/test/contact-location-evidence.integration.ts`、`backend/server/test/personal-current-relationship-stage.integration.ts` 和 `backend/server/test/personal-follow-up-consent-ratio.integration.ts`。第三条先以 runtime role 读取 `not_enabled`，再经正式配置入口启用并读取 `ready 0 / 0`。如果入口缺失、编译失败或真实 Backend 到 PostgreSQL 的任一断言失败，脚本会在这一步停止；设置 `KEEP_POSTGRES_TEST_CONTAINER=1` 后，PostgreSQL 容器会保留供检查。不能把前面的 SQL 通过单独记为 Backend 集成通过。
 
 ### 6.3 怎样读输出
 
@@ -437,6 +437,8 @@ docker rm --force tongxingzhe-postgres-test-12345
 | `checks/verify_*.sql` | 检查表、函数、角色和权限形状 | schema 缺失或 runtime 权限过大 |
 | `fixtures/NNNN_*.sql` | 用 synthetic 数据执行成功与拒绝路径 | 业务事务或不变量错误 |
 | `backend/server/test/contact-location-evidence.integration.ts` | 用 Node 24、真实 Backend Store 和 PostgreSQL bridge 对账地点来源 | wire、Store、SQL 结果分类或隐私边界错误 |
+| `backend/server/test/personal-current-relationship-stage.integration.ts` | 用 runtime role 对账当前关系阶段 Store 与窄 bridge | current snapshot 参数、结果解析或隐私边界错误 |
+| `backend/server/test/personal-follow-up-consent-ratio.integration.ts` | 用 runtime role 对账未启用与启用后的个人比例结果 | identity／project 参数、开关状态或 union 解析错误 |
 | 并发脚本 | 用两个独立 `psql` 会话同时写入 | 锁、唯一约束或冲突合同错误 |
 | dump／restore | 从备份重建 schema 后重复验证 | 备份范围、owner、授权或恢复路径错误 |
 
@@ -546,7 +548,7 @@ CI 会在临时目录重新生成 v19 snapshot 和 migration helper，并与仓�
 | Backend identity, context, and sync | TypeScript check 和全部 Backend tests |
 | Build Android／Web／Linux／iOS／macOS／Windows | 六个平台独立 build |
 
-CI 的 PostgreSQL job 在 Linux runner 上执行同一个 Docker runner。默认会拉取 `postgres:16` 和 `node:24-bookworm`，在临时容器中运行 `psql`、Backend build 和地点来源 integration；它不需要 runner 上的 PostgreSQL service，也不占用本机端口。两条路径执行相同的 migration、check、fixture、Backend 对账和并发脚本。
+CI 的 PostgreSQL job 在 Linux runner 上执行同一个 Docker runner。默认会拉取 `postgres:16` 和 `node:24-bookworm`，在临时容器中运行 `psql`、Backend build 和三条 Backend integration；它不需要 runner 上的 PostgreSQL service，也不占用本机端口。两条路径执行相同的 migration、check、fixture、Backend 对账和并发脚本。
 
 本机通过是提交前证据。远端 CI 通过是干净环境证据。合并前应同时检查两者，不能根据本机结果推断 GitHub 已通过。
 
@@ -564,6 +566,7 @@ CI 的 PostgreSQL job 在 Linux runner 上执行同一个 Docker runner。默认
 | `contact-location-evidence.integration.js` 未找到 | 当前 checkout 是否包含对应 TypeScript source；没有它就不能声称四层对账通过 |
 | Node 24 `npm ci` 或 build 失败 | npm registry、lockfile、Node 镜像和 Backend TypeScript 错误 |
 | Backend 地点来源 integration 断言失败 | 先保留 Node 阶段完整 stdout，再分别检查 Store 映射、SQL fixture 和 privacy assertion |
+| Backend 同意占比 integration 断言失败 | 检查 runtime identity／project 参数、0048 当前开关、0049 union 和 Store exact-key 解析 |
 | restore check 失败 | dump schema 范围、role、函数授权和恢复 owner |
 | Flutter 单测通过但完整测试失败 | 共享状态、生成文件或其他模块的回归 |
 | 离线对象测试通过但真机不启用缓存 | 安全存储探针、本地数据库能力和六平台证据矩阵 |
