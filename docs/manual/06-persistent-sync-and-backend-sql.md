@@ -230,8 +230,38 @@ Slice 6AD-1 在 PostgreSQL 中加入可信项目开关，但仍未加入比例�
 
 这是“当前是否允许读取指标”的开关，不是接触对象的同意。启用后可以计算项目已有期间；
 停用或从未配置时都只返回 `not_enabled`。停用不会删除接触记录或配置历史，配置时间也不会被
-暗中当成指标期间的起点。Flutter 设置、跨设备缓存、比例 bridge、Backend 端点和个人分析 UI
-仍属于后续切片。
+暗中当成指标期间的起点。
+
+Slice 6AD-2 在 PostgreSQL 中加入个人比例 bridge。公开函数
+`app_data.read_personal_follow_up_consent_ratio_v1(text,text,uuid,text,timestamptz,timestamptz)`
+接收 Backend 从已验证 JWT 取得的 trusted issuer／subject、项目 ID、固定指标
+`follow_up_consent_ratio@1` 和 UTC 半开期间 `[from_utc, until_utc)`。函数先重新验证活动账号、个人
+空间所有者和活动项目，再读取 0048 的当前开关。未配置或当前停用时，SQL 在读取 contact 事实前
+短路，并只返回四个键：
+
+```json
+{
+  "contract_id": "personal_follow_up_consent_ratio_result_v1",
+  "metric_id": "follow_up_consent_ratio@1",
+  "project_id": "<uuid>",
+  "status": "not_enabled"
+}
+```
+
+这个分支没有 `period`、`value`、覆盖或排除字段。启用后才返回 `status: "ready"`、`period`
+和嵌套 `value`。`value` 包含 `yes_count`、`no_count`、`numerator`、`unknown_count`、`refused_count`、
+`not_applicable_count`、`unanswered_count`、`excluded_count`、`denominator` 和
+`percentage_basis_points`。`numerator` 与 `yes_count` 相同。统计单位是 contact-target link；只连接活动 contact 的
+`current_revision`，`yes + no` 是分母，`unknown` 计入未回答，拒答和不适用分别保留。启用但没有
+`yes` 或 `no` 时仍返回 `0 / 0`，百分比基点为 `null`。
+
+PostgreSQL fixture 直接读取共享 [`follow_up_consent_ratio_v1.csv`](../../backend/database/fixtures/shared/follow_up_consent_ratio_v1.csv)，
+把 CSV 行映射为 contact、revision 和 contact-target link，再把 `expected_*` 列与 bridge 结果对账。
+它覆盖 `2 / 3 = 6667`、多对象、`unknown`／拒答／不适用、空分母、current revision、作废、
+错误统计单位、其他项目和 UTC 左含右不含边界；未启用场景还检查四键结果和事实读取短路。
+
+这一切片只交付 PostgreSQL bridge、权限、结构检查和 fixture。Flutter／Drift、Backend HTTP 路由、
+项目设置、离线缓存、管理报告和 warehouse 仍属于后续工作。
 
 [`MetricResult`](../../lib/features/contact_metrics/metric_contract.dart) 把值与 UTC 半开期间、报告时区、数据截止时间、来源层、同步覆盖和隐私状态放在同一个结果合同中。当前个人页由 [`PersonalContactMetricMapper`](../../lib/features/contact_metrics/personal_contact_overview.dart) 把 Drift 汇总映射为 `localOperational + personalFact`；同步覆盖明确以接触场次为单位。即使指标值是触达人数或对象关联数，也不能用待同步场次数推算“已同步人数”或“已同步对象反应数”。
 
