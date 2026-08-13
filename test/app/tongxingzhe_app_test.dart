@@ -1,6 +1,7 @@
 import 'package:drift/native.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/app/app_dependencies.dart';
 import 'package:tongxingzhe_app/app/tongxingzhe_app.dart';
@@ -13,6 +14,7 @@ import 'package:tongxingzhe_app/features/contact_metrics/current_relationship_st
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
+import 'package:tongxingzhe_app/project_settings/personal_follow_up_consent_opt_in.dart';
 import 'package:tongxingzhe_app/questionnaires/questionnaire_contract.dart';
 import 'package:tongxingzhe_app/regions/contact_region_resolver.dart';
 import 'package:tongxingzhe_app/regions/region_catalog.dart';
@@ -134,6 +136,116 @@ void main() {
     await tester.tap(find.text('记录接触'));
     await tester.pumpAndSettle();
     expect(find.text('问卷版本 2'), findsOneWidget);
+  });
+
+  testWidgets('个人项目菜单打开后续联系同意占比设置且不会自动启用', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final gateway = _ConsentOptInGateway(
+      projectId: syntheticSessionContext.project.id,
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      personalFollowUpConsentOptInGatewayBuilder: (_, _) => gateway,
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+    );
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+    final semantics = tester.ensureSemantics();
+
+    final projectMenu = find.byKey(const ValueKey('project-context-menu'));
+    final projectMenuSemantics = tester
+        .getSemantics(find.byTooltip('切换推广项目'))
+        .getSemanticsData();
+    expect(projectMenuSemantics.flagsCollection.isButton, isTrue);
+    expect(projectMenuSemantics.tooltip, '切换推广项目');
+
+    final menuButton = find.byTooltip('切换推广项目');
+    await _focusByTabbing(tester, menuButton);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    final settingsItem = find.byKey(
+      const ValueKey('project-settings-menu-item'),
+    );
+    expect(settingsItem, findsOneWidget);
+    final settingsItemSemantics = tester
+        .getSemantics(settingsItem)
+        .getSemanticsData();
+    expect(settingsItemSemantics.flagsCollection.isButton, isTrue);
+    expect(settingsItemSemantics.label, contains('项目设置'));
+
+    await _focusByTabbing(tester, settingsItem);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    expect(find.text('后续联系同意占比'), findsOneWidget);
+    expect(find.text('当前状态：从未启用'), findsOneWidget);
+    expect(gateway.configureCalls, 0);
+
+    await _focusByTabbing(
+      tester,
+      find.byKey(const ValueKey('consent-opt-in-close')),
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.text('后续联系同意占比'), findsNothing);
+    expect(_containsPrimaryFocus(tester, projectMenu), isTrue);
+    semantics.dispose();
+  });
+
+  testWidgets('组织项目菜单不显示个人项目开关入口', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(
+        context: _organizationSessionContext,
+        availableContexts: const [_organizationSessionContext],
+      ),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+    );
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+
+    await tester.tap(find.byKey(const ValueKey('project-context-menu')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('project-settings-menu-item')),
+      findsNothing,
+    );
+    expect(find.text('项目设置'), findsNothing);
   });
 
   testWidgets('项目菜单创建个人推广项目并立即切换', (tester) async {
@@ -1763,6 +1875,89 @@ final class _FakeLocationCapture implements ContactLocationCapture {
 
   @override
   Future<LocationSnapshot> captureCurrentPosition() async => snapshot;
+}
+
+Future<void> _focusByTabbing(WidgetTester tester, Finder target) async {
+  for (var i = 0; i < 12; i++) {
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    if (_containsPrimaryFocus(tester, target)) return;
+  }
+  fail('Could not focus $target');
+}
+
+bool _containsPrimaryFocus(WidgetTester tester, Finder finder) {
+  final target = tester.element(finder);
+  final focused = FocusManager.instance.primaryFocus?.context;
+  if (focused is! Element) return false;
+  if (identical(focused, target)) return true;
+  var contains = false;
+  focused.visitAncestorElements((ancestor) {
+    if (identical(ancestor, target)) {
+      contains = true;
+      return false;
+    }
+    return true;
+  });
+  return contains;
+}
+
+const _organizationSessionContext = TrustedSessionContext(
+  appUserId: '11111111-1111-4111-8111-111111111111',
+  workspace: WorkspaceContext(
+    id: '77777777-7777-4777-8777-777777777777',
+    kind: WorkspaceKind.organization,
+    name: '机构空间',
+  ),
+  project: ProjectContext(
+    id: '88888888-8888-4888-8888-888888888888',
+    name: '机构推广项目',
+  ),
+  questionnaireVersion: QuestionnaireVersionContext(
+    id: '99999999-9999-4999-8999-999999999999',
+    versionNumber: 1,
+  ),
+  capabilities: {'record_contact'},
+);
+
+final class _ConsentOptInGateway
+    implements PersonalFollowUpConsentOptInGateway {
+  _ConsentOptInGateway({required this.projectId});
+
+  final String projectId;
+  var configureCalls = 0;
+
+  @override
+  Future<PersonalFollowUpConsentOptInResult<PersonalFollowUpConsentOptInState>>
+  load() async => PersonalFollowUpConsentOptInSuccess(
+    PersonalFollowUpConsentOptInState(
+      stateContractId: personalFollowUpConsentOptInStateContract,
+      metricId: personalFollowUpConsentOptInMetric,
+      projectId: projectId,
+      status: PersonalFollowUpConsentOptInStatus.notEnabled,
+      configuration: null,
+    ),
+  );
+
+  @override
+  Future<
+    PersonalFollowUpConsentOptInResult<
+      PersonalFollowUpConsentOptInConfiguration
+    >
+  >
+  configure({
+    required int expectedVersion,
+    required bool enabled,
+    required String requestId,
+  }) async {
+    configureCalls++;
+    return const PersonalFollowUpConsentOptInRejected(
+      PersonalFollowUpConsentOptInFailureCode.serviceUnavailable,
+    );
+  }
+
+  @override
+  Future<void> close() async {}
 }
 
 final class _ResolvedRegionResolver implements ContactRegionResolver {

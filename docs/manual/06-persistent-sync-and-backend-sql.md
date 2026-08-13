@@ -285,6 +285,23 @@ actor ID。相同请求的重试和首次成功都返回 `200`，不能根据版
 版本冲突和同一请求 ID 的不同内容返回稳定 `409`。完整 Docker runner 用真实 runtime role 对账
 未配置、启用、精确重放、冲突、停用和回滚。Flutter 设置页与离线配置仍未交付。
 
+Slice 6AD-5 把这个开关接到 Flutter 的当前个人项目设置。入口位于项目菜单；打开设置不会自动
+启用指标。页面会区分“从未启用”“已启用”和“已停用”，解释它不是接触对象的同意，也不显示
+占比结果。组织项目不显示这个个人设置入口，但最终授权仍由 Backend 和 PostgreSQL 重新核对，
+不能把 Flutter 的入口隐藏当成权限控制。
+
+Flutter gateway 固定调用同一个 GET／PUT 路径，并严格检查 contract、metric、当前 project、状态、
+版本、UUID 和 UTC 时间。通用 [`IdGenerator`](../../lib/foundation/runtime_values.dart) 只保证返回新的
+不透明字符串，不保证 UUID；配置请求因此使用独立的 UUID v4 生成器。首次配置的预期版本是零，
+后续变更使用服务端返回的当前版本。同一项未确认成功的保存重试会复用相同请求 ID 和内容；用户
+改变选择后则产生新请求 ID。
+
+设置状态只保存在当前页面内，不写 Drift、Outbox 或离线缓存。网络失败不会改写已显示的权威
+状态，也不会声称保存成功。`409` 会重新读取最新状态并要求用户再次确认，不会自动用旧版本
+覆盖。项目切换和页面关闭都会让迟到响应失效。设置页按现有紧凑界面基线验证 320 px、200%
+字号、键盘焦点、Escape 返回、heading／control 语义和异步 live region；这些 Widget 测试仍不能
+代替 VoiceOver、TalkBack、NVDA 或真机发布验收。
+
 [`MetricResult`](../../lib/features/contact_metrics/metric_contract.dart) 把值与 UTC 半开期间、报告时区、数据截止时间、来源层、同步覆盖和隐私状态放在同一个结果合同中。当前个人页由 [`PersonalContactMetricMapper`](../../lib/features/contact_metrics/personal_contact_overview.dart) 把 Drift 汇总映射为 `localOperational + personalFact`；同步覆盖明确以接触场次为单位。即使指标值是触达人数或对象关联数，也不能用待同步场次数推算“已同步人数”或“已同步对象反应数”。
 
 当前关系阶段不能直接塞进这份期间合同。[`current_relationship_stage_v1.csv`](../../backend/database/fixtures/shared/current_relationship_stage_v1.csv) 先固定未来各层共用的 synthetic 输入。主场景包含 active 的 `0–4` 五档、paused、ended、匿名化对象、已结束分配、另一推广者和另一项目；预期只保留五个当前 active 关系。第二场景故意重复同一对象 × 项目，要求消费者失败关闭，而不是任选一行或重复计数。fixture 还固定一致性读取的 `snapshot_as_of_utc`，并要求当前 revision 的 `updated_at_utc` 不晚于该时刻。
