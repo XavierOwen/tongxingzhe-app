@@ -220,8 +220,18 @@ Flutter 不把这些结果当作无版本的页面字段。[`CoreMetricCatalog`]
 共享 fixture [`follow_up_consent_ratio_v1.csv`](../../backend/database/fixtures/shared/follow_up_consent_ratio_v1.csv)
 固定项目启用、`2 / 3 = 6667` 基点、空分母、多对象、当前 revision、作废、scope 和 UTC
 边界。项目未启用时只有 `not_enabled`，没有数值或覆盖；项目已启用但没有 yes/no 时才是
-`0 / 0` 和空百分比。Slice 6AD-0 只固定合同，尚未新增项目设置、Drift 查询、PostgreSQL
-bridge、Backend 端点或个人分析 UI。
+`0 / 0` 和空百分比。
+
+Slice 6AD-1 在 PostgreSQL 中加入可信项目开关，但仍未加入比例查询或 UI。开关使用追加式
+版本：首次配置的预期版本是零，之后每次变更都要带当前版本和 UUID 请求 ID。同一请求的相同
+内容重试返回原版本；过期版本、同 ID 不同内容和并发竞争会失败。普通 runtime 不能读取版本
+表，只能调用会从可信认证身份重新核对活动账号、个人空间所有者和活动项目的 configure/read
+函数。
+
+这是“当前是否允许读取指标”的开关，不是接触对象的同意。启用后可以计算项目已有期间；
+停用或从未配置时都只返回 `not_enabled`。停用不会删除接触记录或配置历史，配置时间也不会被
+暗中当成指标期间的起点。Flutter 设置、跨设备缓存、比例 bridge、Backend 端点和个人分析 UI
+仍属于后续切片。
 
 [`MetricResult`](../../lib/features/contact_metrics/metric_contract.dart) 把值与 UTC 半开期间、报告时区、数据截止时间、来源层、同步覆盖和隐私状态放在同一个结果合同中。当前个人页由 [`PersonalContactMetricMapper`](../../lib/features/contact_metrics/personal_contact_overview.dart) 把 Drift 汇总映射为 `localOperational + personalFact`；同步覆盖明确以接触场次为单位。即使指标值是触达人数或对象关联数，也不能用待同步场次数推算“已同步人数”或“已同步对象反应数”。
 
