@@ -760,13 +760,26 @@ final class _PersonalSummaryPage extends StatelessWidget {
     final text = AppStrings(controller.localeCode);
     final result = snapshot;
     if (result == null) {
-      if (loadFailed) {
-        return Center(child: Text(text.t('summaryLoadFailed')));
+      final summaryStatus = isLoading && !loadFailed
+          ? const Center(child: CircularProgressIndicator())
+          : Center(child: Text(text.t('summaryLoadFailed')));
+      final relationshipPanel = currentRelationshipStagePanel;
+      if (relationshipPanel == null) {
+        return summaryStatus;
       }
-      if (isLoading) {
-        return const Center(child: CircularProgressIndicator());
-      }
-      return Center(child: Text(text.t('summaryLoadFailed')));
+      return ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(
+            text.t('recentSevenDays'),
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 16),
+          summaryStatus,
+          const SizedBox(height: 16),
+          relationshipPanel,
+        ],
+      );
     }
     final summary = result.summary;
     final interestOrdinalSummary =

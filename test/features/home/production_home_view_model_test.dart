@@ -92,6 +92,25 @@ void main() {
     expect(fixture.viewModel.state.currentRelationshipStage, isNull);
   });
 
+  test('个人接触汇总失败时仍保留成功的当前关系快照', () async {
+    final fixture = _Fixture(
+      relationshipResult: CurrentRelationshipStageGatewaySuccess(
+        _relationshipSnapshot(),
+      ),
+    );
+    fixture.source.failSummary = true;
+
+    await fixture.viewModel.initialize();
+
+    expect(fixture.viewModel.state.loadFailed, isTrue);
+    expect(fixture.viewModel.state.recentSevenDays, isNull);
+    expect(fixture.viewModel.state.relationshipStageLoadFailed, isFalse);
+    expect(
+      fixture.viewModel.state.currentRelationshipStage?.snapshot.stageCounts,
+      [0, 0, 1, 0, 0],
+    );
+  });
+
   test('提交事件发布提示并在同步后刷新首页快照', () async {
     final fixture = _Fixture();
     await fixture.viewModel.initialize();
@@ -391,6 +410,7 @@ final class _FakeSyncWorker implements ForegroundSyncWorker {
 final class _FakeOverviewSource implements PersonalContactOverviewSource {
   PersonalContactSummary summary = _summary();
   int summaryCalls = 0;
+  bool failSummary = false;
 
   @override
   Future<List<ContactRecord>> listContactRecords({
@@ -424,6 +444,7 @@ final class _FakeOverviewSource implements PersonalContactOverviewSource {
     expect(workspaceId, _context.workspace.id);
     expect(projectId, _context.project.id);
     summaryCalls++;
+    if (failSummary) throw StateError('synthetic_summary_failure');
     return summary;
   }
 }

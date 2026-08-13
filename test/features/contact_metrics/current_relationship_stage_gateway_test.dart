@@ -107,6 +107,33 @@ void main() {
     expect(snapshot.coverage.totalCount, 0);
     expect(snapshot.coverage.pendingCount, 0);
   });
+
+  test('bearer transport requires HTTPS except on localhost', () async {
+    expect(
+      () => HttpCurrentRelationshipStageGateway(
+        baseUri: Uri.parse('http://backend.example.test'),
+        identitySession: _signedInIdentity(),
+        client: MockClient((request) async => _jsonResponse(_body(scope))),
+      ),
+      throwsArgumentError,
+    );
+
+    final localGateway = HttpCurrentRelationshipStageGateway(
+      baseUri: Uri.parse('http://127.0.0.1:8080'),
+      identitySession: _signedInIdentity(),
+      client: MockClient((request) async {
+        expect(request.url.scheme, 'http');
+        expect(request.url.host, '127.0.0.1');
+        return _jsonResponse(_body(scope));
+      }),
+    );
+    addTearDown(localGateway.close);
+
+    expect(
+      await localGateway.load(scope: scope),
+      isA<CurrentRelationshipStageGatewaySuccess>(),
+    );
+  });
 }
 
 FakeIdentitySession _signedInIdentity() => FakeIdentitySession(

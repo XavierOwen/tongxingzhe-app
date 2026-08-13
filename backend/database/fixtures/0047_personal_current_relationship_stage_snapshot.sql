@@ -95,7 +95,7 @@ SELECT
 FROM (
   SELECT DISTINCT target_key
   FROM current_relationship_stage_fixture
-  WHERE scenario_key = 'primary_current'
+  WHERE scenario_key IN ('primary_current', 'duplicate_projection')
 ) AS requested
 CROSS JOIN LATERAL app_data.create_promotion_target(
   (SELECT app_user_id FROM current_relationship_owner_context),
@@ -136,9 +136,7 @@ SELECT
   1,
   (SELECT app_user_id FROM current_relationship_owner_context),
   (SELECT app_user_id FROM current_relationship_owner_context),
-  clock_timestamp() - make_interval(secs => row_number() OVER (
-    ORDER BY fixture.row_key
-  )::integer)
+  fixture.updated_at_utc
 FROM current_relationship_stage_fixture AS fixture
 JOIN current_relationship_target_map AS target_map
   ON target_map.target_key = fixture.target_key
@@ -149,7 +147,7 @@ WHERE fixture.scenario_key = 'primary_current';
 -- without fabricating a history row for this read-only contract.
 UPDATE app_data.promotion_target_project_relationships AS relationship_row
 SET current_revision = fixture.current_revision,
-    updated_at = clock_timestamp()
+    updated_at = fixture.updated_at_utc
 FROM current_relationship_stage_fixture AS fixture
 JOIN current_relationship_target_map AS target_map
   ON target_map.target_key = fixture.target_key
@@ -319,6 +317,7 @@ BEGIN
         actual.target_key IS NULL
         OR actual.stage <> expected.stage
         OR actual.revision <> expected.current_revision
+        OR actual.updated_at_utc::timestamptz <> expected.updated_at_utc
       )
   ) THEN
     RAISE EXCEPTION 'shared fixture active stages did not reach the bridge';
@@ -361,6 +360,15 @@ BEGIN
   ) <> 1
   THEN
     RAISE EXCEPTION 'current relationship five-stage distribution diverged';
+  END IF;
+
+  IF source_cutoff <> (
+    SELECT max(updated_at_utc)
+    FROM current_relationship_stage_fixture
+    WHERE scenario_key = 'primary_current'
+      AND expected_in_current_snapshot
+  ) THEN
+    RAISE EXCEPTION 'shared fixture source cutoff did not reach the bridge';
   END IF;
 
   IF (SELECT count(*) FROM current_relationship_other_project_rows) <> 1
@@ -414,6 +422,81 @@ END
 $snapshot_checks$;
 
 RESET ROLE;
+
+-- The production table cannot contain two current rows for one target×project.
+-- Execute the shared duplicate scenario against that boundary instead of only
+-- counting its CSV rows. Client fail-closed parsing is covered by the Flutter
+-- consumer of the same scenario.
+DO $duplicate_projection_check$
+DECLARE
+  duplicate_target_id uuid := (
+    SELECT target_id
+    FROM current_relationship_target_map
+    WHERE target_key = 'target-duplicate'
+  );
+  duplicate_project_id uuid := (
+    SELECT project_id FROM current_relationship_owner_context
+  );
+  owner_id uuid := (SELECT app_user_id FROM current_relationship_owner_context);
+BEGIN
+  INSERT INTO app_data.promotion_target_project_relationships (
+    promotion_target_id,
+    project_id,
+    current_stage,
+    current_revision,
+    established_by_app_user_id,
+    updated_by_app_user_id,
+    updated_at
+  )
+  SELECT
+    duplicate_target_id,
+    duplicate_project_id,
+    stage,
+    current_revision,
+    owner_id,
+    owner_id,
+    updated_at_utc
+  FROM current_relationship_stage_fixture
+  WHERE scenario_key = 'duplicate_projection'
+    AND row_key = 'duplicate-a';
+
+  BEGIN
+    INSERT INTO app_data.promotion_target_project_relationships (
+      promotion_target_id,
+      project_id,
+      current_stage,
+      current_revision,
+      established_by_app_user_id,
+      updated_by_app_user_id,
+      updated_at
+    )
+    SELECT
+      duplicate_target_id,
+      duplicate_project_id,
+      stage,
+      current_revision,
+      owner_id,
+      owner_id,
+      updated_at_utc
+    FROM current_relationship_stage_fixture
+    WHERE scenario_key = 'duplicate_projection'
+      AND row_key = 'duplicate-b';
+    RAISE EXCEPTION 'duplicate target-project projection was accepted';
+  EXCEPTION
+    WHEN unique_violation THEN
+      NULL;
+  END;
+
+  IF (
+    SELECT count(*)
+    FROM app_data.promotion_target_project_relationships
+    WHERE promotion_target_id = duplicate_target_id
+      AND project_id = duplicate_project_id
+  ) <> 1 THEN
+    RAISE EXCEPTION 'duplicate target-project rejection left invalid state';
+  END IF;
+END
+$duplicate_projection_check$;
 
 DO $forbidden_scope_check$
 BEGIN

@@ -310,7 +310,10 @@ void _requireExactKeys(Map<String, Object?> root, List<String> keys) {
 }
 
 Uri _validatedBaseUri(Uri value) {
-  if (value.scheme != 'https' && value.scheme != 'http' ||
+  final localHttp =
+      value.scheme == 'http' &&
+      const {'localhost', '127.0.0.1', '::1'}.contains(value.host);
+  if (value.scheme != 'https' && !localHttp ||
       value.host.isEmpty ||
       value.path.isNotEmpty && value.path != '/') {
     throw ArgumentError('invalid_backend_base_uri');
