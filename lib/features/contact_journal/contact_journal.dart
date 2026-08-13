@@ -1722,6 +1722,15 @@ final class ContactJournal {
             untilUtc,
           )
           .getSingle();
+      final targetResponses = await _database
+          .readPersonalContactTargetResponseSummary(
+            appUserId,
+            workspaceId,
+            projectId,
+            fromUtc,
+            untilUtc,
+          )
+          .getSingle();
       final channels = await _database
           .readPersonalContactChannelSummary(
             appUserId,
@@ -1731,7 +1740,11 @@ final class ContactJournal {
             untilUtc,
           )
           .get();
-      return (summary: summary, channels: channels);
+      return (
+        summary: summary,
+        targetResponses: targetResponses,
+        channels: channels,
+      );
     });
     final channelDistribution = List<int>.filled(
       ContactChannel.values.length,
@@ -1755,6 +1768,15 @@ final class ContactJournal {
       ],
       pendingSyncCount: row.pendingSyncCount,
       channelDistribution: channelDistribution,
+      targetResponseDistribution: [
+        queryResult.targetResponses.targetResponse0Count,
+        queryResult.targetResponses.targetResponse1Count,
+        queryResult.targetResponses.targetResponse2Count,
+        queryResult.targetResponses.targetResponse3Count,
+        queryResult.targetResponses.targetResponse4Count,
+      ],
+      targetResponseUnansweredCount:
+          queryResult.targetResponses.targetResponseUnansweredCount,
       latestOccurredAtUtc: row.latestOccurredAtUtc?.toUtc(),
     );
   }

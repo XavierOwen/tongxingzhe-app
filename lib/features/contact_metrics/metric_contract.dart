@@ -15,7 +15,7 @@ final class MetricReference {
   int get hashCode => Object.hash(metricId, version);
 }
 
-enum MetricStatisticalUnit { contactSession, reachedPerson }
+enum MetricStatisticalUnit { contactSession, reachedPerson, contactTargetLink }
 
 enum MetricValueShape {
   count,
@@ -31,6 +31,8 @@ enum MetricFormula {
   sumReachedPeople,
   countContactSessionsByInterest,
   countContactSessionsByChannel,
+  countContactTargetLinksWithResponse,
+  countContactTargetLinksByResponse,
   summarizeContactSessionsByInterest,
   calculateContactSessionsByInterestRatio,
   calculateContactSessionsByInterestSubsetRatio,
@@ -122,6 +124,31 @@ final class MetricCatalog {
             immutableDefinitions.length) {
       throw ArgumentError('invalid_metric_catalog');
     }
+    final definitionsByReference = {
+      for (final definition in immutableDefinitions)
+        definition.reference: definition,
+    };
+    for (final definition in immutableDefinitions) {
+      final denominator = definition.denominator;
+      if (denominator == null) continue;
+      final denominatorDefinition = definitionsByReference[denominator];
+      if (denominatorDefinition == null ||
+          denominatorDefinition.valueShape != MetricValueShape.count ||
+          denominatorDefinition.statisticalUnit != definition.statisticalUnit ||
+          denominatorDefinition.timeBasis != definition.timeBasis ||
+          denominatorDefinition.exclusions.length !=
+              definition.exclusions.length ||
+          !denominatorDefinition.exclusions.containsAll(
+            definition.exclusions,
+          ) ||
+          denominatorDefinition.privacyRule != definition.privacyRule ||
+          !_usesDenominatorFormula(
+            definition.formula,
+            denominatorDefinition.formula,
+          )) {
+        throw ArgumentError('invalid_metric_catalog_denominator');
+      }
+    }
     return MetricCatalog._(immutableDefinitions);
   }
 
@@ -155,6 +182,17 @@ abstract final class CoreMetricCatalog {
     statisticalUnit: MetricStatisticalUnit.reachedPerson,
     valueShape: MetricValueShape.count,
     formula: MetricFormula.sumReachedPeople,
+    timeBasis: MetricTimeBasis.actualOccurrenceUtc,
+    exclusions: _commonExclusions,
+    privacyRule: MetricPrivacyRule.managementProtectedByTrueUnit,
+  );
+
+  /// 已填写对象反应的接触对象关联数；它是对象反应分布的窄分母指标。
+  static final targetResponses = MetricDefinition(
+    reference: MetricReference('target_responses', 1),
+    statisticalUnit: MetricStatisticalUnit.contactTargetLink,
+    valueShape: MetricValueShape.count,
+    formula: MetricFormula.countContactTargetLinksWithResponse,
     timeBasis: MetricTimeBasis.actualOccurrenceUtc,
     exclusions: _commonExclusions,
     privacyRule: MetricPrivacyRule.managementProtectedByTrueUnit,
@@ -240,15 +278,29 @@ abstract final class CoreMetricCatalog {
     ],
   );
 
+  static final targetResponseDistribution = MetricDefinition(
+    reference: MetricReference('target_response_distribution', 1),
+    statisticalUnit: MetricStatisticalUnit.contactTargetLink,
+    valueShape: MetricValueShape.ordinalDistribution,
+    formula: MetricFormula.countContactTargetLinksByResponse,
+    timeBasis: MetricTimeBasis.actualOccurrenceUtc,
+    exclusions: _commonExclusions,
+    privacyRule: MetricPrivacyRule.managementProtectedByTrueUnit,
+    denominator: targetResponses.reference,
+    bucketLabels: ['0', '1', '2', '3', '4'],
+  );
+
   static final catalog = MetricCatalog([
     contactSessions,
     reachedPeople,
+    targetResponses,
     interestDistribution,
     channelDistribution,
     interestOrdinalSummary,
     interestLevelRatios,
     interestThreeFourRatio,
     interestZeroRatio,
+    targetResponseDistribution,
   ]);
 
   static List<MetricDefinition> get definitions => catalog.definitions;
@@ -322,6 +374,54 @@ final class MetricDistributionValue extends MetricValue {
   @override
   int get hashCode =>
       Object.hash(Object.hashAll(labels), Object.hashAll(counts));
+}
+
+/// 对象当次反应的五档分布与未填写覆盖。
+///
+/// [unansweredCount] 只统计当前有效对象关联中没有填写 response 的数量，
+/// 不进入 [counts] 的五档分母。独立类型防止兴趣或渠道分布误带对象覆盖语义。
+final class TargetResponseDistributionMetricValue extends MetricValue {
+  factory TargetResponseDistributionMetricValue({
+    required List<String> labels,
+    required List<int> counts,
+    required int unansweredCount,
+  }) {
+    if (!_listEquals(labels, _fiveLevelOrdinalLabels) ||
+        labels.length != counts.length ||
+        counts.any((count) => count < 0) ||
+        unansweredCount < 0) {
+      throw ArgumentError('invalid_target_response_distribution');
+    }
+    return TargetResponseDistributionMetricValue._(
+      labels: List.unmodifiable(labels),
+      counts: List.unmodifiable(counts),
+      unansweredCount: unansweredCount,
+    );
+  }
+
+  const TargetResponseDistributionMetricValue._({
+    required this.labels,
+    required this.counts,
+    required this.unansweredCount,
+  });
+
+  final List<String> labels;
+  final List<int> counts;
+  final int unansweredCount;
+
+  @override
+  bool operator ==(Object other) =>
+      other is TargetResponseDistributionMetricValue &&
+      _listEquals(other.labels, labels) &&
+      _listEquals(other.counts, counts) &&
+      other.unansweredCount == unansweredCount;
+
+  @override
+  int get hashCode => Object.hash(
+    Object.hashAll(labels),
+    Object.hashAll(counts),
+    unansweredCount,
+  );
 }
 
 /// 单次兴趣有序量表的分布及下中位等级。
@@ -824,7 +924,9 @@ final class MetricResult {
       MetricValueShape.count => value is CountMetricValue,
       MetricValueShape.ordinalDistribution ||
       MetricValueShape.categoricalDistribution =>
-        value is MetricDistributionValue,
+        definition.formula == MetricFormula.countContactTargetLinksByResponse
+            ? value is TargetResponseDistributionMetricValue
+            : value is MetricDistributionValue,
       MetricValueShape.ordinalSummary => value is OrdinalSummaryMetricValue,
       MetricValueShape.ratio => value is RatioMetricValue,
       MetricValueShape.subsetRatio => value is SubsetRatioMetricValue,
@@ -833,6 +935,10 @@ final class MetricResult {
       throw ArgumentError('metric_value_shape_mismatch');
     }
     if (value is MetricDistributionValue &&
+        !_listEquals(value.labels, definition.bucketLabels)) {
+      throw ArgumentError('metric_distribution_labels_mismatch');
+    }
+    if (value is TargetResponseDistributionMetricValue &&
         !_listEquals(value.labels, definition.bucketLabels)) {
       throw ArgumentError('metric_distribution_labels_mismatch');
     }
@@ -873,6 +979,23 @@ int? _ratioBasisPoints(int numerator, int denominator) {
           (bigDenominator * BigInt.from(2)))
       .toInt();
 }
+
+bool _usesDenominatorFormula(
+  MetricFormula formula,
+  MetricFormula denominatorFormula,
+) => switch (formula) {
+  MetricFormula.countContactSessionsByInterest ||
+  MetricFormula.countContactSessionsByChannel ||
+  MetricFormula.summarizeContactSessionsByInterest ||
+  MetricFormula.calculateContactSessionsByInterestRatio ||
+  MetricFormula.calculateContactSessionsByInterestSubsetRatio =>
+    denominatorFormula == MetricFormula.countContactSessions,
+  MetricFormula.countContactTargetLinksByResponse =>
+    denominatorFormula == MetricFormula.countContactTargetLinksWithResponse,
+  MetricFormula.countContactSessions ||
+  MetricFormula.sumReachedPeople ||
+  MetricFormula.countContactTargetLinksWithResponse => false,
+};
 
 bool _listEquals<T>(List<T> left, List<T> right) {
   if (left.length != right.length) return false;

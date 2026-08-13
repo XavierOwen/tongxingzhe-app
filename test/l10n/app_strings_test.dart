@@ -66,4 +66,22 @@ void main() {
       'Interest 0: 1 / 3 (33.33%)',
     );
   });
+
+  test('对象反应分布文案保留关联单位与未填写边界', () {
+    expect(
+      const AppStrings('zh').format('targetResponseRow', const {
+        'level': 2,
+        'count': 1,
+        'denominator': 3,
+      }),
+      '反应 2：1 / 3 条已填关联',
+    );
+    expect(
+      const AppStrings('en').format('targetResponseCoverage', const {
+        'answered': 3,
+        'unanswered': 2,
+      }),
+      contains('3 answered and 2 unanswered target links'),
+    );
+  });
 }

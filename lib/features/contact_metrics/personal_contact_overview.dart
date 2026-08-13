@@ -50,6 +50,10 @@ abstract final class PersonalContactMetricMapper {
     required DateTime dataCutoffUtc,
   }) {
     _validateSummary(summary);
+    final targetResponseCount = summary.targetResponseDistribution.fold<int>(
+      0,
+      (sum, count) => sum + count,
+    );
     final coverage = MetricSyncCoverage(
       statisticalUnit: MetricStatisticalUnit.contactSession,
       totalCount: summary.contactSessionCount,
@@ -75,6 +79,10 @@ abstract final class PersonalContactMetricMapper {
       result(
         CoreMetricCatalog.reachedPeople,
         CountMetricValue(summary.reachCount),
+      ),
+      result(
+        CoreMetricCatalog.targetResponses,
+        CountMetricValue(targetResponseCount),
       ),
       result(
         CoreMetricCatalog.interestDistribution,
@@ -121,6 +129,14 @@ abstract final class PersonalContactMetricMapper {
           counts: summary.channelDistribution,
         ),
       ),
+      result(
+        CoreMetricCatalog.targetResponseDistribution,
+        TargetResponseDistributionMetricValue(
+          labels: CoreMetricCatalog.targetResponseDistribution.bucketLabels,
+          counts: summary.targetResponseDistribution,
+          unansweredCount: summary.targetResponseUnansweredCount,
+        ),
+      ),
     ]);
   }
 
@@ -139,7 +155,10 @@ abstract final class PersonalContactMetricMapper {
             ) !=
             summary.contactSessionCount ||
         summary.channelDistribution.fold<int>(0, (sum, count) => sum + count) !=
-            summary.contactSessionCount) {
+            summary.contactSessionCount ||
+        summary.targetResponseDistribution.length != 5 ||
+        summary.targetResponseDistribution.any((count) => count < 0) ||
+        summary.targetResponseUnansweredCount < 0) {
       throw StateError('invalid_personal_contact_summary');
     }
   }

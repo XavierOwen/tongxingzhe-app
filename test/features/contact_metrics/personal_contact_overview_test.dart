@@ -28,7 +28,7 @@ void main() {
     expect(week.untilUtc, DateTime.utc(2030, 1, 9));
     expect(today.syncedContactSessionCount, 3);
     expect(today.syncCoverageDenominator, 5);
-    expect(today.metrics, hasLength(8));
+    expect(today.metrics, hasLength(10));
     expect(
       today.metric(CoreMetricCatalog.contactSessions.reference).value,
       CountMetricValue(5),
@@ -36,6 +36,20 @@ void main() {
     expect(
       today.metric(CoreMetricCatalog.reachedPeople.reference).value,
       CountMetricValue(9),
+    );
+    expect(
+      today.metric(CoreMetricCatalog.targetResponses.reference).value,
+      CountMetricValue(3),
+    );
+    expect(
+      today
+          .metric(CoreMetricCatalog.targetResponseDistribution.reference)
+          .value,
+      TargetResponseDistributionMetricValue(
+        labels: ['0', '1', '2', '3', '4'],
+        counts: [1, 0, 0, 1, 1],
+        unansweredCount: 2,
+      ),
     );
     expect(
       today.metric(CoreMetricCatalog.interestDistribution.reference).value,
@@ -193,6 +207,50 @@ void main() {
       expect(subset.percentageBasisPoints, isNull);
     }
   });
+
+  test('对象反应分布按关联计数并把未填写独立保留', () {
+    final metrics = PersonalContactMetricMapper.map(
+      summary: const PersonalContactSummary(
+        contactSessionCount: 1,
+        reachCount: 2,
+        interestDistribution: [0, 0, 1, 0, 0],
+        pendingSyncCount: 0,
+        channelDistribution: [0, 0, 1, 0, 0, 0, 0],
+        targetResponseDistribution: [1, 0, 0, 0, 1],
+        targetResponseUnansweredCount: 1,
+      ),
+      period: MetricPeriod(
+        fromUtc: DateTime.utc(2030, 1, 8),
+        untilUtc: DateTime.utc(2030, 1, 9),
+      ),
+      dataCutoffUtc: DateTime.utc(2030, 1, 8, 18, 30),
+    );
+
+    expect(
+      metrics
+          .singleWhere(
+            (result) =>
+                result.definition.reference ==
+                CoreMetricCatalog.targetResponses.reference,
+          )
+          .value,
+      CountMetricValue(2),
+    );
+    expect(
+      metrics
+          .singleWhere(
+            (result) =>
+                result.definition.reference ==
+                CoreMetricCatalog.targetResponseDistribution.reference,
+          )
+          .value,
+      TargetResponseDistributionMetricValue(
+        labels: ['0', '1', '2', '3', '4'],
+        counts: [1, 0, 0, 0, 1],
+        unansweredCount: 1,
+      ),
+    );
+  });
 }
 
 const _context = TrustedSessionContext(
@@ -216,6 +274,8 @@ const _summary = PersonalContactSummary(
   interestDistribution: [1, 1, 1, 1, 1],
   pendingSyncCount: 2,
   channelDistribution: [1, 1, 1, 1, 1, 0, 0],
+  targetResponseDistribution: [1, 0, 0, 1, 1],
+  targetResponseUnansweredCount: 2,
 );
 
 const _health = SyncHealth(

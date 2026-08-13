@@ -1,4 +1,5 @@
 import 'package:drift/native.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/app/app_dependencies.dart';
@@ -368,6 +369,27 @@ void main() {
     );
     expect(find.text('兴趣 0（明确拒绝）：0 / 0（暂无可计算比例）'), findsOneWidget);
     expect(find.textContaining('比例覆盖'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('对象当次反应分布'),
+      120,
+      scrollable: find.byType(Scrollable).last,
+    );
+    final emptyTargetResponseRow = find.text('反应 2：0 / 0 条已填关联');
+    await tester.scrollUntilVisible(
+      emptyTargetResponseRow,
+      80,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(emptyTargetResponseRow, findsOneWidget);
+    final emptyTargetResponseCoverage = find.textContaining(
+      '已填 0 条、未填写 0 条对象关联',
+    );
+    await tester.scrollUntilVisible(
+      emptyTargetResponseCoverage,
+      80,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(emptyTargetResponseCoverage, findsOneWidget);
     expect(routeInformationProvider.value.uri.path, '/analysis');
 
     await tester.tap(find.text('接触'));
@@ -474,6 +496,20 @@ void main() {
       isTrue,
     );
     expect(find.textContaining('0 / 0（暂无可计算比例）'), findsWidgets);
+    final targetResponseHeading = find.text('对象当次反应分布');
+    await tester.scrollUntilVisible(
+      targetResponseHeading,
+      120,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(
+      tester
+          .getSemantics(targetResponseHeading)
+          .getSemanticsData()
+          .flagsCollection
+          .isHeader,
+      isTrue,
+    );
     expect(tester.takeException(), isNull);
     semantics.dispose();
   });
@@ -555,8 +591,99 @@ void main() {
       scrollable: find.byType(Scrollable).last,
     );
     expect(zeroRow, findsOneWidget);
+    final targetResponseHeading = find.text('Target response distribution');
+    await tester.scrollUntilVisible(
+      targetResponseHeading,
+      80,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(
+      tester
+          .getSemantics(targetResponseHeading)
+          .getSemanticsData()
+          .flagsCollection
+          .isHeader,
+      isTrue,
+    );
+    final emptyTargetResponseRow = find.text(
+      'Response 2: 0 / 0 answered links',
+    );
+    await tester.scrollUntilVisible(
+      emptyTargetResponseRow,
+      80,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(emptyTargetResponseRow, findsOneWidget);
     expect(tester.takeException(), isNull);
     semantics.dispose();
+  });
+
+  testWidgets('个人分析页显示对象反应关联分布并单列未填写', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    await _seedTargetResponseFacts(database);
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final routeInformationProvider = PlatformRouteInformationProvider(
+      initialRouteInformation: RouteInformation(uri: Uri.parse('/analysis')),
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+    );
+
+    await tester.pumpWidget(
+      TongxingzheApp(
+        dependencies: dependencies,
+        routeInformationProvider: routeInformationProvider,
+      ),
+    );
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+    addTearDown(routeInformationProvider.dispose);
+
+    await tester.scrollUntilVisible(
+      find.text('对象当次反应分布'),
+      120,
+      scrollable: find.byType(Scrollable).last,
+    );
+    final neutralRow = find.text('反应 2：1 / 2 条已填关联');
+    await tester.scrollUntilVisible(
+      neutralRow,
+      80,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(neutralRow, findsOneWidget);
+    final nextStepRow = find.text('反应 4：1 / 2 条已填关联');
+    await tester.scrollUntilVisible(
+      nextStepRow,
+      80,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(nextStepRow, findsOneWidget);
+    final coverage = find.textContaining('已填 2 条、未填写 1 条对象关联');
+    await tester.scrollUntilVisible(
+      coverage,
+      80,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(coverage, findsOneWidget);
+    expect(find.textContaining('未填写不算反应 2'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('不存在的草稿地址显示可返回错误而不是永久加载', (tester) async {
@@ -1332,6 +1459,71 @@ final class _EmptyManagementReportGateway implements ManagementReportGateway {
   Future<ManagementReportResult<ManagementAnalysisContextSnapshot>>
   selectContext(String projectId) async =>
       const ManagementReportRejected(ManagementReportFailureCode.unauthorized);
+}
+
+Future<void> _seedTargetResponseFacts(LocalDatabase database) async {
+  const contactId = 'target-response-widget-contact';
+  final occurredAt = DateTime.utc(2030, 1, 2, 2);
+  await database.transaction(() async {
+    await database
+        .into(database.dbContactRecords)
+        .insert(
+          DbContactRecordsCompanion.insert(
+            contactId: contactId,
+            appUserId: syntheticSessionContext.appUserId,
+            workspaceId: syntheticSessionContext.workspace.id,
+            projectId: syntheticSessionContext.project.id,
+            questionnaireVersionId:
+                syntheticSessionContext.questionnaireVersion.id,
+            occurredAtUtc: occurredAt,
+            occurredTimeZone: 'America/Chicago',
+            firstSubmittedAtUtc: occurredAt,
+            channel: 'instant_text',
+            locationKind: 'not_applicable',
+            reachCount: 1,
+            interestLevel: 2,
+            currentRevision: 1,
+            lifecycleStatus: 'active',
+          ),
+        );
+    await database
+        .into(database.dbContactRevisions)
+        .insert(
+          DbContactRevisionsCompanion.insert(
+            revisionId: 'target-response-widget-revision',
+            contactId: contactId,
+            revisionNumber: 1,
+            revisedByAppUserId: syntheticSessionContext.appUserId,
+            revisedAtUtc: occurredAt,
+            occurredAtUtc: occurredAt,
+            occurredTimeZone: 'America/Chicago',
+            channel: 'instant_text',
+            locationKind: 'not_applicable',
+            reachCount: 1,
+            interestLevel: 2,
+          ),
+        );
+    for (final fact in <({String id, int? response})>[
+      (id: 'target-response-level-2', response: 2),
+      (id: 'target-response-level-4', response: 4),
+      (id: 'target-response-unanswered', response: null),
+    ]) {
+      await database
+          .into(database.dbContactTargetLinks)
+          .insert(
+            DbContactTargetLinksCompanion.insert(
+              contactId: contactId,
+              revisionNumber: 1,
+              targetId: fact.id,
+              targetType: 'person',
+              responseLevel: Value(fact.response),
+              followUpConsent: 'unknown',
+              institutionRepresentativeConfirmed: false,
+              confirmStageZero: false,
+            ),
+          );
+    }
+  });
 }
 
 final class _SingleDatabaseFactory implements LocalDatabaseFactory {

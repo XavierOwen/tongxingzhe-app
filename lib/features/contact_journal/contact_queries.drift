@@ -41,6 +41,43 @@ WHERE contact.app_user_id = :app_user_id
   AND contact.occurred_at_utc < :until_utc
   AND contact.lifecycle_status = 'active';
 
+-- 对象反应按接触对象关联统计，而不是按接触场次统计。
+-- 只读取每条接触的 current revision；NULL 反应保留为未填写覆盖数，不能映射为 2。
+readPersonalContactTargetResponseSummary(
+  REQUIRED :app_user_id AS TEXT,
+  REQUIRED :workspace_id AS TEXT,
+  REQUIRED :project_id AS TEXT,
+  REQUIRED :from_utc AS DATETIME,
+  REQUIRED :until_utc AS DATETIME
+):
+WITH scoped_links AS (
+  SELECT link.response_level
+  FROM db_contact_target_links AS link
+  JOIN db_contact_records AS contact
+    ON contact.contact_id = link.contact_id
+   AND contact.current_revision = link.revision_number
+  WHERE contact.app_user_id = :app_user_id
+    AND contact.workspace_id = :workspace_id
+    AND contact.project_id = :project_id
+    AND contact.occurred_at_utc >= :from_utc
+    AND contact.occurred_at_utc < :until_utc
+    AND contact.lifecycle_status = 'active'
+)
+SELECT
+  COALESCE(SUM(CASE WHEN response_level = 0 THEN 1 ELSE 0 END), 0)
+    AS target_response_0_count,
+  COALESCE(SUM(CASE WHEN response_level = 1 THEN 1 ELSE 0 END), 0)
+    AS target_response_1_count,
+  COALESCE(SUM(CASE WHEN response_level = 2 THEN 1 ELSE 0 END), 0)
+    AS target_response_2_count,
+  COALESCE(SUM(CASE WHEN response_level = 3 THEN 1 ELSE 0 END), 0)
+    AS target_response_3_count,
+  COALESCE(SUM(CASE WHEN response_level = 4 THEN 1 ELSE 0 END), 0)
+    AS target_response_4_count,
+  COALESCE(SUM(CASE WHEN response_level IS NULL THEN 1 ELSE 0 END), 0)
+    AS target_response_unanswered_count
+FROM scoped_links;
+
 -- 渠道来源单独按稳定存储值分组。它与上方总计使用完全相同的筛选条件；
 -- ContactJournal 在同一个只读 transaction 中执行两条查询，保证页面看到
 -- 同一数据库快照。

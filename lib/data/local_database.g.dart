@@ -18528,6 +18528,38 @@ abstract class _$LocalDatabase extends GeneratedDatabase {
     );
   }
 
+  Selectable<ReadPersonalContactTargetResponseSummaryResult>
+  readPersonalContactTargetResponseSummary(
+    String appUserId,
+    String workspaceId,
+    String projectId,
+    DateTime fromUtc,
+    DateTime untilUtc,
+  ) {
+    return customSelect(
+      'WITH scoped_links AS (SELECT link.response_level FROM db_contact_target_links AS link JOIN db_contact_records AS contact ON contact.contact_id = link.contact_id AND contact.current_revision = link.revision_number WHERE contact.app_user_id = ?1 AND contact.workspace_id = ?2 AND contact.project_id = ?3 AND contact.occurred_at_utc >= ?4 AND contact.occurred_at_utc < ?5 AND contact.lifecycle_status = \'active\') SELECT COALESCE(SUM(CASE WHEN response_level = 0 THEN 1 ELSE 0 END), 0) AS target_response_0_count, COALESCE(SUM(CASE WHEN response_level = 1 THEN 1 ELSE 0 END), 0) AS target_response_1_count, COALESCE(SUM(CASE WHEN response_level = 2 THEN 1 ELSE 0 END), 0) AS target_response_2_count, COALESCE(SUM(CASE WHEN response_level = 3 THEN 1 ELSE 0 END), 0) AS target_response_3_count, COALESCE(SUM(CASE WHEN response_level = 4 THEN 1 ELSE 0 END), 0) AS target_response_4_count, COALESCE(SUM(CASE WHEN response_level IS NULL THEN 1 ELSE 0 END), 0) AS target_response_unanswered_count FROM scoped_links',
+      variables: [
+        Variable<String>(appUserId),
+        Variable<String>(workspaceId),
+        Variable<String>(projectId),
+        Variable<DateTime>(fromUtc),
+        Variable<DateTime>(untilUtc),
+      ],
+      readsFrom: {dbContactTargetLinks, dbContactRecords},
+    ).map(
+      (QueryRow row) => ReadPersonalContactTargetResponseSummaryResult(
+        targetResponse0Count: row.read<int>('target_response_0_count'),
+        targetResponse1Count: row.read<int>('target_response_1_count'),
+        targetResponse2Count: row.read<int>('target_response_2_count'),
+        targetResponse3Count: row.read<int>('target_response_3_count'),
+        targetResponse4Count: row.read<int>('target_response_4_count'),
+        targetResponseUnansweredCount: row.read<int>(
+          'target_response_unanswered_count',
+        ),
+      ),
+    );
+  }
+
   Selectable<ReadPersonalContactChannelSummaryResult>
   readPersonalContactChannelSummary(
     String appUserId,
@@ -30499,6 +30531,23 @@ class ReadPersonalContactSummaryResult {
     required this.interest4Count,
     required this.pendingSyncCount,
     this.latestOccurredAtUtc,
+  });
+}
+
+class ReadPersonalContactTargetResponseSummaryResult {
+  final int targetResponse0Count;
+  final int targetResponse1Count;
+  final int targetResponse2Count;
+  final int targetResponse3Count;
+  final int targetResponse4Count;
+  final int targetResponseUnansweredCount;
+  ReadPersonalContactTargetResponseSummaryResult({
+    required this.targetResponse0Count,
+    required this.targetResponse1Count,
+    required this.targetResponse2Count,
+    required this.targetResponse3Count,
+    required this.targetResponse4Count,
+    required this.targetResponseUnansweredCount,
   });
 }
 
