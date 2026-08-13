@@ -299,6 +299,8 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 `0046_personal_target_response_level_ratios.sql` 提供对象当次反应的 `target_response_level_ratios@1` 五档比例 bridge。它复用个人 scope、当前有效 contact revision 和 UTC 半开区间；`response_level` 非 `NULL` 的 contact-target link 组成共同 answered 分母，`NULL` 只返回 `unanswered_count`。五档每行返回整数分子、共同分母和按 half-up 计算的百分比基点，空分母保留 `0/0` 与 `NULL` 百分比。fixture 覆盖 `2/9` 舍入、全 `NULL`、空期间、current revision、作废、边界、跨项目／用户 scope、非法期间和权限；bridge 不读取对象 PII。
 
+`current_relationship_stage_v1.csv` 是 Slice 6AC-0 的合同 fixture，不是生产 migration 或 runtime bridge。它把个人当前阶段候选集固定为当前分配、active 对象、active 生命周期和可信当前项目下的去重对象 × 项目关系。主场景的 `0–4` 各有一个纳入关系，并明确排除 paused、ended、匿名化、已结束分配、其他用户和其他项目。重复投影场景必须整体失败，不能任选 revision 或重复计数。后续 Flutter、Drift 和 PostgreSQL 实现应读取同一文件；当前自动测试只验证文件结构、预期选择、时间一致性和重复失败边界。
+
 Backend Store 对 0039 触发器的地点错误只做固定 `SQLSTATE 23514` 与错误文字的窄映射：已知 source 形状失败返回 `rejected / invalid_location_source`，已知 location 形状失败返回 `rejected / invalid_location`，HTTP 层将其作为 `422` permanent failure。未知 `23514` 或其他数据库错误仍向上抛出，HTTP 层返回 `503 sync_unavailable`。不得用一条宽泛的 SQLSTATE 映射掩盖新的约束或权限问题。
 
 `contact_location_source_v1.csv` 是 Flutter、Backend 和 PostgreSQL 共用的四种当前状态及错误输入。`0039_contact_location_provenance.sql` fixture 另行验证历史回填、revision／冲突／作废、地点与来源原子合并、warehouse 清理和 runtime 权限。Node 24 integration 通过真实 Backend Store 与 PostgreSQL bridge 重放共享状态，并断言 permanent／retryable 分类、匿名管理报告以及错误和分析边界。SQL fixture 是数据库证据；它不能单独证明 Backend HTTP 或 Flutter 已经完成四层对账。
