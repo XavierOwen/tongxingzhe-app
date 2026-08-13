@@ -756,6 +756,10 @@ final class _PersonalSummaryPage extends StatelessWidget {
     final interestOrdinalSummary =
         result.metric(CoreMetricCatalog.interestOrdinalSummary.reference).value
             as OrdinalSummaryMetricValue;
+    final interestLevelRatios =
+        result.metric(CoreMetricCatalog.interestLevelRatios.reference).value
+            as RatioMetricValue;
+    final interestRatioValues = interestLevelRatios.values;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -796,17 +800,38 @@ final class _PersonalSummaryPage extends StatelessWidget {
         ],
         if (period == PersonalSummaryPeriod.recentSevenDays) ...[
           const SizedBox(height: 8),
-          Text(
-            text.t('interestDistribution'),
-            style: Theme.of(context).textTheme.titleMedium,
+          Semantics(
+            header: true,
+            child: Text(
+              text.t('interestDistribution'),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
           ),
           const SizedBox(height: 8),
           for (var level = 0; level <= 4; level++)
             Text(
-              '${text.t('interestLevel')} $level：'
-              '${interestOrdinalSummary.counts[level]} '
-              '${text.t('contactSessionUnit')}',
+              text.format('interestRatioRow', {
+                'level': level,
+                'count': interestOrdinalSummary.counts[level],
+                'unit': text.t('contactSessionUnit'),
+                'numerator': interestRatioValues[level].numerator,
+                'denominator': interestRatioValues[level].denominator,
+                'percentage': _formatPercentageBasisPoints(
+                  text,
+                  interestRatioValues[level].percentageBasisPoints,
+                ),
+              }),
             ),
+          const SizedBox(height: 8),
+          Text(
+            text.format('interestRatioCoverage', {
+              'unknown': interestLevelRatios.unknownCount,
+              'refused': interestLevelRatios.refusedCount,
+              'notApplicable': interestLevelRatios.notApplicableCount,
+              'unanswered': interestLevelRatios.unansweredCount,
+              'excluded': interestLevelRatios.excludedCount,
+            }),
+          ),
           const SizedBox(height: 8),
           Text(
             interestOrdinalSummary.medianLevel == null
@@ -845,6 +870,13 @@ final class _PersonalSummaryPage extends StatelessWidget {
       ],
     );
   }
+}
+
+String _formatPercentageBasisPoints(AppStrings text, int? basisPoints) {
+  if (basisPoints == null) return text.t('interestRatioUnavailable');
+  final whole = basisPoints ~/ 100;
+  final fraction = (basisPoints % 100).toString().padLeft(2, '0');
+  return '$whole.$fraction%';
 }
 
 final class _SummaryFactCard extends StatelessWidget {

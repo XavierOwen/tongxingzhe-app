@@ -361,6 +361,8 @@ void main() {
       scrollable: find.byType(Scrollable).last,
     );
     expect(find.text('暂无中位等级'), findsOneWidget);
+    expect(find.textContaining('0 / 0（暂无可计算比例）'), findsWidgets);
+    expect(find.textContaining('比例覆盖'), findsOneWidget);
     expect(routeInformationProvider.value.uri.path, '/analysis');
 
     await tester.tap(find.text('接触'));
@@ -393,6 +395,70 @@ void main() {
     await tester.tap(find.text('接触'));
     await tester.pumpAndSettle();
     expect(find.text('草稿 (2)'), findsOneWidget);
+  });
+
+  testWidgets('兴趣比例在 320 宽和 200% 文字下可滚动且分组标题可识别', (tester) async {
+    final semantics = tester.ensureSemantics();
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 568);
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final routeInformationProvider = PlatformRouteInformationProvider(
+      initialRouteInformation: RouteInformation(uri: Uri.parse('/analysis')),
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+    );
+
+    await tester.pumpWidget(
+      TongxingzheApp(
+        dependencies: dependencies,
+        routeInformationProvider: routeInformationProvider,
+      ),
+    );
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+    addTearDown(routeInformationProvider.dispose);
+
+    final heading = find.text('单次兴趣分布');
+    await tester.scrollUntilVisible(
+      heading,
+      120,
+      scrollable: find.byType(Scrollable).last,
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(
+      tester.getSemantics(heading).getSemanticsData().flagsCollection.isHeader,
+      isTrue,
+    );
+    await tester.drag(find.byType(ListView), const Offset(0, -240));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('0 / 0（暂无可计算比例）'), findsWidgets);
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
   });
 
   testWidgets('不存在的草稿地址显示可返回错误而不是永久加载', (tester) async {
@@ -771,7 +837,7 @@ void main() {
 
     expect(find.text('最近七日接触场次 1'), findsOneWidget);
     expect(find.text('最近七日触达人数 2'), findsOneWidget);
-    expect(find.text('兴趣 3：1 场'), findsOneWidget);
+    expect(find.text('兴趣 3：1 场；1 / 1（100.00%）'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('中位等级：3'),
       120,
@@ -779,6 +845,7 @@ void main() {
     );
     expect(find.text('中位等级：3'), findsOneWidget);
     expect(find.textContaining('不计算等级平均数'), findsOneWidget);
+    expect(find.textContaining('未知 0、拒答 0、不适用 0、未回答 0'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('视频通话：1 场'),
       120,

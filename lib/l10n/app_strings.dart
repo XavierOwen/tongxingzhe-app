@@ -7,6 +7,13 @@ class AppStrings {
     return _strings[localeCode]?[key] ?? _strings['zh']?[key] ?? key;
   }
 
+  String format(String key, Map<String, Object> values) {
+    return values.entries.fold(
+      t(key),
+      (result, entry) => result.replaceAll('{${entry.key}}', '${entry.value}'),
+    );
+  }
+
   String option(String group, String value) {
     return t('$group.$value');
   }
@@ -420,6 +427,11 @@ const Map<String, Map<String, String>> _strings = {
     'interestMedianLevel': '中位等级',
     'noInterestMedianLevel': '暂无中位等级',
     'interestMedianHelp': '偶数场次取较低的真实等级，不计算等级平均数。',
+    'interestRatioUnavailable': '暂无可计算比例',
+    'interestRatioRow':
+        '兴趣 {level}：{count} {unit}；{numerator} / {denominator}（{percentage}）',
+    'interestRatioCoverage':
+        '比例覆盖：未知 {unknown}、拒答 {refused}、不适用 {notApplicable}、未回答 {unanswered}、候选内排除 {excluded}；核心兴趣当前必须为 0–4，这不是草稿、尝试或作废记录盘点。',
     'personalAnalyticsFactNotice': '个人数据：这些事实只用于本人回顾，不用于团队排名。',
     'contactSessionUnit': '场',
     'channelSources': '渠道来源',
@@ -1218,6 +1230,11 @@ const Map<String, Map<String, String>> _strings = {
     'noInterestMedianLevel': 'No median level yet',
     'interestMedianHelp':
         'For an even number of sessions, this uses the lower observed level and does not average ordinal levels.',
+    'interestRatioUnavailable': 'No calculable percentage',
+    'interestRatioRow':
+        'Interest {level}: {count} {unit}; {numerator} / {denominator} ({percentage})',
+    'interestRatioCoverage':
+        'Ratio coverage: unknown {unknown}, refused {refused}, not applicable {notApplicable}, unanswered {unanswered}, and candidate exclusions {excluded}. Core interest must currently be 0–4; this is not a census of drafts, attempts, or voided records.',
     'personalAnalyticsFactNotice':
         'Personal data: these facts are for your review, not team ranking.',
     'contactSessionUnit': 'sessions',

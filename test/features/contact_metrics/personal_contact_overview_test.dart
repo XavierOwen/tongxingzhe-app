@@ -28,7 +28,7 @@ void main() {
     expect(week.untilUtc, DateTime.utc(2030, 1, 9));
     expect(today.syncedContactSessionCount, 3);
     expect(today.syncCoverageDenominator, 5);
-    expect(today.metrics, hasLength(5));
+    expect(today.metrics, hasLength(6));
     expect(
       today.metric(CoreMetricCatalog.contactSessions.reference).value,
       CountMetricValue(5),
@@ -53,6 +53,17 @@ void main() {
         medianLevel: 2,
       ),
     );
+    final ratios =
+        today.metric(CoreMetricCatalog.interestLevelRatios.reference).value
+            as RatioMetricValue;
+    expect(ratios.numerators, [1, 1, 1, 1, 1]);
+    expect(ratios.denominator, 5);
+    expect(ratios.basisPoints, [2000, 2000, 2000, 2000, 2000]);
+    expect(ratios.unknownCount, 0);
+    expect(ratios.refusedCount, 0);
+    expect(ratios.notApplicableCount, 0);
+    expect(ratios.unansweredCount, 0);
+    expect(ratios.excludedCount, 0);
     expect(
       today.metric(CoreMetricCatalog.channelDistribution.reference).value,
       MetricDistributionValue(
@@ -117,6 +128,36 @@ void main() {
       ),
       throwsStateError,
     );
+  });
+
+  test('空期间的兴趣比例是 0/0 且没有百分比', () {
+    final metrics = PersonalContactMetricMapper.map(
+      summary: const PersonalContactSummary(
+        contactSessionCount: 0,
+        reachCount: 0,
+        interestDistribution: [0, 0, 0, 0, 0],
+        pendingSyncCount: 0,
+        channelDistribution: [0, 0, 0, 0, 0, 0, 0],
+      ),
+      period: MetricPeriod(
+        fromUtc: DateTime.utc(2030, 1, 8),
+        untilUtc: DateTime.utc(2030, 1, 9),
+      ),
+      dataCutoffUtc: DateTime.utc(2030, 1, 8, 18, 30),
+    );
+
+    final ratios =
+        metrics
+                .singleWhere(
+                  (result) =>
+                      result.definition.reference ==
+                      CoreMetricCatalog.interestLevelRatios.reference,
+                )
+                .value
+            as RatioMetricValue;
+    expect(ratios.denominator, 0);
+    expect(ratios.numerators, [0, 0, 0, 0, 0]);
+    expect(ratios.basisPoints, [null, null, null, null, null]);
   });
 }
 
