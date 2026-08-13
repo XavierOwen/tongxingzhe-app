@@ -7,6 +7,8 @@ import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/data/local_database_factory.dart';
 import 'package:tongxingzhe_app/device/device_identity_store.dart';
 import 'package:tongxingzhe_app/features/contact_metrics/current_relationship_stage.dart';
+import 'package:tongxingzhe_app/features/contact_metrics/http_personal_follow_up_consent_ratio_gateway.dart';
+import 'package:tongxingzhe_app/features/contact_metrics/personal_follow_up_consent_ratio.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/legacy_demo/legacy_demo_dependencies.dart';
@@ -47,6 +49,10 @@ void main() {
       ready.personalFollowUpConsentOptInGateway,
       isA<DeferredPersonalFollowUpConsentOptInGateway>(),
     );
+    expect(
+      ready.personalFollowUpConsentRatioGateway,
+      isA<DeferredPersonalFollowUpConsentRatioGateway>(),
+    );
 
     final login = await controller.login('admin1', 'admin1');
     expect(login.success, isFalse);
@@ -75,6 +81,35 @@ void main() {
       isTrue,
     );
     await ready.personalFollowUpConsentOptInGateway.close();
+    expect(gateway.closeCount, 1);
+    await ready.appSession.close();
+    await ready.identitySession.close();
+    ready.controller.dispose();
+    await database.close();
+  });
+
+  test('composition root 装配并释放个人同意占比读取 gateway', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final gateway = _TrackingConsentRatioGateway();
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      personalFollowUpConsentRatioGatewayBuilder: (_) => gateway,
+    );
+
+    final startup = await dependencies.start();
+
+    expect(startup, isA<AppStartupReady>());
+    final ready = startup as AppStartupReady;
+    expect(
+      identical(ready.personalFollowUpConsentRatioGateway, gateway),
+      isTrue,
+    );
+    await ready.personalFollowUpConsentRatioGateway.close();
     expect(gateway.closeCount, 1);
     await ready.appSession.close();
     await ready.identitySession.close();
@@ -392,6 +427,23 @@ final class _TrackingConsentOptInGateway
     required String requestId,
   }) async => const PersonalFollowUpConsentOptInRejected(
     PersonalFollowUpConsentOptInFailureCode.notConfigured,
+  );
+}
+
+final class _TrackingConsentRatioGateway
+    implements PersonalFollowUpConsentRatioGateway {
+  var closeCount = 0;
+
+  @override
+  Future<void> close() async => closeCount++;
+
+  @override
+  Future<PersonalFollowUpConsentRatioGatewayResult> load({
+    required String projectId,
+    required DateTime fromUtc,
+    required DateTime untilUtc,
+  }) async => const PersonalFollowUpConsentRatioGatewayRejected(
+    PersonalFollowUpConsentRatioFailureCode.notConfigured,
   );
 }
 

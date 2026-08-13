@@ -16,6 +16,8 @@ import '../features/contact_metrics/metric_contract.dart';
 import '../features/contact_metrics/current_relationship_stage.dart';
 import '../features/contact_metrics/current_relationship_stage_panel.dart';
 import '../features/contact_metrics/personal_contact_overview.dart';
+import '../features/contact_metrics/personal_follow_up_consent_ratio.dart';
+import '../features/contact_metrics/personal_follow_up_consent_ratio_panel.dart';
 import '../features/home/production_home_view_model.dart';
 import '../features/plans/personal_action_plan_panel.dart';
 import '../features/project_settings/personal_follow_up_consent_opt_in_screen.dart';
@@ -57,6 +59,7 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.personalActionPlanGateway,
     required this.personalActionReminderGateway,
     required this.personalFollowUpConsentOptInGateway,
+    required this.personalFollowUpConsentRatioGateway,
     required this.managementReportGateway,
     required this.currentRelationshipStageRepository,
     required this.deviceReminderPreferenceStore,
@@ -84,6 +87,7 @@ final class ProductionHomeShell extends StatefulWidget {
   final PersonalActionPlanGateway personalActionPlanGateway;
   final PersonalActionReminderGateway personalActionReminderGateway;
   final PersonalFollowUpConsentOptInGateway personalFollowUpConsentOptInGateway;
+  final PersonalFollowUpConsentRatioGateway personalFollowUpConsentRatioGateway;
   final ManagementReportGateway managementReportGateway;
   final CurrentRelationshipStageRepository currentRelationshipStageRepository;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
@@ -104,6 +108,8 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
   late int _handledContactPageEvent;
   var _handledNoticeId = 0;
   var _planningRevision = 0;
+  var _consentRatioRefreshRevision = 0;
+  late bool _wasSynchronizing;
 
   @override
   void initState() {
@@ -112,6 +118,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
     _handledContactPageEvent = widget.contactPageClosedEvents.value.sequence;
     widget.contactPageClosedEvents.addListener(_contactPageClosed);
     _viewModel = _createViewModel()..addListener(_viewStateChanged);
+    _wasSynchronizing = _viewModel.state.isSynchronizing;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_viewModel.initialize());
     });
@@ -154,6 +161,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
         ..removeListener(_viewStateChanged)
         ..dispose();
       _viewModel = _createViewModel()..addListener(_viewStateChanged);
+      _wasSynchronizing = _viewModel.state.isSynchronizing;
       _handledNoticeId = 0;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -220,6 +228,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
             ),
           ],
         ),
+        personalConsentRatioPanel: null,
         currentRelationshipStagePanel: null,
       ),
       _ContactsPage(
@@ -262,6 +271,24 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
           isLoading: homeState.isLoading,
           loadFailed: homeState.loadFailed,
           personalPlanPanel: null,
+          personalConsentRatioPanel:
+              widget.context.workspace.kind == WorkspaceKind.personal &&
+                  homeState.recentSevenDays != null
+              ? PersonalFollowUpConsentRatioPanel(
+                  key: ValueKey(
+                    'personal-consent-ratio/'
+                    '${widget.context.project.id}/'
+                    '${homeState.recentSevenDays!.fromUtc.toIso8601String()}/'
+                    '${homeState.recentSevenDays!.untilUtc.toIso8601String()}',
+                  ),
+                  text: strings,
+                  gateway: widget.personalFollowUpConsentRatioGateway,
+                  projectId: widget.context.project.id,
+                  fromUtc: homeState.recentSevenDays!.fromUtc,
+                  untilUtc: homeState.recentSevenDays!.untilUtc,
+                  refreshRevision: _consentRatioRefreshRevision,
+                )
+              : null,
           currentRelationshipStagePanel: CurrentRelationshipStagePanel(
             text: strings,
             result: homeState.currentRelationshipStage,
@@ -466,6 +493,9 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
         ),
       ),
     );
+    if (mounted) {
+      setState(() => _consentRatioRefreshRevision++);
+    }
   }
 
   Future<void> _manageQuestionnaire() async {
@@ -524,8 +554,16 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
     if (!mounted) {
       return;
     }
-    setState(() {});
-    final notice = _viewModel.state.notice;
+    final state = _viewModel.state;
+    final synchronizationCompleted =
+        _wasSynchronizing && !state.isSynchronizing;
+    _wasSynchronizing = state.isSynchronizing;
+    setState(() {
+      if (synchronizationCompleted) {
+        _consentRatioRefreshRevision++;
+      }
+    });
+    final notice = state.notice;
     if (notice == null || notice.id <= _handledNoticeId) {
       return;
     }
@@ -780,6 +818,7 @@ final class _PersonalSummaryPage extends StatelessWidget {
     required this.isLoading,
     required this.loadFailed,
     required this.personalPlanPanel,
+    required this.personalConsentRatioPanel,
     required this.currentRelationshipStagePanel,
   });
 
@@ -789,6 +828,7 @@ final class _PersonalSummaryPage extends StatelessWidget {
   final bool isLoading;
   final bool loadFailed;
   final Widget? personalPlanPanel;
+  final Widget? personalConsentRatioPanel;
   final Widget? currentRelationshipStagePanel;
 
   @override
@@ -1026,6 +1066,10 @@ final class _PersonalSummaryPage extends StatelessWidget {
           if (currentRelationshipStagePanel != null) ...[
             const SizedBox(height: 16),
             currentRelationshipStagePanel!,
+          ],
+          if (personalConsentRatioPanel != null) ...[
+            const SizedBox(height: 16),
+            personalConsentRatioPanel!,
           ],
         ],
       ],

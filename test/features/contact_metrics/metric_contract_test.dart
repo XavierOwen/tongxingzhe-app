@@ -745,6 +745,19 @@ void main() {
     expect(
       () => MetricResult(
         definition: CoreMetricCatalog.contactSessions,
+        value: const SuppressedMetricValue(),
+        period: _period,
+        timeZone: 'UTC',
+        dataCutoffUtc: null,
+        retrievedAtUtc: DateTime.utc(2030, 1, 9),
+        sourceTier: MetricSourceTier.backendOperational,
+        privacyStatus: MetricPrivacyStatus.suppressed,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => MetricResult(
+        definition: CoreMetricCatalog.contactSessions,
         value: CountMetricValue(2),
         period: _period,
         timeZone: 'UTC',
@@ -802,6 +815,49 @@ void main() {
         timeZone: 'UTC',
         dataCutoffUtc: DateTime.utc(2030, 1, 9),
         sourceTier: MetricSourceTier.localOperational,
+        privacyStatus: MetricPrivacyStatus.personalFact,
+      ),
+      throwsArgumentError,
+    );
+  });
+
+  test('Backend 可返回个人事实并区分未知截止与取回时间', () {
+    final backendPersonal = MetricResult(
+      definition: CoreMetricCatalog.contactSessions,
+      value: CountMetricValue(2),
+      period: _period,
+      timeZone: 'UTC',
+      dataCutoffUtc: null,
+      retrievedAtUtc: DateTime.utc(2030, 1, 9),
+      sourceTier: MetricSourceTier.backendOperational,
+      privacyStatus: MetricPrivacyStatus.personalFact,
+    );
+
+    expect(backendPersonal.syncCoverage, isNull);
+    expect(backendPersonal.dataCutoffUtc, isNull);
+    expect(backendPersonal.retrievedAtUtc, DateTime.utc(2030, 1, 9));
+    expect(
+      () => MetricResult(
+        definition: CoreMetricCatalog.contactSessions,
+        value: CountMetricValue(2),
+        period: _period,
+        timeZone: 'UTC',
+        dataCutoffUtc: null,
+        retrievedAtUtc: DateTime.utc(2030, 1, 9),
+        sourceTier: MetricSourceTier.localOperational,
+        syncCoverage: _coverage,
+        privacyStatus: MetricPrivacyStatus.personalFact,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => MetricResult(
+        definition: CoreMetricCatalog.contactSessions,
+        value: CountMetricValue(2),
+        period: _period,
+        timeZone: 'UTC',
+        dataCutoffUtc: DateTime.utc(2030, 1, 9),
+        sourceTier: MetricSourceTier.warehouse,
         privacyStatus: MetricPrivacyStatus.personalFact,
       ),
       throwsArgumentError,
