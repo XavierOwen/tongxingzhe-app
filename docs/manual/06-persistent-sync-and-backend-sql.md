@@ -213,6 +213,10 @@ Flutter 不把这些结果当作无版本的页面字段。[`CoreMetricCatalog`]
 
 [`MetricResult`](../../lib/features/contact_metrics/metric_contract.dart) 把值与 UTC 半开期间、报告时区、数据截止时间、来源层、同步覆盖和隐私状态放在同一个结果合同中。当前个人页由 [`PersonalContactMetricMapper`](../../lib/features/contact_metrics/personal_contact_overview.dart) 把 Drift 汇总映射为 `localOperational + personalFact`；同步覆盖明确以接触场次为单位。即使指标值是触达人数或对象关联数，也不能用待同步场次数推算“已同步人数”或“已同步对象反应数”。
 
+当前关系阶段不能直接塞进这份期间合同。[`current_relationship_stage_v1.csv`](../../backend/database/fixtures/shared/current_relationship_stage_v1.csv) 先固定未来各层共用的 synthetic 输入。主场景包含 active 的 `0–4` 五档、paused、ended、匿名化对象、已结束分配、另一推广者和另一项目；预期只保留五个当前 active 关系。第二场景故意重复同一对象 × 项目，要求消费者失败关闭，而不是任选一行或重复计数。fixture 还固定一致性读取的 `snapshot_as_of_utc`，并要求当前 revision 的 `updated_at_utc` 不晚于该时刻。
+
+6AC-0 不把 fixture 接入生产目录。完整实现必须新增对象 × 项目统计单位、当前快照时间口径和不强制使用接触期间的结果形状，再建立不含 PII 的 Drift 投影与同步覆盖。`snapshot_as_of_utc` 是读取时刻；来源数据截至时间和待同步关系数仍须单独报告。当前 PII vault 含对象资料、关系和共享备注，只为限时离线查看服务，不能成为分析查询源。
+
 这一层没有授予管理权限，也没有把个人事实当成可公开的管理结果。后续加入的私有管理隐私政策见[第 11 章](11-management-metrics-and-privacy.md)。管理查询仍需独立验证成员授权和报告时区；在这些前置条件完成前，不得新增可绕过它们的任意指标端点。
 
 ## 为什么这样测试
