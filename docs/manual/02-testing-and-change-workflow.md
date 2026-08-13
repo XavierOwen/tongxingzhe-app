@@ -156,6 +156,16 @@ Supabase 日志、浏览器类型、时间戳和 PostgreSQL `23505` 共同支持
 
 runner 因此保留使用者熟悉的 `AUTH_SPIKE_DEVICE=chrome`，但内部把 Flutter App device 设为 `web-server`，只让 ChromeDriver 拥有浏览器。回归测试通过公开 shell 入口捕获 Flutter 参数，防止以后有人把内部 device 改回 `chrome`。
 
+#### 6.2.1 本机 ledger：未知结果不能自动重试
+
+单浏览器只能防同一轮测试执行两遍。它不能防止测试者在超时、构建失败或未知网络结果后，再次运行同一个 `signup_request`。
+
+runner 因此先完成不联网的本地检查，再占用 project/email。它把摘要和 UTC 时间刷新到用户级 ledger，然后才能探测本机 driver 端口或启动 Flutter。即使后续步骤失败，该地址也保持已用。这个顺序可能浪费一个尚未发出请求的地址，但不会把未知结果误当成“可以安全重试”。
+
+自动测试通过公开 shell 入口验证 Flutter 是否启动，并通过 Dart CLI 验证持久化和锁。测试覆盖重复运行、不同项目、并发、Flutter 失败、损坏 ledger 和持锁进程终止。CI 在 Linux、macOS 和 Windows 运行 CLI 合同，并在 Linux 与 macOS 运行 shell 合同。它们不联系 Supabase，因此只能证明本机的 at-most-one-attempt（至多一次尝试）合同。
+
+ledger 不能证明远端邮箱此前不存在。旧 runner、其他电脑和手工请求都不在保护范围内。若一个地址可能已经用过，正确操作是生成新地址，而不是修改确认字段或清空 ledger。实际路径和故障处理见 [六平台 Spike](../spikes/supabase-auth-six-platform.md#signup_request-的发送前安全检查)。
+
 ### 6.3 HTTP 500 mapping：服务器失败不能冒充设备断网
 
 Supabase SDK 的 `AuthRetryableFetchException` 可能表示两种不同事实：

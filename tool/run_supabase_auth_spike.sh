@@ -25,6 +25,11 @@ if ! command -v dart >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! command -v flutter >/dev/null 2>&1; then
+  echo "找不到 flutter 命令；未启动认证探针。" >&2
+  exit 1
+fi
+
 if ! auth_spike_config_values="$(
   dart tool/parse_supabase_auth_spike_config.dart "${AUTH_SPIKE_CONFIG}"
 )"; then
@@ -42,12 +47,24 @@ if [[ "${auth_spike_mode}" == "signup_request" ]]; then
     exit 1
   fi
 
-  if [[ ! "${auth_spike_email}" =~ ^auth-spike-[a-z0-9][a-z0-9._-]*@[a-z0-9][a-z0-9.-]*\.[a-z0-9]+$ ]]; then
+  if [[ ! "${auth_spike_email}" =~ ^auth-spike-[a-z0-9][a-z0-9._+-]*@[a-z0-9][a-z0-9.-]*\.[a-z0-9]+$ ]]; then
     echo "signup_request 只接受带 auth-spike- 前缀的 synthetic-test email。" >&2
     echo "普通个人地址和示例占位地址不会启动 Flutter。" >&2
     exit 1
   fi
 fi
+
+claim_signup_email() {
+  if [[ "${auth_spike_mode}" != "signup_request" ]]; then
+    return 0
+  fi
+
+  if ! dart tool/claim_supabase_auth_spike_email.dart \
+    --config "${AUTH_SPIKE_CONFIG}" >/dev/null; then
+    echo "signup_request 未取得本机一次性地址占用；Flutter 未启动。" >&2
+    return 1
+  fi
+}
 
 # 不在命令行展开 email、密码或 OTP；Flutter 直接读取受忽略的 JSON 文件。
 if [[ "${AUTH_SPIKE_DEVICE}" == "chrome" ]]; then
@@ -71,6 +88,9 @@ if [[ "${AUTH_SPIKE_DEVICE}" == "chrome" ]]; then
     auth_spike_web_profile_dir="$(pwd -P)/${auth_spike_web_profile_dir}"
   fi
   mkdir -p "${auth_spike_web_profile_dir}"
+
+  # 注册地址先落盘，再探测本机 driver 端口。后续任何未知结果都不会释放地址。
+  claim_signup_email
 
   chromedriver_owned=false
   # 复用已在 4444 端口运行的 driver；否则由本脚本临时启动并负责关闭。
@@ -115,6 +135,7 @@ else
   # 原生平台可以直接把 integration_test 运行在目标设备上。
   # 默认卸载会让 iOS 删除设备上唯一的开发 App，并连带撤销开发者信任；保留 App
   # 也让多阶段 OTP 探针无需在每次重新构建后手工信任同一张证书。
+  claim_signup_email
   flutter test \
     integration_test/supabase_auth_spike_test.dart \
     --device-id "${AUTH_SPIKE_DEVICE}" \
