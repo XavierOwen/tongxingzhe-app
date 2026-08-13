@@ -19,7 +19,11 @@
 
 脚本建立隔离的 PostgreSQL 16 容器，运行 migration、check、fixture、Backend→PostgreSQL 对账、并发和 dump／restore，最后自动删除容器。Backend 对账阶段使用 Node 24 容器和仓库锁定的 npm 依赖；它不连接 production，也不使用真实用户资料。第一次使用 Docker、需要保留失败容器或理解输出时，阅读[本机、Docker 与 CI 测试指南](../../docs/manual/09-local-docker-and-ci-testing.md)。
 
-Node 阶段要求地点来源、当前关系阶段和后续联系同意占比三条 Backend integration 入口存在。脚本先在 Node 24 中运行 `npm ci --ignore-scripts` 和 `npm run build`，再执行编译产物。后续联系同意占比测试通过 runtime role 先读取 `not_enabled`，再用正式开关入口启用并读取 `ready 0 / 0`。入口缺失、编译失败或断言失败都会使整套测试失败；不能把此前 SQL fixture 的通过单独写成 Backend adapter 集成通过。
+Node 阶段要求地点来源、当前关系阶段、同意占比开关和同意占比读取四条 Backend integration
+入口存在。脚本先在 Node 24 中运行 `npm ci --ignore-scripts` 和 `npm run build`，再执行编译产物。
+开关测试覆盖未配置、启用、幂等重放、冲突和停用；比例测试再读取 `not_enabled` 和启用后的
+`ready 0 / 0`。入口缺失、编译失败或断言失败都会使整套测试失败；不能把此前 SQL fixture 的
+通过单独写成 Backend adapter 集成通过。
 
 schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher` 和 `tongxingzhe_contact_provenance_writer`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
 

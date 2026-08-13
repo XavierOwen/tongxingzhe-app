@@ -272,6 +272,19 @@ PostgreSQL 的 `not_enabled`／`ready` 区别和 snake_case exact-key 合同；�
 配置入口启用同一项目并读取 `ready 0 / 0`，最后回滚。项目设置写入口、Flutter／Drift、个人页面、
 离线缓存、管理报告和 warehouse 仍属于后续工作。
 
+Slice 6AD-4 增加同一路径的项目开关入口：
+`GET /v1/personal/follow-up-consent-ratio/opt-in` 读取当前状态，`PUT` 追加新配置。PUT body 只能
+包含 `expected_version`、`enabled` 和 `request_id`。版本必须在 PostgreSQL `integer` 的非负范围
+`0..2147483647` 内。用户、workspace、project、metric、actor 和
+capability 都不能由客户端指定；Backend 从已验证 identity 与当前 personal context 取得可信范围，
+PostgreSQL 还会再次授权。
+
+读取未配置项目时，configuration 是 null。启用后状态为 `enabled`；停用后状态回到
+`not_enabled`，但响应保留最新 disabled 配置及版本，供下一次变更使用。HTTP 不发送数据库内部
+actor ID。相同请求的重试和首次成功都返回 `200`，不能根据版本号猜测本次是否建立了新版本。
+版本冲突和同一请求 ID 的不同内容返回稳定 `409`。完整 Docker runner 用真实 runtime role 对账
+未配置、启用、精确重放、冲突、停用和回滚。Flutter 设置页与离线配置仍未交付。
+
 [`MetricResult`](../../lib/features/contact_metrics/metric_contract.dart) 把值与 UTC 半开期间、报告时区、数据截止时间、来源层、同步覆盖和隐私状态放在同一个结果合同中。当前个人页由 [`PersonalContactMetricMapper`](../../lib/features/contact_metrics/personal_contact_overview.dart) 把 Drift 汇总映射为 `localOperational + personalFact`；同步覆盖明确以接触场次为单位。即使指标值是触达人数或对象关联数，也不能用待同步场次数推算“已同步人数”或“已同步对象反应数”。
 
 当前关系阶段不能直接塞进这份期间合同。[`current_relationship_stage_v1.csv`](../../backend/database/fixtures/shared/current_relationship_stage_v1.csv) 先固定未来各层共用的 synthetic 输入。主场景包含 active 的 `0–4` 五档、paused、ended、匿名化对象、已结束分配、另一推广者和另一项目；预期只保留五个当前 active 关系。第二场景故意重复同一对象 × 项目，要求消费者失败关闭，而不是任选一行或重复计数。fixture 还固定一致性读取的 `snapshot_as_of_utc`，并要求当前 revision 的 `updated_at_utc` 不晚于该时刻。

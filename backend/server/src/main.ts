@@ -18,6 +18,9 @@ import {
 import {
   PostgresPersonalFollowUpConsentRatioStore,
 } from "./personal-follow-up-consent-ratio.js";
+import {
+  PostgresPersonalFollowUpConsentOptInStore,
+} from "./personal-follow-up-consent-opt-in.js";
 import { PostgresManagementReportSnapshotStore } from "./management-report-snapshots.js";
 import { PostgresManagementReportSnapshotDirectoryStore } from "./management-report-snapshot-directory.js";
 import { PostgresManagementReportReleaseStore } from "./management-report-release.js";
@@ -77,6 +80,10 @@ const personalFollowUpConsentRatioStore =
   new PostgresPersonalFollowUpConsentRatioStore(
     async (text, values) => pool.query(text, [...values]),
   );
+const personalFollowUpConsentOptInStore =
+  new PostgresPersonalFollowUpConsentOptInStore(
+    async (text, values) => pool.query(text, [...values]),
+  );
 // A direct pool query is intentional: PostgreSQL commits its implicit
 // transaction before this promise resolves and before the HTTP response starts.
 const managementReportSnapshotStore =
@@ -111,6 +118,7 @@ const server = createBackendServer({
   personalActionReminderStore,
   personalCurrentRelationshipStageStore,
   personalFollowUpConsentRatioStore,
+  personalFollowUpConsentOptInStore,
   managementReportSnapshotStore,
   managementReportSnapshotDirectoryStore,
   managementReportReleaseStore,

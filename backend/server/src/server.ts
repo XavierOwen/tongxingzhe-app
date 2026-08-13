@@ -69,6 +69,10 @@ import {
   type PersonalFollowUpConsentRatioStore,
 } from "./personal-follow-up-consent-ratio.js";
 import {
+  handlePersonalFollowUpConsentOptIn,
+  type PersonalFollowUpConsentOptInStore,
+} from "./personal-follow-up-consent-opt-in.js";
+import {
   readManagementReportSnapshot,
   type ManagementReportSnapshotStore,
 } from "./management-report-snapshots.js";
@@ -105,6 +109,8 @@ export interface BackendServerDependencies
     PersonalCurrentRelationshipStageStore;
   readonly personalFollowUpConsentRatioStore?:
     PersonalFollowUpConsentRatioStore;
+  readonly personalFollowUpConsentOptInStore?:
+    PersonalFollowUpConsentOptInStore;
   readonly managementReportSnapshotStore?: ManagementReportSnapshotStore;
   readonly managementReportSnapshotDirectoryStore?:
     ManagementReportSnapshotDirectoryStore;
@@ -703,6 +709,36 @@ export function createBackendServer(
       );
       response.statusCode = result.status;
       response.end(JSON.stringify(result.body));
+      return;
+    }
+
+    if (
+      (request.method === "GET" || request.method === "PUT") &&
+      requestUrl.pathname ===
+        "/v1/personal/follow-up-consent-ratio/opt-in"
+    ) {
+      try {
+        const result = await handlePersonalFollowUpConsentOptIn(
+          {
+            method: request.method,
+            authorization: request.headers.authorization,
+            hasQuery: requestUrl.search.length > 0,
+            hasBody: requestDeclaresBody(request.headers),
+            readBody: async () => readJsonBody(request),
+          },
+          {
+            identityVerifier: dependencies.identityVerifier,
+            contextStore: dependencies.contextStore,
+            ...(dependencies.personalFollowUpConsentOptInStore === undefined
+              ? {}
+              : {optInStore: dependencies.personalFollowUpConsentOptInStore}),
+          },
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
+      }
       return;
     }
 
