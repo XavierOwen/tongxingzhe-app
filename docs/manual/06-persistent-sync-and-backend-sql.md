@@ -211,6 +211,18 @@ Flutter 不把这些结果当作无版本的页面字段。[`CoreMetricCatalog`]
 
 对象反应五档比例复用上述五档数量，不增加 Drift 查询。共同分母只包含 `response_level` 非 `NULL` 的当前关联；五个分子必须穷尽分母，`NULL` 只作为 `unanswered_count`。PostgreSQL `0046` bridge 返回五行比例和整数 half-up 基点；分母为零时返回 `0/0` 与 `NULL` 百分比。个人页的同步覆盖仍以接触场次为单位，不能推导已同步关联数。
 
+后续联系同意占比使用同样的当前有效 contact revision 边界，但它不是对象反应的另一种
+名称。统计单位仍是 contact-target link，分子为 `yes`，分母为 `yes + no`。同一接触关联
+多个对象时分别计数；同名场次问卷答案不进入这项指标。现有 `unknown` 是新关联默认值，
+无法证明使用者主动选择了“未知”，所以 v1 把它计入 `unanswered_count`。`refused` 和
+`not_applicable` 保持独立，`unknown_count` 与 `excluded_count` 固定为零。
+
+共享 fixture [`follow_up_consent_ratio_v1.csv`](../../backend/database/fixtures/shared/follow_up_consent_ratio_v1.csv)
+固定项目启用、`2 / 3 = 6667` 基点、空分母、多对象、当前 revision、作废、scope 和 UTC
+边界。项目未启用时只有 `not_enabled`，没有数值或覆盖；项目已启用但没有 yes/no 时才是
+`0 / 0` 和空百分比。Slice 6AD-0 只固定合同，尚未新增项目设置、Drift 查询、PostgreSQL
+bridge、Backend 端点或个人分析 UI。
+
 [`MetricResult`](../../lib/features/contact_metrics/metric_contract.dart) 把值与 UTC 半开期间、报告时区、数据截止时间、来源层、同步覆盖和隐私状态放在同一个结果合同中。当前个人页由 [`PersonalContactMetricMapper`](../../lib/features/contact_metrics/personal_contact_overview.dart) 把 Drift 汇总映射为 `localOperational + personalFact`；同步覆盖明确以接触场次为单位。即使指标值是触达人数或对象关联数，也不能用待同步场次数推算“已同步人数”或“已同步对象反应数”。
 
 当前关系阶段不能直接塞进这份期间合同。[`current_relationship_stage_v1.csv`](../../backend/database/fixtures/shared/current_relationship_stage_v1.csv) 先固定未来各层共用的 synthetic 输入。主场景包含 active 的 `0–4` 五档、paused、ended、匿名化对象、已结束分配、另一推广者和另一项目；预期只保留五个当前 active 关系。第二场景故意重复同一对象 × 项目，要求消费者失败关闭，而不是任选一行或重复计数。fixture 还固定一致性读取的 `snapshot_as_of_utc`，并要求当前 revision 的 `updated_at_utc` 不晚于该时刻。
