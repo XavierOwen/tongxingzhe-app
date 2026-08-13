@@ -167,6 +167,10 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/checks/verify_personal_interest_ordinal_summary.sql
 psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/fixtures/0041_personal_interest_ordinal_summary.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_personal_interest_level_ratios.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0042_personal_interest_level_ratios.sql
 ./tool/verify_questionnaire_publish_concurrency.sh
 ./tool/verify_questionnaire_metric_concurrency.sh
 ./tool/verify_person_institution_relationship_concurrency.sh
@@ -268,6 +272,8 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 `0040_canonical_region_resolution_provenance.sql` 提供 `resolve_canonical_region_with_provenance` 窄函数。它复用 0007 的当前树匹配，只在对应 release 已发布且内容指纹是 64 位小写 SHA-256 时返回结果，并补充固定解析器合同。runtime 只有函数执行权，仍不能直接读取 release 或边界表；发布身份和 PUBLIC 也不能执行该入口。该 migration 不写接触来源，不改变旧 resolver 的兼容合同。
 
 `0041_personal_interest_ordinal_summary.sql` 提供个人兴趣有序汇总的窄函数。它只读取可信个人 scope 和 UTC 半开期间内的当前有效接触，返回 `0–4` 五档数量、接触场次总数和下中位等级。偶数样本取两个中间观察值中较低的真实等级；空期间返回 `NULL`。runtime 可以执行函数，但不能直接读取接触表。Drift 与 PostgreSQL fixture 读取同一份 `personal_contact_metrics_v1.csv`，并分别覆盖奇数、偶数、空期间、右边界、其他用户和其他项目。
+
+`0042_personal_interest_level_ratios.sql` 提供 `read_personal_interest_level_ratios` 窄函数。它复用个人 workspace／项目授权、当前有效接触和 UTC 半开期间，稳定返回五行 `0–4` 比例；每行同时给出整数 `numerator`／共同 `denominator`、四种缺失计数、比例定义排除数和 `percentage_basis_points`。当前核心兴趣的 `NOT NULL` 与 `0–4` 约束使四种缺失计数和比例定义排除数为零；作废、草稿和尝试属于生命周期边界，不计入 `excluded_count`。正分母使用 numeric 中间值执行整数 half-up，空分母保留 `0/0` 且百分比为 `NULL`。对应 fixture 复用 `personal_contact_metrics_v1.csv`，另覆盖作废、右边界、其他项目、其他用户、非法期间和 `2/3 → 6667` 基点舍入。
 
 Backend Store 对 0039 触发器的地点错误只做固定 `SQLSTATE 23514` 与错误文字的窄映射：已知 source 形状失败返回 `rejected / invalid_location_source`，已知 location 形状失败返回 `rejected / invalid_location`，HTTP 层将其作为 `422` permanent failure。未知 `23514` 或其他数据库错误仍向上抛出，HTTP 层返回 `503 sync_unavailable`。不得用一条宽泛的 SQLSTATE 映射掩盖新的约束或权限问题。
 

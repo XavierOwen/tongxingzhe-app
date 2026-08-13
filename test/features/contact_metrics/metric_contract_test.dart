@@ -3,7 +3,7 @@ import 'package:tongxingzhe_app/features/contact_metrics/metric_contract.dart';
 
 void main() {
   test('核心指标目录使用唯一且不可变的版本标识', () {
-    expect(CoreMetricCatalog.definitions, hasLength(5));
+    expect(CoreMetricCatalog.definitions, hasLength(6));
     expect(
       CoreMetricCatalog.definitions
           .map((definition) => definition.reference)
@@ -13,6 +13,7 @@ void main() {
         const MetricReference('reached_people', 1),
         const MetricReference('interest_distribution', 1),
         const MetricReference('interest_ordinal_summary', 1),
+        const MetricReference('interest_level_ratios', 1),
         const MetricReference('channel_distribution', 1),
       },
     );
@@ -36,6 +37,25 @@ void main() {
       CoreMetricCatalog.interestOrdinalSummary.denominator,
       CoreMetricCatalog.contactSessions.reference,
     );
+    expect(
+      CoreMetricCatalog.interestLevelRatios.valueShape,
+      MetricValueShape.ratio,
+    );
+    expect(
+      CoreMetricCatalog.interestLevelRatios.formula,
+      MetricFormula.calculateContactSessionsByInterestRatio,
+    );
+    expect(
+      CoreMetricCatalog.interestLevelRatios.denominator,
+      CoreMetricCatalog.contactSessions.reference,
+    );
+    expect(CoreMetricCatalog.interestLevelRatios.bucketLabels, [
+      '0',
+      '1',
+      '2',
+      '3',
+      '4',
+    ]);
     expect(
       CoreMetricCatalog.reachedPeople.statisticalUnit,
       MetricStatisticalUnit.reachedPerson,
@@ -136,6 +156,108 @@ void main() {
     );
   });
 
+  test('个人兴趣比例以五档共同分母生成整数 half-up 基点', () {
+    final ratios = RatioMetricValue.fromNumerators(
+      labels: const ['0', '1', '2', '3', '4'],
+      numerators: const [1, 0, 0, 1, 1],
+      denominator: 3,
+      unknownCount: 0,
+      refusedCount: 0,
+      notApplicableCount: 0,
+      unansweredCount: 0,
+      excludedCount: 0,
+    );
+
+    expect(ratios.numerators, [1, 0, 0, 1, 1]);
+    expect(ratios.denominator, 3);
+    expect(ratios.basisPoints, [3333, 0, 0, 3333, 3333]);
+    expect(ratios.unknownCount, 0);
+    expect(ratios.refusedCount, 0);
+    expect(ratios.notApplicableCount, 0);
+    expect(ratios.unansweredCount, 0);
+    expect(ratios.excludedCount, 0);
+    expect(ratios.values, hasLength(5));
+    expect(ratios.values[0].numerator, 1);
+    expect(ratios.values[0].denominator, 3);
+    expect(ratios.values[0].percentageBasisPoints, 3333);
+    expect(ratios.values[0].unknownCount, 0);
+    expect(ratios.values[0].excludedCount, 0);
+    expect(
+      MetricResult(
+        definition: CoreMetricCatalog.interestLevelRatios,
+        value: ratios,
+        period: _period,
+        timeZone: 'UTC',
+        dataCutoffUtc: DateTime.utc(2030, 1, 8, 18),
+        sourceTier: MetricSourceTier.localOperational,
+        syncCoverage: _coverage,
+        privacyStatus: MetricPrivacyStatus.personalFact,
+      ).value,
+      ratios,
+    );
+  });
+
+  test('个人兴趣比例空分母保留 null，并由整数推导半上舍入', () {
+    final empty = RatioMetricValue.fromCounts(
+      labels: const ['0', '1', '2', '3', '4'],
+      counts: const [0, 0, 0, 0, 0],
+    );
+    final tie = RatioMetricValue.fromNumerators(
+      labels: const ['0', '1', '2', '3', '4'],
+      numerators: const [2, 62, 0, 0, 0],
+      denominator: 64,
+    );
+
+    expect(empty.denominator, 0);
+    expect(empty.numerators, [0, 0, 0, 0, 0]);
+    expect(empty.basisPoints, [null, null, null, null, null]);
+    expect(tie.basisPoints, [313, 9688, 0, 0, 0]);
+  });
+
+  test('个人兴趣比例拒绝负数、越界、标签错位和非共同分母', () {
+    expect(
+      () => RatioMetricValue.fromNumerators(
+        labels: const ['0', '1', '2', '3', '4'],
+        numerators: const [-1, 1, 0, 0, 0],
+        denominator: 0,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => RatioMetricValue.fromNumerators(
+        labels: const ['0', '1', '2', '3', '4'],
+        numerators: const [2, 1, 0, 0, 0],
+        denominator: 2,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => RatioMetricValue.fromNumerators(
+        labels: const ['0', '1', '2', '3', '3'],
+        numerators: const [1, 0, 0, 0, 0],
+        denominator: 1,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => RatioMetricValue.fromNumerators(
+        labels: const ['0', '1', '2', '3', '4'],
+        numerators: const [1, 0, 0, 0, 0],
+        denominator: 1,
+        unknownCount: -1,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => RatioMetricValue.fromNumerators(
+        labels: const ['0', '1', '2', '3', '4'],
+        numerators: const [0, 0, 0, 0, 0],
+        denominator: 0,
+      ).numerators.add(1),
+      throwsUnsupportedError,
+    );
+  });
+
   test('指标结果拒绝错误值形状、期间、截止时间与同步覆盖', () {
     expect(
       () => MetricResult(
@@ -155,6 +277,36 @@ void main() {
       () => MetricDistributionValue(
         labels: const ['0', '1'],
         counts: const [1, -1],
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => MetricResult(
+        definition: CoreMetricCatalog.interestLevelRatios,
+        value: CountMetricValue(2),
+        period: _period,
+        timeZone: 'UTC',
+        dataCutoffUtc: DateTime.utc(2030, 1, 8, 18),
+        sourceTier: MetricSourceTier.localOperational,
+        syncCoverage: _coverage,
+        privacyStatus: MetricPrivacyStatus.personalFact,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => MetricResult(
+        definition: CoreMetricCatalog.interestLevelRatios,
+        value: RatioMetricValue.fromNumerators(
+          labels: const ['a', 'b', 'c', 'd', 'e'],
+          numerators: const [1, 0, 0, 0, 0],
+          denominator: 1,
+        ),
+        period: _period,
+        timeZone: 'UTC',
+        dataCutoffUtc: DateTime.utc(2030, 1, 8, 18),
+        sourceTier: MetricSourceTier.localOperational,
+        syncCoverage: _coverage,
+        privacyStatus: MetricPrivacyStatus.personalFact,
       ),
       throwsArgumentError,
     );

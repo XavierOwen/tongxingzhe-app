@@ -22,6 +22,7 @@ enum MetricValueShape {
   ordinalDistribution,
   categoricalDistribution,
   ordinalSummary,
+  ratio,
 }
 
 enum MetricFormula {
@@ -30,6 +31,7 @@ enum MetricFormula {
   countContactSessionsByInterest,
   countContactSessionsByChannel,
   summarizeContactSessionsByInterest,
+  calculateContactSessionsByInterestRatio,
 }
 
 enum MetricTimeBasis { actualOccurrenceUtc }
@@ -58,13 +60,13 @@ final class MetricDefinition {
     if (reference.metricId.trim().isEmpty || reference.version < 1) {
       throw ArgumentError('invalid_metric_reference');
     }
-    final isDistribution = valueShape != MetricValueShape.count;
-    if (isDistribution != bucketLabels.isNotEmpty ||
+    final hasBuckets = valueShape != MetricValueShape.count;
+    if (hasBuckets != bucketLabels.isNotEmpty ||
         bucketLabels.toSet().length != bucketLabels.length ||
         bucketLabels.any((label) => label.isEmpty)) {
       throw ArgumentError('invalid_metric_definition_buckets');
     }
-    if (isDistribution != (denominator != null)) {
+    if (hasBuckets != (denominator != null)) {
       throw ArgumentError('invalid_metric_definition_denominator');
     }
     return MetricDefinition._(
@@ -176,6 +178,18 @@ abstract final class CoreMetricCatalog {
     bucketLabels: ['0', '1', '2', '3', '4'],
   );
 
+  static final interestLevelRatios = MetricDefinition(
+    reference: MetricReference('interest_level_ratios', 1),
+    statisticalUnit: MetricStatisticalUnit.contactSession,
+    valueShape: MetricValueShape.ratio,
+    formula: MetricFormula.calculateContactSessionsByInterestRatio,
+    timeBasis: MetricTimeBasis.actualOccurrenceUtc,
+    exclusions: _commonExclusions,
+    privacyRule: MetricPrivacyRule.managementProtectedByTrueUnit,
+    denominator: const MetricReference('contact_sessions', 1),
+    bucketLabels: ['0', '1', '2', '3', '4'],
+  );
+
   static final channelDistribution = MetricDefinition(
     reference: MetricReference('channel_distribution', 1),
     statisticalUnit: MetricStatisticalUnit.contactSession,
@@ -202,6 +216,7 @@ abstract final class CoreMetricCatalog {
     interestDistribution,
     channelDistribution,
     interestOrdinalSummary,
+    interestLevelRatios,
   ]);
 
   static List<MetricDefinition> get definitions => catalog.definitions;
@@ -364,6 +379,224 @@ final class OrdinalSummaryMetricValue extends MetricValue {
   );
 }
 
+/// 一个比例档位的不可变、可审计值。
+///
+/// 百分比不会从调用者传入，而是由 [numerator] 和 [denominator] 按整数
+/// half-up 规则计算。分母为零时，比例基点为 `null`，而不是 `0`。
+final class RatioMetricValueItem {
+  factory RatioMetricValueItem({
+    required String label,
+    required int numerator,
+    required int denominator,
+    int unknownCount = 0,
+    int refusedCount = 0,
+    int notApplicableCount = 0,
+    int unansweredCount = 0,
+    int excludedCount = 0,
+  }) {
+    if (label.isEmpty ||
+        numerator < 0 ||
+        denominator < 0 ||
+        numerator > denominator ||
+        unknownCount < 0 ||
+        refusedCount < 0 ||
+        notApplicableCount < 0 ||
+        unansweredCount < 0 ||
+        excludedCount < 0) {
+      throw ArgumentError('invalid_metric_ratio_item');
+    }
+    return RatioMetricValueItem._(
+      label: label,
+      numerator: numerator,
+      denominator: denominator,
+      unknownCount: unknownCount,
+      refusedCount: refusedCount,
+      notApplicableCount: notApplicableCount,
+      unansweredCount: unansweredCount,
+      excludedCount: excludedCount,
+    );
+  }
+
+  const RatioMetricValueItem._({
+    required this.label,
+    required this.numerator,
+    required this.denominator,
+    required this.unknownCount,
+    required this.refusedCount,
+    required this.notApplicableCount,
+    required this.unansweredCount,
+    required this.excludedCount,
+  });
+
+  final String label;
+  final int numerator;
+  final int denominator;
+  final int unknownCount;
+  final int refusedCount;
+  final int notApplicableCount;
+  final int unansweredCount;
+  final int excludedCount;
+
+  int? get percentageBasisPoints => _ratioBasisPoints(numerator, denominator);
+
+  @override
+  bool operator ==(Object other) =>
+      other is RatioMetricValueItem &&
+      other.label == label &&
+      other.numerator == numerator &&
+      other.denominator == denominator &&
+      other.unknownCount == unknownCount &&
+      other.refusedCount == refusedCount &&
+      other.notApplicableCount == notApplicableCount &&
+      other.unansweredCount == unansweredCount &&
+      other.excludedCount == excludedCount;
+
+  @override
+  int get hashCode => Object.hash(
+    label,
+    numerator,
+    denominator,
+    unknownCount,
+    refusedCount,
+    notApplicableCount,
+    unansweredCount,
+    excludedCount,
+  );
+}
+
+/// 一组穷尽且互斥的分档比例及其覆盖边界。
+///
+/// [labels] 必须稳定、非空且唯一，全部分子之和必须等于共同 [denominator]。
+/// 缺失和排除计数属于这一组比例的透明覆盖元数据；它们
+/// 在每个档位条目中以相同值呈现。百分比基点由整数分子／分母派生，不接受
+/// 外部传入的基点，因此不能伪造跨层权威值。
+final class RatioMetricValue extends MetricValue {
+  factory RatioMetricValue.fromCounts({
+    required List<String> labels,
+    required List<int> counts,
+    int unknownCount = 0,
+    int refusedCount = 0,
+    int notApplicableCount = 0,
+    int unansweredCount = 0,
+    int excludedCount = 0,
+  }) {
+    return RatioMetricValue.fromNumerators(
+      labels: labels,
+      numerators: counts,
+      denominator: counts.fold<int>(0, (sum, count) => sum + count),
+      unknownCount: unknownCount,
+      refusedCount: refusedCount,
+      notApplicableCount: notApplicableCount,
+      unansweredCount: unansweredCount,
+      excludedCount: excludedCount,
+    );
+  }
+
+  factory RatioMetricValue.fromNumerators({
+    required List<String> labels,
+    required List<int> numerators,
+    required int denominator,
+    int unknownCount = 0,
+    int refusedCount = 0,
+    int notApplicableCount = 0,
+    int unansweredCount = 0,
+    int excludedCount = 0,
+  }) {
+    if (labels.isEmpty ||
+        labels.length != numerators.length ||
+        labels.toSet().length != labels.length ||
+        labels.any((label) => label.isEmpty) ||
+        denominator < 0 ||
+        numerators.any((numerator) => numerator < 0) ||
+        numerators.any((numerator) => numerator > denominator) ||
+        numerators.fold<int>(0, (sum, numerator) => sum + numerator) !=
+            denominator ||
+        unknownCount < 0 ||
+        refusedCount < 0 ||
+        notApplicableCount < 0 ||
+        unansweredCount < 0 ||
+        excludedCount < 0) {
+      throw ArgumentError('invalid_metric_ratio');
+    }
+    return RatioMetricValue._(
+      labels: List.unmodifiable(labels),
+      numerators: List.unmodifiable(numerators),
+      denominator: denominator,
+      unknownCount: unknownCount,
+      refusedCount: refusedCount,
+      notApplicableCount: notApplicableCount,
+      unansweredCount: unansweredCount,
+      excludedCount: excludedCount,
+    );
+  }
+
+  const RatioMetricValue._({
+    required this.labels,
+    required this.numerators,
+    required this.denominator,
+    required this.unknownCount,
+    required this.refusedCount,
+    required this.notApplicableCount,
+    required this.unansweredCount,
+    required this.excludedCount,
+  });
+
+  final List<String> labels;
+  final List<int> numerators;
+  final int denominator;
+  final int unknownCount;
+  final int refusedCount;
+  final int notApplicableCount;
+  final int unansweredCount;
+  final int excludedCount;
+
+  /// 每档确定性的百分比基点；空分母时各项均为 `null`。
+  List<int?> get basisPoints => List<int?>.unmodifiable(
+    numerators.map((numerator) => _ratioBasisPoints(numerator, denominator)),
+  );
+
+  List<RatioMetricValueItem> get values =>
+      List<RatioMetricValueItem>.unmodifiable(
+        List<RatioMetricValueItem>.generate(
+          labels.length,
+          (index) => RatioMetricValueItem._(
+            label: labels[index],
+            numerator: numerators[index],
+            denominator: denominator,
+            unknownCount: unknownCount,
+            refusedCount: refusedCount,
+            notApplicableCount: notApplicableCount,
+            unansweredCount: unansweredCount,
+            excludedCount: excludedCount,
+          ),
+        ),
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      other is RatioMetricValue &&
+      _listEquals(other.labels, labels) &&
+      _listEquals(other.numerators, numerators) &&
+      other.denominator == denominator &&
+      other.unknownCount == unknownCount &&
+      other.refusedCount == refusedCount &&
+      other.notApplicableCount == notApplicableCount &&
+      other.unansweredCount == unansweredCount &&
+      other.excludedCount == excludedCount;
+
+  @override
+  int get hashCode => Object.hash(
+    Object.hashAll(labels),
+    Object.hashAll(numerators),
+    denominator,
+    unknownCount,
+    refusedCount,
+    notApplicableCount,
+    unansweredCount,
+    excludedCount,
+  );
+}
+
 final class MetricPeriod {
   factory MetricPeriod({
     required DateTime fromUtc,
@@ -474,6 +707,7 @@ final class MetricResult {
       MetricValueShape.categoricalDistribution =>
         value is MetricDistributionValue,
       MetricValueShape.ordinalSummary => value is OrdinalSummaryMetricValue,
+      MetricValueShape.ratio => value is RatioMetricValue,
     };
     if (!shapeMatches) {
       throw ArgumentError('metric_value_shape_mismatch');
@@ -485,6 +719,10 @@ final class MetricResult {
     if (value is OrdinalSummaryMetricValue &&
         !_listEquals(value.labels, definition.bucketLabels)) {
       throw ArgumentError('metric_ordinal_summary_labels_mismatch');
+    }
+    if (value is RatioMetricValue &&
+        !_listEquals(value.labels, definition.bucketLabels)) {
+      throw ArgumentError('metric_ratio_labels_mismatch');
     }
   }
 }
@@ -499,6 +737,16 @@ int _lowerMedianLevel(List<int> counts, int totalCount) {
     if (cumulative >= rank) return level;
   }
   throw ArgumentError('invalid_metric_ordinal_summary_median');
+}
+
+int? _ratioBasisPoints(int numerator, int denominator) {
+  if (denominator == 0) return null;
+  // BigInt keeps the contract exact on Web when an int exceeds JS safe range.
+  final doubleScaledNumerator = BigInt.from(numerator) * BigInt.from(20000);
+  final bigDenominator = BigInt.from(denominator);
+  return ((doubleScaledNumerator + bigDenominator) ~/
+          (bigDenominator * BigInt.from(2)))
+      .toInt();
 }
 
 bool _listEquals<T>(List<T> left, List<T> right) {

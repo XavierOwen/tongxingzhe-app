@@ -601,6 +601,19 @@ void main() {
           .singleWhere(
             (result) =>
                 result.definition.reference ==
+                CoreMetricCatalog.interestLevelRatios.reference,
+          )
+          .value,
+      RatioMetricValue.fromCounts(
+        labels: CoreMetricCatalog.interestLevelRatios.bucketLabels,
+        counts: expectedInterest,
+      ),
+    );
+    expect(
+      metricResults
+          .singleWhere(
+            (result) =>
+                result.definition.reference ==
                 CoreMetricCatalog.channelDistribution.reference,
           )
           .value,
