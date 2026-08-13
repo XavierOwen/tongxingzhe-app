@@ -774,6 +774,14 @@ final class _PersonalSummaryPage extends StatelessWidget {
                 .metric(CoreMetricCatalog.targetResponseDistribution.reference)
                 .value
             as TargetResponseDistributionMetricValue;
+    final targetResponseOrdinalSummary =
+        result
+                .metric(
+                  CoreMetricCatalog.targetResponseOrdinalSummary.reference,
+                )
+                .value
+            as OrdinalSummaryMetricValue;
+    final targetResponseMedianLevel = targetResponseOrdinalSummary.medianLevel;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -899,6 +907,16 @@ final class _PersonalSummaryPage extends StatelessWidget {
               'unanswered': targetResponseDistribution.unansweredCount,
             }),
           ),
+          const SizedBox(height: 8),
+          Text(
+            targetResponseMedianLevel == null
+                ? text.t('noTargetResponseMedianLevel')
+                : text.format('targetResponseMedianLevel', {
+                    'level': targetResponseMedianLevel,
+                    'answered': targetResponseOrdinalSummary.totalCount,
+                  }),
+          ),
+          Text(text.t('targetResponseMedianHelp')),
           const SizedBox(height: 16),
           Text(
             text.t('channelSources'),

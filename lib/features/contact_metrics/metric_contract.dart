@@ -33,6 +33,7 @@ enum MetricFormula {
   countContactSessionsByChannel,
   countContactTargetLinksWithResponse,
   countContactTargetLinksByResponse,
+  summarizeContactTargetLinksByResponse,
   summarizeContactSessionsByInterest,
   calculateContactSessionsByInterestRatio,
   calculateContactSessionsByInterestSubsetRatio,
@@ -290,6 +291,18 @@ abstract final class CoreMetricCatalog {
     bucketLabels: ['0', '1', '2', '3', '4'],
   );
 
+  static final targetResponseOrdinalSummary = MetricDefinition(
+    reference: MetricReference('target_response_ordinal_summary', 1),
+    statisticalUnit: MetricStatisticalUnit.contactTargetLink,
+    valueShape: MetricValueShape.ordinalSummary,
+    formula: MetricFormula.summarizeContactTargetLinksByResponse,
+    timeBasis: MetricTimeBasis.actualOccurrenceUtc,
+    exclusions: _commonExclusions,
+    privacyRule: MetricPrivacyRule.managementProtectedByTrueUnit,
+    denominator: targetResponses.reference,
+    bucketLabels: ['0', '1', '2', '3', '4'],
+  );
+
   static final catalog = MetricCatalog([
     contactSessions,
     reachedPeople,
@@ -301,6 +314,7 @@ abstract final class CoreMetricCatalog {
     interestThreeFourRatio,
     interestZeroRatio,
     targetResponseDistribution,
+    targetResponseOrdinalSummary,
   ]);
 
   static List<MetricDefinition> get definitions => catalog.definitions;
@@ -424,7 +438,7 @@ final class TargetResponseDistributionMetricValue extends MetricValue {
   );
 }
 
-/// 单次兴趣有序量表的分布及下中位等级。
+/// 五级有序量表的分布及下中位等级。
 ///
 /// [medianLevel] 使用累计数量首次达到 `(totalCount + 1) ~/ 2` 的等级。
 /// 空期间没有中位等级，必须使用 `null`，不能把空值编码成 `0`。
@@ -991,6 +1005,8 @@ bool _usesDenominatorFormula(
   MetricFormula.calculateContactSessionsByInterestSubsetRatio =>
     denominatorFormula == MetricFormula.countContactSessions,
   MetricFormula.countContactTargetLinksByResponse =>
+    denominatorFormula == MetricFormula.countContactTargetLinksWithResponse,
+  MetricFormula.summarizeContactTargetLinksByResponse =>
     denominatorFormula == MetricFormula.countContactTargetLinksWithResponse,
   MetricFormula.countContactSessions ||
   MetricFormula.sumReachedPeople ||

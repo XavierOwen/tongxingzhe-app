@@ -5,7 +5,7 @@
 ## 状态规则
 
 - ADR-0001 至 ADR-0095 作为 `TXZ-SPEC-001` 的首批决策集，于 2026-07-31 一并接受；文件另有状态时以文件为准。
-- ADR-0096、ADR-0097 于 2026-07-31 接受；ADR-0098、ADR-0099 于 2026-08-03 接受；ADR-0100 于 2026-08-05 接受；ADR-0101、ADR-0102 于 2026-08-10 接受；ADR-0103 至 ADR-0108 于 2026-08-11 接受；ADR-0109 至 ADR-0119 于 2026-08-12 接受。
+- ADR-0096、ADR-0097 于 2026-07-31 接受；ADR-0098、ADR-0099 于 2026-08-03 接受；ADR-0100 于 2026-08-05 接受；ADR-0101、ADR-0102 于 2026-08-10 接受；ADR-0103 至 ADR-0108 于 2026-08-11 接受；ADR-0109 至 ADR-0119 于 2026-08-12 接受；ADR-0120 于 2026-08-13 接受。
 - 被取代的 ADR 保留原文和指向新 ADR 的状态，不再作为当前实现合同。
 - 新 ADR 默认只需一个清楚的决定段落。只有背景、备选和后果能帮助未来维护者避免误读时，才增加这些章节。
 - 可逆的 UI 细节、库选择和票内实现步骤留在 Spec 或 Issue，不为增加编号而创建 ADR。
@@ -41,6 +41,7 @@
 | [0117](./0117-personal-interest-ratios-use-integer-basis-points.md) | 已接受，2026-08-12 | Slice 6X；`ANALYTICS-001`、`ANALYTICS-003`、`ANALYTICS-007`、`ANALYTICS-010`、`ANALYTICS-012` | 个人兴趣五档比例保存整数分数、透明缺失覆盖和确定性基点；空分母不虚构零百分比 |
 | [0118](./0118-interest-subset-ratios-are-independent-metrics.md) | 已接受，2026-08-12 | Slice 6Y；`ANALYTICS-001`、`ANALYTICS-003`、`ANALYTICS-007`、`ANALYTICS-010`、`ANALYTICS-012` | 兴趣 3–4 与 0 是共享分母的独立子集比例，不放松五档穷尽比例合同 |
 | [0119](./0119-target-response-distribution-counts-current-answered-links.md) | 已接受，2026-08-12 | Slice 6Z；`TARGET-004`、`TARGET-006`、`TARGET-007`、`TARGET-013`、`ANALYTICS-001`、`ANALYTICS-002`、`ANALYTICS-007`、`ANALYTICS-012` | 对象当次反应按当前 revision 已填写关联计数，NULL 只作未填写覆盖 |
+| [0120](./0120-target-response-median-uses-answered-current-links.md) | 已接受，2026-08-13 | Slice 6AA；`TARGET-004`、`TARGET-006`、`TARGET-007`、`TARGET-013`、`ANALYTICS-001`、`ANALYTICS-002`、`ANALYTICS-007`、`ANALYTICS-012` | 对象当次反应中位等级只使用当前已填关联，偶数取较低真实等级 |
 
 ## 按主题查找
 
@@ -52,7 +53,7 @@
 | 组织、保留、导入导出与合并 | [0030](./0030-allow-verified-users-to-create-organizations.md)–[0043](./0043-promotion-target-merges-are-reversible.md) | Slice 4、7；`ORG`、`TARGET`、`AUTHZ` |
 | 私人计划、通知与周期 | [0044](./0044-personal-action-plans-are-private-and-user-controlled.md)–[0052](./0052-late-entered-contacts-count-in-their-occurrence-period.md) | Slice 5；`PLAN`、`PLATFORM` |
 | 说明书与发布检查 | [0053](./0053-production-code-and-learning-materials-evolve-together.md)–[0059](./0059-documentation-and-statistics-checks-block-releases.md) | 全部 Slice；`MANUAL`、Definition of Done |
-| 指标、报告与隐私 | [0060](./0060-ordinal-scale-distributions-are-primary.md)–[0077](./0077-core-metrics-ship-with-code-and-project-metrics-use-safe-configuration.md)，另见 [0099](./0099-management-analytics-use-bounded-query-surfaces.md)、[0101](./0101-management-weekly-reports-use-two-complete-iso-weeks.md)–[0119](./0119-target-response-distribution-counts-current-answered-links.md) | Slice 6；`ANALYTICS`、`PRIVACY`、`AUTHZ`、`REGION`、`ARCH`、`TEST-005` |
+| 指标、报告与隐私 | [0060](./0060-ordinal-scale-distributions-are-primary.md)–[0077](./0077-core-metrics-ship-with-code-and-project-metrics-use-safe-configuration.md)，另见 [0099](./0099-management-analytics-use-bounded-query-surfaces.md)、[0101](./0101-management-weekly-reports-use-two-complete-iso-weeks.md)–[0120](./0120-target-response-median-uses-answered-current-links.md) | Slice 6；`ANALYTICS`、`PRIVACY`、`AUTHZ`、`REGION`、`ARCH`、`TEST-005` |
 | 当前上下文、问卷、草稿与导航 | [0078](./0078-a-visible-project-context-scopes-default-work.md)–[0090](./0090-contact-entry-prioritizes-core-facts-with-progressive-disclosure.md) | Slice 1、3、5；`CTX`、`QUESTION`、`DRAFT`、`UI` |
 | 尝试、渠道、触达和机构关系 | [0091](./0091-unsuccessful-direct-outreach-is-a-contact-attempt.md)–[0095](./0095-person-to-institution-relationships-use-six-stable-kinds.md) | Slice 1、2、4；`CONTACT`、`TARGET` |
 | 基础设施 | [0097](./0097-use-supabase-postgresql-for-the-initial-stage.md) | Slice 0／发布门槛；`ARCH-003`–`ARCH-010` |

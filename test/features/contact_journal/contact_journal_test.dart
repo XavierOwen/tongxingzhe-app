@@ -758,6 +758,19 @@ void main() {
 
     expect(summary.targetResponseDistribution, [0, 1, 1, 1, 1]);
     expect(summary.targetResponseUnansweredCount, 1);
+    expect(
+      OrdinalSummaryMetricValue.fromCounts(
+        labels: CoreMetricCatalog.targetResponseOrdinalSummary.bucketLabels,
+        counts: summary.targetResponseDistribution,
+      ),
+      OrdinalSummaryMetricValue(
+        labels: const ['0', '1', '2', '3', '4'],
+        counts: const [0, 1, 1, 1, 1],
+        totalCount: 4,
+        medianLevel: 2,
+      ),
+      reason: '未填写关联不能进入偶数样本的下中位计算。',
+    );
   });
 
   test('对象反应汇总只计 current revision 并排除作废接触', () async {
@@ -848,6 +861,14 @@ void main() {
 
     expect(summary.targetResponseDistribution, [0, 0, 0, 1, 0]);
     expect(summary.targetResponseUnansweredCount, 0);
+    expect(
+      OrdinalSummaryMetricValue.fromCounts(
+        labels: CoreMetricCatalog.targetResponseOrdinalSummary.bucketLabels,
+        counts: summary.targetResponseDistribution,
+      ).medianLevel,
+      3,
+      reason: '旧 revision 和作废接触不得影响对象反应中位。',
+    );
   });
 
   test('Drift 汇总与 Flutter 映射对兴趣子集比例场景保持一致', () async {

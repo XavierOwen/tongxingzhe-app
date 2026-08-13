@@ -28,7 +28,7 @@ void main() {
     expect(week.untilUtc, DateTime.utc(2030, 1, 9));
     expect(today.syncedContactSessionCount, 3);
     expect(today.syncCoverageDenominator, 5);
-    expect(today.metrics, hasLength(10));
+    expect(today.metrics, hasLength(11));
     expect(
       today.metric(CoreMetricCatalog.contactSessions.reference).value,
       CountMetricValue(5),
@@ -49,6 +49,17 @@ void main() {
         labels: ['0', '1', '2', '3', '4'],
         counts: [1, 0, 0, 1, 1],
         unansweredCount: 2,
+      ),
+    );
+    expect(
+      today
+          .metric(CoreMetricCatalog.targetResponseOrdinalSummary.reference)
+          .value,
+      OrdinalSummaryMetricValue(
+        labels: const ['0', '1', '2', '3', '4'],
+        counts: const [1, 0, 0, 1, 1],
+        totalCount: 3,
+        medianLevel: 3,
       ),
     );
     expect(
@@ -250,6 +261,52 @@ void main() {
         unansweredCount: 1,
       ),
     );
+    expect(
+      metrics
+          .singleWhere(
+            (result) =>
+                result.definition.reference ==
+                CoreMetricCatalog.targetResponseOrdinalSummary.reference,
+          )
+          .value,
+      OrdinalSummaryMetricValue(
+        labels: const ['0', '1', '2', '3', '4'],
+        counts: const [1, 0, 0, 0, 1],
+        totalCount: 2,
+        medianLevel: 0,
+      ),
+    );
+  });
+
+  test('对象反应全未填写时没有中位等级', () {
+    final metrics = PersonalContactMetricMapper.map(
+      summary: const PersonalContactSummary(
+        contactSessionCount: 1,
+        reachCount: 1,
+        interestDistribution: [0, 0, 1, 0, 0],
+        pendingSyncCount: 0,
+        channelDistribution: [0, 0, 1, 0, 0, 0, 0],
+        targetResponseDistribution: [0, 0, 0, 0, 0],
+        targetResponseUnansweredCount: 2,
+      ),
+      period: MetricPeriod(
+        fromUtc: DateTime.utc(2030, 1, 8),
+        untilUtc: DateTime.utc(2030, 1, 9),
+      ),
+      dataCutoffUtc: DateTime.utc(2030, 1, 8, 18, 30),
+    );
+
+    final summary =
+        metrics
+                .singleWhere(
+                  (result) =>
+                      result.definition.reference ==
+                      CoreMetricCatalog.targetResponseOrdinalSummary.reference,
+                )
+                .value
+            as OrdinalSummaryMetricValue;
+    expect(summary.totalCount, 0);
+    expect(summary.medianLevel, isNull);
   });
 }
 

@@ -179,6 +179,10 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/checks/verify_personal_target_response_distribution.sql
 psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/fixtures/0044_personal_target_response_distribution.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_personal_target_response_ordinal_summary.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0045_personal_target_response_ordinal_summary.sql
 ./tool/verify_questionnaire_publish_concurrency.sh
 ./tool/verify_questionnaire_metric_concurrency.sh
 ./tool/verify_person_institution_relationship_concurrency.sh
@@ -286,6 +290,8 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 `0043_personal_interest_subset_ratios.sql` 提供 `read_personal_interest_subset_ratios` 窄函数。它从同一份 scoped、当前有效接触集合一次计算共同分母，固定按顺序返回 `interest_3_4_ratio` 与 `interest_0_ratio` 两行；两者的分子分别是兴趣 `3/4` 和 `0` 的接触场次，允许分子之和小于分母，因此不能包装成 0042 的五档 exhaustive 比例。每行仍返回整数分子／共同分母、四种缺失计数、候选内排除数和 half-up 基点；当前核心兴趣约束使这些覆盖字段为零，空分母返回 `0/0` 与 `NULL`。对应 fixture 复用 `personal_contact_metrics_v1.csv`，另覆盖仅 `1–2`、全 `0`、全 `3–4`、五档混合、空期间、边界、作废、跨用户／项目和 `2/3 → 6667`。
 
 `0044_personal_target_response_distribution.sql` 提供个人项目对象反应的窄分布 bridge。统计单位是当前有效 contact revision 中的对象关联；`response_level` 为 `NULL` 的关联不进入 0–4 五档分母，而在固定五行结果中以共享的 `unanswered_count` 单独返回。函数按可信用户、personal workspace、active project 和 UTC 半开期间重新授权，只读取 contact/link 事实，不连接 target PII、分配或关系状态，因此对象匿名化后历史响应仍可统计。空期间仍返回 0–4 五行，`denominator=0`、`unanswered_count=0`。对应 fixture 还覆盖多关联、current revision、作废排除、起止边界、跨项目／用户 scope 以及 retention anonymization。
+
+`0045_personal_target_response_ordinal_summary.sql` 从同一组当前已填对象关联返回五档数量、已填总数、未填覆盖和下中位等级。偶数样本取较低的真实等级；全部未填或空期间返回五档零、已填总数零和 `NULL` 中位。函数复用 0044 的个人 scope、current revision、作废排除和 UTC 半开边界，不读取对象 PII。
 
 Backend Store 对 0039 触发器的地点错误只做固定 `SQLSTATE 23514` 与错误文字的窄映射：已知 source 形状失败返回 `rejected / invalid_location_source`，已知 location 形状失败返回 `rejected / invalid_location`，HTTP 层将其作为 `422` permanent failure。未知 `23514` 或其他数据库错误仍向上抛出，HTTP 层返回 `503 sync_unavailable`。不得用一条宽泛的 SQLSTATE 映射掩盖新的约束或权限问题。
 
