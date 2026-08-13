@@ -28,7 +28,7 @@ void main() {
     expect(week.untilUtc, DateTime.utc(2030, 1, 9));
     expect(today.syncedContactSessionCount, 3);
     expect(today.syncCoverageDenominator, 5);
-    expect(today.metrics, hasLength(6));
+    expect(today.metrics, hasLength(8));
     expect(
       today.metric(CoreMetricCatalog.contactSessions.reference).value,
       CountMetricValue(5),
@@ -64,6 +64,24 @@ void main() {
     expect(ratios.notApplicableCount, 0);
     expect(ratios.unansweredCount, 0);
     expect(ratios.excludedCount, 0);
+    final threeFourRatio =
+        today.metric(CoreMetricCatalog.interestThreeFourRatio.reference).value
+            as SubsetRatioMetricValue;
+    final zeroRatio =
+        today.metric(CoreMetricCatalog.interestZeroRatio.reference).value
+            as SubsetRatioMetricValue;
+    expect(threeFourRatio.label, '3_4');
+    expect(threeFourRatio.numerator, 2);
+    expect(threeFourRatio.denominator, 5);
+    expect(threeFourRatio.percentageBasisPoints, 4000);
+    expect(zeroRatio.label, '0');
+    expect(zeroRatio.numerator, 1);
+    expect(zeroRatio.denominator, 5);
+    expect(zeroRatio.percentageBasisPoints, 2000);
+    expect(
+      threeFourRatio.numerator + zeroRatio.numerator,
+      lessThan(threeFourRatio.denominator),
+    );
     expect(
       today.metric(CoreMetricCatalog.channelDistribution.reference).value,
       MetricDistributionValue(
@@ -158,6 +176,22 @@ void main() {
     expect(ratios.denominator, 0);
     expect(ratios.numerators, [0, 0, 0, 0, 0]);
     expect(ratios.basisPoints, [null, null, null, null, null]);
+    for (final definition in [
+      CoreMetricCatalog.interestThreeFourRatio,
+      CoreMetricCatalog.interestZeroRatio,
+    ]) {
+      final subset =
+          metrics
+                  .singleWhere(
+                    (result) =>
+                        result.definition.reference == definition.reference,
+                  )
+                  .value
+              as SubsetRatioMetricValue;
+      expect(subset.numerator, 0);
+      expect(subset.denominator, 0);
+      expect(subset.percentageBasisPoints, isNull);
+    }
   });
 }
 

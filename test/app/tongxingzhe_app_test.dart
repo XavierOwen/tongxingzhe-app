@@ -362,6 +362,11 @@ void main() {
     );
     expect(find.text('暂无中位等级'), findsOneWidget);
     expect(find.textContaining('0 / 0（暂无可计算比例）'), findsWidgets);
+    expect(
+      find.text('兴趣 3–4（明确愿意继续或主动提出／落实下一步）：0 / 0（暂无可计算比例）'),
+      findsOneWidget,
+    );
+    expect(find.text('兴趣 0（明确拒绝）：0 / 0（暂无可计算比例）'), findsOneWidget);
     expect(find.textContaining('比例覆盖'), findsOneWidget);
     expect(routeInformationProvider.value.uri.path, '/analysis');
 
@@ -454,9 +459,102 @@ void main() {
       tester.getSemantics(heading).getSemanticsData().flagsCollection.isHeader,
       isTrue,
     );
-    await tester.drag(find.byType(ListView), const Offset(0, -240));
-    await tester.pumpAndSettle();
+    final subsetHeading = find.text('兴趣 3–4 与 0 占比');
+    await tester.scrollUntilVisible(
+      subsetHeading,
+      120,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(
+      tester
+          .getSemantics(subsetHeading)
+          .getSemanticsData()
+          .flagsCollection
+          .isHeader,
+      isTrue,
+    );
     expect(find.textContaining('0 / 0（暂无可计算比例）'), findsWidgets);
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
+  testWidgets('英文兴趣子集比例在 320 宽和 200% 文字下保留标题语义', (tester) async {
+    final semantics = tester.ensureSemantics();
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 568);
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+    final database = LocalDatabase(NativeDatabase.memory());
+    await database
+        .into(database.dbAppSettings)
+        .insert(const DbAppSetting(key: 'localeCode', value: 'en'));
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final routeInformationProvider = PlatformRouteInformationProvider(
+      initialRouteInformation: RouteInformation(uri: Uri.parse('/analysis')),
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+    );
+
+    await tester.pumpWidget(
+      TongxingzheApp(
+        dependencies: dependencies,
+        routeInformationProvider: routeInformationProvider,
+      ),
+    );
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+    addTearDown(routeInformationProvider.dispose);
+
+    final heading = find.text('Interest 3–4 and 0 ratios');
+    await tester.scrollUntilVisible(
+      heading,
+      120,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(
+      tester.getSemantics(heading).getSemanticsData().flagsCollection.isHeader,
+      isTrue,
+    );
+    final highRow = find.text(
+      'Interest 3–4 (willing to continue or taking the next step): '
+      '0 / 0 (No calculable percentage)',
+    );
+    await tester.scrollUntilVisible(
+      highRow,
+      80,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(highRow, findsOneWidget);
+    final zeroRow = find.text(
+      'Interest 0 (explicit refusal): 0 / 0 (No calculable percentage)',
+    );
+    await tester.scrollUntilVisible(
+      zeroRow,
+      80,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(zeroRow, findsOneWidget);
     expect(tester.takeException(), isNull);
     semantics.dispose();
   });
@@ -843,6 +941,11 @@ void main() {
       120,
       scrollable: find.byType(Scrollable).last,
     );
+    expect(
+      find.text('兴趣 3–4（明确愿意继续或主动提出／落实下一步）：1 / 1（100.00%）'),
+      findsOneWidget,
+    );
+    expect(find.text('兴趣 0（明确拒绝）：0 / 1（0.00%）'), findsOneWidget);
     expect(find.text('中位等级：3'), findsOneWidget);
     expect(find.textContaining('不计算等级平均数'), findsOneWidget);
     expect(find.textContaining('未知 0、拒答 0、不适用 0、未回答 0'), findsOneWidget);

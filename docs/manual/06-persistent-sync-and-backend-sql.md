@@ -189,16 +189,19 @@ Docker runner 在 PostgreSQL fixture 后使用 `node:24-bookworm` 执行 `backen
 - 兴趣 `0–4` 五档数量；
 - 由五档数量确定的下中位等级；
 - 兴趣 `0–4` 五档整数比例；
+- 兴趣 `3–4` 与 `0` 两个独立子集比例；
 - 七类稳定渠道分布；
 - `MAX(occurred_at_utc)`。
 
 [`read_personal_contact_summary`](../../backend/database/migrations/0006_personal_contact_metrics.sql) 使用与 Drift 相同的 UTC 半开区间和 scope 条件。共用输入可以发现两套 SQL 的筛选或单位漂移；它不表示两种 SQL 方言必须写成同一段代码。
 
-Flutter 不把这些结果当作无版本的页面字段。[`CoreMetricCatalog`](../../lib/features/contact_metrics/metric_contract.dart) 为接触场次、触达人数、兴趣分布、兴趣有序汇总、兴趣五档比例和渠道分布固定 `metric_id + version`、统计单位、值形状、实际发生时间口径、排除项和管理隐私规则。`interest_distribution` v1 保持原有计数合同；`interest_ordinal_summary` v1 另行固定五档计数、总场次和下中位等级；`interest_level_ratios` v1 保存每档整数分子、共同分母、缺失／排除计数和百分比基点。修改任何口径时必须新增版本，不能静默覆盖旧定义。
+Flutter 不把这些结果当作无版本的页面字段。[`CoreMetricCatalog`](../../lib/features/contact_metrics/metric_contract.dart) 为接触场次、触达人数、兴趣分布、兴趣有序汇总、兴趣五档比例、两个兴趣子集比例和渠道分布固定 `metric_id + version`、统计单位、值形状、实际发生时间口径、排除项和管理隐私规则。`interest_distribution` v1 保持原有计数合同；`interest_ordinal_summary` v1 另行固定五档计数、总场次和下中位等级；`interest_level_ratios` v1 保存每档整数分子、共同分母、缺失／排除计数和百分比基点；`interest_3_4_ratio` v1 与 `interest_0_ratio` v1 分别保存一个子集分子和同一有效接触分母。修改任何口径时必须新增版本，不能静默覆盖旧定义。
 
 下中位等级只使用 `0–4` 的顺序。样本不为空时，取累计数量首次达到 `(总场次 + 1) ~/ 2` 的等级；空期间返回 `null`。例如 `1、1、4、4` 的中位等级是 `1`，不是 `2.5`。个人页同时显示五档数量和这个中位等级，不默认显示兴趣算术指数。
 
 兴趣比例的五个分子直接来自同一份有效接触分布，分子之和必须等于共同分母。百分比基点只从整数分数按 half-up 规则派生；空期间保存 `0/0` 和空百分比，而不是 `0%`。核心兴趣列受非空 `0–4` 约束，所以未知、拒答、不适用、未回答和候选内排除均为零。这个排除数不盘点草稿、接触尝试或作废记录；这些事实已在进入指标候选集前由生命周期和类型边界排除，草稿也没有可用于该期间的可信实际发生时间。
+
+兴趣 `3–4` 与 `0` 比例分别使用 [`SubsetRatioMetricValue`](../../lib/features/contact_metrics/metric_contract.dart)。每项只要求自己的分子不大于共同分母，不要求两个分子相加等于分母，因为兴趣 `1–2` 仍属于分母。五档 `RatioMetricValue` 的穷尽约束保持不变；页面只读取两个版本化结果，不从五档行临时相加。
 
 [`MetricResult`](../../lib/features/contact_metrics/metric_contract.dart) 把值与 UTC 半开期间、报告时区、数据截止时间、来源层、同步覆盖和隐私状态放在同一个结果合同中。当前个人页由 [`PersonalContactMetricMapper`](../../lib/features/contact_metrics/personal_contact_overview.dart) 把 Drift 汇总映射为 `localOperational + personalFact`；同步覆盖明确以接触场次为单位。即使指标值是触达人数，也不能用待同步场次数推算“已同步人数”。
 

@@ -98,6 +98,23 @@ abstract final class PersonalContactMetricMapper {
         ),
       ),
       result(
+        CoreMetricCatalog.interestThreeFourRatio,
+        SubsetRatioMetricValue(
+          label: CoreMetricCatalog.interestThreeFourRatio.bucketLabels.single,
+          numerator:
+              summary.interestDistribution[3] + summary.interestDistribution[4],
+          denominator: summary.contactSessionCount,
+        ),
+      ),
+      result(
+        CoreMetricCatalog.interestZeroRatio,
+        SubsetRatioMetricValue(
+          label: CoreMetricCatalog.interestZeroRatio.bucketLabels.single,
+          numerator: summary.interestDistribution[0],
+          denominator: summary.contactSessionCount,
+        ),
+      ),
+      result(
         CoreMetricCatalog.channelDistribution,
         MetricDistributionValue(
           labels: CoreMetricCatalog.channelDistribution.bucketLabels,

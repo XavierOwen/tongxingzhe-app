@@ -45,4 +45,25 @@ void main() {
     expect(message, contains('unanswered 4'));
     expect(message, contains('candidate exclusions 5'));
   });
+
+  test('兴趣子集比例行按语言使用本地标点且不伪造中间档', () {
+    expect(
+      const AppStrings('zh').format('interestSubsetRatioRow', const {
+        'label': '兴趣 3–4',
+        'numerator': 2,
+        'denominator': 3,
+        'percentage': '66.67%',
+      }),
+      '兴趣 3–4：2 / 3（66.67%）',
+    );
+    expect(
+      const AppStrings('en').format('interestSubsetRatioRow', const {
+        'label': 'Interest 0',
+        'numerator': 1,
+        'denominator': 3,
+        'percentage': '33.33%',
+      }),
+      'Interest 0: 1 / 3 (33.33%)',
+    );
+  });
 }
