@@ -18,6 +18,37 @@ case "${AUTH_SPIKE_CONFIG}" in
     ;;
 esac
 
+# signup_request 是唯一会建立新账号的模式。先在本机读取有限的配置字段，
+# 再决定是否允许 Flutter 启动；这里不联系 Supabase，也不读取密码。
+if ! command -v dart >/dev/null 2>&1; then
+  echo "signup 安全检查需要 Flutter SDK 自带的 dart 命令读取 JSON 配置。" >&2
+  exit 1
+fi
+
+if ! auth_spike_config_values="$(
+  dart tool/parse_supabase_auth_spike_config.dart "${AUTH_SPIKE_CONFIG}"
+)"; then
+  echo "无法读取 AUTH_SPIKE_CONFIG 的 JSON 内容。" >&2
+  exit 1
+fi
+
+IFS=$'\t' read -r auth_spike_mode auth_spike_email \
+  auth_spike_signup_confirmation <<<"${auth_spike_config_values}"
+
+if [[ "${auth_spike_mode}" == "signup_request" ]]; then
+  if [[ "${auth_spike_signup_confirmation}" != "true" ]]; then
+    echo "signup_request 需要 AUTH_SPIKE_SIGNUP_CONFIRM_NEW_SYNTHETIC_ACCOUNT=true。" >&2
+    echo "该字段只确认本次地址是新的合成测试账号；其他模式不读取它。" >&2
+    exit 1
+  fi
+
+  if [[ ! "${auth_spike_email}" =~ ^auth-spike-[a-z0-9][a-z0-9._-]*@[a-z0-9][a-z0-9.-]*\.[a-z0-9]+$ ]]; then
+    echo "signup_request 只接受带 auth-spike- 前缀的 synthetic-test email。" >&2
+    echo "普通个人地址和示例占位地址不会启动 Flutter。" >&2
+    exit 1
+  fi
+fi
+
 # 不在命令行展开 email、密码或 OTP；Flutter 直接读取受忽略的 JSON 文件。
 if [[ "${AUTH_SPIKE_DEVICE}" == "chrome" ]]; then
   # Flutter Web 的 integration_test 必须通过 flutter drive 与 ChromeDriver 运行。

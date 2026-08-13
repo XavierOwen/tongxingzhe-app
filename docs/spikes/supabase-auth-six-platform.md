@@ -114,7 +114,7 @@ export AUTH_SPIKE_CONFIG='secrets/supabase-auth-macos.json'
 
 | mode | 用途 | 需要的字段 |
 | --- | --- | --- |
-| `signup_request` | 发注册邮件 | email、password |
+| `signup_request` | 发注册邮件 | 合成地址、password、`AUTH_SPIKE_SIGNUP_CONFIRM_NEW_SYNTHETIC_ACCOUNT="true"` |
 | `signup_confirm` | 输入刚收到的注册 OTP | email、otp |
 | `session` | 快速验证登录、刷新、同进程 Adapter 重建、恢复、登出 | 已确认账号的 email、password |
 | `session_start` | 第一进程登录、刷新并保留安全 session 后退出 | 已确认账号的 email、password |
@@ -123,6 +123,19 @@ export AUTH_SPIKE_CONFIG='secrets/supabase-auth-macos.json'
 | `recovery_confirm` | 输入恢复 OTP、设置新密码、登出 | email、otp、new password |
 
 每次运行只报告稳定 failure code 和 provider code，不输出 password、OTP 或 bearer token。实际结果应补回第 3 节，并附 GitHub run、设备／OS 版本、App commit、Supabase project 类型（local/staging）与日期。
+
+### `signup_request` 的发送前安全检查
+
+`signup_request` 是唯一会建立新账号的模式。runner 在启动 Flutter 前读取 JSON 配置，不联系 Supabase。
+
+它要求两个条件：
+
+1. `AUTH_SPIKE_SIGNUP_CONFIRM_NEW_SYNTHETIC_ACCOUNT` 必须是字符串 `"true"`；它只确认本次地址是新的合成测试账号。`session`、`recovery_request` 和其他模式不读取这个字段。
+2. `AUTH_SPIKE_EMAIL` 必须匹配 `^auth-spike-[a-z0-9][a-z0-9._-]*@[a-z0-9][a-z0-9.-]*\.[a-z0-9]+$`，例如 `auth-spike-run-20260813@example.test`。普通个人地址和本示例中的 `synthetic-test-account@example.test` 会被拒绝。
+
+测试 hosted project 时，把 `example.test` 换成团队控制且能实际收信的测试域名。每次注册都应使用新的地址和新的受忽略配置；不要把确认字段复制到个人账号配置中。runner 使用 Flutter SDK 自带的 `dart` 命令读取这三个非密码字段，不需要额外安装 Python。
+
+这项检查只能防止测试者把个人地址交给注册流程。Hosted Supabase Auth 可能对已确认账号返回与新账号相似的注册响应，客户端不能据此判断地址是否已经存在。runner 不调用 Admin API，也不保存 service-role key；“注册请求被接受”仍不等于“地址此前不存在”。
 
 ## 6. 当前阻塞与决策
 
