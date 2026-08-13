@@ -11,6 +11,7 @@ import 'package:tongxingzhe_app/features/contact_metrics/personal_contact_overvi
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/regions/region_catalog.dart';
 import 'package:tongxingzhe_app/regions/region_models.dart';
+import 'package:tongxingzhe_app/targets/promotion_target.dart';
 
 void main() {
   test('合法匿名接触提交后可立即读取并显示待同步', () async {
@@ -652,6 +653,203 @@ void main() {
     );
   });
 
+  test('对象反应汇总按当前 scope 的对象关联计数并保留未填写', () async {
+    final journal = _journal([
+      'target-multi-contact',
+      'target-multi-revision',
+      'target-multi-command',
+      'target-boundary-contact',
+      'target-boundary-revision',
+      'target-boundary-command',
+      'target-other-contact',
+      'target-other-revision',
+      'target-other-command',
+      'target-other-project-contact',
+      'target-other-project-revision',
+      'target-other-project-command',
+    ], now: DateTime.utc(2030, 1, 15, 18, 30));
+
+    await journal.submitAnonymousContact(
+      _submission(
+        occurredAtUtc: DateTime.utc(2030, 1, 14, 12),
+        reachCount: 3,
+        interestLevel: 2,
+        targetLinks: const [
+          ContactTargetLink(
+            targetId: 'target-response-4',
+            targetType: PromotionTargetType.person,
+            responseLevel: 4,
+          ),
+          ContactTargetLink(
+            targetId: 'target-response-1',
+            targetType: PromotionTargetType.person,
+            responseLevel: 1,
+          ),
+          ContactTargetLink(
+            targetId: 'target-response-2',
+            targetType: PromotionTargetType.person,
+            responseLevel: 2,
+          ),
+          ContactTargetLink(
+            targetId: 'target-response-institution-3',
+            targetType: PromotionTargetType.institution,
+            responseLevel: 3,
+            institutionRepresentativeConfirmed: true,
+          ),
+          ContactTargetLink(
+            targetId: 'target-response-unanswered',
+            targetType: PromotionTargetType.person,
+          ),
+        ],
+      ),
+    );
+    await journal.submitAnonymousContact(
+      _submission(
+        occurredAtUtc: DateTime.utc(2030, 1, 15),
+        reachCount: 1,
+        interestLevel: 2,
+        targetLinks: const [
+          ContactTargetLink(
+            targetId: 'target-response-boundary',
+            targetType: PromotionTargetType.person,
+            responseLevel: 3,
+          ),
+        ],
+      ),
+    );
+    await journal.submitAnonymousContact(
+      _submission(
+        appUserId: 'app-user-2',
+        occurredAtUtc: DateTime.utc(2030, 1, 14, 13),
+        reachCount: 1,
+        interestLevel: 2,
+        targetLinks: const [
+          ContactTargetLink(
+            targetId: 'target-response-other-owner',
+            targetType: PromotionTargetType.person,
+            responseLevel: 2,
+          ),
+        ],
+      ),
+    );
+    await journal.submitAnonymousContact(
+      _submission(
+        projectId: 'project-other',
+        occurredAtUtc: DateTime.utc(2030, 1, 14, 14),
+        reachCount: 1,
+        interestLevel: 2,
+        targetLinks: const [
+          ContactTargetLink(
+            targetId: 'target-response-other-project',
+            targetType: PromotionTargetType.person,
+            responseLevel: 0,
+          ),
+        ],
+      ),
+    );
+
+    final summary = await journal.summarizePersonalContacts(
+      appUserId: 'app-user-1',
+      workspaceId: 'personal-workspace-1',
+      projectId: 'project-1',
+      fromUtc: DateTime.utc(2030, 1, 8),
+      untilUtc: DateTime.utc(2030, 1, 15),
+    );
+
+    expect(summary.targetResponseDistribution, [0, 1, 1, 1, 1]);
+    expect(summary.targetResponseUnansweredCount, 1);
+  });
+
+  test('对象反应汇总只计 current revision 并排除作废接触', () async {
+    final journal = _journal([
+      'target-revision-contact',
+      'target-revision-revision-1',
+      'target-revision-command-1',
+      'target-revision-revision-2',
+      'target-revision-command-2',
+      'target-void-contact',
+      'target-void-revision-1',
+      'target-void-command-1',
+      'target-void-revision-2',
+      'target-void-command-2',
+    ], now: DateTime.utc(2030, 1, 15, 18, 30));
+
+    await journal.submitAnonymousContact(
+      _submission(
+        occurredAtUtc: DateTime.utc(2030, 1, 12, 12),
+        reachCount: 1,
+        interestLevel: 2,
+        targetLinks: const [
+          ContactTargetLink(
+            targetId: 'target-revision-old',
+            targetType: PromotionTargetType.person,
+            responseLevel: 0,
+          ),
+        ],
+      ),
+    );
+    await journal.correctContact(
+      ContactCorrectionSubmission(
+        contactId: 'target-revision-contact',
+        appUserId: 'app-user-1',
+        workspaceId: 'personal-workspace-1',
+        projectId: 'project-1',
+        deviceId: 'device-1',
+        baseRevision: 1,
+        reason: '更新对象当次反应',
+        occurredAtUtc: DateTime.utc(2030, 1, 12, 12),
+        occurredTimeZone: 'America/Chicago',
+        channel: ContactChannel.videoCall,
+        location: NotApplicableContactLocation(),
+        reachCount: 1,
+        interestLevel: 2,
+        targetLinks: [
+          ContactTargetLink(
+            targetId: 'target-revision-new',
+            targetType: PromotionTargetType.person,
+            responseLevel: 3,
+          ),
+        ],
+      ),
+    );
+    await journal.submitAnonymousContact(
+      _submission(
+        occurredAtUtc: DateTime.utc(2030, 1, 12, 13),
+        reachCount: 1,
+        interestLevel: 2,
+        targetLinks: const [
+          ContactTargetLink(
+            targetId: 'target-voided',
+            targetType: PromotionTargetType.person,
+            responseLevel: 4,
+          ),
+        ],
+      ),
+    );
+    await journal.voidContact(
+      const ContactVoidSubmission(
+        contactId: 'target-void-contact',
+        appUserId: 'app-user-1',
+        workspaceId: 'personal-workspace-1',
+        projectId: 'project-1',
+        deviceId: 'device-1',
+        baseRevision: 1,
+        reason: '排除作废接触',
+      ),
+    );
+
+    final summary = await journal.summarizePersonalContacts(
+      appUserId: 'app-user-1',
+      workspaceId: 'personal-workspace-1',
+      projectId: 'project-1',
+      fromUtc: DateTime.utc(2030, 1, 8),
+      untilUtc: DateTime.utc(2030, 1, 15),
+    );
+
+    expect(summary.targetResponseDistribution, [0, 0, 0, 1, 0]);
+    expect(summary.targetResponseUnansweredCount, 0);
+  });
+
   test('Drift 汇总与 Flutter 映射对兴趣子集比例场景保持一致', () async {
     const cases =
         <
@@ -1245,6 +1443,7 @@ AnonymousContactSubmission _submission({
   required int reachCount,
   required int interestLevel,
   List<QuestionnaireAnswer> answers = const [],
+  List<ContactTargetLink> targetLinks = const [],
 }) {
   return AnonymousContactSubmission(
     appUserId: appUserId,
@@ -1260,6 +1459,7 @@ AnonymousContactSubmission _submission({
     reachCount: reachCount,
     interestLevel: interestLevel,
     answers: answers,
+    targetLinks: targetLinks,
   );
 }
 

@@ -902,7 +902,9 @@ final class ContactRecord {
 ///
 /// [contactSessionCount] 以接触记录为单位；[reachCount] 以参与互动的自然
 /// 人次为单位；[interestDistribution] 的索引 `0–4` 对应五档单次兴趣；
-/// [channelDistribution] 的索引与 [ContactChannel.values] 一致。
+/// [channelDistribution] 的索引与 [ContactChannel.values] 一致；
+/// [targetResponseDistribution] 的索引 `0–4` 对应当前 revision 中已填写的
+/// 对象当次反应，未填写关联由 [targetResponseUnansweredCount] 单列。
 /// 这是个人自我分析，不应用匿名阈值，也不能解释成管理考核。
 final class PersonalContactSummary {
   const PersonalContactSummary({
@@ -911,6 +913,8 @@ final class PersonalContactSummary {
     required this.interestDistribution,
     required this.pendingSyncCount,
     this.channelDistribution = const [0, 0, 0, 0, 0, 0, 0],
+    this.targetResponseDistribution = const [0, 0, 0, 0, 0],
+    this.targetResponseUnansweredCount = 0,
     this.latestOccurredAtUtc,
   });
 
@@ -919,5 +923,7 @@ final class PersonalContactSummary {
   final List<int> interestDistribution;
   final int pendingSyncCount;
   final List<int> channelDistribution;
+  final List<int> targetResponseDistribution;
+  final int targetResponseUnansweredCount;
   final DateTime? latestOccurredAtUtc;
 }

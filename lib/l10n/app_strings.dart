@@ -437,6 +437,12 @@ const Map<String, Map<String, String>> _strings = {
         '{label}：{numerator} / {denominator}（{percentage}）',
     'interestRatioCoverage':
         '比例覆盖：未知 {unknown}、拒答 {refused}、不适用 {notApplicable}、未回答 {unanswered}、候选内排除 {excluded}；核心兴趣当前必须为 0–4，这不是草稿、尝试或作废记录盘点。',
+    'targetResponseDistribution': '对象当次反应分布',
+    'targetResponseDistributionHelp':
+        '按当前接触 revision 的对象关联分别计数；它与场次整体兴趣、关系阶段分开。',
+    'targetResponseRow': '反应 {level}：{count} / {denominator} 条已填关联',
+    'targetResponseCoverage':
+        '填写覆盖：已填 {answered} 条、未填写 {unanswered} 条对象关联；未填写不算反应 2，草稿、尝试、作废和旧 revision 不在此盘点中。',
     'personalAnalyticsFactNotice': '个人数据：这些事实只用于本人回顾，不用于团队排名。',
     'contactSessionUnit': '场',
     'channelSources': '渠道来源',
@@ -1246,6 +1252,13 @@ const Map<String, Map<String, String>> _strings = {
         '{label}: {numerator} / {denominator} ({percentage})',
     'interestRatioCoverage':
         'Ratio coverage: unknown {unknown}, refused {refused}, not applicable {notApplicable}, unanswered {unanswered}, and candidate exclusions {excluded}. Core interest must currently be 0–4; this is not a census of drafts, attempts, or voided records.',
+    'targetResponseDistribution': 'Target response distribution',
+    'targetResponseDistributionHelp':
+        'Each current contact-revision target link is counted separately. This is distinct from session interest and relationship stage.',
+    'targetResponseRow':
+        'Response {level}: {count} / {denominator} answered links',
+    'targetResponseCoverage':
+        'Response coverage: {answered} answered and {unanswered} unanswered target links. Unanswered is not response 2; drafts, attempts, voided contacts, and old revisions are outside this count.',
     'personalAnalyticsFactNotice':
         'Personal data: these facts are for your review, not team ranking.',
     'contactSessionUnit': 'sessions',

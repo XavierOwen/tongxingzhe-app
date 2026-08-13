@@ -766,6 +766,14 @@ final class _PersonalSummaryPage extends StatelessWidget {
     final interestZeroRatio =
         result.metric(CoreMetricCatalog.interestZeroRatio.reference).value
             as SubsetRatioMetricValue;
+    final targetResponseCount =
+        result.metric(CoreMetricCatalog.targetResponses.reference).value
+            as CountMetricValue;
+    final targetResponseDistribution =
+        result
+                .metric(CoreMetricCatalog.targetResponseDistribution.reference)
+                .value
+            as TargetResponseDistributionMetricValue;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -865,6 +873,32 @@ final class _PersonalSummaryPage extends StatelessWidget {
                       '${interestOrdinalSummary.medianLevel}',
           ),
           Text(text.t('interestMedianHelp')),
+          const SizedBox(height: 16),
+          Semantics(
+            header: true,
+            child: Text(
+              text.t('targetResponseDistribution'),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(text.t('targetResponseDistributionHelp')),
+          const SizedBox(height: 8),
+          for (var level = 0; level <= 4; level++)
+            Text(
+              text.format('targetResponseRow', {
+                'level': level,
+                'count': targetResponseDistribution.counts[level],
+                'denominator': targetResponseCount.value,
+              }),
+            ),
+          const SizedBox(height: 8),
+          Text(
+            text.format('targetResponseCoverage', {
+              'answered': targetResponseCount.value,
+              'unanswered': targetResponseDistribution.unansweredCount,
+            }),
+          ),
           const SizedBox(height: 16),
           Text(
             text.t('channelSources'),

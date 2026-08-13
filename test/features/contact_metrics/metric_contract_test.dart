@@ -3,7 +3,7 @@ import 'package:tongxingzhe_app/features/contact_metrics/metric_contract.dart';
 
 void main() {
   test('核心指标目录使用唯一且不可变的版本标识', () {
-    expect(CoreMetricCatalog.definitions, hasLength(8));
+    expect(CoreMetricCatalog.definitions, hasLength(10));
     expect(
       CoreMetricCatalog.definitions
           .map((definition) => definition.reference)
@@ -11,12 +11,14 @@ void main() {
       {
         const MetricReference('contact_sessions', 1),
         const MetricReference('reached_people', 1),
+        const MetricReference('target_responses', 1),
         const MetricReference('interest_distribution', 1),
         const MetricReference('interest_ordinal_summary', 1),
         const MetricReference('interest_level_ratios', 1),
         const MetricReference('interest_3_4_ratio', 1),
         const MetricReference('interest_0_ratio', 1),
         const MetricReference('channel_distribution', 1),
+        const MetricReference('target_response_distribution', 1),
       },
     );
     expect(
@@ -89,6 +91,26 @@ void main() {
       MetricStatisticalUnit.reachedPerson,
     );
     expect(
+      CoreMetricCatalog.targetResponses.statisticalUnit,
+      MetricStatisticalUnit.contactTargetLink,
+    );
+    expect(
+      CoreMetricCatalog.targetResponses.formula,
+      MetricFormula.countContactTargetLinksWithResponse,
+    );
+    expect(
+      CoreMetricCatalog.targetResponseDistribution.statisticalUnit,
+      MetricStatisticalUnit.contactTargetLink,
+    );
+    expect(
+      CoreMetricCatalog.targetResponseDistribution.formula,
+      MetricFormula.countContactTargetLinksByResponse,
+    );
+    expect(
+      CoreMetricCatalog.targetResponseDistribution.denominator,
+      CoreMetricCatalog.targetResponses.reference,
+    );
+    expect(
       CoreMetricCatalog.definitions.every(
         (definition) =>
             definition.exclusions.contains(MetricExclusion.draft) &&
@@ -106,6 +128,64 @@ void main() {
       () => MetricCatalog([
         CoreMetricCatalog.contactSessions,
         CoreMetricCatalog.contactSessions,
+      ]),
+      throwsArgumentError,
+    );
+  });
+
+  test('指标目录拒绝悬空或口径不一致的分母', () {
+    MetricDefinition distribution(
+      MetricReference denominator, {
+      Set<MetricExclusion> exclusions = const {MetricExclusion.voidedContact},
+    }) => MetricDefinition(
+      reference: const MetricReference('test_distribution', 1),
+      statisticalUnit: MetricStatisticalUnit.contactTargetLink,
+      valueShape: MetricValueShape.ordinalDistribution,
+      formula: MetricFormula.countContactTargetLinksByResponse,
+      timeBasis: MetricTimeBasis.actualOccurrenceUtc,
+      exclusions: exclusions,
+      privacyRule: MetricPrivacyRule.managementProtectedByTrueUnit,
+      denominator: denominator,
+      bucketLabels: const ['0', '1', '2', '3', '4'],
+    );
+
+    expect(
+      () => MetricCatalog([distribution(const MetricReference('missing', 1))]),
+      throwsArgumentError,
+    );
+    expect(
+      () => MetricCatalog([
+        CoreMetricCatalog.contactSessions,
+        distribution(CoreMetricCatalog.contactSessions.reference),
+      ]),
+      throwsArgumentError,
+    );
+    final denominator = MetricDefinition(
+      reference: const MetricReference('target_response_denominator', 1),
+      statisticalUnit: MetricStatisticalUnit.contactTargetLink,
+      valueShape: MetricValueShape.count,
+      formula: MetricFormula.countContactTargetLinksWithResponse,
+      timeBasis: MetricTimeBasis.actualOccurrenceUtc,
+      exclusions: const {MetricExclusion.draft},
+      privacyRule: MetricPrivacyRule.managementProtectedByTrueUnit,
+    );
+    expect(
+      () => MetricCatalog([denominator, distribution(denominator.reference)]),
+      throwsArgumentError,
+    );
+    final wrongFormulaDenominator = MetricDefinition(
+      reference: const MetricReference('wrong_formula_denominator', 1),
+      statisticalUnit: MetricStatisticalUnit.contactTargetLink,
+      valueShape: MetricValueShape.count,
+      formula: MetricFormula.countContactSessions,
+      timeBasis: MetricTimeBasis.actualOccurrenceUtc,
+      exclusions: const {MetricExclusion.voidedContact},
+      privacyRule: MetricPrivacyRule.managementProtectedByTrueUnit,
+    );
+    expect(
+      () => MetricCatalog([
+        wrongFormulaDenominator,
+        distribution(wrongFormulaDenominator.reference),
       ]),
       throwsArgumentError,
     );
@@ -179,6 +259,66 @@ void main() {
         counts: const [1, 1, -1, 0, 0],
         totalCount: 1,
         medianLevel: 0,
+      ),
+      throwsArgumentError,
+    );
+  });
+
+  test('对象反应分布保留未填写关联且拒绝负覆盖数', () {
+    final distribution = TargetResponseDistributionMetricValue(
+      labels: const ['0', '1', '2', '3', '4'],
+      counts: const [1, 0, 0, 0, 1],
+      unansweredCount: 2,
+    );
+
+    expect(distribution.unansweredCount, 2);
+    expect(
+      MetricResult(
+        definition: CoreMetricCatalog.targetResponseDistribution,
+        value: distribution,
+        period: _period,
+        timeZone: 'UTC',
+        dataCutoffUtc: DateTime.utc(2030, 1, 8, 18),
+        sourceTier: MetricSourceTier.localOperational,
+        syncCoverage: _coverage,
+        privacyStatus: MetricPrivacyStatus.personalFact,
+      ).value,
+      distribution,
+    );
+    expect(
+      () => TargetResponseDistributionMetricValue(
+        labels: const ['0', '1', '2', '3', '4'],
+        counts: const [0, 0, 0, 0, 0],
+        unansweredCount: -1,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => MetricResult(
+        definition: CoreMetricCatalog.interestDistribution,
+        value: distribution,
+        period: _period,
+        timeZone: 'UTC',
+        dataCutoffUtc: DateTime.utc(2030, 1, 8, 18),
+        sourceTier: MetricSourceTier.localOperational,
+        syncCoverage: _coverage,
+        privacyStatus: MetricPrivacyStatus.personalFact,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => MetricResult(
+        definition: CoreMetricCatalog.targetResponseDistribution,
+        value: MetricDistributionValue(
+          labels: const ['0', '1', '2', '3', '4'],
+          counts: const [1, 0, 0, 0, 1],
+        ),
+        period: _period,
+        timeZone: 'UTC',
+        dataCutoffUtc: DateTime.utc(2030, 1, 8, 18),
+        sourceTier: MetricSourceTier.localOperational,
+        syncCoverage: _coverage,
+        privacyStatus: MetricPrivacyStatus.personalFact,
       ),
       throwsArgumentError,
     );
