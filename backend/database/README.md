@@ -241,7 +241,7 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 `0017_contact_target_links.sql` 给每个接触 revision 保存零到多条对象关联快照，以及对象在当前项目中的独立关系阶段。关联只保存对象 ID、类型、可选当次反应和后续联系同意，不复制 PII，也不改变场次、触达人数或整体兴趣。新关联、阶段 0 确认、接触写入和 Outbox 在同一 transaction 中完成；修订、冲突解决和拉取都保留逐版本历史。Warehouse payload 只保留对象类型、当次反应和同意状态，不包含对象 ID。
 
-[`follow_up_consent_ratio_v1.csv`](./fixtures/shared/follow_up_consent_ratio_v1.csv) 是后续联系同意占比的实现前合同。它固定项目启用、当前有效 contact-target link、`yes / (yes + no)`、默认 `unknown` 作为未回答、half-up 基点和候选集排除边界。`0048` 保存可信启用事实，但当前仍没有生产比例 SQL 消费这份 fixture；个人比例 bridge 和管理隐私报告必须在后续切片中分别交付。
+[`follow_up_consent_ratio_v1.csv`](./fixtures/shared/follow_up_consent_ratio_v1.csv) 是后续联系同意占比的共享合同。它固定项目启用、当前有效 contact-target link、`yes / (yes + no)`、默认 `unknown` 作为未回答、half-up 基点和候选集排除边界。`0048` 保存可信启用事实，`0049` 的个人比例 bridge 直接消费这份 fixture；管理隐私报告仍须另行交付。
 
 `0018_promotion_target_relationship_audit.sql` 把项目关系扩展为当前投影和追加 revision 历史。阶段仍固定为 `0–4`，生命周期独立保存；阶段、生命周期和共享跟进备注的每次修改都保留操作者、时间、原因和 mutation ID。旧 revision 通过 base snapshot 做字段级三方比较：不同字段自动合并，同字段把拟提交内容写入受保护冲突表，等待当前跟进者明确解决。阶段下降要求结构化原因。项目别名只覆盖显示名，双倍刻度只在响应中派生。runtime role 不能直接读取备注、冲突或历史表。
 
@@ -306,6 +306,13 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 `0047` fixture 与 Flutter 合同测试共同消费 `current_relationship_stage_v1.csv`。主场景五档各保留一个 active 关系；重复对象 × 项目场景必须整体失败，不能任选 revision 或重复计数。数据库检查还固定函数形状、`SECURITY DEFINER` search path、权限、PII-free JSON keys、稳定排序和 pending coverage 为零。
 
 `0048_project_follow_up_consent_opt_in.sql` 为 `follow_up_consent_ratio@1` 保存个人项目的追加式启用版本。配置和读取函数都从可信 issuer／subject 重新解析活动个人空间所有者和活动项目；runtime 只有这两个窄函数的执行权，不能直接访问版本表。首次配置使用预期版本零，后续变更必须提供当前版本；UUID 请求 ID 使同内容重试稳定返回原版本，过期版本、内容不同的重放和并发竞争失败关闭。当前启用后可以回看已有期间；停用或从未配置只返回 `not_enabled`，不会删除接触事实或伪造比例、覆盖和排除数。
+
+`0049_personal_follow_up_consent_ratio.sql` 提供个人后续联系同意占比的 PostgreSQL bridge。公开函数的签名是
+`app_data.read_personal_follow_up_consent_ratio_v1(text,text,uuid,text,timestamptz,timestamptz)`：前两个参数是 Backend 从已验证 JWT 取得的可信 issuer／subject，第三个参数是项目，第四个参数必须是 `follow_up_consent_ratio@1`，最后两个参数是 UTC 半开期间。函数先重新核对活动账号、个人空间所有者和活动项目，再读取 0048 的当前开关。没有配置或当前停用时立即返回四个键 `contract_id`、`metric_id`、`project_id`、`status`，其中 `contract_id` 固定为 `personal_follow_up_consent_ratio_result_v1`，`status` 为 `not_enabled`；这个结果不含 `period`、`value`、覆盖或排除字段，也不读取接触事实。
+
+当前开关启用时，结果仍使用上述三个身份键和 `status: "ready"`，并增加 UTC 半开 `period` 与嵌套 `value`。`value` 保存 `yes_count`、`no_count`、`numerator`、`unknown_count`、`refused_count`、`not_applicable_count`、`unanswered_count`、`excluded_count`、`denominator` 和 `percentage_basis_points`；`numerator` 与 `yes_count` 相同。分母是 `yes + no`，`unknown_count` 与 `excluded_count` 固定为零；分母为零时返回 `0 / 0` 和 `NULL` 基点。统计只使用活动接触的 current revision contact-target link；旧 revision、作废、草稿、尝试、问卷同名答案、其他项目和期间外记录在候选集前排除。
+
+`0049` fixture 直接用 psql `\copy` 读取 [`follow_up_consent_ratio_v1.csv`](./fixtures/shared/follow_up_consent_ratio_v1.csv)，再把共享行映射为 PostgreSQL 的 contact、revision 和 contact-target link，逐场景对账结果。它必须覆盖主场景 `2 / 3 = 6667`、多对象关联、`unknown`／拒答／不适用覆盖、无 `yes`／`no` 的空分母、current revision、作废、错误统计单位、其他 scope、左含右不含的 UTC 边界，以及未启用分支的四键结果。该 migration 只交付 PostgreSQL bridge、权限、fixture 和检查；不包含 Flutter／Drift、Backend HTTP、项目设置、离线缓存、管理报告或 warehouse。
 
 Backend Store 对 0039 触发器的地点错误只做固定 `SQLSTATE 23514` 与错误文字的窄映射：已知 source 形状失败返回 `rejected / invalid_location_source`，已知 location 形状失败返回 `rejected / invalid_location`，HTTP 层将其作为 `422` permanent failure。未知 `23514` 或其他数据库错误仍向上抛出，HTTP 层返回 `503 sync_unavailable`。不得用一条宽泛的 SQLSTATE 映射掩盖新的约束或权限问题。
 
