@@ -254,6 +254,31 @@ test("location rejects unknown keys even when the source is absent", async () =>
   });
 });
 
+test("pending location rejects resolved-region fields", async () => {
+  const body = validCommandBody();
+  const payload = body.typed_payload as Record<string, unknown>;
+  payload.location = {
+    kind: "pending_resolution",
+    latitude: 41.7897,
+    longitude: -87.5997,
+    accuracy_meters: 8.5,
+    place_name: "must-not-be-ignored",
+    smallest_region_id: "must-not-be-ignored",
+    region_tree_version: "must-not-be-ignored",
+  };
+
+  const response = await handleSyncCommand(
+    "Bearer synthetic-token",
+    body,
+    fakeDependencies(),
+  );
+
+  assert.deepEqual(response.body, {
+    result: "rejected",
+    error: { code: "invalid_location" },
+  });
+});
+
 test("sync parser preserves all controlled answer value shapes", async () => {
   let storedCommand: SyncCommand | undefined;
   const body = validCommandBody();

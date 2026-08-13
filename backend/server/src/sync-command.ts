@@ -651,6 +651,11 @@ function parseWireLocation(value: unknown): ContactLocation {
     };
   }
   if (location.kind === "pending_resolution") {
+    assertNullOrMissingLocationFields(location, [
+      "place_name",
+      "smallest_region_id",
+      "region_tree_version",
+    ]);
     const latitude = finiteNumber(location.latitude, "invalid_latitude");
     const longitude = finiteNumber(location.longitude, "invalid_longitude");
     const accuracy = nullableFiniteNumber(

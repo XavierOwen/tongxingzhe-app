@@ -550,6 +550,11 @@ function parseStoredConflictLocation(
       ),
     };
   } else if (location.kind === "pending_resolution") {
+    assertStoredNullOrMissing(location, [
+      "placeName",
+      "smallestRegionId",
+      "regionTreeVersion",
+    ]);
     const latitude = storedFiniteNumber(location.latitude, "latitude");
     const longitude = storedFiniteNumber(location.longitude, "longitude");
     const accuracy = storedNullableFiniteNumber(

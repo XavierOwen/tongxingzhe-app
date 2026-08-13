@@ -305,6 +305,85 @@ test("Postgres store rejects malformed conflict source without exposing coordina
   );
 });
 
+test("Postgres store rejects pending conflict locations with resolved fields", async () => {
+  const store = new PostgresSyncCommandStore(async (queryText) => {
+    if (queryText.includes("read_contact_revision_conflict")) {
+      return {
+        rows: [{
+          conflict_payload: {
+            conflictId: "55555555-5555-4555-8555-555555555555",
+            contactId: "contact-1",
+            baseRevision: 1,
+            currentRevision: 2,
+            conflictingFields: ["location"],
+            questionnaireVersionId: context.current.questionnaireVersion.id,
+            currentRevisionKind: "corrected",
+            currentRevisedAtUtc: "2030-01-08T19:00:00.000Z",
+            currentReason: "另一台设备修正地点",
+            currentSnapshot: {
+              occurredAtUtc: "2030-01-08T18:00:00.000Z",
+              occurredTimeZone: "America/Chicago",
+              channel: "video_call",
+              channelDetail: null,
+              location: {
+                kind: "pending_resolution",
+                latitude: 41.7897,
+                longitude: -87.5997,
+                accuracyMeters: 8.5,
+                placeName: "must-not-be-ignored",
+              },
+              reachCount: 4,
+              interestLevel: 3,
+              answers: [],
+            },
+            proposedSnapshot: {
+              occurredAtUtc: "2030-01-08T18:00:00.000Z",
+              occurredTimeZone: "America/Chicago",
+              channel: "video_call",
+              channelDetail: null,
+              location: { kind: "not_applicable" },
+              reachCount: 3,
+              interestLevel: 3,
+              answers: [],
+            },
+          },
+        }],
+      };
+    }
+    return {
+      rows: [{
+        result_code: "conflict",
+        server_cursor: null,
+        failure_code: "contact_revision_conflict",
+      }],
+    };
+  });
+
+  await assert.rejects(
+    store.apply(context, {
+      ...command,
+      commandId: "malformed-pending-location-conflict",
+      baseRevision: 1,
+      type: "contact.revise.v1",
+      payload: {
+        contactId: "contact-1",
+        workspaceId: context.current.workspace.id,
+        projectId: context.current.project.id,
+        reason: "修正地点",
+        occurredAtUtc: "2030-01-08T18:00:00.000Z",
+        occurredTimeZone: "America/Chicago",
+        channel: "video_call",
+        channelDetail: null,
+        location: { kind: "not_applicable" },
+        reachCount: 3,
+        interestLevel: 3,
+        answers: [],
+      },
+    }),
+    /Revision conflict location shape is invalid/,
+  );
+});
+
 test("Postgres store routes private draft commands to the draft function", async () => {
   let text = "";
   const store = new PostgresSyncCommandStore(async (queryText) => {
