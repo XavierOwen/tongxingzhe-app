@@ -43,7 +43,7 @@
 | [0119](./0119-target-response-distribution-counts-current-answered-links.md) | 已接受，2026-08-12 | Slice 6Z；`TARGET-004`、`TARGET-006`、`TARGET-007`、`TARGET-013`、`ANALYTICS-001`、`ANALYTICS-002`、`ANALYTICS-007`、`ANALYTICS-012` | 对象当次反应按当前 revision 已填写关联计数，NULL 只作未填写覆盖 |
 | [0120](./0120-target-response-median-uses-answered-current-links.md) | 已接受，2026-08-13 | Slice 6AA；`TARGET-004`、`TARGET-006`、`TARGET-007`、`TARGET-013`、`ANALYTICS-001`、`ANALYTICS-002`、`ANALYTICS-007`、`ANALYTICS-012` | 对象当次反应中位等级只使用当前已填关联，偶数取较低真实等级 |
 | [0121](./0121-target-response-level-ratios-use-answered-current-links.md) | 已接受，2026-08-13 | Slice 6AB；`TARGET-004`、`TARGET-006`、`TARGET-007`、`TARGET-013`、`ANALYTICS-001`、`ANALYTICS-002`、`ANALYTICS-003`、`ANALYTICS-007`、`ANALYTICS-010`、`ANALYTICS-012` | 对象当次反应五档比例只使用当前已填关联，整数基点按 half-up 计算，空分母不虚构百分比 |
-| [0122](./0122-current-relationship-stage-distribution-is-a-scoped-current-snapshot.md) | 已接受，2026-08-13 | Slice 6AC-0；`PII-001`–`PII-005`、`ANALYTICS-007`、`ANALYTICS-010`–`ANALYTICS-012` | 个人当前关系阶段按当前分配的 active 对象 × 项目关系计数，并区分快照时刻、来源新鲜度与历史重建 |
+| [0122](./0122-current-relationship-stage-distribution-is-a-scoped-current-snapshot.md) | 已接受，2026-08-13 | Slice 6AC-0、Slice 6AC；`PII-001`–`PII-005`、`ANALYTICS-007`、`ANALYTICS-010`–`ANALYTICS-012` | 个人当前关系阶段按当前分配的 active 对象 × 项目关系计数，并区分快照时刻、来源新鲜度与历史重建 |
 
 ## 按主题查找
 
