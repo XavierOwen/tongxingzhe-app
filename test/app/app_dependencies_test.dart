@@ -1,5 +1,7 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:tongxingzhe_app/app/app_dependencies.dart';
 import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/data/local_database_factory.dart';
@@ -11,6 +13,8 @@ import 'package:tongxingzhe_app/legacy_demo/legacy_demo_dependencies.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
 import 'package:tongxingzhe_app/privacy/drift_offline_pii_lock_store.dart';
 import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
+import 'package:tongxingzhe_app/project_settings/http_personal_follow_up_consent_opt_in_gateway.dart';
+import 'package:tongxingzhe_app/project_settings/personal_follow_up_consent_opt_in.dart';
 import 'package:tongxingzhe_app/targets/promotion_target.dart';
 
 import '../support/fake_identity_session.dart';
@@ -39,10 +43,96 @@ void main() {
     addTearDown(controller.dispose);
     expect(controller.users, isEmpty);
     expect(controller.records, isEmpty);
+    expect(
+      ready.personalFollowUpConsentOptInGateway,
+      isA<DeferredPersonalFollowUpConsentOptInGateway>(),
+    );
 
     final login = await controller.login('admin1', 'admin1');
     expect(login.success, isFalse);
     expect(login.messageKey, 'authUnavailableInProduction');
+  });
+
+  test('composition root 装配并释放后续联系同意占比 gateway', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final gateway = _TrackingConsentOptInGateway();
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      personalFollowUpConsentOptInGatewayBuilder: (_, _) => gateway,
+    );
+
+    final startup = await dependencies.start();
+
+    expect(startup, isA<AppStartupReady>());
+    final ready = startup as AppStartupReady;
+    expect(
+      identical(ready.personalFollowUpConsentOptInGateway, gateway),
+      isTrue,
+    );
+    await ready.personalFollowUpConsentOptInGateway.close();
+    expect(gateway.closeCount, 1);
+    await ready.appSession.close();
+    await ready.identitySession.close();
+    ready.controller.dispose();
+    await database.close();
+  });
+
+  test('配置 Backend 时 composition root 把当前项目绑定到 HTTP gateway', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: const IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+      ),
+    );
+    IdentitySession? receivedIdentity;
+    String Function()? receivedProjectId;
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      personalFollowUpConsentOptInGatewayBuilder: (session, currentProjectId) {
+        receivedIdentity = session;
+        receivedProjectId = currentProjectId;
+        return HttpPersonalFollowUpConsentOptInGateway(
+          baseUri: Uri.parse('https://backend.example.test'),
+          identitySession: session,
+          client: MockClient((_) async => http.Response('', 503)),
+          currentProjectId: currentProjectId,
+        );
+      },
+    );
+
+    final startup = await dependencies.start();
+
+    expect(startup, isA<AppStartupReady>());
+    final ready = startup as AppStartupReady;
+    final gateway = ready.personalFollowUpConsentOptInGateway;
+    addTearDown(gateway.close);
+    addTearDown(ready.appSession.close);
+    addTearDown(ready.identitySession.close);
+    addTearDown(ready.controller.dispose);
+    addTearDown(database.close);
+
+    expect(identical(receivedIdentity, identity), isTrue);
+    expect(receivedProjectId, isNotNull);
+    expect(receivedProjectId!(), syntheticSessionContext.project.id);
+    expect(gateway, isA<HttpPersonalFollowUpConsentOptInGateway>());
+    expect(
+      (gateway as HttpPersonalFollowUpConsentOptInGateway).currentProjectId(),
+      syntheticSessionContext.project.id,
+    );
   });
 
   test('数据库无法打开时返回稳定的启动失败结果', () async {
@@ -275,6 +365,34 @@ final class _TrackingManagementReportGateway
   Future<ManagementReportResult<ManagementAnalysisContextSnapshot>>
   selectContext(String projectId) async =>
       const ManagementReportRejected(ManagementReportFailureCode.notConfigured);
+}
+
+final class _TrackingConsentOptInGateway
+    implements PersonalFollowUpConsentOptInGateway {
+  var closeCount = 0;
+
+  @override
+  Future<void> close() async => closeCount++;
+
+  @override
+  Future<PersonalFollowUpConsentOptInResult<PersonalFollowUpConsentOptInState>>
+  load() async => const PersonalFollowUpConsentOptInRejected(
+    PersonalFollowUpConsentOptInFailureCode.notConfigured,
+  );
+
+  @override
+  Future<
+    PersonalFollowUpConsentOptInResult<
+      PersonalFollowUpConsentOptInConfiguration
+    >
+  >
+  configure({
+    required int expectedVersion,
+    required bool enabled,
+    required String requestId,
+  }) async => const PersonalFollowUpConsentOptInRejected(
+    PersonalFollowUpConsentOptInFailureCode.notConfigured,
+  );
 }
 
 final class _TrackingCurrentRelationshipStageGateway

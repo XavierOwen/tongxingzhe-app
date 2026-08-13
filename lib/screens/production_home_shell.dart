@@ -18,6 +18,7 @@ import '../features/contact_metrics/current_relationship_stage_panel.dart';
 import '../features/contact_metrics/personal_contact_overview.dart';
 import '../features/home/production_home_view_model.dart';
 import '../features/plans/personal_action_plan_panel.dart';
+import '../features/project_settings/personal_follow_up_consent_opt_in_screen.dart';
 import '../features/reminders/personal_action_reminder_panel.dart';
 import '../features/questionnaire_admin/questionnaire_admin_screen.dart';
 import '../features/targets/promotion_target_directory_page.dart';
@@ -25,6 +26,7 @@ import '../features/management_reports/management_report_browser.dart';
 import '../l10n/app_strings.dart';
 import '../management_reports/management_report_gateway.dart';
 import '../plans/personal_action_plan.dart';
+import '../project_settings/personal_follow_up_consent_opt_in.dart';
 import '../reminders/personal_action_reminder.dart';
 import '../questionnaires/questionnaire_administration.dart';
 import '../routing/app_router.dart';
@@ -54,6 +56,7 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.promotionTargetGateway,
     required this.personalActionPlanGateway,
     required this.personalActionReminderGateway,
+    required this.personalFollowUpConsentOptInGateway,
     required this.managementReportGateway,
     required this.currentRelationshipStageRepository,
     required this.deviceReminderPreferenceStore,
@@ -80,6 +83,7 @@ final class ProductionHomeShell extends StatefulWidget {
   final PromotionTargetGateway promotionTargetGateway;
   final PersonalActionPlanGateway personalActionPlanGateway;
   final PersonalActionReminderGateway personalActionReminderGateway;
+  final PersonalFollowUpConsentOptInGateway personalFollowUpConsentOptInGateway;
   final ManagementReportGateway managementReportGateway;
   final CurrentRelationshipStageRepository currentRelationshipStageRepository;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
@@ -307,6 +311,20 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
               ],
             ),
           ),
+          if (widget.context.workspace.kind == WorkspaceKind.personal) ...[
+            const PopupMenuDivider(),
+            PopupMenuItem<String>(
+              key: const ValueKey('project-settings-menu-item'),
+              value: _projectSettingsMenuValue,
+              child: Row(
+                children: [
+                  const Icon(Icons.settings_outlined, size: 18),
+                  const SizedBox(width: 8),
+                  Text(strings.t('projectSettings')),
+                ],
+              ),
+            ),
+          ],
           if (widget.context.capabilities.contains(
             questionnaireManagementCapability,
           )) ...[
@@ -422,6 +440,10 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
   }
 
   Future<void> _handleProjectMenuSelection(String value) async {
+    if (value == _projectSettingsMenuValue) {
+      await _openProjectSettings();
+      return;
+    }
     if (value == _manageQuestionnaireMenuValue) {
       await _manageQuestionnaire();
       return;
@@ -431,6 +453,19 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
       return;
     }
     await _viewModel.selectProject(value);
+  }
+
+  Future<void> _openProjectSettings() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (routeContext) => PersonalFollowUpConsentOptInScreen(
+          text: AppStrings(widget.controller.localeCode),
+          projectId: widget.context.project.id,
+          gateway: widget.personalFollowUpConsentOptInGateway,
+          requestIdGenerator: SecureConsentOptInRequestIdGenerator(),
+        ),
+      ),
+    );
   }
 
   Future<void> _manageQuestionnaire() async {
@@ -679,6 +714,7 @@ final class _ProductionContextTitle extends StatelessWidget {
 
 const _createProjectMenuValue = '__create_personal_project__';
 const _manageQuestionnaireMenuValue = '__manage_questionnaire__';
+const _projectSettingsMenuValue = '__project_settings__';
 
 /// 对话框自行持有输入控制器，关闭动画结束后再随 State 一起释放。
 final class _CreateProjectDialog extends StatefulWidget {
