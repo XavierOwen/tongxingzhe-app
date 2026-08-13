@@ -36,6 +36,7 @@
 | [0112](./0112-contact-location-provenance-is-append-only-revision-evidence.md) | 已接受，2026-08-12 | Slice 6S；`CONTACT-010`、`REGION-001`、`REGION-002`、`REGION-005`、`REGION-007`–`REGION-009`、`ARCH-004`、`ARCH-006`–`ARCH-008`、`ARCH-010`、`AUTHZ-004`、`AUTHZ-006`、`PRIVACY-007`、`PRIVACY-010`、`PRIVACY-011`、`MIGRATION-001`–`MIGRATION-005`、`TEST-003`、`TEST-005` | 接触地点来源按 revision 追加保存；明确 pending／N/A、resolved region-only、历史回填和精确坐标边界 |
 | [0113](./0113-location-source-wire-contract-binds-resolution-provenance.md) | 已接受，2026-08-12 | Slice 6T；`REGION-001`、`REGION-002`、`REGION-005`、`REGION-007`–`REGION-009`、`ARCH-004`、`ARCH-006`–`ARCH-008`、`ARCH-010`、`PRIVACY-007`、`PRIVACY-010`、`PRIVACY-011`、`TEST-003`、`TEST-005` | 严格位置来源 wire 合同把原始坐标绑定到已发布区域树指纹；缺少可信证据时保留 pending |
 | [0114](./0114-device-location-source-is-an-atomic-typed-fact.md) | 已接受，2026-08-12 | Slice 6U；`REGION-001`、`REGION-002`、`REGION-005`、`REGION-007`–`REGION-009`、`ARCH-001`、`ARCH-004`、`ARCH-006`–`ARCH-008`、`ARCH-010`、`PRIVACY-007`、`PRIVACY-010`、`PRIVACY-011`、`MIGRATION-001`–`MIGRATION-005`、`TEST-003`、`TEST-005` | Drift v18 类型化保存来源；地点和来源在设备存储、队列、pull 与冲突中原子替换 |
+| [0115](./0115-location-source-four-layer-evidence.md) | 已接受，2026-08-12 | Slice 6V；`REGION-001`、`REGION-002`、`REGION-005`、`REGION-007`–`REGION-009`、`ARCH-004`、`ARCH-006`–`ARCH-008`、`PRIVACY-007`、`PRIVACY-010`、`PRIVACY-011`、`TEST-003`、`TEST-005` | 共享合成证据对账设备、Backend、PostgreSQL 和隐私边界；已知地点约束稳定永久拒绝 |
 
 ## 按主题查找
 

@@ -5,6 +5,7 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repository_root="$(cd "${script_dir}/.." && pwd)"
 postgres_image="${POSTGRES_TEST_IMAGE:-postgres:16}"
+backend_image="${BACKEND_POSTGRES_TEST_IMAGE:-node:24-bookworm}"
 container_name="${POSTGRES_TEST_CONTAINER:-tongxingzhe-postgres-test-$$}"
 restore_container_name="${container_name}-restore"
 keep_failed_container="${KEEP_POSTGRES_TEST_CONTAINER:-0}"
@@ -528,6 +529,31 @@ run_sql_files \
   '/workspace/backend/database/fixtures' \
   '[0-9][0-9][0-9][0-9]_*.sql' \
   'fixture'
+
+echo "用真实 Backend adapter 对账 PostgreSQL（${backend_image}）。"
+docker run \
+  --rm \
+  --network "container:${container_name}" \
+  --mount "type=bind,src=${repository_root},dst=/source,readonly" \
+  --mount 'type=volume,dst=/work' \
+  --workdir /work \
+  --env DATABASE_URL="${database_url}" \
+  "${backend_image}" \
+  bash -lc \
+    'mkdir -p backend/server backend/database/fixtures &&
+     cp /source/backend/server/package.json \
+        /source/backend/server/package-lock.json \
+        /source/backend/server/tsconfig.json \
+        backend/server/ &&
+     cp -R /source/backend/server/src /source/backend/server/test \
+        backend/server/ &&
+     cp -R /source/backend/database/fixtures/shared \
+        backend/database/fixtures/ &&
+     cd backend/server &&
+     npm ci --ignore-scripts &&
+     npm run build &&
+     node --enable-source-maps \
+       dist/test/contact-location-evidence.integration.js'
 
 echo '用独立数据库会话验证并发不变量。'
 # Concurrency scripts commit their synthetic rows, and the later pg_dump keeps

@@ -170,7 +170,15 @@ Flutter 的 [`HttpContactRegionResolver`](../../lib/regions/contact_region_resol
 
 Drift v18 把来源保存到草稿、当前接触和 revision 的类型化列。ContactJournal、Outbox、pull apply 和冲突快照把地点与来源作为一个事实组：更正会同时替换或清空两者，作废复制上一条已接受 revision，来源单边变化也参与冲突判断。pending、N/A 和冲突界面只显示状态或地点名称，不回显精确坐标。v17 旧行升级后来源保持未知，不根据当前区域投影补造历史。
 
-这组设备测试证明草稿重启、排队重试、pull 和冲突处理不会静默丢失合法来源。它还不是四层端到端证据。只有 Slice 6V 对账 Flutter command、Backend store、PostgreSQL 来源表和 warehouse 清理后，才可以声称真实同步命令完整写入 ADR-0112 的来源记录。
+这组设备测试证明草稿重启、排队重试、pull 和冲突处理不会静默丢失合法来源。它还不是四层端到端证据。Slice 6V 的四层证据必须把 Flutter command、Backend store、PostgreSQL 来源表和 warehouse 清理放进同一条可重跑的对账路径；在该路径通过前，不得声称真实同步命令已经完整写入 ADR-0112 的来源记录。
+
+## 地点来源四层对账与错误边界
+
+PostgreSQL [`0039_contact_location_provenance.sql`](../../backend/database/migrations/0039_contact_location_provenance.sql) 在已接受 revision 的同一 transaction 中追加来源记录。[共享 CSV](../../backend/database/fixtures/shared/contact_location_source_v1.csv) 给 Flutter、Backend 和 PostgreSQL 提供相同的四种当前状态及错误输入。数据库 [`0039_contact_location_provenance.sql`](../../backend/database/fixtures/0039_contact_location_provenance.sql) fixture 另行覆盖历史 `legacy_incomplete`，并检查 revision、冲突、作废、warehouse scrub、append-only 和 runtime 权限。SQL fixture 本身不证明 HTTP adapter 已连接。
+
+Backend Store 只把 0039 中已知的固定 `SQLSTATE 23514`／错误文字映射为永久拒绝。source 形状错误返回 `rejected / invalid_location_source`，location 形状错误返回 `rejected / invalid_location`，HTTP 状态为 `422`。未知 `23514` 和其他数据库错误仍上抛，HTTP 层返回 `503 sync_unavailable`，所以新的约束或权限故障不会被误分类为用户输入错误。错误响应只返回稳定代码，不回显坐标；授权的个人同步冲突和 pull 仍可以返回本人的精确事实。
+
+Docker runner 在 PostgreSQL fixture 后使用 `node:24-bookworm` 执行 `backend/server/test/contact-location-evidence.integration.ts` 的编译产物。该阶段读取同一份共享 CSV，通过真实 Backend Store 对账四种地点来源、修订、冲突、解决、作废、永久失败分类、追加证据、warehouse 和匿名管理报告隐私边界。入口文件缺失或任一断言失败都会使整个命令失败，不能把前面的 SQL fixture 通过单独当作四层通过。这条路径只使用 synthetic 数据，不是生产数据库、真实用户、真机或平台认证验证。
 
 ## Drift 与 PostgreSQL 如何对账同一指标
 

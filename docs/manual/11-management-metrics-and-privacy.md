@@ -2,7 +2,7 @@
 
 个人分析和管理分析处理不同的信任边界。个人页可以立即显示本人设备上的事实，并说明哪些接触尚未同步。管理分析只能使用后端已接受的数据，还必须先降低小群体披露风险。
 
-当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定、不可变受保护快照、项目报告时区版本历史、管理报告能力授权、可信发布 v2、管理项目发现与选择、可信快照目录、窄 HTTPS 发布与读取端点、Flutter 只读管理报告页面、私有区域隐私威胁探针，以及已发布规范区域树和边界版本的冻结。Slice 6S 只固定 PostgreSQL 地点来源合同、历史回填和 fixture-first 证据，不表示 Flutter／Drift、Backend HTTP 或生产写入 bridge 已接入。它仍没有生产成员管理、自动发布调度或生产区域报告。
+当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定、不可变受保护快照、项目报告时区版本历史、管理报告能力授权、可信发布 v2、管理项目发现与选择、可信快照目录、窄 HTTPS 发布与读取端点、Flutter 只读管理报告页面、私有区域隐私威胁探针，以及已发布规范区域树和边界版本的冻结。Slice 6S 固定 PostgreSQL 地点来源合同；6U 接入 Flutter／Drift、Outbox 和 Backend；6V 用共享 synthetic fixture 对账四层。它仍没有生产成员管理、自动发布调度、生产区域报告、真实 GPS 或六平台真机证据。
 
 ## 先确定统计单位
 
@@ -387,7 +387,7 @@ Slice 6Q 因此没有给现有生产端点增加区域参数，也没有注册�
 
 `original` 视图使用接触事实保存的最小区域 ID 和区域树版本。它回答“记录当时归到哪里”。`current` 视图回答“按今天有效的规范区域应归到哪里”，所以必须有明确跨版本映射，或保留可以按当前边界重新解析的来源坐标。
 
-现有 contact current projection 只保存 `region_id + tree_version`，不保存解析前坐标；`contact_region_assignments` 还是随 revision 更新的 current projection。只有这两项投影证据时，系统不能可靠重算 `current`，也不能把旧区域 ID 猜成相似名称的新城市。探针把缺失映射作为失败关闭条件。Slice 6S 的 PostgreSQL 合同另存每个 revision 的来源状态，但不生成 current 映射，也不声称已交付两种生产视图。
+现有 contact current projection 只保存 `region_id + tree_version`；`contact_region_assignments` 还是随 revision 更新的 current projection。Slice 6S 至 6V 会为有来源的 revision 保存解析前坐标，但没有建立跨版本映射或生产区域报告读取路径。系统仍不能把旧区域 ID 猜成相似名称的新城市。探针把缺失映射作为失败关闭条件，也不声称已交付两种生产视图。
 
 `pending_resolution` 的含义不同：面对面接触已有坐标，但平台尚未给出规范区域。该记录保留坐标并排除在城市格之外。`not_applicable` 只适用于纯非线下接触，表示地点维度不适用。它不是解析失败、未知城市或零数量。
 
@@ -438,7 +438,7 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 这些文件只使用 synthetic 数据。并发脚本会提交自己的测试行，普通 fixture 会回滚；不要把测试库当作生产库，也不要把 Docker 通过写成真实维护者发布或六平台验收。
 
-冻结版本是 6S 地点 provenance 的前置条件，不是 provenance 本身。Slice 6S 在 PostgreSQL 中追加保存解析来源和原始证据，但不接入 Flutter／Drift、Backend HTTP 或生产写入 bridge。生产区域报告还必须另行确定完整网格、互补隐藏、授权、快照 lineage 和自己的重识别 fixture。本节不增加区域报告 API、管理 UI、缓存或导出。
+冻结版本是 6S 地点 provenance 的前置条件，不是 provenance 本身。Slice 6S 在 PostgreSQL 中追加保存解析来源和原始证据；6U 接入 Flutter／Drift、Outbox 和 Backend；6V 增加四层对账。生产区域报告还必须另行确定完整网格、互补隐藏、授权、快照 lineage 和自己的重识别 fixture。本节不增加区域报告 API、管理 UI、缓存或导出。
 
 ## Slice 6S 如何固定地点来源合同
 
@@ -462,8 +462,9 @@ current projection，也没有来源读取 API。
 有合法 source 时保留采集坐标，没有时保留 `region-only`；矛盾或畸形 source
 保持 `incomplete`／`unknown`。回填不能从单一 current assignment 伪造历史。
 
-精确坐标是敏感接触事实。来源表留在受限 `app_data`，不进入管理报告、日志、
-错误响应或 warehouse。数据库会在 `warehouse_outbox` 写入边界移除 location
+精确坐标是敏感接触事实。来源表留在受限 `app_data`，不进入管理报告、
+错误响应或 warehouse。Backend 当前没有应用日志 sink；部署平台的访问日志不得记录
+请求体或响应体。数据库会在 `warehouse_outbox` 写入边界移除 location
 和 source，防止修订、冲突解决或作废复制完整 snapshot 时泄漏坐标；
 `tongxingzhe_runtime`、区域发布者和管理分析 capability
 都不会因此获得来源读取权。作废保留来源历史，账号／空间删除与保留期继续遵循

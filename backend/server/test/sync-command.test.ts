@@ -498,6 +498,31 @@ test("malformed contact payload returns stable rejected result", async () => {
   });
 });
 
+test("semantic location failures stay permanent and do not echo coordinates", async () => {
+  const cases = [
+    { failureCode: "invalid_location_source" },
+    { failureCode: "invalid_location" },
+  ] as const;
+
+  for (const { failureCode } of cases) {
+    const response = await handleSyncCommand(
+      "Bearer synthetic-token",
+      validCommandBody(),
+      fakeDependencies({
+        apply: async () => ({ result: "rejected", failureCode }),
+      }),
+    );
+
+    assert.equal(response.status, 422);
+    assert.deepEqual(response.body, {
+      result: "rejected",
+      error: { code: failureCode },
+    });
+    assert.equal(JSON.stringify(response.body).includes("41.7897"), false);
+    assert.equal(JSON.stringify(response.body).includes("-87.5997"), false);
+  }
+});
+
 test("private draft upsert keeps trusted owner outside the client payload", async () => {
   let storedCommand: SyncCommand | undefined;
   const response = await handleSyncCommand(
@@ -913,7 +938,7 @@ test("legacy v1 fixture stays accepted and unsupported protocol is stable", asyn
   });
 });
 
-test("batch returns accepted and retryable results independently", async () => {
+test("batch keeps accepted, retryable, and permanent results independent", async () => {
   const second = {
     ...structuredClone(syncContractV1Fixture),
     command_id: "legacy-command-2",
@@ -925,11 +950,31 @@ test("batch returns accepted and retryable results independently", async () => {
   };
   const response = await handleSyncCommandBatch(
     "Bearer synthetic-token",
-    { commands: [syncContractV1Fixture, second] },
+    {
+      commands: [
+        syncContractV1Fixture,
+        second,
+        {
+          ...structuredClone(second),
+          command_id: "legacy-command-3",
+          aggregate_id: "legacy-contact-3",
+          typed_payload: {
+            ...structuredClone(second.typed_payload),
+            contact_id: "legacy-contact-3",
+          },
+        },
+      ],
+    },
     fakeDependencies({
       apply: async (_resolvedContext, command) => {
         if (command.commandId === "legacy-command-2") {
           throw new Error("synthetic store outage");
+        }
+        if (command.commandId === "legacy-command-3") {
+          return {
+            result: "rejected",
+            failureCode: "invalid_location_source",
+          };
         }
         return { result: "accepted", serverCursor: "cursor-legacy-1" };
       },
@@ -947,6 +992,11 @@ test("batch returns accepted and retryable results independently", async () => {
         command_id: "legacy-command-2",
         result: "retryable",
         error: { code: "sync_unavailable" },
+      },
+      {
+        command_id: "legacy-command-3",
+        result: "rejected",
+        error: { code: "invalid_location_source" },
       },
     ],
   });

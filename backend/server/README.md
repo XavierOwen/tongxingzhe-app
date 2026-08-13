@@ -4,7 +4,17 @@
 
 客户端不能提交 `app_user_id`、role 或 capability。上传会把 payload 的 workspace 和 project 与可信上下文交叉核对。拉取也会核对 query 范围，并只接受属于同一范围的不透明 cursor。响应不返回外部 subject、email 或 token。所有受保护入口共用严格的 bearer header 解析器，防止端点之间出现不同的认证规则。
 
-cursor 不存在或不属于当前用户、空间和项目时，端点返回 `400 invalid_cursor`。未分类的数据库失败返回 `503 sync_unavailable`，不把内部 SQL 错误文字暴露给客户端。
+cursor 不存在或不属于当前用户、空间和项目时，端点返回 `400 invalid_cursor`。未分类的数据库失败返回 `503 sync_unavailable`，不把内部 SQL 错误文字暴露给客户端。地点来源只有一个窄的永久拒绝例外，见下节。
+
+## 接触地点来源与同步错误边界
+
+接触同步的 wire payload 使用 snake_case `location_source`。只有 `resolved` 地点可以带 `captured_coordinates` 来源。`resolved` 没有来源表示 `region-only`；`pending_resolution` 把坐标保留在地点本身；`not_applicable` 不带来源或坐标。提交、更正和冲突解决共用这个 exact-key codec；作废命令不接收新地点，只复制已经接受的 revision。
+
+PostgreSQL `0039_contact_location_provenance.sql` 在接触 revision 的同一 transaction 中追加来源证据。`0039` fixture 覆盖坐标解析、region-only、pending、N/A、历史不完整、修订、冲突、作废和 warehouse 清理。来源表留在 `app_data`；management report、匿名结果、错误响应和 warehouse 不读取精确地点事实。Backend 当前没有应用日志 sink。部署平台的访问日志不得记录请求体或响应体。
+
+Backend Store 只把 PostgreSQL `SQLSTATE 23514` 与 `0039` 中已知的固定错误文字配对。已知地点来源形状错误返回 `rejected`、`invalid_location_source`；已知地点形状错误返回 `rejected`、`invalid_location`。HTTP 响应为 `422`，批量结果也保持永久拒绝，不进入自动重试。响应只包含稳定错误码，不包含坐标。
+
+未知的 `23514`、其他 PostgreSQL 错误或查询结果合同错误仍向 HTTP 层抛出，并返回 `503 sync_unavailable`。代码不能把任意数据库约束失败都当作客户端永久错误。这个窄映射由 Backend Store 单元测试和 Docker 中的真实 PostgreSQL 对账入口共同检查；它不等于生产数据库或真实设备验收。
 
 ## 规范区域解析合同
 
@@ -20,7 +30,7 @@ cursor 不存在或不属于当前用户、空间和项目时，端点返回 `40
 
 同步命令里的 `location_source` 是可选对象。只有 `resolved` 地点可带 `captured_coordinates` 来源；来源必须含原始坐标、可选非负精度、同一固定合同和发布指纹。resolved 没有来源表示兼容的 region-only 记录。pending 的坐标保存在 `location`，`not_applicable` 和空草稿地点不带来源。submit、revise、resolve-conflict 和 draft 共用 exact-key codec；void 不接受地点或来源。
 
-本合同还未把来源写入 Flutter Drift／Outbox 或 PostgreSQL 接触来源表。完成后续持久化和四层对账前，不得把 parser 通过解释为端到端来源已交付。
+Slice 6U 已把来源写入 Flutter Drift／Outbox 和 PostgreSQL 接触来源表。Slice 6V 用共享 synthetic fixture 对账四层，并在 Docker 中运行真实 Backend→PostgreSQL 集成。该证据不等于生产环境、真实 GPS 或六平台真机验收。
 
 ## 问卷管理合同
 
@@ -167,11 +177,13 @@ npm test
 npm run check
 ```
 
-测试使用临时 ES256 key 和 synthetic claims，不连接真实 Supabase 项目。身份 schema 见 [`0002_identity_context.sql`](../database/migrations/0002_identity_context.sql)，项目上下文见 [`0004_personal_project_contexts.sql`](../database/migrations/0004_personal_project_contexts.sql)，区域与私有草稿见 [`0005_regions_and_private_draft_sync.sql`](../database/migrations/0005_regions_and_private_draft_sync.sql)，个人指标见 [`0006_personal_contact_metrics.sql`](../database/migrations/0006_personal_contact_metrics.sql)，区域解析见 [`0007_canonical_region_resolution.sql`](../database/migrations/0007_canonical_region_resolution.sql)，独立接触尝试见 [`0008_contact_attempts.sql`](../database/migrations/0008_contact_attempts.sql)，接触更正与作废见 [`0009_contact_revisions.sql`](../database/migrations/0009_contact_revisions.sql)，修订冲突见 [`0010_contact_revision_conflicts.sql`](../database/migrations/0010_contact_revision_conflicts.sql)，版本化问卷执行见 [`0011_questionnaire_execution.sql`](../database/migrations/0011_questionnaire_execution.sql)，动态显示规则见 [`0012_questionnaire_visibility.sql`](../database/migrations/0012_questionnaire_visibility.sql)，管理草稿与不可变发布见 [`0013_questionnaire_publishing.sql`](../database/migrations/0013_questionnaire_publishing.sql)，旧草稿升级来源见 [`0014_questionnaire_draft_upgrades.sql`](../database/migrations/0014_questionnaire_draft_upgrades.sql)，问卷指标兼容见 [`0015_questionnaire_metric_compatibility.sql`](../database/migrations/0015_questionnaire_metric_compatibility.sql)。CI 使用 synthetic fixture 验证权限、重放、并发、跨项目、同步、问卷、区域、cursor 和 dump／restore。
+测试使用临时 ES256 key 和 synthetic claims，不连接真实 Supabase 项目。身份 schema 见 [`0002_identity_context.sql`](../database/migrations/0002_identity_context.sql)，项目上下文见 [`0004_personal_project_contexts.sql`](../database/migrations/0004_personal_project_contexts.sql)，区域与私有草稿见 [`0005_regions_and_private_draft_sync.sql`](../database/migrations/0005_regions_and_private_draft_sync.sql)，个人指标见 [`0006_personal_contact_metrics.sql`](../database/migrations/0006_personal_contact_metrics.sql)，区域解析见 [`0007_canonical_region_resolution.sql`](../database/migrations/0007_canonical_region_resolution.sql)，独立接触尝试见 [`0008_contact_attempts.sql`](../database/migrations/0008_contact_attempts.sql)，接触更正与作废见 [`0009_contact_revisions.sql`](../database/migrations/0009_contact_revisions.sql)，修订冲突见 [`0010_contact_revision_conflicts.sql`](../database/migrations/0010_contact_revision_conflicts.sql)，版本化问卷执行见 [`0011_questionnaire_execution.sql`](../database/migrations/0011_questionnaire_execution.sql)，动态显示规则见 [`0012_questionnaire_visibility.sql`](../database/migrations/0012_questionnaire_visibility.sql)，管理草稿与不可变发布见 [`0013_questionnaire_publishing.sql`](../database/migrations/0013_questionnaire_publishing.sql)，旧草稿升级来源见 [`0014_questionnaire_draft_upgrades.sql`](../database/migrations/0014_questionnaire_draft_upgrades.sql)，问卷指标兼容见 [`0015_questionnaire_metric_compatibility.sql`](../database/migrations/0015_questionnaire_metric_compatibility.sql)，地点来源证据见 [`0039_contact_location_provenance.sql`](../database/migrations/0039_contact_location_provenance.sql) 和 [`0040_canonical_region_resolution_provenance.sql`](../database/migrations/0040_canonical_region_resolution_provenance.sql)。CI 使用 synthetic fixture 验证权限、重放、并发、跨项目、同步、问卷、区域、cursor、地点来源证据和 dump／restore。
 
 推广对象目录见 [`0016_promotion_target_directory.sql`](../database/migrations/0016_promotion_target_directory.sql)。对应 fixture 另外验证对象分配、PII 隔离、访问审计和恢复库权限。
 
 接触对象关联见 [`0017_contact_target_links.sql`](../database/migrations/0017_contact_target_links.sql)。对应 fixture 验证零到多关联、阶段 0 确认、跨空间与未分配拒绝、机构代表约束、幂等重放、revision 历史、冲突比较和 warehouse PII 隔离。
+
+Node 24 Docker 阶段会在已迁移的 PostgreSQL 上运行 `contact-location-evidence.integration.ts`。它和 Flutter 测试读取同一份 `contact_location_source_v1.csv`，用于证明真实 Backend Store 与 SQL bridge 的结果分类、地点来源四种状态、修订／冲突／作废，以及 warehouse 和匿名管理报告的精确坐标边界。`npm test` 仍是无数据库的合同测试；它不能替代该阶段，也不能证明真机或生产环境。
 
 项目关系审计见 [`0018_promotion_target_relationship_audit.sql`](../database/migrations/0018_promotion_target_relationship_audit.sql)。对应 fixture 验证双向阶段、独立生命周期、共享备注历史、结构化下降原因、mutation 重放、显式冲突、分配撤销、显示别名和 warehouse 文本隔离。
 

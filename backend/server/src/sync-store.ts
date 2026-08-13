@@ -315,29 +315,38 @@ export class PostgresSyncCommandStore implements SyncCommandStore {
       : command.type === "draft.upsert.v1"
       ? "apply_draft_upsert_v3"
       : "apply_draft_delete";
-    const result = await this.query(
-      `SELECT result_code, server_cursor, failure_code
-       FROM app_data.${functionName}(
-         $1::uuid,
-         $2::text,
-         $3::integer,
-         $4::text,
-         $5::text,
-         $6::text,
-         $7::integer,
-         $8::jsonb
-       )`,
-      [
-        context.appUserId,
-        command.commandId,
-        command.protocolVersion,
-        command.type,
-        command.deviceId,
-        command.aggregateId,
-        command.baseRevision,
-        JSON.stringify(command.payload),
-      ],
-    );
+    let result: { readonly rows: readonly unknown[] };
+    try {
+      result = await this.query(
+        `SELECT result_code, server_cursor, failure_code
+         FROM app_data.${functionName}(
+           $1::uuid,
+           $2::text,
+           $3::integer,
+           $4::text,
+           $5::text,
+           $6::text,
+           $7::integer,
+           $8::jsonb
+         )`,
+        [
+          context.appUserId,
+          command.commandId,
+          command.protocolVersion,
+          command.type,
+          command.deviceId,
+          command.aggregateId,
+          command.baseRevision,
+          JSON.stringify(command.payload),
+        ],
+      );
+    } catch (error) {
+      const mapped = mapContactLocationConstraintError(error);
+      if (mapped !== undefined) {
+        return mapped;
+      }
+      throw error;
+    }
     if (result.rows.length !== 1) {
       throw new Error("Sync command function must return exactly one row");
     }
@@ -776,6 +785,45 @@ function postgresErrorCode(error: unknown): string | null {
     return null;
   }
   return typeof error.code === "string" ? error.code : null;
+}
+
+function postgresErrorMessage(error: unknown): string | null {
+  if (typeof error !== "object" || error === null || !("message" in error)) {
+    return null;
+  }
+  return typeof error.message === "string" ? error.message : null;
+}
+
+const locationSourceConstraintMessages = new Set([
+  "not applicable location cannot carry source facts",
+  "resolved location source does not match the release",
+  "location source accuracy must be numeric",
+  "resolved location source coordinates are invalid",
+]);
+
+const locationConstraintMessages = new Set([
+  "pending location requires coordinates only",
+  "location accuracy must be numeric",
+  "pending location coordinates are invalid",
+  "resolved location requires a versioned region",
+  "resolved location requires a published city region",
+  "contact revision location kind is invalid",
+]);
+
+function mapContactLocationConstraintError(
+  error: unknown,
+): SyncCommandResult | undefined {
+  if (postgresErrorCode(error) !== "23514") {
+    return undefined;
+  }
+  const message = postgresErrorMessage(error);
+  if (message !== null && locationSourceConstraintMessages.has(message)) {
+    return { result: "rejected", failureCode: "invalid_location_source" };
+  }
+  if (message !== null && locationConstraintMessages.has(message)) {
+    return { result: "rejected", failureCode: "invalid_location" };
+  }
+  return undefined;
 }
 
 function parseResultRow(value: unknown): SyncCommandResult {

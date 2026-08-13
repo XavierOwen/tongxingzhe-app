@@ -196,11 +196,15 @@ test("HTTP management snapshot route waits for the committed store result", asyn
   const response = await responsePromise;
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("cache-control"), "no-store");
-  assert.deepEqual(await response.json(), {
+  const body = await response.json();
+  assert.deepEqual(body, {
     access_event_id: accessEventId,
     snapshot_id: snapshotId,
     report: {cells: []},
   });
+  const bodyText = JSON.stringify(body);
+  assert.doesNotMatch(bodyText, /location|latitude|longitude/i);
+  assert.doesNotMatch(bodyText, /41\.7897|-87\.5997/);
 });
 
 test("HTTP management snapshot route rejects query fields and missing store", async () => {

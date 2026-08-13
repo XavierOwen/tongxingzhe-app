@@ -7,7 +7,7 @@
 - `migrations/`：只追加、按文件名排序的正式 SQL；已经执行的文件不得改写；
 - `runner/`：迁移历史、锁与 checksum 检查；
 - `checks/`：环境和权限不变量；
-- `fixtures/`：只含 synthetic 数据的可回滚验证资料。
+- `fixtures/`：只含 synthetic 数据的可回滚验证资料；`fixtures/shared/` 保存 Flutter、Backend 和 PostgreSQL 共用的输入。
 
 ## Docker 中运行完整数据库测试
 
@@ -17,7 +17,9 @@
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-脚本建立隔离的 PostgreSQL 16 容器，运行 migration、check、fixture、并发和 dump／restore，最后自动删除容器。第一次使用 Docker、需要保留失败容器或理解输出时，阅读[本机、Docker 与 CI 测试指南](../../docs/manual/09-local-docker-and-ci-testing.md)。
+脚本建立隔离的 PostgreSQL 16 容器，运行 migration、check、fixture、Backend→PostgreSQL 对账、并发和 dump／restore，最后自动删除容器。Backend 对账阶段使用 Node 24 容器和仓库锁定的 npm 依赖；它不连接 production，也不使用真实用户资料。第一次使用 Docker、需要保留失败容器或理解输出时，阅读[本机、Docker 与 CI 测试指南](../../docs/manual/09-local-docker-and-ci-testing.md)。
+
+Node 阶段要求 `backend/server/test/contact-location-evidence.integration.ts` 存在。脚本先在 Node 24 中运行 `npm ci --ignore-scripts` 和 `npm run build`，再执行编译后的 integration test。入口缺失、编译失败或断言失败都会使整套测试失败；不应把此前 SQL fixture 的通过单独写成 Backend 集成通过。
 
 schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher` 和 `tongxingzhe_contact_provenance_writer`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
 
@@ -260,6 +262,10 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 `0039_contact_location_provenance.sql` 为已接受接触 revision 建立追加式地点来源合同。每个 `contact_id + revision_number` 最多一条来源记录；`resolved` 必须引用已发布区域树、城市父链和 0038 内容指纹，且可明确区分有原始坐标与 `region-only`。`pending_resolution` 只保存合法坐标，`not_applicable` 不保存坐标或区域；历史无法解释的行保持 `incomplete`／`unknown`。来源记录不能 `UPDATE`／`DELETE`，也不能由 `contact_region_assignments` 当前投影伪造历史。回填只读取每个 revision 自己的 `snapshot.location` 和可选 `snapshot.locationSource`，不改写既有 contact、revision 或 assignment。三路修订把 location 与 source 作为同一事实组，避免旧坐标与新区域误配。精确坐标留在受限 `app_data`；warehouse outbox 的边界 trigger 会移除 location 和 source，防止修订或作废路径把它们送入分析层。`tongxingzhe_runtime` 没有来源表、sequence 或维护函数直接权限。该 migration 只固定 PostgreSQL 合同、历史回填和 fixture-first 证据，不表示 Flutter／Drift、Backend HTTP 或生产写入 bridge 已接入。
 
 `0040_canonical_region_resolution_provenance.sql` 提供 `resolve_canonical_region_with_provenance` 窄函数。它复用 0007 的当前树匹配，只在对应 release 已发布且内容指纹是 64 位小写 SHA-256 时返回结果，并补充固定解析器合同。runtime 只有函数执行权，仍不能直接读取 release 或边界表；发布身份和 PUBLIC 也不能执行该入口。该 migration 不写接触来源，不改变旧 resolver 的兼容合同。
+
+Backend Store 对 0039 触发器的地点错误只做固定 `SQLSTATE 23514` 与错误文字的窄映射：已知 source 形状失败返回 `rejected / invalid_location_source`，已知 location 形状失败返回 `rejected / invalid_location`，HTTP 层将其作为 `422` permanent failure。未知 `23514` 或其他数据库错误仍向上抛出，HTTP 层返回 `503 sync_unavailable`。不得用一条宽泛的 SQLSTATE 映射掩盖新的约束或权限问题。
+
+`contact_location_source_v1.csv` 是 Flutter、Backend 和 PostgreSQL 共用的四种当前状态及错误输入。`0039_contact_location_provenance.sql` fixture 另行验证历史回填、revision／冲突／作废、地点与来源原子合并、warehouse 清理和 runtime 权限。Node 24 integration 通过真实 Backend Store 与 PostgreSQL bridge 重放共享状态，并断言 permanent／retryable 分类、匿名管理报告以及错误和分析边界。SQL fixture 是数据库证据；它不能单独证明 Backend HTTP 或 Flutter 已经完成四层对账。
 
 普通 fixture 在一个会话中验证定义、权限、revision、幂等和不可变约束。`0038_frozen_canonical_region_tree_releases.sql` 还验证草稿编辑、成功发布、发布后节点和边界写入失败、内容指纹复算、current 切换和旧版本保留。全部 `verify_*_concurrency.sh` 脚本必须另行运行，因为它们会启动独立 `psql` 会话，验证问卷发布、指标兼容、个人与机构活动关系、对象匿名化、管理授权写入与撤权、管理上下文选择、快照目录访问、项目报告时区、管理报告 lineage 和区域树 current 发布的并发不变量。Docker wrapper 会按文件名排序并自动复制、执行这些脚本。检查脚本只使用 synthetic 数据，并要求显式 `DATABASE_URL`。
 
