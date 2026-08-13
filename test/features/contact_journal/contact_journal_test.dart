@@ -573,6 +573,34 @@ void main() {
           .singleWhere(
             (result) =>
                 result.definition.reference ==
+                CoreMetricCatalog.interestThreeFourRatio.reference,
+          )
+          .value,
+      SubsetRatioMetricValue(
+        label: '3_4',
+        numerator: expectedInterest[3] + expectedInterest[4],
+        denominator: expected.length,
+      ),
+    );
+    expect(
+      metricResults
+          .singleWhere(
+            (result) =>
+                result.definition.reference ==
+                CoreMetricCatalog.interestZeroRatio.reference,
+          )
+          .value,
+      SubsetRatioMetricValue(
+        label: '0',
+        numerator: expectedInterest[0],
+        denominator: expected.length,
+      ),
+    );
+    expect(
+      metricResults
+          .singleWhere(
+            (result) =>
+                result.definition.reference ==
                 CoreMetricCatalog.interestOrdinalSummary.reference,
           )
           .value,
@@ -622,6 +650,233 @@ void main() {
         counts: expectedChannels,
       ),
     );
+  });
+
+  test('Drift 汇总与 Flutter 映射对兴趣子集比例场景保持一致', () async {
+    const cases =
+        <
+          ({
+            String projectId,
+            List<int> levels,
+            int highNumerator,
+            int zeroNumerator,
+            int? highBasisPoints,
+            int? zeroBasisPoints,
+          })
+        >[
+          (
+            projectId: 'project-shared-golden',
+            levels: [0, 3, 4],
+            highNumerator: 2,
+            zeroNumerator: 1,
+            highBasisPoints: 6667,
+            zeroBasisPoints: 3333,
+          ),
+          (
+            projectId: 'project-all-zero',
+            levels: [0, 0],
+            highNumerator: 0,
+            zeroNumerator: 2,
+            highBasisPoints: 0,
+            zeroBasisPoints: 10000,
+          ),
+          (
+            projectId: 'project-all-high',
+            levels: [3, 4],
+            highNumerator: 2,
+            zeroNumerator: 0,
+            highBasisPoints: 10000,
+            zeroBasisPoints: 0,
+          ),
+          (
+            projectId: 'project-mixed',
+            levels: [0, 1, 2, 3, 4],
+            highNumerator: 2,
+            zeroNumerator: 1,
+            highBasisPoints: 4000,
+            zeroBasisPoints: 2000,
+          ),
+          (
+            projectId: 'project-rounding',
+            levels: [1, 3, 4],
+            highNumerator: 2,
+            zeroNumerator: 0,
+            highBasisPoints: 6667,
+            zeroBasisPoints: 0,
+          ),
+          (
+            projectId: 'project-empty',
+            levels: [],
+            highNumerator: 0,
+            zeroNumerator: 0,
+            highBasisPoints: null,
+            zeroBasisPoints: null,
+          ),
+        ];
+    final submittedCount = cases.fold<int>(
+      0,
+      (total, item) => total + item.levels.length,
+    );
+    final journal = _journal([
+      for (var index = 0; index < submittedCount; index++) ...[
+        'subset-contact-$index',
+        'subset-revision-$index',
+        'subset-command-$index',
+      ],
+    ], now: DateTime.utc(2030, 1, 15, 18, 30));
+
+    var submittedIndex = 0;
+    for (final item in cases) {
+      for (final level in item.levels) {
+        await journal.submitAnonymousContact(
+          _submission(
+            projectId: item.projectId,
+            occurredAtUtc: DateTime.utc(2030, 1, 10, submittedIndex),
+            reachCount: 1,
+            interestLevel: level,
+          ),
+        );
+        submittedIndex++;
+      }
+
+      final summary = await journal.summarizePersonalContacts(
+        appUserId: 'app-user-1',
+        workspaceId: 'personal-workspace-1',
+        projectId: item.projectId,
+        fromUtc: DateTime.utc(2030, 1, 8),
+        untilUtc: DateTime.utc(2030, 1, 15),
+      );
+      final metrics = PersonalContactMetricMapper.map(
+        summary: summary,
+        period: MetricPeriod(
+          fromUtc: DateTime.utc(2030, 1, 8),
+          untilUtc: DateTime.utc(2030, 1, 15),
+        ),
+        dataCutoffUtc: DateTime.utc(2030, 1, 15, 18, 30),
+      );
+      final high =
+          metrics
+                  .singleWhere(
+                    (result) =>
+                        result.definition.reference ==
+                        CoreMetricCatalog.interestThreeFourRatio.reference,
+                  )
+                  .value
+              as SubsetRatioMetricValue;
+      final zero =
+          metrics
+                  .singleWhere(
+                    (result) =>
+                        result.definition.reference ==
+                        CoreMetricCatalog.interestZeroRatio.reference,
+                  )
+                  .value
+              as SubsetRatioMetricValue;
+
+      expect(high.numerator, item.highNumerator, reason: item.projectId);
+      expect(zero.numerator, item.zeroNumerator, reason: item.projectId);
+      expect(high.denominator, item.levels.length, reason: item.projectId);
+      expect(zero.denominator, item.levels.length, reason: item.projectId);
+      expect(
+        high.percentageBasisPoints,
+        item.highBasisPoints,
+        reason: item.projectId,
+      );
+      expect(
+        zero.percentageBasisPoints,
+        item.zeroBasisPoints,
+        reason: item.projectId,
+      );
+    }
+  });
+
+  test('Drift 兴趣子集比例排除作废记录并使用 UTC 右开边界', () async {
+    final journal = _journal([
+      'subset-active-contact',
+      'subset-active-revision',
+      'subset-active-command',
+      'subset-void-contact',
+      'subset-void-revision',
+      'subset-void-command',
+      'subset-boundary-contact',
+      'subset-boundary-revision',
+      'subset-boundary-command',
+      'subset-void-revision-2',
+      'subset-void-command-2',
+    ], now: DateTime.utc(2030, 1, 15, 18, 30));
+    await journal.submitAnonymousContact(
+      _submission(
+        occurredAtUtc: DateTime.utc(2030, 1, 14, 12),
+        reachCount: 1,
+        interestLevel: 3,
+      ),
+    );
+    await journal.submitAnonymousContact(
+      _submission(
+        occurredAtUtc: DateTime.utc(2030, 1, 14, 13),
+        reachCount: 1,
+        interestLevel: 0,
+      ),
+    );
+    await journal.submitAnonymousContact(
+      _submission(
+        occurredAtUtc: DateTime.utc(2030, 1, 15),
+        reachCount: 1,
+        interestLevel: 4,
+      ),
+    );
+    await journal.voidContact(
+      const ContactVoidSubmission(
+        contactId: 'subset-void-contact',
+        appUserId: 'app-user-1',
+        workspaceId: 'personal-workspace-1',
+        projectId: 'project-1',
+        deviceId: 'device-1',
+        baseRevision: 1,
+        reason: 'Synthetic subset ratio exclusion',
+      ),
+    );
+
+    final summary = await journal.summarizePersonalContacts(
+      appUserId: 'app-user-1',
+      workspaceId: 'personal-workspace-1',
+      projectId: 'project-1',
+      fromUtc: DateTime.utc(2030, 1, 8),
+      untilUtc: DateTime.utc(2030, 1, 15),
+    );
+    final metrics = PersonalContactMetricMapper.map(
+      summary: summary,
+      period: MetricPeriod(
+        fromUtc: DateTime.utc(2030, 1, 8),
+        untilUtc: DateTime.utc(2030, 1, 15),
+      ),
+      dataCutoffUtc: DateTime.utc(2030, 1, 15, 18, 30),
+    );
+    final high =
+        metrics
+                .singleWhere(
+                  (result) =>
+                      result.definition.reference ==
+                      CoreMetricCatalog.interestThreeFourRatio.reference,
+                )
+                .value
+            as SubsetRatioMetricValue;
+    final zero =
+        metrics
+                .singleWhere(
+                  (result) =>
+                      result.definition.reference ==
+                      CoreMetricCatalog.interestZeroRatio.reference,
+                )
+                .value
+            as SubsetRatioMetricValue;
+
+    expect(high.numerator, 1);
+    expect(high.denominator, 1);
+    expect(high.percentageBasisPoints, 10000);
+    expect(zero.numerator, 0);
+    expect(zero.denominator, 1);
+    expect(zero.percentageBasisPoints, 0);
   });
 
   test('实际发生时刻必须是 UTC 并另外保存 IANA 时区', () async {

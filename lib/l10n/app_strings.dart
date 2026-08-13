@@ -430,6 +430,11 @@ const Map<String, Map<String, String>> _strings = {
     'interestRatioUnavailable': '暂无可计算比例',
     'interestRatioRow':
         '兴趣 {level}：{count} {unit}；{numerator} / {denominator}（{percentage}）',
+    'interestSubsetRatios': '兴趣 3–4 与 0 占比',
+    'interestThreeFourRatio': '兴趣 3–4（明确愿意继续或主动提出／落实下一步）',
+    'interestZeroRatio': '兴趣 0（明确拒绝）',
+    'interestSubsetRatioRow':
+        '{label}：{numerator} / {denominator}（{percentage}）',
     'interestRatioCoverage':
         '比例覆盖：未知 {unknown}、拒答 {refused}、不适用 {notApplicable}、未回答 {unanswered}、候选内排除 {excluded}；核心兴趣当前必须为 0–4，这不是草稿、尝试或作废记录盘点。',
     'personalAnalyticsFactNotice': '个人数据：这些事实只用于本人回顾，不用于团队排名。',
@@ -1233,6 +1238,12 @@ const Map<String, Map<String, String>> _strings = {
     'interestRatioUnavailable': 'No calculable percentage',
     'interestRatioRow':
         'Interest {level}: {count} {unit}; {numerator} / {denominator} ({percentage})',
+    'interestSubsetRatios': 'Interest 3–4 and 0 ratios',
+    'interestThreeFourRatio':
+        'Interest 3–4 (willing to continue or taking the next step)',
+    'interestZeroRatio': 'Interest 0 (explicit refusal)',
+    'interestSubsetRatioRow':
+        '{label}: {numerator} / {denominator} ({percentage})',
     'interestRatioCoverage':
         'Ratio coverage: unknown {unknown}, refused {refused}, not applicable {notApplicable}, unanswered {unanswered}, and candidate exclusions {excluded}. Core interest must currently be 0–4; this is not a census of drafts, attempts, or voided records.',
     'personalAnalyticsFactNotice':

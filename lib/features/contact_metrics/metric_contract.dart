@@ -23,6 +23,7 @@ enum MetricValueShape {
   categoricalDistribution,
   ordinalSummary,
   ratio,
+  subsetRatio,
 }
 
 enum MetricFormula {
@@ -32,6 +33,7 @@ enum MetricFormula {
   countContactSessionsByChannel,
   summarizeContactSessionsByInterest,
   calculateContactSessionsByInterestRatio,
+  calculateContactSessionsByInterestSubsetRatio,
 }
 
 enum MetricTimeBasis { actualOccurrenceUtc }
@@ -68,6 +70,10 @@ final class MetricDefinition {
     }
     if (hasBuckets != (denominator != null)) {
       throw ArgumentError('invalid_metric_definition_denominator');
+    }
+    if (valueShape == MetricValueShape.subsetRatio &&
+        bucketLabels.length != 1) {
+      throw ArgumentError('invalid_metric_subset_ratio_labels');
     }
     return MetricDefinition._(
       reference: reference,
@@ -190,6 +196,30 @@ abstract final class CoreMetricCatalog {
     bucketLabels: ['0', '1', '2', '3', '4'],
   );
 
+  static final interestThreeFourRatio = MetricDefinition(
+    reference: MetricReference('interest_3_4_ratio', 1),
+    statisticalUnit: MetricStatisticalUnit.contactSession,
+    valueShape: MetricValueShape.subsetRatio,
+    formula: MetricFormula.calculateContactSessionsByInterestSubsetRatio,
+    timeBasis: MetricTimeBasis.actualOccurrenceUtc,
+    exclusions: _commonExclusions,
+    privacyRule: MetricPrivacyRule.managementProtectedByTrueUnit,
+    denominator: const MetricReference('contact_sessions', 1),
+    bucketLabels: ['3_4'],
+  );
+
+  static final interestZeroRatio = MetricDefinition(
+    reference: MetricReference('interest_0_ratio', 1),
+    statisticalUnit: MetricStatisticalUnit.contactSession,
+    valueShape: MetricValueShape.subsetRatio,
+    formula: MetricFormula.calculateContactSessionsByInterestSubsetRatio,
+    timeBasis: MetricTimeBasis.actualOccurrenceUtc,
+    exclusions: _commonExclusions,
+    privacyRule: MetricPrivacyRule.managementProtectedByTrueUnit,
+    denominator: const MetricReference('contact_sessions', 1),
+    bucketLabels: ['0'],
+  );
+
   static final channelDistribution = MetricDefinition(
     reference: MetricReference('channel_distribution', 1),
     statisticalUnit: MetricStatisticalUnit.contactSession,
@@ -217,6 +247,8 @@ abstract final class CoreMetricCatalog {
     channelDistribution,
     interestOrdinalSummary,
     interestLevelRatios,
+    interestThreeFourRatio,
+    interestZeroRatio,
   ]);
 
   static List<MetricDefinition> get definitions => catalog.definitions;
@@ -442,6 +474,93 @@ final class RatioMetricValueItem {
   @override
   bool operator ==(Object other) =>
       other is RatioMetricValueItem &&
+      other.label == label &&
+      other.numerator == numerator &&
+      other.denominator == denominator &&
+      other.unknownCount == unknownCount &&
+      other.refusedCount == refusedCount &&
+      other.notApplicableCount == notApplicableCount &&
+      other.unansweredCount == unansweredCount &&
+      other.excludedCount == excludedCount;
+
+  @override
+  int get hashCode => Object.hash(
+    label,
+    numerator,
+    denominator,
+    unknownCount,
+    refusedCount,
+    notApplicableCount,
+    unansweredCount,
+    excludedCount,
+  );
+}
+
+/// 一个不要求穷尽分档的单一子集比例值。
+///
+/// [numerator] 是带有 [label] 的单一子集数量，[denominator] 是该指标的
+/// 共同统计单位总数。不同子集指标可以共享分母，但它们的分子不需要相加
+/// 为分母；例如兴趣 `3–4` 和兴趣 `0` 会分别覆盖同一批接触场次的两个子集。
+/// 百分比基点由整数分子／分母按 half-up 规则派生，空分母保留 `null`。
+final class SubsetRatioMetricValue extends MetricValue {
+  factory SubsetRatioMetricValue({
+    required String label,
+    required int numerator,
+    required int denominator,
+    int unknownCount = 0,
+    int refusedCount = 0,
+    int notApplicableCount = 0,
+    int unansweredCount = 0,
+    int excludedCount = 0,
+  }) {
+    if (label.trim().isEmpty ||
+        numerator < 0 ||
+        denominator < 0 ||
+        numerator > denominator ||
+        unknownCount < 0 ||
+        refusedCount < 0 ||
+        notApplicableCount < 0 ||
+        unansweredCount < 0 ||
+        excludedCount < 0) {
+      throw ArgumentError('invalid_metric_subset_ratio');
+    }
+    return SubsetRatioMetricValue._(
+      label: label,
+      numerator: numerator,
+      denominator: denominator,
+      unknownCount: unknownCount,
+      refusedCount: refusedCount,
+      notApplicableCount: notApplicableCount,
+      unansweredCount: unansweredCount,
+      excludedCount: excludedCount,
+    );
+  }
+
+  const SubsetRatioMetricValue._({
+    required this.label,
+    required this.numerator,
+    required this.denominator,
+    required this.unknownCount,
+    required this.refusedCount,
+    required this.notApplicableCount,
+    required this.unansweredCount,
+    required this.excludedCount,
+  });
+
+  final String label;
+  final int numerator;
+  final int denominator;
+  final int unknownCount;
+  final int refusedCount;
+  final int notApplicableCount;
+  final int unansweredCount;
+  final int excludedCount;
+
+  int? get percentageBasisPoints => _ratioBasisPoints(numerator, denominator);
+
+  @override
+  bool operator ==(Object other) =>
+      other is SubsetRatioMetricValue &&
       other.label == label &&
       other.numerator == numerator &&
       other.denominator == denominator &&
@@ -708,6 +827,7 @@ final class MetricResult {
         value is MetricDistributionValue,
       MetricValueShape.ordinalSummary => value is OrdinalSummaryMetricValue,
       MetricValueShape.ratio => value is RatioMetricValue,
+      MetricValueShape.subsetRatio => value is SubsetRatioMetricValue,
     };
     if (!shapeMatches) {
       throw ArgumentError('metric_value_shape_mismatch');
@@ -723,6 +843,11 @@ final class MetricResult {
     if (value is RatioMetricValue &&
         !_listEquals(value.labels, definition.bucketLabels)) {
       throw ArgumentError('metric_ratio_labels_mismatch');
+    }
+    if (value is SubsetRatioMetricValue &&
+        (definition.bucketLabels.length != 1 ||
+            value.label != definition.bucketLabels.single)) {
+      throw ArgumentError('metric_subset_ratio_label_mismatch');
     }
   }
 }

@@ -3,7 +3,7 @@ import 'package:tongxingzhe_app/features/contact_metrics/metric_contract.dart';
 
 void main() {
   test('核心指标目录使用唯一且不可变的版本标识', () {
-    expect(CoreMetricCatalog.definitions, hasLength(6));
+    expect(CoreMetricCatalog.definitions, hasLength(8));
     expect(
       CoreMetricCatalog.definitions
           .map((definition) => definition.reference)
@@ -14,6 +14,8 @@ void main() {
         const MetricReference('interest_distribution', 1),
         const MetricReference('interest_ordinal_summary', 1),
         const MetricReference('interest_level_ratios', 1),
+        const MetricReference('interest_3_4_ratio', 1),
+        const MetricReference('interest_0_ratio', 1),
         const MetricReference('channel_distribution', 1),
       },
     );
@@ -56,6 +58,32 @@ void main() {
       '3',
       '4',
     ]);
+    expect(
+      CoreMetricCatalog.interestThreeFourRatio.valueShape,
+      MetricValueShape.subsetRatio,
+    );
+    expect(
+      CoreMetricCatalog.interestThreeFourRatio.formula,
+      MetricFormula.calculateContactSessionsByInterestSubsetRatio,
+    );
+    expect(
+      CoreMetricCatalog.interestThreeFourRatio.denominator,
+      CoreMetricCatalog.contactSessions.reference,
+    );
+    expect(CoreMetricCatalog.interestThreeFourRatio.bucketLabels, ['3_4']);
+    expect(
+      CoreMetricCatalog.interestZeroRatio.valueShape,
+      MetricValueShape.subsetRatio,
+    );
+    expect(
+      CoreMetricCatalog.interestZeroRatio.formula,
+      MetricFormula.calculateContactSessionsByInterestSubsetRatio,
+    );
+    expect(
+      CoreMetricCatalog.interestZeroRatio.denominator,
+      CoreMetricCatalog.contactSessions.reference,
+    );
+    expect(CoreMetricCatalog.interestZeroRatio.bucketLabels, ['0']);
     expect(
       CoreMetricCatalog.reachedPeople.statisticalUnit,
       MetricStatisticalUnit.reachedPerson,
@@ -258,6 +286,139 @@ void main() {
     );
   });
 
+  test('个人兴趣子集比例允许独立分子并使用整数 half-up 基点', () {
+    // Inputs remain exactly representable on Web, while numerator * 20000
+    // exceeds the JavaScript safe-integer range and requires BigInt math.
+    const nearWebSafeScale = (1 << 47) - 1;
+    final highInterest = SubsetRatioMetricValue(
+      label: '3_4',
+      numerator: 2,
+      denominator: 5,
+    );
+    final rejection = SubsetRatioMetricValue(
+      label: '0',
+      numerator: 1,
+      denominator: 5,
+    );
+
+    expect(highInterest.numerator, 2);
+    expect(highInterest.denominator, 5);
+    expect(highInterest.percentageBasisPoints, 4000);
+    expect(rejection.percentageBasisPoints, 2000);
+    expect(
+      SubsetRatioMetricValue(
+        label: '3_4',
+        numerator: 2,
+        denominator: 3,
+      ).percentageBasisPoints,
+      6667,
+    );
+    expect(
+      SubsetRatioMetricValue(
+        label: '3_4',
+        numerator: 2 * nearWebSafeScale,
+        denominator: 64 * nearWebSafeScale,
+      ).percentageBasisPoints,
+      313,
+    );
+    // These are independent subsets; their values do not form one exhaustive
+    // distribution and therefore do not need to sum to a shared denominator.
+    expect(
+      highInterest.numerator + rejection.numerator,
+      lessThan(highInterest.denominator),
+    );
+    expect(highInterest.label, '3_4');
+    expect(
+      MetricResult(
+        definition: CoreMetricCatalog.interestThreeFourRatio,
+        value: highInterest,
+        period: _period,
+        timeZone: 'UTC',
+        dataCutoffUtc: DateTime.utc(2030, 1, 8, 18),
+        sourceTier: MetricSourceTier.localOperational,
+        syncCoverage: _coverage,
+        privacyStatus: MetricPrivacyStatus.personalFact,
+      ).value,
+      highInterest,
+    );
+  });
+
+  test('个人兴趣子集比例拒绝非法覆盖、标签和空分母状态', () {
+    expect(
+      () => SubsetRatioMetricValue(label: '', numerator: 0, denominator: 1),
+      throwsArgumentError,
+    );
+    expect(
+      () => SubsetRatioMetricValue(label: '3_4', numerator: 2, denominator: 1),
+      throwsArgumentError,
+    );
+    expect(
+      () => SubsetRatioMetricValue(
+        label: '3_4',
+        numerator: 0,
+        denominator: 0,
+      ).percentageBasisPoints,
+      returnsNormally,
+    );
+    expect(
+      SubsetRatioMetricValue(
+        label: '3_4',
+        numerator: 0,
+        denominator: 0,
+      ).percentageBasisPoints,
+      isNull,
+    );
+    expect(
+      () => SubsetRatioMetricValue(label: '3_4', numerator: 1, denominator: 0),
+      throwsArgumentError,
+    );
+    expect(
+      () => SubsetRatioMetricValue(
+        label: '3_4',
+        numerator: 0,
+        denominator: 1,
+        unknownCount: -1,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => SubsetRatioMetricValue(
+        label: '3_4',
+        numerator: 0,
+        denominator: 1,
+        refusedCount: -1,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => SubsetRatioMetricValue(
+        label: '3_4',
+        numerator: 0,
+        denominator: 1,
+        notApplicableCount: -1,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => SubsetRatioMetricValue(
+        label: '3_4',
+        numerator: 0,
+        denominator: 1,
+        unansweredCount: -1,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => SubsetRatioMetricValue(
+        label: '3_4',
+        numerator: 0,
+        denominator: 1,
+        excludedCount: -1,
+      ),
+      throwsArgumentError,
+    );
+  });
+
   test('指标结果拒绝错误值形状、期间、截止时间与同步覆盖', () {
     expect(
       () => MetricResult(
@@ -284,6 +445,32 @@ void main() {
       () => MetricResult(
         definition: CoreMetricCatalog.interestLevelRatios,
         value: CountMetricValue(2),
+        period: _period,
+        timeZone: 'UTC',
+        dataCutoffUtc: DateTime.utc(2030, 1, 8, 18),
+        sourceTier: MetricSourceTier.localOperational,
+        syncCoverage: _coverage,
+        privacyStatus: MetricPrivacyStatus.personalFact,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => MetricResult(
+        definition: CoreMetricCatalog.interestThreeFourRatio,
+        value: CountMetricValue(2),
+        period: _period,
+        timeZone: 'UTC',
+        dataCutoffUtc: DateTime.utc(2030, 1, 8, 18),
+        sourceTier: MetricSourceTier.localOperational,
+        syncCoverage: _coverage,
+        privacyStatus: MetricPrivacyStatus.personalFact,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => MetricResult(
+        definition: CoreMetricCatalog.interestThreeFourRatio,
+        value: SubsetRatioMetricValue(label: '0', numerator: 1, denominator: 1),
         period: _period,
         timeZone: 'UTC',
         dataCutoffUtc: DateTime.utc(2030, 1, 8, 18),

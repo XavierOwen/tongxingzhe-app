@@ -49,7 +49,7 @@ M = 单一推广者的最大贡献数
 
 [`SuppressedMetricValue`](../../lib/features/contact_metrics/metric_contract.dart) 不保存真实数量、贡献者数量或最大贡献值。`MetricResult` 只在 `privacyStatus = suppressed` 时接受这个类型；若调用者尝试把精确 `CountMetricValue` 标成隐藏，构造过程会拒绝。
 
-个人兴趣页可以使用 [`RatioMetricValue`](../../lib/features/contact_metrics/metric_contract.dart) 保存可复算的整数分子、分母、缺失／排除计数和百分比基点，因为它是本人自己的 `personalFact`。这不表示管理报告可以接收相同精确值。管理比例必须先完成真实统计单位阈值和互补隐藏；被隐藏的管理单元仍只能使用 `SuppressedMetricValue`，不能把精确比例包在另一种值类型中绕过隐藏。
+个人兴趣页可以使用 [`RatioMetricValue`](../../lib/features/contact_metrics/metric_contract.dart) 保存穷尽五档比例，也可以使用 [`SubsetRatioMetricValue`](../../lib/features/contact_metrics/metric_contract.dart) 保存兴趣 `3–4` 或 `0` 的独立子集比例。两种值都保留可复算的整数分子、分母、缺失／排除计数和百分比基点，因为它们是本人自己的 `personalFact`。这不表示管理报告可以接收相同精确值。管理比例必须先完成真实统计单位阈值和互补隐藏；被隐藏的管理单元仍只能使用 `SuppressedMetricValue`，不能把精确比例包在另一种值类型中绕过隐藏。
 
 个人本地结果继续带 `MetricSyncCoverage`。管理结果来自后端已接受事实，不伪造“仅本机”或“待同步”数量，因此同步覆盖为不适用。来源层明确标为 `backendOperational`。
 

@@ -760,6 +760,12 @@ final class _PersonalSummaryPage extends StatelessWidget {
         result.metric(CoreMetricCatalog.interestLevelRatios.reference).value
             as RatioMetricValue;
     final interestRatioValues = interestLevelRatios.values;
+    final interestThreeFourRatio =
+        result.metric(CoreMetricCatalog.interestThreeFourRatio.reference).value
+            as SubsetRatioMetricValue;
+    final interestZeroRatio =
+        result.metric(CoreMetricCatalog.interestZeroRatio.reference).value
+            as SubsetRatioMetricValue;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -822,14 +828,33 @@ final class _PersonalSummaryPage extends StatelessWidget {
                 ),
               }),
             ),
+          const SizedBox(height: 16),
+          Semantics(
+            header: true,
+            child: Text(
+              text.t('interestSubsetRatios'),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _InterestSubsetRatioText(
+            text: text,
+            label: text.t('interestThreeFourRatio'),
+            value: interestThreeFourRatio,
+          ),
+          _InterestSubsetRatioText(
+            text: text,
+            label: text.t('interestZeroRatio'),
+            value: interestZeroRatio,
+          ),
           const SizedBox(height: 8),
           Text(
             text.format('interestRatioCoverage', {
-              'unknown': interestLevelRatios.unknownCount,
-              'refused': interestLevelRatios.refusedCount,
-              'notApplicable': interestLevelRatios.notApplicableCount,
-              'unanswered': interestLevelRatios.unansweredCount,
-              'excluded': interestLevelRatios.excludedCount,
+              'unknown': interestThreeFourRatio.unknownCount,
+              'refused': interestThreeFourRatio.refusedCount,
+              'notApplicable': interestThreeFourRatio.notApplicableCount,
+              'unanswered': interestThreeFourRatio.unansweredCount,
+              'excluded': interestThreeFourRatio.excludedCount,
             }),
           ),
           const SizedBox(height: 8),
@@ -868,6 +893,33 @@ final class _PersonalSummaryPage extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+final class _InterestSubsetRatioText extends StatelessWidget {
+  const _InterestSubsetRatioText({
+    required this.text,
+    required this.label,
+    required this.value,
+  });
+
+  final AppStrings text;
+  final String label;
+  final SubsetRatioMetricValue value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text.format('interestSubsetRatioRow', {
+        'label': label,
+        'numerator': value.numerator,
+        'denominator': value.denominator,
+        'percentage': _formatPercentageBasisPoints(
+          text,
+          value.percentageBasisPoints,
+        ),
+      }),
     );
   }
 }
