@@ -11,6 +11,7 @@ import 'package:tongxingzhe_app/data/local_database_factory.dart';
 import 'package:tongxingzhe_app/device/device_time_zone.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
 import 'package:tongxingzhe_app/features/contact_metrics/current_relationship_stage.dart';
+import 'package:tongxingzhe_app/features/contact_metrics/personal_follow_up_consent_ratio.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
@@ -40,6 +41,7 @@ void main() {
         expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
       ),
     );
+    final ratioGateway = _ReadyConsentRatioGateway();
     final dependencies = AppDependencies(
       databaseFactory: _SingleDatabaseFactory(database),
       clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
@@ -53,6 +55,7 @@ void main() {
           const _EmptyManagementReportGateway(),
       currentRelationshipStageGatewayBuilder: (_) =>
           const _OneRelationshipStageGateway(),
+      personalFollowUpConsentRatioGatewayBuilder: (_) => ratioGateway,
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -77,6 +80,17 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('当前关系阶段'), findsOneWidget);
     await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('personal-follow-up-consent-ratio-panel')),
+      300,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('明确同意：2 / 3（66.67%）'), findsOneWidget);
+    expect(ratioGateway.calls, hasLength(1));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(ratioGateway.calls, hasLength(2));
+    await tester.scrollUntilVisible(
       find.byKey(const ValueKey('management-report-view')),
       -300,
     );
@@ -84,6 +98,55 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('management-report-view')));
     await tester.pumpAndSettle();
     expect(find.text('没有可读取管理报告的项目。'), findsOneWidget);
+  });
+
+  testWidgets('占比服务失败时最近七日本地事实仍可读', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
+      personalFollowUpConsentRatioGatewayBuilder: (_) =>
+          const _RejectedConsentRatioGateway(),
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+    );
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+
+    await tester.tap(find.text('分析'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('最近七日接触场次 0'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('personal-follow-up-consent-ratio-panel')),
+      300,
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('无法连接分析服务'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('personal-consent-ratio-retry')),
+      findsOneWidget,
+    );
+    await tester.scrollUntilVisible(find.text('最近七日接触场次 0'), -300);
+    await tester.pumpAndSettle();
+    expect(find.text('最近七日接触场次 0'), findsOneWidget);
   });
 
   testWidgets('项目菜单切换可信项目并采用该项目的问卷上下文', (tester) async {
@@ -153,6 +216,7 @@ void main() {
     final gateway = _ConsentOptInGateway(
       projectId: syntheticSessionContext.project.id,
     );
+    final ratioGateway = _ReadyConsentRatioGateway();
     final dependencies = AppDependencies(
       databaseFactory: _SingleDatabaseFactory(database),
       clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
@@ -161,6 +225,7 @@ void main() {
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       personalFollowUpConsentOptInGatewayBuilder: (_, _) => gateway,
+      personalFollowUpConsentRatioGatewayBuilder: (_) => ratioGateway,
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -168,6 +233,15 @@ void main() {
     await tester.pumpAndSettle();
     addTearDown(database.close);
     final semantics = tester.ensureSemantics();
+
+    await tester.tap(find.text('分析'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('personal-follow-up-consent-ratio-panel')),
+      300,
+    );
+    await tester.pumpAndSettle();
+    expect(ratioGateway.calls, hasLength(1));
 
     final projectMenu = find.byKey(const ValueKey('project-context-menu'));
     final projectMenuSemantics = tester
@@ -204,8 +278,10 @@ void main() {
     );
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    expect(find.text('后续联系同意占比'), findsNothing);
+    expect(find.byKey(const ValueKey('consent-opt-in-close')), findsNothing);
+    expect(find.text('当前状态：从未启用'), findsNothing);
     expect(_containsPrimaryFocus(tester, projectMenu), isTrue);
+    expect(ratioGateway.calls, hasLength(2));
     semantics.dispose();
   });
 
@@ -221,6 +297,7 @@ void main() {
         expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
       ),
     );
+    final ratioGateway = _ReadyConsentRatioGateway();
     final dependencies = AppDependencies(
       databaseFactory: _SingleDatabaseFactory(database),
       clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
@@ -231,6 +308,7 @@ void main() {
         availableContexts: const [_organizationSessionContext],
       ),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      personalFollowUpConsentRatioGatewayBuilder: (_) => ratioGateway,
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -246,6 +324,15 @@ void main() {
       findsNothing,
     );
     expect(find.text('项目设置'), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('分析'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('personal-follow-up-consent-ratio-panel')),
+      findsNothing,
+    );
+    expect(ratioGateway.calls, isEmpty);
   });
 
   testWidgets('项目菜单创建个人推广项目并立即切换', (tester) async {
@@ -1955,6 +2042,58 @@ final class _ConsentOptInGateway
       PersonalFollowUpConsentOptInFailureCode.serviceUnavailable,
     );
   }
+
+  @override
+  Future<void> close() async {}
+}
+
+final class _ReadyConsentRatioGateway
+    implements PersonalFollowUpConsentRatioGateway {
+  final List<String> calls = [];
+
+  @override
+  Future<PersonalFollowUpConsentRatioGatewayResult> load({
+    required String projectId,
+    required DateTime fromUtc,
+    required DateTime untilUtc,
+  }) async {
+    calls.add(projectId);
+    return PersonalFollowUpConsentRatioGatewaySuccess(
+      PersonalFollowUpConsentRatioReady(
+        projectId: projectId,
+        metric: consentRatioMetricResult(
+          fromUtc: fromUtc,
+          untilUtc: untilUtc,
+          dataCutoffUtc: untilUtc,
+          retrievedAtUtc: untilUtc,
+          yesCount: 2,
+          noCount: 1,
+          unknownCount: 0,
+          refusedCount: 1,
+          notApplicableCount: 1,
+          unansweredCount: 2,
+          excludedCount: 0,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Future<void> close() async {}
+}
+
+final class _RejectedConsentRatioGateway
+    implements PersonalFollowUpConsentRatioGateway {
+  const _RejectedConsentRatioGateway();
+
+  @override
+  Future<PersonalFollowUpConsentRatioGatewayResult> load({
+    required String projectId,
+    required DateTime fromUtc,
+    required DateTime untilUtc,
+  }) async => const PersonalFollowUpConsentRatioGatewayRejected(
+    PersonalFollowUpConsentRatioFailureCode.networkUnavailable,
+  );
 
   @override
   Future<void> close() async {}

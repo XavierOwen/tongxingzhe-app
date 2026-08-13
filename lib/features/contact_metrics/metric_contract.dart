@@ -45,6 +45,8 @@ enum MetricFormula {
   calculateContactSessionsByInterestRatio,
   calculateContactSessionsByInterestSubsetRatio,
   calculateContactTargetLinksByResponseRatio,
+  countContactTargetLinksWithFollowUpConsentAnswer,
+  calculateContactTargetLinksByFollowUpConsentRatio,
   countCurrentRelationshipStages,
   countCurrentRelationshipStagesByStage,
 }
@@ -325,6 +327,30 @@ abstract final class CoreMetricCatalog {
     bucketLabels: ['0', '1', '2', '3', '4'],
   );
 
+  /// 可选同意占比的窄分母；不进入默认核心目录。
+  static final followUpConsentAnswers = MetricDefinition(
+    reference: MetricReference('follow_up_consent_answers', 1),
+    statisticalUnit: MetricStatisticalUnit.contactTargetLink,
+    valueShape: MetricValueShape.count,
+    formula: MetricFormula.countContactTargetLinksWithFollowUpConsentAnswer,
+    timeBasis: MetricTimeBasis.actualOccurrenceUtc,
+    exclusions: _commonExclusions,
+    privacyRule: MetricPrivacyRule.managementProtectedByTrueUnit,
+  );
+
+  /// 项目明确启用后才存在的固定 `yes / (yes + no)` 指标。
+  static final followUpConsentRatio = MetricDefinition(
+    reference: MetricReference('follow_up_consent_ratio', 1),
+    statisticalUnit: MetricStatisticalUnit.contactTargetLink,
+    valueShape: MetricValueShape.ratio,
+    formula: MetricFormula.calculateContactTargetLinksByFollowUpConsentRatio,
+    timeBasis: MetricTimeBasis.actualOccurrenceUtc,
+    exclusions: _commonExclusions,
+    privacyRule: MetricPrivacyRule.managementProtectedByTrueUnit,
+    denominator: followUpConsentAnswers.reference,
+    bucketLabels: ['yes', 'no'],
+  );
+
   /// 当前关系阶段五档分布的宽分母。
   ///
   /// 它没有接触期间，也不能被解释为历史期间的计数。
@@ -371,6 +397,12 @@ abstract final class CoreMetricCatalog {
   static final currentSnapshotCatalog = MetricCatalog([
     currentRelationshipStageCount,
     currentRelationshipStageDistribution,
+  ]);
+
+  /// 可选项目指标显式使用的独立目录；不得改变既有 12 项核心合同。
+  static final followUpConsentCatalog = MetricCatalog([
+    followUpConsentAnswers,
+    followUpConsentRatio,
   ]);
 
   static List<MetricDefinition> get definitions => catalog.definitions;
@@ -992,21 +1024,31 @@ final class MetricResult {
     required MetricValue value,
     required MetricPeriod period,
     required String timeZone,
-    required DateTime dataCutoffUtc,
+    required DateTime? dataCutoffUtc,
+    DateTime? retrievedAtUtc,
     required MetricSourceTier sourceTier,
     MetricSyncCoverage? syncCoverage,
     required MetricPrivacyStatus privacyStatus,
   }) {
-    if (timeZone.trim().isEmpty || !dataCutoffUtc.isUtc) {
+    if (timeZone.trim().isEmpty ||
+        dataCutoffUtc != null && !dataCutoffUtc.isUtc ||
+        retrievedAtUtc != null && !retrievedAtUtc.isUtc ||
+        dataCutoffUtc == null &&
+            (sourceTier != MetricSourceTier.backendOperational ||
+                privacyStatus != MetricPrivacyStatus.personalFact ||
+                retrievedAtUtc == null)) {
       throw ArgumentError('invalid_metric_result_metadata');
     }
     final isSuppressedValue = value is SuppressedMetricValue;
+    final personalFactSourceAllowed =
+        sourceTier == MetricSourceTier.localOperational ||
+        sourceTier == MetricSourceTier.backendOperational;
     if ((privacyStatus == MetricPrivacyStatus.suppressed) !=
             isSuppressedValue ||
         (sourceTier == MetricSourceTier.localOperational) !=
             (syncCoverage != null) ||
         privacyStatus == MetricPrivacyStatus.personalFact &&
-            sourceTier != MetricSourceTier.localOperational) {
+            !personalFactSourceAllowed) {
       throw ArgumentError('invalid_metric_result_state');
     }
     if (!isSuppressedValue) _validateValue(definition, value);
@@ -1016,6 +1058,7 @@ final class MetricResult {
       period: period,
       timeZone: timeZone,
       dataCutoffUtc: dataCutoffUtc,
+      retrievedAtUtc: retrievedAtUtc,
       sourceTier: sourceTier,
       syncCoverage: syncCoverage,
       privacyStatus: privacyStatus,
@@ -1028,6 +1071,7 @@ final class MetricResult {
     required this.period,
     required this.timeZone,
     required this.dataCutoffUtc,
+    required this.retrievedAtUtc,
     required this.sourceTier,
     required this.syncCoverage,
     required this.privacyStatus,
@@ -1037,7 +1081,12 @@ final class MetricResult {
   final MetricValue value;
   final MetricPeriod period;
   final String timeZone;
-  final DateTime dataCutoffUtc;
+
+  /// 可信来源截止点；动态 Backend 合同未返回该值时为 null。
+  ///
+  /// 调用方不得用客户端收包时间代替截止点；此时应填写 [retrievedAtUtc]。
+  final DateTime? dataCutoffUtc;
+  final DateTime? retrievedAtUtc;
   final MetricSourceTier sourceTier;
   final MetricSyncCoverage? syncCoverage;
   final MetricPrivacyStatus privacyStatus;
@@ -1220,11 +1269,15 @@ bool _usesDenominatorFormula(
   MetricFormula.summarizeContactTargetLinksByResponse ||
   MetricFormula.calculateContactTargetLinksByResponseRatio =>
     denominatorFormula == MetricFormula.countContactTargetLinksWithResponse,
+  MetricFormula.calculateContactTargetLinksByFollowUpConsentRatio =>
+    denominatorFormula ==
+        MetricFormula.countContactTargetLinksWithFollowUpConsentAnswer,
   MetricFormula.countCurrentRelationshipStagesByStage =>
     denominatorFormula == MetricFormula.countCurrentRelationshipStages,
   MetricFormula.countContactSessions ||
   MetricFormula.sumReachedPeople ||
   MetricFormula.countContactTargetLinksWithResponse ||
+  MetricFormula.countContactTargetLinksWithFollowUpConsentAnswer ||
   MetricFormula.countCurrentRelationshipStages => false,
 };
 

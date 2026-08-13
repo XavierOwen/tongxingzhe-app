@@ -368,6 +368,21 @@ const Map<String, Map<String, String>> _strings = {
     'currentRelationshipStageCoverageUnknown': '对象项目关系的同步覆盖未知。',
     'currentRelationshipStageUnavailable': '当前关系阶段暂时无法载入。',
     'currentRelationshipStageLoading': '正在载入当前关系阶段',
+    'personalConsentRatioTitle': '后续联系同意占比',
+    'personalConsentRatioHelp': '这是当前个人项目在同一最近七日 UTC 期间内的个人事实，不是目标、排名或考核。',
+    'personalConsentRatioLoading': '正在载入后续联系同意占比',
+    'personalConsentRatioNotEnabled': '当前项目未启用这项分析。这不表示 0%。',
+    'personalConsentRatioRow': '明确同意：{numerator} / {denominator}（{percentage}）',
+    'personalConsentRatioCoverage':
+        '覆盖：未知 {unknown}；拒答 {refused}；不适用 {notApplicable}；未回答 {unanswered}；排除 {excluded}',
+    'personalConsentRatioRetry': '重试',
+    'personalConsentRatioUnauthorized': '登录状态已失效，请重新登录。',
+    'personalConsentRatioInvalidRequest': '项目服务未接受这个统计期间。',
+    'personalConsentRatioForbidden': '当前账号不能读取这个个人项目的占比。',
+    'personalConsentRatioNetworkUnavailable': '无法连接分析服务。请检查网络后重试。',
+    'personalConsentRatioInvalidResponse': '分析服务返回了无效结果。',
+    'personalConsentRatioServiceUnavailable': '后续联系同意占比暂时无法载入。',
+    'personalConsentRatioNotConfigured': '后续联系同意占比服务尚未配置。',
     'statisticsUseUtcDays': '当前统计按 UTC 自然日计算',
     'personalPlanTitle': '私人周计划',
     'personalPlanPrivateHelp': '计划、进度和差距只对你本人可见。',
@@ -1208,6 +1223,30 @@ const Map<String, Map<String, String>> _strings = {
     'currentRelationshipStageUnavailable':
         'Current relationship stages are temporarily unavailable.',
     'currentRelationshipStageLoading': 'Loading current relationship stages',
+    'personalConsentRatioTitle': 'Follow-up consent ratio',
+    'personalConsentRatioHelp':
+        'This is a personal fact for the current personal project and the same recent-seven-day UTC period. It is not a target, rank, or performance measure.',
+    'personalConsentRatioLoading': 'Loading the follow-up consent ratio',
+    'personalConsentRatioNotEnabled':
+        'This project has not enabled this analysis. This does not mean 0%.',
+    'personalConsentRatioRow':
+        'Explicit yes: {numerator} / {denominator} ({percentage})',
+    'personalConsentRatioCoverage':
+        'Coverage: unknown {unknown}; refused {refused}; not applicable {notApplicable}; unanswered {unanswered}; excluded {excluded}',
+    'personalConsentRatioRetry': 'Retry',
+    'personalConsentRatioUnauthorized': 'Your session expired. Sign in again.',
+    'personalConsentRatioInvalidRequest':
+        'The project service did not accept this reporting period.',
+    'personalConsentRatioForbidden':
+        'This account cannot read the ratio for this personal project.',
+    'personalConsentRatioNetworkUnavailable':
+        'The analytics service is unreachable. Check the network and retry.',
+    'personalConsentRatioInvalidResponse':
+        'The analytics service returned an invalid result.',
+    'personalConsentRatioServiceUnavailable':
+        'The follow-up consent ratio is temporarily unavailable.',
+    'personalConsentRatioNotConfigured':
+        'The follow-up consent ratio service is not configured.',
     'statisticsUseUtcDays': 'Current statistics use UTC calendar days',
     'personalPlanTitle': 'Private weekly plan',
     'personalPlanPrivateHelp':

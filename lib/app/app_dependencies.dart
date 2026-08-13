@@ -9,6 +9,8 @@ import '../device/device_time_zone.dart';
 import '../features/contact_journal/contact_journal.dart';
 import '../features/contact_metrics/current_relationship_stage.dart';
 import '../features/contact_metrics/current_relationship_stage_gateway.dart';
+import '../features/contact_metrics/http_personal_follow_up_consent_ratio_gateway.dart';
+import '../features/contact_metrics/personal_follow_up_consent_ratio.dart';
 import '../foundation/runtime_values.dart';
 import '../identity/identity_session.dart';
 import '../identity/supabase/supabase_identity_session.dart';
@@ -67,6 +69,7 @@ final class AppDependencies {
     this.personalActionPlanGatewayBuilder,
     this.personalActionReminderGatewayBuilder,
     this.personalFollowUpConsentOptInGatewayBuilder,
+    this.personalFollowUpConsentRatioGatewayBuilder,
     this.managementReportGatewayBuilder,
     this.currentRelationshipStageGatewayBuilder,
     this.reminderSchedulerBuilder = productionReminderNotificationScheduler,
@@ -98,6 +101,8 @@ final class AppDependencies {
           productionPersonalActionReminderGateway,
       personalFollowUpConsentOptInGatewayBuilder:
           productionPersonalFollowUpConsentOptInGateway,
+      personalFollowUpConsentRatioGatewayBuilder:
+          productionPersonalFollowUpConsentRatioGateway,
       managementReportGatewayBuilder: productionManagementReportGateway,
       currentRelationshipStageGatewayBuilder:
           productionCurrentRelationshipStageGateway,
@@ -131,6 +136,8 @@ final class AppDependencies {
     String Function(),
   )?
   personalFollowUpConsentOptInGatewayBuilder;
+  final PersonalFollowUpConsentRatioGateway Function(IdentitySession)?
+  personalFollowUpConsentRatioGatewayBuilder;
   final ManagementReportGateway Function(IdentitySession)?
   managementReportGatewayBuilder;
   final CurrentRelationshipStageGateway Function(IdentitySession)?
@@ -154,6 +161,7 @@ final class AppDependencies {
     PersonalActionPlanGateway? personalActionPlanGateway;
     PersonalActionReminderGateway? personalActionReminderGateway;
     PersonalFollowUpConsentOptInGateway? personalFollowUpConsentOptInGateway;
+    PersonalFollowUpConsentRatioGateway? personalFollowUpConsentRatioGateway;
     ManagementReportGateway? managementReportGateway;
     CurrentRelationshipStageGateway? currentRelationshipStageGateway;
     ReminderNotificationScheduler? reminderNotificationScheduler;
@@ -339,6 +347,9 @@ final class AppDependencies {
             return context.project.id;
           }) ??
           const DeferredPersonalFollowUpConsentOptInGateway();
+      personalFollowUpConsentRatioGateway =
+          personalFollowUpConsentRatioGatewayBuilder?.call(identitySession) ??
+          const DeferredPersonalFollowUpConsentRatioGateway();
       privateSessionDataGuard = await PrivateSessionDataGuard.start(
         appSession: appSession,
         scheduler: reminderNotificationScheduler,
@@ -364,6 +375,8 @@ final class AppDependencies {
         personalActionReminderGateway: personalActionReminderGateway,
         personalFollowUpConsentOptInGateway:
             personalFollowUpConsentOptInGateway,
+        personalFollowUpConsentRatioGateway:
+            personalFollowUpConsentRatioGateway,
         managementReportGateway: managementReportGateway,
         currentRelationshipStageGateway: currentRelationshipStageGateway,
         currentRelationshipStageRepository: currentRelationshipStageRepository,
@@ -384,6 +397,7 @@ final class AppDependencies {
       await personalActionPlanGateway?.close();
       await personalActionReminderGateway?.close();
       await personalFollowUpConsentOptInGateway?.close();
+      await personalFollowUpConsentRatioGateway?.close();
       await managementReportGateway?.close();
       await currentRelationshipStageGateway?.close();
       await privateSessionDataGuard?.close();
@@ -428,6 +442,7 @@ final class AppStartupReady extends AppStartupResult {
     required this.personalActionPlanGateway,
     required this.personalActionReminderGateway,
     required this.personalFollowUpConsentOptInGateway,
+    required this.personalFollowUpConsentRatioGateway,
     required this.managementReportGateway,
     required this.currentRelationshipStageGateway,
     required this.currentRelationshipStageRepository,
@@ -455,6 +470,7 @@ final class AppStartupReady extends AppStartupResult {
   final PersonalActionPlanGateway personalActionPlanGateway;
   final PersonalActionReminderGateway personalActionReminderGateway;
   final PersonalFollowUpConsentOptInGateway personalFollowUpConsentOptInGateway;
+  final PersonalFollowUpConsentRatioGateway personalFollowUpConsentRatioGateway;
   final ManagementReportGateway managementReportGateway;
   final CurrentRelationshipStageGateway currentRelationshipStageGateway;
   final CurrentRelationshipStageRepository currentRelationshipStageRepository;
