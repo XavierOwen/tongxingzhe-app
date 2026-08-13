@@ -12,12 +12,13 @@ import '../features/contact_attempt/contact_attempt_entry_screen.dart';
 import '../features/contact_entry/contact_channel_label.dart';
 import '../features/contact_journal/contact_journal.dart';
 import '../features/contact_journal/contact_models.dart';
+import '../features/contact_metrics/metric_contract.dart';
+import '../features/contact_metrics/personal_contact_overview.dart';
 import '../features/home/production_home_view_model.dart';
 import '../features/plans/personal_action_plan_panel.dart';
 import '../features/reminders/personal_action_reminder_panel.dart';
 import '../features/questionnaire_admin/questionnaire_admin_screen.dart';
 import '../features/targets/promotion_target_directory_page.dart';
-import '../features/contact_metrics/personal_contact_overview.dart';
 import '../features/management_reports/management_report_browser.dart';
 import '../l10n/app_strings.dart';
 import '../management_reports/management_report_gateway.dart';
@@ -752,6 +753,9 @@ final class _PersonalSummaryPage extends StatelessWidget {
       return Center(child: Text(text.t('summaryLoadFailed')));
     }
     final summary = result.summary;
+    final interestOrdinalSummary =
+        result.metric(CoreMetricCatalog.interestOrdinalSummary.reference).value
+            as OrdinalSummaryMetricValue;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -763,6 +767,8 @@ final class _PersonalSummaryPage extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(text.t('statisticsUseUtcDays')),
+        const SizedBox(height: 8),
+        Text(text.t('personalAnalyticsFactNotice')),
         const SizedBox(height: 16),
         _SummaryFactCard(
           icon: Icons.forum_outlined,
@@ -798,9 +804,17 @@ final class _PersonalSummaryPage extends StatelessWidget {
           for (var level = 0; level <= 4; level++)
             Text(
               '${text.t('interestLevel')} $level：'
-              '${summary.interestDistribution[level]} '
+              '${interestOrdinalSummary.counts[level]} '
               '${text.t('contactSessionUnit')}',
             ),
+          const SizedBox(height: 8),
+          Text(
+            interestOrdinalSummary.medianLevel == null
+                ? text.t('noInterestMedianLevel')
+                : '${text.t('interestMedianLevel')}：'
+                      '${interestOrdinalSummary.medianLevel}',
+          ),
+          Text(text.t('interestMedianHelp')),
           const SizedBox(height: 16),
           Text(
             text.t('channelSources'),

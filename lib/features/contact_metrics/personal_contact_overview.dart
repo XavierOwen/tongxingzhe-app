@@ -84,6 +84,13 @@ abstract final class PersonalContactMetricMapper {
         ),
       ),
       result(
+        CoreMetricCatalog.interestOrdinalSummary,
+        OrdinalSummaryMetricValue.fromCounts(
+          labels: CoreMetricCatalog.interestOrdinalSummary.bucketLabels,
+          counts: summary.interestDistribution,
+        ),
+      ),
+      result(
         CoreMetricCatalog.channelDistribution,
         MetricDistributionValue(
           labels: CoreMetricCatalog.channelDistribution.bucketLabels,

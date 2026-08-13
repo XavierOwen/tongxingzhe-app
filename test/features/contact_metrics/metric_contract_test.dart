@@ -3,7 +3,7 @@ import 'package:tongxingzhe_app/features/contact_metrics/metric_contract.dart';
 
 void main() {
   test('核心指标目录使用唯一且不可变的版本标识', () {
-    expect(CoreMetricCatalog.definitions, hasLength(4));
+    expect(CoreMetricCatalog.definitions, hasLength(5));
     expect(
       CoreMetricCatalog.definitions
           .map((definition) => definition.reference)
@@ -12,6 +12,7 @@ void main() {
         const MetricReference('contact_sessions', 1),
         const MetricReference('reached_people', 1),
         const MetricReference('interest_distribution', 1),
+        const MetricReference('interest_ordinal_summary', 1),
         const MetricReference('channel_distribution', 1),
       },
     );
@@ -21,6 +22,18 @@ void main() {
     );
     expect(
       CoreMetricCatalog.interestDistribution.denominator,
+      CoreMetricCatalog.contactSessions.reference,
+    );
+    expect(
+      CoreMetricCatalog.interestOrdinalSummary.valueShape,
+      MetricValueShape.ordinalSummary,
+    );
+    expect(
+      CoreMetricCatalog.interestOrdinalSummary.formula,
+      MetricFormula.summarizeContactSessionsByInterest,
+    );
+    expect(
+      CoreMetricCatalog.interestOrdinalSummary.denominator,
       CoreMetricCatalog.contactSessions.reference,
     );
     expect(
@@ -46,6 +59,79 @@ void main() {
         CoreMetricCatalog.contactSessions,
         CoreMetricCatalog.contactSessions,
       ]),
+      throwsArgumentError,
+    );
+  });
+
+  test('个人兴趣有序汇总使用奇偶下中位并保留空期间 null', () {
+    final odd = OrdinalSummaryMetricValue.fromCounts(
+      labels: const ['0', '1', '2', '3', '4'],
+      counts: const [1, 1, 3, 0, 0],
+    );
+    final even = OrdinalSummaryMetricValue.fromCounts(
+      labels: const ['0', '1', '2', '3', '4'],
+      counts: const [1, 1, 2, 0, 0],
+    );
+    final empty = OrdinalSummaryMetricValue.fromCounts(
+      labels: const ['0', '1', '2', '3', '4'],
+      counts: const [0, 0, 0, 0, 0],
+    );
+
+    expect(odd.totalCount, 5);
+    expect(odd.medianLevel, 2);
+    expect(even.medianLevel, 1);
+    expect(empty.medianLevel, isNull);
+    expect(empty.counts, [0, 0, 0, 0, 0]);
+    expect(
+      MetricResult(
+        definition: CoreMetricCatalog.interestOrdinalSummary,
+        value: odd,
+        period: _period,
+        timeZone: 'UTC',
+        dataCutoffUtc: DateTime.utc(2030, 1, 8, 18),
+        sourceTier: MetricSourceTier.localOperational,
+        syncCoverage: _coverage,
+        privacyStatus: MetricPrivacyStatus.personalFact,
+      ).value,
+      odd,
+    );
+  });
+
+  test('个人兴趣有序汇总严格校验总数、中位和空值', () {
+    expect(
+      () => OrdinalSummaryMetricValue(
+        labels: const ['0', '1', '2', '3', '4'],
+        counts: const [1, 1, 2, 0, 0],
+        totalCount: 5,
+        medianLevel: 1,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => OrdinalSummaryMetricValue(
+        labels: const ['0', '1', '2', '3', '4'],
+        counts: const [1, 1, 2, 0, 0],
+        totalCount: 4,
+        medianLevel: 2,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => OrdinalSummaryMetricValue(
+        labels: const ['0', '1', '2', '3', '4'],
+        counts: const [0, 0, 0, 0, 0],
+        totalCount: 0,
+        medianLevel: 0,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => OrdinalSummaryMetricValue(
+        labels: const ['0', '1', '2', '3', '4'],
+        counts: const [1, 1, -1, 0, 0],
+        totalCount: 1,
+        medianLevel: 0,
+      ),
       throwsArgumentError,
     );
   });

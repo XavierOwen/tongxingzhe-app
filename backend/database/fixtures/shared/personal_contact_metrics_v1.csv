@@ -1,6 +1,8 @@
 contact_id,owner_key,project_key,occurred_at_utc,channel,reach_count,interest_level,expected_in_primary_scope
 metric-contact-1,primary,default,2030-01-10T09:00:00Z,video_call,3,0,true
 metric-contact-2,primary,default,2030-01-14T20:00:00Z,voice_call,1,4,true
+metric-contact-6,primary,default,2030-01-12T12:00:00Z,instant_text,2,3,true
 metric-contact-3,primary,default,2030-01-07T23:59:00Z,video_call,9,2,false
+metric-contact-7,primary,default,2030-01-15T00:00:00Z,voice_call,4,1,false
 metric-contact-4,secondary,default,2030-01-12T00:00:00Z,video_call,7,3,false
 metric-contact-5,primary,other,2030-01-13T00:00:00Z,video_call,5,1,false

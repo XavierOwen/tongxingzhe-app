@@ -17,13 +17,19 @@ final class MetricReference {
 
 enum MetricStatisticalUnit { contactSession, reachedPerson }
 
-enum MetricValueShape { count, ordinalDistribution, categoricalDistribution }
+enum MetricValueShape {
+  count,
+  ordinalDistribution,
+  categoricalDistribution,
+  ordinalSummary,
+}
 
 enum MetricFormula {
   countContactSessions,
   sumReachedPeople,
   countContactSessionsByInterest,
   countContactSessionsByChannel,
+  summarizeContactSessionsByInterest,
 }
 
 enum MetricTimeBasis { actualOccurrenceUtc }
@@ -158,6 +164,18 @@ abstract final class CoreMetricCatalog {
     bucketLabels: ['0', '1', '2', '3', '4'],
   );
 
+  static final interestOrdinalSummary = MetricDefinition(
+    reference: MetricReference('interest_ordinal_summary', 1),
+    statisticalUnit: MetricStatisticalUnit.contactSession,
+    valueShape: MetricValueShape.ordinalSummary,
+    formula: MetricFormula.summarizeContactSessionsByInterest,
+    timeBasis: MetricTimeBasis.actualOccurrenceUtc,
+    exclusions: _commonExclusions,
+    privacyRule: MetricPrivacyRule.managementProtectedByTrueUnit,
+    denominator: const MetricReference('contact_sessions', 1),
+    bucketLabels: ['0', '1', '2', '3', '4'],
+  );
+
   static final channelDistribution = MetricDefinition(
     reference: MetricReference('channel_distribution', 1),
     statisticalUnit: MetricStatisticalUnit.contactSession,
@@ -183,6 +201,7 @@ abstract final class CoreMetricCatalog {
     reachedPeople,
     interestDistribution,
     channelDistribution,
+    interestOrdinalSummary,
   ]);
 
   static List<MetricDefinition> get definitions => catalog.definitions;
@@ -256,6 +275,93 @@ final class MetricDistributionValue extends MetricValue {
   @override
   int get hashCode =>
       Object.hash(Object.hashAll(labels), Object.hashAll(counts));
+}
+
+/// 单次兴趣有序量表的分布及下中位等级。
+///
+/// [medianLevel] 使用累计数量首次达到 `(totalCount + 1) ~/ 2` 的等级。
+/// 空期间没有中位等级，必须使用 `null`，不能把空值编码成 `0`。
+final class OrdinalSummaryMetricValue extends MetricValue {
+  factory OrdinalSummaryMetricValue.fromCounts({
+    required List<String> labels,
+    required List<int> counts,
+  }) {
+    final totalCount = counts.fold<int>(0, (sum, count) => sum + count);
+    return OrdinalSummaryMetricValue(
+      labels: labels,
+      counts: counts,
+      totalCount: totalCount,
+      medianLevel: totalCount <= 0
+          ? null
+          : _lowerMedianLevel(counts, totalCount),
+    );
+  }
+
+  factory OrdinalSummaryMetricValue({
+    required List<String> labels,
+    required List<int> counts,
+    required int totalCount,
+    required int? medianLevel,
+  }) {
+    if (!_listEquals(labels, _fiveLevelOrdinalLabels) ||
+        labels.length != counts.length ||
+        labels.toSet().length != labels.length ||
+        labels.any((label) => label.isEmpty) ||
+        totalCount < 0 ||
+        counts.any((count) => count < 0) ||
+        counts.fold<int>(0, (sum, count) => sum + count) != totalCount) {
+      throw ArgumentError('invalid_metric_ordinal_summary');
+    }
+
+    if (totalCount == 0) {
+      if (medianLevel != null) {
+        throw ArgumentError('invalid_metric_ordinal_summary_median');
+      }
+    } else {
+      if (medianLevel == null) {
+        throw ArgumentError('invalid_metric_ordinal_summary_median');
+      }
+      final expectedMedian = _lowerMedianLevel(counts, totalCount);
+      if (medianLevel != expectedMedian) {
+        throw ArgumentError('invalid_metric_ordinal_summary_median');
+      }
+    }
+
+    return OrdinalSummaryMetricValue._(
+      labels: List.unmodifiable(labels),
+      counts: List.unmodifiable(counts),
+      totalCount: totalCount,
+      medianLevel: medianLevel,
+    );
+  }
+
+  const OrdinalSummaryMetricValue._({
+    required this.labels,
+    required this.counts,
+    required this.totalCount,
+    required this.medianLevel,
+  });
+
+  final List<String> labels;
+  final List<int> counts;
+  final int totalCount;
+  final int? medianLevel;
+
+  @override
+  bool operator ==(Object other) =>
+      other is OrdinalSummaryMetricValue &&
+      _listEquals(other.labels, labels) &&
+      _listEquals(other.counts, counts) &&
+      other.totalCount == totalCount &&
+      other.medianLevel == medianLevel;
+
+  @override
+  int get hashCode => Object.hash(
+    Object.hashAll(labels),
+    Object.hashAll(counts),
+    totalCount,
+    medianLevel,
+  );
 }
 
 final class MetricPeriod {
@@ -367,6 +473,7 @@ final class MetricResult {
       MetricValueShape.ordinalDistribution ||
       MetricValueShape.categoricalDistribution =>
         value is MetricDistributionValue,
+      MetricValueShape.ordinalSummary => value is OrdinalSummaryMetricValue,
     };
     if (!shapeMatches) {
       throw ArgumentError('metric_value_shape_mismatch');
@@ -375,7 +482,23 @@ final class MetricResult {
         !_listEquals(value.labels, definition.bucketLabels)) {
       throw ArgumentError('metric_distribution_labels_mismatch');
     }
+    if (value is OrdinalSummaryMetricValue &&
+        !_listEquals(value.labels, definition.bucketLabels)) {
+      throw ArgumentError('metric_ordinal_summary_labels_mismatch');
+    }
   }
+}
+
+const _fiveLevelOrdinalLabels = ['0', '1', '2', '3', '4'];
+
+int _lowerMedianLevel(List<int> counts, int totalCount) {
+  final rank = (totalCount + 1) ~/ 2;
+  var cumulative = 0;
+  for (var level = 0; level < counts.length; level += 1) {
+    cumulative += counts[level];
+    if (cumulative >= rank) return level;
+  }
+  throw ArgumentError('invalid_metric_ordinal_summary_median');
 }
 
 bool _listEquals<T>(List<T> left, List<T> right) {

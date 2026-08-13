@@ -107,7 +107,9 @@ DECLARE
 BEGIN
   IF EXISTS (
     SELECT 1 FROM metric_write_results WHERE result_code <> 'accepted'
-  ) OR (SELECT count(*) FROM metric_write_results) <> 5 THEN
+  ) OR (SELECT count(*) FROM metric_write_results) <> (
+    SELECT count(*) FROM metric_fixture
+  ) THEN
     RAISE EXCEPTION 'shared metric fixture was not fully accepted';
   END IF;
 

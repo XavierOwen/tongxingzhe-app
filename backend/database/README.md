@@ -163,6 +163,10 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/checks/verify_canonical_region_resolution_provenance.sql
 psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/fixtures/0040_canonical_region_resolution_provenance.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_personal_interest_ordinal_summary.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0041_personal_interest_ordinal_summary.sql
 ./tool/verify_questionnaire_publish_concurrency.sh
 ./tool/verify_questionnaire_metric_concurrency.sh
 ./tool/verify_person_institution_relationship_concurrency.sh
@@ -262,6 +266,8 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 `0039_contact_location_provenance.sql` 为已接受接触 revision 建立追加式地点来源合同。每个 `contact_id + revision_number` 最多一条来源记录；`resolved` 必须引用已发布区域树、城市父链和 0038 内容指纹，且可明确区分有原始坐标与 `region-only`。`pending_resolution` 只保存合法坐标，`not_applicable` 不保存坐标或区域；历史无法解释的行保持 `incomplete`／`unknown`。来源记录不能 `UPDATE`／`DELETE`，也不能由 `contact_region_assignments` 当前投影伪造历史。回填只读取每个 revision 自己的 `snapshot.location` 和可选 `snapshot.locationSource`，不改写既有 contact、revision 或 assignment。三路修订把 location 与 source 作为同一事实组，避免旧坐标与新区域误配。精确坐标留在受限 `app_data`；warehouse outbox 的边界 trigger 会移除 location 和 source，防止修订或作废路径把它们送入分析层。`tongxingzhe_runtime` 没有来源表、sequence 或维护函数直接权限。该 migration 只固定 PostgreSQL 合同、历史回填和 fixture-first 证据，不表示 Flutter／Drift、Backend HTTP 或生产写入 bridge 已接入。
 
 `0040_canonical_region_resolution_provenance.sql` 提供 `resolve_canonical_region_with_provenance` 窄函数。它复用 0007 的当前树匹配，只在对应 release 已发布且内容指纹是 64 位小写 SHA-256 时返回结果，并补充固定解析器合同。runtime 只有函数执行权，仍不能直接读取 release 或边界表；发布身份和 PUBLIC 也不能执行该入口。该 migration 不写接触来源，不改变旧 resolver 的兼容合同。
+
+`0041_personal_interest_ordinal_summary.sql` 提供个人兴趣有序汇总的窄函数。它只读取可信个人 scope 和 UTC 半开期间内的当前有效接触，返回 `0–4` 五档数量、接触场次总数和下中位等级。偶数样本取两个中间观察值中较低的真实等级；空期间返回 `NULL`。runtime 可以执行函数，但不能直接读取接触表。Drift 与 PostgreSQL fixture 读取同一份 `personal_contact_metrics_v1.csv`，并分别覆盖奇数、偶数、空期间、右边界、其他用户和其他项目。
 
 Backend Store 对 0039 触发器的地点错误只做固定 `SQLSTATE 23514` 与错误文字的窄映射：已知 source 形状失败返回 `rejected / invalid_location_source`，已知 location 形状失败返回 `rejected / invalid_location`，HTTP 层将其作为 `422` permanent failure。未知 `23514` 或其他数据库错误仍向上抛出，HTTP 层返回 `503 sync_unavailable`。不得用一条宽泛的 SQLSTATE 映射掩盖新的约束或权限问题。
 

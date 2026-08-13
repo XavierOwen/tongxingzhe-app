@@ -354,6 +354,13 @@ void main() {
     addTearDown(routeInformationProvider.dispose);
 
     expect(find.text('最近七日接触场次 0'), findsOneWidget);
+    expect(find.textContaining('个人数据'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('暂无中位等级'),
+      120,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('暂无中位等级'), findsOneWidget);
     expect(routeInformationProvider.value.uri.path, '/analysis');
 
     await tester.tap(find.text('接触'));
@@ -765,6 +772,13 @@ void main() {
     expect(find.text('最近七日接触场次 1'), findsOneWidget);
     expect(find.text('最近七日触达人数 2'), findsOneWidget);
     expect(find.text('兴趣 3：1 场'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('中位等级：3'),
+      120,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('中位等级：3'), findsOneWidget);
+    expect(find.textContaining('不计算等级平均数'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('视频通话：1 场'),
       120,

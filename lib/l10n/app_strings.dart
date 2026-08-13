@@ -417,6 +417,10 @@ const Map<String, Map<String, String>> _strings = {
     'synced': '已同步',
     'interestDistribution': '单次兴趣分布',
     'interestLevel': '兴趣',
+    'interestMedianLevel': '中位等级',
+    'noInterestMedianLevel': '暂无中位等级',
+    'interestMedianHelp': '偶数场次取较低的真实等级，不计算等级平均数。',
+    'personalAnalyticsFactNotice': '个人数据：这些事实只用于本人回顾，不用于团队排名。',
     'contactSessionUnit': '场',
     'channelSources': '渠道来源',
     'latestContact': '最近发生',
@@ -1210,6 +1214,12 @@ const Map<String, Map<String, String>> _strings = {
     'synced': 'Synced',
     'interestDistribution': 'Contact interest distribution',
     'interestLevel': 'Interest',
+    'interestMedianLevel': 'Median level',
+    'noInterestMedianLevel': 'No median level yet',
+    'interestMedianHelp':
+        'For an even number of sessions, this uses the lower observed level and does not average ordinal levels.',
+    'personalAnalyticsFactNotice':
+        'Personal data: these facts are for your review, not team ranking.',
     'contactSessionUnit': 'sessions',
     'channelSources': 'Channel sources',
     'latestContact': 'Most recent contact',
