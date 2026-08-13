@@ -183,6 +183,8 @@ npm run check
 
 对象反应中位等级入口见 [`0045_personal_target_response_ordinal_summary.sql`](../database/migrations/0045_personal_target_response_ordinal_summary.sql)。它只使用已填的当前关联，偶数样本取较低真实等级，空分母返回 `NULL`。
 
+对象反应五档比例入口见 [`0046_personal_target_response_level_ratios.sql`](../database/migrations/0046_personal_target_response_level_ratios.sql)。它返回 `target_response_level_ratios@1` 的五行结果，分母只包含当前已填的 contact-target link，`NULL` 关联只计入 `unanswered_count`，百分比基点按 half-up 规则计算。PostgreSQL bridge 重新核对个人 workspace、活动项目、current revision 和 UTC 半开区间，不读取对象 PII；个人 Flutter 页复用已有 Drift 五档汇总，不增加新的 Drift 查询。该入口不是管理报告或任意查询端点。
+
 推广对象目录见 [`0016_promotion_target_directory.sql`](../database/migrations/0016_promotion_target_directory.sql)。对应 fixture 另外验证对象分配、PII 隔离、访问审计和恢复库权限。
 
 接触对象关联见 [`0017_contact_target_links.sql`](../database/migrations/0017_contact_target_links.sql)。对应 fixture 验证零到多关联、阶段 0 确认、跨空间与未分配拒绝、机构代表约束、幂等重放、revision 历史、冲突比较和 warehouse PII 隔离。

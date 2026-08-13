@@ -758,6 +758,26 @@ void main() {
 
     expect(summary.targetResponseDistribution, [0, 1, 1, 1, 1]);
     expect(summary.targetResponseUnansweredCount, 1);
+    final ratios =
+        PersonalContactMetricMapper.map(
+                  summary: summary,
+                  period: MetricPeriod(
+                    fromUtc: DateTime.utc(2030, 1, 8),
+                    untilUtc: DateTime.utc(2030, 1, 15),
+                  ),
+                  dataCutoffUtc: DateTime.utc(2030, 1, 15, 18, 30),
+                )
+                .singleWhere(
+                  (result) =>
+                      result.definition.reference ==
+                      CoreMetricCatalog.targetResponseLevelRatios.reference,
+                )
+                .value
+            as RatioMetricValue;
+    expect(ratios.numerators, [0, 1, 1, 1, 1]);
+    expect(ratios.denominator, 4);
+    expect(ratios.basisPoints, [0, 2500, 2500, 2500, 2500]);
+    expect(ratios.unansweredCount, 1);
     expect(
       OrdinalSummaryMetricValue.fromCounts(
         labels: CoreMetricCatalog.targetResponseOrdinalSummary.bucketLabels,
@@ -861,6 +881,14 @@ void main() {
 
     expect(summary.targetResponseDistribution, [0, 0, 0, 1, 0]);
     expect(summary.targetResponseUnansweredCount, 0);
+    final ratios = RatioMetricValue.fromCounts(
+      labels: CoreMetricCatalog.targetResponseLevelRatios.bucketLabels,
+      counts: summary.targetResponseDistribution,
+      unansweredCount: summary.targetResponseUnansweredCount,
+    );
+    expect(ratios.numerators, [0, 0, 0, 1, 0]);
+    expect(ratios.denominator, 1);
+    expect(ratios.basisPoints, [0, 0, 0, 10000, 0]);
     expect(
       OrdinalSummaryMetricValue.fromCounts(
         labels: CoreMetricCatalog.targetResponseOrdinalSummary.bucketLabels,

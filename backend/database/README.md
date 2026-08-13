@@ -183,6 +183,10 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/checks/verify_personal_target_response_ordinal_summary.sql
 psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/fixtures/0045_personal_target_response_ordinal_summary.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_personal_target_response_level_ratios.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0046_personal_target_response_level_ratios.sql
 ./tool/verify_questionnaire_publish_concurrency.sh
 ./tool/verify_questionnaire_metric_concurrency.sh
 ./tool/verify_person_institution_relationship_concurrency.sh
@@ -292,6 +296,8 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 `0044_personal_target_response_distribution.sql` 提供个人项目对象反应的窄分布 bridge。统计单位是当前有效 contact revision 中的对象关联；`response_level` 为 `NULL` 的关联不进入 0–4 五档分母，而在固定五行结果中以共享的 `unanswered_count` 单独返回。函数按可信用户、personal workspace、active project 和 UTC 半开期间重新授权，只读取 contact/link 事实，不连接 target PII、分配或关系状态，因此对象匿名化后历史响应仍可统计。空期间仍返回 0–4 五行，`denominator=0`、`unanswered_count=0`。对应 fixture 还覆盖多关联、current revision、作废排除、起止边界、跨项目／用户 scope 以及 retention anonymization。
 
 `0045_personal_target_response_ordinal_summary.sql` 从同一组当前已填对象关联返回五档数量、已填总数、未填覆盖和下中位等级。偶数样本取较低的真实等级；全部未填或空期间返回五档零、已填总数零和 `NULL` 中位。函数复用 0044 的个人 scope、current revision、作废排除和 UTC 半开边界，不读取对象 PII。
+
+`0046_personal_target_response_level_ratios.sql` 提供对象当次反应的 `target_response_level_ratios@1` 五档比例 bridge。它复用个人 scope、当前有效 contact revision 和 UTC 半开区间；`response_level` 非 `NULL` 的 contact-target link 组成共同 answered 分母，`NULL` 只返回 `unanswered_count`。五档每行返回整数分子、共同分母和按 half-up 计算的百分比基点，空分母保留 `0/0` 与 `NULL` 百分比。fixture 覆盖 `2/9` 舍入、全 `NULL`、空期间、current revision、作废、边界、跨项目／用户 scope、非法期间和权限；bridge 不读取对象 PII。
 
 Backend Store 对 0039 触发器的地点错误只做固定 `SQLSTATE 23514` 与错误文字的窄映射：已知 source 形状失败返回 `rejected / invalid_location_source`，已知 location 形状失败返回 `rejected / invalid_location`，HTTP 层将其作为 `422` permanent failure。未知 `23514` 或其他数据库错误仍向上抛出，HTTP 层返回 `503 sync_unavailable`。不得用一条宽泛的 SQLSTATE 映射掩盖新的约束或权限问题。
 

@@ -144,6 +144,14 @@ abstract final class PersonalContactMetricMapper {
           counts: summary.targetResponseDistribution,
         ),
       ),
+      result(
+        CoreMetricCatalog.targetResponseLevelRatios,
+        RatioMetricValue.fromCounts(
+          labels: CoreMetricCatalog.targetResponseLevelRatios.bucketLabels,
+          counts: summary.targetResponseDistribution,
+          unansweredCount: summary.targetResponseUnansweredCount,
+        ),
+      ),
     ]);
   }
 
