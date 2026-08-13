@@ -12,7 +12,7 @@
 
 - 正式 composition root，以及可控制的 Clock、ID、Database、Identity、错误结果和 Platform Capability 接缝；
 - 正式入口与 MD5、默认演示账号、自动 seed 和旧登录 UI 的 import 边界；
-- Drift v5 基线、v6 至 v16 中间版本、当前 v17 schema 快照和 v5／v6／v8 至 v16→v17 升级测试；
+- Drift v5 基线、v6 至 v17 中间版本、当前 v18 schema 快照和 v5／v6／v8 至 v17→v18 升级测试；
 - `ContactJournal` 本地深模块，以及可读的 SQLite 个人汇总 SQL；
 - Supabase `IdentitySession` Adapter、安全 session／PKCE 存储和 test-only fake；
 - PostgreSQL 有序 SQL migration、checksum、最小权限 runtime role、synthetic fixture 和恢复检查；
@@ -85,7 +85,7 @@ dart run tool/check_markdown_links.dart
 
 若中文路径使 `flutter analyze` 的 analysis server 输出异常，可使用 `dart analyze`；这不是跳过静态分析。
 
-Drift 当前 v17 快照和 v5／v6／v8 至 v16→v17 升级检查：
+Drift 当前 v18 快照和 v5／v6／v8 至 v17→v18 升级检查：
 
 ```bash
 flutter test test/data/local_database_migration_test.dart

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/native.dart';
@@ -58,6 +59,7 @@ void main() {
           placeName: 'University of Chicago',
           smallestRegionId: 'region-university-of-chicago',
           regionTreeVersion: 'regions-test-v1',
+          source: _locationSource,
         ),
         reachCount: 3,
         interestLevel: 3,
@@ -81,9 +83,20 @@ void main() {
         placeName: 'University of Chicago',
         smallestRegionId: 'region-university-of-chicago',
         regionTreeVersion: 'regions-test-v1',
+        source: _locationSource,
       ),
     );
     expect(stored.syncState, LocalSyncState.pending);
+    final command = await database.select(database.dbSyncOutbox).getSingle();
+    final payload = jsonDecode(command.payloadJson) as Map<String, Object?>;
+    expect(payload['location_source'], {
+      'kind': 'captured_coordinates',
+      'latitude': 41.7886,
+      'longitude': -87.5987,
+      'accuracy_meters': 12.0,
+      'resolver_contract_version': 'canonical-region-resolution:v1',
+      'region_tree_content_fingerprint': _fingerprint,
+    });
   });
 
   test('纯线上接触把地点明确保存为 N/A 而不是空值', () async {
@@ -111,6 +124,97 @@ void main() {
 
     final stored = await journal.contactById('contact-online');
     expect(stored!.location, const NotApplicableContactLocation());
+  });
+
+  test('已解析来源在草稿重启恢复和最新 Outbox 快照中保持完整', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    await RegionCatalog(database).installSnapshot(
+      const CanonicalRegionSnapshot(
+        version: 'regions-test-v1',
+        nodes: [
+          CanonicalRegionNode(
+            regionId: 'region-chicago',
+            canonicalName: 'Chicago',
+            kind: RegionKind.city,
+          ),
+        ],
+      ),
+    );
+    final journal = ContactJournal(
+      database: database,
+      clock: _FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
+      idGenerator: _SequenceIdGenerator(['draft-source']),
+    );
+    const location = ResolvedContactLocation(
+      placeName: 'Chicago',
+      smallestRegionId: 'region-chicago',
+      regionTreeVersion: 'regions-test-v1',
+      source: _locationSource,
+    );
+    await journal.saveDraft(
+      const ContactDraftInput(
+        deviceId: 'device-1',
+        appUserId: 'app-user-1',
+        workspaceId: 'personal-workspace-1',
+        projectId: 'project-1',
+        questionnaireVersionId: 'questionnaire-v1',
+        location: location,
+      ),
+    );
+
+    final restarted = ContactJournal(
+      database: database,
+      clock: _FixedClock(DateTime.utc(2030, 1, 8, 18, 31)),
+      idGenerator: _SequenceIdGenerator(const []),
+    );
+    expect(
+      (await restarted.listDrafts(appUserId: 'app-user-1')).single.location,
+      location,
+    );
+    final command = await database.select(database.dbSyncOutbox).getSingle();
+    final payload = jsonDecode(command.payloadJson) as Map<String, Object?>;
+    expect(
+      (payload['location_source']
+          as Map<String, Object?>)['region_tree_content_fingerprint'],
+      _fingerprint,
+    );
+  });
+
+  test('错误的已解析来源在写入前稳定拒绝', () async {
+    final journal = _journal([
+      'contact-invalid-source',
+      'revision-invalid-source',
+      'command-invalid-source',
+    ]);
+    await expectLater(
+      journal.submitAnonymousContact(
+        _submission(
+          occurredAtUtc: DateTime.utc(2030, 1, 8, 17),
+          channel: ContactChannel.faceToFace,
+          location: const ResolvedContactLocation(
+            placeName: 'Chicago',
+            smallestRegionId: 'region-chicago',
+            regionTreeVersion: 'regions-test-v1',
+            source: CapturedCoordinatesLocationSource(
+              latitude: 41.8781,
+              longitude: -87.6298,
+              resolverContractVersion: 'resolver-v2',
+              regionTreeContentFingerprint: _fingerprint,
+            ),
+          ),
+          reachCount: 1,
+          interestLevel: 2,
+        ),
+      ),
+      throwsA(
+        isA<ContactValidationException>().having(
+          (error) => error.code,
+          'code',
+          'invalid_location_source',
+        ),
+      ),
+    );
   });
 
   test('面对面接触不能把地点记为 N/A', () async {
@@ -771,6 +875,17 @@ void main() {
     );
   });
 }
+
+const _fingerprint =
+    '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+
+const _locationSource = CapturedCoordinatesLocationSource(
+  latitude: 41.7886,
+  longitude: -87.5987,
+  accuracyMeters: 12,
+  resolverContractVersion: 'canonical-region-resolution:v1',
+  regionTreeContentFingerprint: _fingerprint,
+);
 
 ContactJournal _journal(List<String> ids, {DateTime? now}) {
   final database = LocalDatabase(NativeDatabase.memory());

@@ -1135,10 +1135,7 @@ bool _usesAutomaticNotApplicableLocation(ContactChannel channel) =>
 String _locationLabel(AppStrings text, ContactLocation location) =>
     switch (location) {
       NotApplicableContactLocation() => text.t('locationNotApplicable'),
-      final PendingContactLocation pending =>
-        '${pending.latitude.toStringAsFixed(6)}, '
-            '${pending.longitude.toStringAsFixed(6)} '
-            '(${text.t('locationPendingResolution')})',
+      PendingContactLocation() => text.t('locationPendingResolution'),
       final ResolvedContactLocation resolved => resolved.placeName,
     };
 

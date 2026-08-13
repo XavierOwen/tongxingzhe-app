@@ -234,17 +234,20 @@ final class HttpSyncTransport implements SyncTransport, SyncBatchTransport {
       return const SyncPushPermanentFailure(failureCode: 'forbidden');
     }
     if (response.statusCode == 409) {
+      if (response.body.trim().isEmpty) {
+        return SyncPushConflict(
+          failureCode: _responseFailureCode(response, 'conflict'),
+        );
+      }
       try {
         final body = jsonDecode(response.body);
         if (body is Map<String, Object?>) {
           return _mapPushBody(body);
         }
       } on FormatException {
-        // 旧 Backend 可能只返回 409。保留稳定冲突分类，但不伪造详情。
+        return const SyncPushRetryable(failureCode: 'invalid_server_response');
       }
-      return SyncPushConflict(
-        failureCode: _responseFailureCode(response, 'conflict'),
-      );
+      return const SyncPushRetryable(failureCode: 'invalid_server_response');
     }
     if (response.statusCode == 422) {
       return SyncPushPermanentFailure(
@@ -447,7 +450,7 @@ final class HttpSyncTransport implements SyncTransport, SyncBatchTransport {
       occurredTimeZone: _nonEmptyString(value['occurredTimeZone']),
       channel: _conflictChannel(value['channel']),
       channelDetail: _nullableString(value['channelDetail']),
-      location: _conflictLocation(value['location']),
+      location: _conflictLocation(value['location'], value['locationSource']),
       reachCount: reachCount,
       interestLevel: interestLevel,
       answers: List.unmodifiable(answers),
@@ -510,24 +513,136 @@ final class HttpSyncTransport implements SyncTransport, SyncBatchTransport {
     });
   }
 
-  ContactLocation _conflictLocation(Object? value) {
+  ContactLocation _conflictLocation(Object? value, Object? sourceValue) {
     if (value is! Map<String, Object?>) {
       throw const FormatException('conflict location must be an object');
     }
-    return switch (value['kind']) {
-      'not_applicable' => const NotApplicableContactLocation(),
-      'resolved' => ResolvedContactLocation(
-        placeName: _nonEmptyString(value['placeName']),
-        smallestRegionId: _nonEmptyString(value['smallestRegionId']),
-        regionTreeVersion: _nonEmptyString(value['regionTreeVersion']),
-      ),
-      'pending_resolution' => PendingContactLocation(
-        latitude: _boundedDouble(value['latitude'], -90, 90),
-        longitude: _boundedDouble(value['longitude'], -180, 180),
-        accuracyMeters: _nullableNonNegativeDouble(value['accuracyMeters']),
-      ),
+    const allowedKeys = {
+      'kind',
+      'placeName',
+      'smallestRegionId',
+      'regionTreeVersion',
+      'latitude',
+      'longitude',
+      'accuracyMeters',
+    };
+    if (value.keys.any((key) => !allowedKeys.contains(key))) {
+      throw const FormatException('conflict location shape is invalid');
+    }
+    final source = _conflictLocationSource(sourceValue);
+    final location = switch (value['kind']) {
+      'not_applicable' => _conflictNotApplicableLocation(value),
+      'resolved' => _conflictResolvedLocation(value, source),
+      'pending_resolution' => _conflictPendingLocation(value, source),
       _ => throw const FormatException('conflict location kind is invalid'),
     };
+    if (source != null && location is! ResolvedContactLocation) {
+      throw const FormatException('conflict location source is not applicable');
+    }
+    return location;
+  }
+
+  NotApplicableContactLocation _conflictNotApplicableLocation(
+    Map<String, Object?> value,
+  ) {
+    if (!_conflictLocationFieldsNull(value, const [
+      'placeName',
+      'smallestRegionId',
+      'regionTreeVersion',
+      'latitude',
+      'longitude',
+      'accuracyMeters',
+    ])) {
+      throw const FormatException('conflict N/A location shape is invalid');
+    }
+    return const NotApplicableContactLocation();
+  }
+
+  ResolvedContactLocation _conflictResolvedLocation(
+    Map<String, Object?> value,
+    CapturedCoordinatesLocationSource? source,
+  ) {
+    if (!_conflictLocationFieldsNull(value, const [
+      'latitude',
+      'longitude',
+      'accuracyMeters',
+    ])) {
+      throw const FormatException(
+        'conflict resolved location shape is invalid',
+      );
+    }
+    return ResolvedContactLocation(
+      placeName: _nonEmptyString(value['placeName']),
+      smallestRegionId: _nonEmptyString(value['smallestRegionId']),
+      regionTreeVersion: _nonEmptyString(value['regionTreeVersion']),
+      source: source,
+    );
+  }
+
+  PendingContactLocation _conflictPendingLocation(
+    Map<String, Object?> value,
+    CapturedCoordinatesLocationSource? source,
+  ) {
+    if (source != null ||
+        !_conflictLocationFieldsNull(value, const [
+          'placeName',
+          'smallestRegionId',
+          'regionTreeVersion',
+        ])) {
+      throw const FormatException('conflict pending location shape is invalid');
+    }
+    return PendingContactLocation(
+      latitude: _boundedDouble(value['latitude'], -90, 90),
+      longitude: _boundedDouble(value['longitude'], -180, 180),
+      accuracyMeters: _nullableNonNegativeDouble(value['accuracyMeters']),
+    );
+  }
+
+  bool _conflictLocationFieldsNull(
+    Map<String, Object?> value,
+    List<String> keys,
+  ) => keys.every((key) => value[key] == null);
+
+  CapturedCoordinatesLocationSource? _conflictLocationSource(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is! Map<String, Object?>) {
+      throw const FormatException('conflict location source must be an object');
+    }
+    const allowedKeys = {
+      'kind',
+      'latitude',
+      'longitude',
+      'accuracyMeters',
+      'resolverContractVersion',
+      'regionTreeContentFingerprint',
+    };
+    if (value.keys.any((key) => !allowedKeys.contains(key))) {
+      throw const FormatException('conflict location source shape is invalid');
+    }
+    if (value['kind'] != 'captured_coordinates') {
+      throw const FormatException('conflict location source kind is invalid');
+    }
+    final fingerprint = _nonEmptyString(value['regionTreeContentFingerprint']);
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(fingerprint)) {
+      throw const FormatException(
+        'conflict location source fingerprint is invalid',
+      );
+    }
+    final contract = _nonEmptyString(value['resolverContractVersion']);
+    if (contract != 'canonical-region-resolution:v1') {
+      throw const FormatException(
+        'conflict location source contract is invalid',
+      );
+    }
+    return CapturedCoordinatesLocationSource(
+      latitude: _boundedDouble(value['latitude'], -90, 90),
+      longitude: _boundedDouble(value['longitude'], -180, 180),
+      accuracyMeters: _nullableNonNegativeDouble(value['accuracyMeters']),
+      resolverContractVersion: contract,
+      regionTreeContentFingerprint: fingerprint,
+    );
   }
 
   ContactChannel _conflictChannel(Object? value) => switch (value) {

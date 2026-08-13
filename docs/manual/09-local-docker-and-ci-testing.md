@@ -461,15 +461,15 @@ fixture：0035_management_report_snapshot_directory.sql
 
 并发脚本不能直接在没有准备的空数据库中运行。只有在完整套件失败并保留了容器时，才按 6.4 节的方法进入该测试库单独调查。目录并发测试使用 `pg_locks` 等待实际锁，不用固定休眠猜测请求先后；若它偶尔失败，应先检查锁合同和 synthetic UUID 是否冲突，不要只增加等待秒数。
 
-## 8. Drift v17 生成文件怎样检查
+## 8. Drift v18 生成文件怎样检查
 
-当前本地 schema 版本是 v17。数据库结构变化后先重新生成：
+当前本地 schema 版本是 v18。数据库结构变化后先重新生成：
 
 ```bash
 dart run build_runner build
 dart run drift_dev schema dump \
   lib/data/local_database.dart \
-  drift_schemas/drift_schema_v17.json
+  drift_schemas/drift_schema_v18.json
 dart run drift_dev schema generate \
   drift_schemas \
   test/generated_migrations
@@ -483,7 +483,7 @@ dart analyze
 flutter test --no-pub test/data/local_database_migration_test.dart
 ```
 
-CI 会在临时目录重新生成 v17 snapshot 和 migration helper，并与仓库文件逐字比较。手工修改生成文件不能通过该检查。
+CI 会在临时目录重新生成 v18 snapshot 和 migration helper，并与仓库文件逐字比较。手工修改生成文件不能通过该检查。
 
 ## 9. 六个平台 build 怎样运行
 

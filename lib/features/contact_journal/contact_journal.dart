@@ -242,6 +242,16 @@ final class ContactJournal {
             latitude: Value(location.latitude),
             longitude: Value(location.longitude),
             locationAccuracyMeters: Value(location.accuracyMeters),
+            locationSourceKind: Value(location.sourceKind),
+            locationSourceLatitude: Value(location.sourceLatitude),
+            locationSourceLongitude: Value(location.sourceLongitude),
+            locationSourceAccuracyMeters: Value(location.sourceAccuracyMeters),
+            locationSourceResolverContractVersion: Value(
+              location.sourceResolverContractVersion,
+            ),
+            locationSourceRegionTreeContentFingerprint: Value(
+              location.sourceRegionTreeContentFingerprint,
+            ),
             reachCount: submission.reachCount,
             interestLevel: submission.interestLevel,
             currentRevision: 1,
@@ -293,6 +303,16 @@ final class ContactJournal {
             latitude: Value(location.latitude),
             longitude: Value(location.longitude),
             locationAccuracyMeters: Value(location.accuracyMeters),
+            locationSourceKind: Value(location.sourceKind),
+            locationSourceLatitude: Value(location.sourceLatitude),
+            locationSourceLongitude: Value(location.sourceLongitude),
+            locationSourceAccuracyMeters: Value(location.sourceAccuracyMeters),
+            locationSourceResolverContractVersion: Value(
+              location.sourceResolverContractVersion,
+            ),
+            locationSourceRegionTreeContentFingerprint: Value(
+              location.sourceRegionTreeContentFingerprint,
+            ),
             reachCount: submission.reachCount,
             interestLevel: submission.interestLevel,
           ),
@@ -342,6 +362,7 @@ final class ContactJournal {
         'longitude': location.longitude,
         'accuracy_meters': location.accuracyMeters,
       },
+      'location_source': _locationSourceWirePayload(submission.location),
       'reach_count': submission.reachCount,
       'interest_level': submission.interestLevel,
       'answers': [
@@ -429,6 +450,18 @@ final class ContactJournal {
                 latitude: Value(location.latitude),
                 longitude: Value(location.longitude),
                 locationAccuracyMeters: Value(location.accuracyMeters),
+                locationSourceKind: Value(location.sourceKind),
+                locationSourceLatitude: Value(location.sourceLatitude),
+                locationSourceLongitude: Value(location.sourceLongitude),
+                locationSourceAccuracyMeters: Value(
+                  location.sourceAccuracyMeters,
+                ),
+                locationSourceResolverContractVersion: Value(
+                  location.sourceResolverContractVersion,
+                ),
+                locationSourceRegionTreeContentFingerprint: Value(
+                  location.sourceRegionTreeContentFingerprint,
+                ),
                 reachCount: submission.reachCount,
                 interestLevel: submission.interestLevel,
               ),
@@ -458,6 +491,16 @@ final class ContactJournal {
             latitude: Value(location.latitude),
             longitude: Value(location.longitude),
             locationAccuracyMeters: Value(location.accuracyMeters),
+            locationSourceKind: Value(location.sourceKind),
+            locationSourceLatitude: Value(location.sourceLatitude),
+            locationSourceLongitude: Value(location.sourceLongitude),
+            locationSourceAccuracyMeters: Value(location.sourceAccuracyMeters),
+            locationSourceResolverContractVersion: Value(
+              location.sourceResolverContractVersion,
+            ),
+            locationSourceRegionTreeContentFingerprint: Value(
+              location.sourceRegionTreeContentFingerprint,
+            ),
             reachCount: Value(submission.reachCount),
             interestLevel: Value(submission.interestLevel),
             currentRevision: Value(nextRevision),
@@ -485,6 +528,7 @@ final class ContactJournal {
             'longitude': location.longitude,
             'accuracy_meters': location.accuracyMeters,
           },
+          'location_source': _locationSourceWirePayload(submission.location),
           'reach_count': submission.reachCount,
           'interest_level': submission.interestLevel,
           'answers': _answerPayload(submission.answers),
@@ -577,6 +621,18 @@ final class ContactJournal {
                 latitude: Value(current.latitude),
                 longitude: Value(current.longitude),
                 locationAccuracyMeters: Value(current.locationAccuracyMeters),
+                locationSourceKind: Value(current.locationSourceKind),
+                locationSourceLatitude: Value(current.locationSourceLatitude),
+                locationSourceLongitude: Value(current.locationSourceLongitude),
+                locationSourceAccuracyMeters: Value(
+                  current.locationSourceAccuracyMeters,
+                ),
+                locationSourceResolverContractVersion: Value(
+                  current.locationSourceResolverContractVersion,
+                ),
+                locationSourceRegionTreeContentFingerprint: Value(
+                  current.locationSourceRegionTreeContentFingerprint,
+                ),
                 reachCount: current.reachCount,
                 interestLevel: current.interestLevel,
               ),
@@ -755,6 +811,18 @@ final class ContactJournal {
                 latitude: Value(location.latitude),
                 longitude: Value(location.longitude),
                 locationAccuracyMeters: Value(location.accuracyMeters),
+                locationSourceKind: Value(location.sourceKind),
+                locationSourceLatitude: Value(location.sourceLatitude),
+                locationSourceLongitude: Value(location.sourceLongitude),
+                locationSourceAccuracyMeters: Value(
+                  location.sourceAccuracyMeters,
+                ),
+                locationSourceResolverContractVersion: Value(
+                  location.sourceResolverContractVersion,
+                ),
+                locationSourceRegionTreeContentFingerprint: Value(
+                  location.sourceRegionTreeContentFingerprint,
+                ),
                 reachCount: snapshot.reachCount,
                 interestLevel: snapshot.interestLevel,
               ),
@@ -784,6 +852,16 @@ final class ContactJournal {
             latitude: Value(location.latitude),
             longitude: Value(location.longitude),
             locationAccuracyMeters: Value(location.accuracyMeters),
+            locationSourceKind: Value(location.sourceKind),
+            locationSourceLatitude: Value(location.sourceLatitude),
+            locationSourceLongitude: Value(location.sourceLongitude),
+            locationSourceAccuracyMeters: Value(location.sourceAccuracyMeters),
+            locationSourceResolverContractVersion: Value(
+              location.sourceResolverContractVersion,
+            ),
+            locationSourceRegionTreeContentFingerprint: Value(
+              location.sourceRegionTreeContentFingerprint,
+            ),
             reachCount: Value(snapshot.reachCount),
             interestLevel: Value(snapshot.interestLevel),
             currentRevision: Value(nextRevision),
@@ -839,6 +917,7 @@ final class ContactJournal {
               'longitude': location.longitude,
               'accuracy_meters': location.accuracyMeters,
             },
+            'location_source': _locationSourceWirePayload(snapshot.location),
             'reach_count': snapshot.reachCount,
             'interest_level': snapshot.interestLevel,
             'answers': _answerPayload(snapshot.answers),
@@ -1094,7 +1173,10 @@ final class ContactJournal {
       occurredTimeZone: decoded['occurredTimeZone']! as String,
       channel: ContactChannel.fromStorage(decoded['channel']! as String),
       channelDetail: decoded['channelDetail'] as String?,
-      location: _storedConflictLocation(decoded['location']),
+      location: _storedConflictLocation(
+        decoded['location'],
+        decoded['locationSource'],
+      ),
       reachCount: decoded['reachCount']! as int,
       interestLevel: decoded['interestLevel']! as int,
       answers: [for (final answer in rawAnswers) _storedConflictAnswer(answer)],
@@ -1126,7 +1208,7 @@ final class ContactJournal {
     );
   }
 
-  ContactLocation _storedConflictLocation(Object? value) {
+  ContactLocation _storedConflictLocation(Object? value, Object? sourceValue) {
     if (value is! Map<String, Object?>) {
       throw const FormatException('invalid stored conflict location');
     }
@@ -1136,6 +1218,7 @@ final class ContactJournal {
         placeName: value['placeName']! as String,
         smallestRegionId: value['smallestRegionId']! as String,
         regionTreeVersion: value['regionTreeVersion']! as String,
+        source: _storedConflictLocationSource(sourceValue),
       ),
       'pending_resolution' => PendingContactLocation(
         latitude: (value['latitude']! as num).toDouble(),
@@ -1144,6 +1227,35 @@ final class ContactJournal {
       ),
       _ => throw const FormatException('invalid stored conflict location kind'),
     };
+  }
+
+  CapturedCoordinatesLocationSource? _storedConflictLocationSource(
+    Object? value,
+  ) {
+    if (value == null) {
+      return null;
+    }
+    if (value is! Map<String, Object?> ||
+        value['kind'] != 'captured_coordinates') {
+      throw const FormatException('invalid stored conflict location source');
+    }
+    final source = CapturedCoordinatesLocationSource(
+      latitude: (value['latitude']! as num).toDouble(),
+      longitude: (value['longitude']! as num).toDouble(),
+      accuracyMeters: (value['accuracyMeters'] as num?)?.toDouble(),
+      resolverContractVersion: value['resolverContractVersion']! as String,
+      regionTreeContentFingerprint:
+          value['regionTreeContentFingerprint']! as String,
+    );
+    _validateLocationWhenPresent(
+      ResolvedContactLocation(
+        placeName: 'stored-conflict',
+        smallestRegionId: 'stored-conflict',
+        regionTreeVersion: 'stored-conflict',
+        source: source,
+      ),
+    );
+    return source;
   }
 
   QuestionnaireAnswer _storedConflictAnswer(Object? value) {
@@ -1231,25 +1343,7 @@ final class ContactJournal {
       }
     }
     _validateTargetLinks(submission.targetLinks);
-    if (submission.location case final PendingContactLocation pending) {
-      final accuracy = pending.accuracyMeters;
-      if (!pending.latitude.isFinite ||
-          pending.latitude < -90 ||
-          pending.latitude > 90 ||
-          !pending.longitude.isFinite ||
-          pending.longitude < -180 ||
-          pending.longitude > 180 ||
-          (accuracy != null && (!accuracy.isFinite || accuracy < 0))) {
-        throw const ContactValidationException('invalid_pending_location');
-      }
-    }
-    if (submission.location case final ResolvedContactLocation resolved) {
-      if (resolved.placeName.trim().isEmpty ||
-          resolved.smallestRegionId.trim().isEmpty ||
-          resolved.regionTreeVersion.trim().isEmpty) {
-        throw const ContactValidationException('resolved_location_required');
-      }
-    }
+    _validateLocationWhenPresent(submission.location);
     if (submission.channel == ContactChannel.faceToFace &&
         submission.location is NotApplicableContactLocation) {
       throw const ContactValidationException('face_to_face_location_required');
@@ -1299,25 +1393,7 @@ final class ContactJournal {
       }
     }
     _validateTargetLinks(submission.targetLinks);
-    if (submission.location case final PendingContactLocation pending) {
-      final accuracy = pending.accuracyMeters;
-      if (!pending.latitude.isFinite ||
-          pending.latitude < -90 ||
-          pending.latitude > 90 ||
-          !pending.longitude.isFinite ||
-          pending.longitude < -180 ||
-          pending.longitude > 180 ||
-          (accuracy != null && (!accuracy.isFinite || accuracy < 0))) {
-        throw const ContactValidationException('invalid_pending_location');
-      }
-    }
-    if (submission.location case final ResolvedContactLocation resolved) {
-      if (resolved.placeName.trim().isEmpty ||
-          resolved.smallestRegionId.trim().isEmpty ||
-          resolved.regionTreeVersion.trim().isEmpty) {
-        throw const ContactValidationException('resolved_location_required');
-      }
-    }
+    _validateLocationWhenPresent(submission.location);
     if (submission.channel == ContactChannel.faceToFace &&
         submission.location is NotApplicableContactLocation) {
       throw const ContactValidationException('face_to_face_location_required');
@@ -1507,6 +1583,14 @@ final class ContactJournal {
             latitude: row.latitude,
             longitude: row.longitude,
             accuracyMeters: row.locationAccuracyMeters,
+            sourceKind: row.locationSourceKind,
+            sourceLatitude: row.locationSourceLatitude,
+            sourceLongitude: row.locationSourceLongitude,
+            sourceAccuracyMeters: row.locationSourceAccuracyMeters,
+            sourceResolverContractVersion:
+                row.locationSourceResolverContractVersion,
+            sourceRegionTreeContentFingerprint:
+                row.locationSourceRegionTreeContentFingerprint,
           ),
           reachCount: row.reachCount,
           interestLevel: row.interestLevel,
@@ -1540,6 +1624,14 @@ final class ContactJournal {
         latitude: row.latitude,
         longitude: row.longitude,
         accuracyMeters: row.locationAccuracyMeters,
+        sourceKind: row.locationSourceKind,
+        sourceLatitude: row.locationSourceLatitude,
+        sourceLongitude: row.locationSourceLongitude,
+        sourceAccuracyMeters: row.locationSourceAccuracyMeters,
+        sourceResolverContractVersion:
+            row.locationSourceResolverContractVersion,
+        sourceRegionTreeContentFingerprint:
+            row.locationSourceRegionTreeContentFingerprint,
       ),
       reachCount: row.reachCount,
       interestLevel: row.interestLevel,
@@ -1561,11 +1653,25 @@ final class ContactJournal {
     required double? latitude,
     required double? longitude,
     required double? accuracyMeters,
+    required String? sourceKind,
+    required double? sourceLatitude,
+    required double? sourceLongitude,
+    required double? sourceAccuracyMeters,
+    required String? sourceResolverContractVersion,
+    required String? sourceRegionTreeContentFingerprint,
   }) => switch (kind) {
     'resolved' => ResolvedContactLocation(
       placeName: placeName!,
       smallestRegionId: smallestRegionId!,
       regionTreeVersion: regionTreeVersion!,
+      source: _capturedSourceFromColumns(
+        kind: sourceKind,
+        latitude: sourceLatitude,
+        longitude: sourceLongitude,
+        accuracyMeters: sourceAccuracyMeters,
+        resolverContractVersion: sourceResolverContractVersion,
+        regionTreeContentFingerprint: sourceRegionTreeContentFingerprint,
+      ),
     ),
     'not_applicable' => const NotApplicableContactLocation(),
     'pending_resolution' => PendingContactLocation(

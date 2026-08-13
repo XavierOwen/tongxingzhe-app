@@ -763,11 +763,7 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
   String _locationLabel(AppStrings text, ContactLocation? location) {
     return switch (location) {
       NotApplicableContactLocation() => text.t('locationNotApplicable'),
-      final PendingContactLocation pending =>
-        '${pending.latitude.toStringAsFixed(6)}, '
-            '${pending.longitude.toStringAsFixed(6)}'
-            '${pending.accuracyMeters == null ? '' : '\n${text.t('locationAccuracy')} ${pending.accuracyMeters!.toStringAsFixed(1)} m'}'
-            '\n${text.t('locationPendingResolution')}',
+      PendingContactLocation() => text.t('locationPendingResolution'),
       final ResolvedContactLocation resolved => resolved.placeName,
       null => text.t('locationRequired'),
     };

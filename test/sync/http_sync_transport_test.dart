@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/sync/http_sync_transport.dart';
 import 'package:tongxingzhe_app/sync/sync_models.dart';
@@ -94,6 +95,108 @@ void main() {
     expect(conflict.conflictingFields, ['reachCount']);
     expect(conflict.currentSnapshot.reachCount, 4);
     expect(conflict.proposedSnapshot.reachCount, 3);
+  });
+
+  test('409 冲突快照保留 camelCase locationSource', () async {
+    final transport = HttpSyncTransport(
+      baseUri: Uri.parse('https://backend.example.test'),
+      identitySession: _signedInIdentity(),
+      client: MockClient(
+        (_) async => http.Response(
+          jsonEncode({
+            'result': 'conflict',
+            'error': {'code': 'contact_revision_conflict'},
+            'conflict': {
+              'conflict_id': 'conflict-source-1',
+              'contact_id': 'contact-1',
+              'base_revision': 1,
+              'current_revision': 2,
+              'conflicting_fields': ['location'],
+              'questionnaire_version_id': 'questionnaire-v1',
+              'current_revision_kind': 'corrected',
+              'current_revised_at_utc': '2030-01-08T19:00:00.000Z',
+              'current_reason': '地点来源更新',
+              'current_snapshot': _resolvedConflictSnapshot(reachCount: 4),
+              'proposed_snapshot': _resolvedConflictSnapshot(reachCount: 3),
+            },
+          }),
+          409,
+          headers: {'content-type': 'application/json'},
+        ),
+      ),
+    );
+
+    final result = await transport.push(_command);
+
+    expect(result, isA<SyncPushConflict>());
+    final conflict = (result as SyncPushConflict).conflict!;
+    final current = conflict.currentSnapshot.location;
+    final proposed = conflict.proposedSnapshot.location;
+    expect(current, isA<ResolvedContactLocation>());
+    expect(proposed, isA<ResolvedContactLocation>());
+    expect((current as ResolvedContactLocation).source, _capturedSource);
+    expect((proposed as ResolvedContactLocation).source, _capturedSource);
+  });
+
+  test('不符合合同的结构化冲突按无效服务端响应重试', () async {
+    final transport = HttpSyncTransport(
+      baseUri: Uri.parse('https://backend.example.test'),
+      identitySession: _signedInIdentity(),
+      client: MockClient(
+        (_) async => http.Response(
+          jsonEncode({
+            'result': 'conflict',
+            'error': {'code': 'contact_revision_conflict'},
+            'conflict': {
+              'conflict_id': 'conflict-source-invalid',
+              'contact_id': 'contact-1',
+              'base_revision': 1,
+              'current_revision': 2,
+              'conflicting_fields': ['location'],
+              'questionnaire_version_id': 'questionnaire-v1',
+              'current_revision_kind': 'corrected',
+              'current_revised_at_utc': '2030-01-08T19:00:00.000Z',
+              'current_reason': '地点来源更新',
+              'current_snapshot': _resolvedConflictSnapshot(
+                reachCount: 4,
+                source: {
+                  'kind': 'captured_coordinates',
+                  'latitude': 91,
+                  'longitude': -87.6,
+                  'accuracyMeters': null,
+                  'resolverContractVersion': 'canonical-region-resolution:v1',
+                  'regionTreeContentFingerprint':
+                      '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+                },
+              ),
+              'proposed_snapshot': _resolvedConflictSnapshot(reachCount: 3),
+            },
+          }),
+          409,
+          headers: {'content-type': 'application/json'},
+        ),
+      ),
+    );
+
+    final result = await transport.push(_command);
+    expect(result, isA<SyncPushRetryable>());
+    expect(
+      (result as SyncPushRetryable).failureCode,
+      'invalid_server_response',
+    );
+  });
+
+  test('旧 Backend 的空 409 保留无详情冲突分类', () async {
+    final transport = HttpSyncTransport(
+      baseUri: Uri.parse('https://backend.example.test'),
+      identitySession: _signedInIdentity(),
+      client: MockClient((_) async => http.Response('', 409)),
+    );
+
+    final result = await transport.push(_command);
+
+    expect(result, isA<SyncPushConflict>());
+    expect((result as SyncPushConflict).conflict, isNull);
   });
 
   test('过大 Retry-After 按本地一小时上限处理', () async {
@@ -391,6 +494,45 @@ Map<String, Object?> _conflictSnapshot({required int reachCount}) => {
   'channel': 'video_call',
   'channelDetail': null,
   'location': {'kind': 'not_applicable'},
+  'reachCount': reachCount,
+  'interestLevel': 3,
+  'answers': <Object?>[],
+};
+
+const _capturedSource = CapturedCoordinatesLocationSource(
+  latitude: 41.79,
+  longitude: -87.6,
+  accuracyMeters: 12.5,
+  resolverContractVersion: 'canonical-region-resolution:v1',
+  regionTreeContentFingerprint:
+      '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+);
+
+Map<String, Object?> _resolvedConflictSnapshot({
+  required int reachCount,
+  Map<String, Object?>? source,
+}) => {
+  'occurredAtUtc': '2030-01-08T18:00:00.000Z',
+  'occurredTimeZone': 'America/Chicago',
+  'channel': 'video_call',
+  'channelDetail': null,
+  'location': {
+    'kind': 'resolved',
+    'placeName': 'Chicago Loop',
+    'smallestRegionId': 'region-loop',
+    'regionTreeVersion': 'tree-v1',
+  },
+  'locationSource':
+      source ??
+      {
+        'kind': 'captured_coordinates',
+        'latitude': _capturedSource.latitude,
+        'longitude': _capturedSource.longitude,
+        'accuracyMeters': _capturedSource.accuracyMeters,
+        'resolverContractVersion': _capturedSource.resolverContractVersion,
+        'regionTreeContentFingerprint':
+            _capturedSource.regionTreeContentFingerprint,
+      },
   'reachCount': reachCount,
   'interestLevel': 3,
   'answers': <Object?>[],

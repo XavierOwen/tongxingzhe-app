@@ -27,6 +27,13 @@ class DbContactDrafts extends Table {
   RealColumn get latitude => real().nullable()();
   RealColumn get longitude => real().nullable()();
   RealColumn get locationAccuracyMeters => real().nullable()();
+  TextColumn get locationSourceKind => text().nullable()();
+  RealColumn get locationSourceLatitude => real().nullable()();
+  RealColumn get locationSourceLongitude => real().nullable()();
+  RealColumn get locationSourceAccuracyMeters => real().nullable()();
+  TextColumn get locationSourceResolverContractVersion => text().nullable()();
+  TextColumn get locationSourceRegionTreeContentFingerprint =>
+      text().nullable()();
   IntColumn get reachCount => integer().nullable()();
   IntColumn get interestLevel => integer().nullable()();
   TextColumn get syncMode =>
@@ -71,10 +78,31 @@ class DbContactDrafts extends Table {
         'longitude IS NULL AND location_accuracy_meters IS NULL) OR '
         "(location_kind = 'pending_resolution' AND place_name IS NULL AND "
         'smallest_region_id IS NULL AND region_tree_version IS NULL '
-        'AND latitude BETWEEN -90 AND 90 AND '
-        'longitude BETWEEN -180 AND 180 AND '
+        'AND latitude IS NOT NULL AND latitude BETWEEN -90 AND 90 AND '
+        'longitude IS NOT NULL AND longitude BETWEEN -180 AND 180 AND '
         '(location_accuracy_meters IS NULL OR '
         'location_accuracy_meters >= 0)))',
+    'CHECK ((location_source_kind IS NULL AND '
+        'location_source_latitude IS NULL AND '
+        'location_source_longitude IS NULL AND '
+        'location_source_accuracy_meters IS NULL AND '
+        'location_source_resolver_contract_version IS NULL AND '
+        'location_source_region_tree_content_fingerprint IS NULL) OR '
+        "(location_kind = 'resolved' AND "
+        'location_source_kind IS NOT NULL AND '
+        "location_source_kind = 'captured_coordinates' AND "
+        'location_source_latitude IS NOT NULL AND '
+        'location_source_latitude BETWEEN -90 AND 90 AND '
+        'location_source_longitude IS NOT NULL AND '
+        'location_source_longitude BETWEEN -180 AND 180 AND '
+        '(location_source_accuracy_meters IS NULL OR '
+        'location_source_accuracy_meters >= 0) AND '
+        'location_source_resolver_contract_version IS NOT NULL AND '
+        "location_source_resolver_contract_version = 'canonical-region-resolution:v1' "
+        'AND location_source_region_tree_content_fingerprint IS NOT NULL AND '
+        'length(location_source_region_tree_content_fingerprint) = 64 AND '
+        'location_source_region_tree_content_fingerprint '
+        "NOT GLOB '*[^0-9a-f]*'))",
     'CHECK (reach_count IS NULL OR reach_count > 0)',
     'CHECK (interest_level IS NULL OR interest_level BETWEEN 0 AND 4)',
     "CHECK (sync_mode IN ('account_private', 'device_only'))",
@@ -162,6 +190,13 @@ class DbContactRecords extends Table {
   RealColumn get latitude => real().nullable()();
   RealColumn get longitude => real().nullable()();
   RealColumn get locationAccuracyMeters => real().nullable()();
+  TextColumn get locationSourceKind => text().nullable()();
+  RealColumn get locationSourceLatitude => real().nullable()();
+  RealColumn get locationSourceLongitude => real().nullable()();
+  RealColumn get locationSourceAccuracyMeters => real().nullable()();
+  TextColumn get locationSourceResolverContractVersion => text().nullable()();
+  TextColumn get locationSourceRegionTreeContentFingerprint =>
+      text().nullable()();
   IntColumn get reachCount => integer()();
   IntColumn get interestLevel => integer()();
   IntColumn get currentRevision => integer()();
@@ -177,17 +212,39 @@ class DbContactRecords extends Table {
         'smallest_region_id IS NOT NULL AND '
         'length(trim(smallest_region_id)) > 0 AND '
         'region_tree_version IS NOT NULL AND '
-        'length(trim(region_tree_version)) > 0) OR '
+        'length(trim(region_tree_version)) > 0 AND latitude IS NULL AND '
+        'longitude IS NULL AND location_accuracy_meters IS NULL) OR '
         "(location_kind = 'not_applicable' AND place_name IS NULL AND "
         'smallest_region_id IS NULL AND region_tree_version IS NULL AND '
         'latitude IS NULL AND '
         'longitude IS NULL AND location_accuracy_meters IS NULL) OR '
-        "(location_kind = 'pending_resolution' AND "
+        "(location_kind = 'pending_resolution' AND place_name IS NULL AND "
         'smallest_region_id IS NULL AND region_tree_version IS NULL AND '
-        'latitude BETWEEN -90 AND 90 AND '
-        'longitude BETWEEN -180 AND 180 AND '
+        'latitude IS NOT NULL AND latitude BETWEEN -90 AND 90 AND '
+        'longitude IS NOT NULL AND longitude BETWEEN -180 AND 180 AND '
         '(location_accuracy_meters IS NULL OR '
         'location_accuracy_meters >= 0)))',
+    'CHECK ((location_source_kind IS NULL AND '
+        'location_source_latitude IS NULL AND '
+        'location_source_longitude IS NULL AND '
+        'location_source_accuracy_meters IS NULL AND '
+        'location_source_resolver_contract_version IS NULL AND '
+        'location_source_region_tree_content_fingerprint IS NULL) OR '
+        "(location_kind = 'resolved' AND "
+        'location_source_kind IS NOT NULL AND '
+        "location_source_kind = 'captured_coordinates' AND "
+        'location_source_latitude IS NOT NULL AND '
+        'location_source_latitude BETWEEN -90 AND 90 AND '
+        'location_source_longitude IS NOT NULL AND '
+        'location_source_longitude BETWEEN -180 AND 180 AND '
+        '(location_source_accuracy_meters IS NULL OR '
+        'location_source_accuracy_meters >= 0) AND '
+        'location_source_resolver_contract_version IS NOT NULL AND '
+        "location_source_resolver_contract_version = 'canonical-region-resolution:v1' "
+        'AND location_source_region_tree_content_fingerprint IS NOT NULL AND '
+        'length(location_source_region_tree_content_fingerprint) = 64 AND '
+        'location_source_region_tree_content_fingerprint '
+        "NOT GLOB '*[^0-9a-f]*'))",
     "CHECK (lifecycle_status IN ('active', 'voided'))",
     'CHECK (reach_count > 0)',
     'CHECK (interest_level BETWEEN 0 AND 4)',
@@ -263,6 +320,13 @@ class DbContactRevisions extends Table {
   RealColumn get latitude => real().nullable()();
   RealColumn get longitude => real().nullable()();
   RealColumn get locationAccuracyMeters => real().nullable()();
+  TextColumn get locationSourceKind => text().nullable()();
+  RealColumn get locationSourceLatitude => real().nullable()();
+  RealColumn get locationSourceLongitude => real().nullable()();
+  RealColumn get locationSourceAccuracyMeters => real().nullable()();
+  TextColumn get locationSourceResolverContractVersion => text().nullable()();
+  TextColumn get locationSourceRegionTreeContentFingerprint =>
+      text().nullable()();
   IntColumn get reachCount => integer()();
   IntColumn get interestLevel => integer()();
 
@@ -289,17 +353,39 @@ class DbContactRevisions extends Table {
         'smallest_region_id IS NOT NULL AND '
         'length(trim(smallest_region_id)) > 0 AND '
         'region_tree_version IS NOT NULL AND '
-        'length(trim(region_tree_version)) > 0) OR '
+        'length(trim(region_tree_version)) > 0 AND latitude IS NULL AND '
+        'longitude IS NULL AND location_accuracy_meters IS NULL) OR '
         "(location_kind = 'not_applicable' AND place_name IS NULL AND "
         'smallest_region_id IS NULL AND region_tree_version IS NULL AND '
         'latitude IS NULL AND '
         'longitude IS NULL AND location_accuracy_meters IS NULL) OR '
-        "(location_kind = 'pending_resolution' AND "
+        "(location_kind = 'pending_resolution' AND place_name IS NULL AND "
         'smallest_region_id IS NULL AND region_tree_version IS NULL AND '
-        'latitude BETWEEN -90 AND 90 AND '
-        'longitude BETWEEN -180 AND 180 AND '
+        'latitude IS NOT NULL AND latitude BETWEEN -90 AND 90 AND '
+        'longitude IS NOT NULL AND longitude BETWEEN -180 AND 180 AND '
         '(location_accuracy_meters IS NULL OR '
         'location_accuracy_meters >= 0)))',
+    'CHECK ((location_source_kind IS NULL AND '
+        'location_source_latitude IS NULL AND '
+        'location_source_longitude IS NULL AND '
+        'location_source_accuracy_meters IS NULL AND '
+        'location_source_resolver_contract_version IS NULL AND '
+        'location_source_region_tree_content_fingerprint IS NULL) OR '
+        "(location_kind = 'resolved' AND "
+        'location_source_kind IS NOT NULL AND '
+        "location_source_kind = 'captured_coordinates' AND "
+        'location_source_latitude IS NOT NULL AND '
+        'location_source_latitude BETWEEN -90 AND 90 AND '
+        'location_source_longitude IS NOT NULL AND '
+        'location_source_longitude BETWEEN -180 AND 180 AND '
+        '(location_source_accuracy_meters IS NULL OR '
+        'location_source_accuracy_meters >= 0) AND '
+        'location_source_resolver_contract_version IS NOT NULL AND '
+        "location_source_resolver_contract_version = 'canonical-region-resolution:v1' "
+        'AND location_source_region_tree_content_fingerprint IS NOT NULL AND '
+        'length(location_source_region_tree_content_fingerprint) = 64 AND '
+        'location_source_region_tree_content_fingerprint '
+        "NOT GLOB '*[^0-9a-f]*'))",
     "CHECK (channel IN ('face_to_face', 'voice_call', 'video_call', "
         "'instant_text', 'asynchronous_message', 'mixed', "
         "'other_direct'))",
