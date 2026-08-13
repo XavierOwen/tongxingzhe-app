@@ -255,6 +255,8 @@ final class _ClaimScenario {
       ['tool/claim_supabase_auth_spike_email.dart', '--config', config.path],
       workingDirectory: Directory.current.path,
       environment: environment,
+      stdoutEncoding: utf8,
+      stderrEncoding: utf8,
     );
   }
 
