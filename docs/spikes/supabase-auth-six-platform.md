@@ -131,11 +131,29 @@ export AUTH_SPIKE_CONFIG='secrets/supabase-auth-macos.json'
 它要求两个条件：
 
 1. `AUTH_SPIKE_SIGNUP_CONFIRM_NEW_SYNTHETIC_ACCOUNT` 必须是字符串 `"true"`；它只确认本次地址是新的合成测试账号。`session`、`recovery_request` 和其他模式不读取这个字段。
-2. `AUTH_SPIKE_EMAIL` 必须匹配 `^auth-spike-[a-z0-9][a-z0-9._-]*@[a-z0-9][a-z0-9.-]*\.[a-z0-9]+$`，例如 `auth-spike-run-20260813@example.test`。普通个人地址和本示例中的 `synthetic-test-account@example.test` 会被拒绝。
+2. `AUTH_SPIKE_EMAIL` 必须匹配 `^auth-spike-[a-z0-9][a-z0-9._+-]*@[a-z0-9][a-z0-9.-]*\.[a-z0-9]+$`，例如 `auth-spike-run-20260813@example.test`。普通个人地址和本示例中的 `synthetic-test-account@example.test` 会被拒绝。`+tag` 是地址的字面部分，不会按 Gmail 别名规则合并。
 
-测试 hosted project 时，把 `example.test` 换成团队控制且能实际收信的测试域名。每次注册都应使用新的地址和新的受忽略配置；不要把确认字段复制到个人账号配置中。runner 使用 Flutter SDK 自带的 `dart` 命令读取这三个非密码字段，不需要额外安装 Python。
+测试 hosted project 时，把 `example.test` 换成团队控制且能实际收信的测试域名。每次注册都应使用新的地址和新的受忽略配置；不要把确认字段复制到个人账号配置中。runner 使用 Flutter SDK 自带的 `dart` 命令，不需要额外安装 Python。
 
-这项检查只能防止测试者把个人地址交给注册流程。Hosted Supabase Auth 可能对已确认账号返回与新账号相似的注册响应，客户端不能据此判断地址是否已经存在。runner 不调用 Admin API，也不保存 service-role key；“注册请求被接受”仍不等于“地址此前不存在”。
+这两项检查通过后，runner 检查命令、端口、路径并建立本机目录，再占用 `(SUPABASE_URL, AUTH_SPIKE_EMAIL)`。占用记录先刷新到磁盘，然后才能探测本机 driver 端口或启动 Flutter。后续 driver 失败、构建失败、进程中止、超时、5xx 或未知网络结果都不会释放该地址。正常重跑必须改用新的合成邮箱；确认字段不能覆盖占用记录。
+
+两个并发 runner 会争用同一个操作系统文件锁。同一项目和邮箱最多只有一个 runner 能启动 Flutter。项目 URL 的 scheme 和 host 不区分大小写，默认端口和末尾 `/` 不产生新项目。邮箱在生成摘要前会移除首尾空白并转为 ASCII 小写；runner 入口仍只接受规范的小写合成地址。
+
+ledger 是加锁的 append-only JSONL 文件。它只保存版本、UTC 占用时间和 project/email 的 SHA-256 摘要。完整记录追加后会先 flush，再允许 Flutter 启动。中途截断的记录会让后续运行失败关闭，不会被覆盖或静默修复。ledger 不保存原邮箱、项目 URL、password、OTP、publishable key 或 token。默认位置如下：
+
+| 系统 | 默认 ledger |
+| --- | --- |
+| macOS | `~/Library/Application Support/tongxingzhe/auth-spike/spent-signup-emails-v1.json` |
+| Linux | `$XDG_STATE_HOME/tongxingzhe/auth-spike/spent-signup-emails-v1.json`；未设置时使用 `~/.local/state/...` |
+| Windows | `%LOCALAPPDATA%\tongxingzhe\auth-spike\spent-signup-emails-v1.json` |
+
+自动测试可以用绝对路径 `AUTH_SPIKE_LEDGER_PATH` 隔离 ledger。Windows Git Bash 也接受 `/c/...` 形式的盘符绝对路径。改变该路径会建立新的保护域，不表示原地址可以复用。普通手工探针应使用默认位置，使同一电脑的多个 checkout 共用记录。
+
+若 ledger 损坏、版本未知或不可写，runner 会失败关闭并保留原文件。不要为了重跑而删除或清空它。先保留备份并停止使用旧地址，再让维护者检查记录。删除远端 synthetic 用户也不会释放本机占用。
+
+这套 ledger 只防止更新后、同一用户状态目录内、经此 runner 发起的重复尝试。它不能发现旧版本、其他电脑、其他系统用户、手工请求或另一 ledger 路径的历史。第一次使用新版本前，如果某个地址可能已经请求过，必须先换新地址。
+
+Hosted Supabase Auth 可能对已确认账号返回与新账号相似的注册响应，客户端不能据此判断地址是否已经存在。runner 不调用 Admin API，也不保存 service-role key；“注册请求被接受”和“本机 ledger 首次占用”都不等于“地址此前不存在”。
 
 ## 6. 当前阻塞与决策
 

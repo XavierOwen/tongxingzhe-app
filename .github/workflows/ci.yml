@@ -160,6 +160,20 @@ jobs:
       - name: Resolve dependencies
         run: flutter pub get
 
+      - name: Verify auth signup ledger portability
+        if: matrix.target == 'macOS' || matrix.target == 'Windows'
+        shell: bash
+        run: >-
+          flutter test --no-pub
+          test/tool/claim_supabase_auth_spike_email_test.dart
+
+      - name: Verify auth signup shell runner on macOS
+        if: matrix.target == 'macOS'
+        shell: bash
+        run: >-
+          flutter test --no-pub
+          test/tool/run_supabase_auth_spike_test.dart
+
       - name: Build
         shell: bash
         run: ${{ matrix.command }}
