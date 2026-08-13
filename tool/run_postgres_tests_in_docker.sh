@@ -534,14 +534,26 @@ echo "用真实 Backend adapter 对账 PostgreSQL（${backend_image}）。"
 docker run \
   --rm \
   --network "container:${container_name}" \
-  --mount "type=bind,src=${repository_root},dst=/workspace,readonly" \
-  --mount 'type=volume,dst=/workspace/backend/server/node_modules' \
-  --mount 'type=tmpfs,dst=/workspace/backend/server/dist' \
-  --workdir /workspace/backend/server \
+  --mount "type=bind,src=${repository_root},dst=/source,readonly" \
+  --mount 'type=volume,dst=/work' \
+  --workdir /work \
   --env DATABASE_URL="${database_url}" \
   "${backend_image}" \
   bash -lc \
-    'npm ci --ignore-scripts && npm run build && node --enable-source-maps dist/test/contact-location-evidence.integration.js'
+    'mkdir -p backend/server backend/database/fixtures &&
+     cp /source/backend/server/package.json \
+        /source/backend/server/package-lock.json \
+        /source/backend/server/tsconfig.json \
+        backend/server/ &&
+     cp -R /source/backend/server/src /source/backend/server/test \
+        backend/server/ &&
+     cp -R /source/backend/database/fixtures/shared \
+        backend/database/fixtures/ &&
+     cd backend/server &&
+     npm ci --ignore-scripts &&
+     npm run build &&
+     node --enable-source-maps \
+       dist/test/contact-location-evidence.integration.js'
 
 echo '用独立数据库会话验证并发不变量。'
 # Concurrency scripts commit their synthetic rows, and the later pg_dump keeps

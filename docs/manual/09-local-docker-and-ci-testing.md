@@ -314,7 +314,7 @@ flutter run \
 
 脚本默认使用 `postgres:16` 和 `node:24-bookworm`。首次运行时，Docker 会下载这两个镜像；Node 阶段还会从 npm registry 下载 `backend/server/package-lock.json` 指定的依赖。后续运行会复用本机镜像，但每个一次性 Node 容器仍会重新运行 `npm ci`，除非你在 Docker 环境外另行配置 npm cache。
 
-Node 24 容器使用与 PostgreSQL 容器相同的 network namespace。它通过临时 `DATABASE_URL` 访问 `tongxingzhe_test`，读取只读仓库 bind mount，在临时 `node_modules` volume 中运行 `npm ci --ignore-scripts`，并把 `dist` 写入临时 tmpfs。Node 阶段不公开端口，也不连接 production。
+Node 24 容器使用与 PostgreSQL 容器相同的 network namespace。它通过临时 `DATABASE_URL` 访问 `tongxingzhe_test`。脚本把 Backend 源码和共享 fixture 从只读仓库挂载复制到一个临时 work volume，再运行 `npm ci --ignore-scripts` 和编译。这个做法也适用于没有 `node_modules` 或 `dist` 的全新 checkout。Node 阶段不公开端口，也不连接 production。
 
 ### 6.2 脚本按什么顺序工作
 
@@ -331,7 +331,7 @@ Node 24 容器使用与 PostgreSQL 容器相同的 network namespace。它通过
 9. 修改 migration 的临时副本，确认 runner 拒绝 checksum 漂移；
 10. 执行 `pg_dump`，启动没有源 cluster roles 的第二个 PostgreSQL 容器；
 11. 用 `postgres_prepare_restore_roles.sh` 建立 archive 所需的无登录角色，恢复后再运行全部 check 和 fixture；
-12. 成功后删除两个 PostgreSQL 容器、Node 容器和本机临时 dump。
+12. 成功后删除两个 PostgreSQL 容器、Node 容器、临时 work volume 和本机临时 dump。
 
 这组步骤同时验证新安装、重复部署、Backend→PostgreSQL 结果分类、并发、最小权限和备份恢复。fixture 内使用 `BEGIN` 与 `ROLLBACK`，不会把合成业务资料留在测试库。并发脚本会提交自己的 synthetic 行，这些行会随 dump 进入恢复库；它们不是 production 数据。
 
