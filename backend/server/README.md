@@ -4,6 +4,16 @@
 
 客户端不能提交 `app_user_id`、role 或 capability。上传会把 payload 的 workspace 和 project 与可信上下文交叉核对。拉取也会核对 query 范围，并只接受属于同一范围的不透明 cursor。响应不返回外部 subject、email 或 token。所有受保护入口共用严格的 bearer header 解析器，防止端点之间出现不同的认证规则。
 
+## 个人当前关系阶段快照
+
+| 方法与路径 | 行为 |
+| --- | --- |
+| `GET /v1/personal/current-relationship-stage` | 返回当前 personal project 中仍分配给当前使用者、对象 active 且项目关系 active 的 PII-free 对象×项目关系快照 |
+
+这个端点不接受 query、body、workspace、user、project、`asOf` 或任意时间范围。Backend 从已验证身份解析当前 session context，PostgreSQL 再验证 personal workspace owner、active project、active assignment、active target 和 active relationship。`snapshot_as_of_utc` 是一次一致性读取判断当前状态的 UTC 时刻；`source_cutoff_utc` 表示该返回集合中最新关系更新时间，空集合使用同一 snapshot 时刻。两者都不表示可重建的历史 as-of，也不等同于接触期间的数据截止时间。
+
+响应只包含稳定合同、project key、快照和授权时刻、`coverage.total/pending`（当前 bridge 的 pending 为 0）以及 target key、stage、revision、updated time。target key 是受限数据面的 UUID，不是匿名保证；响应不含姓名、电话、邮箱、关系备注或历史 revision。runtime role 只能执行窄 bridge，不能直接读取对象、分配或关系表。当前路由不扩展组织 workspace，也不调用对象 PII 目录或离线 PII vault。
+
 cursor 不存在或不属于当前用户、空间和项目时，端点返回 `400 invalid_cursor`。未分类的数据库失败返回 `503 sync_unavailable`，不把内部 SQL 错误文字暴露给客户端。地点来源只有一个窄的永久拒绝例外，见下节。
 
 ## 接触地点来源与同步错误边界

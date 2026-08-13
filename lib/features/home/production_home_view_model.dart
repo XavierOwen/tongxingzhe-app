@@ -8,6 +8,7 @@ import '../../sync/foreground_sync_coordinator.dart';
 import '../../sync/sync_engine_factory.dart';
 import '../contact_journal/contact_journal.dart';
 import '../contact_journal/contact_models.dart';
+import '../contact_metrics/current_relationship_stage.dart';
 import '../contact_metrics/personal_contact_overview.dart';
 
 /// 首页一次性提示的稳定类别。
@@ -60,12 +61,16 @@ final class ProductionHomeViewState {
     required this.today,
     required this.recentSevenDays,
     required this.contacts,
+    required this.currentRelationshipStage,
+    required this.relationshipStageIsLoading,
+    required this.relationshipStageLoadFailed,
     required List<ProductionHomeProjectOption> projectOptions,
     required this.notice,
   }) : projectOptions = List.unmodifiable(projectOptions);
 
   ProductionHomeViewState.initial({
     required List<ProductionHomeProjectOption> projectOptions,
+    required this.relationshipStageIsLoading,
   }) : isLoading = true,
        isSynchronizing = false,
        loadFailed = false,
@@ -73,6 +78,8 @@ final class ProductionHomeViewState {
        today = null,
        recentSevenDays = null,
        contacts = null,
+       currentRelationshipStage = null,
+       relationshipStageLoadFailed = false,
        projectOptions = List.unmodifiable(projectOptions),
        notice = null;
 
@@ -83,6 +90,9 @@ final class ProductionHomeViewState {
   final PersonalSummarySnapshot? today;
   final PersonalSummarySnapshot? recentSevenDays;
   final ContactOverviewSnapshot? contacts;
+  final CurrentRelationshipStageRepositorySuccess? currentRelationshipStage;
+  final bool relationshipStageIsLoading;
+  final bool relationshipStageLoadFailed;
   final List<ProductionHomeProjectOption> projectOptions;
   final ProductionHomeNotice? notice;
 
@@ -94,8 +104,12 @@ final class ProductionHomeViewState {
     PersonalSummarySnapshot? today,
     PersonalSummarySnapshot? recentSevenDays,
     ContactOverviewSnapshot? contacts,
+    CurrentRelationshipStageRepositorySuccess? currentRelationshipStage,
+    bool? relationshipStageIsLoading,
+    bool? relationshipStageLoadFailed,
     ProductionHomeNotice? notice,
     bool clearNotice = false,
+    bool clearCurrentRelationshipStage = false,
   }) {
     return ProductionHomeViewState(
       isLoading: isLoading ?? this.isLoading,
@@ -105,6 +119,13 @@ final class ProductionHomeViewState {
       today: today ?? this.today,
       recentSevenDays: recentSevenDays ?? this.recentSevenDays,
       contacts: contacts ?? this.contacts,
+      currentRelationshipStage: clearCurrentRelationshipStage
+          ? null
+          : currentRelationshipStage ?? this.currentRelationshipStage,
+      relationshipStageIsLoading:
+          relationshipStageIsLoading ?? this.relationshipStageIsLoading,
+      relationshipStageLoadFailed:
+          relationshipStageLoadFailed ?? this.relationshipStageLoadFailed,
       projectOptions: projectOptions,
       notice: clearNotice ? null : notice ?? this.notice,
     );
@@ -191,6 +212,7 @@ final class ProductionHomeViewModel extends ChangeNotifier {
     required ContactJournal contactJournal,
     required String deviceId,
     required SyncEngineFactory? syncEngineFactory,
+    required CurrentRelationshipStageRepository relationshipStageRepository,
     required DateTime Function() now,
   }) {
     final syncCoordinator = ForegroundSyncCoordinator(
@@ -207,6 +229,7 @@ final class ProductionHomeViewModel extends ChangeNotifier {
         now: now,
         loadSyncHealth: syncCoordinator.health,
       ),
+      relationshipStageRepository: relationshipStageRepository,
       syncCoordinator: syncCoordinator,
     );
   }
@@ -218,6 +241,7 @@ final class ProductionHomeViewModel extends ChangeNotifier {
     required ProductionHomeSessionActions sessionActions,
     required ProductionHomeDraftStore draftStore,
     required PersonalContactOverviewRepository overviewRepository,
+    CurrentRelationshipStageRepository? relationshipStageRepository,
     required ForegroundSyncCoordinator syncCoordinator,
   }) => ProductionHomeViewModel._(
     context,
@@ -226,6 +250,7 @@ final class ProductionHomeViewModel extends ChangeNotifier {
     sessionActions,
     draftStore,
     overviewRepository,
+    relationshipStageRepository,
     syncCoordinator,
   );
 
@@ -236,9 +261,11 @@ final class ProductionHomeViewModel extends ChangeNotifier {
     this._sessionActions,
     this._draftStore,
     this._overviewRepository,
+    this._relationshipStageRepository,
     this._syncCoordinator,
   ) : _state = ProductionHomeViewState.initial(
         projectOptions: _projectOptions(availableContexts, _context),
+        relationshipStageIsLoading: _relationshipStageRepository != null,
       );
 
   final TrustedSessionContext _context;
@@ -246,6 +273,7 @@ final class ProductionHomeViewModel extends ChangeNotifier {
   final ProductionHomeSessionActions _sessionActions;
   final ProductionHomeDraftStore _draftStore;
   final PersonalContactOverviewRepository _overviewRepository;
+  final CurrentRelationshipStageRepository? _relationshipStageRepository;
   final ForegroundSyncCoordinator _syncCoordinator;
 
   ProductionHomeViewState _state;
@@ -367,6 +395,8 @@ final class ProductionHomeViewModel extends ChangeNotifier {
         isSynchronizing: true,
         loadFailed: false,
         syncFailed: false,
+        relationshipStageIsLoading: _relationshipStageRepository != null,
+        relationshipStageLoadFailed: false,
       ),
     );
 
@@ -376,6 +406,10 @@ final class ProductionHomeViewModel extends ChangeNotifier {
     } catch (_) {
       syncFailed = true;
     }
+
+    // Relationship fetch starts after contact sync but does not delay the
+    // existing personal summaries. Its panel owns a separate loading state.
+    final relationshipStageFuture = _loadRelationshipStage();
 
     try {
       final today = await _overviewRepository.loadSummary(
@@ -410,6 +444,33 @@ final class ProductionHomeViewModel extends ChangeNotifier {
         ),
       );
     }
+
+    final relationshipStage = await relationshipStageFuture;
+    _setState(
+      _state.copyWith(
+        relationshipStageIsLoading: false,
+        relationshipStageLoadFailed: relationshipStage.failed,
+        currentRelationshipStage: relationshipStage.success,
+        clearCurrentRelationshipStage:
+            _relationshipStageRepository != null &&
+            relationshipStage.success == null,
+      ),
+    );
+  }
+
+  Future<({CurrentRelationshipStageRepositorySuccess? success, bool failed})>
+  _loadRelationshipStage() async {
+    final repository = _relationshipStageRepository;
+    if (repository == null) return (success: null, failed: false);
+    try {
+      final result = await repository.load(_context);
+      if (result is CurrentRelationshipStageRepositorySuccess) {
+        return (success: result, failed: false);
+      }
+    } catch (_) {
+      // The relationship panel reports its own stable failure state.
+    }
+    return (success: null, failed: true);
   }
 
   void _publishNotice(ProductionHomeNoticeKind kind, {ContactDraft? draft}) {

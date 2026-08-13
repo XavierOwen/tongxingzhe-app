@@ -61,6 +61,10 @@ import {
   type PersonalActionReminderStore,
 } from "./personal-action-reminders.js";
 import {
+  readPersonalCurrentRelationshipStage,
+  type PersonalCurrentRelationshipStageStore,
+} from "./personal-current-relationship-stage.js";
+import {
   readManagementReportSnapshot,
   type ManagementReportSnapshotStore,
 } from "./management-report-snapshots.js";
@@ -93,6 +97,8 @@ export interface BackendServerDependencies
     TargetInstitutionRelationshipStore;
   readonly personalActionPlanStore?: PersonalActionPlanStore;
   readonly personalActionReminderStore?: PersonalActionReminderStore;
+  readonly personalCurrentRelationshipStageStore?:
+    PersonalCurrentRelationshipStageStore;
   readonly managementReportSnapshotStore?: ManagementReportSnapshotStore;
   readonly managementReportSnapshotDirectoryStore?:
     ManagementReportSnapshotDirectoryStore;
@@ -632,6 +638,42 @@ export function createBackendServer(
       } catch (error) {
         writeBodyError(response, error);
       }
+      return;
+    }
+
+    if (
+      request.method === "GET" &&
+      requestUrl.pathname === "/v1/personal/current-relationship-stage"
+    ) {
+      if (
+        requestUrl.search.length > 0 ||
+        requestDeclaresBody(request.headers)
+      ) {
+        response.statusCode = 400;
+        response.end(JSON.stringify({
+          error: {
+            code: "invalid_personal_current_relationship_stage_request",
+          },
+        }));
+        return;
+      }
+      if (dependencies.personalCurrentRelationshipStageStore === undefined) {
+        response.statusCode = 503;
+        response.end(JSON.stringify({
+          error: {code: "personal_current_relationship_stage_unavailable"},
+        }));
+        return;
+      }
+      const result = await readPersonalCurrentRelationshipStage(
+        request.headers.authorization,
+        {
+          identityVerifier: dependencies.identityVerifier,
+          contextStore: dependencies.contextStore,
+          snapshotStore: dependencies.personalCurrentRelationshipStageStore,
+        },
+      );
+      response.statusCode = result.status;
+      response.end(JSON.stringify(result.body));
       return;
     }
 

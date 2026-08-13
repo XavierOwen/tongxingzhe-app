@@ -326,7 +326,7 @@ Node 24 容器使用与 PostgreSQL 容器相同的 network namespace。它通过
 4. 把数据库目录和全部正式并发脚本复制到容器；
 5. 从空库执行全部 migration，再执行一次 checksum 重放；
 6. 运行全部 schema／权限 check 和可回滚 synthetic fixture；
-7. 建立一次性的 Node 24 容器，编译 Backend，并运行 `contact-location-evidence.integration.ts` 的编译产物；
+7. 建立一次性的 Node 24 容器，编译 Backend，并运行地点来源与当前关系阶段两条 PostgreSQL adapter integration test；
 8. 按文件名运行全部正式并发脚本，用独立数据库会话检查锁、撤权和唯一性合同；
 9. 修改 migration 的临时副本，确认 runner 拒绝 checksum 漂移；
 10. 执行 `pg_dump`，启动没有源 cluster roles 的第二个 PostgreSQL 容器；
@@ -335,7 +335,7 @@ Node 24 容器使用与 PostgreSQL 容器相同的 network namespace。它通过
 
 这组步骤同时验证新安装、重复部署、Backend→PostgreSQL 结果分类、并发、最小权限和备份恢复。fixture 内使用 `BEGIN` 与 `ROLLBACK`，不会把合成业务资料留在测试库。并发脚本会提交自己的 synthetic 行，这些行会随 dump 进入恢复库；它们不是 production 数据。
 
-Node 阶段编译并运行 `backend/server/test/contact-location-evidence.integration.ts`。如果入口缺失、编译失败或真实 Backend 到 PostgreSQL 的任一断言失败，脚本会在这一步停止；设置 `KEEP_POSTGRES_TEST_CONTAINER=1` 后，PostgreSQL 容器会保留供检查。不能把前面的 SQL 通过单独记为 Backend 集成通过。
+Node 阶段编译并运行 `backend/server/test/contact-location-evidence.integration.ts` 和 `backend/server/test/personal-current-relationship-stage.integration.ts`。如果入口缺失、编译失败或真实 Backend 到 PostgreSQL 的任一断言失败，脚本会在这一步停止；设置 `KEEP_POSTGRES_TEST_CONTAINER=1` 后，PostgreSQL 容器会保留供检查。不能把前面的 SQL 通过单独记为 Backend 集成通过。
 
 ### 6.3 怎样读输出
 
@@ -496,15 +496,15 @@ fixture：0035_management_report_snapshot_directory.sql
 
 并发脚本不能直接在没有准备的空数据库中运行。只有在完整套件失败并保留了容器时，才按 6.4 节的方法进入该测试库单独调查。目录并发测试使用 `pg_locks` 等待实际锁，不用固定休眠猜测请求先后；若它偶尔失败，应先检查锁合同和 synthetic UUID 是否冲突，不要只增加等待秒数。
 
-## 8. Drift v18 生成文件怎样检查
+## 8. Drift v19 生成文件怎样检查
 
-当前本地 schema 版本是 v18。数据库结构变化后先重新生成：
+当前本地 schema 版本是 v19。数据库结构变化后先重新生成：
 
 ```bash
 dart run build_runner build
 dart run drift_dev schema dump \
   lib/data/local_database.dart \
-  drift_schemas/drift_schema_v18.json
+  drift_schemas/drift_schema_v19.json
 dart run drift_dev schema generate \
   drift_schemas \
   test/generated_migrations
@@ -518,7 +518,7 @@ dart analyze
 flutter test --no-pub test/data/local_database_migration_test.dart
 ```
 
-CI 会在临时目录重新生成 v18 snapshot 和 migration helper，并与仓库文件逐字比较。手工修改生成文件不能通过该检查。
+CI 会在临时目录重新生成 v19 snapshot 和 migration helper，并与仓库文件逐字比较。手工修改生成文件不能通过该检查。
 
 ## 9. 六个平台 build 怎样运行
 

@@ -15,7 +15,14 @@ final class MetricReference {
   int get hashCode => Object.hash(metricId, version);
 }
 
-enum MetricStatisticalUnit { contactSession, reachedPerson, contactTargetLink }
+enum MetricStatisticalUnit {
+  contactSession,
+  reachedPerson,
+  contactTargetLink,
+
+  /// 去重的“推广对象 × 项目”当前关系。
+  targetProjectRelationship,
+}
 
 enum MetricValueShape {
   count,
@@ -38,9 +45,11 @@ enum MetricFormula {
   calculateContactSessionsByInterestRatio,
   calculateContactSessionsByInterestSubsetRatio,
   calculateContactTargetLinksByResponseRatio,
+  countCurrentRelationshipStages,
+  countCurrentRelationshipStagesByStage,
 }
 
-enum MetricTimeBasis { actualOccurrenceUtc }
+enum MetricTimeBasis { actualOccurrenceUtc, currentSnapshotUtc }
 
 enum MetricExclusion { draft, contactAttempt, voidedContact }
 
@@ -316,6 +325,32 @@ abstract final class CoreMetricCatalog {
     bucketLabels: ['0', '1', '2', '3', '4'],
   );
 
+  /// 当前关系阶段五档分布的宽分母。
+  ///
+  /// 它没有接触期间，也不能被解释为历史期间的计数。
+  static final currentRelationshipStageCount = MetricDefinition(
+    reference: MetricReference('current_relationship_stage_count', 1),
+    statisticalUnit: MetricStatisticalUnit.targetProjectRelationship,
+    valueShape: MetricValueShape.count,
+    formula: MetricFormula.countCurrentRelationshipStages,
+    timeBasis: MetricTimeBasis.currentSnapshotUtc,
+    exclusions: const {},
+    privacyRule: MetricPrivacyRule.managementProtectedByTrueUnit,
+  );
+
+  /// 当前快照中每个 active 对象 × 项目关系的阶段分布。
+  static final currentRelationshipStageDistribution = MetricDefinition(
+    reference: MetricReference('current_relationship_stage_distribution', 1),
+    statisticalUnit: MetricStatisticalUnit.targetProjectRelationship,
+    valueShape: MetricValueShape.ordinalDistribution,
+    formula: MetricFormula.countCurrentRelationshipStagesByStage,
+    timeBasis: MetricTimeBasis.currentSnapshotUtc,
+    exclusions: const {},
+    privacyRule: MetricPrivacyRule.managementProtectedByTrueUnit,
+    denominator: currentRelationshipStageCount.reference,
+    bucketLabels: ['0', '1', '2', '3', '4'],
+  );
+
   static final catalog = MetricCatalog([
     contactSessions,
     reachedPeople,
@@ -331,7 +366,17 @@ abstract final class CoreMetricCatalog {
     targetResponseLevelRatios,
   ]);
 
+  /// 当前快照定义暂不并入旧的期间目录，避免改变既有页面的固定 12 项合同。
+  /// 新页面可显式使用这份目录，保证期间指标与当前快照指标不会被混合。
+  static final currentSnapshotCatalog = MetricCatalog([
+    currentRelationshipStageCount,
+    currentRelationshipStageDistribution,
+  ]);
+
   static List<MetricDefinition> get definitions => catalog.definitions;
+
+  static List<MetricDefinition> get currentSnapshotDefinitions =>
+      currentSnapshotCatalog.definitions;
 }
 
 sealed class MetricValue {
@@ -869,13 +914,19 @@ final class MetricSyncCoverage {
   factory MetricSyncCoverage({
     required MetricStatisticalUnit statisticalUnit,
     required int totalCount,
-    required int pendingCount,
+    int? pendingCount,
   }) {
-    if (totalCount < 0 || pendingCount < 0 || pendingCount > totalCount) {
+    if (totalCount < 0 ||
+        pendingCount != null &&
+            (pendingCount < 0 || pendingCount > totalCount)) {
       throw ArgumentError('invalid_metric_sync_coverage');
     }
     return MetricSyncCoverage._(statisticalUnit, totalCount, pendingCount);
   }
+
+  factory MetricSyncCoverage.unknown({
+    required MetricStatisticalUnit statisticalUnit,
+  }) => MetricSyncCoverage._(statisticalUnit, null, null);
 
   const MetricSyncCoverage._(
     this.statisticalUnit,
@@ -884,10 +935,54 @@ final class MetricSyncCoverage {
   );
 
   final MetricStatisticalUnit statisticalUnit;
-  final int totalCount;
-  final int pendingCount;
+  final int? totalCount;
+  final int? pendingCount;
 
-  int get synchronizedCount => totalCount - pendingCount;
+  bool get isKnown => totalCount != null && pendingCount != null;
+
+  int? get synchronizedCount => isKnown ? totalCount! - pendingCount! : null;
+}
+
+/// 当前快照结果的来源新鲜度；它与 [snapshotAsOfUtc] 是两个不同的时刻。
+enum MetricFreshnessStatus { fresh, stale, unknown }
+
+final class MetricSourceFreshness {
+  const MetricSourceFreshness({
+    required this.status,
+    this.sourceDataCutoffUtc,
+    this.authorizedAtUtc,
+    this.lastSuccessfulSyncAtUtc,
+  });
+
+  const MetricSourceFreshness.unknown()
+    : this(status: MetricFreshnessStatus.unknown);
+
+  const MetricSourceFreshness.fresh({
+    DateTime? sourceDataCutoffUtc,
+    DateTime? authorizedAtUtc,
+    DateTime? lastSuccessfulSyncAtUtc,
+  }) : this(
+         status: MetricFreshnessStatus.fresh,
+         sourceDataCutoffUtc: sourceDataCutoffUtc,
+         authorizedAtUtc: authorizedAtUtc,
+         lastSuccessfulSyncAtUtc: lastSuccessfulSyncAtUtc,
+       );
+
+  const MetricSourceFreshness.stale({
+    DateTime? sourceDataCutoffUtc,
+    DateTime? authorizedAtUtc,
+    DateTime? lastSuccessfulSyncAtUtc,
+  }) : this(
+         status: MetricFreshnessStatus.stale,
+         sourceDataCutoffUtc: sourceDataCutoffUtc,
+         authorizedAtUtc: authorizedAtUtc,
+         lastSuccessfulSyncAtUtc: lastSuccessfulSyncAtUtc,
+       );
+
+  final MetricFreshnessStatus status;
+  final DateTime? sourceDataCutoffUtc;
+  final DateTime? authorizedAtUtc;
+  final DateTime? lastSuccessfulSyncAtUtc;
 }
 
 /// 一个可审计、可跨层传递的指标结果。
@@ -947,6 +1042,32 @@ final class MetricResult {
   final MetricSyncCoverage? syncCoverage;
   final MetricPrivacyStatus privacyStatus;
 
+  /// 为不强制使用接触期间的调用方提供当前快照结果。
+  ///
+  /// 旧的 [MetricResult] 构造器仍然只接受 [MetricPeriod]；新指标使用这个
+  /// 工厂得到 [CurrentSnapshotMetricResult]，因而不会把快照时刻伪装成期间。
+  static CurrentSnapshotMetricResult currentSnapshot({
+    required MetricDefinition definition,
+    required MetricValue value,
+    required DateTime snapshotAsOfUtc,
+    required String timeZone,
+    DateTime? sourceDataCutoffUtc,
+    MetricSourceFreshness freshness = const MetricSourceFreshness.unknown(),
+    required MetricSourceTier sourceTier,
+    MetricSyncCoverage? syncCoverage,
+    required MetricPrivacyStatus privacyStatus,
+  }) => CurrentSnapshotMetricResult(
+    definition: definition,
+    value: value,
+    snapshotAsOfUtc: snapshotAsOfUtc,
+    timeZone: timeZone,
+    sourceDataCutoffUtc: sourceDataCutoffUtc,
+    freshness: freshness,
+    sourceTier: sourceTier,
+    syncCoverage: syncCoverage,
+    privacyStatus: privacyStatus,
+  );
+
   static void _validateValue(MetricDefinition definition, MetricValue value) {
     final shapeMatches = switch (definition.valueShape) {
       MetricValueShape.count => value is CountMetricValue,
@@ -986,6 +1107,82 @@ final class MetricResult {
   }
 }
 
+/// 不带 [MetricPeriod] 的当前快照指标结果。
+///
+/// [snapshotAsOfUtc] 只表示一致性读取判断当前状态的时刻；[freshness] 说明
+/// 来源数据和授权是否新鲜。两者必须由调用方分别展示。
+final class CurrentSnapshotMetricResult {
+  factory CurrentSnapshotMetricResult({
+    required MetricDefinition definition,
+    required MetricValue value,
+    required DateTime snapshotAsOfUtc,
+    required String timeZone,
+    DateTime? sourceDataCutoffUtc,
+    MetricSourceFreshness freshness = const MetricSourceFreshness.unknown(),
+    required MetricSourceTier sourceTier,
+    MetricSyncCoverage? syncCoverage,
+    required MetricPrivacyStatus privacyStatus,
+  }) {
+    if (definition.timeBasis != MetricTimeBasis.currentSnapshotUtc ||
+        timeZone.trim().isEmpty ||
+        !snapshotAsOfUtc.isUtc ||
+        sourceDataCutoffUtc != null && !sourceDataCutoffUtc.isUtc ||
+        freshness.sourceDataCutoffUtc != null &&
+            sourceDataCutoffUtc != null &&
+            freshness.sourceDataCutoffUtc != sourceDataCutoffUtc) {
+      throw ArgumentError('invalid_current_snapshot_metric_metadata');
+    }
+    final isSuppressedValue = value is SuppressedMetricValue;
+    if ((privacyStatus == MetricPrivacyStatus.suppressed) !=
+            isSuppressedValue ||
+        (sourceTier == MetricSourceTier.localOperational) !=
+            (syncCoverage != null) ||
+        privacyStatus == MetricPrivacyStatus.personalFact &&
+            sourceTier != MetricSourceTier.localOperational) {
+      throw ArgumentError('invalid_current_snapshot_metric_state');
+    }
+    if (!isSuppressedValue) {
+      MetricResult._validateValue(definition, value);
+    }
+    return CurrentSnapshotMetricResult._(
+      definition: definition,
+      value: value,
+      snapshotAsOfUtc: snapshotAsOfUtc,
+      timeZone: timeZone,
+      sourceDataCutoffUtc: sourceDataCutoffUtc,
+      freshness: freshness,
+      sourceTier: sourceTier,
+      syncCoverage: syncCoverage,
+      privacyStatus: privacyStatus,
+    );
+  }
+
+  const CurrentSnapshotMetricResult._({
+    required this.definition,
+    required this.value,
+    required this.snapshotAsOfUtc,
+    required this.timeZone,
+    required this.sourceDataCutoffUtc,
+    required this.freshness,
+    required this.sourceTier,
+    required this.syncCoverage,
+    required this.privacyStatus,
+  });
+
+  final MetricDefinition definition;
+  final MetricValue value;
+  final DateTime snapshotAsOfUtc;
+  final String timeZone;
+  final DateTime? sourceDataCutoffUtc;
+  final MetricSourceFreshness freshness;
+  final MetricSourceTier sourceTier;
+  final MetricSyncCoverage? syncCoverage;
+  final MetricPrivacyStatus privacyStatus;
+}
+
+/// 简短别名，便于页面和仓储代码表达“当前指标”而不混入期间术语。
+typedef CurrentMetricResult = CurrentSnapshotMetricResult;
+
 const _fiveLevelOrdinalLabels = ['0', '1', '2', '3', '4'];
 
 int _lowerMedianLevel(List<int> counts, int totalCount) {
@@ -1023,9 +1220,12 @@ bool _usesDenominatorFormula(
   MetricFormula.summarizeContactTargetLinksByResponse ||
   MetricFormula.calculateContactTargetLinksByResponseRatio =>
     denominatorFormula == MetricFormula.countContactTargetLinksWithResponse,
+  MetricFormula.countCurrentRelationshipStagesByStage =>
+    denominatorFormula == MetricFormula.countCurrentRelationshipStages,
   MetricFormula.countContactSessions ||
   MetricFormula.sumReachedPeople ||
-  MetricFormula.countContactTargetLinksWithResponse => false,
+  MetricFormula.countContactTargetLinksWithResponse ||
+  MetricFormula.countCurrentRelationshipStages => false,
 };
 
 bool _listEquals<T>(List<T> left, List<T> right) {

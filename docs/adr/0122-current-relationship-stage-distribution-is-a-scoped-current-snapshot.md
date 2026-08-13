@@ -2,7 +2,7 @@
 
 状态：**已接受（2026-08-13）**。
 
-关联：Issue #114、Slice 6AC-0；ADR-0018、ADR-0019、ADR-0026、
+关联：Issue #114、Issue #116、Slice 6AC-0、Slice 6AC；ADR-0018、ADR-0019、ADR-0026、
 ADR-0061、ADR-0074、ADR-0075；`PII-001`–`PII-005`、
 `ANALYTICS-007`、`ANALYTICS-010`–`ANALYTICS-012`。
 
@@ -30,10 +30,10 @@ ADR-0061、ADR-0074、ADR-0075；`PII-001`–`PII-005`、
 
 ## 后果与边界
 
-完整 Slice 6AC 需要为指标目录增加对象 × 项目统计单位和当前快照时间口径，并设计不强制
-使用接触 `MetricPeriod` 的结果合同。它还需要最小 Drift 投影、同步边界、PostgreSQL 窄
-读取和个人页面。6AC-0 只固定合同和共享 synthetic fixture，不注册生产指标，也不交付
-上述数据路径。
+Slice 6AC 已为指标目录增加对象 × 项目统计单位和当前快照时间口径，并用独立结果合同
+避免伪造接触 `MetricPeriod`。PostgreSQL 窄读取、固定 Backend GET、Drift v19 最小投影、
+离线旧快照边界和个人分析页共同消费本决定；共享 synthetic fixture 继续用于 Flutter 与
+PostgreSQL 对账。
 
 管理阶段分布需要独立授权和匿名保护。阶段变更、历史 as-of、趋势、导出、warehouse 和
 后续联系同意占比不属于本决定。

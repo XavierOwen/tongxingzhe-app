@@ -13,6 +13,8 @@ import '../features/contact_entry/contact_channel_label.dart';
 import '../features/contact_journal/contact_journal.dart';
 import '../features/contact_journal/contact_models.dart';
 import '../features/contact_metrics/metric_contract.dart';
+import '../features/contact_metrics/current_relationship_stage.dart';
+import '../features/contact_metrics/current_relationship_stage_panel.dart';
 import '../features/contact_metrics/personal_contact_overview.dart';
 import '../features/home/production_home_view_model.dart';
 import '../features/plans/personal_action_plan_panel.dart';
@@ -53,6 +55,7 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.personalActionPlanGateway,
     required this.personalActionReminderGateway,
     required this.managementReportGateway,
+    required this.currentRelationshipStageRepository,
     required this.deviceReminderPreferenceStore,
     required this.reminderNotificationScheduler,
     required this.idGenerator,
@@ -78,6 +81,7 @@ final class ProductionHomeShell extends StatefulWidget {
   final PersonalActionPlanGateway personalActionPlanGateway;
   final PersonalActionReminderGateway personalActionReminderGateway;
   final ManagementReportGateway managementReportGateway;
+  final CurrentRelationshipStageRepository currentRelationshipStageRepository;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
   final ReminderNotificationScheduler reminderNotificationScheduler;
   final IdGenerator idGenerator;
@@ -139,6 +143,8 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
         oldWidget.controller != widget.controller ||
         oldWidget.appSession != widget.appSession ||
         oldWidget.deviceId != widget.deviceId ||
+        oldWidget.currentRelationshipStageRepository !=
+            widget.currentRelationshipStageRepository ||
         !_sameScope(oldWidget.context, widget.context)) {
       _viewModel
         ..removeListener(_viewStateChanged)
@@ -210,6 +216,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
             ),
           ],
         ),
+        currentRelationshipStagePanel: null,
       ),
       _ContactsPage(
         controller: widget.controller,
@@ -251,6 +258,12 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
           isLoading: homeState.isLoading,
           loadFailed: homeState.loadFailed,
           personalPlanPanel: null,
+          currentRelationshipStagePanel: CurrentRelationshipStagePanel(
+            text: strings,
+            result: homeState.currentRelationshipStage,
+            isLoading: homeState.relationshipStageIsLoading,
+            loadFailed: homeState.relationshipStageLoadFailed,
+          ),
         ),
         managementReports: ManagementReportBrowser(
           text: strings,
@@ -467,6 +480,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
       contactJournal: widget.contactJournal,
       deviceId: widget.deviceId,
       syncEngineFactory: widget.syncEngineFactory,
+      relationshipStageRepository: widget.currentRelationshipStageRepository,
       now: widget.controller.now,
     );
   }
@@ -730,6 +744,7 @@ final class _PersonalSummaryPage extends StatelessWidget {
     required this.isLoading,
     required this.loadFailed,
     required this.personalPlanPanel,
+    required this.currentRelationshipStagePanel,
   });
 
   final AppController controller;
@@ -738,19 +753,33 @@ final class _PersonalSummaryPage extends StatelessWidget {
   final bool isLoading;
   final bool loadFailed;
   final Widget? personalPlanPanel;
+  final Widget? currentRelationshipStagePanel;
 
   @override
   Widget build(BuildContext context) {
     final text = AppStrings(controller.localeCode);
     final result = snapshot;
     if (result == null) {
-      if (loadFailed) {
-        return Center(child: Text(text.t('summaryLoadFailed')));
+      final summaryStatus = isLoading && !loadFailed
+          ? const Center(child: CircularProgressIndicator())
+          : Center(child: Text(text.t('summaryLoadFailed')));
+      final relationshipPanel = currentRelationshipStagePanel;
+      if (relationshipPanel == null) {
+        return summaryStatus;
       }
-      if (isLoading) {
-        return const Center(child: CircularProgressIndicator());
-      }
-      return Center(child: Text(text.t('summaryLoadFailed')));
+      return ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(
+            text.t('recentSevenDays'),
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 16),
+          summaryStatus,
+          const SizedBox(height: 16),
+          relationshipPanel,
+        ],
+      );
     }
     final summary = result.summary;
     final interestOrdinalSummary =
@@ -958,6 +987,10 @@ final class _PersonalSummaryPage extends StatelessWidget {
             '${result.syncedContactSessionCount} / '
             '${result.syncCoverageDenominator}',
           ),
+          if (currentRelationshipStagePanel != null) ...[
+            const SizedBox(height: 16),
+            currentRelationshipStagePanel!,
+          ],
         ],
       ],
     );

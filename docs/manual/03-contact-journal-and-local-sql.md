@@ -22,9 +22,9 @@
 
 模块接收真实 Drift 数据库、Clock 和 ID generator。测试使用真实 SQLite、固定时间和确定性 ID。测试可以稳定重现失败，不把测试条件带入正式代码。
 
-## 2. v18 的十九张现代接触、问卷、同步与区域表
+## 2. v19 的二十一张现代业务表
 
-表结构定义在 [`contact_tables.dart`](../../lib/features/contact_journal/contact_tables.dart) 和 [`questionnaire_tables.dart`](../../lib/questionnaires/questionnaire_tables.dart)。Drift 根据这些定义生成 SQLite schema 和类型安全的 Dart row。
+现代表结构按职责定义在 [`contact_tables.dart`](../../lib/features/contact_journal/contact_tables.dart)、[`questionnaire_tables.dart`](../../lib/questionnaires/questionnaire_tables.dart)、[`sync_tables.dart`](../../lib/sync/sync_tables.dart)、[`region_tables.dart`](../../lib/regions/region_tables.dart) 和 [`current_relationship_stage_tables.dart`](../../lib/data/current_relationship_stage_tables.dart)。Drift 根据这些定义生成 SQLite schema 和类型安全的 Dart row。
 
 | 表 | 保存的事实 | 不保存的内容 |
 | --- | --- | --- |
@@ -47,6 +47,8 @@
 | `db_canonical_region_versions` | 带版本、唯一父级的规范区域节点和属性 | 项目私有层级、接触事实 |
 | `db_contact_region_assignments` | 已提交接触到最小区域节点的真实外键 | 重复保存的上级区域路径 |
 | `db_draft_region_assignments` | 草稿到最小区域节点的真实外键 | 未经解析的坐标 |
+| `db_current_relationship_stage_projections` | 本人当前项目中每个活动对象关系的稳定对象键、阶段、revision 和更新时间 | 姓名、联系方式、备注、关系历史 |
+| `db_current_relationship_stage_snapshots` | 当前关系快照时刻、来源截止、授权时刻、最近成功同步和覆盖数量 | 对象 PII、历史时点、离线编辑状态 |
 
 草稿答案与正式答案分表保存。统计 SQL 只查询 `db_contact_records`，因此草稿和尝试都不会增加接触场次、触达人数或兴趣分布。
 
@@ -230,7 +232,7 @@ WHERE app_user_id = :app_user_id
 
 对象当次反应五档比例 `target_response_level_ratios@1` 复用这条对象关联汇总的五档数量和未填写覆盖，不增加 Drift 查询。每个等级的分子是该等级的已填关联数，共同分母是全部已填关联数，五个分子之和必须等于分母。页面从这些整数数量生成 half-up 百分比基点；空分母显示 `0 / 0` 和“暂无可计算比例”，不显示 `0%`。
 
-## 13. v5 至 v18 如何安全升级
+## 13. v5 至 v19 如何安全升级
 
 v6 使用 expand-contract 新增已提交接触、revision、答案和 Outbox 表。v7 新增草稿和草稿答案表。v8 新增同步执行租约和按可信范围保存的 cursor。v9 新增草稿同步版本、Outbox 可信范围和三张区域表。v10 新增独立尝试表，并给草稿加入可选来源尝试。v11 给 revision 增加受约束的 `submitted`、`corrected`、`voided` 类型。v12 新增只属于当前用户与项目的接触修订冲突表。
 
@@ -238,11 +240,14 @@ v13 扩展八种问卷题型的互斥值列，并加入不可变定义缓存。v
 
 v18 为草稿、当前接触和 revision 增加六个类型化来源字段，并重建三张表以启用地点／来源组合约束。旧行的来源保持空值；migration 不根据当前区域 assignment 或发布树猜测历史来源。升级不删除五张 legacy 表，也不从旧宽表猜测现代接触、尝试、冲突、区域归属、问卷定义、草稿升级关系、对象关联或位置来源。
 
+v19 新增两张无 PII 的当前关系阶段缓存表。升级只建立空表，不从接触、对象目录或旧关系字段猜测当前关系。App 必须先取得经过 Backend 授权的完整快照，校验全部行和元数据，再在一个 transaction 中替换对应用户、workspace 和项目的旧快照。
+
 当新列参与 `CHECK` 约束时，不能只运行 SQLite `ADD COLUMN`。migration 使用 Drift `TableMigration` 重建受影响的表并复制旧数据。跨多个版本升级时，重建步骤按当前表定义复制数据；旧版本缺少的每一列都必须通过 `newColumns` 提供默认表达式。否则 SQL 会引用旧表中不存在的列。
 
 [`local_database_migration_test.dart`](../../test/data/local_database_migration_test.dart) 保存四类证据：
 
-- 当前 v18 快照可以独立重建；
+- 当前 v19 快照可以独立重建；
+- v18 的旧接触和来源字段升级后保持不变，两张当前关系快照表为空；
 - v17 的 resolved、pending 和 N/A 旧行升级后保持原地点，来源字段为空；
 - v16 的旧接触与草稿升级后保持零对象关联；
 - v15 的旧草稿升级后保留，新的升级来源为空；
@@ -256,8 +261,8 @@ v18 为草稿、当前接触和 revision 增加六个类型化来源字段，并
 - v6 的 synthetic 已提交接触升级后仍存在；
 - v5 的 synthetic 设置升级后仍存在，无法证明的现代区域表保持为空。
 
-机器可读快照位于 [`drift_schema_v18.json`](../../drift_schemas/drift_schema_v18.json)。CI 会重新导出当前 schema 并逐字比较，也会重新生成所有 migration 测试辅助代码。
+机器可读快照位于 [`drift_schema_v19.json`](../../drift_schemas/drift_schema_v19.json)。CI 会重新导出当前 schema 并逐字比较，也会重新生成所有 migration 测试辅助代码。
 
 ## 14. 当前边界
 
-v18 完成草稿、正式接触、独立接触尝试、追加更正、带原因作废、跨设备私有草稿、草稿冲突副本、接触修订的自动合并与显式冲突解决、逐 revision 对象关联、版本化区域外键、已解析位置来源、八题型问卷答案、受限显示规则、管理端问卷工作副本、问卷升级来源、本机同步状态和远端 cursor。位置来源与地点在三张本地事实表中原子保存；旧 resolved 可继续没有来源。对象姓名与联系方式仍只从在线对象目录读取，不写入接触 SQLite 表。本地数据库应用层加密仍属后续切片。同步状态机和 Backend SQL 见[第 6 章](06-persistent-sync-and-backend-sql.md)，问卷设计与执行见[第 7 章](07-versioned-questionnaire-execution.md)。
+v19 完成草稿、正式接触、独立接触尝试、追加更正、带原因作废、跨设备私有草稿、草稿冲突副本、接触修订的自动合并与显式冲突解决、逐 revision 对象关联、版本化区域外键、已解析位置来源、八题型问卷答案、受限显示规则、管理端问卷工作副本、问卷升级来源、本机同步状态、远端 cursor，以及当前关系阶段的无 PII 只读快照。位置来源与地点在三张本地事实表中原子保存；旧 resolved 可继续没有来源。对象姓名与联系方式仍只从在线对象目录读取，不写入接触 SQLite 表；当前关系缓存也只保存稳定对象键和分析元数据。本地数据库应用层加密仍属后续切片。同步状态机和 Backend SQL 见[第 6 章](06-persistent-sync-and-backend-sql.md)，问卷设计与执行见[第 7 章](07-versioned-questionnaire-execution.md)。

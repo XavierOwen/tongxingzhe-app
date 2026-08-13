@@ -19,13 +19,89 @@ import '../generated_migrations/schema_v16.dart' as v16;
 import '../generated_migrations/schema_v17.dart' as v17;
 
 void main() {
-  test('保存的 schema v18 可以独立重建', () async {
+  test('保存的 schema v19 可以独立重建', () async {
     final verifier = SchemaVerifier(GeneratedHelper());
-    final connection = await verifier.startAt(18);
+    final connection = await verifier.startAt(19);
     final database = LocalDatabase(connection);
     addTearDown(database.close);
 
-    await verifier.migrateAndValidate(database, 18);
+    await verifier.migrateAndValidate(database, 19);
+  });
+
+  test('v18 升级到 v19 只建空的无 PII 当前关系快照表', () async {
+    final verifier = SchemaVerifier(GeneratedHelper());
+    final schema = await verifier.schemaAt(18);
+    addTearDown(schema.close);
+
+    final database = LocalDatabase(schema.newConnection());
+    addTearDown(database.close);
+    await verifier.migrateAndValidate(database, 19);
+
+    expect(
+      await database
+          .select(database.dbCurrentRelationshipStageProjections)
+          .get(),
+      isEmpty,
+    );
+    expect(
+      await database.select(database.dbCurrentRelationshipStageSnapshots).get(),
+      isEmpty,
+    );
+  });
+
+  test('v19 约束关系阶段、对象唯一性和同步覆盖', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+
+    await database.customStatement('''
+      INSERT INTO db_current_relationship_stage_projections (
+        app_user_id, workspace_id, project_id, target_key,
+        relationship_stage, relationship_revision,
+        relationship_updated_at_utc
+      ) VALUES (
+        'app-user-1', 'workspace-1', 'project-1', 'target-1',
+        2, 1, 1894723200
+      )
+    ''');
+    await expectLater(
+      database.customStatement('''
+        INSERT INTO db_current_relationship_stage_projections (
+          app_user_id, workspace_id, project_id, target_key,
+          relationship_stage, relationship_revision,
+          relationship_updated_at_utc
+        ) VALUES (
+          'app-user-1', 'workspace-1', 'project-1', 'target-1',
+          4, 2, 1894723200
+        )
+      '''),
+      throwsA(isA<Exception>()),
+    );
+    await expectLater(
+      database.customStatement('''
+        INSERT INTO db_current_relationship_stage_projections (
+          app_user_id, workspace_id, project_id, target_key,
+          relationship_stage, relationship_revision,
+          relationship_updated_at_utc
+        ) VALUES (
+          'app-user-1', 'workspace-1', 'project-1', 'target-2',
+          5, 1, 1894723200
+        )
+      '''),
+      throwsA(isA<Exception>()),
+    );
+    await expectLater(
+      database.customStatement('''
+        INSERT INTO db_current_relationship_stage_snapshots (
+          app_user_id, workspace_id, project_id, snapshot_as_of_utc,
+          source_cutoff_utc, authorized_at_utc,
+          last_successful_sync_at_utc, total_count, pending_sync_count
+        ) VALUES (
+          'app-user-1', 'workspace-1', 'project-1', 1894723200,
+          1894723100, 1894723150, 1894723200, 1, 2
+        )
+      '''),
+      throwsA(isA<Exception>()),
+    );
   });
 
   test('v17 升级到 v18 不猜来源并保留 resolved、pending、N/A 旧行', () async {

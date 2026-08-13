@@ -333,6 +333,19 @@ const Map<String, Map<String, String>> _strings = {
     'managementReportCellSemantics': '{period}，{category}：{value}',
     'managementReportOpenSemantics': '打开报告：版本 {version}，发布时间 {releasedAt}',
     'recentSevenDays': '最近七日',
+    'currentRelationshipStageTitle': '当前关系阶段',
+    'currentRelationshipStageHelp': '每个当前有效的“对象 × 项目”关系只计一次。暂停、结束和已匿名化对象不在五档中。',
+    'currentRelationshipStageRow': '关系阶段 {stage}：{count} 个对象项目关系',
+    'currentRelationshipStageSnapshotAt': '当前状态快照：{time}',
+    'currentRelationshipStageSourceCutoff': '来源数据截止：{time}',
+    'currentRelationshipStageFresh': '已显示最新取得的服务器快照。',
+    'currentRelationshipStageStale': '离线旧快照：当前无法连接服务器，以下结果可能已变化。',
+    'currentRelationshipStageFreshnessUnknown': '来源新鲜度未知，不能视为已同步。',
+    'currentRelationshipStageCoverage':
+        '同步覆盖：{synced}/{total} 个对象项目关系；待同步 {pending}',
+    'currentRelationshipStageCoverageUnknown': '对象项目关系的同步覆盖未知。',
+    'currentRelationshipStageUnavailable': '当前关系阶段暂时无法载入。',
+    'currentRelationshipStageLoading': '正在载入当前关系阶段',
     'statisticsUseUtcDays': '当前统计按 UTC 自然日计算',
     'personalPlanTitle': '私人周计划',
     'personalPlanPrivateHelp': '计划、进度和差距只对你本人可见。',
@@ -1122,6 +1135,26 @@ const Map<String, Map<String, String>> _strings = {
     'managementReportOpenSemantics':
         'Open report: version {version}, published {releasedAt}',
     'recentSevenDays': 'Recent seven days',
+    'currentRelationshipStageTitle': 'Current relationship stages',
+    'currentRelationshipStageHelp':
+        'Each active target-project relationship counts once. Paused, ended, and anonymized targets are excluded from the five stages.',
+    'currentRelationshipStageRow':
+        'Relationship stage {stage}: {count} target-project relationships',
+    'currentRelationshipStageSnapshotAt': 'Current-state snapshot: {time}',
+    'currentRelationshipStageSourceCutoff': 'Source data cutoff: {time}',
+    'currentRelationshipStageFresh':
+        'Showing the latest server snapshot received.',
+    'currentRelationshipStageStale':
+        'Offline old snapshot: the server is unreachable and these results may have changed.',
+    'currentRelationshipStageFreshnessUnknown':
+        'Source freshness is unknown. Do not treat this result as synchronized.',
+    'currentRelationshipStageCoverage':
+        'Sync coverage: {synced}/{total} target-project relationships; {pending} pending',
+    'currentRelationshipStageCoverageUnknown':
+        'Sync coverage for target-project relationships is unknown.',
+    'currentRelationshipStageUnavailable':
+        'Current relationship stages are temporarily unavailable.',
+    'currentRelationshipStageLoading': 'Loading current relationship stages',
     'statisticsUseUtcDays': 'Current statistics use UTC calendar days',
     'personalPlanTitle': 'Private weekly plan',
     'personalPlanPrivateHelp':

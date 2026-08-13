@@ -215,7 +215,9 @@ Flutter 不把这些结果当作无版本的页面字段。[`CoreMetricCatalog`]
 
 当前关系阶段不能直接塞进这份期间合同。[`current_relationship_stage_v1.csv`](../../backend/database/fixtures/shared/current_relationship_stage_v1.csv) 先固定未来各层共用的 synthetic 输入。主场景包含 active 的 `0–4` 五档、paused、ended、匿名化对象、已结束分配、另一推广者和另一项目；预期只保留五个当前 active 关系。第二场景故意重复同一对象 × 项目，要求消费者失败关闭，而不是任选一行或重复计数。fixture 还固定一致性读取的 `snapshot_as_of_utc`，并要求当前 revision 的 `updated_at_utc` 不晚于该时刻。
 
-6AC-0 不把 fixture 接入生产目录。完整实现必须新增对象 × 项目统计单位、当前快照时间口径和不强制使用接触期间的结果形状，再建立不含 PII 的 Drift 投影与同步覆盖。`snapshot_as_of_utc` 是读取时刻；来源数据截至时间和待同步关系数仍须单独报告。当前 PII vault 含对象资料、关系和共享备注，只为限时离线查看服务，不能成为分析查询源。
+Slice 6AC 已注册对象 × 项目统计单位、当前快照时间口径，以及不强制使用接触期间的结果形状。PostgreSQL `0047` 通过窄 bridge 返回当前个人项目的 PII-free 关系集合；Backend 固定 GET 入口不接受客户端范围或时间。Flutter 先严格验证完整响应，再由 Drift v19 在同一事务中替换按账号、workspace 和项目隔离的投影及元数据。有效空快照会删除旧投影但保留快照证据；安装失败则保留上一份完整快照。
+
+`snapshot_as_of_utc` 是当前状态的一致性读取时刻，`source_cutoff_utc` 是来源关系的截止，成功接收时刻又是第三个时间。页面分别显示这些含义和对象 × 项目的同步覆盖。只有网络失败可回退到明确标为旧数据的缓存；授权失败会清除对应范围。当前 PII vault 含对象资料、关系和共享备注，只为限时离线查看服务，不能成为分析查询源。
 
 这一层没有授予管理权限，也没有把个人事实当成可公开的管理结果。后续加入的私有管理隐私政策见[第 11 章](11-management-metrics-and-privacy.md)。管理查询仍需独立验证成员授权和报告时区；在这些前置条件完成前，不得新增可绕过它们的任意指标端点。
 

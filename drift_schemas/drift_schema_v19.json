@@ -1,0 +1,4394 @@
+{
+  "_meta": {
+    "description": "This file contains a serialized version of schema entities for drift.",
+    "version": "1.3.0"
+  },
+  "options": {
+    "store_date_time_values_as_text": false
+  },
+  "entities": [
+    {
+      "id": 0,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "db_sync_outbox",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "command_id",
+            "getter_name": "commandId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "protocol_version",
+            "getter_name": "protocolVersion",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "command_type",
+            "getter_name": "commandType",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "device_id",
+            "getter_name": "deviceId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "aggregate_id",
+            "getter_name": "aggregateId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "app_user_id",
+            "getter_name": "appUserId",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "workspace_id",
+            "getter_name": "workspaceId",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "project_id",
+            "getter_name": "projectId",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "base_revision",
+            "getter_name": "baseRevision",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "payload_json",
+            "getter_name": "payloadJson",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "created_at_utc",
+            "getter_name": "createdAtUtc",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "status",
+            "getter_name": "status",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "attempt_count",
+            "getter_name": "attemptCount",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "next_attempt_at_utc",
+            "getter_name": "nextAttemptAtUtc",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "lease_owner",
+            "getter_name": "leaseOwner",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "lease_expires_at_utc",
+            "getter_name": "leaseExpiresAtUtc",
+            "moor_type": "dateTime",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "last_failure_code",
+            "getter_name": "lastFailureCode",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "completed_at_utc",
+            "getter_name": "completedAtUtc",
+            "moor_type": "dateTime",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [
+          "CHECK (status IN ('pending', 'leased', 'needs_resolution', 'permanent_failure', 'completed'))",
+          "CHECK (attempt_count >= 0)",
+          "CHECK (protocol_version > 0 AND base_revision >= 0)",
+          "CHECK ((app_user_id IS NULL AND workspace_id IS NULL AND project_id IS NULL) OR (app_user_id IS NOT NULL AND length(trim(app_user_id)) > 0 AND workspace_id IS NOT NULL AND length(trim(workspace_id)) > 0 AND project_id IS NOT NULL AND length(trim(project_id)) > 0))"
+        ],
+        "explicit_pk": [
+          "command_id"
+        ]
+      }
+    },
+    {
+      "id": 1,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "db_contact_records",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "contact_id",
+            "getter_name": "contactId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "app_user_id",
+            "getter_name": "appUserId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "workspace_id",
+            "getter_name": "workspaceId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "project_id",
+            "getter_name": "projectId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "questionnaire_version_id",
+            "getter_name": "questionnaireVersionId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "occurred_at_utc",
+            "getter_name": "occurredAtUtc",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "occurred_time_zone",
+            "getter_name": "occurredTimeZone",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "first_submitted_at_utc",
+            "getter_name": "firstSubmittedAtUtc",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "channel",
+            "getter_name": "channel",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "channel_detail",
+            "getter_name": "channelDetail",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_kind",
+            "getter_name": "locationKind",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "place_name",
+            "getter_name": "placeName",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "smallest_region_id",
+            "getter_name": "smallestRegionId",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "region_tree_version",
+            "getter_name": "regionTreeVersion",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "latitude",
+            "getter_name": "latitude",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "longitude",
+            "getter_name": "longitude",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_accuracy_meters",
+            "getter_name": "locationAccuracyMeters",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_source_kind",
+            "getter_name": "locationSourceKind",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_source_latitude",
+            "getter_name": "locationSourceLatitude",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_source_longitude",
+            "getter_name": "locationSourceLongitude",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_source_accuracy_meters",
+            "getter_name": "locationSourceAccuracyMeters",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_source_resolver_contract_version",
+            "getter_name": "locationSourceResolverContractVersion",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_source_region_tree_content_fingerprint",
+            "getter_name": "locationSourceRegionTreeContentFingerprint",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "reach_count",
+            "getter_name": "reachCount",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "interest_level",
+            "getter_name": "interestLevel",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "current_revision",
+            "getter_name": "currentRevision",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "lifecycle_status",
+            "getter_name": "lifecycleStatus",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [
+          "CHECK ((location_kind = 'resolved' AND place_name IS NOT NULL AND length(trim(place_name)) > 0 AND smallest_region_id IS NOT NULL AND length(trim(smallest_region_id)) > 0 AND region_tree_version IS NOT NULL AND length(trim(region_tree_version)) > 0 AND latitude IS NULL AND longitude IS NULL AND location_accuracy_meters IS NULL) OR (location_kind = 'not_applicable' AND place_name IS NULL AND smallest_region_id IS NULL AND region_tree_version IS NULL AND latitude IS NULL AND longitude IS NULL AND location_accuracy_meters IS NULL) OR (location_kind = 'pending_resolution' AND place_name IS NULL AND smallest_region_id IS NULL AND region_tree_version IS NULL AND latitude IS NOT NULL AND latitude BETWEEN -90 AND 90 AND longitude IS NOT NULL AND longitude BETWEEN -180 AND 180 AND (location_accuracy_meters IS NULL OR location_accuracy_meters >= 0)))",
+          "CHECK ((location_source_kind IS NULL AND location_source_latitude IS NULL AND location_source_longitude IS NULL AND location_source_accuracy_meters IS NULL AND location_source_resolver_contract_version IS NULL AND location_source_region_tree_content_fingerprint IS NULL) OR (location_kind = 'resolved' AND location_source_kind IS NOT NULL AND location_source_kind = 'captured_coordinates' AND location_source_latitude IS NOT NULL AND location_source_latitude BETWEEN -90 AND 90 AND location_source_longitude IS NOT NULL AND location_source_longitude BETWEEN -180 AND 180 AND (location_source_accuracy_meters IS NULL OR location_source_accuracy_meters >= 0) AND location_source_resolver_contract_version IS NOT NULL AND location_source_resolver_contract_version = 'canonical-region-resolution:v1' AND location_source_region_tree_content_fingerprint IS NOT NULL AND length(location_source_region_tree_content_fingerprint) = 64 AND location_source_region_tree_content_fingerprint NOT GLOB '*[^0-9a-f]*'))",
+          "CHECK (lifecycle_status IN ('active', 'voided'))",
+          "CHECK (reach_count > 0)",
+          "CHECK (interest_level BETWEEN 0 AND 4)",
+          "CHECK (current_revision > 0)",
+          "CHECK (channel IN ('face_to_face', 'voice_call', 'video_call', 'instant_text', 'asynchronous_message', 'mixed', 'other_direct'))",
+          "CHECK (channel != 'other_direct' OR (channel_detail IS NOT NULL AND length(trim(channel_detail)) > 0))"
+        ],
+        "explicit_pk": [
+          "contact_id"
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "db_sync_drainer_leases",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "lease_name",
+            "getter_name": "leaseName",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "lease_owner",
+            "getter_name": "leaseOwner",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "lease_expires_at_utc",
+            "getter_name": "leaseExpiresAtUtc",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [
+          "CHECK (length(trim(lease_name)) > 0)",
+          "CHECK (length(trim(lease_owner)) > 0)"
+        ],
+        "explicit_pk": [
+          "lease_name"
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "db_sync_scopes",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "app_user_id",
+            "getter_name": "appUserId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "workspace_id",
+            "getter_name": "workspaceId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "project_id",
+            "getter_name": "projectId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "server_cursor",
+            "getter_name": "serverCursor",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "last_success_at_utc",
+            "getter_name": "lastSuccessAtUtc",
+            "moor_type": "dateTime",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "last_failure_code",
+            "getter_name": "lastFailureCode",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "updated_at_utc",
+            "getter_name": "updatedAtUtc",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [
+          "CHECK (length(trim(app_user_id)) > 0)",
+          "CHECK (length(trim(workspace_id)) > 0)",
+          "CHECK (length(trim(project_id)) > 0)",
+          "CHECK (server_cursor IS NULL OR length(server_cursor) > 0)",
+          "CHECK (last_failure_code IS NULL OR length(trim(last_failure_code)) > 0)"
+        ],
+        "explicit_pk": [
+          "app_user_id",
+          "workspace_id",
+          "project_id"
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "references": [
+        1
+      ],
+      "type": "table",
+      "data": {
+        "name": "db_contact_attempts",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "attempt_id",
+            "getter_name": "attemptId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "app_user_id",
+            "getter_name": "appUserId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "workspace_id",
+            "getter_name": "workspaceId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "project_id",
+            "getter_name": "projectId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "occurred_at_utc",
+            "getter_name": "occurredAtUtc",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "occurred_time_zone",
+            "getter_name": "occurredTimeZone",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "first_submitted_at_utc",
+            "getter_name": "firstSubmittedAtUtc",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "channel",
+            "getter_name": "channel",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "channel_detail",
+            "getter_name": "channelDetail",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "linked_contact_id",
+            "getter_name": "linkedContactId",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "defaultConstraints": "REFERENCES db_contact_records (contact_id)",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "REFERENCES db_contact_records (contact_id)"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "foreign_key": {
+                  "to": {
+                    "table": "db_contact_records",
+                    "column": "contact_id"
+                  },
+                  "initially_deferred": false,
+                  "on_update": null,
+                  "on_delete": null
+                }
+              }
+            ]
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [
+          "CHECK (length(trim(app_user_id)) > 0)",
+          "CHECK (length(trim(workspace_id)) > 0)",
+          "CHECK (length(trim(project_id)) > 0)",
+          "CHECK (length(trim(occurred_time_zone)) > 0)",
+          "CHECK (channel IN ('face_to_face', 'voice_call', 'video_call', 'instant_text', 'asynchronous_message', 'mixed', 'other_direct'))",
+          "CHECK (channel != 'other_direct' OR (channel_detail IS NOT NULL AND length(trim(channel_detail)) > 0))"
+        ],
+        "explicit_pk": [
+          "attempt_id"
+        ]
+      }
+    },
+    {
+      "id": 5,
+      "references": [
+        1
+      ],
+      "type": "table",
+      "data": {
+        "name": "db_contact_revisions",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "revision_id",
+            "getter_name": "revisionId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "contact_id",
+            "getter_name": "contactId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "REFERENCES db_contact_records (contact_id)",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "REFERENCES db_contact_records (contact_id)"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "foreign_key": {
+                  "to": {
+                    "table": "db_contact_records",
+                    "column": "contact_id"
+                  },
+                  "initially_deferred": false,
+                  "on_update": null,
+                  "on_delete": null
+                }
+              }
+            ]
+          },
+          {
+            "name": "revision_number",
+            "getter_name": "revisionNumber",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "revision_kind",
+            "getter_name": "revisionKind",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('\\'submitted\\'')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "revised_by_app_user_id",
+            "getter_name": "revisedByAppUserId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "revised_at_utc",
+            "getter_name": "revisedAtUtc",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "reason",
+            "getter_name": "reason",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "occurred_at_utc",
+            "getter_name": "occurredAtUtc",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "occurred_time_zone",
+            "getter_name": "occurredTimeZone",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "channel",
+            "getter_name": "channel",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "channel_detail",
+            "getter_name": "channelDetail",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_kind",
+            "getter_name": "locationKind",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "place_name",
+            "getter_name": "placeName",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "smallest_region_id",
+            "getter_name": "smallestRegionId",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "region_tree_version",
+            "getter_name": "regionTreeVersion",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "latitude",
+            "getter_name": "latitude",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "longitude",
+            "getter_name": "longitude",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_accuracy_meters",
+            "getter_name": "locationAccuracyMeters",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_source_kind",
+            "getter_name": "locationSourceKind",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_source_latitude",
+            "getter_name": "locationSourceLatitude",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_source_longitude",
+            "getter_name": "locationSourceLongitude",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_source_accuracy_meters",
+            "getter_name": "locationSourceAccuracyMeters",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_source_resolver_contract_version",
+            "getter_name": "locationSourceResolverContractVersion",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_source_region_tree_content_fingerprint",
+            "getter_name": "locationSourceRegionTreeContentFingerprint",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "reach_count",
+            "getter_name": "reachCount",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "interest_level",
+            "getter_name": "interestLevel",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [
+          "CHECK (revision_number > 0)",
+          "CHECK (revision_kind IN ('submitted', 'corrected', 'voided'))",
+          "CHECK ((revision_number = 1 AND revision_kind = 'submitted' AND reason IS NULL) OR (revision_number > 1 AND revision_kind IN ('corrected', 'voided') AND reason IS NOT NULL AND length(trim(reason)) > 0))",
+          "CHECK (reach_count > 0)",
+          "CHECK (interest_level BETWEEN 0 AND 4)",
+          "CHECK ((location_kind = 'resolved' AND place_name IS NOT NULL AND length(trim(place_name)) > 0 AND smallest_region_id IS NOT NULL AND length(trim(smallest_region_id)) > 0 AND region_tree_version IS NOT NULL AND length(trim(region_tree_version)) > 0 AND latitude IS NULL AND longitude IS NULL AND location_accuracy_meters IS NULL) OR (location_kind = 'not_applicable' AND place_name IS NULL AND smallest_region_id IS NULL AND region_tree_version IS NULL AND latitude IS NULL AND longitude IS NULL AND location_accuracy_meters IS NULL) OR (location_kind = 'pending_resolution' AND place_name IS NULL AND smallest_region_id IS NULL AND region_tree_version IS NULL AND latitude IS NOT NULL AND latitude BETWEEN -90 AND 90 AND longitude IS NOT NULL AND longitude BETWEEN -180 AND 180 AND (location_accuracy_meters IS NULL OR location_accuracy_meters >= 0)))",
+          "CHECK ((location_source_kind IS NULL AND location_source_latitude IS NULL AND location_source_longitude IS NULL AND location_source_accuracy_meters IS NULL AND location_source_resolver_contract_version IS NULL AND location_source_region_tree_content_fingerprint IS NULL) OR (location_kind = 'resolved' AND location_source_kind IS NOT NULL AND location_source_kind = 'captured_coordinates' AND location_source_latitude IS NOT NULL AND location_source_latitude BETWEEN -90 AND 90 AND location_source_longitude IS NOT NULL AND location_source_longitude BETWEEN -180 AND 180 AND (location_source_accuracy_meters IS NULL OR location_source_accuracy_meters >= 0) AND location_source_resolver_contract_version IS NOT NULL AND location_source_resolver_contract_version = 'canonical-region-resolution:v1' AND location_source_region_tree_content_fingerprint IS NOT NULL AND length(location_source_region_tree_content_fingerprint) = 64 AND location_source_region_tree_content_fingerprint NOT GLOB '*[^0-9a-f]*'))",
+          "CHECK (channel IN ('face_to_face', 'voice_call', 'video_call', 'instant_text', 'asynchronous_message', 'mixed', 'other_direct'))",
+          "CHECK (channel != 'other_direct' OR (channel_detail IS NOT NULL AND length(trim(channel_detail)) > 0))"
+        ],
+        "explicit_pk": [
+          "revision_id"
+        ],
+        "unique_keys": [
+          [
+            "contact_id",
+            "revision_number"
+          ]
+        ]
+      }
+    },
+    {
+      "id": 6,
+      "references": [
+        1
+      ],
+      "type": "table",
+      "data": {
+        "name": "db_contact_answers",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "contact_id",
+            "getter_name": "contactId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "REFERENCES db_contact_records (contact_id)",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "REFERENCES db_contact_records (contact_id)"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "foreign_key": {
+                  "to": {
+                    "table": "db_contact_records",
+                    "column": "contact_id"
+                  },
+                  "initially_deferred": false,
+                  "on_update": null,
+                  "on_delete": null
+                }
+              }
+            ]
+          },
+          {
+            "name": "revision_number",
+            "getter_name": "revisionNumber",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "question_id",
+            "getter_name": "questionId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "answer_state",
+            "getter_name": "answerState",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "answer_state_reason",
+            "getter_name": "answerStateReason",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "answer_type",
+            "getter_name": "answerType",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "boolean_value",
+            "getter_name": "booleanValue",
+            "moor_type": "bool",
+            "nullable": true,
+            "customConstraints": null,
+            "defaultConstraints": "CHECK (\"boolean_value\" IN (0, 1))",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "CHECK (\"boolean_value\" IN (0, 1))"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "text_value",
+            "getter_name": "textValue",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "number_value",
+            "getter_name": "numberValue",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "multi_choice_value_json",
+            "getter_name": "multiChoiceValueJson",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [
+          "CHECK (revision_number > 0)",
+          "CHECK (length(trim(question_id)) > 0)",
+          "CHECK (answer_state_reason IS NULL OR (answer_state = 'not_applicable' AND answer_state_reason = 'rule_skipped'))",
+          "CHECK ((answer_state IN ('unknown', 'refused', 'not_applicable', 'unanswered') AND boolean_value IS NULL AND text_value IS NULL AND number_value IS NULL AND multi_choice_value_json IS NULL) OR (answer_state = 'answered' AND ((answer_type = 'boolean' AND boolean_value IS NOT NULL AND text_value IS NULL AND number_value IS NULL AND multi_choice_value_json IS NULL) OR (answer_type IN ('single_choice', 'ordinal_choice', 'date', 'short_text', 'long_text') AND boolean_value IS NULL AND text_value IS NOT NULL AND length(text_value) > 0 AND number_value IS NULL AND multi_choice_value_json IS NULL) OR (answer_type = 'number' AND boolean_value IS NULL AND text_value IS NULL AND number_value IS NOT NULL AND multi_choice_value_json IS NULL) OR (answer_type = 'multi_choice' AND boolean_value IS NULL AND text_value IS NULL AND number_value IS NULL AND json_valid(multi_choice_value_json) AND json_type(multi_choice_value_json) = 'array'))))"
+        ],
+        "explicit_pk": [
+          "contact_id",
+          "revision_number",
+          "question_id"
+        ]
+      }
+    },
+    {
+      "id": 7,
+      "references": [
+        1
+      ],
+      "type": "table",
+      "data": {
+        "name": "db_contact_revision_conflicts",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "conflict_id",
+            "getter_name": "conflictId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "command_id",
+            "getter_name": "commandId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "UNIQUE",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "UNIQUE"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              "unique"
+            ]
+          },
+          {
+            "name": "contact_id",
+            "getter_name": "contactId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "REFERENCES db_contact_records (contact_id)",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "REFERENCES db_contact_records (contact_id)"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "foreign_key": {
+                  "to": {
+                    "table": "db_contact_records",
+                    "column": "contact_id"
+                  },
+                  "initially_deferred": false,
+                  "on_update": null,
+                  "on_delete": null
+                }
+              }
+            ]
+          },
+          {
+            "name": "app_user_id",
+            "getter_name": "appUserId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "workspace_id",
+            "getter_name": "workspaceId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "project_id",
+            "getter_name": "projectId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "base_revision",
+            "getter_name": "baseRevision",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "current_revision",
+            "getter_name": "currentRevision",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "conflicting_fields_json",
+            "getter_name": "conflictingFieldsJson",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "questionnaire_version_id",
+            "getter_name": "questionnaireVersionId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "current_revision_kind",
+            "getter_name": "currentRevisionKind",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "current_revised_at_utc",
+            "getter_name": "currentRevisedAtUtc",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "current_reason",
+            "getter_name": "currentReason",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "current_snapshot_json",
+            "getter_name": "currentSnapshotJson",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "proposed_snapshot_json",
+            "getter_name": "proposedSnapshotJson",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "status",
+            "getter_name": "status",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('\\'pending\\'')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "resolution_command_id",
+            "getter_name": "resolutionCommandId",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "created_at_utc",
+            "getter_name": "createdAtUtc",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "resolved_at_utc",
+            "getter_name": "resolvedAtUtc",
+            "moor_type": "dateTime",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [
+          "CHECK (base_revision > 0 AND current_revision > base_revision)",
+          "CHECK (current_revision_kind = 'corrected')",
+          "CHECK (status IN ('pending', 'resolution_pending', 'resolved'))",
+          "CHECK ((status = 'pending' AND resolution_command_id IS NULL AND resolved_at_utc IS NULL) OR (status = 'resolution_pending' AND resolution_command_id IS NOT NULL AND resolved_at_utc IS NULL) OR (status = 'resolved' AND resolution_command_id IS NOT NULL AND resolved_at_utc IS NOT NULL))"
+        ],
+        "explicit_pk": [
+          "conflict_id"
+        ]
+      }
+    },
+    {
+      "id": 8,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "db_contact_drafts",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "draft_id",
+            "getter_name": "draftId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "app_user_id",
+            "getter_name": "appUserId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "workspace_id",
+            "getter_name": "workspaceId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "project_id",
+            "getter_name": "projectId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "questionnaire_version_id",
+            "getter_name": "questionnaireVersionId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "created_at_utc",
+            "getter_name": "createdAtUtc",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "updated_at_utc",
+            "getter_name": "updatedAtUtc",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "occurred_at_utc",
+            "getter_name": "occurredAtUtc",
+            "moor_type": "dateTime",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "occurred_time_zone",
+            "getter_name": "occurredTimeZone",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "channel",
+            "getter_name": "channel",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "channel_detail",
+            "getter_name": "channelDetail",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_kind",
+            "getter_name": "locationKind",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "place_name",
+            "getter_name": "placeName",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "smallest_region_id",
+            "getter_name": "smallestRegionId",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "region_tree_version",
+            "getter_name": "regionTreeVersion",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "latitude",
+            "getter_name": "latitude",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "longitude",
+            "getter_name": "longitude",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_accuracy_meters",
+            "getter_name": "locationAccuracyMeters",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_source_kind",
+            "getter_name": "locationSourceKind",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_source_latitude",
+            "getter_name": "locationSourceLatitude",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_source_longitude",
+            "getter_name": "locationSourceLongitude",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_source_accuracy_meters",
+            "getter_name": "locationSourceAccuracyMeters",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_source_resolver_contract_version",
+            "getter_name": "locationSourceResolverContractVersion",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_source_region_tree_content_fingerprint",
+            "getter_name": "locationSourceRegionTreeContentFingerprint",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "reach_count",
+            "getter_name": "reachCount",
+            "moor_type": "int",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "interest_level",
+            "getter_name": "interestLevel",
+            "moor_type": "int",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "sync_mode",
+            "getter_name": "syncMode",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('\\'account_private\\'')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "local_revision",
+            "getter_name": "localRevision",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('1')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "server_revision",
+            "getter_name": "serverRevision",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "source_attempt_id",
+            "getter_name": "sourceAttemptId",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "conflict_of_draft_id",
+            "getter_name": "conflictOfDraftId",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "upgraded_from_draft_id",
+            "getter_name": "upgradedFromDraftId",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "abandoned_at_utc",
+            "getter_name": "abandonedAtUtc",
+            "moor_type": "dateTime",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "undo_until_utc",
+            "getter_name": "undoUntilUtc",
+            "moor_type": "dateTime",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [
+          "CHECK (length(trim(app_user_id)) > 0)",
+          "CHECK (length(trim(workspace_id)) > 0)",
+          "CHECK (length(trim(project_id)) > 0)",
+          "CHECK (length(trim(questionnaire_version_id)) > 0)",
+          "CHECK (updated_at_utc >= created_at_utc)",
+          "CHECK ((occurred_at_utc IS NULL AND occurred_time_zone IS NULL) OR (occurred_at_utc IS NOT NULL AND occurred_time_zone IS NOT NULL AND length(trim(occurred_time_zone)) > 0))",
+          "CHECK (channel IS NULL OR channel IN ('face_to_face', 'voice_call', 'video_call', 'instant_text', 'asynchronous_message', 'mixed', 'other_direct'))",
+          "CHECK ((location_kind IS NULL AND place_name IS NULL AND smallest_region_id IS NULL AND region_tree_version IS NULL AND latitude IS NULL AND longitude IS NULL AND location_accuracy_meters IS NULL) OR (location_kind = 'resolved' AND place_name IS NOT NULL AND length(trim(place_name)) > 0 AND smallest_region_id IS NOT NULL AND length(trim(smallest_region_id)) > 0 AND region_tree_version IS NOT NULL AND length(trim(region_tree_version)) > 0 AND latitude IS NULL AND longitude IS NULL AND location_accuracy_meters IS NULL) OR (location_kind = 'not_applicable' AND place_name IS NULL AND smallest_region_id IS NULL AND region_tree_version IS NULL AND latitude IS NULL AND longitude IS NULL AND location_accuracy_meters IS NULL) OR (location_kind = 'pending_resolution' AND place_name IS NULL AND smallest_region_id IS NULL AND region_tree_version IS NULL AND latitude IS NOT NULL AND latitude BETWEEN -90 AND 90 AND longitude IS NOT NULL AND longitude BETWEEN -180 AND 180 AND (location_accuracy_meters IS NULL OR location_accuracy_meters >= 0)))",
+          "CHECK ((location_source_kind IS NULL AND location_source_latitude IS NULL AND location_source_longitude IS NULL AND location_source_accuracy_meters IS NULL AND location_source_resolver_contract_version IS NULL AND location_source_region_tree_content_fingerprint IS NULL) OR (location_kind = 'resolved' AND location_source_kind IS NOT NULL AND location_source_kind = 'captured_coordinates' AND location_source_latitude IS NOT NULL AND location_source_latitude BETWEEN -90 AND 90 AND location_source_longitude IS NOT NULL AND location_source_longitude BETWEEN -180 AND 180 AND (location_source_accuracy_meters IS NULL OR location_source_accuracy_meters >= 0) AND location_source_resolver_contract_version IS NOT NULL AND location_source_resolver_contract_version = 'canonical-region-resolution:v1' AND location_source_region_tree_content_fingerprint IS NOT NULL AND length(location_source_region_tree_content_fingerprint) = 64 AND location_source_region_tree_content_fingerprint NOT GLOB '*[^0-9a-f]*'))",
+          "CHECK (reach_count IS NULL OR reach_count > 0)",
+          "CHECK (interest_level IS NULL OR interest_level BETWEEN 0 AND 4)",
+          "CHECK (sync_mode IN ('account_private', 'device_only'))",
+          "CHECK (local_revision > 0)",
+          "CHECK (server_revision >= 0)",
+          "CHECK (source_attempt_id IS NULL OR length(trim(source_attempt_id)) > 0)",
+          "CHECK (conflict_of_draft_id IS NULL OR length(trim(conflict_of_draft_id)) > 0)",
+          "CHECK (upgraded_from_draft_id IS NULL OR (length(trim(upgraded_from_draft_id)) > 0 AND upgraded_from_draft_id <> draft_id))",
+          "CHECK ((abandoned_at_utc IS NULL AND undo_until_utc IS NULL) OR (abandoned_at_utc IS NOT NULL AND undo_until_utc IS NOT NULL AND undo_until_utc >= abandoned_at_utc))"
+        ],
+        "explicit_pk": [
+          "draft_id"
+        ]
+      }
+    },
+    {
+      "id": 9,
+      "references": [
+        8
+      ],
+      "type": "table",
+      "data": {
+        "name": "db_contact_draft_answers",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "draft_id",
+            "getter_name": "draftId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "REFERENCES db_contact_drafts (draft_id)",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "REFERENCES db_contact_drafts (draft_id)"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "foreign_key": {
+                  "to": {
+                    "table": "db_contact_drafts",
+                    "column": "draft_id"
+                  },
+                  "initially_deferred": false,
+                  "on_update": null,
+                  "on_delete": null
+                }
+              }
+            ]
+          },
+          {
+            "name": "question_id",
+            "getter_name": "questionId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "answer_state",
+            "getter_name": "answerState",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "answer_state_reason",
+            "getter_name": "answerStateReason",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "answer_type",
+            "getter_name": "answerType",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "boolean_value",
+            "getter_name": "booleanValue",
+            "moor_type": "bool",
+            "nullable": true,
+            "customConstraints": null,
+            "defaultConstraints": "CHECK (\"boolean_value\" IN (0, 1))",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "CHECK (\"boolean_value\" IN (0, 1))"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "text_value",
+            "getter_name": "textValue",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "number_value",
+            "getter_name": "numberValue",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "multi_choice_value_json",
+            "getter_name": "multiChoiceValueJson",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [
+          "CHECK (length(trim(question_id)) > 0)",
+          "CHECK (answer_state_reason IS NULL OR (answer_state = 'not_applicable' AND answer_state_reason = 'rule_skipped'))",
+          "CHECK ((answer_state IN ('unknown', 'refused', 'not_applicable', 'unanswered') AND boolean_value IS NULL AND text_value IS NULL AND number_value IS NULL AND multi_choice_value_json IS NULL) OR (answer_state = 'answered' AND ((answer_type = 'boolean' AND boolean_value IS NOT NULL AND text_value IS NULL AND number_value IS NULL AND multi_choice_value_json IS NULL) OR (answer_type IN ('single_choice', 'ordinal_choice', 'date', 'short_text', 'long_text') AND boolean_value IS NULL AND text_value IS NOT NULL AND length(text_value) > 0 AND number_value IS NULL AND multi_choice_value_json IS NULL) OR (answer_type = 'number' AND boolean_value IS NULL AND text_value IS NULL AND number_value IS NOT NULL AND multi_choice_value_json IS NULL) OR (answer_type = 'multi_choice' AND boolean_value IS NULL AND text_value IS NULL AND number_value IS NULL AND json_valid(multi_choice_value_json) AND json_type(multi_choice_value_json) = 'array'))))"
+        ],
+        "explicit_pk": [
+          "draft_id",
+          "question_id"
+        ]
+      }
+    },
+    {
+      "id": 10,
+      "references": [
+        1,
+        5
+      ],
+      "type": "table",
+      "data": {
+        "name": "db_contact_target_links",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "contact_id",
+            "getter_name": "contactId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "REFERENCES db_contact_records (contact_id)",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "REFERENCES db_contact_records (contact_id)"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "foreign_key": {
+                  "to": {
+                    "table": "db_contact_records",
+                    "column": "contact_id"
+                  },
+                  "initially_deferred": false,
+                  "on_update": null,
+                  "on_delete": null
+                }
+              }
+            ]
+          },
+          {
+            "name": "revision_number",
+            "getter_name": "revisionNumber",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "target_id",
+            "getter_name": "targetId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "target_type",
+            "getter_name": "targetType",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "response_level",
+            "getter_name": "responseLevel",
+            "moor_type": "int",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "follow_up_consent",
+            "getter_name": "followUpConsent",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "institution_representative_confirmed",
+            "getter_name": "institutionRepresentativeConfirmed",
+            "moor_type": "bool",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "CHECK (\"institution_representative_confirmed\" IN (0, 1))",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "CHECK (\"institution_representative_confirmed\" IN (0, 1))"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "confirm_stage_zero",
+            "getter_name": "confirmStageZero",
+            "moor_type": "bool",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "CHECK (\"confirm_stage_zero\" IN (0, 1))",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "CHECK (\"confirm_stage_zero\" IN (0, 1))"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [
+          "FOREIGN KEY (contact_id, revision_number) REFERENCES db_contact_revisions (contact_id, revision_number) ON DELETE RESTRICT",
+          "CHECK (revision_number > 0)",
+          "CHECK (length(trim(target_id)) > 0)",
+          "CHECK (target_type IN ('person', 'institution'))",
+          "CHECK (response_level IS NULL OR response_level BETWEEN 0 AND 4)",
+          "CHECK (follow_up_consent IN ('yes', 'no', 'unknown', 'refused', 'not_applicable'))",
+          "CHECK (target_type = 'institution' OR institution_representative_confirmed = 0)",
+          "CHECK (target_type != 'institution' OR response_level IS NULL OR institution_representative_confirmed = 1)"
+        ],
+        "explicit_pk": [
+          "contact_id",
+          "revision_number",
+          "target_id"
+        ]
+      }
+    },
+    {
+      "id": 11,
+      "references": [
+        8
+      ],
+      "type": "table",
+      "data": {
+        "name": "db_contact_draft_target_links",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "draft_id",
+            "getter_name": "draftId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "REFERENCES db_contact_drafts (draft_id)",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "REFERENCES db_contact_drafts (draft_id)"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "foreign_key": {
+                  "to": {
+                    "table": "db_contact_drafts",
+                    "column": "draft_id"
+                  },
+                  "initially_deferred": false,
+                  "on_update": null,
+                  "on_delete": null
+                }
+              }
+            ]
+          },
+          {
+            "name": "target_id",
+            "getter_name": "targetId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "target_type",
+            "getter_name": "targetType",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "response_level",
+            "getter_name": "responseLevel",
+            "moor_type": "int",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "follow_up_consent",
+            "getter_name": "followUpConsent",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "institution_representative_confirmed",
+            "getter_name": "institutionRepresentativeConfirmed",
+            "moor_type": "bool",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "CHECK (\"institution_representative_confirmed\" IN (0, 1))",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "CHECK (\"institution_representative_confirmed\" IN (0, 1))"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "confirm_stage_zero",
+            "getter_name": "confirmStageZero",
+            "moor_type": "bool",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "CHECK (\"confirm_stage_zero\" IN (0, 1))",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "CHECK (\"confirm_stage_zero\" IN (0, 1))"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [
+          "CHECK (length(trim(target_id)) > 0)",
+          "CHECK (target_type IN ('person', 'institution'))",
+          "CHECK (response_level IS NULL OR response_level BETWEEN 0 AND 4)",
+          "CHECK (follow_up_consent IN ('yes', 'no', 'unknown', 'refused', 'not_applicable'))",
+          "CHECK (target_type = 'institution' OR institution_representative_confirmed = 0)",
+          "CHECK (target_type != 'institution' OR response_level IS NULL OR institution_representative_confirmed = 1)"
+        ],
+        "explicit_pk": [
+          "draft_id",
+          "target_id"
+        ]
+      }
+    },
+    {
+      "id": 12,
+      "references": [
+        8
+      ],
+      "type": "index",
+      "data": {
+        "on": 8,
+        "name": "contact_drafts_owner_updated",
+        "sql": null,
+        "unique": false,
+        "columns": [
+          {
+            "column": "app_user_id",
+            "order_by": null
+          },
+          {
+            "column": "abandoned_at_utc",
+            "order_by": null
+          },
+          {
+            "column": "updated_at_utc",
+            "order_by": null
+          }
+        ]
+      }
+    },
+    {
+      "id": 13,
+      "references": [
+        1
+      ],
+      "type": "index",
+      "data": {
+        "on": 1,
+        "name": "contact_records_personal_period",
+        "sql": null,
+        "unique": false,
+        "columns": [
+          {
+            "column": "app_user_id",
+            "order_by": null
+          },
+          {
+            "column": "workspace_id",
+            "order_by": null
+          },
+          {
+            "column": "project_id",
+            "order_by": null
+          },
+          {
+            "column": "occurred_at_utc",
+            "order_by": null
+          }
+        ]
+      }
+    },
+    {
+      "id": 14,
+      "references": [
+        4
+      ],
+      "type": "index",
+      "data": {
+        "on": 4,
+        "name": "contact_attempts_personal_period",
+        "sql": null,
+        "unique": false,
+        "columns": [
+          {
+            "column": "app_user_id",
+            "order_by": null
+          },
+          {
+            "column": "workspace_id",
+            "order_by": null
+          },
+          {
+            "column": "project_id",
+            "order_by": null
+          },
+          {
+            "column": "occurred_at_utc",
+            "order_by": null
+          }
+        ]
+      }
+    },
+    {
+      "id": 15,
+      "references": [
+        0
+      ],
+      "type": "index",
+      "data": {
+        "on": 0,
+        "name": "sync_outbox_ready",
+        "sql": null,
+        "unique": false,
+        "columns": [
+          {
+            "column": "status",
+            "order_by": null
+          },
+          {
+            "column": "next_attempt_at_utc",
+            "order_by": null
+          },
+          {
+            "column": "created_at_utc",
+            "order_by": null
+          }
+        ]
+      }
+    },
+    {
+      "id": 16,
+      "references": [
+        0
+      ],
+      "type": "index",
+      "data": {
+        "on": 0,
+        "name": "sync_outbox_aggregate_order",
+        "sql": null,
+        "unique": false,
+        "columns": [
+          {
+            "column": "aggregate_id",
+            "order_by": null
+          },
+          {
+            "column": "created_at_utc",
+            "order_by": null
+          }
+        ]
+      }
+    },
+    {
+      "id": 17,
+      "references": [
+        7
+      ],
+      "type": "index",
+      "data": {
+        "on": 7,
+        "name": "contact_revision_conflicts_owner_contact",
+        "sql": null,
+        "unique": false,
+        "columns": [
+          {
+            "column": "app_user_id",
+            "order_by": null
+          },
+          {
+            "column": "contact_id",
+            "order_by": null
+          },
+          {
+            "column": "status",
+            "order_by": null
+          }
+        ]
+      }
+    },
+    {
+      "id": 18,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "db_users",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "user_id",
+            "getter_name": "userId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "username",
+            "getter_name": "username",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "UNIQUE",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "UNIQUE"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              "unique"
+            ]
+          },
+          {
+            "name": "display_name",
+            "getter_name": "displayName",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "email",
+            "getter_name": "email",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "phone",
+            "getter_name": "phone",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "birthday",
+            "getter_name": "birthday",
+            "moor_type": "dateTime",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "gender",
+            "getter_name": "gender",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('\\'unknown\\'')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "occupation",
+            "getter_name": "occupation",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('\\'\\'')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "contact_json",
+            "getter_name": "contactJson",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('\\'{}\\'')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "role_level",
+            "getter_name": "roleLevel",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "city_names_json",
+            "getter_name": "cityNamesJson",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "team_name",
+            "getter_name": "teamName",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "password_md5",
+            "getter_name": "passwordMd5",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "status",
+            "getter_name": "status",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "failed_login_count",
+            "getter_name": "failedLoginCount",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "must_change_password",
+            "getter_name": "mustChangePassword",
+            "moor_type": "bool",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "CHECK (\"must_change_password\" IN (0, 1))",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "CHECK (\"must_change_password\" IN (0, 1))"
+            },
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "locked_until",
+            "getter_name": "lockedUntil",
+            "moor_type": "dateTime",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "last_seen_at",
+            "getter_name": "lastSeenAt",
+            "moor_type": "dateTime",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "last_failed_login_at",
+            "getter_name": "lastFailedLoginAt",
+            "moor_type": "dateTime",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [],
+        "explicit_pk": [
+          "user_id"
+        ]
+      }
+    },
+    {
+      "id": 19,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "db_conversation_records",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "record_id",
+            "getter_name": "recordId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "created_at",
+            "getter_name": "createdAt",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "collector_user_id",
+            "getter_name": "collectorUserId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "city_name",
+            "getter_name": "cityName",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "area_name",
+            "getter_name": "areaName",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('\\'unassigned\\'')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "team_name",
+            "getter_name": "teamName",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "recorder_name",
+            "getter_name": "recorderName",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "person_name",
+            "getter_name": "personName",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "english_name",
+            "getter_name": "englishName",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "average_heart_rate",
+            "getter_name": "averageHeartRate",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "latitude",
+            "getter_name": "latitude",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "longitude",
+            "getter_name": "longitude",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_accuracy_meters",
+            "getter_name": "locationAccuracyMeters",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "location_error",
+            "getter_name": "locationError",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "manual_place_name",
+            "getter_name": "manualPlaceName",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "gender",
+            "getter_name": "gender",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "identity",
+            "getter_name": "identity",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "age_range",
+            "getter_name": "ageRange",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "relationship_level",
+            "getter_name": "relationshipLevel",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('1')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "interest_level",
+            "getter_name": "interestLevel",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('2')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "attitude_level",
+            "getter_name": "attitudeLevel",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "notes",
+            "getter_name": "notes",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "is_location_verified",
+            "getter_name": "isLocationVerified",
+            "moor_type": "bool",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "CHECK (\"is_location_verified\" IN (0, 1))",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "CHECK (\"is_location_verified\" IN (0, 1))"
+            },
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "corrected_latitude",
+            "getter_name": "correctedLatitude",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "corrected_longitude",
+            "getter_name": "correctedLongitude",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "corrected_place_name",
+            "getter_name": "correctedPlaceName",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "corrected_at",
+            "getter_name": "correctedAt",
+            "moor_type": "dateTime",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [],
+        "explicit_pk": [
+          "record_id"
+        ]
+      }
+    },
+    {
+      "id": 20,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "db_record_contacts",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "contact_id",
+            "getter_name": "contactId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "record_id",
+            "getter_name": "recordId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "channel",
+            "getter_name": "channel",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "value",
+            "getter_name": "value",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "created_at",
+            "getter_name": "createdAt",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [],
+        "explicit_pk": [
+          "contact_id"
+        ]
+      }
+    },
+    {
+      "id": 21,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "db_app_settings",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "key",
+            "getter_name": "key",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "value",
+            "getter_name": "value",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [],
+        "explicit_pk": [
+          "key"
+        ]
+      }
+    },
+    {
+      "id": 22,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "db_security_events",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "event_id",
+            "getter_name": "eventId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "user_id",
+            "getter_name": "userId",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "event_type",
+            "getter_name": "eventType",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "event_detail_json",
+            "getter_name": "eventDetailJson",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "created_at",
+            "getter_name": "createdAt",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [],
+        "explicit_pk": [
+          "event_id"
+        ]
+      }
+    },
+    {
+      "id": 23,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "db_canonical_region_versions",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "region_version_key",
+            "getter_name": "regionVersionKey",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "region_id",
+            "getter_name": "regionId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "tree_version",
+            "getter_name": "treeVersion",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "parent_region_version_key",
+            "getter_name": "parentRegionVersionKey",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "defaultConstraints": "REFERENCES db_canonical_region_versions (region_version_key)",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "REFERENCES db_canonical_region_versions (region_version_key)"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "foreign_key": {
+                  "to": {
+                    "table": "db_canonical_region_versions",
+                    "column": "region_version_key"
+                  },
+                  "initially_deferred": false,
+                  "on_update": null,
+                  "on_delete": null
+                }
+              }
+            ]
+          },
+          {
+            "name": "canonical_name",
+            "getter_name": "canonicalName",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "kind",
+            "getter_name": "kind",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "attributes_json",
+            "getter_name": "attributesJson",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [
+          "CHECK (length(trim(region_id)) > 0)",
+          "CHECK (length(trim(tree_version)) > 0)",
+          "CHECK (length(trim(canonical_name)) > 0)",
+          "CHECK (kind IN ('country', 'admin_area', 'city', 'district', 'neighborhood', 'street', 'institution', 'venue', 'other'))"
+        ],
+        "explicit_pk": [
+          "region_version_key"
+        ],
+        "unique_keys": [
+          [
+            "region_id",
+            "tree_version"
+          ]
+        ]
+      }
+    },
+    {
+      "id": 24,
+      "references": [
+        1,
+        23
+      ],
+      "type": "table",
+      "data": {
+        "name": "db_contact_region_assignments",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "contact_id",
+            "getter_name": "contactId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "REFERENCES db_contact_records (contact_id)",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "REFERENCES db_contact_records (contact_id)"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "foreign_key": {
+                  "to": {
+                    "table": "db_contact_records",
+                    "column": "contact_id"
+                  },
+                  "initially_deferred": false,
+                  "on_update": null,
+                  "on_delete": null
+                }
+              }
+            ]
+          },
+          {
+            "name": "region_version_key",
+            "getter_name": "regionVersionKey",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "REFERENCES db_canonical_region_versions (region_version_key)",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "REFERENCES db_canonical_region_versions (region_version_key)"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "foreign_key": {
+                  "to": {
+                    "table": "db_canonical_region_versions",
+                    "column": "region_version_key"
+                  },
+                  "initially_deferred": false,
+                  "on_update": null,
+                  "on_delete": null
+                }
+              }
+            ]
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [],
+        "explicit_pk": [
+          "contact_id"
+        ]
+      }
+    },
+    {
+      "id": 25,
+      "references": [
+        8,
+        23
+      ],
+      "type": "table",
+      "data": {
+        "name": "db_draft_region_assignments",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "draft_id",
+            "getter_name": "draftId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "REFERENCES db_contact_drafts (draft_id)",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "REFERENCES db_contact_drafts (draft_id)"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "foreign_key": {
+                  "to": {
+                    "table": "db_contact_drafts",
+                    "column": "draft_id"
+                  },
+                  "initially_deferred": false,
+                  "on_update": null,
+                  "on_delete": null
+                }
+              }
+            ]
+          },
+          {
+            "name": "region_version_key",
+            "getter_name": "regionVersionKey",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "REFERENCES db_canonical_region_versions (region_version_key)",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "REFERENCES db_canonical_region_versions (region_version_key)"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "foreign_key": {
+                  "to": {
+                    "table": "db_canonical_region_versions",
+                    "column": "region_version_key"
+                  },
+                  "initially_deferred": false,
+                  "on_update": null,
+                  "on_delete": null
+                }
+              }
+            ]
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [],
+        "explicit_pk": [
+          "draft_id"
+        ]
+      }
+    },
+    {
+      "id": 26,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "db_questionnaire_versions",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "questionnaire_version_id",
+            "getter_name": "questionnaireVersionId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "project_id",
+            "getter_name": "projectId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "version_number",
+            "getter_name": "versionNumber",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "status",
+            "getter_name": "status",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "installed_at_utc",
+            "getter_name": "installedAtUtc",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [
+          "CHECK (length(trim(questionnaire_version_id)) > 0)",
+          "CHECK (length(trim(project_id)) > 0)",
+          "CHECK (version_number > 0)",
+          "CHECK (status = 'published')",
+          "UNIQUE (project_id, version_number)"
+        ],
+        "explicit_pk": [
+          "questionnaire_version_id"
+        ]
+      }
+    },
+    {
+      "id": 27,
+      "references": [
+        26
+      ],
+      "type": "table",
+      "data": {
+        "name": "db_questionnaire_questions",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "questionnaire_version_id",
+            "getter_name": "questionnaireVersionId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "REFERENCES db_questionnaire_versions (questionnaire_version_id)",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "REFERENCES db_questionnaire_versions (questionnaire_version_id)"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "foreign_key": {
+                  "to": {
+                    "table": "db_questionnaire_versions",
+                    "column": "questionnaire_version_id"
+                  },
+                  "initially_deferred": false,
+                  "on_update": null,
+                  "on_delete": null
+                }
+              }
+            ]
+          },
+          {
+            "name": "question_id",
+            "getter_name": "questionId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "position",
+            "getter_name": "position",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "prompt",
+            "getter_name": "prompt",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "question_type",
+            "getter_name": "questionType",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "is_required",
+            "getter_name": "isRequired",
+            "moor_type": "bool",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "CHECK (\"is_required\" IN (0, 1))",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "CHECK (\"is_required\" IN (0, 1))"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "allow_unknown",
+            "getter_name": "allowUnknown",
+            "moor_type": "bool",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "CHECK (\"allow_unknown\" IN (0, 1))",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "CHECK (\"allow_unknown\" IN (0, 1))"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "allow_refused",
+            "getter_name": "allowRefused",
+            "moor_type": "bool",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "CHECK (\"allow_refused\" IN (0, 1))",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "CHECK (\"allow_refused\" IN (0, 1))"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "allow_not_applicable",
+            "getter_name": "allowNotApplicable",
+            "moor_type": "bool",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "CHECK (\"allow_not_applicable\" IN (0, 1))",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "CHECK (\"allow_not_applicable\" IN (0, 1))"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "minimum_selections",
+            "getter_name": "minimumSelections",
+            "moor_type": "int",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "maximum_selections",
+            "getter_name": "maximumSelections",
+            "moor_type": "int",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "number_kind",
+            "getter_name": "numberKind",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "unit",
+            "getter_name": "unit",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "minimum",
+            "getter_name": "minimum",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "maximum",
+            "getter_name": "maximum",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "maximum_length",
+            "getter_name": "maximumLength",
+            "moor_type": "int",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "display_rule_json",
+            "getter_name": "displayRuleJson",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [
+          "CHECK (length(trim(question_id)) > 0)",
+          "CHECK (position > 0)",
+          "CHECK (length(trim(prompt)) > 0)",
+          "CHECK (question_type IN ('boolean', 'single_choice', 'ordinal_choice', 'multi_choice', 'number', 'date', 'short_text', 'long_text'))",
+          "CHECK ((question_type = 'multi_choice' AND minimum_selections > 0 AND maximum_selections >= minimum_selections) OR (question_type <> 'multi_choice' AND minimum_selections IS NULL AND maximum_selections IS NULL))",
+          "CHECK ((question_type = 'number' AND number_kind IN ('integer', 'decimal') AND (minimum IS NULL OR maximum IS NULL OR minimum <= maximum)) OR (question_type <> 'number' AND number_kind IS NULL AND unit IS NULL AND minimum IS NULL AND maximum IS NULL))",
+          "CHECK ((question_type IN ('short_text', 'long_text') AND maximum_length > 0) OR (question_type NOT IN ('short_text', 'long_text') AND maximum_length IS NULL))",
+          "CHECK (display_rule_json IS NULL OR (json_valid(display_rule_json) AND json_type(display_rule_json) = 'object'))",
+          "UNIQUE (questionnaire_version_id, position)"
+        ],
+        "explicit_pk": [
+          "questionnaire_version_id",
+          "question_id"
+        ]
+      }
+    },
+    {
+      "id": 28,
+      "references": [
+        26
+      ],
+      "type": "table",
+      "data": {
+        "name": "db_questionnaire_options",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "questionnaire_version_id",
+            "getter_name": "questionnaireVersionId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "REFERENCES db_questionnaire_versions (questionnaire_version_id)",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "REFERENCES db_questionnaire_versions (questionnaire_version_id)"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "foreign_key": {
+                  "to": {
+                    "table": "db_questionnaire_versions",
+                    "column": "questionnaire_version_id"
+                  },
+                  "initially_deferred": false,
+                  "on_update": null,
+                  "on_delete": null
+                }
+              }
+            ]
+          },
+          {
+            "name": "question_id",
+            "getter_name": "questionId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "option_id",
+            "getter_name": "optionId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "position",
+            "getter_name": "position",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "label",
+            "getter_name": "label",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [
+          "CHECK (length(trim(question_id)) > 0)",
+          "CHECK (length(trim(option_id)) > 0)",
+          "CHECK (position > 0)",
+          "CHECK (length(trim(label)) > 0)",
+          "UNIQUE (questionnaire_version_id, question_id, position)"
+        ],
+        "explicit_pk": [
+          "questionnaire_version_id",
+          "question_id",
+          "option_id"
+        ]
+      }
+    },
+    {
+      "id": 29,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "db_questionnaire_draft_working_copies",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "questionnaire_draft_id",
+            "getter_name": "questionnaireDraftId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "project_id",
+            "getter_name": "projectId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "source_version_id",
+            "getter_name": "sourceVersionId",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "base_revision",
+            "getter_name": "baseRevision",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "definition_json",
+            "getter_name": "definitionJson",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "has_local_changes",
+            "getter_name": "hasLocalChanges",
+            "moor_type": "bool",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "CHECK (\"has_local_changes\" IN (0, 1))",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "CHECK (\"has_local_changes\" IN (0, 1))"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "updated_at_utc",
+            "getter_name": "updatedAtUtc",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [
+          "CHECK (length(trim(questionnaire_draft_id)) > 0)",
+          "CHECK (length(trim(project_id)) > 0)",
+          "CHECK (base_revision > 0)",
+          "CHECK (json_valid(definition_json) AND json_type(definition_json) = 'object')"
+        ],
+        "explicit_pk": [
+          "questionnaire_draft_id"
+        ]
+      }
+    },
+    {
+      "id": 30,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "db_current_relationship_stage_projections",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "app_user_id",
+            "getter_name": "appUserId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "workspace_id",
+            "getter_name": "workspaceId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "project_id",
+            "getter_name": "projectId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "target_key",
+            "getter_name": "targetKey",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "relationship_stage",
+            "getter_name": "relationshipStage",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "relationship_revision",
+            "getter_name": "relationshipRevision",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "relationship_updated_at_utc",
+            "getter_name": "relationshipUpdatedAtUtc",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [
+          "CHECK (length(trim(app_user_id)) > 0)",
+          "CHECK (length(trim(workspace_id)) > 0)",
+          "CHECK (length(trim(project_id)) > 0)",
+          "CHECK (length(trim(target_key)) > 0)",
+          "CHECK (relationship_stage BETWEEN 0 AND 4)",
+          "CHECK (relationship_revision > 0)"
+        ],
+        "explicit_pk": [
+          "app_user_id",
+          "workspace_id",
+          "project_id",
+          "target_key"
+        ]
+      }
+    },
+    {
+      "id": 31,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "db_current_relationship_stage_snapshots",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "app_user_id",
+            "getter_name": "appUserId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "workspace_id",
+            "getter_name": "workspaceId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "project_id",
+            "getter_name": "projectId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "snapshot_as_of_utc",
+            "getter_name": "snapshotAsOfUtc",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "source_cutoff_utc",
+            "getter_name": "sourceCutoffUtc",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "authorized_at_utc",
+            "getter_name": "authorizedAtUtc",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "last_successful_sync_at_utc",
+            "getter_name": "lastSuccessfulSyncAtUtc",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "total_count",
+            "getter_name": "totalCount",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "pending_sync_count",
+            "getter_name": "pendingSyncCount",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [
+          "CHECK (length(trim(app_user_id)) > 0)",
+          "CHECK (length(trim(workspace_id)) > 0)",
+          "CHECK (length(trim(project_id)) > 0)",
+          "CHECK (total_count >= 0)",
+          "CHECK (pending_sync_count >= 0 AND pending_sync_count <= total_count)"
+        ],
+        "explicit_pk": [
+          "app_user_id",
+          "workspace_id",
+          "project_id"
+        ]
+      }
+    },
+    {
+      "id": 32,
+      "references": [
+        30
+      ],
+      "type": "index",
+      "data": {
+        "on": 30,
+        "name": "current_relationship_stage_scope_stage",
+        "sql": null,
+        "unique": false,
+        "columns": [
+          {
+            "column": "app_user_id",
+            "order_by": null
+          },
+          {
+            "column": "workspace_id",
+            "order_by": null
+          },
+          {
+            "column": "project_id",
+            "order_by": null
+          },
+          {
+            "column": "relationship_stage",
+            "order_by": null
+          }
+        ]
+      }
+    }
+  ],
+  "fixed_sql": [
+    {
+      "name": "db_sync_outbox",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_sync_outbox\" (\"command_id\" TEXT NOT NULL, \"protocol_version\" INTEGER NOT NULL, \"command_type\" TEXT NOT NULL, \"device_id\" TEXT NOT NULL, \"aggregate_id\" TEXT NOT NULL, \"app_user_id\" TEXT NULL, \"workspace_id\" TEXT NULL, \"project_id\" TEXT NULL, \"base_revision\" INTEGER NOT NULL, \"payload_json\" TEXT NOT NULL, \"created_at_utc\" INTEGER NOT NULL, \"status\" TEXT NOT NULL, \"attempt_count\" INTEGER NOT NULL DEFAULT 0, \"next_attempt_at_utc\" INTEGER NOT NULL, \"lease_owner\" TEXT NULL, \"lease_expires_at_utc\" INTEGER NULL, \"last_failure_code\" TEXT NULL, \"completed_at_utc\" INTEGER NULL, PRIMARY KEY (\"command_id\"), CHECK (status IN ('pending', 'leased', 'needs_resolution', 'permanent_failure', 'completed')), CHECK (attempt_count >= 0), CHECK (protocol_version > 0 AND base_revision >= 0), CHECK ((app_user_id IS NULL AND workspace_id IS NULL AND project_id IS NULL) OR (app_user_id IS NOT NULL AND length(trim(app_user_id)) > 0 AND workspace_id IS NOT NULL AND length(trim(workspace_id)) > 0 AND project_id IS NOT NULL AND length(trim(project_id)) > 0)));"
+        }
+      ]
+    },
+    {
+      "name": "db_contact_records",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_contact_records\" (\"contact_id\" TEXT NOT NULL, \"app_user_id\" TEXT NOT NULL, \"workspace_id\" TEXT NOT NULL, \"project_id\" TEXT NOT NULL, \"questionnaire_version_id\" TEXT NOT NULL, \"occurred_at_utc\" INTEGER NOT NULL, \"occurred_time_zone\" TEXT NOT NULL, \"first_submitted_at_utc\" INTEGER NOT NULL, \"channel\" TEXT NOT NULL, \"channel_detail\" TEXT NULL, \"location_kind\" TEXT NOT NULL, \"place_name\" TEXT NULL, \"smallest_region_id\" TEXT NULL, \"region_tree_version\" TEXT NULL, \"latitude\" REAL NULL, \"longitude\" REAL NULL, \"location_accuracy_meters\" REAL NULL, \"location_source_kind\" TEXT NULL, \"location_source_latitude\" REAL NULL, \"location_source_longitude\" REAL NULL, \"location_source_accuracy_meters\" REAL NULL, \"location_source_resolver_contract_version\" TEXT NULL, \"location_source_region_tree_content_fingerprint\" TEXT NULL, \"reach_count\" INTEGER NOT NULL, \"interest_level\" INTEGER NOT NULL, \"current_revision\" INTEGER NOT NULL, \"lifecycle_status\" TEXT NOT NULL, PRIMARY KEY (\"contact_id\"), CHECK ((location_kind = 'resolved' AND place_name IS NOT NULL AND length(trim(place_name)) > 0 AND smallest_region_id IS NOT NULL AND length(trim(smallest_region_id)) > 0 AND region_tree_version IS NOT NULL AND length(trim(region_tree_version)) > 0 AND latitude IS NULL AND longitude IS NULL AND location_accuracy_meters IS NULL) OR (location_kind = 'not_applicable' AND place_name IS NULL AND smallest_region_id IS NULL AND region_tree_version IS NULL AND latitude IS NULL AND longitude IS NULL AND location_accuracy_meters IS NULL) OR (location_kind = 'pending_resolution' AND place_name IS NULL AND smallest_region_id IS NULL AND region_tree_version IS NULL AND latitude IS NOT NULL AND latitude BETWEEN -90 AND 90 AND longitude IS NOT NULL AND longitude BETWEEN -180 AND 180 AND (location_accuracy_meters IS NULL OR location_accuracy_meters >= 0))), CHECK ((location_source_kind IS NULL AND location_source_latitude IS NULL AND location_source_longitude IS NULL AND location_source_accuracy_meters IS NULL AND location_source_resolver_contract_version IS NULL AND location_source_region_tree_content_fingerprint IS NULL) OR (location_kind = 'resolved' AND location_source_kind IS NOT NULL AND location_source_kind = 'captured_coordinates' AND location_source_latitude IS NOT NULL AND location_source_latitude BETWEEN -90 AND 90 AND location_source_longitude IS NOT NULL AND location_source_longitude BETWEEN -180 AND 180 AND (location_source_accuracy_meters IS NULL OR location_source_accuracy_meters >= 0) AND location_source_resolver_contract_version IS NOT NULL AND location_source_resolver_contract_version = 'canonical-region-resolution:v1' AND location_source_region_tree_content_fingerprint IS NOT NULL AND length(location_source_region_tree_content_fingerprint) = 64 AND location_source_region_tree_content_fingerprint NOT GLOB '*[^0-9a-f]*')), CHECK (lifecycle_status IN ('active', 'voided')), CHECK (reach_count > 0), CHECK (interest_level BETWEEN 0 AND 4), CHECK (current_revision > 0), CHECK (channel IN ('face_to_face', 'voice_call', 'video_call', 'instant_text', 'asynchronous_message', 'mixed', 'other_direct')), CHECK (channel != 'other_direct' OR (channel_detail IS NOT NULL AND length(trim(channel_detail)) > 0)));"
+        }
+      ]
+    },
+    {
+      "name": "db_sync_drainer_leases",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_sync_drainer_leases\" (\"lease_name\" TEXT NOT NULL, \"lease_owner\" TEXT NOT NULL, \"lease_expires_at_utc\" INTEGER NOT NULL, PRIMARY KEY (\"lease_name\"), CHECK (length(trim(lease_name)) > 0), CHECK (length(trim(lease_owner)) > 0));"
+        }
+      ]
+    },
+    {
+      "name": "db_sync_scopes",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_sync_scopes\" (\"app_user_id\" TEXT NOT NULL, \"workspace_id\" TEXT NOT NULL, \"project_id\" TEXT NOT NULL, \"server_cursor\" TEXT NULL, \"last_success_at_utc\" INTEGER NULL, \"last_failure_code\" TEXT NULL, \"updated_at_utc\" INTEGER NOT NULL, PRIMARY KEY (\"app_user_id\", \"workspace_id\", \"project_id\"), CHECK (length(trim(app_user_id)) > 0), CHECK (length(trim(workspace_id)) > 0), CHECK (length(trim(project_id)) > 0), CHECK (server_cursor IS NULL OR length(server_cursor) > 0), CHECK (last_failure_code IS NULL OR length(trim(last_failure_code)) > 0));"
+        }
+      ]
+    },
+    {
+      "name": "db_contact_attempts",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_contact_attempts\" (\"attempt_id\" TEXT NOT NULL, \"app_user_id\" TEXT NOT NULL, \"workspace_id\" TEXT NOT NULL, \"project_id\" TEXT NOT NULL, \"occurred_at_utc\" INTEGER NOT NULL, \"occurred_time_zone\" TEXT NOT NULL, \"first_submitted_at_utc\" INTEGER NOT NULL, \"channel\" TEXT NOT NULL, \"channel_detail\" TEXT NULL, \"linked_contact_id\" TEXT NULL REFERENCES db_contact_records (contact_id), PRIMARY KEY (\"attempt_id\"), CHECK (length(trim(app_user_id)) > 0), CHECK (length(trim(workspace_id)) > 0), CHECK (length(trim(project_id)) > 0), CHECK (length(trim(occurred_time_zone)) > 0), CHECK (channel IN ('face_to_face', 'voice_call', 'video_call', 'instant_text', 'asynchronous_message', 'mixed', 'other_direct')), CHECK (channel != 'other_direct' OR (channel_detail IS NOT NULL AND length(trim(channel_detail)) > 0)));"
+        }
+      ]
+    },
+    {
+      "name": "db_contact_revisions",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_contact_revisions\" (\"revision_id\" TEXT NOT NULL, \"contact_id\" TEXT NOT NULL REFERENCES db_contact_records (contact_id), \"revision_number\" INTEGER NOT NULL, \"revision_kind\" TEXT NOT NULL DEFAULT 'submitted', \"revised_by_app_user_id\" TEXT NOT NULL, \"revised_at_utc\" INTEGER NOT NULL, \"reason\" TEXT NULL, \"occurred_at_utc\" INTEGER NOT NULL, \"occurred_time_zone\" TEXT NOT NULL, \"channel\" TEXT NOT NULL, \"channel_detail\" TEXT NULL, \"location_kind\" TEXT NOT NULL, \"place_name\" TEXT NULL, \"smallest_region_id\" TEXT NULL, \"region_tree_version\" TEXT NULL, \"latitude\" REAL NULL, \"longitude\" REAL NULL, \"location_accuracy_meters\" REAL NULL, \"location_source_kind\" TEXT NULL, \"location_source_latitude\" REAL NULL, \"location_source_longitude\" REAL NULL, \"location_source_accuracy_meters\" REAL NULL, \"location_source_resolver_contract_version\" TEXT NULL, \"location_source_region_tree_content_fingerprint\" TEXT NULL, \"reach_count\" INTEGER NOT NULL, \"interest_level\" INTEGER NOT NULL, PRIMARY KEY (\"revision_id\"), UNIQUE (\"contact_id\", \"revision_number\"), CHECK (revision_number > 0), CHECK (revision_kind IN ('submitted', 'corrected', 'voided')), CHECK ((revision_number = 1 AND revision_kind = 'submitted' AND reason IS NULL) OR (revision_number > 1 AND revision_kind IN ('corrected', 'voided') AND reason IS NOT NULL AND length(trim(reason)) > 0)), CHECK (reach_count > 0), CHECK (interest_level BETWEEN 0 AND 4), CHECK ((location_kind = 'resolved' AND place_name IS NOT NULL AND length(trim(place_name)) > 0 AND smallest_region_id IS NOT NULL AND length(trim(smallest_region_id)) > 0 AND region_tree_version IS NOT NULL AND length(trim(region_tree_version)) > 0 AND latitude IS NULL AND longitude IS NULL AND location_accuracy_meters IS NULL) OR (location_kind = 'not_applicable' AND place_name IS NULL AND smallest_region_id IS NULL AND region_tree_version IS NULL AND latitude IS NULL AND longitude IS NULL AND location_accuracy_meters IS NULL) OR (location_kind = 'pending_resolution' AND place_name IS NULL AND smallest_region_id IS NULL AND region_tree_version IS NULL AND latitude IS NOT NULL AND latitude BETWEEN -90 AND 90 AND longitude IS NOT NULL AND longitude BETWEEN -180 AND 180 AND (location_accuracy_meters IS NULL OR location_accuracy_meters >= 0))), CHECK ((location_source_kind IS NULL AND location_source_latitude IS NULL AND location_source_longitude IS NULL AND location_source_accuracy_meters IS NULL AND location_source_resolver_contract_version IS NULL AND location_source_region_tree_content_fingerprint IS NULL) OR (location_kind = 'resolved' AND location_source_kind IS NOT NULL AND location_source_kind = 'captured_coordinates' AND location_source_latitude IS NOT NULL AND location_source_latitude BETWEEN -90 AND 90 AND location_source_longitude IS NOT NULL AND location_source_longitude BETWEEN -180 AND 180 AND (location_source_accuracy_meters IS NULL OR location_source_accuracy_meters >= 0) AND location_source_resolver_contract_version IS NOT NULL AND location_source_resolver_contract_version = 'canonical-region-resolution:v1' AND location_source_region_tree_content_fingerprint IS NOT NULL AND length(location_source_region_tree_content_fingerprint) = 64 AND location_source_region_tree_content_fingerprint NOT GLOB '*[^0-9a-f]*')), CHECK (channel IN ('face_to_face', 'voice_call', 'video_call', 'instant_text', 'asynchronous_message', 'mixed', 'other_direct')), CHECK (channel != 'other_direct' OR (channel_detail IS NOT NULL AND length(trim(channel_detail)) > 0)));"
+        }
+      ]
+    },
+    {
+      "name": "db_contact_answers",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_contact_answers\" (\"contact_id\" TEXT NOT NULL REFERENCES db_contact_records (contact_id), \"revision_number\" INTEGER NOT NULL, \"question_id\" TEXT NOT NULL, \"answer_state\" TEXT NOT NULL, \"answer_state_reason\" TEXT NULL, \"answer_type\" TEXT NOT NULL, \"boolean_value\" INTEGER NULL CHECK (\"boolean_value\" IN (0, 1)), \"text_value\" TEXT NULL, \"number_value\" REAL NULL, \"multi_choice_value_json\" TEXT NULL, PRIMARY KEY (\"contact_id\", \"revision_number\", \"question_id\"), CHECK (revision_number > 0), CHECK (length(trim(question_id)) > 0), CHECK (answer_state_reason IS NULL OR (answer_state = 'not_applicable' AND answer_state_reason = 'rule_skipped')), CHECK ((answer_state IN ('unknown', 'refused', 'not_applicable', 'unanswered') AND boolean_value IS NULL AND text_value IS NULL AND number_value IS NULL AND multi_choice_value_json IS NULL) OR (answer_state = 'answered' AND ((answer_type = 'boolean' AND boolean_value IS NOT NULL AND text_value IS NULL AND number_value IS NULL AND multi_choice_value_json IS NULL) OR (answer_type IN ('single_choice', 'ordinal_choice', 'date', 'short_text', 'long_text') AND boolean_value IS NULL AND text_value IS NOT NULL AND length(text_value) > 0 AND number_value IS NULL AND multi_choice_value_json IS NULL) OR (answer_type = 'number' AND boolean_value IS NULL AND text_value IS NULL AND number_value IS NOT NULL AND multi_choice_value_json IS NULL) OR (answer_type = 'multi_choice' AND boolean_value IS NULL AND text_value IS NULL AND number_value IS NULL AND json_valid(multi_choice_value_json) AND json_type(multi_choice_value_json) = 'array')))));"
+        }
+      ]
+    },
+    {
+      "name": "db_contact_revision_conflicts",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_contact_revision_conflicts\" (\"conflict_id\" TEXT NOT NULL, \"command_id\" TEXT NOT NULL UNIQUE, \"contact_id\" TEXT NOT NULL REFERENCES db_contact_records (contact_id), \"app_user_id\" TEXT NOT NULL, \"workspace_id\" TEXT NOT NULL, \"project_id\" TEXT NOT NULL, \"base_revision\" INTEGER NOT NULL, \"current_revision\" INTEGER NOT NULL, \"conflicting_fields_json\" TEXT NOT NULL, \"questionnaire_version_id\" TEXT NOT NULL, \"current_revision_kind\" TEXT NOT NULL, \"current_revised_at_utc\" INTEGER NOT NULL, \"current_reason\" TEXT NOT NULL, \"current_snapshot_json\" TEXT NOT NULL, \"proposed_snapshot_json\" TEXT NOT NULL, \"status\" TEXT NOT NULL DEFAULT 'pending', \"resolution_command_id\" TEXT NULL, \"created_at_utc\" INTEGER NOT NULL, \"resolved_at_utc\" INTEGER NULL, PRIMARY KEY (\"conflict_id\"), CHECK (base_revision > 0 AND current_revision > base_revision), CHECK (current_revision_kind = 'corrected'), CHECK (status IN ('pending', 'resolution_pending', 'resolved')), CHECK ((status = 'pending' AND resolution_command_id IS NULL AND resolved_at_utc IS NULL) OR (status = 'resolution_pending' AND resolution_command_id IS NOT NULL AND resolved_at_utc IS NULL) OR (status = 'resolved' AND resolution_command_id IS NOT NULL AND resolved_at_utc IS NOT NULL)));"
+        }
+      ]
+    },
+    {
+      "name": "db_contact_drafts",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_contact_drafts\" (\"draft_id\" TEXT NOT NULL, \"app_user_id\" TEXT NOT NULL, \"workspace_id\" TEXT NOT NULL, \"project_id\" TEXT NOT NULL, \"questionnaire_version_id\" TEXT NOT NULL, \"created_at_utc\" INTEGER NOT NULL, \"updated_at_utc\" INTEGER NOT NULL, \"occurred_at_utc\" INTEGER NULL, \"occurred_time_zone\" TEXT NULL, \"channel\" TEXT NULL, \"channel_detail\" TEXT NULL, \"location_kind\" TEXT NULL, \"place_name\" TEXT NULL, \"smallest_region_id\" TEXT NULL, \"region_tree_version\" TEXT NULL, \"latitude\" REAL NULL, \"longitude\" REAL NULL, \"location_accuracy_meters\" REAL NULL, \"location_source_kind\" TEXT NULL, \"location_source_latitude\" REAL NULL, \"location_source_longitude\" REAL NULL, \"location_source_accuracy_meters\" REAL NULL, \"location_source_resolver_contract_version\" TEXT NULL, \"location_source_region_tree_content_fingerprint\" TEXT NULL, \"reach_count\" INTEGER NULL, \"interest_level\" INTEGER NULL, \"sync_mode\" TEXT NOT NULL DEFAULT 'account_private', \"local_revision\" INTEGER NOT NULL DEFAULT 1, \"server_revision\" INTEGER NOT NULL DEFAULT 0, \"source_attempt_id\" TEXT NULL, \"conflict_of_draft_id\" TEXT NULL, \"upgraded_from_draft_id\" TEXT NULL, \"abandoned_at_utc\" INTEGER NULL, \"undo_until_utc\" INTEGER NULL, PRIMARY KEY (\"draft_id\"), CHECK (length(trim(app_user_id)) > 0), CHECK (length(trim(workspace_id)) > 0), CHECK (length(trim(project_id)) > 0), CHECK (length(trim(questionnaire_version_id)) > 0), CHECK (updated_at_utc >= created_at_utc), CHECK ((occurred_at_utc IS NULL AND occurred_time_zone IS NULL) OR (occurred_at_utc IS NOT NULL AND occurred_time_zone IS NOT NULL AND length(trim(occurred_time_zone)) > 0)), CHECK (channel IS NULL OR channel IN ('face_to_face', 'voice_call', 'video_call', 'instant_text', 'asynchronous_message', 'mixed', 'other_direct')), CHECK ((location_kind IS NULL AND place_name IS NULL AND smallest_region_id IS NULL AND region_tree_version IS NULL AND latitude IS NULL AND longitude IS NULL AND location_accuracy_meters IS NULL) OR (location_kind = 'resolved' AND place_name IS NOT NULL AND length(trim(place_name)) > 0 AND smallest_region_id IS NOT NULL AND length(trim(smallest_region_id)) > 0 AND region_tree_version IS NOT NULL AND length(trim(region_tree_version)) > 0 AND latitude IS NULL AND longitude IS NULL AND location_accuracy_meters IS NULL) OR (location_kind = 'not_applicable' AND place_name IS NULL AND smallest_region_id IS NULL AND region_tree_version IS NULL AND latitude IS NULL AND longitude IS NULL AND location_accuracy_meters IS NULL) OR (location_kind = 'pending_resolution' AND place_name IS NULL AND smallest_region_id IS NULL AND region_tree_version IS NULL AND latitude IS NOT NULL AND latitude BETWEEN -90 AND 90 AND longitude IS NOT NULL AND longitude BETWEEN -180 AND 180 AND (location_accuracy_meters IS NULL OR location_accuracy_meters >= 0))), CHECK ((location_source_kind IS NULL AND location_source_latitude IS NULL AND location_source_longitude IS NULL AND location_source_accuracy_meters IS NULL AND location_source_resolver_contract_version IS NULL AND location_source_region_tree_content_fingerprint IS NULL) OR (location_kind = 'resolved' AND location_source_kind IS NOT NULL AND location_source_kind = 'captured_coordinates' AND location_source_latitude IS NOT NULL AND location_source_latitude BETWEEN -90 AND 90 AND location_source_longitude IS NOT NULL AND location_source_longitude BETWEEN -180 AND 180 AND (location_source_accuracy_meters IS NULL OR location_source_accuracy_meters >= 0) AND location_source_resolver_contract_version IS NOT NULL AND location_source_resolver_contract_version = 'canonical-region-resolution:v1' AND location_source_region_tree_content_fingerprint IS NOT NULL AND length(location_source_region_tree_content_fingerprint) = 64 AND location_source_region_tree_content_fingerprint NOT GLOB '*[^0-9a-f]*')), CHECK (reach_count IS NULL OR reach_count > 0), CHECK (interest_level IS NULL OR interest_level BETWEEN 0 AND 4), CHECK (sync_mode IN ('account_private', 'device_only')), CHECK (local_revision > 0), CHECK (server_revision >= 0), CHECK (source_attempt_id IS NULL OR length(trim(source_attempt_id)) > 0), CHECK (conflict_of_draft_id IS NULL OR length(trim(conflict_of_draft_id)) > 0), CHECK (upgraded_from_draft_id IS NULL OR (length(trim(upgraded_from_draft_id)) > 0 AND upgraded_from_draft_id <> draft_id)), CHECK ((abandoned_at_utc IS NULL AND undo_until_utc IS NULL) OR (abandoned_at_utc IS NOT NULL AND undo_until_utc IS NOT NULL AND undo_until_utc >= abandoned_at_utc)));"
+        }
+      ]
+    },
+    {
+      "name": "db_contact_draft_answers",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_contact_draft_answers\" (\"draft_id\" TEXT NOT NULL REFERENCES db_contact_drafts (draft_id), \"question_id\" TEXT NOT NULL, \"answer_state\" TEXT NOT NULL, \"answer_state_reason\" TEXT NULL, \"answer_type\" TEXT NOT NULL, \"boolean_value\" INTEGER NULL CHECK (\"boolean_value\" IN (0, 1)), \"text_value\" TEXT NULL, \"number_value\" REAL NULL, \"multi_choice_value_json\" TEXT NULL, PRIMARY KEY (\"draft_id\", \"question_id\"), CHECK (length(trim(question_id)) > 0), CHECK (answer_state_reason IS NULL OR (answer_state = 'not_applicable' AND answer_state_reason = 'rule_skipped')), CHECK ((answer_state IN ('unknown', 'refused', 'not_applicable', 'unanswered') AND boolean_value IS NULL AND text_value IS NULL AND number_value IS NULL AND multi_choice_value_json IS NULL) OR (answer_state = 'answered' AND ((answer_type = 'boolean' AND boolean_value IS NOT NULL AND text_value IS NULL AND number_value IS NULL AND multi_choice_value_json IS NULL) OR (answer_type IN ('single_choice', 'ordinal_choice', 'date', 'short_text', 'long_text') AND boolean_value IS NULL AND text_value IS NOT NULL AND length(text_value) > 0 AND number_value IS NULL AND multi_choice_value_json IS NULL) OR (answer_type = 'number' AND boolean_value IS NULL AND text_value IS NULL AND number_value IS NOT NULL AND multi_choice_value_json IS NULL) OR (answer_type = 'multi_choice' AND boolean_value IS NULL AND text_value IS NULL AND number_value IS NULL AND json_valid(multi_choice_value_json) AND json_type(multi_choice_value_json) = 'array')))));"
+        }
+      ]
+    },
+    {
+      "name": "db_contact_target_links",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_contact_target_links\" (\"contact_id\" TEXT NOT NULL REFERENCES db_contact_records (contact_id), \"revision_number\" INTEGER NOT NULL, \"target_id\" TEXT NOT NULL, \"target_type\" TEXT NOT NULL, \"response_level\" INTEGER NULL, \"follow_up_consent\" TEXT NOT NULL, \"institution_representative_confirmed\" INTEGER NOT NULL CHECK (\"institution_representative_confirmed\" IN (0, 1)), \"confirm_stage_zero\" INTEGER NOT NULL CHECK (\"confirm_stage_zero\" IN (0, 1)), PRIMARY KEY (\"contact_id\", \"revision_number\", \"target_id\"), FOREIGN KEY (contact_id, revision_number) REFERENCES db_contact_revisions (contact_id, revision_number) ON DELETE RESTRICT, CHECK (revision_number > 0), CHECK (length(trim(target_id)) > 0), CHECK (target_type IN ('person', 'institution')), CHECK (response_level IS NULL OR response_level BETWEEN 0 AND 4), CHECK (follow_up_consent IN ('yes', 'no', 'unknown', 'refused', 'not_applicable')), CHECK (target_type = 'institution' OR institution_representative_confirmed = 0), CHECK (target_type != 'institution' OR response_level IS NULL OR institution_representative_confirmed = 1));"
+        }
+      ]
+    },
+    {
+      "name": "db_contact_draft_target_links",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_contact_draft_target_links\" (\"draft_id\" TEXT NOT NULL REFERENCES db_contact_drafts (draft_id), \"target_id\" TEXT NOT NULL, \"target_type\" TEXT NOT NULL, \"response_level\" INTEGER NULL, \"follow_up_consent\" TEXT NOT NULL, \"institution_representative_confirmed\" INTEGER NOT NULL CHECK (\"institution_representative_confirmed\" IN (0, 1)), \"confirm_stage_zero\" INTEGER NOT NULL CHECK (\"confirm_stage_zero\" IN (0, 1)), PRIMARY KEY (\"draft_id\", \"target_id\"), CHECK (length(trim(target_id)) > 0), CHECK (target_type IN ('person', 'institution')), CHECK (response_level IS NULL OR response_level BETWEEN 0 AND 4), CHECK (follow_up_consent IN ('yes', 'no', 'unknown', 'refused', 'not_applicable')), CHECK (target_type = 'institution' OR institution_representative_confirmed = 0), CHECK (target_type != 'institution' OR response_level IS NULL OR institution_representative_confirmed = 1));"
+        }
+      ]
+    },
+    {
+      "name": "contact_drafts_owner_updated",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE INDEX contact_drafts_owner_updated ON db_contact_drafts (app_user_id, abandoned_at_utc, updated_at_utc)"
+        }
+      ]
+    },
+    {
+      "name": "contact_records_personal_period",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE INDEX contact_records_personal_period ON db_contact_records (app_user_id, workspace_id, project_id, occurred_at_utc)"
+        }
+      ]
+    },
+    {
+      "name": "contact_attempts_personal_period",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE INDEX contact_attempts_personal_period ON db_contact_attempts (app_user_id, workspace_id, project_id, occurred_at_utc)"
+        }
+      ]
+    },
+    {
+      "name": "sync_outbox_ready",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE INDEX sync_outbox_ready ON db_sync_outbox (status, next_attempt_at_utc, created_at_utc)"
+        }
+      ]
+    },
+    {
+      "name": "sync_outbox_aggregate_order",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE INDEX sync_outbox_aggregate_order ON db_sync_outbox (aggregate_id, created_at_utc)"
+        }
+      ]
+    },
+    {
+      "name": "contact_revision_conflicts_owner_contact",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE INDEX contact_revision_conflicts_owner_contact ON db_contact_revision_conflicts (app_user_id, contact_id, status)"
+        }
+      ]
+    },
+    {
+      "name": "db_users",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_users\" (\"user_id\" TEXT NOT NULL, \"username\" TEXT NOT NULL UNIQUE, \"display_name\" TEXT NOT NULL, \"email\" TEXT NOT NULL, \"phone\" TEXT NOT NULL, \"birthday\" INTEGER NULL, \"gender\" TEXT NOT NULL DEFAULT 'unknown', \"occupation\" TEXT NOT NULL DEFAULT '', \"contact_json\" TEXT NOT NULL DEFAULT '{}', \"role_level\" INTEGER NOT NULL, \"city_names_json\" TEXT NOT NULL, \"team_name\" TEXT NOT NULL, \"password_md5\" TEXT NOT NULL, \"status\" TEXT NOT NULL, \"failed_login_count\" INTEGER NOT NULL DEFAULT 0, \"must_change_password\" INTEGER NOT NULL DEFAULT 0 CHECK (\"must_change_password\" IN (0, 1)), \"locked_until\" INTEGER NULL, \"last_seen_at\" INTEGER NULL, \"last_failed_login_at\" INTEGER NULL, PRIMARY KEY (\"user_id\"));"
+        }
+      ]
+    },
+    {
+      "name": "db_conversation_records",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_conversation_records\" (\"record_id\" TEXT NOT NULL, \"created_at\" INTEGER NOT NULL, \"collector_user_id\" TEXT NOT NULL, \"city_name\" TEXT NOT NULL, \"area_name\" TEXT NOT NULL DEFAULT 'unassigned', \"team_name\" TEXT NOT NULL, \"recorder_name\" TEXT NOT NULL, \"person_name\" TEXT NOT NULL, \"english_name\" TEXT NOT NULL, \"average_heart_rate\" REAL NULL, \"latitude\" REAL NULL, \"longitude\" REAL NULL, \"location_accuracy_meters\" REAL NULL, \"location_error\" TEXT NULL, \"manual_place_name\" TEXT NOT NULL, \"gender\" TEXT NOT NULL, \"identity\" TEXT NOT NULL, \"age_range\" TEXT NOT NULL, \"relationship_level\" INTEGER NOT NULL DEFAULT 1, \"interest_level\" INTEGER NOT NULL DEFAULT 2, \"attitude_level\" INTEGER NOT NULL, \"notes\" TEXT NOT NULL, \"is_location_verified\" INTEGER NOT NULL DEFAULT 0 CHECK (\"is_location_verified\" IN (0, 1)), \"corrected_latitude\" REAL NULL, \"corrected_longitude\" REAL NULL, \"corrected_place_name\" TEXT NULL, \"corrected_at\" INTEGER NULL, PRIMARY KEY (\"record_id\"));"
+        }
+      ]
+    },
+    {
+      "name": "db_record_contacts",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_record_contacts\" (\"contact_id\" TEXT NOT NULL, \"record_id\" TEXT NOT NULL, \"channel\" TEXT NOT NULL, \"value\" TEXT NOT NULL, \"created_at\" INTEGER NOT NULL, PRIMARY KEY (\"contact_id\"));"
+        }
+      ]
+    },
+    {
+      "name": "db_app_settings",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_app_settings\" (\"key\" TEXT NOT NULL, \"value\" TEXT NOT NULL, PRIMARY KEY (\"key\"));"
+        }
+      ]
+    },
+    {
+      "name": "db_security_events",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_security_events\" (\"event_id\" TEXT NOT NULL, \"user_id\" TEXT NULL, \"event_type\" TEXT NOT NULL, \"event_detail_json\" TEXT NOT NULL, \"created_at\" INTEGER NOT NULL, PRIMARY KEY (\"event_id\"));"
+        }
+      ]
+    },
+    {
+      "name": "db_canonical_region_versions",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_canonical_region_versions\" (\"region_version_key\" TEXT NOT NULL, \"region_id\" TEXT NOT NULL, \"tree_version\" TEXT NOT NULL, \"parent_region_version_key\" TEXT NULL REFERENCES db_canonical_region_versions (region_version_key), \"canonical_name\" TEXT NOT NULL, \"kind\" TEXT NOT NULL, \"attributes_json\" TEXT NOT NULL, PRIMARY KEY (\"region_version_key\"), UNIQUE (\"region_id\", \"tree_version\"), CHECK (length(trim(region_id)) > 0), CHECK (length(trim(tree_version)) > 0), CHECK (length(trim(canonical_name)) > 0), CHECK (kind IN ('country', 'admin_area', 'city', 'district', 'neighborhood', 'street', 'institution', 'venue', 'other')));"
+        }
+      ]
+    },
+    {
+      "name": "db_contact_region_assignments",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_contact_region_assignments\" (\"contact_id\" TEXT NOT NULL REFERENCES db_contact_records (contact_id), \"region_version_key\" TEXT NOT NULL REFERENCES db_canonical_region_versions (region_version_key), PRIMARY KEY (\"contact_id\"));"
+        }
+      ]
+    },
+    {
+      "name": "db_draft_region_assignments",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_draft_region_assignments\" (\"draft_id\" TEXT NOT NULL REFERENCES db_contact_drafts (draft_id), \"region_version_key\" TEXT NOT NULL REFERENCES db_canonical_region_versions (region_version_key), PRIMARY KEY (\"draft_id\"));"
+        }
+      ]
+    },
+    {
+      "name": "db_questionnaire_versions",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_questionnaire_versions\" (\"questionnaire_version_id\" TEXT NOT NULL, \"project_id\" TEXT NOT NULL, \"version_number\" INTEGER NOT NULL, \"status\" TEXT NOT NULL, \"installed_at_utc\" INTEGER NOT NULL, PRIMARY KEY (\"questionnaire_version_id\"), CHECK (length(trim(questionnaire_version_id)) > 0), CHECK (length(trim(project_id)) > 0), CHECK (version_number > 0), CHECK (status = 'published'), UNIQUE (project_id, version_number));"
+        }
+      ]
+    },
+    {
+      "name": "db_questionnaire_questions",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_questionnaire_questions\" (\"questionnaire_version_id\" TEXT NOT NULL REFERENCES db_questionnaire_versions (questionnaire_version_id), \"question_id\" TEXT NOT NULL, \"position\" INTEGER NOT NULL, \"prompt\" TEXT NOT NULL, \"question_type\" TEXT NOT NULL, \"is_required\" INTEGER NOT NULL CHECK (\"is_required\" IN (0, 1)), \"allow_unknown\" INTEGER NOT NULL CHECK (\"allow_unknown\" IN (0, 1)), \"allow_refused\" INTEGER NOT NULL CHECK (\"allow_refused\" IN (0, 1)), \"allow_not_applicable\" INTEGER NOT NULL CHECK (\"allow_not_applicable\" IN (0, 1)), \"minimum_selections\" INTEGER NULL, \"maximum_selections\" INTEGER NULL, \"number_kind\" TEXT NULL, \"unit\" TEXT NULL, \"minimum\" REAL NULL, \"maximum\" REAL NULL, \"maximum_length\" INTEGER NULL, \"display_rule_json\" TEXT NULL, PRIMARY KEY (\"questionnaire_version_id\", \"question_id\"), CHECK (length(trim(question_id)) > 0), CHECK (position > 0), CHECK (length(trim(prompt)) > 0), CHECK (question_type IN ('boolean', 'single_choice', 'ordinal_choice', 'multi_choice', 'number', 'date', 'short_text', 'long_text')), CHECK ((question_type = 'multi_choice' AND minimum_selections > 0 AND maximum_selections >= minimum_selections) OR (question_type <> 'multi_choice' AND minimum_selections IS NULL AND maximum_selections IS NULL)), CHECK ((question_type = 'number' AND number_kind IN ('integer', 'decimal') AND (minimum IS NULL OR maximum IS NULL OR minimum <= maximum)) OR (question_type <> 'number' AND number_kind IS NULL AND unit IS NULL AND minimum IS NULL AND maximum IS NULL)), CHECK ((question_type IN ('short_text', 'long_text') AND maximum_length > 0) OR (question_type NOT IN ('short_text', 'long_text') AND maximum_length IS NULL)), CHECK (display_rule_json IS NULL OR (json_valid(display_rule_json) AND json_type(display_rule_json) = 'object')), UNIQUE (questionnaire_version_id, position));"
+        }
+      ]
+    },
+    {
+      "name": "db_questionnaire_options",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_questionnaire_options\" (\"questionnaire_version_id\" TEXT NOT NULL REFERENCES db_questionnaire_versions (questionnaire_version_id), \"question_id\" TEXT NOT NULL, \"option_id\" TEXT NOT NULL, \"position\" INTEGER NOT NULL, \"label\" TEXT NOT NULL, PRIMARY KEY (\"questionnaire_version_id\", \"question_id\", \"option_id\"), CHECK (length(trim(question_id)) > 0), CHECK (length(trim(option_id)) > 0), CHECK (position > 0), CHECK (length(trim(label)) > 0), UNIQUE (questionnaire_version_id, question_id, position));"
+        }
+      ]
+    },
+    {
+      "name": "db_questionnaire_draft_working_copies",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_questionnaire_draft_working_copies\" (\"questionnaire_draft_id\" TEXT NOT NULL, \"project_id\" TEXT NOT NULL, \"source_version_id\" TEXT NULL, \"base_revision\" INTEGER NOT NULL, \"definition_json\" TEXT NOT NULL, \"has_local_changes\" INTEGER NOT NULL CHECK (\"has_local_changes\" IN (0, 1)), \"updated_at_utc\" INTEGER NOT NULL, PRIMARY KEY (\"questionnaire_draft_id\"), CHECK (length(trim(questionnaire_draft_id)) > 0), CHECK (length(trim(project_id)) > 0), CHECK (base_revision > 0), CHECK (json_valid(definition_json) AND json_type(definition_json) = 'object'));"
+        }
+      ]
+    },
+    {
+      "name": "db_current_relationship_stage_projections",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_current_relationship_stage_projections\" (\"app_user_id\" TEXT NOT NULL, \"workspace_id\" TEXT NOT NULL, \"project_id\" TEXT NOT NULL, \"target_key\" TEXT NOT NULL, \"relationship_stage\" INTEGER NOT NULL, \"relationship_revision\" INTEGER NOT NULL, \"relationship_updated_at_utc\" INTEGER NOT NULL, PRIMARY KEY (\"app_user_id\", \"workspace_id\", \"project_id\", \"target_key\"), CHECK (length(trim(app_user_id)) > 0), CHECK (length(trim(workspace_id)) > 0), CHECK (length(trim(project_id)) > 0), CHECK (length(trim(target_key)) > 0), CHECK (relationship_stage BETWEEN 0 AND 4), CHECK (relationship_revision > 0));"
+        }
+      ]
+    },
+    {
+      "name": "db_current_relationship_stage_snapshots",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"db_current_relationship_stage_snapshots\" (\"app_user_id\" TEXT NOT NULL, \"workspace_id\" TEXT NOT NULL, \"project_id\" TEXT NOT NULL, \"snapshot_as_of_utc\" INTEGER NOT NULL, \"source_cutoff_utc\" INTEGER NOT NULL, \"authorized_at_utc\" INTEGER NOT NULL, \"last_successful_sync_at_utc\" INTEGER NOT NULL, \"total_count\" INTEGER NOT NULL, \"pending_sync_count\" INTEGER NOT NULL, PRIMARY KEY (\"app_user_id\", \"workspace_id\", \"project_id\"), CHECK (length(trim(app_user_id)) > 0), CHECK (length(trim(workspace_id)) > 0), CHECK (length(trim(project_id)) > 0), CHECK (total_count >= 0), CHECK (pending_sync_count >= 0 AND pending_sync_count <= total_count));"
+        }
+      ]
+    },
+    {
+      "name": "current_relationship_stage_scope_stage",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE INDEX current_relationship_stage_scope_stage ON db_current_relationship_stage_projections (app_user_id, workspace_id, project_id, relationship_stage)"
+        }
+      ]
+    }
+  ]
+}

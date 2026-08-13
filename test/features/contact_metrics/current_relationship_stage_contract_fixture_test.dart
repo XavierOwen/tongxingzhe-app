@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tongxingzhe_app/features/contact_metrics/current_relationship_stage.dart';
 
 void main() {
   final fixtureFile = File(
@@ -73,6 +74,34 @@ void main() {
             row.expectedReason == 'duplicate_target_project',
       ),
       isTrue,
+    );
+
+    final scope = CurrentRelationshipStageScope(
+      appUserId: 'primary',
+      workspaceId: 'personal',
+      projectId: 'default',
+    );
+    expect(
+      () => CurrentRelationshipStageSnapshot(
+        scope: scope,
+        snapshotAsOfUtc: scenario.first.snapshotAsOfUtc,
+        coverage: CurrentRelationshipStageCoverage.known(
+          totalCount: scenario.length,
+          pendingCount: 0,
+        ),
+        rows: [
+          for (final row in scenario)
+            CurrentRelationshipStageRow(
+              targetId: row.targetKey,
+              relationshipProjectId: row.relationshipProjectKey,
+              assignedAppUserId: scope.appUserId,
+              stage: row.stage,
+              currentRevision: row.currentRevision,
+              updatedAtUtc: row.updatedAtUtc,
+            ),
+        ],
+      ),
+      throwsArgumentError,
     );
   });
 
