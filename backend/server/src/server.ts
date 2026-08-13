@@ -65,6 +65,10 @@ import {
   type PersonalCurrentRelationshipStageStore,
 } from "./personal-current-relationship-stage.js";
 import {
+  readPersonalFollowUpConsentRatio,
+  type PersonalFollowUpConsentRatioStore,
+} from "./personal-follow-up-consent-ratio.js";
+import {
   readManagementReportSnapshot,
   type ManagementReportSnapshotStore,
 } from "./management-report-snapshots.js";
@@ -99,6 +103,8 @@ export interface BackendServerDependencies
   readonly personalActionReminderStore?: PersonalActionReminderStore;
   readonly personalCurrentRelationshipStageStore?:
     PersonalCurrentRelationshipStageStore;
+  readonly personalFollowUpConsentRatioStore?:
+    PersonalFollowUpConsentRatioStore;
   readonly managementReportSnapshotStore?: ManagementReportSnapshotStore;
   readonly managementReportSnapshotDirectoryStore?:
     ManagementReportSnapshotDirectoryStore;
@@ -670,6 +676,29 @@ export function createBackendServer(
           identityVerifier: dependencies.identityVerifier,
           contextStore: dependencies.contextStore,
           snapshotStore: dependencies.personalCurrentRelationshipStageStore,
+        },
+      );
+      response.statusCode = result.status;
+      response.end(JSON.stringify(result.body));
+      return;
+    }
+
+    if (
+      request.method === "GET" &&
+      requestUrl.pathname === "/v1/personal/follow-up-consent-ratio"
+    ) {
+      const result = await readPersonalFollowUpConsentRatio(
+        {
+          authorization: request.headers.authorization,
+          query: requestUrl.searchParams,
+          hasBody: requestDeclaresBody(request.headers),
+        },
+        {
+          identityVerifier: dependencies.identityVerifier,
+          contextStore: dependencies.contextStore,
+          ...(dependencies.personalFollowUpConsentRatioStore === undefined
+            ? {}
+            : {ratioStore: dependencies.personalFollowUpConsentRatioStore}),
         },
       );
       response.statusCode = result.status;

@@ -260,8 +260,17 @@ PostgreSQL fixture 直接读取共享 [`follow_up_consent_ratio_v1.csv`](../../b
 它覆盖 `2 / 3 = 6667`、多对象、`unknown`／拒答／不适用、空分母、current revision、作废、
 错误统计单位、其他项目和 UTC 左含右不含边界；未启用场景还检查四键结果和事实读取短路。
 
-这一切片只交付 PostgreSQL bridge、权限、结构检查和 fixture。Flutter／Drift、Backend HTTP 路由、
-项目设置、离线缓存、管理报告和 warehouse 仍属于后续工作。
+Slice 6AD-3 增加固定 Backend 读取入口：
+`GET /v1/personal/follow-up-consent-ratio?from_utc=...&until_utc=...`。调用方只能给出一个 UTC
+半开期间；Backend 从 verified identity 取得 issuer／subject，从当前 personal context 取得项目，并
+在 Store 内固定 metric。query 不能带 user、workspace、project、metric、筛选或 SQL。HTTP 响应保留
+PostgreSQL 的 `not_enabled`／`ready` 区别和 snake_case exact-key 合同；错误不会回显 identity、接触
+事实或数据库消息。
+
+无数据库的 Backend 测试检查认证顺序、query codec、HTTP no-store、固定参数、结果 union 和计数
+不变量。完整 Docker runner 另用 runtime role 连接真实 PostgreSQL：先读取未启用结果，再通过正式
+配置入口启用同一项目并读取 `ready 0 / 0`，最后回滚。项目设置写入口、Flutter／Drift、个人页面、
+离线缓存、管理报告和 warehouse 仍属于后续工作。
 
 [`MetricResult`](../../lib/features/contact_metrics/metric_contract.dart) 把值与 UTC 半开期间、报告时区、数据截止时间、来源层、同步覆盖和隐私状态放在同一个结果合同中。当前个人页由 [`PersonalContactMetricMapper`](../../lib/features/contact_metrics/personal_contact_overview.dart) 把 Drift 汇总映射为 `localOperational + personalFact`；同步覆盖明确以接触场次为单位。即使指标值是触达人数或对象关联数，也不能用待同步场次数推算“已同步人数”或“已同步对象反应数”。
 
