@@ -510,6 +510,20 @@ void main() {
           .isHeader,
       isTrue,
     );
+    final emptyTargetMedian = find.text('暂无对象当次反应中位等级');
+    await tester.scrollUntilVisible(
+      emptyTargetMedian,
+      80,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(emptyTargetMedian, findsOneWidget);
+    final targetMedianHelp = find.textContaining('偶数条取较低的真实等级');
+    await tester.scrollUntilVisible(
+      targetMedianHelp,
+      80,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(targetMedianHelp, findsOneWidget);
     expect(tester.takeException(), isNull);
     semantics.dispose();
   });
@@ -614,6 +628,20 @@ void main() {
       scrollable: find.byType(Scrollable).last,
     );
     expect(emptyTargetResponseRow, findsOneWidget);
+    final emptyTargetMedian = find.text('No target response median level yet');
+    await tester.scrollUntilVisible(
+      emptyTargetMedian,
+      80,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(emptyTargetMedian, findsOneWidget);
+    final targetMedianHelp = find.textContaining('lower observed level');
+    await tester.scrollUntilVisible(
+      targetMedianHelp,
+      80,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(targetMedianHelp, findsOneWidget);
     expect(tester.takeException(), isNull);
     semantics.dispose();
   });
@@ -683,6 +711,13 @@ void main() {
     );
     expect(coverage, findsOneWidget);
     expect(find.textContaining('未填写不算反应 2'), findsOneWidget);
+    final median = find.text('对象当次反应中位等级：2（2 条已填关联）');
+    await tester.scrollUntilVisible(
+      median,
+      80,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(median, findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

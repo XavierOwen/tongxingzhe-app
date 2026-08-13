@@ -137,6 +137,13 @@ abstract final class PersonalContactMetricMapper {
           unansweredCount: summary.targetResponseUnansweredCount,
         ),
       ),
+      result(
+        CoreMetricCatalog.targetResponseOrdinalSummary,
+        OrdinalSummaryMetricValue.fromCounts(
+          labels: CoreMetricCatalog.targetResponseOrdinalSummary.bucketLabels,
+          counts: summary.targetResponseDistribution,
+        ),
+      ),
     ]);
   }
 

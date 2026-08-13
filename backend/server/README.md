@@ -181,6 +181,8 @@ npm run check
 
 对象反应分布的 PostgreSQL 入口见 [`0044_personal_target_response_distribution.sql`](../database/migrations/0044_personal_target_response_distribution.sql)。完整 Docker CI 使用 synthetic fixture 检查五档数量、已填写分母、未填写覆盖、current revision、个人 scope、UTC 半开边界、对象匿名化后事实保留和 dump／restore。
 
+对象反应中位等级入口见 [`0045_personal_target_response_ordinal_summary.sql`](../database/migrations/0045_personal_target_response_ordinal_summary.sql)。它只使用已填的当前关联，偶数样本取较低真实等级，空分母返回 `NULL`。
+
 推广对象目录见 [`0016_promotion_target_directory.sql`](../database/migrations/0016_promotion_target_directory.sql)。对应 fixture 另外验证对象分配、PII 隔离、访问审计和恢复库权限。
 
 接触对象关联见 [`0017_contact_target_links.sql`](../database/migrations/0017_contact_target_links.sql)。对应 fixture 验证零到多关联、阶段 0 确认、跨空间与未分配拒绝、机构代表约束、幂等重放、revision 历史、冲突比较和 warehouse PII 隔离。

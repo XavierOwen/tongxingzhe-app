@@ -83,5 +83,15 @@ void main() {
       }),
       contains('3 answered and 2 unanswered target links'),
     );
+    expect(
+      const AppStrings(
+        'zh',
+      ).format('targetResponseMedianLevel', const {'level': 0, 'answered': 2}),
+      '对象当次反应中位等级：0（2 条已填关联）',
+    );
+    expect(
+      const AppStrings('en').t('targetResponseMedianHelp'),
+      contains('lower observed level'),
+    );
   });
 }

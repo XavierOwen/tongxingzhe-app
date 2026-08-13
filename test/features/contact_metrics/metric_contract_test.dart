@@ -3,7 +3,7 @@ import 'package:tongxingzhe_app/features/contact_metrics/metric_contract.dart';
 
 void main() {
   test('核心指标目录使用唯一且不可变的版本标识', () {
-    expect(CoreMetricCatalog.definitions, hasLength(10));
+    expect(CoreMetricCatalog.definitions, hasLength(11));
     expect(
       CoreMetricCatalog.definitions
           .map((definition) => definition.reference)
@@ -19,6 +19,7 @@ void main() {
         const MetricReference('interest_0_ratio', 1),
         const MetricReference('channel_distribution', 1),
         const MetricReference('target_response_distribution', 1),
+        const MetricReference('target_response_ordinal_summary', 1),
       },
     );
     expect(
@@ -108,6 +109,14 @@ void main() {
     );
     expect(
       CoreMetricCatalog.targetResponseDistribution.denominator,
+      CoreMetricCatalog.targetResponses.reference,
+    );
+    expect(
+      CoreMetricCatalog.targetResponseOrdinalSummary.formula,
+      MetricFormula.summarizeContactTargetLinksByResponse,
+    );
+    expect(
+      CoreMetricCatalog.targetResponseOrdinalSummary.denominator,
       CoreMetricCatalog.targetResponses.reference,
     );
     expect(
@@ -321,6 +330,41 @@ void main() {
         privacyStatus: MetricPrivacyStatus.personalFact,
       ),
       throwsArgumentError,
+    );
+  });
+
+  test('对象反应有序汇总只按已填写关联计算下中位', () {
+    final even = OrdinalSummaryMetricValue.fromCounts(
+      labels: const ['0', '1', '2', '3', '4'],
+      counts: const [1, 0, 0, 0, 1],
+    );
+    final odd = OrdinalSummaryMetricValue.fromCounts(
+      labels: const ['0', '1', '2', '3', '4'],
+      counts: const [0, 1, 2, 0, 0],
+    );
+    final empty = OrdinalSummaryMetricValue.fromCounts(
+      labels: const ['0', '1', '2', '3', '4'],
+      counts: const [0, 0, 0, 0, 0],
+    );
+
+    expect(even.totalCount, 2);
+    expect(even.medianLevel, 0);
+    expect(odd.totalCount, 3);
+    expect(odd.medianLevel, 2);
+    expect(empty.totalCount, 0);
+    expect(empty.medianLevel, isNull);
+    expect(
+      MetricResult(
+        definition: CoreMetricCatalog.targetResponseOrdinalSummary,
+        value: even,
+        period: _period,
+        timeZone: 'UTC',
+        dataCutoffUtc: DateTime.utc(2030, 1, 8, 18),
+        sourceTier: MetricSourceTier.localOperational,
+        syncCoverage: _coverage,
+        privacyStatus: MetricPrivacyStatus.personalFact,
+      ).value,
+      even,
     );
   });
 

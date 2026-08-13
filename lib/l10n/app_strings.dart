@@ -443,6 +443,9 @@ const Map<String, Map<String, String>> _strings = {
     'targetResponseRow': '反应 {level}：{count} / {denominator} 条已填关联',
     'targetResponseCoverage':
         '填写覆盖：已填 {answered} 条、未填写 {unanswered} 条对象关联；未填写不算反应 2，草稿、尝试、作废和旧 revision 不在此盘点中。',
+    'targetResponseMedianLevel': '对象当次反应中位等级：{level}（{answered} 条已填关联）',
+    'noTargetResponseMedianLevel': '暂无对象当次反应中位等级',
+    'targetResponseMedianHelp': '只使用已填写关联；偶数条取较低的真实等级，不计算等级平均数。',
     'personalAnalyticsFactNotice': '个人数据：这些事实只用于本人回顾，不用于团队排名。',
     'contactSessionUnit': '场',
     'channelSources': '渠道来源',
@@ -1259,6 +1262,11 @@ const Map<String, Map<String, String>> _strings = {
         'Response {level}: {count} / {denominator} answered links',
     'targetResponseCoverage':
         'Response coverage: {answered} answered and {unanswered} unanswered target links. Unanswered is not response 2; drafts, attempts, voided contacts, and old revisions are outside this count.',
+    'targetResponseMedianLevel':
+        'Target response median level: {level} ({answered} answered links)',
+    'noTargetResponseMedianLevel': 'No target response median level yet',
+    'targetResponseMedianHelp':
+        'Only answered links are used. An even sample uses the lower observed level and does not average ordinal levels.',
     'personalAnalyticsFactNotice':
         'Personal data: these facts are for your review, not team ranking.',
     'contactSessionUnit': 'sessions',
