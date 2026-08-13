@@ -3,7 +3,7 @@ import 'package:tongxingzhe_app/features/contact_metrics/metric_contract.dart';
 
 void main() {
   test('核心指标目录使用唯一且不可变的版本标识', () {
-    expect(CoreMetricCatalog.definitions, hasLength(11));
+    expect(CoreMetricCatalog.definitions, hasLength(12));
     expect(
       CoreMetricCatalog.definitions
           .map((definition) => definition.reference)
@@ -20,6 +20,7 @@ void main() {
         const MetricReference('channel_distribution', 1),
         const MetricReference('target_response_distribution', 1),
         const MetricReference('target_response_ordinal_summary', 1),
+        const MetricReference('target_response_level_ratios', 1),
       },
     );
     expect(
@@ -119,6 +120,25 @@ void main() {
       CoreMetricCatalog.targetResponseOrdinalSummary.denominator,
       CoreMetricCatalog.targetResponses.reference,
     );
+    expect(
+      CoreMetricCatalog.targetResponseLevelRatios.valueShape,
+      MetricValueShape.ratio,
+    );
+    expect(
+      CoreMetricCatalog.targetResponseLevelRatios.formula,
+      MetricFormula.calculateContactTargetLinksByResponseRatio,
+    );
+    expect(
+      CoreMetricCatalog.targetResponseLevelRatios.denominator,
+      CoreMetricCatalog.targetResponses.reference,
+    );
+    expect(CoreMetricCatalog.targetResponseLevelRatios.bucketLabels, [
+      '0',
+      '1',
+      '2',
+      '3',
+      '4',
+    ]);
     expect(
       CoreMetricCatalog.definitions.every(
         (definition) =>
@@ -424,6 +444,32 @@ void main() {
     expect(empty.numerators, [0, 0, 0, 0, 0]);
     expect(empty.basisPoints, [null, null, null, null, null]);
     expect(tie.basisPoints, [313, 9688, 0, 0, 0]);
+  });
+
+  test('对象反应五档比例只用已填写关联作共同分母', () {
+    final ratios = RatioMetricValue.fromCounts(
+      labels: const ['0', '1', '2', '3', '4'],
+      counts: const [2, 1, 2, 2, 2],
+      unansweredCount: 3,
+    );
+
+    expect(ratios.numerators, [2, 1, 2, 2, 2]);
+    expect(ratios.denominator, 9);
+    expect(ratios.basisPoints, [2222, 1111, 2222, 2222, 2222]);
+    expect(ratios.unansweredCount, 3);
+    expect(
+      MetricResult(
+        definition: CoreMetricCatalog.targetResponseLevelRatios,
+        value: ratios,
+        period: _period,
+        timeZone: 'UTC',
+        dataCutoffUtc: DateTime.utc(2030, 1, 8, 18),
+        sourceTier: MetricSourceTier.localOperational,
+        syncCoverage: _coverage,
+        privacyStatus: MetricPrivacyStatus.personalFact,
+      ).value,
+      ratios,
+    );
   });
 
   test('个人兴趣比例拒绝负数、越界、标签错位和非共同分母', () {

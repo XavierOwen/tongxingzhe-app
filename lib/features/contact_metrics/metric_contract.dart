@@ -37,6 +37,7 @@ enum MetricFormula {
   summarizeContactSessionsByInterest,
   calculateContactSessionsByInterestRatio,
   calculateContactSessionsByInterestSubsetRatio,
+  calculateContactTargetLinksByResponseRatio,
 }
 
 enum MetricTimeBasis { actualOccurrenceUtc }
@@ -303,6 +304,18 @@ abstract final class CoreMetricCatalog {
     bucketLabels: ['0', '1', '2', '3', '4'],
   );
 
+  static final targetResponseLevelRatios = MetricDefinition(
+    reference: MetricReference('target_response_level_ratios', 1),
+    statisticalUnit: MetricStatisticalUnit.contactTargetLink,
+    valueShape: MetricValueShape.ratio,
+    formula: MetricFormula.calculateContactTargetLinksByResponseRatio,
+    timeBasis: MetricTimeBasis.actualOccurrenceUtc,
+    exclusions: _commonExclusions,
+    privacyRule: MetricPrivacyRule.managementProtectedByTrueUnit,
+    denominator: targetResponses.reference,
+    bucketLabels: ['0', '1', '2', '3', '4'],
+  );
+
   static final catalog = MetricCatalog([
     contactSessions,
     reachedPeople,
@@ -315,6 +328,7 @@ abstract final class CoreMetricCatalog {
     interestZeroRatio,
     targetResponseDistribution,
     targetResponseOrdinalSummary,
+    targetResponseLevelRatios,
   ]);
 
   static List<MetricDefinition> get definitions => catalog.definitions;
@@ -1006,7 +1020,8 @@ bool _usesDenominatorFormula(
     denominatorFormula == MetricFormula.countContactSessions,
   MetricFormula.countContactTargetLinksByResponse =>
     denominatorFormula == MetricFormula.countContactTargetLinksWithResponse,
-  MetricFormula.summarizeContactTargetLinksByResponse =>
+  MetricFormula.summarizeContactTargetLinksByResponse ||
+  MetricFormula.calculateContactTargetLinksByResponseRatio =>
     denominatorFormula == MetricFormula.countContactTargetLinksWithResponse,
   MetricFormula.countContactSessions ||
   MetricFormula.sumReachedPeople ||

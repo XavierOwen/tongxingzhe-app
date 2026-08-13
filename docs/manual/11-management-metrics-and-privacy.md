@@ -51,6 +51,8 @@ M = 单一推广者的最大贡献数
 
 个人兴趣页可以使用 [`RatioMetricValue`](../../lib/features/contact_metrics/metric_contract.dart) 保存穷尽五档比例，也可以使用 [`SubsetRatioMetricValue`](../../lib/features/contact_metrics/metric_contract.dart) 保存兴趣 `3–4` 或 `0` 的独立子集比例。两种值都保留可复算的整数分子、分母、缺失／排除计数和百分比基点，因为它们是本人自己的 `personalFact`。这不表示管理报告可以接收相同精确值。管理比例必须先完成真实统计单位阈值和互补隐藏；被隐藏的管理单元仍只能使用 `SuppressedMetricValue`，不能把精确比例包在另一种值类型中绕过隐藏。
 
+对象当次反应五档比例也属于个人 `personalFact`，但统计单位是 contact-target link，分母只包含当前已填关联。`NULL` 只作为未填写覆盖，不进入五档比例。即使分母使用对象关联，个人页仍只显示接触场次同步覆盖；管理报告不能直接接收这项个人精确比例，未来若纳入管理分析，必须另行定义真实统计单位、阈值和互补隐藏。
+
 个人本地结果继续带 `MetricSyncCoverage`。管理结果来自后端已接受事实，不伪造“仅本机”或“待同步”数量，因此同步覆盖为不适用。来源层明确标为 `backendOperational`。
 
 [`ManagementContactSessionPrivacyPolicyV1`](../../lib/features/contact_metrics/management_privacy_policy.dart) 是纯政策模块。它不读取成员关系，也不授予查看权限。输入必须是服务端已经按固定报表定义聚合的可信贡献，不能接收客户端声明的推广者身份。

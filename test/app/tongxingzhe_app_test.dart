@@ -374,7 +374,7 @@ void main() {
       120,
       scrollable: find.byType(Scrollable).last,
     );
-    final emptyTargetResponseRow = find.text('反应 2：0 / 0 条已填关联');
+    final emptyTargetResponseRow = find.text('反应 2：0 条已填关联；0 / 0（暂无可计算比例）');
     await tester.scrollUntilVisible(
       emptyTargetResponseRow,
       80,
@@ -382,7 +382,7 @@ void main() {
     );
     expect(emptyTargetResponseRow, findsOneWidget);
     final emptyTargetResponseCoverage = find.textContaining(
-      '已填 0 条、未填写 0 条对象关联',
+      '已填 0 条、未知 0、拒答 0、不适用 0、未回答 0、候选内排除 0 条对象关联',
     );
     await tester.scrollUntilVisible(
       emptyTargetResponseCoverage,
@@ -620,7 +620,7 @@ void main() {
       isTrue,
     );
     final emptyTargetResponseRow = find.text(
-      'Response 2: 0 / 0 answered links',
+      'Response 2: 0 answered links; 0 / 0 (No calculable percentage)',
     );
     await tester.scrollUntilVisible(
       emptyTargetResponseRow,
@@ -689,28 +689,30 @@ void main() {
       120,
       scrollable: find.byType(Scrollable).last,
     );
-    final neutralRow = find.text('反应 2：1 / 2 条已填关联');
+    final neutralRow = find.text('反应 2：1 条已填关联；1 / 2（50.00%）');
     await tester.scrollUntilVisible(
       neutralRow,
       80,
       scrollable: find.byType(Scrollable).last,
     );
     expect(neutralRow, findsOneWidget);
-    final nextStepRow = find.text('反应 4：1 / 2 条已填关联');
+    final nextStepRow = find.text('反应 4：1 条已填关联；1 / 2（50.00%）');
     await tester.scrollUntilVisible(
       nextStepRow,
       80,
       scrollable: find.byType(Scrollable).last,
     );
     expect(nextStepRow, findsOneWidget);
-    final coverage = find.textContaining('已填 2 条、未填写 1 条对象关联');
+    final coverage = find.textContaining(
+      '已填 2 条、未知 0、拒答 0、不适用 0、未回答 1、候选内排除 0 条对象关联',
+    );
     await tester.scrollUntilVisible(
       coverage,
       80,
       scrollable: find.byType(Scrollable).last,
     );
     expect(coverage, findsOneWidget);
-    expect(find.textContaining('未填写不算反应 2'), findsOneWidget);
+    expect(find.textContaining('未回答不算反应 2'), findsOneWidget);
     final median = find.text('对象当次反应中位等级：2（2 条已填关联）');
     await tester.scrollUntilVisible(
       median,

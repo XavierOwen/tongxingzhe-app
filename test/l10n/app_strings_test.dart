@@ -71,17 +71,40 @@ void main() {
     expect(
       const AppStrings('zh').format('targetResponseRow', const {
         'level': 2,
-        'count': 1,
-        'denominator': 3,
+        'count': 2,
+        'numerator': 2,
+        'denominator': 9,
+        'percentage': '22.22%',
       }),
-      '反应 2：1 / 3 条已填关联',
+      '反应 2：2 条已填关联；2 / 9（22.22%）',
+    );
+    expect(
+      const AppStrings('en').format('targetResponseRow', const {
+        'level': 2,
+        'count': 0,
+        'numerator': 0,
+        'denominator': 0,
+        'percentage': 'No calculable percentage',
+      }),
+      'Response 2: 0 answered links; 0 / 0 (No calculable percentage)',
     );
     expect(
       const AppStrings('en').format('targetResponseCoverage', const {
         'answered': 3,
+        'unknown': 0,
+        'refused': 0,
+        'notApplicable': 0,
         'unanswered': 2,
+        'excluded': 0,
       }),
-      contains('3 answered and 2 unanswered target links'),
+      allOf(
+        contains('3 answered'),
+        contains('0 unknown'),
+        contains('0 refused'),
+        contains('0 not applicable'),
+        contains('2 unanswered'),
+        contains('0 candidate exclusions'),
+      ),
     );
     expect(
       const AppStrings(

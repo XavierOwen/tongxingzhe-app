@@ -28,7 +28,7 @@ void main() {
     expect(week.untilUtc, DateTime.utc(2030, 1, 9));
     expect(today.syncedContactSessionCount, 3);
     expect(today.syncCoverageDenominator, 5);
-    expect(today.metrics, hasLength(11));
+    expect(today.metrics, hasLength(12));
     expect(
       today.metric(CoreMetricCatalog.contactSessions.reference).value,
       CountMetricValue(5),
@@ -62,6 +62,15 @@ void main() {
         medianLevel: 3,
       ),
     );
+    final targetResponseRatios =
+        today
+                .metric(CoreMetricCatalog.targetResponseLevelRatios.reference)
+                .value
+            as RatioMetricValue;
+    expect(targetResponseRatios.numerators, [1, 0, 0, 1, 1]);
+    expect(targetResponseRatios.denominator, 3);
+    expect(targetResponseRatios.basisPoints, [3333, 0, 0, 3333, 3333]);
+    expect(targetResponseRatios.unansweredCount, 2);
     expect(
       today.metric(CoreMetricCatalog.interestDistribution.reference).value,
       MetricDistributionValue(
@@ -266,6 +275,20 @@ void main() {
           .singleWhere(
             (result) =>
                 result.definition.reference ==
+                CoreMetricCatalog.targetResponseLevelRatios.reference,
+          )
+          .value,
+      RatioMetricValue.fromCounts(
+        labels: const ['0', '1', '2', '3', '4'],
+        counts: const [1, 0, 0, 0, 1],
+        unansweredCount: 1,
+      ),
+    );
+    expect(
+      metrics
+          .singleWhere(
+            (result) =>
+                result.definition.reference ==
                 CoreMetricCatalog.targetResponseOrdinalSummary.reference,
           )
           .value,
@@ -307,6 +330,18 @@ void main() {
             as OrdinalSummaryMetricValue;
     expect(summary.totalCount, 0);
     expect(summary.medianLevel, isNull);
+    final ratios =
+        metrics
+                .singleWhere(
+                  (result) =>
+                      result.definition.reference ==
+                      CoreMetricCatalog.targetResponseLevelRatios.reference,
+                )
+                .value
+            as RatioMetricValue;
+    expect(ratios.denominator, 0);
+    expect(ratios.basisPoints, everyElement(isNull));
+    expect(ratios.unansweredCount, 2);
   });
 }
 

@@ -781,6 +781,12 @@ final class _PersonalSummaryPage extends StatelessWidget {
                 )
                 .value
             as OrdinalSummaryMetricValue;
+    final targetResponseLevelRatios =
+        result
+                .metric(CoreMetricCatalog.targetResponseLevelRatios.reference)
+                .value
+            as RatioMetricValue;
+    final targetResponseRatioValues = targetResponseLevelRatios.values;
     final targetResponseMedianLevel = targetResponseOrdinalSummary.medianLevel;
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -897,14 +903,23 @@ final class _PersonalSummaryPage extends StatelessWidget {
               text.format('targetResponseRow', {
                 'level': level,
                 'count': targetResponseDistribution.counts[level],
-                'denominator': targetResponseCount.value,
+                'numerator': targetResponseRatioValues[level].numerator,
+                'denominator': targetResponseRatioValues[level].denominator,
+                'percentage': _formatPercentageBasisPoints(
+                  text,
+                  targetResponseRatioValues[level].percentageBasisPoints,
+                ),
               }),
             ),
           const SizedBox(height: 8),
           Text(
             text.format('targetResponseCoverage', {
               'answered': targetResponseCount.value,
-              'unanswered': targetResponseDistribution.unansweredCount,
+              'unknown': targetResponseLevelRatios.unknownCount,
+              'refused': targetResponseLevelRatios.refusedCount,
+              'notApplicable': targetResponseLevelRatios.notApplicableCount,
+              'unanswered': targetResponseLevelRatios.unansweredCount,
+              'excluded': targetResponseLevelRatios.excludedCount,
             }),
           ),
           const SizedBox(height: 8),

@@ -440,9 +440,10 @@ const Map<String, Map<String, String>> _strings = {
     'targetResponseDistribution': '对象当次反应分布',
     'targetResponseDistributionHelp':
         '按当前接触 revision 的对象关联分别计数；它与场次整体兴趣、关系阶段分开。',
-    'targetResponseRow': '反应 {level}：{count} / {denominator} 条已填关联',
+    'targetResponseRow':
+        '反应 {level}：{count} 条已填关联；{numerator} / {denominator}（{percentage}）',
     'targetResponseCoverage':
-        '填写覆盖：已填 {answered} 条、未填写 {unanswered} 条对象关联；未填写不算反应 2，草稿、尝试、作废和旧 revision 不在此盘点中。',
+        '比例覆盖：已填 {answered} 条、未知 {unknown}、拒答 {refused}、不适用 {notApplicable}、未回答 {unanswered}、候选内排除 {excluded} 条对象关联；对象反应当前只能为 0–4 或未回答，未回答不算反应 2。这不是草稿、尝试、作废或旧 revision 盘点。',
     'targetResponseMedianLevel': '对象当次反应中位等级：{level}（{answered} 条已填关联）',
     'noTargetResponseMedianLevel': '暂无对象当次反应中位等级',
     'targetResponseMedianHelp': '只使用已填写关联；偶数条取较低的真实等级，不计算等级平均数。',
@@ -1259,9 +1260,9 @@ const Map<String, Map<String, String>> _strings = {
     'targetResponseDistributionHelp':
         'Each current contact-revision target link is counted separately. This is distinct from session interest and relationship stage.',
     'targetResponseRow':
-        'Response {level}: {count} / {denominator} answered links',
+        'Response {level}: {count} answered links; {numerator} / {denominator} ({percentage})',
     'targetResponseCoverage':
-        'Response coverage: {answered} answered and {unanswered} unanswered target links. Unanswered is not response 2; drafts, attempts, voided contacts, and old revisions are outside this count.',
+        'Ratio coverage: {answered} answered, {unknown} unknown, {refused} refused, {notApplicable} not applicable, {unanswered} unanswered, and {excluded} candidate exclusions. A response is currently 0–4 or unanswered; unanswered is not response 2. This is not a census of drafts, attempts, voided contacts, or old revisions.',
     'targetResponseMedianLevel':
         'Target response median level: {level} ({answered} answered links)',
     'noTargetResponseMedianLevel': 'No target response median level yet',
