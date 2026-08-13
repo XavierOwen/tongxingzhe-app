@@ -17,7 +17,8 @@
 ├── Flutter 与 Dart：格式、静态分析、SQLite、Widget、同步和工具测试
 ├── Node.js：Backend TypeScript 检查和 HTTP／命令合同测试
 └── Docker daemon
-    ├── 源 PostgreSQL 16 容器：空库重建、权限、fixture、并发和 dump
+    ├── 源 PostgreSQL 16 容器：空库重建、权限、fixture、Backend 对账、并发和 dump
+    ├── Node 24 容器：编译并运行真实 Backend→PostgreSQL 地点来源对账
     └── 恢复 PostgreSQL 16 容器：预置 cluster roles 后恢复和复验
 
 GitHub Actions
@@ -31,15 +32,15 @@ Flutter 的设备数据库是 Drift／SQLite。它随 `flutter test` 在测试�
 
 | 名词 | 含义 | 本项目中的例子 |
 | --- | --- | --- |
-| image（镜像） | 建立容器的只读模板 | `postgres:16` |
-| container（容器） | 从镜像启动的隔离进程和文件系统 | `tongxingzhe-postgres-test-进程号` 及其 `-restore` 容器 |
+| image（镜像） | 建立容器的只读模板 | `postgres:16`、`node:24-bookworm` |
+| container（容器） | 从镜像启动的隔离进程和文件系统 | 源 PostgreSQL、Node 24 一次性容器和 `-restore` PostgreSQL |
 | database（数据库） | PostgreSQL 进程中的一个逻辑数据库 | `tongxingzhe_test` |
 
-删除两个临时容器会删除其中的测试数据库。这是预期行为。测试只使用 synthetic 数据，脚本不挂载持久 volume，也不公开 PostgreSQL 端口。
+删除两个临时容器会删除其中的测试数据库。Node 24 容器也会在命令结束后删除。这是预期行为。测试只使用 synthetic 数据，脚本不挂载持久 volume，也不公开 PostgreSQL 端口。
 
 ### 2.2 PostgreSQL 容器与 Supabase 本地栈不是同一项
 
-本章的自动 Docker 套件只启动 `postgres:16`。它验证 migration、SQL 权限、fixture、并发和备份恢复，不启动 Supabase Auth、Mailpit 或其他 Supabase 服务。
+本章的自动 Docker 套件启动 `postgres:16`，并用一次性 `node:24-bookworm` 容器执行 Backend→PostgreSQL 对账。它验证 migration、SQL 权限、fixture、Backend bridge、并发和备份恢复，不启动 Supabase Auth、Mailpit 或其他 Supabase 服务。
 
 普通 Flutter、Widget 和管理报告客户端改动不需要本地 Supabase 栈。只有改动或验证 Supabase 登录接线、注册确认邮件、密码恢复、会话回调、本地 Auth／JWKS 或 Mailpit 时，才需要 Supabase CLI 的本地 Docker 栈。当前仓库尚未把这套环境接入自动 runner；具体状态和替代验证见 [Supabase Auth 六平台 Spike](../spikes/supabase-auth-six-platform.md)。
 
@@ -311,25 +312,30 @@ flutter run \
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-脚本使用 `postgres:16`。首次运行时，Docker 会先下载镜像。下载时间取决于网络，后续运行会复用本机镜像。
+脚本默认使用 `postgres:16` 和 `node:24-bookworm`。首次运行时，Docker 会下载这两个镜像；Node 阶段还会从 npm registry 下载 `backend/server/package-lock.json` 指定的依赖。后续运行会复用本机镜像，但每个一次性 Node 容器仍会重新运行 `npm ci`，除非你在 Docker 环境外另行配置 npm cache。
+
+Node 24 容器使用与 PostgreSQL 容器相同的 network namespace。它通过临时 `DATABASE_URL` 访问 `tongxingzhe_test`，读取只读仓库 bind mount，在临时 `node_modules` volume 中运行 `npm ci --ignore-scripts`，并把 `dist` 写入临时 tmpfs。Node 阶段不公开端口，也不连接 production。
 
 ### 6.2 脚本按什么顺序工作
 
 脚本执行以下步骤：
 
 1. 确认 Docker CLI 和 daemon 可用；
-2. 建立名称含当前进程号的临时容器；
+2. 建立名称含当前进程号的临时 PostgreSQL 容器；
 3. 等待 PostgreSQL 健康检查通过；
 4. 把数据库目录和全部正式并发脚本复制到容器；
 5. 从空库执行全部 migration，再执行一次 checksum 重放；
 6. 运行全部 schema／权限 check 和可回滚 synthetic fixture；
-7. 按文件名运行全部正式并发脚本，用独立数据库会话检查锁、撤权和唯一性合同；
-8. 修改 migration 的临时副本，确认 runner 拒绝 checksum 漂移；
-9. 执行 `pg_dump`，启动没有源 cluster roles 的第二个 PostgreSQL 容器；
-10. 用 `postgres_prepare_restore_roles.sh` 建立 archive 所需的无登录角色，恢复后再运行全部 check 和 fixture；
-11. 成功后删除两个临时容器和本机临时 dump。
+7. 建立一次性的 Node 24 容器，编译 Backend，并运行 `contact-location-evidence.integration.ts` 的编译产物；
+8. 按文件名运行全部正式并发脚本，用独立数据库会话检查锁、撤权和唯一性合同；
+9. 修改 migration 的临时副本，确认 runner 拒绝 checksum 漂移；
+10. 执行 `pg_dump`，启动没有源 cluster roles 的第二个 PostgreSQL 容器；
+11. 用 `postgres_prepare_restore_roles.sh` 建立 archive 所需的无登录角色，恢复后再运行全部 check 和 fixture；
+12. 成功后删除两个 PostgreSQL 容器、Node 容器和本机临时 dump。
 
-这组步骤同时验证新安装、重复部署、并发、最小权限和备份恢复。fixture 内使用 `BEGIN` 与 `ROLLBACK`，不会把合成业务资料留在测试库。
+这组步骤同时验证新安装、重复部署、Backend→PostgreSQL 结果分类、并发、最小权限和备份恢复。fixture 内使用 `BEGIN` 与 `ROLLBACK`，不会把合成业务资料留在测试库。并发脚本会提交自己的 synthetic 行，这些行会随 dump 进入恢复库；它们不是 production 数据。
+
+Node 阶段编译并运行 `backend/server/test/contact-location-evidence.integration.ts`。如果入口缺失、编译失败或真实 Backend 到 PostgreSQL 的任一断言失败，脚本会在这一步停止；设置 `KEEP_POSTGRES_TEST_CONTAINER=1` 后，PostgreSQL 容器会保留供检查。不能把前面的 SQL 通过单独记为 Backend 集成通过。
 
 ### 6.3 怎样读输出
 
@@ -341,6 +347,14 @@ flutter run \
 checksum 漂移已按预期被拒绝。
 ```
 
+地点来源四层阶段开始时还应看到：
+
+```text
+用真实 Backend adapter 对账 PostgreSQL（node:24-bookworm）。
+```
+
+该行只表示 Node 阶段开始。必须看到该阶段的 integration test 退出码为 0，且最后的总成功标志才算完整套件通过。
+
 最后应出现：
 
 ```text
@@ -350,7 +364,7 @@ PostgreSQL Docker 测试全部通过。
 
 ### 6.4 失败时保留容器
 
-默认情况下，脚本在成功或失败后都删除容器。需要检查失败现场时，运行：
+默认情况下，脚本在成功或失败后都删除 PostgreSQL 容器。Node 24 容器使用 `--rm`，其 stdout 是唯一的阶段日志，失败后不会保留容器。需要检查 PostgreSQL 失败现场时，运行：
 
 ```bash
 KEEP_POSTGRES_TEST_CONTAINER=1 \
@@ -364,6 +378,8 @@ docker logs tongxingzhe-postgres-test-12345
 docker exec -it tongxingzhe-postgres-test-12345 \
   psql -U postgres -d tongxingzhe_test
 ```
+
+如果 Node 阶段失败，先保存终端中从 `用真实 Backend adapter 对账 PostgreSQL` 开始的完整输出，再按错误涉及的命令重跑。`npm ci`、TypeScript 编译和 integration test 的断言都在终端输出；脚本不会把依赖或编译目录写回仓库。
 
 进入 `psql` 后可先运行只读命令：
 
@@ -392,7 +408,25 @@ POSTGRES_TEST_IMAGE='postgres:16' \
   ./tool/run_postgres_tests_in_docker.sh
 ```
 
+Node 24 镜像也可以显式设置，用于检查兼容的 Node 基础镜像：
+
+```bash
+BACKEND_POSTGRES_TEST_IMAGE='node:24-bookworm' \
+  ./tool/run_postgres_tests_in_docker.sh
+```
+
 不要把 production 数据库地址传给这个脚本。脚本始终在自己建立的容器内使用固定测试库名。
+
+### 6.6 重跑和清理
+
+成功运行后直接再次执行同一个命令即可。每次运行使用新的进程号命名容器；脚本会先检查同名容器，避免覆盖别的测试现场。若上一次运行设置了 `KEEP_POSTGRES_TEST_CONTAINER=1`，先用脚本输出的准确名称查看并删除旧容器，再重跑：
+
+```bash
+docker rm --force tongxingzhe-postgres-test-12345
+./tool/run_postgres_tests_in_docker.sh
+```
+
+不要删除未由脚本输出的容器，也不要把 production 数据库、个人 Docker volume 或真实 dump 传给这个 runner。
 
 ## 7. PostgreSQL 各类文件分别证明什么
 
@@ -402,6 +436,7 @@ POSTGRES_TEST_IMAGE='postgres:16' \
 | `runner/*.sql` | 锁定、记录并校验 migration 历史 | 历史被改写或部署并发不安全 |
 | `checks/verify_*.sql` | 检查表、函数、角色和权限形状 | schema 缺失或 runtime 权限过大 |
 | `fixtures/NNNN_*.sql` | 用 synthetic 数据执行成功与拒绝路径 | 业务事务或不变量错误 |
+| `backend/server/test/contact-location-evidence.integration.ts` | 用 Node 24、真实 Backend Store 和 PostgreSQL bridge 对账地点来源 | wire、Store、SQL 结果分类或隐私边界错误 |
 | 并发脚本 | 用两个独立 `psql` 会话同时写入 | 锁、唯一约束或冲突合同错误 |
 | dump／restore | 从备份重建 schema 后重复验证 | 备份范围、owner、授权或恢复路径错误 |
 
@@ -507,11 +542,11 @@ CI 会在临时目录重新生成 v18 snapshot 和 migration helper，并与仓�
 | CI job | 重复的主要证据 |
 | --- | --- |
 | Flutter quality and tests | 格式、分析、全部 Flutter tests、边界、链接和 Drift 生成比较 |
-| PostgreSQL rebuild, permissions, and restore | migration、check、fixture、并发、checksum 和恢复 |
+| PostgreSQL rebuild, permissions, and restore | migration、check、fixture、Node 24 Backend→PostgreSQL 对账、并发、checksum 和恢复 |
 | Backend identity, context, and sync | TypeScript check 和全部 Backend tests |
 | Build Android／Web／Linux／iOS／macOS／Windows | 六个平台独立 build |
 
-CI 的 PostgreSQL job 在 Linux runner 上启动 `postgres:16-alpine` service，并让 runner 上的 `psql` 通过端口 `5432` 访问。Docker 本地脚本使用 `postgres:16`，并在容器内运行 `psql`，因此不占用本机端口。两条路径执行相同的 migration、check、fixture 和并发脚本。
+CI 的 PostgreSQL job 在 Linux runner 上执行同一个 Docker runner。默认会拉取 `postgres:16` 和 `node:24-bookworm`，在临时容器中运行 `psql`、Backend build 和地点来源 integration；它不需要 runner 上的 PostgreSQL service，也不占用本机端口。两条路径执行相同的 migration、check、fixture、Backend 对账和并发脚本。
 
 本机通过是提交前证据。远端 CI 通过是干净环境证据。合并前应同时检查两者，不能根据本机结果推断 GitHub 已通过。
 
@@ -526,6 +561,9 @@ CI 的 PostgreSQL job 在 Linux runner 上启动 `postgres:16-alpine` service，
 | migration 第一次失败 | 输出中的第一个 migration 文件和 PostgreSQL 错误码 |
 | 第二次 migration 报 checksum 不同 | 已执行的 migration 是否被改写 |
 | fixture 失败 | 最后打印的 fixture 文件和异常文本 |
+| `contact-location-evidence.integration.js` 未找到 | 当前 checkout 是否包含对应 TypeScript source；没有它就不能声称四层对账通过 |
+| Node 24 `npm ci` 或 build 失败 | npm registry、lockfile、Node 镜像和 Backend TypeScript 错误 |
+| Backend 地点来源 integration 断言失败 | 先保留 Node 阶段完整 stdout，再分别检查 Store 映射、SQL fixture 和 privacy assertion |
 | restore check 失败 | dump schema 范围、role、函数授权和恢复 owner |
 | Flutter 单测通过但完整测试失败 | 共享状态、生成文件或其他模块的回归 |
 | 离线对象测试通过但真机不启用缓存 | 安全存储探针、本地数据库能力和六平台证据矩阵 |

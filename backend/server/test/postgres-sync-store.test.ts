@@ -75,6 +75,54 @@ test("Postgres store sends trusted app user separately from client payload", asy
   assert.equal(JSON.stringify(command.payload).includes("appUserId"), false);
 });
 
+test("Postgres store maps only fixed location provenance violations", async () => {
+  const cases = [
+    {
+      message: "resolved location source does not match the release",
+      failureCode: "invalid_location_source",
+    },
+    {
+      message: "location source accuracy must be numeric",
+      failureCode: "invalid_location_source",
+    },
+    {
+      message: "pending location coordinates are invalid",
+      failureCode: "invalid_location",
+    },
+    {
+      message: "resolved location requires a published city region",
+      failureCode: "invalid_location",
+    },
+  ] as const;
+
+  for (const { message, failureCode } of cases) {
+    const store = new PostgresSyncCommandStore(async () => {
+      throw Object.assign(new Error(message), { code: "23514" });
+    });
+
+    const result = await store.apply(context, command);
+
+    assert.deepEqual(result, { result: "rejected", failureCode });
+    assert.equal(JSON.stringify(result).includes("41.7897"), false);
+    assert.equal(JSON.stringify(result).includes("-87.5997"), false);
+  }
+});
+
+test("Postgres store rethrows unknown PostgreSQL errors without exposing them", async () => {
+  const unknownConstraint = Object.assign(
+    new Error("unexpected constraint with 41.7897 and -87.5997"),
+    { code: "23514" },
+  );
+  const store = new PostgresSyncCommandStore(async () => {
+    throw unknownConstraint;
+  });
+
+  await assert.rejects(
+    store.apply(context, command),
+    (error: unknown) => error === unknownConstraint,
+  );
+});
+
 test("Postgres store parses stable conflict without exposing SQL error", async () => {
   const store = new PostgresSyncCommandStore(async () => ({
     rows: [

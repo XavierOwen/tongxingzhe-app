@@ -61,6 +61,7 @@ export async function readManagementReportSnapshot(
       snapshotId,
     );
     if (result.status === "completed") {
+      assertNoExactLocationFacts(result.protectedReport);
       return {
         status: 200,
         body: {
@@ -242,6 +243,40 @@ function requireExactKeys(
     actual.some((key, index) => key !== sortedExpected[index])
   ) {
     throw invalidAccessResult();
+  }
+}
+
+const exactLocationFactKeys = new Set([
+  "location",
+  "location_source",
+  "locationSource",
+  "location_kind",
+  "locationKind",
+  "place_name",
+  "placeName",
+  "smallest_region_id",
+  "smallestRegionId",
+  "region_tree_version",
+  "regionTreeVersion",
+  "latitude",
+  "longitude",
+  "accuracy_meters",
+  "accuracyMeters",
+  "resolver_contract_version",
+  "resolverContractVersion",
+  "region_tree_content_fingerprint",
+  "regionTreeContentFingerprint",
+]);
+
+function assertNoExactLocationFacts(value: unknown): void {
+  if (Array.isArray(value)) {
+    for (const item of value) assertNoExactLocationFacts(item);
+    return;
+  }
+  if (typeof value !== "object" || value === null) return;
+  for (const [key, item] of Object.entries(value)) {
+    if (exactLocationFactKeys.has(key)) throw invalidAccessResult();
+    assertNoExactLocationFacts(item);
   }
 }
 

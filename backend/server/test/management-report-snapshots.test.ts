@@ -55,6 +55,39 @@ test("verified identity reads one protected snapshot without SessionContext", as
   });
 });
 
+test("management snapshot fails closed on nested exact location facts", async () => {
+  const result = await readManagementReportSnapshot(
+    "Bearer token",
+    projectId,
+    snapshotId,
+    {
+      identityVerifier: {verify: async () => identity},
+      snapshotStore: {
+        read: async () => ({
+          status: "completed",
+          accessEventId,
+          requestedSnapshotId: snapshotId,
+          resolvedSnapshotId: snapshotId,
+          protectedReport: {
+            ...protectedReport,
+            cells: [{
+              privacy_status: "suppressed",
+              value_count: null,
+              location_source: {latitude: 41.7897, longitude: -87.5997},
+            }],
+          },
+        }),
+      },
+    },
+  );
+
+  assert.deepEqual(result, {
+    status: 503,
+    body: {error: {code: "management_report_snapshot_unavailable"}},
+  });
+  assert.doesNotMatch(JSON.stringify(result), /41\.7897|-87\.5997/);
+});
+
 test("missing bearer and invalid ids fail before the snapshot store", async () => {
   let identityCalls = 0;
   let storeCalls = 0;
