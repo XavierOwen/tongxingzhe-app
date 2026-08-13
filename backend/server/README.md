@@ -21,12 +21,26 @@ cursor 不存在或不属于当前用户、空间和项目时，端点返回 `40
 | 方法与路径 | 行为 |
 | --- | --- |
 | `GET /v1/personal/follow-up-consent-ratio?from_utc=...&until_utc=...` | 返回当前 personal project 在 UTC 半开期间内的固定 `follow_up_consent_ratio@1` 结果 |
+| `GET /v1/personal/follow-up-consent-ratio/opt-in` | 返回当前 personal project 的可信启用状态和最新配置元数据 |
+| `PUT /v1/personal/follow-up-consent-ratio/opt-in` | 用预期版本、boolean 启用值和 UUID 请求 ID 追加启用或停用版本 |
 
 这个端点必须且只能收到一次 `from_utc` 和一次 `until_utc`。两者使用 UTC `Z` 时刻，可带一至九位小数秒。Backend 会截取到毫秒精度，并要求规范后的 `from_utc < until_utc`。GET body、偏移时区、重复／缺失／额外 query、客户端 project、workspace、user 或 metric 都会被拒绝。token 验证先于 query 校验；项目只来自已验证身份的当前 personal context。
 
 Store 把 verified issuer／subject、当前 project、固定 metric 和期间交给 `read_personal_follow_up_consent_ratio_v1`。PostgreSQL 会重新授权。未配置或当前停用时，`result` 只有合同、metric、project 和 `status: not_enabled`；它没有 `period` 或 `value`。启用后，`status: ready` 才带期间、`yes / (yes + no)`、各缺失状态和整数百分比基点。Backend 对两种结果执行 exact-key 和计数不变量检查，不接受返回合同漂移。
 
-缺失或无效 token 返回 `401 unauthenticated`；无效请求返回 `400 invalid_personal_follow_up_consent_ratio_request`；数据库重新授权失败返回 `403 personal_follow_up_consent_ratio_forbidden`；adapter 缺失、数据库错误或返回合同无效返回 `503 personal_follow_up_consent_ratio_unavailable`。所有响应使用 `Cache-Control: no-store`，错误不含 identity、接触事实或 PostgreSQL 消息。这个入口不提供项目开关写入、自由指标、管理报告、导出或 Flutter 离线缓存。
+配置 GET 不接受 query 或 body。配置 PUT 只接受 `expected_version`、`enabled` 和 `request_id`。
+`expected_version` 必须在 PostgreSQL `integer` 的非负范围 `0..2147483647` 内；
+不能提交用户、workspace、project、metric、actor 或 capability。未配置时返回 `not_enabled` 和
+null configuration；当前停用时仍返回 `not_enabled`，但保留 `enabled: false` 的最新配置。Backend
+严格验证数据库中的 actor ID，却不会把它发送给客户端。写入成功统一返回 `200`，因为底层合同
+不能区分首次执行与幂等重放。
+
+缺失或无效 token 返回 `401 unauthenticated`。比例请求无效时返回
+`400 invalid_personal_follow_up_consent_ratio_request`；配置请求无效时返回
+`400 invalid_personal_follow_up_consent_opt_in_request`。数据库重新授权失败分别返回对应的 `403`；
+配置版本或幂等冲突返回 `409 personal_follow_up_consent_opt_in_conflict`。adapter 缺失、数据库错误
+或返回合同无效返回对应的 `503 unavailable`。所有响应使用 `Cache-Control: no-store`，错误不含
+identity、接触事实或 PostgreSQL 消息。这些入口不提供自由指标、管理报告、导出或 Flutter 离线缓存。
 
 ## 接触地点来源与同步错误边界
 
@@ -211,7 +225,11 @@ npm run check
 
 接触对象关联见 [`0017_contact_target_links.sql`](../database/migrations/0017_contact_target_links.sql)。对应 fixture 验证零到多关联、阶段 0 确认、跨空间与未分配拒绝、机构代表约束、幂等重放、revision 历史、冲突比较和 warehouse PII 隔离。
 
-Node 24 Docker 阶段会在已迁移的 PostgreSQL 上运行地点来源、当前关系阶段和后续联系同意占比三条 integration。地点来源测试和 Flutter 读取同一份 `contact_location_source_v1.csv`；另外两条分别对账当前快照 bridge，以及同意占比的 `not_enabled`／`ready` union。`npm test` 仍是无数据库的合同测试；它不能替代该阶段，也不能证明真机或生产环境。
+Node 24 Docker 阶段会在已迁移的 PostgreSQL 上运行地点来源、当前关系阶段、同意占比开关和
+同意占比读取四条 integration。地点来源测试和 Flutter 读取同一份
+`contact_location_source_v1.csv`；其余测试分别对账当前快照 bridge、开关的版本／幂等合同，以及
+比例的 `not_enabled`／`ready` union。`npm test` 仍是无数据库的合同测试；它不能替代该阶段，也
+不能证明真机或生产环境。
 
 项目关系审计见 [`0018_promotion_target_relationship_audit.sql`](../database/migrations/0018_promotion_target_relationship_audit.sql)。对应 fixture 验证双向阶段、独立生命周期、共享备注历史、结构化下降原因、mutation 重放、显式冲突、分配撤销、显示别名和 warehouse 文本隔离。
 
