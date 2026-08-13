@@ -28,7 +28,7 @@ void main() {
     expect(week.untilUtc, DateTime.utc(2030, 1, 9));
     expect(today.syncedContactSessionCount, 3);
     expect(today.syncCoverageDenominator, 5);
-    expect(today.metrics, hasLength(4));
+    expect(today.metrics, hasLength(5));
     expect(
       today.metric(CoreMetricCatalog.contactSessions.reference).value,
       CountMetricValue(5),
@@ -42,6 +42,15 @@ void main() {
       MetricDistributionValue(
         labels: ['0', '1', '2', '3', '4'],
         counts: [1, 1, 1, 1, 1],
+      ),
+    );
+    expect(
+      today.metric(CoreMetricCatalog.interestOrdinalSummary.reference).value,
+      OrdinalSummaryMetricValue(
+        labels: const ['0', '1', '2', '3', '4'],
+        counts: const [1, 1, 1, 1, 1],
+        totalCount: 5,
+        medianLevel: 2,
       ),
     );
     expect(

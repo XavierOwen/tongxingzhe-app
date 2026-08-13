@@ -573,6 +573,21 @@ void main() {
           .singleWhere(
             (result) =>
                 result.definition.reference ==
+                CoreMetricCatalog.interestOrdinalSummary.reference,
+          )
+          .value,
+      OrdinalSummaryMetricValue(
+        labels: CoreMetricCatalog.interestOrdinalSummary.bucketLabels,
+        counts: expectedInterest,
+        totalCount: expected.length,
+        medianLevel: 3,
+      ),
+    );
+    expect(
+      metricResults
+          .singleWhere(
+            (result) =>
+                result.definition.reference ==
                 CoreMetricCatalog.interestDistribution.reference,
           )
           .value,

@@ -187,12 +187,15 @@ Docker runner 在 PostgreSQL fixture 后使用 `node:24-bookworm` 执行 `backen
 - 有效接触场次；
 - `SUM(reach_count)`；
 - 兴趣 `0–4` 五档数量；
+- 由五档数量确定的下中位等级；
 - 七类稳定渠道分布；
 - `MAX(occurred_at_utc)`。
 
 [`read_personal_contact_summary`](../../backend/database/migrations/0006_personal_contact_metrics.sql) 使用与 Drift 相同的 UTC 半开区间和 scope 条件。共用输入可以发现两套 SQL 的筛选或单位漂移；它不表示两种 SQL 方言必须写成同一段代码。
 
-Flutter 不把这四个数字当作无版本的页面字段。[`CoreMetricCatalog`](../../lib/features/contact_metrics/metric_contract.dart) 为接触场次、触达人数、兴趣分布和渠道分布固定 `metric_id + version`、统计单位、值形状、实际发生时间口径、排除项和管理隐私规则。修改任何口径时必须新增版本，不能静默覆盖 v1。
+Flutter 不把这些结果当作无版本的页面字段。[`CoreMetricCatalog`](../../lib/features/contact_metrics/metric_contract.dart) 为接触场次、触达人数、兴趣分布、兴趣有序汇总和渠道分布固定 `metric_id + version`、统计单位、值形状、实际发生时间口径、排除项和管理隐私规则。`interest_distribution` v1 保持原有计数合同；`interest_ordinal_summary` v1 另行固定五档计数、总场次和下中位等级。修改任何口径时必须新增版本，不能静默覆盖旧定义。
+
+下中位等级只使用 `0–4` 的顺序。样本不为空时，取累计数量首次达到 `(总场次 + 1) ~/ 2` 的等级；空期间返回 `null`。例如 `1、1、4、4` 的中位等级是 `1`，不是 `2.5`。个人页同时显示五档数量和这个中位等级，不默认显示兴趣算术指数。
 
 [`MetricResult`](../../lib/features/contact_metrics/metric_contract.dart) 把值与 UTC 半开期间、报告时区、数据截止时间、来源层、同步覆盖和隐私状态放在同一个结果合同中。当前个人页由 [`PersonalContactMetricMapper`](../../lib/features/contact_metrics/personal_contact_overview.dart) 把 Drift 汇总映射为 `localOperational + personalFact`；同步覆盖明确以接触场次为单位。即使指标值是触达人数，也不能用待同步场次数推算“已同步人数”。
 
