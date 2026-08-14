@@ -201,6 +201,7 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `REGION-010` | 没有原始坐标可重新解析时，旧区域只能凭绑定两个已发布树内容指纹的显式一对一映射证据进入指定新版本；缺失、冲突、拆分、合并或证据漂移必须失败关闭，不按名称、父链或坐标猜测。 |
 | `REGION-011` | 区域归属证据解析必须接收调用方明确指定的已发布目标树版本和内容指纹；原始视图只接受精确来源证据，当前视图的坐标只接受唯一最深且同属一条父链的命中，跨父链或同深度多命中返回歧义；`region-only` 只接受同版本来源或显式一对一映射，`pending_resolution`、`not_applicable` 和不完整来源返回 `not_reportable`。 |
 | `REGION-012` | 固定管理区域报告必须用可信 `data_cutoff_utc` 从追加式区域树选择历史解析唯一目标树；publication selection 和目标 release 的发布时间都必须不晚于该截止点，内容指纹必须精确一致。迁移基线没有真实 `selected_at_utc`，只能从 `recorded_at_utc` 这个观察下界开始使用；更早截止点返回历史不可用，不读取 `is_current`，也不按最新 release 猜测。 |
+| `REGION-013` | 首个私有区域报告候选固定为 current 城市粒度。它把 6AM 的显式目标树传给 6AL，把每条可报告的最小区域归入唯一城市祖先，并输出两完整期间 × 目标树全部城市的稳定完整网格；嵌套城市、缺失唯一城市祖先或证据漂移失败关闭。 |
 
 ### 5.5 场景问卷
 
@@ -518,6 +519,28 @@ mapping writer 和 provenance writer 都不能执行它。`PUBLIC`、runtime、m
 并发测试覆盖 publication-first 与 resolver-first 两种锁顺序。完整 Docker 套件还必须在无源 cluster roles
 的恢复库中重跑 migration、check、fixture、checksum 和并发脚本。
 
+#### Slice 6AN：私有 current 城市报告执行与保护合同
+
+Slice 6AN 注册私有固定定义 `contact_sessions_by_current_city_two_periods@1`，但不把它接入既有生产发布链。
+定义固定 `contact_sessions@1`、`current` 视图、城市粒度、项目报告时区下最近两个完整 ISO 周和
+`management_current_city_contact_session_privacy_v1`。专用 canonicalizer 只接受该 ID 和 version；现有渠道
+canonicalizer、16 格校验、快照、HTTP 和导出必须继续拒绝它，不能把“注册表已有一行”解释成生产支持。
+
+私有 executor 只接受可信项目、报告时区和 `data_cutoff_utc`。它先调用 6AM，再把显式 target tree version
+和 fingerprint 传给 6AL。当前 active、首次提交不晚于 cutoff 且发生在两完整期间的接触使用当前 revision
+地点来源。`attributed` 结果归入目标树中唯一城市祖先；`pending_resolution`、`not_applicable`、不完整来源、
+零命中、歧义和缺失 mapping 不进入城市格。缺失 current revision 来源、嵌套城市或证据不一致失败关闭。
+
+完整网格包含 `previous/current × target tree 全部 city`，按 `region_id` 的 `C` 排序稳定输出。每格以接触
+场次为真实单位，先检查 `k=10`、至少三位贡献者和单人不超过一半。一个期间若恰有一个 primary-suppressed
+格且仍有可显示格，再按稳定城市顺序互补隐藏一个格。所有 suppressed 值为 `null`。文档可以包含固定定义、
+期间、目标树选择证据、数据截止和 source change watermark，但不得包含名称、geometry、坐标、来源、
+contact、revision、贡献者或 PII。
+
+executor 由无登录、无成员的最小 reader role 拥有；runtime、`PUBLIC` 和区域维护身份没有执行权。本 Slice
+不提供 original 视图、父子 rollup、任意区域集合、生产快照 lineage、runtime bridge、HTTP、Flutter、缓存、
+导出、区域治理、历史 `as-of`、更正版或删除。读取 current projection 和 watermark 不能解释成历史重放。
+
 只有高级分析可显示：
 
 ```text
@@ -552,6 +575,7 @@ mapping writer 和 provenance writer 都不能执行它。`PUBLIC`、runtime、m
 | `ANALYTICS-020` | Flutter 只把固定导出解码为内存 artifact；它严格核对响应头、原始 canonical bytes、目录摘要和受保护报告合同，不重新序列化、不持久化，也不把取得 bytes 表述为下载、保存或分享成功。 |
 | `ANALYTICS-021` | Web 管理报告下载使用两阶段操作：先准备并验证内存 artifact，再由新的用户操作把原始 bytes、固定 MIME 和文件名交给浏览器；结果只表示已请求下载，delivery 重试不重复生成服务端导出事件，非 Web 平台明确 unavailable。 |
 | `ANALYTICS-022` | 固定区域报告的 `history-derived cutoff context` 只由可信 `data_cutoff_utc` 和追加式 selection history 派生；它保存目标树、指纹、selection evidence 和发布时间。selection time 与 release `published_at_utc` 必须不晚于 cutoff，指纹必须精确一致；migration baseline 只能从 `recorded_at_utc` 观察下界使用，更早 cutoff 不可判定，不能回退到 `is_current` 或最新 release。 |
+| `ANALYTICS-023` | `contact_sessions_by_current_city_two_periods@1` 只统计两个完整 ISO 周内、截止点前已首次提交的 current active 接触，并返回固定定义、目标树选择证据、source change watermark 和完整受保护城市网格；它不声称 current projection 是历史 `as-of`。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -571,6 +595,7 @@ mapping writer 和 provenance writer 都不能执行它。`PUBLIC`、runtime、m
 | `PRIVACY-012` | 未来管理阶段变更报告的 `k=10` 以不同“对象 × 项目”关系为真实统计单位；事件数和方向事件数不能靠同一关系重复发生来达到阈值。 |
 | `PRIVACY-013` | 固定匿名管理报告文件导出只能接收已经完成阈值、贡献者保护、完整网格和互补隐藏的快照；`suppressed` 永远是 `null`，客户端和导出过程都不得重算或补回隐藏值。 |
 | `PRIVACY-014` | 区域目标上下文只返回固定合同、状态、原因、截止点、树版本、内容指纹和选择／发布时间证据，不返回坐标、来源、接触、贡献者、区域名称或 PII；历史不可用时失败关闭，不能用 current、名称或几何相似度补造归属。 |
+| `PRIVACY-015` | current 城市报告只返回完整城市网格中的保护后接触场次数；每格执行 `k=10`、三位贡献者和单人不超过一半，单一 primary suppression 触发确定性互补隐藏，所有 suppressed 值为 `null`，输出不含名称、边界、坐标、来源、接触、revision、贡献者或 PII。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
 
@@ -591,6 +616,7 @@ mapping writer 和 provenance writer 都不能执行它。`PUBLIC`、runtime、m
 | `MANUAL-011` | 复杂 SQL、事务、migration、同步、冲突、统计和隐私逻辑按不变量与原因注释；不机械给每个括号、赋值或生成代码加注释。 |
 | `MANUAL-012` | 注释和说明书不引用会随编辑失效的固定行号；使用稳定类、函数、字段和 snippet marker 追溯。 |
 | `MANUAL-013` | 学习文档必须说明 6AM 的可信 cutoff、history-derived context、migration baseline 观察下界、publication 共享事务锁、私有无 runtime 边界、6AL 显式消费方式，以及 Docker 和已有测试库中的手工命令。 |
+| `MANUAL-014` | 学习文档必须说明 6AN 的固定 current 城市范围、完整网格、三项 primary 阈值、互补隐藏、source watermark、私有非生产边界、与旧渠道发布链的隔离，以及 Docker 和已有测试库中的验证步骤。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -784,6 +810,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-014` | 规范区域跨版本映射 fixture 覆盖已发布树与精确指纹、未知节点、草稿树、同版本、幂等、request 漂移、冲突目标、追加不可变、最小权限和缺失映射；确定性双事务测试证明同一来源到同一目标版本至多提交一个目标，完整 Docker 套件在恢复库重复验证。 |
 | `TEST-015` | 私有区域归属 resolver fixture 覆盖 original 精确来源、current 显式目标树、坐标唯一／零命中／同链嵌套／跨链歧义／同深度歧义、region-only 同版本与 6AK 映射、错误指纹、草稿或未知树、`not_reportable` 状态、无敏感输出和最小权限；完整 Docker 套件在恢复库重复验证。 |
 | `TEST-016` | 6AM fixture 覆盖无历史、publication 在 cutoff 前／等于／之后、两次切换、migration baseline 观察下界前／等于／之后、草稿、缺失 release、指纹或发布时间不一致、稳定 blocked 状态、无敏感输出和最小权限；publication-first 与 resolver-first 并发脚本证明共享锁线性化，完整 Docker 套件在恢复库重跑。 |
+| `TEST-017` | 6AN fixture 覆盖固定请求、两完整期间、全城市网格、空格、三项 primary 阈值、单一／多个隐藏、互补隐藏、稳定排序和 watermark；current 坐标、同版本 region-only、6AK mapping、无 mapping、歧义、pending、N/A、不完整或缺失来源及嵌套城市均有失败关闭证据。publication-first 与 report-first 并发脚本证明组合仍使用 6AM 锁，完整 Docker 套件在恢复库重跑。 |
 
 ## 9. UI、视觉与可访问性
 

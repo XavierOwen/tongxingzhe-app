@@ -835,6 +835,75 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 手工通过只证明当前 SQL 返回合同、权限、历史边界和并发锁成立。它不证明真实区域对应关系、维护者审核或
 生产区域报告已经验收。
 
+## Slice 6AN 如何生成私有 current 城市报告候选
+
+6AN 把 6AM 和 6AL 接到第一份固定区域聚合，但仍停在私有数据库边界。报告定义固定为
+`contact_sessions_by_current_city_two_periods@1`：指标是接触场次，视图是 `current`，区域粒度是城市，
+时间是项目报告时区下最近两个完整 ISO 周。调用方不能传区域树、城市列表、坐标、polygon 或其他筛选。
+
+executor 先用可信 `data_cutoff_utc` 调用 6AM。只有 6AM 返回 `selected`，它才把明确的目标树版本和内容
+指纹传给 6AL。6AL 返回的最小区域沿同一目标树父链归入唯一城市祖先。坐标零命中或歧义、缺失一对一
+mapping、pending、`N/A` 和不完整来源不会进入城市格；当前 revision 缺少来源、同一父链出现多个城市或
+冻结证据不一致时，整个候选失败关闭。
+
+### 完整网格和互补隐藏
+
+“完整网格”表示输出先枚举目标树中的全部城市，再与 `previous/current` 两个期间做笛卡尔积。即使某城市
+没有接触，也会有一个 suppressed cell；不能用省略城市来暗示零或小样本。城市按 `region_id` 的 `C`
+排序。该稳定 ID 只用于机器合同，6AN 不返回城市名称、边界或坐标。
+
+每格的真实统计单位是一条合格接触场次。保护函数先检查：
+
+1. 场次数至少为 `10`；
+2. 至少有三位不同推广者；
+3. 任一推广者的场次数不超过该格一半。
+
+任一条件不满足时，值为 `null`。若一个期间恰好只有一个格因这些条件被隐藏，同时还有可显示格，函数再
+按稳定城市顺序隐藏一个格。这样即使另有总量，也不会只剩一个未知数可由相减直接恢复。两格以上首先被
+隐藏时不增加互补格。没有随机噪声；这些控制只降低披露风险，不构成形式化不可重识别保证。
+
+候选文档记录 `source_change_sequence`。它说明这次读取观察到的项目 change feed 水位，不表示系统可以按
+该水位重放历史。接触修订或作废后，current projection 可以改变以后生成的候选。正式固定与更正版仍需要
+后续 snapshot lineage。
+
+### 为什么旧渠道发布链仍拒绝新定义
+
+现有 `canonicalize_management_report_request_v1`、16 格 validator、快照发布、HTTP 和导出只理解
+`contact_sessions_by_channel_two_periods@1`。6AN 使用专用 canonicalizer 和 executor。私有注册表出现新的
+definition，不表示旧 dispatcher 已支持区域文档。后续接入必须显式选择正确 executor、validator、pair
+release 和 lineage；不能把区域 ID 塞进原有 channel cell。
+
+6AN reader role 无登录、无成员，只读取执行所需列并调用 6AM、6AL 和保护函数。`PUBLIC`、runtime、区域
+发布者、mapping writer 和 provenance writer 不能执行 executor。本切片没有 runtime bridge、HTTP、Flutter、
+缓存、快照、目录或导出。
+
+### 如何验证 6AN
+
+零基础读者仍只需从仓库根目录运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+脚本会自动发现 0056 migration、结构与权限 check、synthetic fixture 和并发脚本。它还会检查 migration
+checksum，并在没有源 cluster roles 的第二个 PostgreSQL 16 容器中先建立最小角色、恢复 dump，再重复
+check 和 fixture。成功或失败退出时，脚本都会删除临时容器。
+
+如果已有专用测试库，可以按以下顺序只检查 6AN。不要把命令指向 production：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_current_city_report.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0056_management_current_city_report.sql
+./tool/verify_management_current_city_report_concurrency.sh
+```
+
+这组结果证明固定请求、归属组合、完整网格、隐私状态、最小权限和两种 publication 锁顺序。它不证明真实
+城市映射正确、外部资料攻击已被排除、生产快照已经发布或用户已在任何平台看到区域报告。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和

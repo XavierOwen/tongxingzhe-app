@@ -27,7 +27,7 @@ Backend integration 入口存在。脚本先在 Node 24 中运行 `npm ci --igno
 入口缺失、编译失败或断言失败都会使整套测试失败；不能把此前 SQL fixture 的通过单独写成
 Backend adapter 集成通过。
 
-schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer`、`tongxingzhe_region_mapping_writer` 和 `tongxingzhe_region_attribution_reader`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
+schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer`、`tongxingzhe_region_mapping_writer`、`tongxingzhe_region_attribution_reader` 和 `tongxingzhe_management_region_report_reader`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
 
 ## 使用已有 PostgreSQL 测试库
 
@@ -227,6 +227,10 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/checks/verify_management_report_region_target_context.sql
 psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/fixtures/0055_management_report_region_target_context.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_current_city_report.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0056_management_current_city_report.sql
 ./tool/verify_questionnaire_publish_concurrency.sh
 ./tool/verify_questionnaire_metric_concurrency.sh
 ./tool/verify_person_institution_relationship_concurrency.sh
@@ -240,6 +244,7 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 ./tool/verify_management_report_snapshot_export_concurrency.sh
 ./tool/verify_canonical_region_version_mapping_concurrency.sh
 ./tool/verify_management_report_region_target_context_concurrency.sh
+./tool/verify_management_current_city_report_concurrency.sh
 ```
 
 第二次执行不是重复建库，而是验证已经记录的 checksum。若历史文件被修改，脚本会拒绝继续。
@@ -427,6 +432,22 @@ current selection history 和已发布 release，用可信 `data_cutoff_utc` 选
 runtime、PUBLIC 和区域维护角色都不能执行它；runtime 和 PUBLIC 也不能直接读取 selection history。区域发布者
 只保留 0038 发布流程所需的既有 `SELECT`／`INSERT`。未来区域报告先消费 6AM 的显式树版本和指纹，
 再传给 6AL；0055 不聚合接触、不注册报告、不开放 HTTP 或 Flutter。
+
+`0056_management_current_city_report.sql` 提供 DB-only 的固定区域候选
+`contact_sessions_by_current_city_two_periods@1`。专用 canonicalizer 只接受该 ID 和 version；旧渠道
+canonicalizer、16 格 validator、快照、HTTP 和导出继续拒绝它。executor 只接受可信项目、IANA 报告时区和
+截止点，先消费 6AM 的 target context，再把显式树版本和指纹传给 6AL。它不接受客户端树版本、城市列表、
+坐标、polygon 或筛选。
+
+候选使用 current active contact 的 current revision，并把可报告的最小区域归入目标树中唯一城市祖先。
+完整网格固定为两个完整 ISO 周 × 目标树全部城市，按 `C` 排序。每格先执行 `k=10`、至少三位贡献者和
+单人不超过一半；一个期间只有一个 primary-suppressed 格时，再按稳定城市顺序互补隐藏一个可显示格。
+suppressed 值始终为 `NULL`。输出包含固定定义、期间、截止点、source change watermark 和 6AM 选择证据，
+不含城市名称、边界、坐标、来源、contact、revision、贡献者或 PII。
+
+无登录、无成员的 `tongxingzhe_management_region_report_reader` 只获得所需列读取和私有函数执行权。
+runtime、PUBLIC 和区域维护身份不能执行 executor。0056 不提供 original 视图、生产快照、runtime bridge、
+HTTP、Flutter、缓存或导出；watermark 也不把 current projection 变成历史 `as-of`。
 
 0054 的手工验证需要专用测试库：
 
