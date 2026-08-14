@@ -179,8 +179,9 @@ assignment 结束后，先前合格事件仍计入；匿名化产生的 lifecycl
 | 身份、workspace 或 current project 无权 | `403 personal_relationship_stage_change_summary_forbidden` |
 | bridge、数据库或合同异常 | `503 personal_relationship_stage_change_summary_unavailable` |
 
-所有响应带 `Cache-Control: no-store`。该入口只提供服务端读取，不连接 Flutter、Drift、离线
-历史同步或 UI。
+所有响应带 `Cache-Control: no-store`。Slice 6AE-1 只提供这条服务端读取；Slice 6AE-2 的
+Flutter gateway 复用同一固定合同，并在 personal workspace 的最近七日页面显示结果。客户端
+项目 ID 只校验响应 scope，不进入 query。结果仍不写入 Drift，也不增加离线历史同步。
 
 问卷答案经过同步时，Backend 先把受控 wire 格式解析为类型化答案，PostgreSQL 再按可信项目与精确已发布版本复验。[`0012_questionnaire_visibility.sql`](../../backend/database/migrations/0012_questionnaire_visibility.sql) 按问题顺序重算显示规则，拒绝隐藏题的真实值、可见题的 `rule_skipped` 标记和可见必填题遗漏。客户端即时预验只改善离线体验，不代替这个服务端边界。
 

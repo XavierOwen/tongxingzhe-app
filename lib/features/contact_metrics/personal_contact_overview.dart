@@ -15,6 +15,26 @@ final class UtcMetricPeriod {
   final DateTime untilUtc;
 }
 
+/// Returns the shared UTC boundary for a personal summary period.
+UtcMetricPeriod personalSummaryPeriodBounds({
+  required PersonalSummaryPeriod period,
+  required DateTime now,
+}) {
+  final nowUtc = now.toUtc();
+  final tomorrowUtc = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day + 1);
+  final todayUtc = tomorrowUtc.subtract(const Duration(days: 1));
+  return switch (period) {
+    PersonalSummaryPeriod.today => UtcMetricPeriod(
+      fromUtc: todayUtc,
+      untilUtc: tomorrowUtc,
+    ),
+    PersonalSummaryPeriod.recentSevenDays => UtcMetricPeriod(
+      fromUtc: todayUtc.subtract(const Duration(days: 6)),
+      untilUtc: tomorrowUtc,
+    ),
+  };
+}
+
 /// 汇总页需要的事实和已统一单位的同步覆盖。
 final class PersonalSummarySnapshot {
   PersonalSummarySnapshot({
@@ -292,19 +312,7 @@ final class PersonalContactOverviewRepository {
   final Future<SyncHealth?> Function()? _loadSyncHealth;
 
   UtcMetricPeriod periodBounds(PersonalSummaryPeriod period) {
-    final nowUtc = _now().toUtc();
-    final tomorrowUtc = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day + 1);
-    final todayUtc = tomorrowUtc.subtract(const Duration(days: 1));
-    return switch (period) {
-      PersonalSummaryPeriod.today => UtcMetricPeriod(
-        fromUtc: todayUtc,
-        untilUtc: tomorrowUtc,
-      ),
-      PersonalSummaryPeriod.recentSevenDays => UtcMetricPeriod(
-        fromUtc: todayUtc.subtract(const Duration(days: 6)),
-        untilUtc: tomorrowUtc,
-      ),
-    };
+    return personalSummaryPeriodBounds(period: period, now: _now());
   }
 
   Future<PersonalSummarySnapshot> loadSummary({

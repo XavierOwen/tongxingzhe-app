@@ -18,6 +18,8 @@ import '../features/contact_metrics/current_relationship_stage_panel.dart';
 import '../features/contact_metrics/personal_contact_overview.dart';
 import '../features/contact_metrics/personal_follow_up_consent_ratio.dart';
 import '../features/contact_metrics/personal_follow_up_consent_ratio_panel.dart';
+import '../features/contact_metrics/relationship_stage_change_summary.dart';
+import '../features/contact_metrics/relationship_stage_change_summary_panel.dart';
 import '../features/home/production_home_view_model.dart';
 import '../features/plans/personal_action_plan_panel.dart';
 import '../features/project_settings/personal_follow_up_consent_opt_in_screen.dart';
@@ -60,6 +62,7 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.personalActionReminderGateway,
     required this.personalFollowUpConsentOptInGateway,
     required this.personalFollowUpConsentRatioGateway,
+    required this.personalRelationshipStageChangeSummaryGateway,
     required this.managementReportGateway,
     required this.currentRelationshipStageRepository,
     required this.deviceReminderPreferenceStore,
@@ -88,6 +91,8 @@ final class ProductionHomeShell extends StatefulWidget {
   final PersonalActionReminderGateway personalActionReminderGateway;
   final PersonalFollowUpConsentOptInGateway personalFollowUpConsentOptInGateway;
   final PersonalFollowUpConsentRatioGateway personalFollowUpConsentRatioGateway;
+  final PersonalRelationshipStageChangeSummaryGateway
+  personalRelationshipStageChangeSummaryGateway;
   final ManagementReportGateway managementReportGateway;
   final CurrentRelationshipStageRepository currentRelationshipStageRepository;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
@@ -108,7 +113,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
   late int _handledContactPageEvent;
   var _handledNoticeId = 0;
   var _planningRevision = 0;
-  var _consentRatioRefreshRevision = 0;
+  var _personalAnalyticsRefreshRevision = 0;
   late bool _wasSynchronizing;
 
   @override
@@ -137,6 +142,9 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      if (mounted) {
+        setState(() => _personalAnalyticsRefreshRevision++);
+      }
       unawaited(_viewModel.appResumed());
     }
   }
@@ -175,6 +183,10 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
   Widget build(BuildContext context) {
     final strings = AppStrings(widget.controller.localeCode);
     final homeState = _viewModel.state;
+    final recentSevenDaysPeriod = personalSummaryPeriodBounds(
+      period: PersonalSummaryPeriod.recentSevenDays,
+      now: widget.controller.now(),
+    );
     final destinations = [
       _Destination(Icons.today_outlined, strings.t('today')),
       _Destination(Icons.forum_outlined, strings.t('navContacts')),
@@ -230,6 +242,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
         ),
         personalConsentRatioPanel: null,
         currentRelationshipStagePanel: null,
+        relationshipStageChangePanel: null,
       ),
       _ContactsPage(
         controller: widget.controller,
@@ -286,7 +299,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
                   projectId: widget.context.project.id,
                   fromUtc: homeState.recentSevenDays!.fromUtc,
                   untilUtc: homeState.recentSevenDays!.untilUtc,
-                  refreshRevision: _consentRatioRefreshRevision,
+                  refreshRevision: _personalAnalyticsRefreshRevision,
                 )
               : null,
           currentRelationshipStagePanel: CurrentRelationshipStagePanel(
@@ -295,6 +308,23 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
             isLoading: homeState.relationshipStageIsLoading,
             loadFailed: homeState.relationshipStageLoadFailed,
           ),
+          relationshipStageChangePanel:
+              widget.context.workspace.kind == WorkspaceKind.personal
+              ? RelationshipStageChangeSummaryPanel(
+                  key: ValueKey(
+                    'relationship-stage-change/'
+                    '${widget.context.project.id}/'
+                    '${recentSevenDaysPeriod.fromUtc.toIso8601String()}/'
+                    '${recentSevenDaysPeriod.untilUtc.toIso8601String()}',
+                  ),
+                  text: strings,
+                  gateway: widget.personalRelationshipStageChangeSummaryGateway,
+                  projectId: widget.context.project.id,
+                  fromUtc: recentSevenDaysPeriod.fromUtc,
+                  untilUtc: recentSevenDaysPeriod.untilUtc,
+                  refreshRevision: _personalAnalyticsRefreshRevision,
+                )
+              : null,
         ),
         managementReports: ManagementReportBrowser(
           text: strings,
@@ -494,7 +524,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
       ),
     );
     if (mounted) {
-      setState(() => _consentRatioRefreshRevision++);
+      setState(() => _personalAnalyticsRefreshRevision++);
     }
   }
 
@@ -560,7 +590,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
     _wasSynchronizing = state.isSynchronizing;
     setState(() {
       if (synchronizationCompleted) {
-        _consentRatioRefreshRevision++;
+        _personalAnalyticsRefreshRevision++;
       }
     });
     final notice = state.notice;
@@ -820,6 +850,7 @@ final class _PersonalSummaryPage extends StatelessWidget {
     required this.personalPlanPanel,
     required this.personalConsentRatioPanel,
     required this.currentRelationshipStagePanel,
+    required this.relationshipStageChangePanel,
   });
 
   final AppController controller;
@@ -830,6 +861,7 @@ final class _PersonalSummaryPage extends StatelessWidget {
   final Widget? personalPlanPanel;
   final Widget? personalConsentRatioPanel;
   final Widget? currentRelationshipStagePanel;
+  final Widget? relationshipStageChangePanel;
 
   @override
   Widget build(BuildContext context) {
@@ -840,7 +872,8 @@ final class _PersonalSummaryPage extends StatelessWidget {
           ? const Center(child: CircularProgressIndicator())
           : Center(child: Text(text.t('summaryLoadFailed')));
       final relationshipPanel = currentRelationshipStagePanel;
-      if (relationshipPanel == null) {
+      final stageChangePanel = relationshipStageChangePanel;
+      if (relationshipPanel == null && stageChangePanel == null) {
         return summaryStatus;
       }
       return ListView(
@@ -852,8 +885,14 @@ final class _PersonalSummaryPage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           summaryStatus,
-          const SizedBox(height: 16),
-          relationshipPanel,
+          if (relationshipPanel != null) ...[
+            const SizedBox(height: 16),
+            relationshipPanel,
+          ],
+          if (stageChangePanel != null) ...[
+            const SizedBox(height: 16),
+            stageChangePanel,
+          ],
         ],
       );
     }
@@ -1066,6 +1105,10 @@ final class _PersonalSummaryPage extends StatelessWidget {
           if (currentRelationshipStagePanel != null) ...[
             const SizedBox(height: 16),
             currentRelationshipStagePanel!,
+          ],
+          if (relationshipStageChangePanel != null) ...[
+            const SizedBox(height: 16),
+            relationshipStageChangePanel!,
           ],
           if (personalConsentRatioPanel != null) ...[
             const SizedBox(height: 16),

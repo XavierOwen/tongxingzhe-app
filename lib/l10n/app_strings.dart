@@ -383,6 +383,24 @@ const Map<String, Map<String, String>> _strings = {
     'personalConsentRatioInvalidResponse': '分析服务返回了无效结果。',
     'personalConsentRatioServiceUnavailable': '后续联系同意占比暂时无法载入。',
     'personalConsentRatioNotConfigured': '后续联系同意占比服务尚未配置。',
+    'relationshipStageChangeTitle': '关系阶段变更',
+    'relationshipStageChangeHelp':
+        '按阶段变更的实际操作者统计个人事实。同一关系可有多次事件，但关系数只去重一次。上升或下降都不代表成败。',
+    'relationshipStageChangeLoading': '正在载入关系阶段变更',
+    'relationshipStageChangeEventCount': '阶段变更事件：{count} 次',
+    'relationshipStageChangeUpwardCount': '上升事件：{count} 次',
+    'relationshipStageChangeDownwardCount': '下降事件：{count} 次',
+    'relationshipStageChangeRelationshipCount': '发生过变更的去重关系：{count} 个对象 × 项目关系',
+    'relationshipStageChangePeriod': '统计期间（UTC）：{from} 至 {until}，不含结束时刻',
+    'relationshipStageChangeDataCutoff': '服务器数据截止：{time}',
+    'relationshipStageChangeRetry': '重试',
+    'relationshipStageChangeUnauthorized': '登录状态已失效，请重新登录。',
+    'relationshipStageChangeInvalidRequest': '分析服务未接受这个统计期间。',
+    'relationshipStageChangeForbidden': '当前账号不能读取这个个人项目的阶段变更。',
+    'relationshipStageChangeNetworkUnavailable': '无法连接分析服务。请检查网络后重试。',
+    'relationshipStageChangeInvalidResponse': '分析服务返回了无效的阶段变更结果。',
+    'relationshipStageChangeServiceUnavailable': '关系阶段变更暂时无法载入。',
+    'relationshipStageChangeNotConfigured': '关系阶段变更服务尚未配置。',
     'statisticsUseUtcDays': '当前统计按 UTC 自然日计算',
     'personalPlanTitle': '私人周计划',
     'personalPlanPrivateHelp': '计划、进度和差距只对你本人可见。',
@@ -1247,6 +1265,33 @@ const Map<String, Map<String, String>> _strings = {
         'The follow-up consent ratio is temporarily unavailable.',
     'personalConsentRatioNotConfigured':
         'The follow-up consent ratio service is not configured.',
+    'relationshipStageChangeTitle': 'Relationship stage changes',
+    'relationshipStageChangeHelp':
+        'These personal facts are attributed to the person who made each stage change. One relationship can have several events but counts once as a changed relationship. Upward and downward do not mean success and failure.',
+    'relationshipStageChangeLoading': 'Loading relationship stage changes',
+    'relationshipStageChangeEventCount': 'Stage-change events: {count}',
+    'relationshipStageChangeUpwardCount': 'Upward events: {count}',
+    'relationshipStageChangeDownwardCount': 'Downward events: {count}',
+    'relationshipStageChangeRelationshipCount':
+        'Distinct changed relationships: {count} target-project relationships',
+    'relationshipStageChangePeriod':
+        'Period (UTC): {from} to {until}, excluding the end',
+    'relationshipStageChangeDataCutoff': 'Server data cutoff: {time}',
+    'relationshipStageChangeRetry': 'Retry',
+    'relationshipStageChangeUnauthorized':
+        'Your session expired. Sign in again.',
+    'relationshipStageChangeInvalidRequest':
+        'The analytics service did not accept this reporting period.',
+    'relationshipStageChangeForbidden':
+        'This account cannot read stage changes for this personal project.',
+    'relationshipStageChangeNetworkUnavailable':
+        'The analytics service is unreachable. Check the network and retry.',
+    'relationshipStageChangeInvalidResponse':
+        'The analytics service returned an invalid stage-change result.',
+    'relationshipStageChangeServiceUnavailable':
+        'Relationship stage changes are temporarily unavailable.',
+    'relationshipStageChangeNotConfigured':
+        'The relationship stage-change service is not configured.',
     'statisticsUseUtcDays': 'Current statistics use UTC calendar days',
     'personalPlanTitle': 'Private weekly plan',
     'personalPlanPrivateHelp':

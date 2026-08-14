@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drift/native.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
@@ -9,9 +11,11 @@ import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
 import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/data/local_database_factory.dart';
 import 'package:tongxingzhe_app/device/device_time_zone.dart';
+import 'package:tongxingzhe_app/features/contact_journal/contact_journal.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
 import 'package:tongxingzhe_app/features/contact_metrics/current_relationship_stage.dart';
 import 'package:tongxingzhe_app/features/contact_metrics/personal_follow_up_consent_ratio.dart';
+import 'package:tongxingzhe_app/features/contact_metrics/relationship_stage_change_summary.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
@@ -42,6 +46,7 @@ void main() {
       ),
     );
     final ratioGateway = _ReadyConsentRatioGateway();
+    final stageChangeGateway = _ReadyRelationshipStageChangeSummaryGateway();
     final dependencies = AppDependencies(
       databaseFactory: _SingleDatabaseFactory(database),
       clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
@@ -56,6 +61,8 @@ void main() {
       currentRelationshipStageGatewayBuilder: (_) =>
           const _OneRelationshipStageGateway(),
       personalFollowUpConsentRatioGatewayBuilder: (_) => ratioGateway,
+      personalRelationshipStageChangeSummaryGatewayBuilder: (_) =>
+          stageChangeGateway,
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -86,10 +93,21 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('明确同意：2 / 3（66.67%）'), findsOneWidget);
     expect(ratioGateway.calls, hasLength(1));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('relationship-stage-change-summary-panel')),
+      300,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('阶段变更事件：5 次'), findsOneWidget);
+    expect(find.text('上升事件：3 次'), findsOneWidget);
+    expect(find.text('下降事件：2 次'), findsOneWidget);
+    expect(find.text('发生过变更的去重关系：4 个对象 × 项目关系'), findsOneWidget);
+    expect(stageChangeGateway.calls, hasLength(1));
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pumpAndSettle();
     expect(ratioGateway.calls, hasLength(2));
+    expect(stageChangeGateway.calls, hasLength(2));
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('management-report-view')),
       -300,
@@ -102,6 +120,7 @@ void main() {
 
   testWidgets('占比服务失败时最近七日本地事实仍可读', (tester) async {
     final database = LocalDatabase(NativeDatabase.memory());
+    final semantics = tester.ensureSemantics();
     final identity = FakeIdentitySession(
       initial: IdentitySnapshot(
         stage: IdentityStage.signedIn,
@@ -121,8 +140,12 @@ void main() {
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
+      currentRelationshipStageGatewayBuilder: (_) =>
+          const _OneRelationshipStageGateway(),
       personalFollowUpConsentRatioGatewayBuilder: (_) =>
           const _RejectedConsentRatioGateway(),
+      personalRelationshipStageChangeSummaryGatewayBuilder: (_) =>
+          const _RejectedRelationshipStageChangeSummaryGateway(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -139,14 +162,202 @@ void main() {
       300,
     );
     await tester.pumpAndSettle();
-    expect(find.textContaining('无法连接分析服务'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('personal-follow-up-consent-ratio-panel'),
+        ),
+        matching: find.textContaining('无法连接分析服务'),
+      ),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey('personal-consent-ratio-retry')),
       findsOneWidget,
     );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('relationship-stage-change-summary-panel')),
+      300,
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('relationship-stage-change-summary-panel'),
+        ),
+        matching: find.text('无法连接分析服务。请检查网络后重试。'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('relationship-stage-change-retry')),
+      findsOneWidget,
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('current-relationship-stage-panel')),
+      -300,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('当前关系阶段'), findsOneWidget);
+    expect(find.bySemanticsLabel('关系阶段 2：1 个对象项目关系'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('最近七日接触场次 0'), -300);
     await tester.pumpAndSettle();
     expect(find.text('最近七日接触场次 0'), findsOneWidget);
+    semantics.dispose();
+  });
+
+  testWidgets('本地最近七日仍在载入时远端阶段变更独立显示', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final transport = _BlockingPullSyncTransport();
+    final stageChangeGateway = _ReadyRelationshipStageChangeSummaryGateway();
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
+      syncTransportBuilder: (_) => transport,
+      personalRelationshipStageChangeSummaryGatewayBuilder: (_) =>
+          stageChangeGateway,
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+    );
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    addTearDown(database.close);
+    for (
+      var attempt = 0;
+      attempt < 20 && find.text('分析').evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    await tester.tap(find.text('分析'));
+    for (
+      var attempt = 0;
+      attempt < 20 && stageChangeGateway.calls.isEmpty;
+      attempt++
+    ) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(transport.pullCalls, 1);
+    expect(stageChangeGateway.calls, hasLength(1));
+    expect(find.byType(CircularProgressIndicator), findsWidgets);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('relationship-stage-change-summary-panel')),
+      300,
+    );
+    await tester.pump();
+    expect(find.text('阶段变更事件：5 次'), findsOneWidget);
+
+    transport.completePull(
+      const SyncPullSucceeded(
+        SyncPullBatch(changes: [], nextCursor: 'initial-cursor'),
+      ),
+    );
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('App 恢复与同步完成分别刷新个人阶段变更', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final transport = _CompletingSyncTransport();
+    final stageChangeGateway = _ReadyRelationshipStageChangeSummaryGateway();
+    final clock = _FixedClock(DateTime.utc(2030, 1, 2, 3, 4));
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: clock,
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
+      syncTransportBuilder: (_) => transport,
+      personalRelationshipStageChangeSummaryGatewayBuilder: (_) =>
+          stageChangeGateway,
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+    );
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    addTearDown(database.close);
+
+    await tester.tap(find.text('分析'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('relationship-stage-change-summary-panel')),
+      300,
+    );
+    await tester.pumpAndSettle();
+    expect(stageChangeGateway.calls, hasLength(1));
+
+    await ContactJournal(
+      database: database,
+      clock: clock,
+      idGenerator: _FixedIds([
+        'resume-contact',
+        'resume-revision',
+        'resume-command',
+      ]),
+    ).submitAnonymousContact(
+      AnonymousContactSubmission(
+        appUserId: syntheticSessionContext.appUserId,
+        workspaceId: syntheticSessionContext.workspace.id,
+        projectId: syntheticSessionContext.project.id,
+        questionnaireVersionId: syntheticSessionContext.questionnaireVersion.id,
+        deviceId: 'resume-device',
+        occurredAtUtc: DateTime.utc(2030, 1, 2, 3),
+        occurredTimeZone: 'America/Chicago',
+        channel: ContactChannel.videoCall,
+        location: const NotApplicableContactLocation(),
+        reachCount: 1,
+        interestLevel: 2,
+      ),
+    );
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    for (
+      var attempt = 0;
+      attempt < 20 && transport.commands.isEmpty;
+      attempt++
+    ) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(transport.commands, hasLength(1));
+    expect(stageChangeGateway.calls, hasLength(2));
+
+    transport.completePush(
+      const SyncPushAccepted(serverCursor: 'test-cursor-1'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(stageChangeGateway.calls, hasLength(3));
   });
 
   testWidgets('项目菜单切换可信项目并采用该项目的问卷上下文', (tester) async {
@@ -217,6 +428,7 @@ void main() {
       projectId: syntheticSessionContext.project.id,
     );
     final ratioGateway = _ReadyConsentRatioGateway();
+    final stageChangeGateway = _ReadyRelationshipStageChangeSummaryGateway();
     final dependencies = AppDependencies(
       databaseFactory: _SingleDatabaseFactory(database),
       clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
@@ -226,6 +438,8 @@ void main() {
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       personalFollowUpConsentOptInGatewayBuilder: (_, _) => gateway,
       personalFollowUpConsentRatioGatewayBuilder: (_) => ratioGateway,
+      personalRelationshipStageChangeSummaryGatewayBuilder: (_) =>
+          stageChangeGateway,
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -242,6 +456,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(ratioGateway.calls, hasLength(1));
+    expect(stageChangeGateway.calls, hasLength(1));
 
     final projectMenu = find.byKey(const ValueKey('project-context-menu'));
     final projectMenuSemantics = tester
@@ -282,6 +497,7 @@ void main() {
     expect(find.text('当前状态：从未启用'), findsNothing);
     expect(_containsPrimaryFocus(tester, projectMenu), isTrue);
     expect(ratioGateway.calls, hasLength(2));
+    expect(stageChangeGateway.calls, hasLength(2));
     semantics.dispose();
   });
 
@@ -298,6 +514,7 @@ void main() {
       ),
     );
     final ratioGateway = _ReadyConsentRatioGateway();
+    final stageChangeGateway = _ReadyRelationshipStageChangeSummaryGateway();
     final dependencies = AppDependencies(
       databaseFactory: _SingleDatabaseFactory(database),
       clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
@@ -309,6 +526,8 @@ void main() {
       ),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       personalFollowUpConsentRatioGatewayBuilder: (_) => ratioGateway,
+      personalRelationshipStageChangeSummaryGatewayBuilder: (_) =>
+          stageChangeGateway,
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
     );
 
@@ -333,6 +552,11 @@ void main() {
       findsNothing,
     );
     expect(ratioGateway.calls, isEmpty);
+    expect(
+      find.byKey(const ValueKey('relationship-stage-change-summary-panel')),
+      findsNothing,
+    );
+    expect(stageChangeGateway.calls, isEmpty);
   });
 
   testWidgets('项目菜单创建个人推广项目并立即切换', (tester) async {
@@ -1332,7 +1556,11 @@ void main() {
       scrollable: find.byType(Scrollable).last,
     );
     expect(find.text('视频通话：1 场'), findsOneWidget);
-    await tester.drag(find.byType(ListView), const Offset(0, -220));
+    await tester.scrollUntilVisible(
+      find.text('最近发生 2030-01-02T03:04:00.000Z'),
+      120,
+      scrollable: find.byType(Scrollable).last,
+    );
     await tester.pumpAndSettle();
     expect(find.text('最近发生 2030-01-02T03:04:00.000Z'), findsOneWidget);
     expect(find.text('同步覆盖 0 / 1'), findsOneWidget);
@@ -1839,6 +2067,15 @@ final class _SequenceIdGenerator implements IdGenerator {
   String next() => 'test-${_next++}';
 }
 
+final class _FixedIds implements IdGenerator {
+  _FixedIds(List<String> values) : _values = [...values];
+
+  final List<String> _values;
+
+  @override
+  String next() => _values.removeAt(0);
+}
+
 final class _FakeTimeZoneProvider implements DeviceTimeZoneProvider {
   const _FakeTimeZoneProvider(this.value);
 
@@ -1953,6 +2190,54 @@ final class _QueueingSyncTransport implements SyncTransport {
   Future<SyncPushResult> push(SyncCommand command) async {
     return _replies.removeAt(0);
   }
+}
+
+final class _CompletingSyncTransport implements SyncTransport {
+  final List<SyncCommand> commands = [];
+  final _pushCompleter = Completer<SyncPushResult>();
+
+  void completePush(SyncPushResult result) => _pushCompleter.complete(result);
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  Future<SyncPullResult> pull({
+    required SyncScope scope,
+    required String? cursor,
+    int limit = 100,
+  }) async =>
+      SyncPullSucceeded(SyncPullBatch(changes: const [], nextCursor: cursor));
+
+  @override
+  Future<SyncPushResult> push(SyncCommand command) {
+    commands.add(command);
+    return _pushCompleter.future;
+  }
+}
+
+final class _BlockingPullSyncTransport implements SyncTransport {
+  final _pullCompleter = Completer<SyncPullResult>();
+  var pullCalls = 0;
+
+  void completePull(SyncPullResult result) => _pullCompleter.complete(result);
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  Future<SyncPullResult> pull({
+    required SyncScope scope,
+    required String? cursor,
+    int limit = 100,
+  }) {
+    pullCalls++;
+    return _pullCompleter.future;
+  }
+
+  @override
+  Future<SyncPushResult> push(SyncCommand command) async =>
+      const SyncPushAccepted(serverCursor: 'unexpected-push');
 }
 
 final class _FakeLocationCapture implements ContactLocationCapture {
@@ -2093,6 +2378,54 @@ final class _RejectedConsentRatioGateway
     required DateTime untilUtc,
   }) async => const PersonalFollowUpConsentRatioGatewayRejected(
     PersonalFollowUpConsentRatioFailureCode.networkUnavailable,
+  );
+
+  @override
+  Future<void> close() async {}
+}
+
+final class _ReadyRelationshipStageChangeSummaryGateway
+    implements PersonalRelationshipStageChangeSummaryGateway {
+  final List<String> calls = [];
+
+  @override
+  Future<PersonalRelationshipStageChangeSummaryGatewayResult> load({
+    required String projectId,
+    required DateTime fromUtc,
+    required DateTime untilUtc,
+  }) async {
+    calls.add(projectId);
+    return PersonalRelationshipStageChangeSummaryGatewaySuccess(
+      PersonalRelationshipStageChangeSummary.fromCounts(
+        projectId: projectId,
+        fromUtc: fromUtc,
+        untilUtc: untilUtc,
+        dataCutoffUtc: untilUtc,
+        authorizedAtUtc: untilUtc,
+        retrievedAtUtc: untilUtc,
+        eventCount: 5,
+        distinctRelationshipCount: 4,
+        upwardCount: 3,
+        downwardCount: 2,
+      ),
+    );
+  }
+
+  @override
+  Future<void> close() async {}
+}
+
+final class _RejectedRelationshipStageChangeSummaryGateway
+    implements PersonalRelationshipStageChangeSummaryGateway {
+  const _RejectedRelationshipStageChangeSummaryGateway();
+
+  @override
+  Future<PersonalRelationshipStageChangeSummaryGatewayResult> load({
+    required String projectId,
+    required DateTime fromUtc,
+    required DateTime untilUtc,
+  }) async => const PersonalRelationshipStageChangeSummaryGatewayRejected(
+    PersonalRelationshipStageChangeSummaryFailureCode.networkUnavailable,
   );
 
   @override

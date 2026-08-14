@@ -75,7 +75,8 @@ invalid_personal_relationship_stage_change_summary_request`；inactive identity�
 project、已归档 project、删除 workspace 或数据库 `42501` 返回 `403
 personal_relationship_stage_change_summary_forbidden`；bridge、数据库或合同解析失败返回 `503
 personal_relationship_stage_change_summary_unavailable`。服务器为成功和错误响应都设置
-`Cache-Control: no-store`。该入口不新增 Flutter gateway、Drift 表、离线历史同步、Outbox 或 UI。
+`Cache-Control: no-store`。Slice 6AE-1 只交付这条服务端入口；Slice 6AE-2 另以严格 Flutter
+gateway 在个人最近七日页面显示结果，但仍不新增 Drift 表、离线历史同步或 Outbox。
 
 ## 个人后续联系同意占比
 
@@ -300,8 +301,9 @@ Backend Store 只传递已验证 issuer／subject 和规范化 UTC 期间，不�
 覆盖本人／他人、其他项目、期间边界、结束分配、匿名化保留边界、排除项、上升／下降、重复关系和
 重复 revision。
 
-数据库 check 用 `EXPLAIN` 固定 actor、project、changed-at 部分索引，避免无界历史扫描。该
-Slice 不包含 Flutter、Drift、页面或历史同步。
+数据库 check 用 `EXPLAIN` 固定 actor、project、changed-at 部分索引，避免无界历史扫描。
+Slice 6AE-1 不包含 Flutter、Drift、页面或历史同步；6AE-2 只增加 Flutter gateway 和页面，
+仍不增加 Drift 或历史同步。
 
 项目关系审计见 [`0018_promotion_target_relationship_audit.sql`](../database/migrations/0018_promotion_target_relationship_audit.sql)。对应 fixture 验证双向阶段、独立生命周期、共享备注历史、结构化下降原因、mutation 重放、显式冲突、分配撤销、显示别名和 warehouse 文本隔离。
 

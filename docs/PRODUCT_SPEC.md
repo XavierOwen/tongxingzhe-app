@@ -337,11 +337,22 @@ workspace／project。响应固定为 `personal_relationship_stage_change_summar
 客户端收包时刻。对象匿名化或当前分配结束不会删除此前合格事件；匿名化产生的 lifecycle-only
 和 note-only revision 不计入。该入口不提供逐事件明细，也不返回 PII。
 
-阶段变更指标仍属于个人事实，不新增 Flutter 页面、Drift 表、关系历史同步、Outbox 或管理报告。
+Slice 6AE-1 中的阶段变更指标仍属于个人事实；该服务端切片不新增 Flutter 页面、Drift 表、
+关系历史同步、Outbox 或管理报告。
+
 事件数和方向分布的 `managementPrivacyUnit` 固定为
 `targetProjectRelationship`，去重关系指标本身也使用该单位。未来管理报告若使用事件数，
 `k=10` 仍必须由不同的“对象 × 项目”关系满足；同一关系的重复事件不能满足阈值，并继续遵守
 贡献者保护和互补隐藏规则。
+
+Slice 6AE-2 在 personal workspace 的最近七日页面显示该固定汇总。Flutter 请求仍只含 UTC
+半开期间；当前项目 ID 只用于核对返回 scope 和丢弃迟到响应，不进入 query。卡片同时显示事件
+总数、`upward`、`downward`、去重关系数、回显期间和 Backend 的可信数据截止。页面说明结果按
+实际操作者归属，同一关系可有多次事件但只形成一个关系统计单位，上升和下降不表示成功或失败。
+
+它是独立的远端个人事实，不写入 Drift，不把当前关系阶段、本地接触事实或客户端收包时间当作
+历史替代值或数据截止。项目／期间变化、同步完成、项目设置返回、App 恢复和手工重试会触发
+重新读取。
 
 只有高级分析可显示：
 
