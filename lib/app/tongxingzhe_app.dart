@@ -12,6 +12,7 @@ import '../features/contact_journal/contact_models.dart';
 import '../features/contact_entry/contact_entry_screen.dart';
 import '../features/contact_metrics/current_relationship_stage.dart';
 import '../features/contact_metrics/personal_follow_up_consent_ratio.dart';
+import '../features/contact_metrics/relationship_stage_change_summary.dart';
 import '../features/contact_revision/contact_revision_screen.dart';
 import '../foundation/runtime_values.dart';
 import '../identity/identity_session.dart';
@@ -75,6 +76,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
   PersonalActionReminderGateway? _personalActionReminderGateway;
   PersonalFollowUpConsentOptInGateway? _personalFollowUpConsentOptInGateway;
   PersonalFollowUpConsentRatioGateway? _personalFollowUpConsentRatioGateway;
+  PersonalRelationshipStageChangeSummaryGateway?
+  _personalRelationshipStageChangeSummaryGateway;
   ManagementReportGateway? _managementReportGateway;
   CurrentRelationshipStageGateway? _currentRelationshipStageGateway;
   ReminderNotificationScheduler? _reminderNotificationScheduler;
@@ -101,6 +104,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       :final personalActionReminderGateway,
       :final personalFollowUpConsentOptInGateway,
       :final personalFollowUpConsentRatioGateway,
+      :final personalRelationshipStageChangeSummaryGateway,
       :final managementReportGateway,
       :final currentRelationshipStageGateway,
       :final reminderNotificationScheduler,
@@ -120,6 +124,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
           personalFollowUpConsentOptInGateway;
       _personalFollowUpConsentRatioGateway =
           personalFollowUpConsentRatioGateway;
+      _personalRelationshipStageChangeSummaryGateway =
+          personalRelationshipStageChangeSummaryGateway;
       _managementReportGateway = managementReportGateway;
       _currentRelationshipStageGateway = currentRelationshipStageGateway;
       _reminderNotificationScheduler = reminderNotificationScheduler;
@@ -141,6 +147,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
     unawaited(_personalActionReminderGateway?.close());
     unawaited(_personalFollowUpConsentOptInGateway?.close());
     unawaited(_personalFollowUpConsentRatioGateway?.close());
+    unawaited(_personalRelationshipStageChangeSummaryGateway?.close());
     unawaited(_managementReportGateway?.close());
     unawaited(_currentRelationshipStageGateway?.close());
     unawaited(_privateSessionDataGuard?.close());
@@ -180,6 +187,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
             :final personalActionReminderGateway,
             :final personalFollowUpConsentOptInGateway,
             :final personalFollowUpConsentRatioGateway,
+            :final personalRelationshipStageChangeSummaryGateway,
             :final managementReportGateway,
             :final currentRelationshipStageRepository,
             :final deviceReminderPreferenceStore,
@@ -206,6 +214,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
                   personalFollowUpConsentOptInGateway,
               personalFollowUpConsentRatioGateway:
                   personalFollowUpConsentRatioGateway,
+              personalRelationshipStageChangeSummaryGateway:
+                  personalRelationshipStageChangeSummaryGateway,
               managementReportGateway: managementReportGateway,
               currentRelationshipStageRepository:
                   currentRelationshipStageRepository,
@@ -243,6 +253,7 @@ class _ReadyApp extends StatefulWidget {
     required this.personalActionReminderGateway,
     required this.personalFollowUpConsentOptInGateway,
     required this.personalFollowUpConsentRatioGateway,
+    required this.personalRelationshipStageChangeSummaryGateway,
     required this.managementReportGateway,
     required this.currentRelationshipStageRepository,
     required this.deviceReminderPreferenceStore,
@@ -269,6 +280,8 @@ class _ReadyApp extends StatefulWidget {
   final PersonalActionReminderGateway personalActionReminderGateway;
   final PersonalFollowUpConsentOptInGateway personalFollowUpConsentOptInGateway;
   final PersonalFollowUpConsentRatioGateway personalFollowUpConsentRatioGateway;
+  final PersonalRelationshipStageChangeSummaryGateway
+  personalRelationshipStageChangeSummaryGateway;
   final ManagementReportGateway managementReportGateway;
   final CurrentRelationshipStageRepository currentRelationshipStageRepository;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
@@ -364,6 +377,8 @@ final class _ReadyAppState extends State<_ReadyApp> {
             widget.personalFollowUpConsentOptInGateway,
         personalFollowUpConsentRatioGateway:
             widget.personalFollowUpConsentRatioGateway,
+        personalRelationshipStageChangeSummaryGateway:
+            widget.personalRelationshipStageChangeSummaryGateway,
         managementReportGateway: widget.managementReportGateway,
         currentRelationshipStageRepository:
             widget.currentRelationshipStageRepository,

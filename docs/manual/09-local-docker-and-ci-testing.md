@@ -304,8 +304,8 @@ flutter run \
 
 ### 5.7 验证个人阶段变更汇总读取
 
-Slice 6AE-1 只改动 Backend HTTP、PostgreSQL bridge、索引和测试。它没有 Flutter、Drift、页面或
-离线历史同步步骤。先运行无数据库的 Backend 检查：
+Slice 6AE-1 改动 Backend HTTP、PostgreSQL bridge、索引和测试。Slice 6AE-2 在不增加 Drift 或
+离线历史同步的前提下增加 Flutter typed gateway 和个人页面。先运行无数据库的 Backend 检查：
 
 ```bash
 npm --prefix backend/server run check
@@ -337,6 +337,27 @@ changed-at 部分索引，且
 Docker runner 还会执行已注册的并发脚本、checksum 检查和 dump／restore。0051 check 证明当前项目
 指针锁先于 snapshot aggregate。只能在看到 Node integration、恢复库 check 和最后的总成功标志后，记录为 Backend→PostgreSQL 通过。这个
 结果不代表生产 Supabase 身份、真实用户资料或任何 Flutter／真机功能已验收。
+
+Flutter 测试不在 Docker 中运行。它们使用本机 Flutter SDK，验证 typed gateway、页面状态、
+scope 隔离和可访问性；Docker 仍只负责真实 PostgreSQL 与 Backend adapter 边界。从仓库根目录运行：
+
+```bash
+flutter test --no-pub test/features/contact_metrics/relationship_stage_change_summary_test.dart
+flutter test --no-pub test/features/contact_metrics/http_relationship_stage_change_summary_gateway_test.dart
+flutter test --no-pub test/features/contact_metrics/relationship_stage_change_summary_panel_test.dart
+flutter test --no-pub test/app/app_dependencies_test.dart test/app/tongxingzhe_app_test.dart
+```
+
+第一组检查四个计数、UTC 期间和可信时刻不变量。第二组检查请求只有 `from_utc`／`until_utc`、
+Bearer 更新、HTTP 错误分类和 exact-key 解析。第三组检查 loading、成功、全零、失败、重试、
+项目／期间变化、同步完成、项目设置返回、App 恢复、迟到响应、320 px、200% 字号、键盘路径和
+屏幕阅读器语义。最后一组确认正式
+composition root 注入并关闭 gateway，且只有 personal workspace 发起读取。
+
+若 Flutter 测试通过但 Docker 失败，只能说明客户端合同内部一致，不能说明它与真实 PostgreSQL
+bridge 对账成功。反过来，Docker 通过也不能代替 Flutter 页面和可访问性测试。两组都通过后，
+才可以记录本地客户端合同与 Backend→PostgreSQL 分层证据齐全；它不是 Flutter→实际 Backend 的
+端到端验收。生产 Supabase 身份和真机结果仍须单独验证。
 
 ## 6. Docker PostgreSQL 套件怎样运行
 

@@ -34,7 +34,9 @@ final class PersonalFollowUpConsentRatioPanel extends StatefulWidget {
 }
 
 final class _PersonalFollowUpConsentRatioPanelState
-    extends State<PersonalFollowUpConsentRatioPanel> {
+    extends State<PersonalFollowUpConsentRatioPanel>
+    with AutomaticKeepAliveClientMixin {
+  // Scrolling the long analysis page offscreen must not trigger a new read.
   PersonalFollowUpConsentRatioResult? _result;
   PersonalFollowUpConsentRatioFailureCode? _failure;
   var _isLoading = true;
@@ -99,6 +101,7 @@ final class _PersonalFollowUpConsentRatioPanelState
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Card(
       key: const ValueKey('personal-follow-up-consent-ratio-panel'),
       child: Padding(
@@ -122,6 +125,9 @@ final class _PersonalFollowUpConsentRatioPanelState
       ),
     );
   }
+
+  @override
+  bool get wantKeepAlive => true;
 
   Widget _body() {
     if (_isLoading) {
