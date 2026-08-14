@@ -291,6 +291,37 @@ adapter，能发现条件导入或浏览器 API 的编译错误，但不会自�
 也不表示 production current 区域报告、HTTP、Flutter 或六平台运行时已经交付。完整原理和单项命令见
 [第 11 章](11-management-metrics-and-privacy.md#slice-6ak-如何固定跨版本区域映射证据)。
 
+只修改 Slice 6AL 的私有管理区域归属 resolver 时，不需要 Flutter、浏览器、Supabase 账号或真机。第一次
+使用 Docker 时，确认 Docker Desktop 已启动，然后从仓库根目录运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+脚本会自动发现 0054 migration、结构与权限 check、synthetic fixture 和 dump／restore。通过必须同时
+证明 reader role 的最小权限、`original` 与显式 `current` 目标树、坐标唯一／零命中／歧义状态、6AK
+region-only mapping、`not_reportable` 和无敏感输出。脚本通过不表示报告截止点已经选定，也不表示生产区域
+报告、完整网格、互补隐藏、授权、HTTP、Flutter 或真机运行时已经交付。
+
+0054 使用无登录、无成员的 `tongxingzhe_region_attribution_reader` 作为 resolver owner。schema dump 不
+包含 PostgreSQL cluster roles；恢复库会先由 `tool/postgres_prepare_restore_roles.sh` 幂等创建该 reader，
+再恢复函数 owner 和权限。这样可以发现只在源数据库角色存在时才暴露的 owner／ACL 错误。
+
+如果只需要在已经运行的测试库检查 0054，先运行 migration，再按以下顺序执行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_region_attribution.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0054_management_region_attribution.sql
+```
+
+这些命令只使用 synthetic 来源、树、边界、坐标和指纹。它们不读取 current selection，不选择报告截止点，
+也不连接 production。手工通过只能证明当前 SQL 合同和权限矩阵，不证明维护者外部证据、真实区域等价或
+生产区域报告已经验收。
+
 第一次使用 Docker 时，从第 6.1 节开始操作。Docker 套件证明数据库授权、最小访问审计、撤权并发和恢复后合同；Flutter synthetic 测试证明客户端状态与显示规则。两类证据不能互相替代。
 
 管理报告发布端点同时改动 Backend 和 PostgreSQL bridge。开发时先运行：

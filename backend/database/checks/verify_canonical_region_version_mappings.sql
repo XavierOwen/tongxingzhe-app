@@ -351,7 +351,10 @@ BEGIN
   END IF;
 
   FOR function_row IN
-    SELECT exploded.grantee, exploded.privilege_type
+    SELECT
+      procedure_row.oid AS function_oid,
+      exploded.grantee,
+      exploded.privilege_type
     FROM pg_catalog.pg_proc AS procedure_row
     CROSS JOIN LATERAL aclexplode(
       COALESCE(
@@ -368,6 +371,16 @@ BEGIN
         AND function_row.grantee <> (
           SELECT oid FROM pg_catalog.pg_roles
           WHERE rolname = 'tongxingzhe_region_publisher'
+        )
+        AND NOT (
+          function_row.function_oid = resolver_function
+          AND function_row.grantee = COALESCE(
+            (
+              SELECT oid FROM pg_catalog.pg_roles
+              WHERE rolname = 'tongxingzhe_region_attribution_reader'
+            ),
+            0
+          )
         )
     THEN
       RAISE EXCEPTION 'unexpected mapping function EXECUTE grant: %',

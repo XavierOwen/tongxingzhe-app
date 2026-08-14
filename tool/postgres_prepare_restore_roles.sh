@@ -25,7 +25,8 @@ BEGIN
     'tongxingzhe_runtime',
     'tongxingzhe_region_publisher',
     'tongxingzhe_contact_provenance_writer',
-    'tongxingzhe_region_mapping_writer'
+    'tongxingzhe_region_mapping_writer',
+    'tongxingzhe_region_attribution_reader'
   ]
   LOOP
     IF NOT EXISTS (
@@ -110,6 +111,27 @@ BEGIN
   END LOOP;
 END
 $mapping_writer_membership$;
+
+DO $attribution_reader_membership$
+DECLARE
+  member_name text;
+BEGIN
+  FOR member_name IN
+    SELECT member_role.rolname
+    FROM pg_catalog.pg_auth_members AS membership
+    JOIN pg_catalog.pg_roles AS reader_role
+      ON reader_role.oid = membership.roleid
+    JOIN pg_catalog.pg_roles AS member_role
+      ON member_role.oid = membership.member
+    WHERE reader_role.rolname = 'tongxingzhe_region_attribution_reader'
+  LOOP
+    EXECUTE format(
+      'REVOKE tongxingzhe_region_attribution_reader FROM %I',
+      member_name
+    );
+  END LOOP;
+END
+$attribution_reader_membership$;
 SQL
 
 echo 'PostgreSQL restore 所需 cluster roles 已准备。'

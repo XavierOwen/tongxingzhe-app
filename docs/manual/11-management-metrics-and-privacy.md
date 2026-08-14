@@ -696,6 +696,60 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 冲突和并发双写；它不证明维护者审核正确，不证明两个真实区域等价，也没有交付 production current
 区域报告、完整隐私网格、授权、快照 lineage、HTTP、Flutter、缓存或导出。
 
+## Slice 6AL 如何解析私有区域归属证据
+
+Slice 6AL 为未来固定区域报告提供一个私有、只读的 typed resolver。调用方必须明确选择
+`original` 或 `current`。`original` 的两个 target 参数必须为 `NULL`；`current` 视图才同时提供已发布
+目标树的 `tree_version` 和精确 `content_fingerprint`。resolver 不读取 current 选择开关，也不替调用方
+决定报告截止点的目标树。
+
+`original` 只验证地点来源自己的 release、内容指纹、区域节点和城市父链，然后返回原始区域 tuple。
+来源事实不完整或指纹不一致时，resolver 失败关闭。它不能用 `contact_region_assignments` 当前投影补造
+历史来源。
+
+`current` 对 `resolved_from_coordinates` 使用来源保存的原始坐标和指定目标树的边界。只接受唯一最深
+候选；其他命中必须属于同一父链。零命中返回 `unmapped`。跨父链或同深度多候选返回 `ambiguous`，
+不能用稳定排序把歧义变成一个结果。`resolved_region_only` 在来源和目标树相同时保留已验证来源，
+跨版本时只调用 Slice 6AK 的显式一对一 mapping resolver，不组合映射链。
+
+`pending_resolution`、`not_applicable` 和 `legacy_incomplete` 没有可报告区域 ID，返回不含区域 tuple
+的稳定 `not_reportable` 状态。成功结果只带固定 contract、视图、状态、原因和区域 ID、树版本、内容
+指纹。输出不含 source ID、contact、revision、贡献者、地点名、坐标或 PII。错误视图、缺少 current
+目标、草稿目标、目标指纹漂移、未知目标节点或缺少城市父链均失败关闭。
+
+这个 resolver 由无登录、无成员的 `tongxingzhe_region_attribution_reader` 拥有。`tongxingzhe_runtime`、`PUBLIC`、区域
+发布者、mapping writer 和 provenance writer 都不能执行它或直接读取新增能力。本 Slice 不注册生产区域
+报告，不选择 current tree，不实现历史 `as-of`、接触统计资格、完整区域网格、重叠查询、互补隐藏、授权、
+快照 lineage、HTTP、Flutter、缓存或导出。
+
+### 如何验证 6AL
+
+没有 PostgreSQL 时，从仓库根目录运行完整 Docker 套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+脚本会从空库运行 0054 migration、结构与权限 check、synthetic fixture、checksum，并在没有源 cluster
+roles 的第二个 PostgreSQL 16 容器恢复后重复 check 和 fixture。看到 0054 的 migration、check、fixture
+都通过，且最后出现 `PostgreSQL Docker 测试全部通过。`，才表示数据库合同的本地证据齐全。
+
+如果只检查已经运行的测试库，先确认 Docker Desktop 或 PostgreSQL 测试库已启动，再执行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_region_attribution.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0054_management_region_attribution.sql
+```
+
+手工检查只使用 synthetic 来源、区域树、坐标和指纹。它应覆盖 original 精确来源、current 坐标唯一／
+零命中／同链嵌套／跨链歧义／同深度歧义、region-only 同版本／显式 mapping／缺失 mapping、错误指纹、
+草稿或未知树，以及 pending、N/A 和不完整来源的 `not_reportable`。通过只证明当前列出的 SQL shape、
+权限和失败关闭条件，不证明真实区域等价、维护者审核、报告截止点选择或 production 区域报告已经完成。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和
