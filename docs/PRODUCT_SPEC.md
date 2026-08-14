@@ -409,6 +409,7 @@ Slice 6AF 不协调后续联系同意占比的两个独立 HTTP GET，也不新�
 | `ANALYTICS-015` | 阶段变更三个指标固定 ID／version、事件或对象×项目统计单位、UTC `changed_at` 半开期间、`upward`／`downward` 顺序、actor scope 和排除项；个人事件数与去重关系数必须同时可复算。 |
 | `ANALYTICS-016` | 个人阶段变更汇总只通过固定 GET 读取；认证优先、当前项目由数据库解析并加锁，响应使用单 statement 的授权／数据截止时刻，不提供历史 as-of 或逐事件明细。 |
 | `ANALYTICS-017` | 个人兴趣 `3–4` 趋势只比较两个相邻、完整结束的 UTC 七日期间；两期使用同一 Drift transaction 和本地 `dataCutoffUtc`，只有两期可计算时才显示 `current - previous` 百分点差，并保持个人观察、非因果边界。 |
+| `ANALYTICS-018` | 固定管理报告详情只显示已解析的报告／指标 ID 与 version、`source_scope`、`privacy_policy`、时区、数据截止、发布时间和 16 格 `displayed`／`suppressed` 计数；稳定 ID 与 version 同时保留，`suppressed` 不解释为零，客户端不重算指标或隐私；中英文和屏幕阅读器在 320×568、200% 字号下仍可读，并明确匿名控制只降低披露风险、不构成形式化不可重识别保证。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -631,6 +632,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-007` | Database fixture 覆盖新库初始化、每次正式升级、关键 SQL、失败恢复和 forward-fix，不拿真实用户资料试 migration。 |
 | `TEST-008` | 阶段变更共享 fixture `relationship_stage_changes_v1.csv` 由 Dart 与 PostgreSQL 独立重算；覆盖 actor、项目、UTC 边界、结束分配、排除项、上升／下降、重复关系和重复 revision，错误输入失败关闭。 |
 | `TEST-009` | Dart／Drift synthetic fixture 覆盖一次时钟读取、相邻 UTC 边界、scope／排除项、half-up、正／负／零差、空分母、同一 Drift transaction 与共享 `dataCutoffUtc`，以及不可比较结果失败关闭。 |
+| `TEST-010` | 管理报告浏览器 synthetic snapshot 覆盖中英文固定元数据、稳定 ID／version、16 格 displayed／suppressed 计数、`management-report-privacy-summary` Semantics、隐藏格不显示零，以及 320×568、200% 字号无溢出；`AppStrings` 同时验证中英文边界文案。 |
 
 ## 9. UI、视觉与可访问性
 
