@@ -2,7 +2,7 @@
 
 个人分析和管理分析处理不同的信任边界。个人页可以立即显示本人设备上的事实，并说明哪些接触尚未同步。管理分析只能使用后端已接受的数据，还必须先降低小群体披露风险。
 
-当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定、不可变受保护快照、项目报告时区版本历史、管理报告能力授权、可信发布 v2、管理项目发现与选择、可信快照目录、窄 HTTPS 发布与读取端点、Flutter 只读管理报告页面、私有区域隐私威胁探针，以及已发布规范区域树和边界版本的冻结。Slice 6AE-0 固定个人阶段变更指标合同，6AE-1 增加固定个人读取，6AE-2 在个人页面显示结果；6AF 增加个人兴趣 `3–4` 占比的两期可比趋势；这些切片不交付管理阶段变更报告。Slice 6S 固定 PostgreSQL 地点来源合同；6U 接入 Flutter／Drift、Outbox 和 Backend；6V 用共享 synthetic fixture 对账四层。它仍没有生产成员管理、自动发布调度、生产区域报告、真实 GPS 或六平台真机证据。
+当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定、不可变受保护快照、项目报告时区版本历史、管理报告能力授权、可信发布 v2、管理项目发现与选择、可信快照目录、窄 HTTPS 发布与读取端点、Flutter 只读管理报告页面、报告详情的固定来源／定义／隐私元数据、私有区域隐私威胁探针，以及已发布规范区域树和边界版本的冻结。Slice 6AE-0 固定个人阶段变更指标合同，6AE-1 增加固定个人读取，6AE-2 在个人页面显示结果；6AF 增加个人兴趣 `3–4` 占比的两期可比趋势；这些切片不交付管理阶段变更报告。Slice 6S 固定 PostgreSQL 地点来源合同；6U 接入 Flutter／Drift、Outbox 和 Backend；6V 用共享 synthetic fixture 对账四层。它仍没有生产成员管理、自动发布调度、生产区域报告、真实 GPS 或六平台真机证据。
 
 ## 先确定统计单位
 
@@ -448,6 +448,29 @@ HTTP 只把数据库结果缩成稳定合同：可信快照返回 `200`、access
 
 紧凑宽度和大字号使用逐期间列表，每格有独立的期间、渠道和值／隐藏状态语义。宽屏和正常字号使用三列表格。两种布局显示相同的服务端结果，不在客户端重排或聚合报告值。
 
+## 报告详情如何显示固定定义和隐私边界
+
+Slice 6AG 只使用 6L 已经严格解析并交给 Widget 的字段，不增加新的 wire 字段，也不从
+显示文字反推或重新计算指标。详情保留既有的报告时区、数据截止和发布时间，并在同一元数据区
+显示以下稳定合同：
+
+| 显示项目 | 固定显示内容 |
+| --- | --- |
+| 报告定义 | “报告定义”／“Report definition”标签，加稳定的 `contact_sessions_by_channel_two_periods@1` |
+| 统计指标 | “接触场次”／“Contact sessions”，加 `contact_sessions@1` |
+| 数据来源 | “后端已接受的接触”／“Backend-accepted contacts”，加 `(backend_accepted_contacts)` |
+| 隐私规则 | “接触场次隐私规则 v1”／“Contact session privacy rules v1”，加 `(management_contact_session_privacy_v1)` |
+| 隐私摘要 | 对 16 个固定格按 `privacy_status` 计数，分别显示 `displayed` 与 `suppressed` 格数 |
+
+稳定 ID 和 version 不能被友好名称替代，因为它们用于复算、审计和发现合同漂移。摘要只数格子：
+`displayed` 格必须已有非负 `value_count`，`suppressed` 格的值在服务端就是 JSON `null`，页面继续
+显示“已隐藏”而不是 `0`，也不运行客户端隐私算法。中文和英文标签描述同一组字段。
+
+这组字段描述的是已经经过服务端阈值、贡献者保护、完整结果网格和互补隐藏的匿名管理事实。规则
+用于降低披露风险，但不构成形式化的不可重识别保证，也不能证明所有外部资料组合都安全。页面因此
+不把它写成“绝对匿名”、个人绩效、排名或因果结论；它也不新增导出、下载、图表、缓存、动态查询、
+更正版或删除规则。
+
 ## 在 Docker 中验证
 
 先启动 Docker Desktop。然后在仓库根目录运行：
@@ -472,10 +495,11 @@ flutter test --no-pub test/features/contact_metrics/management_privacy_policy_te
 flutter test --no-pub \
   test/management_reports/http_management_report_gateway_test.dart \
   test/features/management_reports/management_report_browser_view_model_test.dart \
-  test/features/management_reports/management_report_browser_test.dart
+  test/features/management_reports/management_report_browser_test.dart \
+  test/l10n/app_strings_test.dart
 ```
 
-第一项固定身份 token、三条端点和严格 JSON 合同。第二项固定项目切换、迟到响应和重试状态。第三项固定 320 px、200% 字号、键盘焦点和屏幕阅读器语义。这些测试使用 synthetic HTTP 响应，不证明真实账号拥有报告权限，也不替代服务端的 PostgreSQL 授权与审计测试。
+第一项固定身份 token、三条端点和严格 JSON 合同。第二项固定项目切换、迟到响应和重试状态。第三项固定 320 px、200% 字号、键盘焦点、屏幕阅读器语义、固定来源／定义／隐私元数据及 displayed／suppressed 摘要。第四项固定中英文文案的结构。所有测试使用 synthetic HTTP 响应，不证明真实账号拥有报告权限，也不替代服务端的 PostgreSQL 授权与审计测试。
 
 只想验证 Backend 请求和期间合同时运行：
 

@@ -369,6 +369,13 @@ final class _ReportDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final report = snapshot.report;
+    final privacySummary = text.format('managementReportPrivacySummary', {
+      'displayed': _cellCount(report, ManagementReportPrivacyStatus.displayed),
+      'suppressed': _cellCount(
+        report,
+        ManagementReportPrivacyStatus.suppressed,
+      ),
+    });
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -389,6 +396,28 @@ final class _ReportDetail extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _MetadataLine(
+                  label: text.t('managementReportDefinition'),
+                  value: '${report.reportId}@${report.reportVersion}',
+                ),
+                _MetadataLine(
+                  label: text.t('managementReportMetric'),
+                  value:
+                      '${_metricLabel(text, report.metricId)} '
+                      '(${report.metricId}@${report.metricVersion})',
+                ),
+                _MetadataLine(
+                  label: text.t('managementReportDataSource'),
+                  value:
+                      '${_sourceScopeLabel(text, report.sourceScope)} '
+                      '(${report.sourceScope})',
+                ),
+                _MetadataLine(
+                  label: text.t('managementReportPrivacyRule'),
+                  value:
+                      '${_privacyPolicyLabel(text, report.privacyPolicy)} '
+                      '(${report.privacyPolicy})',
+                ),
+                _MetadataLine(
                   label: text.t('managementReportTimeZone'),
                   value: report.reportingTimeZone,
                 ),
@@ -397,9 +426,30 @@ final class _ReportDetail extends StatelessWidget {
                   value: _formatUtc(report.dataCutoffUtc),
                 ),
                 _MetadataLine(
+                  label: text.t('managementReportDisplayedCells'),
+                  value:
+                      '${_cellCount(report, ManagementReportPrivacyStatus.displayed)}',
+                ),
+                _MetadataLine(
+                  label: text.t('managementReportSuppressedCells'),
+                  value:
+                      '${_cellCount(report, ManagementReportPrivacyStatus.suppressed)}',
+                ),
+                _MetadataLine(
                   label: text.t('managementReportReleasedAt'),
                   value: _formatUtc(snapshot.summary.releasedAtUtc),
                   isLast: true,
+                ),
+                const SizedBox(height: 12),
+                Semantics(
+                  key: const ValueKey('management-report-privacy-summary'),
+                  container: true,
+                  excludeSemantics: true,
+                  label: privacySummary,
+                  child: Text(
+                    privacySummary,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ),
               ],
             ),
@@ -519,7 +569,7 @@ final class _CompactCell extends StatelessWidget {
       child: ListTile(
         minVerticalPadding: 12,
         title: Text(category),
-        trailing: Text(value, style: Theme.of(context).textTheme.titleMedium),
+        subtitle: Text(value, style: Theme.of(context).textTheme.titleMedium),
       ),
     );
   }
@@ -651,6 +701,32 @@ String _cellValue(AppStrings text, ProtectedManagementReportCell cell) =>
         'managementReportSuppressed',
       ),
     };
+
+String _metricLabel(AppStrings text, String metricId) => switch (metricId) {
+  'contact_sessions' => text.t('managementReportContactSessions'),
+  _ => metricId,
+};
+
+String _sourceScopeLabel(AppStrings text, String sourceScope) =>
+    switch (sourceScope) {
+      'backend_accepted_contacts' => text.t(
+        'managementReportSourceBackendAcceptedContacts',
+      ),
+      _ => sourceScope,
+    };
+
+String _privacyPolicyLabel(AppStrings text, String privacyPolicy) =>
+    switch (privacyPolicy) {
+      'management_contact_session_privacy_v1' => text.t(
+        'managementReportPrivacyContactSessionV1',
+      ),
+      _ => privacyPolicy,
+    };
+
+int _cellCount(
+  ProtectedManagementReport report,
+  ManagementReportPrivacyStatus status,
+) => report.cells.where((cell) => cell.privacyStatus == status).length;
 
 String _periodLabel(AppStrings text, ManagementReportPeriodKey periodKey) =>
     text.t(switch (periodKey) {

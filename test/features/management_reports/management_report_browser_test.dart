@@ -28,6 +28,87 @@ void main() {
     );
   });
 
+  testWidgets('报告详情在窄屏大字号下显示中文固定元数据和隐私摘要', (tester) async {
+    final semantics = tester.ensureSemantics();
+    _compactView(tester);
+    await tester.pumpWidget(
+      _app(
+        _Gateway(
+          context: _contextSnapshot(current: _projectA),
+          summaries: [_summary],
+          snapshot: _snapshot,
+        ),
+        text: const AppStrings('zh'),
+        textScaler: TextScaler.linear(2),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _openReport(tester);
+
+    expect(tester.takeException(), isNull);
+    _expectFixedMetadata(
+      tester,
+      metricLabel: '接触场次 (contact_sessions@1)',
+      sourceLabel: '后端已接受的接触',
+      privacyLabel: '接触场次隐私规则 v1',
+      displayedLabel: '显示格数',
+      suppressedLabel: '隐藏格数',
+    );
+    final summary = tester.getSemantics(
+      find.byKey(const ValueKey('management-report-privacy-summary')),
+    );
+    expect(summary.label, contains('1'));
+    expect(summary.label, contains('15'));
+    expect(summary.label, isNot(contains('0')));
+    expect(find.text('0'), findsNothing);
+    expect(find.textContaining('降低披露风险'), findsOneWidget);
+    expect(find.textContaining('形式化不可重识别'), findsOneWidget);
+    semantics.dispose();
+  });
+
+  testWidgets('报告详情以英文显示固定元数据和非形式化匿名边界', (tester) async {
+    final semantics = tester.ensureSemantics();
+    _compactView(tester);
+    await tester.pumpWidget(
+      _app(
+        _Gateway(
+          context: _contextSnapshot(current: _projectA),
+          summaries: [_summary],
+          snapshot: _snapshot,
+        ),
+        text: const AppStrings('en'),
+        textScaler: TextScaler.linear(2),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _openReport(tester);
+
+    expect(tester.takeException(), isNull);
+    _expectFixedMetadata(
+      tester,
+      metricLabel: 'Contact sessions (contact_sessions@1)',
+      sourceLabel: 'Backend-accepted contacts',
+      privacyLabel: 'Contact session privacy rules v1',
+      displayedLabel: 'Displayed cells',
+      suppressedLabel: 'Hidden cells',
+    );
+    final summary = tester.getSemantics(
+      find.byKey(const ValueKey('management-report-privacy-summary')),
+    );
+    expect(summary.label, contains('1'));
+    expect(summary.label, contains('15'));
+    expect(summary.label, isNot(contains('0')));
+    expect(find.text('0'), findsNothing);
+    expect(find.textContaining('reduce disclosure risk'), findsOneWidget);
+    expect(
+      find.textContaining('formal non-re-identification guarantee'),
+      findsOneWidget,
+    );
+    semantics.dispose();
+  });
+
   testWidgets('键盘按视觉顺序打开报告，返回后恢复目录项焦点', (tester) async {
     _compactView(tester);
     await tester.pumpWidget(
@@ -152,19 +233,58 @@ void main() {
   });
 }
 
-Widget _app(_Gateway gateway, {TextScaler textScaler = TextScaler.noScaling}) =>
-    MaterialApp(
-      builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context).copyWith(textScaler: textScaler),
-        child: child!,
-      ),
-      home: Scaffold(
-        body: ManagementReportBrowser(
-          text: const AppStrings('zh'),
-          gateway: gateway,
-        ),
-      ),
-    );
+Widget _app(
+  _Gateway gateway, {
+  AppStrings text = const AppStrings('zh'),
+  TextScaler textScaler = TextScaler.noScaling,
+}) => MaterialApp(
+  builder: (context, child) => MediaQuery(
+    data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+    child: child!,
+  ),
+  home: Scaffold(
+    body: ManagementReportBrowser(text: text, gateway: gateway),
+  ),
+);
+
+Future<void> _openReport(WidgetTester tester) async {
+  final item = find.byKey(ValueKey('management-report-${_summary.snapshotId}'));
+  final scrollable = find.byType(Scrollable).first;
+  for (var attempt = 0; attempt < 8 && !tester.any(item); attempt++) {
+    await tester.drag(scrollable, const Offset(0, -280));
+    await tester.pump();
+  }
+  expect(item, findsOneWidget);
+  await tester.ensureVisible(item);
+  await tester.pumpAndSettle();
+  await tester.tap(item);
+  await tester.pumpAndSettle();
+}
+
+void _expectFixedMetadata(
+  WidgetTester tester, {
+  required String metricLabel,
+  required String sourceLabel,
+  required String privacyLabel,
+  required String displayedLabel,
+  required String suppressedLabel,
+}) {
+  expect(
+    find.textContaining('contact_sessions_by_channel_two_periods@1'),
+    findsOneWidget,
+  );
+  expect(find.textContaining('contact_sessions@1'), findsOneWidget);
+  expect(find.textContaining(metricLabel), findsOneWidget);
+  expect(find.textContaining('backend_accepted_contacts'), findsOneWidget);
+  expect(find.textContaining(sourceLabel), findsOneWidget);
+  expect(
+    find.textContaining('management_contact_session_privacy_v1'),
+    findsOneWidget,
+  );
+  expect(find.textContaining(privacyLabel), findsOneWidget);
+  expect(find.textContaining(displayedLabel), findsOneWidget);
+  expect(find.textContaining(suppressedLabel), findsOneWidget);
+}
 
 void _compactView(WidgetTester tester) {
   tester.view.devicePixelRatio = 1;

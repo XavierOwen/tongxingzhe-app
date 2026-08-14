@@ -117,4 +117,44 @@ void main() {
       contains('lower observed level'),
     );
   });
+
+  test('管理报告元数据和匿名边界文案按语言保持固定结构', () {
+    const zh = AppStrings('zh');
+    const en = AppStrings('en');
+
+    expect(zh.t('managementReportDefinition'), '报告定义');
+    expect(zh.t('managementReportMetric'), '统计指标');
+    expect(zh.t('managementReportDataSource'), '数据来源');
+    expect(zh.t('managementReportPrivacyRule'), '隐私规则');
+    expect(zh.t('managementReportDisplayedCells'), '显示格数');
+    expect(zh.t('managementReportSuppressedCells'), '隐藏格数');
+    expect(zh.t('managementReportSourceBackendAcceptedContacts'), '后端已接受的接触');
+    expect(zh.t('managementReportPrivacyContactSessionV1'), '接触场次隐私规则 v1');
+    expect(
+      zh.t('managementReportPrivacySummary'),
+      allOf(contains('降低披露风险'), contains('形式化不可重识别')),
+    );
+
+    expect(en.t('managementReportDefinition'), 'Report definition');
+    expect(en.t('managementReportMetric'), 'Metric');
+    expect(en.t('managementReportDataSource'), 'Data source');
+    expect(en.t('managementReportPrivacyRule'), 'Privacy rule');
+    expect(en.t('managementReportDisplayedCells'), 'Displayed cells');
+    expect(en.t('managementReportSuppressedCells'), 'Hidden cells');
+    expect(
+      en.t('managementReportSourceBackendAcceptedContacts'),
+      'Backend-accepted contacts',
+    );
+    expect(
+      en.t('managementReportPrivacyContactSessionV1'),
+      'Contact session privacy rules v1',
+    );
+    expect(
+      en.t('managementReportPrivacySummary'),
+      allOf(
+        contains('reduce disclosure risk'),
+        contains('formal non-re-identification guarantee'),
+      ),
+    );
+  });
 }
