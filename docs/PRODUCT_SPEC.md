@@ -403,6 +403,20 @@ Backend 和 PostgreSQL 每次重新验证活动账号、组织／项目成员关
 本 Slice 不交付 Flutter、浏览器或原生保存／分享、CSV、六平台真机验收、图表、批量导出、任意查询、
 区域下钻、报告更正／取代、缓存、保留或删除策略；推广对象资料导出和 Slice 7 删除规则保持原边界。
 
+#### Slice 6AI：Flutter 验证管理报告导出 artifact
+
+Slice 6AI 只把 6AH 的固定导出接入 Flutter transport。客户端使用当前显式管理项目和目录中的快照
+摘要调用同一窄 GET，不增加 query 或 body。成功响应必须同时通过固定响应头、export event ID、
+Content-Length、UTF-8、canonical key 顺序、项目／快照／发布时间／报告元数据和 16 格合同验证。
+
+成功结果是只存在于内存的 typed export artifact。它保留服务端原始 canonical bytes、固定文件名、
+content type、export event ID 和已核对的快照，不重新序列化，不写入 Drift、离线缓存或日志。`401`
+最多强制刷新并重试一次；权限、未找到、不可信、网络和协议漂移保持不同的稳定失败类别。
+
+本 Slice 不增加 Widget 下载按钮、浏览器 API、原生文件系统、系统分享、文件插件或真实平台证据。
+浏览器下载、原生保存和系统分享是三种不同的后续交付行为；任何一项成功都不能证明另外两项成功，
+也不能扩大服务端导出审计的含义。
+
 只有高级分析可显示：
 
 ```text
@@ -434,6 +448,7 @@ Backend 和 PostgreSQL 每次重新验证活动账号、组织／项目成员关
 | `ANALYTICS-017` | 个人兴趣 `3–4` 趋势只比较两个相邻、完整结束的 UTC 七日期间；两期使用同一 Drift transaction 和本地 `dataCutoffUtc`，只有两期可计算时才显示 `current - previous` 百分点差，并保持个人观察、非因果边界。 |
 | `ANALYTICS-018` | 固定管理报告详情只显示已解析的报告／指标 ID 与 version、`source_scope`、`privacy_policy`、时区、数据截止、发布时间和 16 格 `displayed`／`suppressed` 计数；稳定 ID 与 version 同时保留，`suppressed` 不解释为零，客户端不重算指标或隐私；中英文和屏幕阅读器在 320×568、200% 字号下仍可读，并明确匿名控制只降低披露风险、不构成形式化不可重识别保证。 |
 | `ANALYTICS-019` | 固定匿名管理报告文件导出只返回已发布可信 v2 快照的 canonical JSON v1；报告定义、指标、来源、时区、截止点、发布时间和 16 格顺序固定，后续数据不改变同一快照的导出字节。 |
+| `ANALYTICS-020` | Flutter 只把固定导出解码为内存 artifact；它严格核对响应头、原始 canonical bytes、目录摘要和受保护报告合同，不重新序列化、不持久化，也不把取得 bytes 表述为下载、保存或分享成功。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -659,6 +674,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-009` | Dart／Drift synthetic fixture 覆盖一次时钟读取、相邻 UTC 边界、scope／排除项、half-up、正／负／零差、空分母、同一 Drift transaction 与共享 `dataCutoffUtc`，以及不可比较结果失败关闭。 |
 | `TEST-010` | 管理报告浏览器 synthetic snapshot 覆盖中英文固定元数据、稳定 ID／version、16 格 displayed／suppressed 计数、`management-report-privacy-summary` Semantics、隐藏格不显示零，以及 320×568、200% 字号无溢出；`AppStrings` 同时验证中英文边界文案。 |
 | `TEST-011` | 固定匿名管理报告文件导出使用共享 synthetic snapshot 和 canonical JSON golden fixture；覆盖双 capability 授权、可信 provenance、16 格顺序、`suppressed = null`、稳定字节、独立不可变导出审计和无 PII／贡献者／地点字段。 |
+| `TEST-012` | Flutter 导出 gateway 使用 canonical UTF-8 golden bytes；覆盖固定请求／响应头、一次 `401` 刷新、稳定错误、Content-Length、key 顺序、目录摘要绑定、16 格、`displayed >= 10`、`suppressed = null`、额外字段和非 canonical 响应失败关闭。 |
 
 ## 9. UI、视觉与可访问性
 

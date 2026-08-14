@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 /// Flutter 读取管理分析项目、可信快照目录和受保护报告的唯一接口。
 ///
 /// 该接口不暴露 bearer token、授权关系或客户端隐私计算。每次调用都由远端
@@ -20,6 +22,16 @@ abstract interface class ManagementReportGateway {
   /// 6L 单份响应没有发布时间，因此实现必须把目录摘要与报告逐项对照，不能自行
   /// 补造该时间。成功结果只存在于调用方内存，不得写入离线缓存。
   Future<ManagementReportResult<ManagementReportSnapshot>> readSnapshot({
+    required String projectId,
+    required ManagementReportSnapshotSummary summary,
+  });
+
+  /// 重新授权并取得 [summary] 指定快照的固定 canonical JSON v1 字节。
+  ///
+  /// 成功结果只表示客户端已验证服务端准备交付的内存 artifact。它不表示文件已经
+  /// 下载、落盘、打开或分享，也不得由 gateway 写入离线缓存。
+  Future<ManagementReportResult<ManagementReportExportArtifact>>
+  exportSnapshot({
     required String projectId,
     required ManagementReportSnapshotSummary summary,
   });
@@ -114,6 +126,26 @@ final class ManagementReportSnapshot {
   final ProtectedManagementReport report;
 }
 
+/// 服务端生成并由 Flutter 严格验证的固定管理报告导出 artifact。
+///
+/// [bytes] 保留服务端 canonical JSON v1 原始字节，不由客户端重新序列化。
+/// 该对象只存在于内存；后续平台交付必须通过独立 capability adapter。
+final class ManagementReportExportArtifact {
+  ManagementReportExportArtifact({
+    required List<int> bytes,
+    required this.fileName,
+    required this.contentType,
+    required this.exportEventId,
+    required this.snapshot,
+  }) : bytes = UnmodifiableListView(List<int>.of(bytes));
+
+  final List<int> bytes;
+  final String fileName;
+  final String contentType;
+  final String exportEventId;
+  final ManagementReportSnapshot snapshot;
+}
+
 final class ProtectedManagementReport {
   ProtectedManagementReport({
     required this.reportId,
@@ -198,6 +230,14 @@ final class DeferredManagementReportGateway implements ManagementReportGateway {
 
   @override
   Future<ManagementReportResult<ManagementReportSnapshot>> readSnapshot({
+    required String projectId,
+    required ManagementReportSnapshotSummary summary,
+  }) async =>
+      const ManagementReportRejected(ManagementReportFailureCode.notConfigured);
+
+  @override
+  Future<ManagementReportResult<ManagementReportExportArtifact>>
+  exportSnapshot({
     required String projectId,
     required ManagementReportSnapshotSummary summary,
   }) async =>

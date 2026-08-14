@@ -104,9 +104,38 @@ final class HttpManagementReportGateway implements ManagementReportGateway {
     parse: (root) => _parseSnapshot(root, projectId, summary),
   );
 
+  @override
+  Future<ManagementReportResult<ManagementReportExportArtifact>>
+  exportSnapshot({
+    required String projectId,
+    required ManagementReportSnapshotSummary summary,
+  }) => _requestResponse(
+    send: (token) => _client.get(
+      _baseUri.resolve(
+        '/v1/projects/${Uri.encodeComponent(projectId)}/'
+        'management-report-snapshots/'
+        '${Uri.encodeComponent(summary.snapshotId)}/export',
+      ),
+      headers: _headers(token),
+    ),
+    parse: (response) => _parseExportResponse(
+      response,
+      requestedProjectId: projectId,
+      summary: summary,
+    ),
+  );
+
   Future<ManagementReportResult<T>> _request<T>({
     required Future<http.Response> Function(IdentityAccessToken token) send,
     required T Function(Map<String, Object?> root) parse,
+  }) => _requestResponse(
+    send: send,
+    parse: (response) => parse(_jsonObject(response.body)),
+  );
+
+  Future<ManagementReportResult<T>> _requestResponse<T>({
+    required Future<http.Response> Function(IdentityAccessToken token) send,
+    required T Function(http.Response response) parse,
   }) async {
     // 401 只允许强制刷新一次。第二次 401 或刷新失败都停止，避免认证重试循环。
     try {
@@ -125,7 +154,7 @@ final class HttpManagementReportGateway implements ManagementReportGateway {
       if (response.statusCode < 200 || response.statusCode >= 300) {
         return ManagementReportRejected(_httpFailure(response.statusCode));
       }
-      return ManagementReportSuccess(parse(_jsonObject(response.body)));
+      return ManagementReportSuccess(parse(response));
     } on TimeoutException {
       return const ManagementReportRejected(
         ManagementReportFailureCode.networkUnavailable,
@@ -147,6 +176,142 @@ final class HttpManagementReportGateway implements ManagementReportGateway {
 
   @override
   Future<void> close() async => _client.close();
+}
+
+ManagementReportExportArtifact _parseExportResponse(
+  http.Response response, {
+  required String requestedProjectId,
+  required ManagementReportSnapshotSummary summary,
+}) {
+  final contentType = _requiredHeader(response, 'content-type');
+  final disposition = _requiredHeader(response, 'content-disposition');
+  final cacheControl = _requiredHeader(response, 'cache-control');
+  final contentTypeOptions = _requiredHeader(
+    response,
+    'x-content-type-options',
+  );
+  final exportEventId = _uuid(
+    _requiredHeader(response, 'x-management-report-export-event-id'),
+  );
+  final contentLength = _requiredHeader(response, 'content-length');
+  if (contentType != _exportContentType ||
+      disposition != _exportContentDisposition ||
+      cacheControl != 'no-store' ||
+      contentTypeOptions != 'nosniff' ||
+      !_contentLengthPattern.hasMatch(contentLength) ||
+      int.tryParse(contentLength) != response.bodyBytes.length) {
+    throw const FormatException('management report export headers are invalid');
+  }
+
+  final body = utf8.decode(response.bodyBytes);
+  final root = _jsonObject(body);
+  _requireExactOrderedKeys(root, const [
+    'export_contract_id',
+    'snapshot_id',
+    'released_at_utc',
+    'report',
+  ]);
+  if (root['export_contract_id'] != _exportContractId ||
+      _canonicalUuid(root['snapshot_id']) != summary.snapshotId.toLowerCase()) {
+    throw const FormatException('management report export identity is invalid');
+  }
+  final releasedAtUtc = _canonicalUtcTimestamp(root['released_at_utc']);
+  if (releasedAtUtc != summary.releasedAtUtc) {
+    throw const FormatException('management report export release is invalid');
+  }
+  final report = _parseExportProtectedReport(
+    root['report'],
+    requestedProjectId,
+    summary,
+  );
+  if (jsonEncode(root) != body) {
+    throw const FormatException('management report export is not canonical');
+  }
+  return ManagementReportExportArtifact(
+    bytes: response.bodyBytes,
+    fileName: _exportFileName,
+    contentType: contentType,
+    exportEventId: exportEventId,
+    snapshot: ManagementReportSnapshot(summary: summary, report: report),
+  );
+}
+
+ProtectedManagementReport _parseExportProtectedReport(
+  Object? value,
+  String requestedProjectId,
+  ManagementReportSnapshotSummary summary,
+) {
+  final report = _object(value);
+  _requireExactOrderedKeys(report, const [
+    'report_id',
+    'report_version',
+    'metric_id',
+    'metric_version',
+    'dimension',
+    'query_fingerprint',
+    'privacy_policy',
+    'source_scope',
+    'project_id',
+    'periods',
+    'cells',
+  ]);
+  if (_canonicalUuid(report['project_id']) !=
+      requestedProjectId.toLowerCase()) {
+    throw const FormatException('management report export project is invalid');
+  }
+  final periods = _object(report['periods']);
+  _requireExactOrderedKeys(periods, const [
+    'period_boundary_id',
+    'reporting_time_zone',
+    'data_cutoff_utc',
+    'previous_period',
+    'current_period',
+  ]);
+  _canonicalUtcTimestamp(periods['data_cutoff_utc']);
+  for (final periodKey in const ['previous_period', 'current_period']) {
+    final period = _object(periods[periodKey]);
+    _requireExactOrderedKeys(period, const ['start_utc', 'until_utc']);
+    _canonicalUtcTimestamp(period['start_utc']);
+    _canonicalUtcTimestamp(period['until_utc']);
+  }
+
+  final cells = _list(report['cells']);
+  if (cells.length != managementReportCategoryKeys.length * 2) {
+    throw const FormatException('management report export needs 16 cells');
+  }
+  for (final value in cells) {
+    final cell = _object(value);
+    _requireExactOrderedKeys(cell, const [
+      'period_key',
+      'category_key',
+      'cell_order',
+      'privacy_status',
+      'value_count',
+    ]);
+    final privacyStatus = cell['privacy_status'];
+    final valueCount = cell['value_count'];
+    if (privacyStatus == 'displayed') {
+      if (valueCount is! int ||
+          valueCount < 10 ||
+          valueCount > _maximumSafeJsonInteger) {
+        throw const FormatException(
+          'displayed management report export value is invalid',
+        );
+      }
+    } else if (privacyStatus != 'suppressed' || valueCount != null) {
+      throw const FormatException(
+        'suppressed management report export value is invalid',
+      );
+    }
+  }
+  return _parseProtectedReport(value, requestedProjectId, summary);
+}
+
+String _requiredHeader(http.Response response, String name) {
+  for (final entry in response.headers.entries) {
+    if (entry.key.toLowerCase() == name) return entry.value;
+  }
+  throw const FormatException('management report export header is missing');
 }
 
 ManagementAnalysisContextSnapshot _parseContextSnapshot(
@@ -563,6 +728,15 @@ String _uuid(Object? value) {
   return text.toLowerCase();
 }
 
+String _canonicalUuid(Object? value) {
+  final text = _nonEmptyString(value);
+  final normalized = _uuid(text);
+  if (text != normalized) {
+    throw const FormatException('expected canonical UUID');
+  }
+  return normalized;
+}
+
 void _requireExactKeys(Map<String, Object?> value, List<String> expected) {
   final actual = value.keys.toList()..sort();
   final sortedExpected = [...expected]..sort();
@@ -574,6 +748,32 @@ void _requireExactKeys(Map<String, Object?> value, List<String> expected) {
       throw const FormatException('object keys are invalid');
     }
   }
+}
+
+void _requireExactOrderedKeys(
+  Map<String, Object?> value,
+  List<String> expected,
+) {
+  final actual = value.keys.toList();
+  if (actual.length != expected.length) {
+    throw const FormatException('object key order is invalid');
+  }
+  for (var index = 0; index < actual.length; index++) {
+    if (actual[index] != expected[index]) {
+      throw const FormatException('object key order is invalid');
+    }
+  }
+}
+
+DateTime _canonicalUtcTimestamp(Object? value) {
+  if (value is! String || !_canonicalUtcPattern.hasMatch(value)) {
+    throw const FormatException('expected canonical UTC timestamp');
+  }
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null || parsed.toUtc().toIso8601String() != value) {
+    throw const FormatException('canonical UTC timestamp is invalid');
+  }
+  return parsed.toUtc();
 }
 
 Uri _validatedBaseUri(Uri value) {
@@ -598,6 +798,10 @@ final _uuidPattern = RegExp(
 final _rfc3339Pattern = RegExp(
   r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$',
 );
+final _canonicalUtcPattern = RegExp(
+  r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$',
+);
+final _contentLengthPattern = RegExp(r'^(?:0|[1-9]\d*)$');
 final _timeZonePattern = RegExp(r'^[A-Za-z0-9._+/-]+$');
 var _timeZonesInitialized = false;
 const _fixedReportId = 'contact_sessions_by_channel_two_periods';
@@ -610,4 +814,9 @@ const _fixedQueryFingerprint =
 const _fixedPrivacyPolicy = 'management_contact_session_privacy_v1';
 const _fixedSourceScope = 'backend_accepted_contacts';
 const _fixedPeriodBoundaryId = 'iso_week_monday_v1';
+const _exportContractId = 'management_report_snapshot_export_v1';
+const _exportContentType = 'application/json; charset=utf-8';
+const _exportFileName = 'management-report-snapshot-v1.json';
+const _exportContentDisposition = 'attachment; filename="$_exportFileName"';
+const _maximumSafeJsonInteger = 9007199254740991;
 final _supportedCategoryKeys = managementReportCategoryKeys.toSet();

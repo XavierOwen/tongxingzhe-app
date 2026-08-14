@@ -1948,6 +1948,14 @@ final class _EmptyManagementReportGateway implements ManagementReportGateway {
       const ManagementReportRejected(ManagementReportFailureCode.notFound);
 
   @override
+  Future<ManagementReportResult<ManagementReportExportArtifact>>
+  exportSnapshot({
+    required String projectId,
+    required ManagementReportSnapshotSummary summary,
+  }) async =>
+      const ManagementReportRejected(ManagementReportFailureCode.notFound);
+
+  @override
   Future<ManagementReportResult<ManagementAnalysisContextSnapshot>>
   selectContext(String projectId) async =>
       const ManagementReportRejected(ManagementReportFailureCode.unauthorized);
