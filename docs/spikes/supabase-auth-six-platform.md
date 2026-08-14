@@ -43,7 +43,7 @@ Supabase 官方说明 Flutter 初始化使用 project URL 和 publishable／anon
 | iOS | CI pass；本机 device/no-codesign pass；Apple Development 签名真机安装 pass | Keychain 写入与跨进程读取 pass | 注册请求、OTP 邮件送达／确认、恢复 OTP、改密码 pass | 登录、强制刷新、Adapter 重建、跨进程恢复、登出 pass | runtime pass |
 | Web | CI pass；本机 release build pass | localhost 写入、Adapter 重建读取、关闭并重启浏览器后读取 pass | 注册请求、OTP 邮件送达、OTP 确认、恢复 OTP 与改密码 pass | 登录、强制刷新、跨浏览器进程恢复、登出 pass | runtime pass |
 | macOS | CI pass；Apple Development 签名 debug pass | Keychain 读写 pass | 注册、8 位 OTP、恢复、改密码 pass | 登录、强制刷新、跨进程恢复、登出 pass | runtime pass |
-| Windows | CI pass；Windows 11 25H2／Flutter 3.44.9 本机 debug pass | Credential Store 写入、读回、删除与跨独立进程 session 读回 pass | 注册请求、OTP 邮件送达／确认、恢复 OTP、改密码 pass | 登录、强制刷新、Adapter 重建、跨独立进程恢复、登出 pass | runtime pass |
+| Windows | CI pass；Windows 11 25H2／Flutter 3.44.9 本机 debug pass | Windows 安全存储写入、读回、删除与跨独立进程 session 读回 pass | 注册请求、OTP 邮件送达／确认、恢复 OTP、改密码 pass | 登录、强制刷新、Adapter 重建、跨独立进程恢复、登出 pass | runtime pass |
 | Linux | CI pass | libsecret＋keyring 待测 | 待测 | 待测 | build only |
 
 GitHub Actions 的 build 只能把第一列改为 pass；其余列必须有真实 Supabase test project 和对应运行环境。`flutter_secure_storage` 声明支持六平台，但 Web 需要 HTTPS／localhost，Linux 需要 libsecret 与可用 keyring，这些都是 runtime 条件，不能从 package metadata 推导为真机通过：[package requirements](https://pub.dev/packages/flutter_secure_storage)。
@@ -64,9 +64,25 @@ iOS 的第一轮真机证据于 2026-08-03 在 iPhone 14 Pro、iOS 26.5.2 和同
 
 iOS 第一次注册请求对原测试邮箱得到 `/auth/v1/signup` 200，但未收到邮件；提供的 22 条日志全部标为 success，且没有收件服务器的最终投递回执，所以证据只支持“Supabase 接受请求”，不能证明学校邮箱、别名规则或 SMTP 中哪一层拦截。改用受控工作邮箱后，真机 `signup_request` 成功且实际收到 OTP；`signup_confirm` 随后进入 `signedIn` 并登出。`recovery_request` 又实际送达新的恢复 OTP，`recovery_confirm` 建立恢复 session、更新新密码、回到 `signedIn` 并登出。最后把新密码放入独立 `session` 运行，登录、两次刷新、Adapter 重建恢复与登出全部通过，也证明 `--no-uninstall` 后下一次覆盖安装不再丢失开发者信任。期间一次 Xcode“推荐工程设置”模态窗口导致启动等待超时；关闭而不接受自动工程改写后重跑通过，未进入 Dart 的轮次不计为认证失败。
 
-Windows 的第一轮本机证据于 2026-08-12 在 Windows 11 25H2（10.0.26200.8655）、Flutter 3.44.9、Visual Studio Community 2026 18.9.0 上取得。中文系统的 MSVC code page 936 先在 `/WX` 下拒绝编译 `main.cpp` 的 UTF-8 窗口标题；Windows runner target 明确加入 `/utf-8` 后，本机 debug build 通过，实际 App 进程创建了标题为“同行者”的可响应窗口并以 0 正常退出。随后使用不含身份或业务资料的 synthetic marker 运行安全存储探针：第一独立测试进程写入并读回，第二独立测试进程在未接收 marker 值的情况下从 Windows 安全存储读回，随后删除并确认不存在。因此 Windows 安全存储的实际写入、跨进程读取与删除可记为 pass。
+Windows 的第一轮本机证据于 2026-08-12 在 Windows 11 25H2（10.0.26200.8655）、Flutter 3.44.9、Visual Studio Community 2026 18.9.0 上取得。被测工作树以 App commit `00d84a4f96a05b20185f0e81c128b265a055c4e7` 为基线，并包含当时尚未提交的 `/utf-8` 修复。
 
-Windows 的 hosted Supabase 合同于 2026-08-14 在同一环境、隔离 hosted test project 和专用 synthetic 测试账号上完成，最终被测工作树以 App commit `00d84a4f96a05b20185f0e81c128b265a055c4e7` 为基线并包含上述 `/utf-8` 修复。全新账号的 `signup_request` 实际送达注册 OTP，`signup_confirm` 进入 `signedIn` 后登出；`session` 完成登录、token 强制刷新、安全存储读取、Adapter 重建恢复与登出。随后两个独立 App 进程分别运行 `session_start` 与 `session_restore`：第一进程登录、刷新并留下 session，第二进程的配置明确不含 password，仍从 Windows Credential Store 恢复 token，随后登出并清除 session。`recovery_request` 又实际送达恢复 OTP，`recovery_confirm` 建立恢复 session、更新新密码、回到 `signedIn` 并登出；最后以新密码再次运行 `session`，登录、两次刷新、Adapter 重建恢复与登出全部通过。所有阶段只使用受 Git 忽略的配置，日志未输出 password、OTP 或 bearer／refresh token。因此 Windows 注册、App 内 OTP、登录、强制刷新、跨独立进程安全 session 恢复、密码恢复／修改和登出合同可记为 runtime pass。
+中文系统的 MSVC code page 936 先在 `/WX` 下拒绝编译 `main.cpp` 的 UTF-8 窗口标题。Windows runner target 加入修复后，本机 debug build 通过。App 进程创建了标题为“同行者”的可响应窗口并以 0 正常退出。
+
+随后使用不含身份或业务资料的 synthetic marker 运行安全存储探针。第一独立测试进程写入并读回。第二独立测试进程在未接收 marker 值的情况下读回，随后删除并确认不存在。因此 Windows 安全存储的实际写入、跨进程读取与删除可记为 pass。
+
+当前锁定的 `flutter_secure_storage_windows 4.2.2` 默认路径使用 Windows DPAPI 保护应用支持目录中的密文文件。旧插件存储只在显式启用 backward compatibility 时读取，本次探针没有启用该选项。
+
+Windows 的 hosted Supabase 合同于 2026-08-14 在同一环境、隔离 hosted test project 和专用 synthetic 测试账号上完成。完整分阶段序列使用上述 `00d84a4f96a05b20185f0e81c128b265a055c4e7` 基线和 `/utf-8` 修复。
+
+专用合成邮箱的 `signup_request` 实际送达注册 OTP，但这个结果不证明远端账号此前不存在。`signup_confirm` 进入 `signedIn` 后登出。`session` 完成登录、token 强制刷新、安全存储读取、Adapter 重建恢复与登出。
+
+随后两个独立 App 进程分别运行 `session_start` 与 `session_restore`。第一进程登录、刷新并留下 session。第二进程的配置明确不含 password，仍从 Windows 安全存储恢复 session，随后登出并清除 session。
+
+`recovery_request` 又实际送达恢复 OTP。`recovery_confirm` 建立恢复 session、更新新密码、回到 `signedIn` 并登出。最后以新密码再次运行 `session`，登录、两次刷新、Adapter 重建恢复与登出全部通过。
+
+完整序列发生在共享 signup ledger 落地前，因此不把这次请求记为 ledger-protected。实现提交 `6a8e0c32804a52a4cc7072c1149c1dfef09fe906` 随后把 `/utf-8` 和 runner 的 LF 规则重放到 `8266988e3c15f574ad2af2c6d4e6d4bdcddf8d09`。该候选重新运行 hosted `session`，未把注册和恢复序列写成在候选提交上重跑。
+
+所有阶段只使用受 Git 忽略的配置，日志未输出 password、OTP 或 bearer／refresh token。因此现有证据支持 Windows 注册、App 内 OTP、登录、强制刷新、跨独立进程安全 session 恢复、密码恢复／修改和登出合同为 runtime pass。
 
 ## 4. 隔离测试 project 的设置
 
