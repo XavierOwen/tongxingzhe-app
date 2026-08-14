@@ -1,6 +1,6 @@
 # 六平台能力证据矩阵
 
-状态：**持续更新；截至 2026-08-06，只确认六平台 build 和 iOS／Web／macOS 认证运行时证据。离线 PII 尚无平台运行时通过结论。**
+状态：**持续更新；截至 2026-08-14，确认六平台 build 和 iOS／Web／macOS／Windows 认证运行时证据。离线 PII 尚无平台运行时通过结论。**
 
 适用需求：`GOAL-006`、`AUTH-004`、`PLATFORM-001` 至 `PLATFORM-007`、`TEST-006`
 
@@ -23,14 +23,14 @@
 | iOS | CI pass；签名真机安装 pass | pass；Keychain、OTP、刷新、跨进程恢复均有证据 | 只有共享 migration 自动测试，平台持久化待测 | 共享自动测试通过；设备重启恢复待测 | 实现和启动探针已接线；离线 PII 专用流程待测 | 未验收 | auth runtime pass |
 | Web | CI／release build pass | pass；localhost 安全存储、OTP、刷新、跨浏览器进程恢复均有证据 | Web 持久化、刷新、崩溃和双标签待测 | 共享自动测试通过；浏览器持久化恢复待测 | 当前禁用；durable database 仍为 `runtimeProbeRequired`，不会装配 PII vault | 未验收 | auth runtime pass |
 | macOS | CI pass；签名 debug pass | pass；Keychain、OTP、刷新、跨进程恢复均有证据 | 只有共享 migration 自动测试，平台持久化待测 | 共享自动测试通过；设备重启恢复待测 | 实现和启动探针已接线；离线 PII 专用流程待测 | 未验收 | auth runtime pass |
-| Windows | CI pass | 待测；安全存储待测 | 只有共享 migration 自动测试，平台持久化待测 | 共享自动测试通过；设备重启恢复待测 | 实现和启动探针已接线；Credential Store 运行时待测 | 未验收 | build only |
+| Windows | CI pass；Windows 11 25H2／Flutter 3.44.9 本机 debug pass | pass；Windows 安全存储、注册／恢复 OTP、刷新、改密码、跨独立进程 session 恢复和登出均有证据 | 只有共享 migration 自动测试，平台持久化待测 | 共享自动测试通过；设备重启恢复待测 | 实现和启动探针已接线；Windows 安全存储基础运行时 pass，离线 PII 专用流程待测 | 未验收 | auth runtime pass |
 | Linux | CI pass | 待测；libsecret／keyring 待测 | 只有共享 migration 自动测试，平台持久化待测 | 共享自动测试通过；设备重启恢复待测 | 实现和启动探针已接线；libsecret／keyring 运行时待测 | 未验收 | build only |
 
 认证逐步证据和测试环境见 [Supabase Auth 六平台 Spike](./supabase-auth-six-platform.md)。离线对象资料的信任边界和残余风险见[威胁模型](../security/offline-pii-threat-model.md)。共享 Drift schema 和 migration 测试证明代码路径可重建旧库，但在每个平台完成关闭进程、重新打开和持久化探针前，不能把“测试通过”扩大为平台 runtime 通过。
 
 ## 公开发布前必须补齐
 
-- Android、Windows、Linux 的注册、OTP、恢复、刷新、登出和跨进程安全 session 恢复；
+- Android、Linux 的注册、OTP、恢复、刷新、登出和跨进程安全 session 恢复；
 - 六平台本地数据库初始化、migration、进程重启后的持久化和失败恢复；
 - 六平台断网记录、Outbox 租约恢复、重复请求和同步恢复；
 - 原生五平台的离线 PII 写入、跨进程只读恢复、到期、撤权和清除失败重试；
