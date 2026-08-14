@@ -303,6 +303,12 @@ _Avoid_: current 开关选择、名称匹配、父链猜测、重叠边界裁决
 它由私有、无 runtime 执行权的 resolver 提供，不是完整报告、快照 lineage 或任意历史查询。
 _Avoid_: `is_current`、最新 release、客户端时钟、区域名称猜测
 
+**current 城市接触场次报告候选**:
+只在私有数据库边界组合可信截止点、current 目标树、单条地点归属、两个完整 ISO 周和城市完整网格的
+固定 `contact_sessions@1` 文档；每条可报告归属只进入唯一城市祖先，格值在返回前完成阈值和互补隐藏。
+它保存 source change watermark，但读取的是 current contact projection，不是历史 `as-of`，也尚未接入生产发布链。
+_Avoid_: original 区域视图、最小区域下钻、任意区域筛选、生产区域报告、历史重放
+
 **迁移基线观察下界**:
 0038 迁移为既有 current release 写入的基线观察只有 `recorded_at_utc`；它的 `selected_at_utc` 为 `NULL`，
 不能解释成真实选择时间。只有不早于该观察时间的报告截止点，才能把基线作为已观察证据；更早截止点必须返回

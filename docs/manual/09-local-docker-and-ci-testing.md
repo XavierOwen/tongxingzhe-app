@@ -353,6 +353,32 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 这些命令只使用 synthetic selection history 和已发布树。手工通过表示当前 resolver 的返回合同、权限和锁语义
 成立，不表示真实报告已经生成。并发脚本会提交自己的测试行，普通 fixture 会回滚；不要把测试库当作生产库。
 
+只修改 Slice 6AN 的私有 current 城市报告合同时，也使用同一个 Docker 入口：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+不需要先创建容器、数据库或 PostgreSQL 用户。runner 会自动发现 0056 migration、check、fixture 和
+`verify_management_current_city_report_concurrency.sh`，并在恢复库重复 check 与 fixture。6AN 新增的无登录
+reader role 也由恢复准备脚本建立；若忘记这一步，源容器可能通过，但跨 cluster restore 会因 owner 不存在而失败。
+
+只在已有专用测试库调试 6AN 时，按顺序运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_current_city_report.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0056_management_current_city_report.sql
+./tool/verify_management_current_city_report_concurrency.sh
+```
+
+check 检查固定定义、函数形状、最小列权限和旧渠道发布隔离；fixture 检查两期完整城市网格、归属状态、三项
+primary 阈值和互补隐藏；并发脚本检查区域树 publication 和报告执行的两种锁顺序。三者不能互相替代。
+通过仍只表示 DB-only synthetic 合同成立，不表示生产快照、HTTP、Flutter、导出、真实区域或外部事实攻击已验收。
+
 管理报告发布端点同时改动 Backend 和 PostgreSQL bridge。开发时先运行：
 
 ```bash
