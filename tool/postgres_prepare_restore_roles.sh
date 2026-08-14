@@ -24,7 +24,8 @@ BEGIN
   FOREACH role_name IN ARRAY ARRAY[
     'tongxingzhe_runtime',
     'tongxingzhe_region_publisher',
-    'tongxingzhe_contact_provenance_writer'
+    'tongxingzhe_contact_provenance_writer',
+    'tongxingzhe_region_mapping_writer'
   ]
   LOOP
     IF NOT EXISTS (
@@ -88,6 +89,27 @@ BEGIN
   END LOOP;
 END
 $provenance_writer_membership$;
+
+DO $mapping_writer_membership$
+DECLARE
+  member_name text;
+BEGIN
+  FOR member_name IN
+    SELECT member_role.rolname
+    FROM pg_catalog.pg_auth_members AS membership
+    JOIN pg_catalog.pg_roles AS writer_role
+      ON writer_role.oid = membership.roleid
+    JOIN pg_catalog.pg_roles AS member_role
+      ON member_role.oid = membership.member
+    WHERE writer_role.rolname = 'tongxingzhe_region_mapping_writer'
+  LOOP
+    EXECUTE format(
+      'REVOKE tongxingzhe_region_mapping_writer FROM %I',
+      member_name
+    );
+  END LOOP;
+END
+$mapping_writer_membership$;
 SQL
 
 echo 'PostgreSQL restore 所需 cluster roles 已准备。'
