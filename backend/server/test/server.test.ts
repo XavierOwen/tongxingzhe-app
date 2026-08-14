@@ -241,6 +241,141 @@ test("HTTP management snapshot route rejects query fields and missing store", as
   });
 });
 
+test("HTTP management snapshot export waits for audit commit and returns a file", async () => {
+  const projectId = "33333333-3333-4333-8333-333333333333";
+  const snapshotId = "88888888-8888-4888-8888-888888888888";
+  const exportEventId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const content = JSON.stringify({
+    export_contract_id: "management_report_snapshot_export_v1",
+    snapshot_id: snapshotId,
+  });
+  let finishExport: (() => void) | undefined;
+  const exportGate = new Promise<void>((resolve) => {finishExport = resolve;});
+  const server = createBackendServer({
+    identityVerifier: {
+      verify: async () => ({issuer: "issuer", subject: "subject"}),
+    },
+    contextStore: {
+      loadOrCreate: async () => {
+        throw new Error("personal context must not authorize an export");
+      },
+    },
+    managementReportSnapshotExportStore: {
+      export: async (identity, receivedProjectId, receivedSnapshotId) => {
+        assert.deepEqual(identity, {issuer: "issuer", subject: "subject"});
+        assert.equal(receivedProjectId, projectId);
+        assert.equal(receivedSnapshotId, snapshotId);
+        await exportGate;
+        return {
+          status: "completed",
+          exportEventId,
+          requestedSnapshotId: snapshotId,
+          resolvedSnapshotId: snapshotId,
+          content,
+        };
+      },
+    },
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  test.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+
+  let responseSettled = false;
+  const endpoint = `http://127.0.0.1:${address.port}` +
+    `/v1/projects/${projectId}` +
+    `/management-report-snapshots/${snapshotId}/export`;
+  const responsePromise = fetch(
+    endpoint,
+    {headers: {authorization: "Bearer token"}},
+  ).then((response) => {
+    responseSettled = true;
+    return response;
+  });
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(responseSettled, false);
+
+  finishExport?.();
+  const response = await responsePromise;
+  assert.equal(response.status, 200);
+  assert.equal(
+    response.headers.get("content-type"),
+    "application/json; charset=utf-8",
+  );
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(
+    response.headers.get("content-disposition"),
+    'attachment; filename="management-report-snapshot-v1.json"',
+  );
+  assert.equal(
+    response.headers.get("x-management-report-export-event-id"),
+    exportEventId,
+  );
+  assert.equal(
+    response.headers.get("content-length"),
+    String(Buffer.byteLength(content)),
+  );
+  assert.equal(await response.text(), content);
+});
+
+test("HTTP management snapshot export rejects query, body, and missing store", async () => {
+  const projectId = "33333333-3333-4333-8333-333333333333";
+  const snapshotId = "88888888-8888-4888-8888-888888888888";
+  const server = createBackendServer({
+    identityVerifier: {
+      verify: async (token) => {
+        if (token === "invalid") throw new IdentityVerificationError();
+        return {issuer: "issuer", subject: "subject"};
+      },
+    },
+    contextStore: {
+      loadOrCreate: async () => {throw new Error("context is not expected");},
+    },
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  test.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+  const path =
+    `/v1/projects/${projectId}/management-report-snapshots/${snapshotId}/export`;
+
+  const unauthenticated = await fetch(
+    `http://127.0.0.1:${address.port}${path}?format=csv`,
+    {headers: {authorization: "Bearer invalid"}},
+  );
+  assert.equal(unauthenticated.status, 401);
+
+  const query = await fetch(
+    `http://127.0.0.1:${address.port}${path}?format=csv`,
+    {headers: {authorization: "Bearer token"}},
+  );
+  assert.equal(query.status, 400);
+  assert.equal(query.headers.get("content-disposition"), null);
+  assert.deepEqual(await query.json(), {
+    error: {code: "invalid_management_report_snapshot_export_request"},
+  });
+
+  const body = await rawHttpRequest(
+    address.port,
+    "GET",
+    path,
+    {authorization: "Bearer token", "content-type": "application/json"},
+    "{}",
+  );
+  assert.equal(body.status, 400);
+  assert.deepEqual(body.body, {
+    error: {code: "invalid_management_report_snapshot_export_request"},
+  });
+
+  const unavailable = await fetch(`http://127.0.0.1:${address.port}${path}`, {
+    headers: {authorization: "Bearer token"},
+  });
+  assert.equal(unavailable.status, 503);
+  assert.equal(unavailable.headers.get("content-disposition"), null);
+  assert.deepEqual(await unavailable.json(), {
+    error: {code: "management_report_snapshot_export_unavailable"},
+  });
+});
+
 test("HTTP management snapshot directory waits for its committed audit", async () => {
   const projectId = "33333333-3333-4333-8333-333333333333";
   let finishList: (() => void) | undefined;

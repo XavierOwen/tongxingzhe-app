@@ -2,7 +2,7 @@
 
 个人分析和管理分析处理不同的信任边界。个人页可以立即显示本人设备上的事实，并说明哪些接触尚未同步。管理分析只能使用后端已接受的数据，还必须先降低小群体披露风险。
 
-当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定、不可变受保护快照、项目报告时区版本历史、管理报告能力授权、可信发布 v2、管理项目发现与选择、可信快照目录、窄 HTTPS 发布与读取端点、Flutter 只读管理报告页面、报告详情的固定来源／定义／隐私元数据、私有区域隐私威胁探针，以及已发布规范区域树和边界版本的冻结。Slice 6AE-0 固定个人阶段变更指标合同，6AE-1 增加固定个人读取，6AE-2 在个人页面显示结果；6AF 增加个人兴趣 `3–4` 占比的两期可比趋势；这些切片不交付管理阶段变更报告。Slice 6S 固定 PostgreSQL 地点来源合同；6U 接入 Flutter／Drift、Outbox 和 Backend；6V 用共享 synthetic fixture 对账四层。它仍没有生产成员管理、自动发布调度、生产区域报告、真实 GPS 或六平台真机证据。
+当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定、不可变受保护快照、项目报告时区版本历史、管理报告能力授权、可信发布 v2、管理项目发现与选择、可信快照目录、窄 HTTPS 发布与读取端点、Flutter 只读管理报告页面、报告详情的固定来源／定义／隐私元数据、固定匿名管理报告 canonical JSON v1 文件导出、独立导出审计、私有区域隐私威胁探针，以及已发布规范区域树和边界版本的冻结。Slice 6AE-0 固定个人阶段变更指标合同，6AE-1 增加固定个人读取，6AE-2 在个人页面显示结果；6AF 增加个人兴趣 `3–4` 占比的两期可比趋势；这些切片不交付管理阶段变更报告。Slice 6S 固定 PostgreSQL 地点来源合同；6U 接入 Flutter／Drift、Outbox 和 Backend；6V 用共享 synthetic fixture 对账四层。它仍没有生产成员管理、自动发布调度、生产区域报告、真实 GPS 或六平台真机证据；6AH 的服务端审计也不证明客户端已经保存、分享或读取文件。
 
 ## 先确定统计单位
 
@@ -381,7 +381,7 @@ production store 使用一次参数化 `pool.query`。PostgreSQL 完成该 state
 
 读取与撤权使用同一组 transaction lock。读取先取得锁时，撤权等到报告和审计提交；撤权先取得锁时，读取等待后看见失效边界，以 `42501` 结束且不写审计。如果调用方在显式外层事务中取得报告后主动 `ROLLBACK`，访问事件也会回滚。因此 `0033` production store 把读取作为单条自动提交操作，并在数据库调用成功以后才把报告交给客户端。
 
-`0032` 仍位于 `app_private`。`tongxingzhe_runtime` 和 `PUBLIC` 对函数与审计表都没有权限。唯一单份报告读取入口是 `0033` 位于 `app_data` 的四参数 bridge；`0034` 的独立导航上下文不能读取报告。当前仍没有一般 organization session、缓存、导出或 latest 查询。不能把私有函数直接授予通用 runtime role。
+`0032` 仍位于 `app_private`。`tongxingzhe_runtime` 和 `PUBLIC` 对函数与审计表都没有权限。唯一单份报告读取入口是 `0033` 位于 `app_data` 的四参数 bridge；`0034` 的独立导航上下文不能读取报告。当前仍没有一般 organization session、缓存、latest 查询或其他动态导出；6AH 只提供显式项目／快照的固定 canonical JSON v1 导出。不能把私有函数直接授予通用 runtime role。
 
 ## 如何发现并选择管理分析项目
 
@@ -430,6 +430,35 @@ production adapter 使用一次参数化 `pool.query`。PostgreSQL 完成该 sta
 
 HTTP 只把数据库结果缩成稳定合同：可信快照返回 `200`、access event ID、快照 ID 和受保护报告；未知与跨项目统一返回 `404`；同项目 legacy provenance 返回 `409`；无权返回 `403`。错误响应没有报告格、授权关系、外部 subject 或 PostgreSQL 错误文字。服务器对全部响应设置 `Cache-Control: no-store`。
 
+## 固定匿名管理报告文件导出如何保持快照和审计边界
+
+6AH 的生产端点是：
+
+```text
+GET /v1/projects/:projectId/management-report-snapshots/:snapshotId/export
+```
+
+路径只含显式项目和快照 UUID。请求不接受 body、query、报告定义、格式、时区、数据截止点、筛选或其他客户端字段；报告身份固定为 `contact_sessions_by_channel_two_periods@1`。项目或快照路径只是查找范围，不是授权证据。它不提供 latest、动态重算、任意指标或 CSV。
+
+Backend 先验证 Bearer token，再在同一数据库授权边界中重新确认活动账号、组织／项目成员关系，以及 `view_anonymous_analytics` 和独立 `export_management_reports` capability。`release_management_reports` 不自动包含查看或导出权；`export_target_pii`、近期重新认证和推广对象资料权限也不由本 Slice 引入。未通过任一检查的请求不生成文件；未完成完整授权的调用不会写导出事件。
+
+响应使用 UTF-8、`application/json` 和 `Cache-Control: no-store`。本合同中的 canonical 指固定 key 顺序、无多余空白和 UTC 毫秒时间格式，不表示 RFC 8785。顶层 exact keys 固定为 `export_contract_id`、`snapshot_id`、`released_at_utc` 和 `report`。结构示意如下；尖括号只是文档占位符，不会作为字符串写入真实文件：
+
+```text
+{
+  "export_contract_id": "management_report_snapshot_export_v1",
+  "snapshot_id": "<snapshot UUID>",
+  "released_at_utc": "<UTC instant>",
+  "report": <the fixed protected report object, including exactly 16 cell objects>
+}
+```
+
+`report` 直接复用已经保存的受保护快照，包括固定定义、指标、来源、报告时区、数据截止、期间和 16 格 `cells`。格子按 `cell_order` 稳定排列；`displayed` 只能携带大于等于 10 的整数，`suppressed` 必须保持 JSON `null`。服务端只序列化已通过阈值、贡献者保护、完整网格和互补隐藏的值，不重新执行动态报告或隐私政策，也不接受客户端自定义字段。同一快照的后续数据变化不能改变其 canonical JSON v1 字节；合同不包含本地化标签、组织名称、贡献者、推广对象、地点、PII 或隐藏前值。
+
+导出读取和普通快照读取是两个审计边界。每次通过身份验证并完成完整授权的导出请求都追加一个独立、不可变的导出事件，记录内部 actor、项目、快照、导出合同、请求时间、结果状态和 event ID，不记录报告格、贡献者、推广对象、地点或 PII。数据库先提交授权、生成和审计，再准备 HTTP 交付；网络中断后的重试重新授权并产生新的导出事件。事件只能证明服务端已完成授权、生成并准备交付，不证明客户端已经落盘、分享或读取文件。
+
+固定匿名管理报告文件导出不等同于推广对象资料导出，也不声称形式化不可重识别。本节不交付 Flutter、浏览器或原生保存／分享、六平台真机验收、缓存、保留／删除策略、区域下钻、报告更正／取代或 Slice 7 的 PII 流程。
+
 ## Flutter 如何浏览受保护报告
 
 “分析”页保留原有的个人最近七日事实，并增加“管理报告”视图。两个视图使用独立范围：个人视图继续读取个人 `SessionContext`，管理视图只读取 6M 的管理分析上下文。切换管理项目不会切换接触记录、问卷、私人计划或提醒所在的个人项目。
@@ -468,8 +497,8 @@ Slice 6AG 只使用 6L 已经严格解析并交给 Widget 的字段，不增加�
 
 这组字段描述的是已经经过服务端阈值、贡献者保护、完整结果网格和互补隐藏的匿名管理事实。规则
 用于降低披露风险，但不构成形式化的不可重识别保证，也不能证明所有外部资料组合都安全。页面因此
-不把它写成“绝对匿名”、个人绩效、排名或因果结论；它也不新增导出、下载、图表、缓存、动态查询、
-更正版或删除规则。
+不把它写成“绝对匿名”、个人绩效、排名或因果结论；6AG 本身也不新增导出、下载、图表、缓存、动态查询、
+更正版或删除规则，6AH 的固定文件合同另见上一节。
 
 ## 在 Docker 中验证
 
@@ -501,13 +530,15 @@ flutter test --no-pub \
 
 第一项固定身份 token、三条端点和严格 JSON 合同。第二项固定项目切换、迟到响应和重试状态。第三项固定 320 px、200% 字号、键盘焦点、屏幕阅读器语义、固定来源／定义／隐私元数据及 displayed／suppressed 摘要。第四项固定中英文文案的结构。所有测试使用 synthetic HTTP 响应，不证明真实账号拥有报告权限，也不替代服务端的 PostgreSQL 授权与审计测试。
 
-只想验证 Backend 请求和期间合同时运行：
+只想验证 Backend 请求、期间和固定导出合同时运行：
 
 ```bash
 cd backend/server
 npm ci
 npm test
 ```
+
+这组 Node 测试还覆盖 canonical JSON v1 的 exact keys、16 格顺序、`suppressed = null`、稳定字节、严格数据库结果解析和不含值的错误响应。它们不替代 Docker 中的双 capability 授权、可信 provenance 或不可变导出审计检查。
 
 Docker 的安装、输出解释和失败容器保留方法见[第 9 章](09-local-docker-and-ci-testing.md)。
 
@@ -636,7 +667,7 @@ Backend 生产写入、区域 current 映射或区域报告不可重识别。
 
 ## 当前证据不能证明什么
 
-这些条件减少直接披露和简单相减恢复的风险，不构成形式化的不可重识别保证。当前 fixture 覆盖固定渠道报告的相邻完整周、补录变化、稀疏格和互补隐藏，也用候选区域形状演练父子范围、跨版本重叠、外部已知事实、待解析与 `N/A`。它没有交付生产区域报告，也未覆盖跨账号导出组合或真实外部资料攻击。
+这些条件减少直接披露和简单相减恢复的风险，不构成形式化的不可重识别保证。当前 fixture 覆盖固定渠道报告的相邻完整周、补录变化、稀疏格和互补隐藏，也用候选区域形状演练父子范围、跨版本重叠、外部已知事实、待解析与 `N/A`。它没有交付生产区域报告，也未覆盖跨账号导出组合或真实外部资料攻击。6AH 的合同只证明服务端授权、生成并准备交付固定快照，不证明客户端落盘、分享或读取。
 
 生产管理报表仍需完成：
 
@@ -645,6 +676,6 @@ Backend 生产写入、区域 current 映射或区域报告不可重识别。
 - 跨时区 revision 后重新建立基线或更正版的隐私判定；
 - 可按历史 revision 水位重新执行的 `as-of` 投影、更正版取代关系和删除流程；
 - 可验证的 current 跨版本映射，以及生产区域报告自己的完整网格、互补隐藏、授权和快照 lineage；
-- 快照目录与单份读取以外的动态 API、缓存、图表和导出。
+- 快照目录与单份读取以外的动态 API、缓存、图表，以及除 6AH 固定 canonical JSON v1 外的其他导出。
 
 在这些前置条件完成前，不得删除个人指标 SQL 的 `app_user_id` 条件来制造团队汇总，也不得向 `tongxingzhe_runtime` 授予私有政策函数的执行权。

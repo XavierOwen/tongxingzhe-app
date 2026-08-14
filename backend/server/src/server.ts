@@ -81,6 +81,10 @@ import {
   type ManagementReportSnapshotStore,
 } from "./management-report-snapshots.js";
 import {
+  exportManagementReportSnapshot,
+  type ManagementReportSnapshotExportStore,
+} from "./management-report-snapshot-exports.js";
+import {
   listManagementReportSnapshotDirectory,
   type ManagementReportSnapshotDirectoryStore,
 } from "./management-report-snapshot-directory.js";
@@ -118,6 +122,8 @@ export interface BackendServerDependencies
   readonly personalFollowUpConsentOptInStore?:
     PersonalFollowUpConsentOptInStore;
   readonly managementReportSnapshotStore?: ManagementReportSnapshotStore;
+  readonly managementReportSnapshotExportStore?:
+    ManagementReportSnapshotExportStore;
   readonly managementReportSnapshotDirectoryStore?:
     ManagementReportSnapshotDirectoryStore;
   readonly managementReportReleaseStore?: ManagementReportReleaseStore;
@@ -238,6 +244,50 @@ export function createBackendServer(
       );
       response.statusCode = result.status;
       response.end(JSON.stringify(result.body));
+      return;
+    }
+
+    const managementReportSnapshotExportMatch = requestUrl.pathname.match(
+      /^\/v1\/projects\/([^/]+)\/management-report-snapshots\/([^/]+)\/export$/,
+    );
+    if (
+      request.method === "GET" &&
+      managementReportSnapshotExportMatch !== null
+    ) {
+      const result = await exportManagementReportSnapshot(
+        {
+          authorization: request.headers.authorization,
+          projectId: managementReportSnapshotExportMatch[1] ?? "",
+          snapshotId: managementReportSnapshotExportMatch[2] ?? "",
+          hasQuery: requestUrl.search.length > 0,
+          hasBody: requestDeclaresBody(request.headers),
+        },
+        {
+          identityVerifier: dependencies.identityVerifier,
+          ...(dependencies.managementReportSnapshotExportStore === undefined
+            ? {}
+            : {
+              exportStore: dependencies.managementReportSnapshotExportStore,
+            }),
+        },
+      );
+      response.statusCode = result.status;
+      if ("content" in result) {
+        response.setHeader("content-type", "application/json; charset=utf-8");
+        response.setHeader(
+          "content-disposition",
+          'attachment; filename="management-report-snapshot-v1.json"',
+        );
+        response.setHeader("x-content-type-options", "nosniff");
+        response.setHeader(
+          "x-management-report-export-event-id",
+          result.exportEventId,
+        );
+        response.setHeader("content-length", Buffer.byteLength(result.content));
+        response.end(result.content);
+      } else {
+        response.end(JSON.stringify(result.body));
+      }
       return;
     }
 
