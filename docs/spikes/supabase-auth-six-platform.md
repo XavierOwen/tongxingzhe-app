@@ -2,9 +2,9 @@
 
 第一次接触测试流程的读者，可先阅读说明书的 [用测试和证据安全地修改代码](../manual/02-testing-and-change-workflow.md)。其中逐项解释本 Spike 为什么拆分注册、OTP、恢复、session 和跨进程恢复，以及 Red–Green、回归测试、测试接缝与 CI 分别是什么。
 
-状态：**macOS、Web 与 iOS 的真实认证合同已通过；Android、Windows、Linux 仍须实测。因此不能把 Supabase 写成六平台最终 pass。**
+状态：**macOS、Web、iOS 与 Windows 的真实认证合同已通过；Android、Linux 仍须实测。因此不能把 Supabase 写成六平台最终 pass。**
 
-记录日期：2026-08-03
+记录日期：2026-08-14
 
 适用需求：`AUTH-001`、`AUTH-004`、`AUTH-006`–`AUTH-008`、`TEST-002`、`TEST-006`
 
@@ -43,12 +43,12 @@ Supabase 官方说明 Flutter 初始化使用 project URL 和 publishable／anon
 | iOS | CI pass；本机 device/no-codesign pass；Apple Development 签名真机安装 pass | Keychain 写入与跨进程读取 pass | 注册请求、OTP 邮件送达／确认、恢复 OTP、改密码 pass | 登录、强制刷新、Adapter 重建、跨进程恢复、登出 pass | runtime pass |
 | Web | CI pass；本机 release build pass | localhost 写入、Adapter 重建读取、关闭并重启浏览器后读取 pass | 注册请求、OTP 邮件送达、OTP 确认、恢复 OTP 与改密码 pass | 登录、强制刷新、跨浏览器进程恢复、登出 pass | runtime pass |
 | macOS | CI pass；Apple Development 签名 debug pass | Keychain 读写 pass | 注册、8 位 OTP、恢复、改密码 pass | 登录、强制刷新、跨进程恢复、登出 pass | runtime pass |
-| Windows | CI pass | 安全存储待测 | 待测 | 待测 | build only |
+| Windows | CI pass；Windows 11 25H2／Flutter 3.44.9 本机 debug pass | Credential Store 写入、读回、删除与跨独立进程 session 读回 pass | 注册请求、OTP 邮件送达／确认、恢复 OTP、改密码 pass | 登录、强制刷新、Adapter 重建、跨独立进程恢复、登出 pass | runtime pass |
 | Linux | CI pass | libsecret＋keyring 待测 | 待测 | 待测 | build only |
 
 GitHub Actions 的 build 只能把第一列改为 pass；其余列必须有真实 Supabase test project 和对应运行环境。`flutter_secure_storage` 声明支持六平台，但 Web 需要 HTTPS／localhost，Linux 需要 libsecret 与可用 keyring，这些都是 runtime 条件，不能从 package metadata 推导为真机通过：[package requirements](https://pub.dev/packages/flutter_secure_storage)。
 
-六个平台均在 [GitHub Actions run 30666113687](https://github.com/XavierOwen/tongxingzhe-app/actions/runs/30666113687) 的独立 job 中 build 通过；上述四个本机构建也在 2026-07-31 使用 Flutter 3.44.2 完成。Android 依赖目前会提示 `package_info_plus` 尚未迁移到未来的 Built-in Kotlin；本次 build 成功，但应在依赖发布兼容版本后升级并清除 warning。
+六个平台均在 [GitHub Actions run 30666113687](https://github.com/XavierOwen/tongxingzhe-app/actions/runs/30666113687) 的独立 job 中 build 通过；Android、iOS、Web、macOS 四个本机构建也在 2026-07-31 使用 Flutter 3.44.2 完成，Windows 本机构建则见下方 2026-08-12 的独立证据。Android 依赖目前会提示 `package_info_plus` 尚未迁移到未来的 Built-in Kotlin；本次 build 成功，但应在依赖发布兼容版本后升级并清除 warning。
 
 macOS 运行时证据于 2026-08-01 在 macOS 26.5.2、隔离 hosted Supabase project 和专用测试邮箱／SMTP 上取得。第一次实测暴露出 App Sandbox 缺少出站网络权限，以及 Keychain 缺少签名 entitlement；最小探针分别得到 `Operation not permitted` 和系统错误 `-34018`。修复 `com.apple.security.network.client`、`keychain-access-groups` 并使用 Apple Development 签名后，注册、注册 OTP、登录、刷新、Adapter 重建、密码恢复、修改后重新登录均通过。最后再用两个独立 App 进程执行 `session_start` 与 `session_restore`，证明恢复不只是同一进程内重建对象。
 
@@ -63,6 +63,10 @@ iOS 的第一轮真机证据于 2026-08-03 在 iPhone 14 Pro、iOS 26.5.2 和同
 分阶段 OTP 测试随后发现，每次成功运行后开发者信任都会消失。反馈回路表明这些失败均发生在 Dart VM 启动之前并显示 `No tests ran`，所以没有重复提交 OTP 或请求 Supabase。根因是 `flutter test` 对 integration test 默认启用卸载：测试结束时删除设备上的最后一款开发 App，下一 mode 覆盖安装前便需要重新建立信任。runner 的公开命令回归测试先因缺少 `--no-uninstall` 得到预期 Red；原生分支加入该参数后转为 Green。它仍然为每个 mode 构建并覆盖安装当前测试 App，只在阶段结束后保留 App，从而保持开发者信任；Web 分支不变。整套验证结束后再手工删除 synthetic App。
 
 iOS 第一次注册请求对原测试邮箱得到 `/auth/v1/signup` 200，但未收到邮件；提供的 22 条日志全部标为 success，且没有收件服务器的最终投递回执，所以证据只支持“Supabase 接受请求”，不能证明学校邮箱、别名规则或 SMTP 中哪一层拦截。改用受控工作邮箱后，真机 `signup_request` 成功且实际收到 OTP；`signup_confirm` 随后进入 `signedIn` 并登出。`recovery_request` 又实际送达新的恢复 OTP，`recovery_confirm` 建立恢复 session、更新新密码、回到 `signedIn` 并登出。最后把新密码放入独立 `session` 运行，登录、两次刷新、Adapter 重建恢复与登出全部通过，也证明 `--no-uninstall` 后下一次覆盖安装不再丢失开发者信任。期间一次 Xcode“推荐工程设置”模态窗口导致启动等待超时；关闭而不接受自动工程改写后重跑通过，未进入 Dart 的轮次不计为认证失败。
+
+Windows 的第一轮本机证据于 2026-08-12 在 Windows 11 25H2（10.0.26200.8655）、Flutter 3.44.9、Visual Studio Community 2026 18.9.0 上取得。中文系统的 MSVC code page 936 先在 `/WX` 下拒绝编译 `main.cpp` 的 UTF-8 窗口标题；Windows runner target 明确加入 `/utf-8` 后，本机 debug build 通过，实际 App 进程创建了标题为“同行者”的可响应窗口并以 0 正常退出。随后使用不含身份或业务资料的 synthetic marker 运行安全存储探针：第一独立测试进程写入并读回，第二独立测试进程在未接收 marker 值的情况下从 Windows 安全存储读回，随后删除并确认不存在。因此 Windows 安全存储的实际写入、跨进程读取与删除可记为 pass。
+
+Windows 的 hosted Supabase 合同于 2026-08-14 在同一环境、隔离 hosted test project 和专用 synthetic 测试账号上完成，最终被测工作树以 App commit `00d84a4f96a05b20185f0e81c128b265a055c4e7` 为基线并包含上述 `/utf-8` 修复。全新账号的 `signup_request` 实际送达注册 OTP，`signup_confirm` 进入 `signedIn` 后登出；`session` 完成登录、token 强制刷新、安全存储读取、Adapter 重建恢复与登出。随后两个独立 App 进程分别运行 `session_start` 与 `session_restore`：第一进程登录、刷新并留下 session，第二进程的配置明确不含 password，仍从 Windows Credential Store 恢复 token，随后登出并清除 session。`recovery_request` 又实际送达恢复 OTP，`recovery_confirm` 建立恢复 session、更新新密码、回到 `signedIn` 并登出；最后以新密码再次运行 `session`，登录、两次刷新、Adapter 重建恢复与登出全部通过。所有阶段只使用受 Git 忽略的配置，日志未输出 password、OTP 或 bearer／refresh token。因此 Windows 注册、App 内 OTP、登录、强制刷新、跨独立进程安全 session 恢复、密码恢复／修改和登出合同可记为 runtime pass。
 
 ## 4. 隔离测试 project 的设置
 
@@ -157,6 +161,6 @@ Hosted Supabase Auth 可能对已确认账号返回与新账号相似的注册�
 
 ## 6. 当前阻塞与决策
 
-隔离 hosted Supabase project、测试邮箱和 Apple Development 签名环境已经就绪，macOS、Web 与 iOS 合同通过。Android、Windows、Linux 尚缺真实运行时验证；CI build 不能替代这些结果。本地 Supabase CLI／Docker 栈仍不可用，但不再阻塞 hosted project 的设备验证。
+隔离 hosted Supabase project 和测试邮箱已经就绪，macOS、Web、iOS 与 Windows 合同通过。Android、Linux 仍缺真实运行时验证；CI build 不能替代这些结果。
 
-当前决策是：保留 Supabase 的条件首选和已编译 Adapter。Slice 0 只要求认证接缝、自动测试和证据矩阵诚实区分 pass／pending；Android、Windows、Linux 的真实运行时验证作为独立公开发布门槛并行推进，不再阻塞匿名领域切片。如果某个必需平台在合理修复后仍失败，再记录失败证据并按 ADR-0096 评估 Cognito，而不是把三个已通过平台扩张为六平台结论。整体能力状态见 [六平台能力证据矩阵](./six-platform-capability-matrix.md)。
+当前决策是：保留 Supabase 的条件首选和已编译 Adapter。Slice 0 只要求认证接缝、自动测试和证据矩阵诚实区分 pass／pending；Android、Linux 的真实运行时验证作为独立公开发布门槛并行推进，不再阻塞匿名领域切片。如果某个必需平台在合理修复后仍失败，再记录失败证据并按 ADR-0096 评估 Cognito，而不是把四个已通过平台扩张为六平台结论。整体能力状态见 [六平台能力证据矩阵](./six-platform-capability-matrix.md)。
