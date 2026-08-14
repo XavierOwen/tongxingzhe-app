@@ -200,6 +200,7 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `REGION-009` | 日常分析默认使用当前区域视图；原始区域视图用于历史复现、解释跨期边界变化和审计。 |
 | `REGION-010` | 没有原始坐标可重新解析时，旧区域只能凭绑定两个已发布树内容指纹的显式一对一映射证据进入指定新版本；缺失、冲突、拆分、合并或证据漂移必须失败关闭，不按名称、父链或坐标猜测。 |
 | `REGION-011` | 区域归属证据解析必须接收调用方明确指定的已发布目标树版本和内容指纹；原始视图只接受精确来源证据，当前视图的坐标只接受唯一最深且同属一条父链的命中，跨父链或同深度多命中返回歧义；`region-only` 只接受同版本来源或显式一对一映射，`pending_resolution`、`not_applicable` 和不完整来源返回 `not_reportable`。 |
+| `REGION-012` | 固定管理区域报告必须用可信 `data_cutoff_utc` 从追加式区域树选择历史解析唯一目标树；publication selection 和目标 release 的发布时间都必须不晚于该截止点，内容指纹必须精确一致。迁移基线没有真实 `selected_at_utc`，只能从 `recorded_at_utc` 这个观察下界开始使用；更早截止点返回历史不可用，不读取 `is_current`，也不按最新 release 猜测。 |
 
 ### 5.5 场景问卷
 
@@ -484,6 +485,39 @@ mapping writer 和 provenance writer 不得执行它。
 pending／N/A／不完整来源以及敏感字段不出现在输出。结构与权限 check、migration checksum 和跨 cluster
 dump／restore 必须重复验证同一合同。
 
+#### Slice 6AM：按报告截止点固定区域目标树上下文
+
+Slice 6AM 只提供私有、只读的历史派生报告截止上下文。resolver 接收可信的 `data_cutoff_utc`，读取
+追加式区域树 current selection history 和已发布 release，返回固定 contract、状态、原因、截止点、
+`target_tree_version`、`target_content_fingerprint`、`selection_sequence`、`selection_source`、
+证据时间和 `tree_published_at_utc`。它不读取 mutable `is_current`，不按最新 release 或区域名称选择目标树。
+
+publication selection 只有在 `selected_at_utc <= data_cutoff_utc` 时才有效，目标 release 还必须在该截止点
+前已发布，且保存的内容指纹与 release 精确一致。0038 migration baseline 的 `selected_at_utc` 是 `NULL`，
+只能把 `recorded_at_utc` 当作“已观察到该基线”的下界；截止点早于该时间时返回稳定的历史不可用状态，
+不能把观察时间伪装成真实选择时间。
+没有符合 cutoff 的历史时返回不含 target tuple 的 `selection_history_unavailable`；已经选中的历史若指向
+草稿或缺失 release，或者指纹、选择时间和发布时间不一致，则以 `SQLSTATE 55000` 拒绝解析，不返回上下文。
+
+区域树发布函数和 resolver 共用 publication transaction advisory lock。resolver 虽然不写表，也必须在这把
+锁内线性化，避免读取未提交 selection 或把结果排在发布提交之前。resolver 由最小权限的无登录 reader
+role 拥有，使用固定 `SECURITY DEFINER` 和 search path；`PUBLIC`、`tongxingzhe_runtime`、区域发布者、
+mapping writer 和 provenance writer 都不能执行它。`PUBLIC`、runtime、mapping writer 和 provenance writer
+也不能直接读取 selection history；区域发布者只保留 0038 发布流程所需的既有 `SELECT`／`INSERT`。
+
+未来固定区域报告先消费 6AM 返回的显式 `target_tree_version + target_content_fingerprint`，再把这两个值传给 6AL 的
+`current` 归属 resolver。6AM 不修改 6AL 的 `original`／`current` 合同，6AL 也不自行选择目标树。没有可
+验证的截止上下文时，调用方必须保持不可报告，不生成区域 tuple。
+
+本 Slice 不注册生产区域报告，不执行接触统计资格或区域聚合，不实现完整网格、父子或重叠查询、`k=10`、
+三位贡献者、单人占比、互补隐藏、snapshot lineage、capability、任意历史 `as-of`、报告修订／删除、
+项目目标树配置、区域发布 UI、HTTP、Flutter、Drift、缓存、导出或 UI。
+
+自动测试覆盖无历史、publication 在 cutoff 前／等于／之后、两次切换、migration baseline 在观察下界前／
+等于／之后、草稿、缺失 release、指纹或发布时间不一致、敏感字段不输出、读写权限和同一 cutoff 重试。
+并发测试覆盖 publication-first 与 resolver-first 两种锁顺序。完整 Docker 套件还必须在无源 cluster roles
+的恢复库中重跑 migration、check、fixture、checksum 和并发脚本。
+
 只有高级分析可显示：
 
 ```text
@@ -517,6 +551,7 @@ dump／restore 必须重复验证同一合同。
 | `ANALYTICS-019` | 固定匿名管理报告文件导出只返回已发布可信 v2 快照的 canonical JSON v1；报告定义、指标、来源、时区、截止点、发布时间和 16 格顺序固定，后续数据不改变同一快照的导出字节。 |
 | `ANALYTICS-020` | Flutter 只把固定导出解码为内存 artifact；它严格核对响应头、原始 canonical bytes、目录摘要和受保护报告合同，不重新序列化、不持久化，也不把取得 bytes 表述为下载、保存或分享成功。 |
 | `ANALYTICS-021` | Web 管理报告下载使用两阶段操作：先准备并验证内存 artifact，再由新的用户操作把原始 bytes、固定 MIME 和文件名交给浏览器；结果只表示已请求下载，delivery 重试不重复生成服务端导出事件，非 Web 平台明确 unavailable。 |
+| `ANALYTICS-022` | 固定区域报告的 `history-derived cutoff context` 只由可信 `data_cutoff_utc` 和追加式 selection history 派生；它保存目标树、指纹、selection evidence 和发布时间。selection time 与 release `published_at_utc` 必须不晚于 cutoff，指纹必须精确一致；migration baseline 只能从 `recorded_at_utc` 观察下界使用，更早 cutoff 不可判定，不能回退到 `is_current` 或最新 release。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -535,6 +570,7 @@ dump／restore 必须重复验证同一合同。
 | `PRIVACY-011` | 查看或修正去身份化异常需要相应 capability 并留下审计；修正采用接触 revision，不借纠错入口取得记录者或对象身份。 |
 | `PRIVACY-012` | 未来管理阶段变更报告的 `k=10` 以不同“对象 × 项目”关系为真实统计单位；事件数和方向事件数不能靠同一关系重复发生来达到阈值。 |
 | `PRIVACY-013` | 固定匿名管理报告文件导出只能接收已经完成阈值、贡献者保护、完整网格和互补隐藏的快照；`suppressed` 永远是 `null`，客户端和导出过程都不得重算或补回隐藏值。 |
+| `PRIVACY-014` | 区域目标上下文只返回固定合同、状态、原因、截止点、树版本、内容指纹和选择／发布时间证据，不返回坐标、来源、接触、贡献者、区域名称或 PII；历史不可用时失败关闭，不能用 current、名称或几何相似度补造归属。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
 
@@ -554,6 +590,7 @@ dump／restore 必须重复验证同一合同。
 | `MANUAL-010` | 手写业务代码注释以中文为主；公共业务接口说明用途、参数来源／单位／空值语义、返回值、副作用和权限边界。 |
 | `MANUAL-011` | 复杂 SQL、事务、migration、同步、冲突、统计和隐私逻辑按不变量与原因注释；不机械给每个括号、赋值或生成代码加注释。 |
 | `MANUAL-012` | 注释和说明书不引用会随编辑失效的固定行号；使用稳定类、函数、字段和 snippet marker 追溯。 |
+| `MANUAL-013` | 学习文档必须说明 6AM 的可信 cutoff、history-derived context、migration baseline 观察下界、publication 共享事务锁、私有无 runtime 边界、6AL 显式消费方式，以及 Docker 和已有测试库中的手工命令。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -746,6 +783,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-013` | Web 下载 delivery、管理报告状态机和 Widget 覆盖两阶段操作、原始 artifact 透传、非 Web unavailable、重复点击、delivery 重试不重复导出、迟到响应和页面离开清理，以及中英文 live semantics、320×568 和 200% 字号；Web build 验证条件导入，真实浏览器证据单独记录。 |
 | `TEST-014` | 规范区域跨版本映射 fixture 覆盖已发布树与精确指纹、未知节点、草稿树、同版本、幂等、request 漂移、冲突目标、追加不可变、最小权限和缺失映射；确定性双事务测试证明同一来源到同一目标版本至多提交一个目标，完整 Docker 套件在恢复库重复验证。 |
 | `TEST-015` | 私有区域归属 resolver fixture 覆盖 original 精确来源、current 显式目标树、坐标唯一／零命中／同链嵌套／跨链歧义／同深度歧义、region-only 同版本与 6AK 映射、错误指纹、草稿或未知树、`not_reportable` 状态、无敏感输出和最小权限；完整 Docker 套件在恢复库重复验证。 |
+| `TEST-016` | 6AM fixture 覆盖无历史、publication 在 cutoff 前／等于／之后、两次切换、migration baseline 观察下界前／等于／之后、草稿、缺失 release、指纹或发布时间不一致、稳定 blocked 状态、无敏感输出和最小权限；publication-first 与 resolver-first 并发脚本证明共享锁线性化，完整 Docker 套件在恢复库重跑。 |
 
 ## 9. UI、视觉与可访问性
 
