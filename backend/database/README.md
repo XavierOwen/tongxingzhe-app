@@ -27,7 +27,7 @@ Backend integration 入口存在。脚本先在 Node 24 中运行 `npm ci --igno
 入口缺失、编译失败或断言失败都会使整套测试失败；不能把此前 SQL fixture 的通过单独写成
 Backend adapter 集成通过。
 
-schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer` 和 `tongxingzhe_region_mapping_writer`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
+schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer`、`tongxingzhe_region_mapping_writer` 和 `tongxingzhe_region_attribution_reader`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
 
 ## 使用已有 PostgreSQL 测试库
 
@@ -393,6 +393,32 @@ evidence digest。独立的无登录 mapping writer 拥有私有登记与解析�
 清空；私有解析不组合链，也
 不按名称、父链或几何相似度猜测。runtime 和 PUBLIC 无表或函数权限；本 migration 不注册生产区域
 报告，也不改写 contact location provenance。
+
+`0054_management_region_attribution.sql` 提供私有、只读的管理区域归属 evidence resolver。调用方必须
+明确选择 `original` 或 `current`；`original` 的两个 target 参数必须为 `NULL`，`current` 才提供已发布
+目标树版本和精确内容指纹。`original` 只接受已验证来源 release、指纹、节点和城市父链；`current` 对坐标
+只接受指定树中的唯一最深同链命中，对 `resolved_region_only` 只接受同版本来源或 0053 显式一对一 mapping。
+零命中、跨链或同深度多命中、错误指纹和缺失映射均失败关闭或返回稳定状态；`pending_resolution`、
+`not_applicable` 和不完整来源返回 `not_reportable`。输出不含 source ID、contact、revision、贡献者、
+地点名、坐标或 PII，也不读取 current selection 或自动选择报告截止点。无登录 reader role 只拥有 resolver
+所需的受保护读取能力；runtime、PUBLIC、区域发布者、mapping writer 和 provenance writer 没有新增执行权或表权。
+该 migration 不注册生产区域报告。
+
+0054 的手工验证需要专用测试库：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_region_attribution.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0054_management_region_attribution.sql
+```
+
+完整 Docker 套件会从空库运行同一 migration、check 和 fixture，在 checksum 复跑及 dump／restore 后再次
+执行。synthetic fixture 必须覆盖 original 精确来源、current 坐标唯一／零命中／同链嵌套／跨链歧义／同深度
+歧义、region-only 同版本／显式 mapping／缺失 mapping、错误指纹、草稿或未知树，以及 pending、N/A 和
+不完整来源的 `not_reportable`。这些检查不证明真实区域对应关系或生产报告已经验收。
 
 Backend Store 对 0039 触发器的地点错误只做固定 `SQLSTATE 23514` 与错误文字的窄映射：已知 source 形状失败返回 `rejected / invalid_location_source`，已知 location 形状失败返回 `rejected / invalid_location`，HTTP 层将其作为 `422` permanent failure。未知 `23514` 或其他数据库错误仍向上抛出，HTTP 层返回 `503 sync_unavailable`。不得用一条宽泛的 SQLSTATE 映射掩盖新的约束或权限问题。
 

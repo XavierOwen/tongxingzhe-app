@@ -199,6 +199,7 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `REGION-008` | 新节点或边界建议待审核时，接触先归入当时已有的最小规范上级；审核后可用新版本重新解析，但不得抹除原匹配。 |
 | `REGION-009` | 日常分析默认使用当前区域视图；原始区域视图用于历史复现、解释跨期边界变化和审计。 |
 | `REGION-010` | 没有原始坐标可重新解析时，旧区域只能凭绑定两个已发布树内容指纹的显式一对一映射证据进入指定新版本；缺失、冲突、拆分、合并或证据漂移必须失败关闭，不按名称、父链或坐标猜测。 |
+| `REGION-011` | 区域归属证据解析必须接收调用方明确指定的已发布目标树版本和内容指纹；原始视图只接受精确来源证据，当前视图的坐标只接受唯一最深且同属一条父链的命中，跨父链或同深度多命中返回歧义；`region-only` 只接受同版本来源或显式一对一映射，`pending_resolution`、`not_applicable` 和不完整来源返回 `not_reportable`。 |
 
 ### 5.5 场景问卷
 
@@ -452,6 +453,36 @@ Slice 6AK 只在私有数据边界保存已发布规范区域树之间的显式�
 
 本 Slice 不注册生产区域报告，不增加 runtime／HTTP／Flutter 入口，也不交付完整网格、互补隐藏、授权、
 快照 lineage、动态下钻、缓存、导出、历史 as-of、更正版、删除或一对多／多对一映射。
+
+#### Slice 6AL：固定私有管理区域归属证据解析接缝
+
+Slice 6AL 只提供供未来固定区域报告复用的私有、只读 typed resolver。调用方必须提供
+`original` 或 `current` 视图；`original` 的两个 target 参数必须为 `NULL`，`current` 才必须提供
+一个明确的已发布目标 `tree_version` 和 `content_fingerprint`。resolver 不读取 current 选择开关，也不
+替调用方决定报告截止点的目标树。
+
+`original` 视图只在地点来源的 release 已发布、来源指纹精确匹配、节点真实存在且父链包含城市时返回
+原始区域 tuple。`current` 视图对 `resolved_from_coordinates` 使用原始坐标和指定目标树的边界重新解析，
+只接受唯一最深候选；多个命中只有在同一父链上才可继续，跨父链或同深度多候选返回稳定歧义状态，零命中
+返回未映射。`resolved_region_only` 在来源与目标树相同时保留已验证来源，跨版本时只调用 6AK 的显式
+一对一 mapping resolver，不组合映射链。
+
+`pending_resolution`、`not_applicable` 和 `legacy_incomplete` 不产生区域 tuple，返回稳定的
+`not_reportable` 状态。成功结果只包含固定 contract、视图、状态、原因和区域 ID、树版本、内容指纹；
+不得返回来源 ID、contact、revision、贡献者、地点名称、坐标或 PII。错误视图、缺少 current 目标、草稿
+目标、目标指纹漂移、未知目标节点或没有城市父链的目标均失败关闭。
+
+resolver 由无登录、无成员的 `tongxingzhe_region_attribution_reader` 拥有；`tongxingzhe_runtime`、区域发布者、
+mapping writer 和 provenance writer 不得执行它。
+
+本 Slice 不选择 current tree，不实现报告截止点或历史 `as-of`，不读取接触统计资格，不注册生产区域报告，
+也不增加完整区域网格、父子或重叠查询、互补隐藏、授权、快照 lineage、HTTP、Flutter、缓存或导出。
+组织成员治理和区域维护者审核仍由后续工作单元负责。
+
+自动测试使用 synthetic provenance 和区域树，覆盖原始成功、坐标 current 成功／零命中／同链嵌套／跨链
+歧义／同深度歧义、region-only 同版本／显式 mapping／缺失 mapping、错误指纹、草稿树、未知树、
+pending／N/A／不完整来源以及敏感字段不出现在输出。结构与权限 check、migration checksum 和跨 cluster
+dump／restore 必须重复验证同一合同。
 
 只有高级分析可显示：
 
@@ -714,6 +745,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-012` | Flutter 导出 gateway 使用 canonical UTF-8 golden bytes；覆盖固定请求／响应头、一次 `401` 刷新、稳定错误、Content-Length、key 顺序、目录摘要绑定、16 格、`displayed >= 10`、`suppressed = null`、额外字段和非 canonical 响应失败关闭。 |
 | `TEST-013` | Web 下载 delivery、管理报告状态机和 Widget 覆盖两阶段操作、原始 artifact 透传、非 Web unavailable、重复点击、delivery 重试不重复导出、迟到响应和页面离开清理，以及中英文 live semantics、320×568 和 200% 字号；Web build 验证条件导入，真实浏览器证据单独记录。 |
 | `TEST-014` | 规范区域跨版本映射 fixture 覆盖已发布树与精确指纹、未知节点、草稿树、同版本、幂等、request 漂移、冲突目标、追加不可变、最小权限和缺失映射；确定性双事务测试证明同一来源到同一目标版本至多提交一个目标，完整 Docker 套件在恢复库重复验证。 |
+| `TEST-015` | 私有区域归属 resolver fixture 覆盖 original 精确来源、current 显式目标树、坐标唯一／零命中／同链嵌套／跨链歧义／同深度歧义、region-only 同版本与 6AK 映射、错误指纹、草稿或未知树、`not_reportable` 状态、无敏感输出和最小权限；完整 Docker 套件在恢复库重复验证。 |
 
 ## 9. UI、视觉与可访问性
 
