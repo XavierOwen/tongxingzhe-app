@@ -249,6 +249,31 @@ flutter test --no-pub \
 Docker。通过表示 Flutter 能严格验证服务端响应；它不表示浏览器已下载、原生平台已保存、系统分享
 可用或用户已经打开文件。后续平台交付必须分别运行对应 adapter、平台 build 和必要的运行时验收。
 
+只修改 6AJ 的 Web 下载 delivery 或两阶段 UI 时，运行：
+
+```bash
+flutter test --no-pub \
+  test/management_reports/management_report_export_delivery_test.dart \
+  test/features/management_reports/management_report_browser_view_model_test.dart \
+  test/features/management_reports/management_report_browser_test.dart \
+  test/l10n/app_strings_test.dart
+flutter test --no-pub --platform chrome \
+  test/management_reports/management_report_export_delivery_web_test.dart
+flutter build web --release
+```
+
+这些命令不需要 Docker。第一条在内存中检查准备、下载请求、重试、迟到响应、非 Web unavailable、
+双语文案和辅助功能；它不会在电脑上创建文件。第二条在 Headless Chrome 中拦截真实 Blob 和临时链接，
+对账 bytes、MIME、文件名、链接移除和 object URL 延后回收，并把浏览器版本写入测试日志。测试会阻止
+默认保存动作，因此只证明浏览器收到了正确的下载请求，不证明文件已保存。第三条编译真正的 Web
+adapter，能发现条件导入或浏览器 API 的编译错误，但不会自动点击下载。
+
+2026-08-14 的本地证据使用 `HeadlessChrome/150.0.0.0`：测试捕获文件名
+`management-report.json`、MIME `application/json; charset=utf-8` 和 bytes
+`[0, 1, 2, 127, 128, 255]`，并确认临时链接已移除、object URL 在 click 后回收。这个证据没有执行
+浏览器保存动作，也不能替代其他浏览器或五个原生平台的验收。若要声称某个浏览器实际生成了文件，
+还要在该浏览器中完成保存后的文件对账，并另行记录浏览器版本、文件名、MIME 和 bytes。
+
 第一次使用 Docker 时，从第 6.1 节开始操作。Docker 套件证明数据库授权、最小访问审计、撤权并发和恢复后合同；Flutter synthetic 测试证明客户端状态与显示规则。两类证据不能互相替代。
 
 管理报告发布端点同时改动 Backend 和 PostgreSQL bridge。开发时先运行：

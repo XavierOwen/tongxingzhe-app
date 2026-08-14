@@ -18,6 +18,7 @@ import '../foundation/runtime_values.dart';
 import '../identity/identity_session.dart';
 import '../l10n/app_strings.dart';
 import '../management_reports/management_report_gateway.dart';
+import '../management_reports/management_report_export_delivery.dart';
 import '../plans/personal_action_plan.dart';
 import '../project_settings/personal_follow_up_consent_opt_in.dart';
 import '../reminders/personal_action_reminder.dart';
@@ -189,6 +190,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
             :final personalFollowUpConsentRatioGateway,
             :final personalRelationshipStageChangeSummaryGateway,
             :final managementReportGateway,
+            :final managementReportExportDelivery,
             :final currentRelationshipStageRepository,
             :final deviceReminderPreferenceStore,
             :final reminderNotificationScheduler,
@@ -217,6 +219,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
               personalRelationshipStageChangeSummaryGateway:
                   personalRelationshipStageChangeSummaryGateway,
               managementReportGateway: managementReportGateway,
+              managementReportExportDelivery: managementReportExportDelivery,
               currentRelationshipStageRepository:
                   currentRelationshipStageRepository,
               deviceReminderPreferenceStore: deviceReminderPreferenceStore,
@@ -255,6 +258,7 @@ class _ReadyApp extends StatefulWidget {
     required this.personalFollowUpConsentRatioGateway,
     required this.personalRelationshipStageChangeSummaryGateway,
     required this.managementReportGateway,
+    required this.managementReportExportDelivery,
     required this.currentRelationshipStageRepository,
     required this.deviceReminderPreferenceStore,
     required this.reminderNotificationScheduler,
@@ -283,6 +287,7 @@ class _ReadyApp extends StatefulWidget {
   final PersonalRelationshipStageChangeSummaryGateway
   personalRelationshipStageChangeSummaryGateway;
   final ManagementReportGateway managementReportGateway;
+  final ManagementReportExportDelivery managementReportExportDelivery;
   final CurrentRelationshipStageRepository currentRelationshipStageRepository;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
   final ReminderNotificationScheduler reminderNotificationScheduler;
@@ -380,6 +385,7 @@ final class _ReadyAppState extends State<_ReadyApp> {
         personalRelationshipStageChangeSummaryGateway:
             widget.personalRelationshipStageChangeSummaryGateway,
         managementReportGateway: widget.managementReportGateway,
+        managementReportExportDelivery: widget.managementReportExportDelivery,
         currentRelationshipStageRepository:
             widget.currentRelationshipStageRepository,
         deviceReminderPreferenceStore: widget.deviceReminderPreferenceStore,

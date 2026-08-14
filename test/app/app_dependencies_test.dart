@@ -14,6 +14,7 @@ import 'package:tongxingzhe_app/features/contact_metrics/relationship_stage_chan
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/legacy_demo/legacy_demo_dependencies.dart';
+import 'package:tongxingzhe_app/management_reports/management_report_export_delivery.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
 import 'package:tongxingzhe_app/privacy/drift_offline_pii_lock_store.dart';
 import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
@@ -58,6 +59,10 @@ void main() {
     expect(
       ready.personalRelationshipStageChangeSummaryGateway,
       isA<DeferredPersonalRelationshipStageChangeSummaryGateway>(),
+    );
+    expect(
+      ready.managementReportExportDelivery,
+      isA<UnsupportedManagementReportExportDelivery>(),
     );
 
     final login = await controller.login('admin1', 'admin1');
@@ -146,6 +151,30 @@ void main() {
     );
     await ready.personalRelationshipStageChangeSummaryGateway.close();
     expect(gateway.closeCount, 1);
+    await ready.appSession.close();
+    await ready.identitySession.close();
+    ready.controller.dispose();
+    await database.close();
+  });
+
+  test('composition root 保留显式注入的管理报告下载 adapter', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final delivery = _TrackingManagementReportExportDelivery();
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      managementReportExportDelivery: delivery,
+    );
+
+    final startup = await dependencies.start();
+
+    expect(startup, isA<AppStartupReady>());
+    final ready = startup as AppStartupReady;
+    expect(identical(ready.managementReportExportDelivery, delivery), isTrue);
     await ready.appSession.close();
     await ready.identitySession.close();
     ready.controller.dispose();
@@ -443,6 +472,17 @@ final class _TrackingManagementReportGateway
   Future<ManagementReportResult<ManagementAnalysisContextSnapshot>>
   selectContext(String projectId) async =>
       const ManagementReportRejected(ManagementReportFailureCode.notConfigured);
+}
+
+final class _TrackingManagementReportExportDelivery
+    implements ManagementReportExportDelivery {
+  @override
+  bool get isAvailable => true;
+
+  @override
+  Future<ManagementReportExportDeliveryResult> requestDownload(
+    ManagementReportExportArtifact artifact,
+  ) async => const ManagementReportDownloadRequested();
 }
 
 final class _TrackingConsentOptInGateway

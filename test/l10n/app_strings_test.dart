@@ -156,5 +156,22 @@ void main() {
         contains('formal non-re-identification guarantee'),
       ),
     );
+    expect(
+      zh.t('managementReportExportRequested'),
+      allOf(contains('已向浏览器请求下载'), contains('不证明文件已保存')),
+    );
+    expect(
+      en.t('managementReportExportRequested'),
+      allOf(contains('Download requested'), contains('does not prove')),
+    );
+    expect(
+      zh.t('managementReportExportDeliveryFailed'),
+      contains('同一份已验证文件重试'),
+    );
+    expect(zh.t('managementReportExportUnauthorized'), '当前账号没有导出管理报告的权限。');
+    expect(
+      en.t('managementReportExportUnauthorized'),
+      'This account cannot export management reports.',
+    );
   });
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../management_reports/management_report_export_delivery.dart';
 import '../../management_reports/management_report_gateway.dart';
 
 enum ManagementReportBrowserStage {
@@ -13,6 +14,16 @@ enum ManagementReportBrowserStage {
   failure,
 }
 
+enum ManagementReportExportStage {
+  unavailable,
+  idle,
+  preparing,
+  ready,
+  requesting,
+  requested,
+  failure,
+}
+
 final class ManagementReportBrowserState {
   ManagementReportBrowserState({
     required this.stage,
@@ -22,6 +33,9 @@ final class ManagementReportBrowserState {
     this.selectedSummary,
     this.snapshot,
     this.failureCode,
+    this.exportStage = ManagementReportExportStage.unavailable,
+    this.exportArtifact,
+    this.exportFailureCode,
   }) : availableContexts = List.unmodifiable(availableContexts),
        snapshots = List.unmodifiable(snapshots);
 
@@ -37,6 +51,9 @@ final class ManagementReportBrowserState {
   final ManagementReportSnapshotSummary? selectedSummary;
   final ManagementReportSnapshot? snapshot;
   final ManagementReportFailureCode? failureCode;
+  final ManagementReportExportStage exportStage;
+  final ManagementReportExportArtifact? exportArtifact;
+  final ManagementReportFailureCode? exportFailureCode;
 }
 
 /// 组织管理报告浏览状态机。
@@ -44,17 +61,20 @@ final class ManagementReportBrowserState {
 /// 管理项目和个人项目彼此独立。切换管理项目时先删除内存中的旧目录和报告；
 /// 每个异步操作也带 generation，避免迟到响应把已切换的范围写回页面。
 final class ManagementReportBrowserViewModel extends ChangeNotifier {
-  ManagementReportBrowserViewModel(this._gateway);
+  ManagementReportBrowserViewModel(this._gateway, this._exportDelivery);
 
   final ManagementReportGateway _gateway;
+  final ManagementReportExportDelivery _exportDelivery;
   ManagementReportBrowserState _state = ManagementReportBrowserState.initial();
   var _generation = 0;
+  var _exportGeneration = 0;
   var _disposed = false;
   _RetryOperation? _retryOperation;
 
   ManagementReportBrowserState get state => _state;
 
   Future<void> initialize() async {
+    _invalidateExport();
     final generation = ++_generation;
     _retryOperation = const _RetryLoadContext();
     _setState(ManagementReportBrowserState.initial());
@@ -90,6 +110,7 @@ final class ManagementReportBrowserViewModel extends ChangeNotifier {
   }
 
   Future<void> selectContext(String projectId) async {
+    _invalidateExport();
     final generation = ++_generation;
     final available = _state.availableContexts;
     _retryOperation = _RetrySelectContext(projectId);
@@ -132,6 +153,7 @@ final class ManagementReportBrowserViewModel extends ChangeNotifier {
   Future<void> openSnapshot(ManagementReportSnapshotSummary summary) async {
     final context = _state.currentContext;
     if (context == null) return;
+    _invalidateExport();
     final generation = ++_generation;
     final available = _state.availableContexts;
     final snapshots = _state.snapshots;
@@ -163,6 +185,9 @@ final class ManagementReportBrowserViewModel extends ChangeNotifier {
           snapshots: snapshots,
           selectedSummary: summary,
           snapshot: value,
+          exportStage: _exportDelivery.isAvailable
+              ? ManagementReportExportStage.idle
+              : ManagementReportExportStage.unavailable,
         ),
       );
       return;
@@ -180,6 +205,7 @@ final class ManagementReportBrowserViewModel extends ChangeNotifier {
   void showDirectory() {
     final context = _state.currentContext;
     if (context == null) return;
+    _invalidateExport();
     _generation++;
     _retryOperation = null;
     _setState(
@@ -190,6 +216,85 @@ final class ManagementReportBrowserViewModel extends ChangeNotifier {
         snapshots: _state.snapshots,
       ),
     );
+  }
+
+  Future<void> prepareExport() async {
+    final state = _state;
+    final context = state.currentContext;
+    final summary = state.selectedSummary;
+    if (!_exportDelivery.isAvailable ||
+        state.stage != ManagementReportBrowserStage.report ||
+        context == null ||
+        summary == null ||
+        (state.exportStage != ManagementReportExportStage.idle &&
+            !(state.exportStage == ManagementReportExportStage.failure &&
+                state.exportArtifact == null))) {
+      return;
+    }
+
+    final browserGeneration = _generation;
+    final exportGeneration = ++_exportGeneration;
+    _updateExport(stage: ManagementReportExportStage.preparing);
+
+    final result = await _gateway.exportSnapshot(
+      projectId: context.projectId,
+      summary: summary,
+    );
+    if (!_isExportCurrent(browserGeneration, exportGeneration)) return;
+    if (result case ManagementReportSuccess<ManagementReportExportArtifact>(
+      :final value,
+    )) {
+      _updateExport(stage: ManagementReportExportStage.ready, artifact: value);
+      return;
+    }
+    _updateExport(
+      stage: ManagementReportExportStage.failure,
+      failureCode:
+          (result as ManagementReportRejected<ManagementReportExportArtifact>)
+              .code,
+    );
+  }
+
+  Future<void> requestDownload() async {
+    final state = _state;
+    final artifact = state.exportArtifact;
+    if (!_exportDelivery.isAvailable ||
+        state.stage != ManagementReportBrowserStage.report ||
+        artifact == null ||
+        (state.exportStage != ManagementReportExportStage.ready &&
+            state.exportStage != ManagementReportExportStage.requested &&
+            state.exportStage != ManagementReportExportStage.failure)) {
+      return;
+    }
+
+    final browserGeneration = _generation;
+    final exportGeneration = ++_exportGeneration;
+    _updateExport(
+      stage: ManagementReportExportStage.requesting,
+      artifact: artifact,
+    );
+    final result = await _exportDelivery.requestDownload(artifact);
+    if (!_isExportCurrent(browserGeneration, exportGeneration)) return;
+    switch (result) {
+      case ManagementReportDownloadRequested():
+        _updateExport(
+          stage: ManagementReportExportStage.requested,
+          artifact: artifact,
+        );
+        return;
+      case ManagementReportDownloadUnavailable():
+        _updateExport(
+          stage: ManagementReportExportStage.unavailable,
+          artifact: artifact,
+        );
+        return;
+      case ManagementReportDownloadFailed():
+        _updateExport(
+          stage: ManagementReportExportStage.failure,
+          artifact: artifact,
+        );
+        return;
+    }
   }
 
   Future<void> retry() async {
@@ -280,6 +385,35 @@ final class ManagementReportBrowserViewModel extends ChangeNotifier {
 
   bool _isCurrent(int generation) => !_disposed && generation == _generation;
 
+  bool _isExportCurrent(int browserGeneration, int exportGeneration) =>
+      _isCurrent(browserGeneration) && exportGeneration == _exportGeneration;
+
+  void _invalidateExport() {
+    _exportGeneration++;
+  }
+
+  void _updateExport({
+    required ManagementReportExportStage stage,
+    ManagementReportExportArtifact? artifact,
+    ManagementReportFailureCode? failureCode,
+  }) {
+    final state = _state;
+    _setState(
+      ManagementReportBrowserState(
+        stage: state.stage,
+        currentContext: state.currentContext,
+        availableContexts: state.availableContexts,
+        snapshots: state.snapshots,
+        selectedSummary: state.selectedSummary,
+        snapshot: state.snapshot,
+        failureCode: state.failureCode,
+        exportStage: stage,
+        exportArtifact: artifact,
+        exportFailureCode: failureCode,
+      ),
+    );
+  }
+
   void _setState(ManagementReportBrowserState state) {
     if (_disposed) return;
     _state = state;
@@ -288,8 +422,10 @@ final class ManagementReportBrowserViewModel extends ChangeNotifier {
 
   @override
   void dispose() {
+    _state = ManagementReportBrowserState.initial();
     _disposed = true;
     _generation++;
+    _exportGeneration++;
     super.dispose();
   }
 }
