@@ -89,6 +89,7 @@
 | `AUTHZ-004` | Backend 对每个受保护操作重新验证 workspace、project、membership、capability 和撤权状态；UI 隐藏不是安全边界。 |
 | `AUTHZ-005` | 管理角色不自动获得对象 PII、个人反思或个人行动计划访问权。 |
 | `AUTHZ-006` | 分配、撤销分配、查看敏感资料、导入导出、合并拆分、权限变更与区域修改都必须审计。 |
+| `AUTHZ-007` | 固定匿名管理报告文件导出必须同时具备 `view_anonymous_analytics` 与独立 `export_management_reports` capability；每次请求重新授权，完整授权的导出结果写入独立于普通快照读取的不可变导出审计。 |
 
 ## 4. 核心信息架构
 
@@ -380,6 +381,28 @@ Slice 6AF 不协调后续联系同意占比的两个独立 HTTP GET，也不新�
 报告导出、图表、排名、任意指标、任意期间、Backend、PostgreSQL、migration、Drift schema、
 离线趋势缓存、历史 `as-of`、报告更正／删除、区域下钻或真机通知验收。
 
+#### Slice 6AH：固定匿名管理报告文件导出
+
+Slice 6AH 只为一份已发布、具有可信 v2 来源的
+`contact_sessions_by_channel_two_periods@1` 固定管理报告提供 canonical JSON v1 文件导出。
+它使用显式项目和快照 ID 的窄 GET；请求不接受 query、body、报告定义、格式、时区、数据截止点或筛选。
+Backend 和 PostgreSQL 每次重新验证活动账号、组织／项目成员关系、`view_anonymous_analytics`
+与独立 `export_management_reports` capability。`release_management_reports` 不自动包含查看或导出权。
+
+导出 JSON 的顶层 exact keys 固定为 `export_contract_id`、`snapshot_id`、`released_at_utc` 和
+`report`。`report` 复用 6L 已验证的固定来源、定义、时区、截止点、期间和 16 格 `cells`；格子顺序
+使用 `cell_order`，`displayed` 只能带大于等于 10 的整数，`suppressed` 必须是 JSON `null`。服务端直接序列化
+已保存的受保护快照，不重新执行动态报告或隐私政策，不接受客户端自定义字段。响应使用 UTF-8、
+`application/json`、稳定的 canonical 序列化和 `Cache-Control: no-store`。
+
+每次通过身份验证并完成完整授权的导出请求都写入独立、不可变的管理报告导出审计，记录内部 actor、项目、快照、
+导出合同、请求时间、结果状态和事件 ID，不记录报告格、贡献者、推广对象、地点或 PII。审计只证明
+服务端已完成授权、生成并准备交付，不证明客户端已经落盘、分享或读取。固定匿名管理报告文件导出
+不等同于推广对象资料导出，也不声称形式化不可重识别。
+
+本 Slice 不交付 Flutter、浏览器或原生保存／分享、CSV、六平台真机验收、图表、批量导出、任意查询、
+区域下钻、报告更正／取代、缓存、保留或删除策略；推广对象资料导出和 Slice 7 删除规则保持原边界。
+
 只有高级分析可显示：
 
 ```text
@@ -410,6 +433,7 @@ Slice 6AF 不协调后续联系同意占比的两个独立 HTTP GET，也不新�
 | `ANALYTICS-016` | 个人阶段变更汇总只通过固定 GET 读取；认证优先、当前项目由数据库解析并加锁，响应使用单 statement 的授权／数据截止时刻，不提供历史 as-of 或逐事件明细。 |
 | `ANALYTICS-017` | 个人兴趣 `3–4` 趋势只比较两个相邻、完整结束的 UTC 七日期间；两期使用同一 Drift transaction 和本地 `dataCutoffUtc`，只有两期可计算时才显示 `current - previous` 百分点差，并保持个人观察、非因果边界。 |
 | `ANALYTICS-018` | 固定管理报告详情只显示已解析的报告／指标 ID 与 version、`source_scope`、`privacy_policy`、时区、数据截止、发布时间和 16 格 `displayed`／`suppressed` 计数；稳定 ID 与 version 同时保留，`suppressed` 不解释为零，客户端不重算指标或隐私；中英文和屏幕阅读器在 320×568、200% 字号下仍可读，并明确匿名控制只降低披露风险、不构成形式化不可重识别保证。 |
+| `ANALYTICS-019` | 固定匿名管理报告文件导出只返回已发布可信 v2 快照的 canonical JSON v1；报告定义、指标、来源、时区、截止点、发布时间和 16 格顺序固定，后续数据不改变同一快照的导出字节。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -427,6 +451,7 @@ Slice 6AF 不协调后续联系同意占比的两个独立 HTTP GET，也不新�
 | `PRIVACY-010` | 第一阶段只开放服务端定义、版本化的固定报告形状；后端对维度、时间／区域粒度、筛选和导出字段使用 allowlist，将请求 canonicalize 后执行完整网格与互补隐藏，并以审计和重识别 fixture 验证风险边界。 |
 | `PRIVACY-011` | 查看或修正去身份化异常需要相应 capability 并留下审计；修正采用接触 revision，不借纠错入口取得记录者或对象身份。 |
 | `PRIVACY-012` | 未来管理阶段变更报告的 `k=10` 以不同“对象 × 项目”关系为真实统计单位；事件数和方向事件数不能靠同一关系重复发生来达到阈值。 |
+| `PRIVACY-013` | 固定匿名管理报告文件导出只能接收已经完成阈值、贡献者保护、完整网格和互补隐藏的快照；`suppressed` 永远是 `null`，客户端和导出过程都不得重算或补回隐藏值。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
 
@@ -633,6 +658,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-008` | 阶段变更共享 fixture `relationship_stage_changes_v1.csv` 由 Dart 与 PostgreSQL 独立重算；覆盖 actor、项目、UTC 边界、结束分配、排除项、上升／下降、重复关系和重复 revision，错误输入失败关闭。 |
 | `TEST-009` | Dart／Drift synthetic fixture 覆盖一次时钟读取、相邻 UTC 边界、scope／排除项、half-up、正／负／零差、空分母、同一 Drift transaction 与共享 `dataCutoffUtc`，以及不可比较结果失败关闭。 |
 | `TEST-010` | 管理报告浏览器 synthetic snapshot 覆盖中英文固定元数据、稳定 ID／version、16 格 displayed／suppressed 计数、`management-report-privacy-summary` Semantics、隐藏格不显示零，以及 320×568、200% 字号无溢出；`AppStrings` 同时验证中英文边界文案。 |
+| `TEST-011` | 固定匿名管理报告文件导出使用共享 synthetic snapshot 和 canonical JSON golden fixture；覆盖双 capability 授权、可信 provenance、16 格顺序、`suppressed = null`、稳定字节、独立不可变导出审计和无 PII／贡献者／地点字段。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -731,13 +757,13 @@ Slice 0、1、2 完成后可以发放内部 Alpha，用于验证匿名接触闭�
 
 ### Slice 6：指标、管理汇总与隐私
 
-交付：指标目录、个人即时分析、管理匿名汇总、区域与时间分析、问卷兼容合并、动态报表、固定报告快照和必要 SQL 教学样例。
+交付：指标目录、个人即时分析、管理匿名汇总、区域与时间分析、问卷兼容合并、动态报表、固定报告快照、固定匿名管理报告文件导出和必要 SQL 教学样例。
 
-验收：Drift、PostgreSQL 和前端使用同一 synthetic fixture 对账；管理界面只调用版本化固定报告，后端 canonicalize 请求并统一执行 `k=10`、至少三位推广者、单人不超过一半、完整结果网格与互补隐藏；相邻周期、重叠区域、互补类别和已知外部事实的重识别 fixture 通过。Widget 只渲染已带来源、单位、版本、截止时间和抑制状态的 `MetricResult`，拿不到被隐藏的精确值。验收结论只能说明降低披露风险，不宣称形式化不可重识别。
+验收：Drift、PostgreSQL 和前端使用同一 synthetic fixture 对账；管理界面只调用版本化固定报告，后端 canonicalize 请求并统一执行 `k=10`、至少三位推广者、单人不超过一半、完整结果网格与互补隐藏；固定匿名管理报告文件导出同时检查 `view_anonymous_analytics` 与 `export_management_reports`，只序列化可信 v2 快照，保持 16 格顺序和 `suppressed = null`，并留下独立不可变导出审计。相邻周期、重叠区域、互补类别和已知外部事实的重识别 fixture 通过。Widget 只渲染已带来源、单位、版本、截止时间和抑制状态的 `MetricResult`，拿不到被隐藏的精确值。验收结论只能说明降低披露风险，不宣称形式化不可重识别。
 
 ### Slice 7：组织治理与数据可携带性
 
-交付：组织创建、定向邀请、可转发申请链接、审批、所有权、成员与 capability 管理、账号／组织删除恢复期，以及完整导入、导出、重复处理和可逆合并流程。
+交付：组织创建、定向邀请、可转发申请链接、审批、所有权、成员与 capability 管理、账号／组织删除恢复期，以及推广对象资料的完整导入、导出、重复处理和可逆合并流程。固定匿名管理报告文件导出属于 Slice 6，不改变本 Slice 的 PII 边界。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 
