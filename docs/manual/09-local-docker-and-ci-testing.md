@@ -324,6 +324,35 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 第一次使用 Docker 时，从第 6.1 节开始操作。Docker 套件证明数据库授权、最小访问审计、撤权并发和恢复后合同；Flutter synthetic 测试证明客户端状态与显示规则。两类证据不能互相替代。
 
+只修改 Slice 6AM 的报告截止区域目标树上下文时，不需要 Flutter、Backend、浏览器、Supabase 账号或真机。
+第一次使用 Docker 时，先启动 Docker Desktop，再从仓库根目录运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+脚本会自动运行 0055 migration、结构与权限 check、synthetic fixture、checksum、并发脚本和 dump／restore。
+它验证历史 selection 是否按可信 cutoff 固定、migration baseline 的观察下界、publication 与 resolver 的共享
+事务锁、reader 最小权限和恢复库 owner／ACL。看到 `0055_management_report_region_target_context`、
+`verify_management_report_region_target_context.sql`、`verify_management_report_region_target_context_concurrency.sh`
+均通过，才表示本切片的数据库证据齐全。通过不表示生产区域报告、区域聚合、6AL 以外的客户端入口或真实区域
+维护审核已经完成。完整原理见[管理指标与隐私章节](11-management-metrics-and-privacy.md#slice-6am-按报告截止点固定区域目标树上下文)。
+
+如果只检查已经运行的测试库，先确认 `DATABASE_URL` 指向专用 synthetic 数据库，再按顺序执行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_report_region_target_context.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0055_management_report_region_target_context.sql
+./tool/verify_management_report_region_target_context_concurrency.sh
+```
+
+这些命令只使用 synthetic selection history 和已发布树。手工通过表示当前 resolver 的返回合同、权限和锁语义
+成立，不表示真实报告已经生成。并发脚本会提交自己的测试行，普通 fixture 会回滚；不要把测试库当作生产库。
+
 管理报告发布端点同时改动 Backend 和 PostgreSQL bridge。开发时先运行：
 
 ```bash

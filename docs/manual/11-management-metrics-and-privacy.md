@@ -750,6 +750,91 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 草稿或未知树，以及 pending、N/A 和不完整来源的 `not_reportable`。通过只证明当前列出的 SQL shape、
 权限和失败关闭条件，不证明真实区域等价、维护者审核、报告截止点选择或 production 区域报告已经完成。
 
+## Slice 6AM 按报告截止点固定区域目标树上下文
+
+6AM 解决一个比区域聚合更早的问题：给定可信的 `data_cutoff_utc`，数据库能否证明当时哪一个已发布
+区域树是 current。私有函数
+`app_private.resolve_management_report_region_target_context_v1(timestamptz)` 提供只读的
+`history-derived cutoff context`，不注册生产报告，也不读取接触
+统计。返回值只包含固定 contract、状态、原因、cutoff、`target_tree_version`、
+`target_content_fingerprint`、`selection_sequence`、`selection_source`、证据时间和
+`tree_published_at_utc`。
+
+### 6AM 如何选择历史上下文
+
+resolver 只读两类事实：0038 的追加式 current selection history 和对应的已发布 release。它不读取 mutable
+`is_current`，也不按最新 release、区域名称、父链或几何相似度猜测目标树。
+
+一条 publication selection 只有同时满足以下条件，才能进入结果：
+
+- `selected_at_utc <= data_cutoff_utc`；
+- 对应 release 的生命周期是 `published`；
+- `published_at_utc <= data_cutoff_utc`；
+- selection 保存的内容指纹与 release 的精确指纹一致。
+
+resolver 按选择时间和历史序号取得截止点以前的唯一选择。没有可用选择时，结果不含目标区域 tuple，
+并返回稳定的 `selection_history_unavailable`。如果选中的历史指向草稿或缺失 release，或者发布时间、
+选择时间或指纹不一致，resolver 以固定 `SQLSTATE 55000` 拒绝解析，不返回上下文。相同 cutoff 的重试
+读取同一追加历史，不会因后来切换 current 而改变旧上下文。
+
+### migration baseline 不是历史选择时间
+
+0038 迁移会为迁移时已经是 current 的已发布树写入 `migration_baseline` 选择记录。旧 schema 没有真实的
+`selected_at_utc`，所以该字段保持 `NULL`；`recorded_at_utc` 只表示数据库在迁移时观察到这条基线。
+`recorded_at_utc` 是可以使用该观察证据的下界，不是树成为 current 的时间。报告 cutoff 早于该时间时，
+resolver 必须返回 `selection_history_unavailable`，不能把观察时间回填成选择时间，也不能返回一个猜测的
+target tree。
+
+### publication 与 resolver 的共享锁
+
+区域树发布函数和 6AM resolver 共用 `canonical-region-tree-publication:v1` 事务 advisory lock。发布函数在
+锁内完成 draft 校验、内容指纹、release 冻结和 selection history 追加。resolver 在同一把锁内读取已提交
+历史。resolver 没有写表动作，但仍使用 `VOLATILE SECURITY DEFINER`，因为它必须持有并遵守事务锁，保证
+publication-first 与 resolver-first 两种并发顺序都得到可解释的线性化结果。
+
+### 权限与 6AL 的边界
+
+resolver 由无登录、无成员的最小 reader role 拥有，只获得 selection history 和 published release 所需的
+`SELECT`。`PUBLIC`、`tongxingzhe_runtime`、区域发布者、mapping writer 和 provenance writer 不能执行
+resolver。`PUBLIC`、runtime、mapping writer 和 provenance writer 也不能直接读取 selection history；
+区域发布者只保留 0038 发布流程所需的既有 `SELECT`／`INSERT`。它没有 HTTP、Flutter、Drift 或 runtime bridge。
+
+未来固定区域报告先调用 6AM，再把结果中的显式 `target_tree_version + target_content_fingerprint` 传给 6AL 的
+`current` resolver。6AL 继续负责地点来源、坐标唯一性和 6AK 显式映射。6AL 不读取 current selection，
+也不自行决定 cutoff。`original` 视图合同不变。
+
+6AM 不交付完整区域报告、接触统计资格、区域网格、父子或重叠查询、`k=10`、贡献者保护、互补隐藏、
+snapshot lineage、capability、项目目标树配置、任意历史 `as-of`、报告修订／删除、HTTP、Flutter、Drift、
+缓存或导出。它只交付后续报告可以安全消费的目标树上下文。
+
+### 如何验证 6AM
+
+没有 PostgreSQL 时，从仓库根目录运行完整 Docker 套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+脚本会从空库运行 0055 migration、结构与权限 check、synthetic fixture、checksum、并发脚本，并在没有源
+cluster roles 的第二个 PostgreSQL 16 容器恢复后重复执行。fixture 覆盖无历史、publication 在 cutoff 前／
+等于／之后、两次切换、baseline 观察下界前／等于／之后、草稿、缺失 release、指纹或发布时间不一致、稳定
+不可用状态和敏感字段不输出。并发脚本分别让 publication 和 resolver 先取共享锁。
+
+如果只检查已经运行的测试库，先运行 migration，再按以下顺序执行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_report_region_target_context.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0055_management_report_region_target_context.sql
+./tool/verify_management_report_region_target_context_concurrency.sh
+```
+
+手工通过只证明当前 SQL 返回合同、权限、历史边界和并发锁成立。它不证明真实区域对应关系、维护者审核或
+生产区域报告已经验收。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和

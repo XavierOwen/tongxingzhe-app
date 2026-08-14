@@ -219,6 +219,14 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/checks/verify_canonical_region_version_mappings.sql
 psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/fixtures/0053_canonical_region_version_mappings.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_region_attribution.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0054_management_region_attribution.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_report_region_target_context.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0055_management_report_region_target_context.sql
 ./tool/verify_questionnaire_publish_concurrency.sh
 ./tool/verify_questionnaire_metric_concurrency.sh
 ./tool/verify_person_institution_relationship_concurrency.sh
@@ -231,6 +239,7 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 ./tool/verify_personal_relationship_stage_change_summary_concurrency.sh
 ./tool/verify_management_report_snapshot_export_concurrency.sh
 ./tool/verify_canonical_region_version_mapping_concurrency.sh
+./tool/verify_management_report_region_target_context_concurrency.sh
 ```
 
 第二次执行不是重复建库，而是验证已经记录的 checksum。若历史文件被修改，脚本会拒绝继续。
@@ -403,6 +412,21 @@ evidence digest。独立的无登录 mapping writer 拥有私有登记与解析�
 地点名、坐标或 PII，也不读取 current selection 或自动选择报告截止点。无登录 reader role 只拥有 resolver
 所需的受保护读取能力；runtime、PUBLIC、区域发布者、mapping writer 和 provenance writer 没有新增执行权或表权。
 该 migration 不注册生产区域报告。
+
+`0055_management_report_region_target_context.sql` 提供 6AM 的历史派生 cutoff resolver
+`app_private.resolve_management_report_region_target_context_v1(timestamptz)`。它只读取追加式
+current selection history 和已发布 release，用可信 `data_cutoff_utc` 选择 `selected_at_utc <= cutoff` 的
+唯一历史上下文，并返回树版本、精确指纹、selection sequence、selection source、证据时间和发布时间。
+目标 release 必须在 cutoff 前发布。0038 migration baseline 的 `selected_at_utc` 为 `NULL`，只能从
+`recorded_at_utc` 这个观察下界使用；更早 cutoff 返回历史不可用，不把观察时间当成选择时间。
+没有符合 cutoff 的历史时返回不含 target tuple 的稳定不可用文档；选中的历史若指向草稿或缺失 release，
+或者指纹、选择时间和发布时间不一致，则以 `SQLSTATE 55000` 拒绝解析。
+
+发布函数和 6AM resolver 共用 `canonical-region-tree-publication:v1` 事务 advisory lock。resolver 是
+私有 `VOLATILE SECURITY DEFINER` 函数，reader role 只获得所需的 selection history 和 release 读取权限。
+runtime、PUBLIC 和区域维护角色都不能执行它；runtime 和 PUBLIC 也不能直接读取 selection history。区域发布者
+只保留 0038 发布流程所需的既有 `SELECT`／`INSERT`。未来区域报告先消费 6AM 的显式树版本和指纹，
+再传给 6AL；0055 不聚合接触、不注册报告、不开放 HTTP 或 Flutter。
 
 0054 的手工验证需要专用测试库：
 
