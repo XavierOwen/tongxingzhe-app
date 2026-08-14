@@ -512,6 +512,15 @@ void main() {
       ),
       ManagementReportFailureCode.notConfigured,
     );
+    expect(
+      _rejectedCode(
+        await gateway.exportSnapshot(
+          projectId: _projectId,
+          summary: _summary(),
+        ),
+      ),
+      ManagementReportFailureCode.notConfigured,
+    );
   });
 }
 

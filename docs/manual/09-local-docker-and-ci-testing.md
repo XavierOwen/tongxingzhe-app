@@ -237,6 +237,18 @@ flutter test --no-pub \
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
+只修改 6AI 的 Flutter 导出读取时，再加入导出 gateway 测试：
+
+```bash
+flutter test --no-pub \
+  test/management_reports/http_management_report_export_gateway_test.dart \
+  test/management_reports/http_management_report_gateway_test.dart
+```
+
+这组测试使用内存 HTTP 响应和 canonical UTF-8 golden bytes，不会在电脑上创建报告文件，也不需要
+Docker。通过表示 Flutter 能严格验证服务端响应；它不表示浏览器已下载、原生平台已保存、系统分享
+可用或用户已经打开文件。后续平台交付必须分别运行对应 adapter、平台 build 和必要的运行时验收。
+
 第一次使用 Docker 时，从第 6.1 节开始操作。Docker 套件证明数据库授权、最小访问审计、撤权并发和恢复后合同；Flutter synthetic 测试证明客户端状态与显示规则。两类证据不能互相替代。
 
 管理报告发布端点同时改动 Backend 和 PostgreSQL bridge。开发时先运行：

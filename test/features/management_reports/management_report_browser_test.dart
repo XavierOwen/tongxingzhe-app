@@ -349,6 +349,14 @@ final class _Gateway implements ManagementReportGateway {
       : ManagementReportSuccess(snapshot!);
 
   @override
+  Future<ManagementReportResult<ManagementReportExportArtifact>>
+  exportSnapshot({
+    required String projectId,
+    required ManagementReportSnapshotSummary summary,
+  }) async =>
+      const ManagementReportRejected(ManagementReportFailureCode.notFound);
+
+  @override
   Future<ManagementReportResult<ManagementAnalysisContextSnapshot>>
   selectContext(String projectId) async => contextResult;
 }

@@ -432,6 +432,14 @@ final class _TrackingManagementReportGateway
       const ManagementReportRejected(ManagementReportFailureCode.notConfigured);
 
   @override
+  Future<ManagementReportResult<ManagementReportExportArtifact>>
+  exportSnapshot({
+    required String projectId,
+    required ManagementReportSnapshotSummary summary,
+  }) async =>
+      const ManagementReportRejected(ManagementReportFailureCode.notConfigured);
+
+  @override
   Future<ManagementReportResult<ManagementAnalysisContextSnapshot>>
   selectContext(String projectId) async =>
       const ManagementReportRejected(ManagementReportFailureCode.notConfigured);
