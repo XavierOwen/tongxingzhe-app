@@ -327,8 +327,18 @@ revision，以及同一 revision 的重复输入都不计入；重复输入必�
 事件发生后当前分配结束，不会把该事件从原 UTC 期间移除；本合同不按当前分配或历史分配区间
 归因，也不提供历史 `as-of` 快照。
 
-阶段变更指标属于个人事实，不新增生产 HTTP endpoint、Flutter 页面、Drift 表、关系历史同步、
-Outbox 或管理报告。事件数和方向分布的 `managementPrivacyUnit` 固定为
+Slice 6AE-1 通过固定的
+`GET /v1/personal/relationship-stage-change-summary?from_utc=...&until_utc=...`
+读取个人汇总。请求只接受两个 UTC `Z` query key 和无 body；Backend 先验证 Bearer，再由
+PostgreSQL 从可信 issuer／subject 解析 active app user、锁定当前项目指针并重新验证 personal
+workspace／project。响应固定为 `personal_relationship_stage_change_summary_result_v1`，包含
+`project_id`、`relationshipChangedAtUtc`、UTC 半开 `period`、statement 时刻的
+`data_cutoff_utc`／`authorized_at_utc` 和四个非负计数。两者是读取时刻，不是历史 `as-of` 或
+客户端收包时刻。对象匿名化或当前分配结束不会删除此前合格事件；匿名化产生的 lifecycle-only
+和 note-only revision 不计入。该入口不提供逐事件明细，也不返回 PII。
+
+阶段变更指标仍属于个人事实，不新增 Flutter 页面、Drift 表、关系历史同步、Outbox 或管理报告。
+事件数和方向分布的 `managementPrivacyUnit` 固定为
 `targetProjectRelationship`，去重关系指标本身也使用该单位。未来管理报告若使用事件数，
 `k=10` 仍必须由不同的“对象 × 项目”关系满足；同一关系的重复事件不能满足阈值，并继续遵守
 贡献者保护和互补隐藏规则。
@@ -360,6 +370,7 @@ Outbox 或管理报告。事件数和方向分布的 `managementPrivacyUnit` 固
 | `ANALYTICS-013` | 后续数据或定义变更以更正版报告取代原快照；不静默覆盖原报告，也不用报告绕过删除规则。 |
 | `ANALYTICS-014` | “后续联系同意占比”由项目选择是否启用，不是平台必显核心指标，也不得作为个人目标、排名或考核；管理展示继续经过匿名保护。 |
 | `ANALYTICS-015` | 阶段变更三个指标固定 ID／version、事件或对象×项目统计单位、UTC `changed_at` 半开期间、`upward`／`downward` 顺序、actor scope 和排除项；个人事件数与去重关系数必须同时可复算。 |
+| `ANALYTICS-016` | 个人阶段变更汇总只通过固定 GET 读取；认证优先、当前项目由数据库解析并加锁，响应使用单 statement 的授权／数据截止时刻，不提供历史 as-of 或逐事件明细。 |
 
 ### 5.9 管理分析的匿名保护
 

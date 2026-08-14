@@ -555,6 +555,7 @@ docker run \
      node --enable-source-maps --test \
        dist/test/contact-location-evidence.integration.js \
        dist/test/personal-current-relationship-stage.integration.js \
+       dist/test/personal-relationship-stage-change-summary.integration.js \
        dist/test/personal-follow-up-consent-ratio.integration.js \
        dist/test/personal-follow-up-consent-opt-in.integration.js'
 

@@ -16,6 +16,67 @@
 
 cursor 不存在或不属于当前用户、空间和项目时，端点返回 `400 invalid_cursor`。未分类的数据库失败返回 `503 sync_unavailable`，不把内部 SQL 错误文字暴露给客户端。地点来源只有一个窄的永久拒绝例外，见下节。
 
+## 个人阶段变更汇总
+
+| 方法与路径 | 行为 |
+| --- | --- |
+| `GET /v1/personal/relationship-stage-change-summary?from_utc=...&until_utc=...` | 返回当前个人项目在 UTC 半开期间内的阶段变更事件、方向和去重关系数 |
+
+请求必须只有一次 `from_utc` 和一次 `until_utc`，不带 body。时间只接受 UTC `Z`，可带一至六位
+小数；Backend 规范化到毫秒，并要求 `from_utc < until_utc`。Backend 先验证 Bearer token，再
+检查 query。客户端不能提交 actor、workspace、project、metric、筛选条件或 `as-of`。
+
+成功响应固定为：
+
+```json
+{
+  "result": {
+    "contract_id": "personal_relationship_stage_change_summary_result_v1",
+    "project_id": "uuid",
+    "time_basis": "relationshipChangedAtUtc",
+    "period": {
+      "from_utc": "2030-01-01T00:00:00.000Z",
+      "until_utc": "2030-01-08T00:00:00.000Z"
+    },
+    "data_cutoff_utc": "UTC timestamp",
+    "authorized_at_utc": "UTC timestamp",
+    "value": {
+      "event_count": 5,
+      "distinct_relationship_count": 4,
+      "upward_count": 3,
+      "downward_count": 2
+    }
+  }
+}
+```
+
+空期间仍返回同一 `result` 形状和四个零。Backend 严格检查 exact keys、UUID、UTC 时间、非负
+安全整数、`event_count = upward_count + downward_count` 以及
+`distinct_relationship_count <= event_count`。
+
+PostgreSQL 通过
+`app_data.read_personal_relationship_stage_change_summary_v1(text,text,timestamptz,timestamptz)`
+重新解析 issuer／subject 对应的 active app user。一次 bridge 调用在同一 PostgreSQL transaction
+中锁定该用户的 `user_current_projects` 行，验证未删除的 personal workspace 与 active current
+project，再用一个 statement snapshot 聚合 revision。锁与项目切换写入冲突，所以项目切换、归档
+或删除并发时只能得到完整旧 snapshot、完整新 snapshot 或 `403`，不会混合两个项目。
+`data_cutoff_utc` 和 `authorized_at_utc` 都来自外层 bridge 调用 statement 开始时的可信 UTC 时刻，不是
+历史 as-of，也不是客户端收包时间。
+
+候选 revision 必须属于可信 actor、workspace 和 current project，并满足 `old_stage IS NOT NULL`、
+`old_stage <> new_stage`、`changed_fields` 含 `stage`、`reason_code <> 'project_entry'`。同一关系的
+不同 revision 分别计事件，distinct 关系按对象×项目去重。查询不按当前 assignment、关系 lifecycle
+或 target active 状态过滤；对象匿名化或 assignment 结束后，先前合格事件仍计入。匿名化产生的
+lifecycle-only 与 note-only revision 不计入。响应只含计数，不含对象、revision、actor、原因、备注
+或其他 PII。
+
+缺失／无效 Bearer 返回 `401 unauthenticated`；query 或 body 形状错误返回 `400
+invalid_personal_relationship_stage_change_summary_request`；inactive identity、无 current
+project、已归档 project、删除 workspace 或数据库 `42501` 返回 `403
+personal_relationship_stage_change_summary_forbidden`；bridge、数据库或合同解析失败返回 `503
+personal_relationship_stage_change_summary_unavailable`。服务器为成功和错误响应都设置
+`Cache-Control: no-store`。该入口不新增 Flutter gateway、Drift 表、离线历史同步、Outbox 或 UI。
+
 ## 个人后续联系同意占比
 
 | 方法与路径 | 行为 |
@@ -226,10 +287,21 @@ npm run check
 接触对象关联见 [`0017_contact_target_links.sql`](../database/migrations/0017_contact_target_links.sql)。对应 fixture 验证零到多关联、阶段 0 确认、跨空间与未分配拒绝、机构代表约束、幂等重放、revision 历史、冲突比较和 warehouse PII 隔离。
 
 Node 24 Docker 阶段会在已迁移的 PostgreSQL 上运行地点来源、当前关系阶段、同意占比开关和
-同意占比读取四条 integration。地点来源测试和 Flutter 读取同一份
+同意占比读取、个人阶段变更汇总五条 integration。地点来源测试和 Flutter 读取同一份
 `contact_location_source_v1.csv`；其余测试分别对账当前快照 bridge、开关的版本／幂等合同，以及
-比例的 `not_enabled`／`ready` union。`npm test` 仍是无数据库的合同测试；它不能替代该阶段，也
-不能证明真机或生产环境。
+比例的 `not_enabled`／`ready` union，以及阶段变更汇总的 `5 / 4 / 3 / 2` 和空期间。SQL fixture
+另证实匿名化历史，独立并发脚本证实项目锁边界。`npm test` 仍是无数据库的合同测试；它不能
+替代该阶段，也不能证明真机或生产环境。
+
+个人阶段变更汇总的数据库入口和固定权限见
+[`0051_personal_relationship_stage_change_summary.sql`](../database/migrations/0051_personal_relationship_stage_change_summary.sql)。
+Backend Store 只传递已验证 issuer／subject 和规范化 UTC 期间，不传递 project ID。共享
+[`relationship_stage_changes_v1.csv`](../database/fixtures/shared/relationship_stage_changes_v1.csv)
+覆盖本人／他人、其他项目、期间边界、结束分配、匿名化保留边界、排除项、上升／下降、重复关系和
+重复 revision。
+
+数据库 check 用 `EXPLAIN` 固定 actor、project、changed-at 部分索引，避免无界历史扫描。该
+Slice 不包含 Flutter、Drift、页面或历史同步。
 
 项目关系审计见 [`0018_promotion_target_relationship_audit.sql`](../database/migrations/0018_promotion_target_relationship_audit.sql)。对应 fixture 验证双向阶段、独立生命周期、共享备注历史、结构化下降原因、mutation 重放、显式冲突、分配撤销、显示别名和 warehouse 文本隔离。
 

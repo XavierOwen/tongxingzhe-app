@@ -19,6 +19,9 @@ import {
   PostgresPersonalFollowUpConsentRatioStore,
 } from "./personal-follow-up-consent-ratio.js";
 import {
+  PostgresPersonalRelationshipStageChangeSummaryStore,
+} from "./personal-relationship-stage-change-summary.js";
+import {
   PostgresPersonalFollowUpConsentOptInStore,
 } from "./personal-follow-up-consent-opt-in.js";
 import { PostgresManagementReportSnapshotStore } from "./management-report-snapshots.js";
@@ -80,6 +83,10 @@ const personalFollowUpConsentRatioStore =
   new PostgresPersonalFollowUpConsentRatioStore(
     async (text, values) => pool.query(text, [...values]),
   );
+const personalRelationshipStageChangeSummaryStore =
+  new PostgresPersonalRelationshipStageChangeSummaryStore(
+    async (text, values) => pool.query(text, [...values]),
+  );
 const personalFollowUpConsentOptInStore =
   new PostgresPersonalFollowUpConsentOptInStore(
     async (text, values) => pool.query(text, [...values]),
@@ -118,6 +125,7 @@ const server = createBackendServer({
   personalActionReminderStore,
   personalCurrentRelationshipStageStore,
   personalFollowUpConsentRatioStore,
+  personalRelationshipStageChangeSummaryStore,
   personalFollowUpConsentOptInStore,
   managementReportSnapshotStore,
   managementReportSnapshotDirectoryStore,
