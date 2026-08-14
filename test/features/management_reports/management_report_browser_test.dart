@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/features/management_reports/management_report_browser.dart';
 import 'package:tongxingzhe_app/l10n/app_strings.dart';
+import 'package:tongxingzhe_app/management_reports/management_report_export_delivery.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
 
 void main() {
@@ -231,19 +232,237 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('Web 报告先准备 artifact，再由第二次操作请求浏览器下载', (tester) async {
+    final semantics = tester.ensureSemantics();
+    _compactView(tester);
+    final gateway = _Gateway(
+      context: _contextSnapshot(current: _projectA),
+      summaries: [_summary],
+      snapshot: _snapshot,
+      exportResult: ManagementReportSuccess(_artifact),
+    );
+    final delivery = _Delivery();
+    await tester.pumpWidget(
+      _app(gateway, delivery: delivery, textScaler: TextScaler.linear(2)),
+    );
+    await tester.pumpAndSettle();
+    await _openReport(tester);
+
+    final prepare = find.byKey(
+      const ValueKey('management-report-export-prepare'),
+    );
+    await tester.ensureVisible(prepare);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('准备 JSON 文件'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('management-report-export-request')),
+      findsNothing,
+    );
+
+    await tester.tap(prepare);
+    await tester.pumpAndSettle();
+
+    expect(gateway.exportRequests, [(_projectA.projectId, _summary)]);
+    expect(delivery.requests, isEmpty);
+    expect(find.textContaining('请再次选择下载'), findsOneWidget);
+    final request = find.byKey(
+      const ValueKey('management-report-export-request'),
+    );
+    expect(request, findsOneWidget);
+    expect(_containsPrimaryFocus(tester, request), isTrue);
+    await tester.ensureVisible(request);
+    await tester.pumpAndSettle();
+
+    await tester.tap(request);
+    await tester.pumpAndSettle();
+
+    expect(delivery.requests, hasLength(1));
+    expect(delivery.requests.single, same(_artifact));
+    expect(gateway.exportRequests, hasLength(1));
+    expect(find.textContaining('不证明文件已保存'), findsOneWidget);
+    expect(
+      tester
+          .getSemantics(
+            find.byKey(const ValueKey('management-report-export-status')),
+          )
+          .label,
+      contains('已向浏览器请求下载'),
+    );
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
+  testWidgets(
+    'English export flow keeps two-stage controls and live status usable',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      _compactView(tester);
+      final gateway = _Gateway(
+        context: _contextSnapshot(current: _projectA),
+        summaries: [_summary],
+        snapshot: _snapshot,
+        exportResult: ManagementReportSuccess(_artifact),
+      );
+      final delivery = _Delivery();
+      await tester.pumpWidget(
+        _app(
+          gateway,
+          text: const AppStrings('en'),
+          delivery: delivery,
+          textScaler: TextScaler.linear(2),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _openReport(tester);
+
+      final prepare = find.byKey(
+        const ValueKey('management-report-export-prepare'),
+      );
+      await tester.ensureVisible(prepare);
+      await tester.pumpAndSettle();
+      await tester.tap(prepare);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('Choose download again to continue'),
+        findsOneWidget,
+      );
+      final request = find.byKey(
+        const ValueKey('management-report-export-request'),
+      );
+      expect(find.text('Request browser download'), findsOneWidget);
+      expect(_containsPrimaryFocus(tester, request), isTrue);
+      await tester.ensureVisible(request);
+      await tester.pumpAndSettle();
+      await tester.tap(request);
+      await tester.pumpAndSettle();
+
+      expect(delivery.requests, hasLength(1));
+      expect(gateway.exportRequests, hasLength(1));
+      expect(
+        tester
+            .getSemantics(
+              find.byKey(const ValueKey('management-report-export-status')),
+            )
+            .label,
+        contains('Download requested'),
+      );
+      expect(
+        find.textContaining('does not prove that the file was saved'),
+        findsOne,
+      );
+      expect(tester.takeException(), isNull);
+      semantics.dispose();
+    },
+  );
+
+  testWidgets('delivery 失败保留已验证文件，并以同一 artifact 重试', (tester) async {
+    final gateway = _Gateway(
+      context: _contextSnapshot(current: _projectA),
+      summaries: [_summary],
+      snapshot: _snapshot,
+      exportResult: ManagementReportSuccess(_artifact),
+    );
+    final delivery = _Delivery(result: const ManagementReportDownloadFailed());
+    await tester.pumpWidget(_app(gateway, delivery: delivery));
+    await tester.pumpAndSettle();
+    await _openReport(tester);
+
+    final prepare = find.byKey(
+      const ValueKey('management-report-export-prepare'),
+    );
+    await tester.ensureVisible(prepare);
+    await tester.pumpAndSettle();
+    await tester.tap(prepare);
+    await tester.pumpAndSettle();
+    final request = find.byKey(
+      const ValueKey('management-report-export-request'),
+    );
+    await tester.ensureVisible(request);
+    await tester.pumpAndSettle();
+    await tester.tap(request);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('同一份已验证文件重试'), findsOneWidget);
+    delivery.result = const ManagementReportDownloadRequested();
+    await tester.tap(request);
+    await tester.pumpAndSettle();
+
+    expect(delivery.requests, hasLength(2));
+    expect(gateway.exportRequests, hasLength(1));
+    expect(find.textContaining('不证明文件已保存'), findsOneWidget);
+  });
+
+  testWidgets('独立导出权限失败不误写成报告读取权限失败', (tester) async {
+    final gateway = _Gateway(
+      context: _contextSnapshot(current: _projectA),
+      summaries: [_summary],
+      snapshot: _snapshot,
+      exportResult: const ManagementReportRejected(
+        ManagementReportFailureCode.unauthorized,
+      ),
+    );
+    await tester.pumpWidget(_app(gateway, delivery: _Delivery()));
+    await tester.pumpAndSettle();
+    await _openReport(tester);
+
+    final prepare = find.byKey(
+      const ValueKey('management-report-export-prepare'),
+    );
+    await tester.ensureVisible(prepare);
+    await tester.pumpAndSettle();
+    await tester.tap(prepare);
+    await tester.pumpAndSettle();
+
+    expect(find.text('当前账号没有导出管理报告的权限。'), findsOneWidget);
+    expect(find.text('当前账号没有读取管理报告的权限。'), findsNothing);
+    expect(find.textContaining('报告版本'), findsWidgets);
+    expect(
+      find.byKey(const ValueKey('management-report-export-prepare')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('非 Web 平台显示 unavailable，不请求导出或文件系统', (tester) async {
+    final gateway = _Gateway(
+      context: _contextSnapshot(current: _projectA),
+      summaries: [_summary],
+      snapshot: _snapshot,
+      exportResult: ManagementReportSuccess(_artifact),
+    );
+    await tester.pumpWidget(
+      _app(gateway, delivery: _Delivery(isAvailable: false)),
+    );
+    await tester.pumpAndSettle();
+    await _openReport(tester);
+
+    expect(find.text('当前平台不提供 Web 浏览器下载。'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('management-report-export-prepare')),
+      findsNothing,
+    );
+    expect(gateway.exportRequests, isEmpty);
+  });
 }
 
 Widget _app(
   _Gateway gateway, {
   AppStrings text = const AppStrings('zh'),
   TextScaler textScaler = TextScaler.noScaling,
+  ManagementReportExportDelivery? delivery,
 }) => MaterialApp(
   builder: (context, child) => MediaQuery(
     data: MediaQuery.of(context).copyWith(textScaler: textScaler),
     child: child!,
   ),
   home: Scaffold(
-    body: ManagementReportBrowser(text: text, gateway: gateway),
+    body: ManagementReportBrowser(
+      text: text,
+      gateway: gateway,
+      exportDelivery: delivery ?? _Delivery(isAvailable: false),
+    ),
   ),
 );
 
@@ -321,13 +540,19 @@ final class _Gateway implements ManagementReportGateway {
     ManagementReportResult<ManagementAnalysisContextSnapshot>? contextResult,
     this.summaries = const [],
     this.snapshot,
+    ManagementReportResult<ManagementReportExportArtifact>? exportResult,
   }) : contextResult =
            contextResult ??
-           ManagementReportSuccess(context ?? _contextSnapshot(current: null));
+           ManagementReportSuccess(context ?? _contextSnapshot(current: null)),
+       exportResult =
+           exportResult ??
+           const ManagementReportRejected(ManagementReportFailureCode.notFound);
 
   ManagementReportResult<ManagementAnalysisContextSnapshot> contextResult;
   final List<ManagementReportSnapshotSummary> summaries;
   final ManagementReportSnapshot? snapshot;
+  ManagementReportResult<ManagementReportExportArtifact> exportResult;
+  final exportRequests = <(String, ManagementReportSnapshotSummary)>[];
 
   @override
   Future<void> close() async {}
@@ -353,12 +578,34 @@ final class _Gateway implements ManagementReportGateway {
   exportSnapshot({
     required String projectId,
     required ManagementReportSnapshotSummary summary,
-  }) async =>
-      const ManagementReportRejected(ManagementReportFailureCode.notFound);
+  }) async {
+    exportRequests.add((projectId, summary));
+    return exportResult;
+  }
 
   @override
   Future<ManagementReportResult<ManagementAnalysisContextSnapshot>>
   selectContext(String projectId) async => contextResult;
+}
+
+final class _Delivery implements ManagementReportExportDelivery {
+  _Delivery({
+    this.isAvailable = true,
+    ManagementReportExportDeliveryResult? result,
+  }) : result = result ?? const ManagementReportDownloadRequested();
+
+  @override
+  final bool isAvailable;
+  ManagementReportExportDeliveryResult result;
+  final requests = <ManagementReportExportArtifact>[];
+
+  @override
+  Future<ManagementReportExportDeliveryResult> requestDownload(
+    ManagementReportExportArtifact artifact,
+  ) async {
+    requests.add(artifact);
+    return result;
+  }
 }
 
 ManagementAnalysisContextSnapshot _contextSnapshot({
@@ -430,6 +677,13 @@ final _snapshot = ManagementReportSnapshot(
           ),
     ],
   ),
+);
+final _artifact = ManagementReportExportArtifact(
+  bytes: const [123, 125],
+  fileName: 'management-report-snapshot-v1.json',
+  contentType: 'application/json; charset=utf-8',
+  exportEventId: '77777777-7777-4777-8777-777777777777',
+  snapshot: _snapshot,
 );
 
 const _categories = [

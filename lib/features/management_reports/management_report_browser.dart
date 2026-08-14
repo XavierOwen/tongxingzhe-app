@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_strings.dart';
+import '../../management_reports/management_report_export_delivery.dart';
 import '../../management_reports/management_report_gateway.dart';
 import '../contact_entry/contact_channel_label.dart';
 import '../contact_journal/contact_models.dart';
@@ -13,10 +14,12 @@ final class ManagementReportBrowser extends StatefulWidget {
     super.key,
     required this.text,
     required this.gateway,
+    required this.exportDelivery,
   });
 
   final AppStrings text;
   final ManagementReportGateway gateway;
+  final ManagementReportExportDelivery exportDelivery;
 
   @override
   State<ManagementReportBrowser> createState() =>
@@ -27,9 +30,13 @@ final class _ManagementReportBrowserState
     extends State<ManagementReportBrowser> {
   final _projectFocusNode = FocusNode(debugLabel: 'management project picker');
   final _backFocusNode = FocusNode(debugLabel: 'management report back');
+  final _exportActionFocusNode = FocusNode(
+    debugLabel: 'management report export action',
+  );
   final _snapshotFocusNodes = <String, FocusNode>{};
   late ManagementReportBrowserViewModel _viewModel;
   ManagementReportBrowserStage? _previousStage;
+  ManagementReportExportStage? _previousExportStage;
   String? _returnFocusSnapshotId;
 
   @override
@@ -42,7 +49,10 @@ final class _ManagementReportBrowserState
   @override
   void didUpdateWidget(covariant ManagementReportBrowser oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.gateway == widget.gateway) return;
+    if (oldWidget.gateway == widget.gateway &&
+        oldWidget.exportDelivery == widget.exportDelivery) {
+      return;
+    }
     _viewModel
       ..removeListener(_stateChanged)
       ..dispose();
@@ -53,8 +63,12 @@ final class _ManagementReportBrowserState
   }
 
   ManagementReportBrowserViewModel _createViewModel() {
-    final viewModel = ManagementReportBrowserViewModel(widget.gateway);
+    final viewModel = ManagementReportBrowserViewModel(
+      widget.gateway,
+      widget.exportDelivery,
+    );
     _previousStage = viewModel.state.stage;
+    _previousExportStage = viewModel.state.exportStage;
     return viewModel..addListener(_stateChanged);
   }
 
@@ -65,6 +79,7 @@ final class _ManagementReportBrowserState
       ..dispose();
     _projectFocusNode.dispose();
     _backFocusNode.dispose();
+    _exportActionFocusNode.dispose();
     _clearSnapshotFocusNodes();
     super.dispose();
   }
@@ -135,7 +150,16 @@ final class _ManagementReportBrowserState
           ),
         if (state.stage == ManagementReportBrowserStage.report &&
             state.snapshot != null)
-          _ReportDetail(text: text, snapshot: state.snapshot!),
+          _ReportDetail(
+            text: text,
+            snapshot: state.snapshot!,
+            exportStage: state.exportStage,
+            exportFailureCode: state.exportFailureCode,
+            hasExportArtifact: state.exportArtifact != null,
+            exportActionFocusNode: _exportActionFocusNode,
+            onPrepareExport: () => unawaited(_viewModel.prepareExport()),
+            onRequestDownload: () => unawaited(_viewModel.requestDownload()),
+          ),
         if (state.stage == ManagementReportBrowserStage.failure)
           _FailurePanel(
             text: text,
@@ -195,11 +219,21 @@ final class _ManagementReportBrowserState
     final shouldFocusBack =
         _previousStage == ManagementReportBrowserStage.loadingReport &&
         stage == ManagementReportBrowserStage.report;
+    final exportStage = _viewModel.state.exportStage;
+    final shouldFocusExportAction =
+        _previousExportStage == ManagementReportExportStage.preparing &&
+        exportStage == ManagementReportExportStage.ready;
     _previousStage = stage;
+    _previousExportStage = exportStage;
     setState(() {});
     if (shouldFocusBack) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _backFocusNode.requestFocus();
+      });
+    }
+    if (shouldFocusExportAction) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _exportActionFocusNode.requestFocus();
       });
     }
   }
@@ -361,10 +395,25 @@ final class _DirectoryItem extends StatelessWidget {
 }
 
 final class _ReportDetail extends StatelessWidget {
-  const _ReportDetail({required this.text, required this.snapshot});
+  const _ReportDetail({
+    required this.text,
+    required this.snapshot,
+    required this.exportStage,
+    required this.exportFailureCode,
+    required this.hasExportArtifact,
+    required this.exportActionFocusNode,
+    required this.onPrepareExport,
+    required this.onRequestDownload,
+  });
 
   final AppStrings text;
   final ManagementReportSnapshot snapshot;
+  final ManagementReportExportStage exportStage;
+  final ManagementReportFailureCode? exportFailureCode;
+  final bool hasExportArtifact;
+  final FocusNode exportActionFocusNode;
+  final VoidCallback onPrepareExport;
+  final VoidCallback onRequestDownload;
 
   @override
   Widget build(BuildContext context) {
@@ -456,6 +505,16 @@ final class _ReportDetail extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
+        _ExportControls(
+          text: text,
+          stage: exportStage,
+          failureCode: exportFailureCode,
+          hasArtifact: hasExportArtifact,
+          actionFocusNode: exportActionFocusNode,
+          onPrepare: onPrepareExport,
+          onRequest: onRequestDownload,
+        ),
+        const SizedBox(height: 24),
         LayoutBuilder(
           builder: (context, constraints) {
             final textScale = MediaQuery.textScalerOf(
@@ -488,6 +547,172 @@ final class _MetadataLine extends StatelessWidget {
     padding: EdgeInsets.only(bottom: isLast ? 0 : 8),
     child: Text('$label：$value'),
   );
+}
+
+final class _ExportControls extends StatelessWidget {
+  const _ExportControls({
+    required this.text,
+    required this.stage,
+    required this.failureCode,
+    required this.hasArtifact,
+    required this.actionFocusNode,
+    required this.onPrepare,
+    required this.onRequest,
+  });
+
+  final AppStrings text;
+  final ManagementReportExportStage stage;
+  final ManagementReportFailureCode? failureCode;
+  final bool hasArtifact;
+  final FocusNode actionFocusNode;
+  final VoidCallback onPrepare;
+  final VoidCallback onRequest;
+
+  @override
+  Widget build(BuildContext context) {
+    final message = _exportStatusMessage(
+      text,
+      stage,
+      failureCode: failureCode,
+      hasArtifact: hasArtifact,
+    );
+    final isFailure = stage == ManagementReportExportStage.failure;
+    final colors = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Semantics(
+          header: true,
+          child: Text(
+            text.t('managementReportExportTitle'),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(text.t('managementReportExportIntro')),
+        const SizedBox(height: 12),
+        Semantics(
+          key: const ValueKey('management-report-export-status'),
+          container: true,
+          liveRegion:
+              stage != ManagementReportExportStage.idle &&
+              stage != ManagementReportExportStage.unavailable,
+          excludeSemantics: true,
+          label: message,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: isFailure
+                  ? colors.errorContainer
+                  : colors.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                message,
+                style: TextStyle(
+                  color: isFailure
+                      ? colors.onErrorContainer
+                      : colors.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (_exportAction(text) case final action?) ...[
+          const SizedBox(height: 12),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                key: ValueKey(action.key),
+                focusNode: actionFocusNode,
+                onPressed: action.enabled ? action.onPressed : null,
+                icon: action.busy
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(action.icon),
+                label: Text(action.label),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  _ExportAction? _exportAction(AppStrings text) => switch (stage) {
+    ManagementReportExportStage.unavailable => null,
+    ManagementReportExportStage.idle => _ExportAction(
+      key: 'management-report-export-prepare',
+      label: text.t('managementReportExportPrepare'),
+      icon: Icons.inventory_2_outlined,
+      onPressed: onPrepare,
+    ),
+    ManagementReportExportStage.preparing => _ExportAction(
+      key: 'management-report-export-prepare',
+      label: text.t('managementReportExportPreparing'),
+      icon: Icons.inventory_2_outlined,
+      onPressed: onPrepare,
+      enabled: false,
+      busy: true,
+    ),
+    ManagementReportExportStage.ready => _ExportAction(
+      key: 'management-report-export-request',
+      label: text.t('managementReportExportRequest'),
+      icon: Icons.download_outlined,
+      onPressed: onRequest,
+    ),
+    ManagementReportExportStage.requesting => _ExportAction(
+      key: 'management-report-export-request',
+      label: text.t('managementReportExportRequesting'),
+      icon: Icons.download_outlined,
+      onPressed: onRequest,
+      enabled: false,
+      busy: true,
+    ),
+    ManagementReportExportStage.requested => _ExportAction(
+      key: 'management-report-export-request',
+      label: text.t('managementReportExportRequestAgain'),
+      icon: Icons.download_outlined,
+      onPressed: onRequest,
+    ),
+    ManagementReportExportStage.failure =>
+      hasArtifact
+          ? _ExportAction(
+              key: 'management-report-export-request',
+              label: text.t('managementReportExportRequestAgain'),
+              icon: Icons.refresh,
+              onPressed: onRequest,
+            )
+          : _ExportAction(
+              key: 'management-report-export-prepare',
+              label: text.t('managementReportExportPrepareRetry'),
+              icon: Icons.refresh,
+              onPressed: onPrepare,
+            ),
+  };
+}
+
+final class _ExportAction {
+  const _ExportAction({
+    required this.key,
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    this.enabled = true,
+    this.busy = false,
+  });
+
+  final String key;
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+  final bool enabled;
+  final bool busy;
 }
 
 final class _CompactReportGrid extends StatelessWidget {
@@ -644,19 +869,7 @@ final class _FailurePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final message = text.t(switch (code) {
-      ManagementReportFailureCode.unauthorized =>
-        'managementReportUnauthorized',
-      ManagementReportFailureCode.notFound => 'managementReportNotFound',
-      ManagementReportFailureCode.untrusted => 'managementReportUntrusted',
-      ManagementReportFailureCode.networkUnavailable =>
-        'managementReportNetworkUnavailable',
-      ManagementReportFailureCode.invalidResponse =>
-        'managementReportInvalidResponse',
-      ManagementReportFailureCode.notConfigured =>
-        'managementReportNotConfigured',
-      ManagementReportFailureCode.serverRejected => 'managementReportFailed',
-    });
+    final message = text.t(_failureMessageKey(code));
     return Padding(
       padding: const EdgeInsets.only(top: 20),
       child: Column(
@@ -681,6 +894,54 @@ final class _FailurePanel extends StatelessWidget {
     );
   }
 }
+
+String _exportStatusMessage(
+  AppStrings text,
+  ManagementReportExportStage stage, {
+  required ManagementReportFailureCode? failureCode,
+  required bool hasArtifact,
+}) => text.t(switch (stage) {
+  ManagementReportExportStage.unavailable =>
+    'managementReportExportUnavailable',
+  ManagementReportExportStage.idle => 'managementReportExportIdle',
+  ManagementReportExportStage.preparing => 'managementReportExportPreparing',
+  ManagementReportExportStage.ready => 'managementReportExportReady',
+  ManagementReportExportStage.requesting => 'managementReportExportRequesting',
+  ManagementReportExportStage.requested => 'managementReportExportRequested',
+  ManagementReportExportStage.failure when hasArtifact =>
+    'managementReportExportDeliveryFailed',
+  ManagementReportExportStage.failure when failureCode != null =>
+    _exportFailureMessageKey(failureCode),
+  ManagementReportExportStage.failure => 'managementReportExportPrepareFailed',
+});
+
+String _exportFailureMessageKey(
+  ManagementReportFailureCode code,
+) => switch (code) {
+  ManagementReportFailureCode.unauthorized =>
+    'managementReportExportUnauthorized',
+  ManagementReportFailureCode.notFound => 'managementReportExportNotFound',
+  ManagementReportFailureCode.untrusted => 'managementReportExportUntrusted',
+  ManagementReportFailureCode.networkUnavailable =>
+    'managementReportNetworkUnavailable',
+  ManagementReportFailureCode.invalidResponse =>
+    'managementReportExportInvalidResponse',
+  ManagementReportFailureCode.notConfigured =>
+    'managementReportExportNotConfigured',
+  ManagementReportFailureCode.serverRejected => 'managementReportExportFailed',
+};
+
+String _failureMessageKey(ManagementReportFailureCode code) => switch (code) {
+  ManagementReportFailureCode.unauthorized => 'managementReportUnauthorized',
+  ManagementReportFailureCode.notFound => 'managementReportNotFound',
+  ManagementReportFailureCode.untrusted => 'managementReportUntrusted',
+  ManagementReportFailureCode.networkUnavailable =>
+    'managementReportNetworkUnavailable',
+  ManagementReportFailureCode.invalidResponse =>
+    'managementReportInvalidResponse',
+  ManagementReportFailureCode.notConfigured => 'managementReportNotConfigured',
+  ManagementReportFailureCode.serverRejected => 'managementReportFailed',
+};
 
 String _cellSemantics(
   AppStrings text,

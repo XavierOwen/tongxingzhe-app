@@ -364,6 +364,26 @@ const Map<String, Map<String, String>> _strings = {
         '显示 {displayed} 格，隐藏 {suppressed} 格。这些规则用于降低披露风险，不代表形式化不可重识别。',
     'managementReportCellSemantics': '{period}，{category}：{value}',
     'managementReportOpenSemantics': '打开报告：版本 {version}，发布时间 {releasedAt}',
+    'managementReportExportTitle': '管理报告文件',
+    'managementReportExportIntro': '先准备并验证固定 JSON 文件。文件只保留在当前页面内存中。',
+    'managementReportExportIdle': '尚未准备文件。',
+    'managementReportExportPrepare': '准备 JSON 文件',
+    'managementReportExportPreparing': '正在准备并验证文件…',
+    'managementReportExportReady': '文件已验证并暂存在内存中。请再次选择下载。',
+    'managementReportExportRequest': '请求浏览器下载',
+    'managementReportExportRequestAgain': '再次请求浏览器下载',
+    'managementReportExportRequesting': '正在向浏览器请求下载…',
+    'managementReportExportRequested': '已向浏览器请求下载。浏览器可能保存、询问或阻止；此状态不证明文件已保存。',
+    'managementReportExportUnavailable': '当前平台不提供 Web 浏览器下载。',
+    'managementReportExportDeliveryFailed': '浏览器未能接收下载请求。可使用同一份已验证文件重试。',
+    'managementReportExportPrepareFailed': '文件准备失败。请重试。',
+    'managementReportExportPrepareRetry': '重新准备 JSON 文件',
+    'managementReportExportUnauthorized': '当前账号没有导出管理报告的权限。',
+    'managementReportExportNotFound': '可导出的报告已不存在。',
+    'managementReportExportUntrusted': '导出文件来源无法验证。',
+    'managementReportExportInvalidResponse': '管理报告服务返回了无效导出文件。',
+    'managementReportExportNotConfigured': '管理报告导出服务尚未配置。',
+    'managementReportExportFailed': '管理报告文件暂时无法准备，请重试。',
     'recentSevenDays': '最近七日',
     'currentRelationshipStageTitle': '当前关系阶段',
     'currentRelationshipStageHelp': '每个当前有效的“对象 × 项目”关系只计一次。暂停、结束和已匿名化对象不在五档中。',
@@ -1253,6 +1273,39 @@ const Map<String, Map<String, String>> _strings = {
         'Contact session privacy rules v1',
     'managementReportPrivacySummary':
         'Displayed cell entries: {displayed}. Hidden cell entries: {suppressed}. These rules reduce disclosure risk. They do not provide a formal non-re-identification guarantee.',
+    'managementReportExportTitle': 'Management report file',
+    'managementReportExportIntro':
+        'Prepare and validate the fixed JSON file first. It remains only in memory on this page.',
+    'managementReportExportIdle': 'No file has been prepared.',
+    'managementReportExportPrepare': 'Prepare JSON file',
+    'managementReportExportPreparing': 'Preparing and validating the file…',
+    'managementReportExportReady':
+        'The file is validated and held in memory. Choose download again to continue.',
+    'managementReportExportRequest': 'Request browser download',
+    'managementReportExportRequestAgain': 'Request browser download again',
+    'managementReportExportRequesting':
+        'Requesting the download from the browser…',
+    'managementReportExportRequested':
+        'Download requested. The browser may save, prompt, or block it. This status does not prove that the file was saved.',
+    'managementReportExportUnavailable':
+        'Web browser download is unavailable on this platform.',
+    'managementReportExportDeliveryFailed':
+        'The browser did not accept the download request. Retry with the same validated file.',
+    'managementReportExportPrepareFailed':
+        'The file could not be prepared. Retry the request.',
+    'managementReportExportPrepareRetry': 'Prepare JSON file again',
+    'managementReportExportUnauthorized':
+        'This account cannot export management reports.',
+    'managementReportExportNotFound':
+        'The report is no longer available for export.',
+    'managementReportExportUntrusted':
+        'The export file source could not be verified.',
+    'managementReportExportInvalidResponse':
+        'The management report service returned an invalid export file.',
+    'managementReportExportNotConfigured':
+        'The management report export service is not configured.',
+    'managementReportExportFailed':
+        'The management report file could not be prepared. Retry the request.',
     'managementReportCellSemantics': '{period}, {category}: {value}',
     'managementReportOpenSemantics':
         'Open report: version {version}, published {releasedAt}',

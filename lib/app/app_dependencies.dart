@@ -17,6 +17,7 @@ import '../foundation/runtime_values.dart';
 import '../identity/identity_session.dart';
 import '../identity/supabase/supabase_identity_session.dart';
 import '../management_reports/http_management_report_gateway.dart';
+import '../management_reports/management_report_export_delivery.dart';
 import '../management_reports/management_report_gateway.dart';
 import '../platform/platform_capabilities.dart';
 import '../plans/http_personal_action_plan_gateway.dart';
@@ -74,6 +75,7 @@ final class AppDependencies {
     this.personalFollowUpConsentRatioGatewayBuilder,
     this.personalRelationshipStageChangeSummaryGatewayBuilder,
     this.managementReportGatewayBuilder,
+    this.managementReportExportDelivery,
     this.currentRelationshipStageGatewayBuilder,
     this.reminderSchedulerBuilder = productionReminderNotificationScheduler,
     this.offlinePiiSecureStore,
@@ -147,6 +149,7 @@ final class AppDependencies {
   personalRelationshipStageChangeSummaryGatewayBuilder;
   final ManagementReportGateway Function(IdentitySession)?
   managementReportGatewayBuilder;
+  final ManagementReportExportDelivery? managementReportExportDelivery;
   final CurrentRelationshipStageGateway Function(IdentitySession)?
   currentRelationshipStageGatewayBuilder;
   final ReminderNotificationScheduler Function(AppPlatform)
@@ -157,6 +160,9 @@ final class AppDependencies {
   final LegacyDemoAccess? legacyDemoAccess;
 
   Future<AppStartupResult> start() async {
+    final exportDelivery =
+        managementReportExportDelivery ??
+        productionManagementReportExportDelivery();
     LocalDatabase? database;
     IdentitySession? identitySession;
     AppSession? appSession;
@@ -394,6 +400,7 @@ final class AppDependencies {
         personalRelationshipStageChangeSummaryGateway:
             personalRelationshipStageChangeSummaryGateway,
         managementReportGateway: managementReportGateway,
+        managementReportExportDelivery: exportDelivery,
         currentRelationshipStageGateway: currentRelationshipStageGateway,
         currentRelationshipStageRepository: currentRelationshipStageRepository,
         deviceReminderPreferenceStore: DriftDeviceReminderPreferenceStore(
@@ -462,6 +469,7 @@ final class AppStartupReady extends AppStartupResult {
     required this.personalFollowUpConsentRatioGateway,
     required this.personalRelationshipStageChangeSummaryGateway,
     required this.managementReportGateway,
+    required this.managementReportExportDelivery,
     required this.currentRelationshipStageGateway,
     required this.currentRelationshipStageRepository,
     required this.deviceReminderPreferenceStore,
@@ -492,6 +500,7 @@ final class AppStartupReady extends AppStartupResult {
   final PersonalRelationshipStageChangeSummaryGateway
   personalRelationshipStageChangeSummaryGateway;
   final ManagementReportGateway managementReportGateway;
+  final ManagementReportExportDelivery managementReportExportDelivery;
   final CurrentRelationshipStageGateway currentRelationshipStageGateway;
   final CurrentRelationshipStageRepository currentRelationshipStageRepository;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;

@@ -417,6 +417,21 @@ content type、export event ID 和已核对的快照，不重新序列化，不�
 浏览器下载、原生保存和系统分享是三种不同的后续交付行为；任何一项成功都不能证明另外两项成功，
 也不能扩大服务端导出审计的含义。
 
+#### Slice 6AJ：Web 两阶段下载管理报告 artifact
+
+Slice 6AJ 只为 Web 提供浏览器下载请求。详情页先通过 6AI 准备并验证一份内存 artifact；准备完成后，
+用户必须再次选择下载。第二次操作把 artifact 的原始 bytes、固定 content type 和固定文件名交给 Web
+delivery adapter。adapter 使用 Blob、临时 object URL 和带 `download` 的 anchor 发起请求，随后移除
+anchor 并释放 object URL。它不重新序列化、不再次读取服务端，也不写入 Drift、缓存或日志。
+
+浏览器只向客户端提供“已接受下载请求”的可观察边界。页面使用“已请求下载”，不使用“下载成功”或
+“已保存”；浏览器可能自动保存、询问用户或阻止请求。delivery 失败时复用同一份内存 artifact，
+不重复调用 6AH，也不产生新的服务端导出审计。切换项目或快照、返回目录和销毁页面都会清除 artifact。
+
+非 Web build 使用明确的 unavailable adapter。Web 下载不复用持久文件系统 capability，也不证明
+Android、iOS、macOS、Windows 或 Linux 已支持保存。本 Slice 不增加原生保存、系统分享、文件打开、
+下载历史、File System Access API、离线缓存、CSV／PDF、Backend／PostgreSQL 变更或跨浏览器声明。
+
 只有高级分析可显示：
 
 ```text
@@ -449,6 +464,7 @@ content type、export event ID 和已核对的快照，不重新序列化，不�
 | `ANALYTICS-018` | 固定管理报告详情只显示已解析的报告／指标 ID 与 version、`source_scope`、`privacy_policy`、时区、数据截止、发布时间和 16 格 `displayed`／`suppressed` 计数；稳定 ID 与 version 同时保留，`suppressed` 不解释为零，客户端不重算指标或隐私；中英文和屏幕阅读器在 320×568、200% 字号下仍可读，并明确匿名控制只降低披露风险、不构成形式化不可重识别保证。 |
 | `ANALYTICS-019` | 固定匿名管理报告文件导出只返回已发布可信 v2 快照的 canonical JSON v1；报告定义、指标、来源、时区、截止点、发布时间和 16 格顺序固定，后续数据不改变同一快照的导出字节。 |
 | `ANALYTICS-020` | Flutter 只把固定导出解码为内存 artifact；它严格核对响应头、原始 canonical bytes、目录摘要和受保护报告合同，不重新序列化、不持久化，也不把取得 bytes 表述为下载、保存或分享成功。 |
+| `ANALYTICS-021` | Web 管理报告下载使用两阶段操作：先准备并验证内存 artifact，再由新的用户操作把原始 bytes、固定 MIME 和文件名交给浏览器；结果只表示已请求下载，delivery 重试不重复生成服务端导出事件，非 Web 平台明确 unavailable。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -675,6 +691,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-010` | 管理报告浏览器 synthetic snapshot 覆盖中英文固定元数据、稳定 ID／version、16 格 displayed／suppressed 计数、`management-report-privacy-summary` Semantics、隐藏格不显示零，以及 320×568、200% 字号无溢出；`AppStrings` 同时验证中英文边界文案。 |
 | `TEST-011` | 固定匿名管理报告文件导出使用共享 synthetic snapshot 和 canonical JSON golden fixture；覆盖双 capability 授权、可信 provenance、16 格顺序、`suppressed = null`、稳定字节、独立不可变导出审计和无 PII／贡献者／地点字段。 |
 | `TEST-012` | Flutter 导出 gateway 使用 canonical UTF-8 golden bytes；覆盖固定请求／响应头、一次 `401` 刷新、稳定错误、Content-Length、key 顺序、目录摘要绑定、16 格、`displayed >= 10`、`suppressed = null`、额外字段和非 canonical 响应失败关闭。 |
+| `TEST-013` | Web 下载 delivery、管理报告状态机和 Widget 覆盖两阶段操作、原始 artifact 透传、非 Web unavailable、重复点击、delivery 重试不重复导出、迟到响应和页面离开清理，以及中英文 live semantics、320×568 和 200% 字号；Web build 验证条件导入，真实浏览器证据单独记录。 |
 
 ## 9. UI、视觉与可访问性
 
