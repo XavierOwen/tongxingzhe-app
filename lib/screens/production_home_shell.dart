@@ -18,6 +18,7 @@ import '../features/contact_metrics/current_relationship_stage_panel.dart';
 import '../features/contact_metrics/personal_contact_overview.dart';
 import '../features/contact_metrics/personal_follow_up_consent_ratio.dart';
 import '../features/contact_metrics/personal_follow_up_consent_ratio_panel.dart';
+import '../features/contact_metrics/personal_interest_ratio_trend_panel.dart';
 import '../features/contact_metrics/relationship_stage_change_summary.dart';
 import '../features/contact_metrics/relationship_stage_change_summary_panel.dart';
 import '../features/home/production_home_view_model.dart';
@@ -241,6 +242,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
           ],
         ),
         personalConsentRatioPanel: null,
+        personalInterestRatioTrendPanel: null,
         currentRelationshipStagePanel: null,
         relationshipStageChangePanel: null,
       ),
@@ -284,6 +286,17 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
           isLoading: homeState.isLoading,
           loadFailed: homeState.loadFailed,
           personalPlanPanel: null,
+          personalInterestRatioTrendPanel:
+              widget.context.workspace.kind == WorkspaceKind.personal
+              ? PersonalInterestRatioTrendPanel(
+                  text: strings,
+                  comparison: homeState.interestRatioTrend,
+                  isLoading: homeState.interestRatioTrendIsLoading,
+                  loadFailed: homeState.interestRatioTrendLoadFailed,
+                  onRetry: () =>
+                      unawaited(_viewModel.retryInterestRatioTrend()),
+                )
+              : null,
           personalConsentRatioPanel:
               widget.context.workspace.kind == WorkspaceKind.personal &&
                   homeState.recentSevenDays != null
@@ -849,6 +862,7 @@ final class _PersonalSummaryPage extends StatelessWidget {
     required this.loadFailed,
     required this.personalPlanPanel,
     required this.personalConsentRatioPanel,
+    required this.personalInterestRatioTrendPanel,
     required this.currentRelationshipStagePanel,
     required this.relationshipStageChangePanel,
   });
@@ -860,6 +874,7 @@ final class _PersonalSummaryPage extends StatelessWidget {
   final bool loadFailed;
   final Widget? personalPlanPanel;
   final Widget? personalConsentRatioPanel;
+  final Widget? personalInterestRatioTrendPanel;
   final Widget? currentRelationshipStagePanel;
   final Widget? relationshipStageChangePanel;
 
@@ -873,7 +888,10 @@ final class _PersonalSummaryPage extends StatelessWidget {
           : Center(child: Text(text.t('summaryLoadFailed')));
       final relationshipPanel = currentRelationshipStagePanel;
       final stageChangePanel = relationshipStageChangePanel;
-      if (relationshipPanel == null && stageChangePanel == null) {
+      final trendPanel = personalInterestRatioTrendPanel;
+      if (relationshipPanel == null &&
+          stageChangePanel == null &&
+          trendPanel == null) {
         return summaryStatus;
       }
       return ListView(
@@ -885,6 +903,7 @@ final class _PersonalSummaryPage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           summaryStatus,
+          if (trendPanel != null) ...[const SizedBox(height: 16), trendPanel],
           if (relationshipPanel != null) ...[
             const SizedBox(height: 16),
             relationshipPanel,
@@ -971,6 +990,11 @@ final class _PersonalSummaryPage extends StatelessWidget {
           const SizedBox(height: 16),
         ],
         if (period == PersonalSummaryPeriod.recentSevenDays) ...[
+          if (personalInterestRatioTrendPanel != null) ...[
+            const SizedBox(height: 8),
+            personalInterestRatioTrendPanel!,
+            const SizedBox(height: 16),
+          ],
           const SizedBox(height: 8),
           Semantics(
             header: true,

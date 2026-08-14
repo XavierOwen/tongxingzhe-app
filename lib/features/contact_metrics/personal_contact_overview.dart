@@ -4,8 +4,17 @@ import '../contact_journal/contact_journal.dart';
 import '../contact_journal/contact_models.dart';
 import 'metric_contract.dart';
 
-/// 首页支持的两个稳定统计窗口。
-enum PersonalSummaryPeriod { today, recentSevenDays }
+/// 首页支持的稳定统计窗口。
+///
+/// [today] and [recentSevenDays] retain the original home-page semantics. The
+/// final two values describe the two complete, adjacent UTC seven-day windows
+/// used by the personal trend read.
+enum PersonalSummaryPeriod {
+  today,
+  recentSevenDays,
+  previousSevenDays,
+  currentCompletedSevenDays,
+}
 
 /// 指标查询使用的 UTC 半开区间 `[fromUtc, untilUtc)`。
 final class UtcMetricPeriod {
@@ -15,14 +24,45 @@ final class UtcMetricPeriod {
   final DateTime untilUtc;
 }
 
+/// The adjacent completed seven-day windows ending immediately before today.
+///
+/// [current] is the later window. Its `untilUtc` is the current UTC midnight;
+/// [previous] ends at that same boundary's `fromUtc`, so the two half-open
+/// windows cannot overlap or leave a gap.
+final class PersonalSummaryPeriodPairBounds {
+  const PersonalSummaryPeriodPairBounds({
+    required this.previous,
+    required this.current,
+  });
+
+  final UtcMetricPeriod previous;
+  final UtcMetricPeriod current;
+}
+
+/// Returns two adjacent complete UTC seven-day windows for [now].
+PersonalSummaryPeriodPairBounds adjacentCompletedSevenDayPeriodBounds({
+  required DateTime now,
+}) {
+  final nowUtc = now.toUtc();
+  final todayUtc = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day);
+  final currentFromUtc = todayUtc.subtract(const Duration(days: 7));
+  return PersonalSummaryPeriodPairBounds(
+    previous: UtcMetricPeriod(
+      fromUtc: currentFromUtc.subtract(const Duration(days: 7)),
+      untilUtc: currentFromUtc,
+    ),
+    current: UtcMetricPeriod(fromUtc: currentFromUtc, untilUtc: todayUtc),
+  );
+}
+
 /// Returns the shared UTC boundary for a personal summary period.
 UtcMetricPeriod personalSummaryPeriodBounds({
   required PersonalSummaryPeriod period,
   required DateTime now,
 }) {
   final nowUtc = now.toUtc();
-  final tomorrowUtc = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day + 1);
-  final todayUtc = tomorrowUtc.subtract(const Duration(days: 1));
+  final todayUtc = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day);
+  final tomorrowUtc = todayUtc.add(const Duration(days: 1));
   return switch (period) {
     PersonalSummaryPeriod.today => UtcMetricPeriod(
       fromUtc: todayUtc,
@@ -32,6 +72,10 @@ UtcMetricPeriod personalSummaryPeriodBounds({
       fromUtc: todayUtc.subtract(const Duration(days: 6)),
       untilUtc: tomorrowUtc,
     ),
+    PersonalSummaryPeriod.previousSevenDays =>
+      adjacentCompletedSevenDayPeriodBounds(now: nowUtc).previous,
+    PersonalSummaryPeriod.currentCompletedSevenDays =>
+      adjacentCompletedSevenDayPeriodBounds(now: nowUtc).current,
   };
 }
 
@@ -58,6 +102,25 @@ final class PersonalSummarySnapshot {
 
   MetricResult metric(MetricReference reference) =>
       metrics.singleWhere((result) => result.definition.reference == reference);
+}
+
+/// Two complete adjacent personal summary snapshots read with one cutoff.
+final class PersonalSummaryPairSnapshot {
+  PersonalSummaryPairSnapshot._({
+    required this.scope,
+    required this.previous,
+    required this.current,
+    required this.dataCutoffUtc,
+  }) {
+    if (!dataCutoffUtc.isUtc) {
+      throw ArgumentError('invalid_personal_summary_data_cutoff');
+    }
+  }
+
+  final PersonalMetricScope scope;
+  final PersonalSummarySnapshot previous;
+  final PersonalSummarySnapshot current;
+  final DateTime dataCutoffUtc;
 }
 
 /// 把本地个人事实映射到版本化结果合同。
@@ -239,6 +302,15 @@ abstract interface class PersonalContactOverviewSource {
     required DateTime fromUtc,
     required DateTime untilUtc,
   });
+
+  /// Reads the two periods for one scope in one source operation.
+  Future<PersonalContactSummaryPair> summarizePersonalContactsForPeriods({
+    required String appUserId,
+    required String workspaceId,
+    required String projectId,
+    required UtcMetricPeriod previousPeriod,
+    required UtcMetricPeriod currentPeriod,
+  });
 }
 
 /// 把 ContactJournal 收窄为指标编排层所需的只读接口。
@@ -288,6 +360,23 @@ final class ContactJournalOverviewSource
     fromUtc: fromUtc,
     untilUtc: untilUtc,
   );
+
+  @override
+  Future<PersonalContactSummaryPair> summarizePersonalContactsForPeriods({
+    required String appUserId,
+    required String workspaceId,
+    required String projectId,
+    required UtcMetricPeriod previousPeriod,
+    required UtcMetricPeriod currentPeriod,
+  }) => _journal.summarizePersonalContactsForPeriods(
+    appUserId: appUserId,
+    workspaceId: workspaceId,
+    projectId: projectId,
+    previousFromUtc: previousPeriod.fromUtc,
+    previousUntilUtc: previousPeriod.untilUtc,
+    currentFromUtc: currentPeriod.fromUtc,
+    currentUntilUtc: currentPeriod.untilUtc,
+  );
 }
 
 /// 统一统计时间边界、数据读取和同步覆盖口径。
@@ -319,7 +408,11 @@ final class PersonalContactOverviewRepository {
     required TrustedSessionContext context,
     required PersonalSummaryPeriod period,
   }) async {
-    final bounds = periodBounds(period);
+    final dataCutoffUtc = _now().toUtc();
+    final bounds = personalSummaryPeriodBounds(
+      period: period,
+      now: dataCutoffUtc,
+    );
     final summary = await _source.summarizePersonalContacts(
       appUserId: context.appUserId,
       workspaceId: context.workspace.id,
@@ -339,7 +432,68 @@ final class PersonalContactOverviewRepository {
       metrics: PersonalContactMetricMapper.map(
         summary: summary,
         period: metricPeriod,
-        dataCutoffUtc: _now().toUtc(),
+        dataCutoffUtc: dataCutoffUtc,
+      ),
+    );
+  }
+
+  /// Loads the previous and current complete UTC seven-day windows together.
+  ///
+  /// The clock is sampled once. Both metric lists receive that exact instant as
+  /// `dataCutoffUtc`, while the source receives one scope and both period
+  /// bounds so a local source can keep the read in one transaction.
+  Future<PersonalSummaryPairSnapshot> loadAdjacentCompletedSevenDayPair({
+    required TrustedSessionContext context,
+  }) async {
+    final dataCutoffUtc = _now().toUtc();
+    final bounds = adjacentCompletedSevenDayPeriodBounds(now: dataCutoffUtc);
+    final summaries = await _source.summarizePersonalContactsForPeriods(
+      appUserId: context.appUserId,
+      workspaceId: context.workspace.id,
+      projectId: context.project.id,
+      previousPeriod: bounds.previous,
+      currentPeriod: bounds.current,
+    );
+    return PersonalSummaryPairSnapshot._(
+      scope: PersonalMetricScope(
+        appUserId: context.appUserId,
+        workspaceId: context.workspace.id,
+        projectId: context.project.id,
+      ),
+      previous: _snapshotForSummary(
+        period: PersonalSummaryPeriod.previousSevenDays,
+        bounds: bounds.previous,
+        summary: summaries.previous,
+        dataCutoffUtc: dataCutoffUtc,
+      ),
+      current: _snapshotForSummary(
+        period: PersonalSummaryPeriod.currentCompletedSevenDays,
+        bounds: bounds.current,
+        summary: summaries.current,
+        dataCutoffUtc: dataCutoffUtc,
+      ),
+      dataCutoffUtc: dataCutoffUtc,
+    );
+  }
+
+  PersonalSummarySnapshot _snapshotForSummary({
+    required PersonalSummaryPeriod period,
+    required UtcMetricPeriod bounds,
+    required PersonalContactSummary summary,
+    required DateTime dataCutoffUtc,
+  }) {
+    return PersonalSummarySnapshot(
+      period: period,
+      fromUtc: bounds.fromUtc,
+      untilUtc: bounds.untilUtc,
+      summary: summary,
+      metrics: PersonalContactMetricMapper.map(
+        summary: summary,
+        period: MetricPeriod(
+          fromUtc: bounds.fromUtc,
+          untilUtc: bounds.untilUtc,
+        ),
+        dataCutoffUtc: dataCutoffUtc,
       ),
     );
   }

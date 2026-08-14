@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
+import 'package:tongxingzhe_app/features/contact_journal/contact_journal.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
 import 'package:tongxingzhe_app/features/contact_metrics/current_relationship_stage.dart';
 import 'package:tongxingzhe_app/features/contact_metrics/personal_contact_overview.dart';
@@ -52,11 +53,14 @@ void main() {
     expect(fixture.worker.drainCalls, 1);
     expect(fixture.worker.pullCalls, 1);
     expect(fixture.source.summaryCalls, 3);
+    expect(fixture.source.summaryPairCalls, 1);
     expect(fixture.viewModel.state.isLoading, isFalse);
     expect(fixture.viewModel.state.isSynchronizing, isFalse);
     expect(fixture.viewModel.state.loadFailed, isFalse);
     expect(fixture.viewModel.state.today?.summary.contactSessionCount, 5);
     expect(fixture.viewModel.state.recentSevenDays?.syncCoverageDenominator, 5);
+    expect(fixture.viewModel.state.interestRatioTrend, isNotNull);
+    expect(fixture.viewModel.state.interestRatioTrendLoadFailed, isFalse);
     expect(fixture.viewModel.state.contacts?.syncHealth, _health);
   });
 
@@ -90,6 +94,30 @@ void main() {
     expect(fixture.viewModel.state.today, isNotNull);
     expect(fixture.viewModel.state.relationshipStageLoadFailed, isTrue);
     expect(fixture.viewModel.state.currentRelationshipStage, isNull);
+  });
+
+  test('兴趣趋势读取失败不遮蔽既有个人接触汇总', () async {
+    final fixture = _Fixture()..source.failSummaryPair = true;
+
+    await fixture.viewModel.initialize();
+
+    expect(fixture.viewModel.state.loadFailed, isFalse);
+    expect(fixture.viewModel.state.recentSevenDays, isNotNull);
+    expect(fixture.viewModel.state.interestRatioTrendLoadFailed, isTrue);
+    expect(fixture.viewModel.state.interestRatioTrend, isNull);
+  });
+
+  test('兴趣趋势手工重试会重新同步并恢复比较', () async {
+    final fixture = _Fixture()..source.failSummaryPair = true;
+    await fixture.viewModel.initialize();
+
+    fixture.source.failSummaryPair = false;
+    await fixture.viewModel.retryInterestRatioTrend();
+
+    expect(fixture.worker.drainCalls, 2);
+    expect(fixture.source.summaryPairCalls, 2);
+    expect(fixture.viewModel.state.interestRatioTrendLoadFailed, isFalse);
+    expect(fixture.viewModel.state.interestRatioTrend?.deltaBasisPoints, 0);
   });
 
   test('个人接触汇总失败时仍保留成功的当前关系快照', () async {
@@ -193,6 +221,7 @@ void main() {
     expect(fixture.worker.drainCalls, 2);
     expect(fixture.worker.maximumConcurrentDrains, 1);
     expect(fixture.source.summaryCalls, 6);
+    expect(fixture.source.summaryPairCalls, 2);
   });
 
   test('选择当前项目直接成功且不调用会话接口', () async {
@@ -410,7 +439,9 @@ final class _FakeSyncWorker implements ForegroundSyncWorker {
 final class _FakeOverviewSource implements PersonalContactOverviewSource {
   PersonalContactSummary summary = _summary();
   int summaryCalls = 0;
+  int summaryPairCalls = 0;
   bool failSummary = false;
+  bool failSummaryPair = false;
 
   @override
   Future<List<ContactRecord>> listContactRecords({
@@ -446,6 +477,28 @@ final class _FakeOverviewSource implements PersonalContactOverviewSource {
     summaryCalls++;
     if (failSummary) throw StateError('synthetic_summary_failure');
     return summary;
+  }
+
+  @override
+  Future<PersonalContactSummaryPair> summarizePersonalContactsForPeriods({
+    required String appUserId,
+    required String workspaceId,
+    required String projectId,
+    required UtcMetricPeriod previousPeriod,
+    required UtcMetricPeriod currentPeriod,
+  }) async {
+    expect(appUserId, _context.appUserId);
+    expect(workspaceId, _context.workspace.id);
+    expect(projectId, _context.project.id);
+    expect(previousPeriod.fromUtc, DateTime.utc(2029, 12, 25));
+    expect(previousPeriod.untilUtc, DateTime.utc(2030, 1, 1));
+    expect(currentPeriod.fromUtc, DateTime.utc(2030, 1, 1));
+    expect(currentPeriod.untilUtc, DateTime.utc(2030, 1, 8));
+    summaryPairCalls++;
+    if (failSummaryPair) {
+      throw StateError('synthetic_summary_pair_failure');
+    }
+    return PersonalContactSummaryPair(previous: summary, current: summary);
   }
 }
 

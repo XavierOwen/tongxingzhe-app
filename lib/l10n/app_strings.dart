@@ -503,6 +503,20 @@ const Map<String, Map<String, String>> _strings = {
     'interestZeroRatio': '兴趣 0（明确拒绝）',
     'interestSubsetRatioRow':
         '{label}：{numerator} / {denominator}（{percentage}）',
+    'interestTrendTitle': '兴趣 3–4 两期趋势',
+    'interestTrendHelp': '比较最近两个已经完整结束的 UTC 七日区间；今天不在这两个区间内。',
+    'interestTrendPrevious': '较早七日',
+    'interestTrendCurrent': '较晚七日',
+    'interestTrendPeriodRow':
+        '{label} [{from}, {until})：{numerator} / {denominator}（{percentage}）；本地待同步 {pending}',
+    'interestTrendDelta': '百分点差（较晚期 − 较早期）：{delta}',
+    'interestTrendDeltaValue': '{value} 个百分点',
+    'interestTrendDeltaUnavailable': '任一期没有可计算比例，因此不显示百分点差。',
+    'interestTrendObservationNotice': '这是个人观察性事实；差异不表示成功、失败或因果。',
+    'interestTrendDataCutoff': '本地数据截止：{time}',
+    'interestTrendLoading': '正在读取兴趣趋势',
+    'interestTrendUnavailable': '兴趣趋势暂时无法载入，请稍后重试。',
+    'interestTrendRetry': '重试趋势',
     'interestRatioCoverage':
         '比例覆盖：未知 {unknown}、拒答 {refused}、不适用 {notApplicable}、未回答 {unanswered}、候选内排除 {excluded}；核心兴趣当前必须为 0–4，这不是草稿、尝试或作废记录盘点。',
     'targetResponseDistribution': '对象当次反应分布',
@@ -1424,6 +1438,25 @@ const Map<String, Map<String, String>> _strings = {
     'interestZeroRatio': 'Interest 0 (explicit refusal)',
     'interestSubsetRatioRow':
         '{label}: {numerator} / {denominator} ({percentage})',
+    'interestTrendTitle': 'Two-period interest 3–4 trend',
+    'interestTrendHelp':
+        'This compares the two most recent completed seven-day UTC periods. Today is not included in either period.',
+    'interestTrendPrevious': 'Earlier seven days',
+    'interestTrendCurrent': 'Later seven days',
+    'interestTrendPeriodRow':
+        '{label} [{from}, {until}): {numerator} / {denominator} ({percentage}); locally pending sync: {pending}',
+    'interestTrendDelta':
+        'Percentage-point difference (later minus earlier): {delta}',
+    'interestTrendDeltaValue': '{value} percentage points',
+    'interestTrendDeltaUnavailable':
+        'One period has no calculable percentage, so no percentage-point difference is shown.',
+    'interestTrendObservationNotice':
+        'This is a personal observational fact. The difference does not show success, failure, or causation.',
+    'interestTrendDataCutoff': 'Local data cutoff: {time}',
+    'interestTrendLoading': 'Loading the interest trend',
+    'interestTrendUnavailable':
+        'The interest trend is temporarily unavailable. Try again later.',
+    'interestTrendRetry': 'Retry trend',
     'interestRatioCoverage':
         'Ratio coverage: unknown {unknown}, refused {refused}, not applicable {notApplicable}, unanswered {unanswered}, and candidate exclusions {excluded}. Core interest must currently be 0–4; this is not a census of drafts, attempts, or voided records.',
     'targetResponseDistribution': 'Target response distribution',
