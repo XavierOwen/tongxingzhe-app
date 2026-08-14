@@ -274,6 +274,23 @@ adapter，能发现条件导入或浏览器 API 的编译错误，但不会自�
 浏览器保存动作，也不能替代其他浏览器或五个原生平台的验收。若要声称某个浏览器实际生成了文件，
 还要在该浏览器中完成保存后的文件对账，并另行记录浏览器版本、文件名、MIME 和 bytes。
 
+只修改 Slice 6AK 的规范区域跨版本映射合同时，不需要 Flutter、浏览器或真机。第一次使用 Docker 时，
+确认 Docker Desktop 已启动，然后从仓库根目录运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+脚本会自动发现 0053 migration、结构与权限 check、可回滚 fixture 和确定性并发脚本；随后还会导出
+测试数据库，在第二个 PostgreSQL 16 容器恢复并重复 check 与 fixture。看到
+`0053_canonical_region_version_mappings`、`verify_canonical_region_version_mappings.sql` 和
+`verify_canonical_region_version_mapping_concurrency.sh` 均执行成功，才表示这张数据库合同已通过。
+
+这套测试不连接 production，不需要 Supabase 账号，也不使用真实区域或接触资料。通过只证明 synthetic
+已发布树、精确内容指纹、幂等、冲突拒绝、追加不可变和最小权限；它不证明现实区域对应关系正确，
+也不表示 production current 区域报告、HTTP、Flutter 或六平台运行时已经交付。完整原理和单项命令见
+[第 11 章](11-management-metrics-and-privacy.md#slice-6ak-如何固定跨版本区域映射证据)。
+
 第一次使用 Docker 时，从第 6.1 节开始操作。Docker 套件证明数据库授权、最小访问审计、撤权并发和恢复后合同；Flutter synthetic 测试证明客户端状态与显示规则。两类证据不能互相替代。
 
 管理报告发布端点同时改动 Backend 和 PostgreSQL bridge。开发时先运行：

@@ -27,7 +27,7 @@ Backend integration 入口存在。脚本先在 Node 24 中运行 `npm ci --igno
 入口缺失、编译失败或断言失败都会使整套测试失败；不能把此前 SQL fixture 的通过单独写成
 Backend adapter 集成通过。
 
-schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher` 和 `tongxingzhe_contact_provenance_writer`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
+schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer` 和 `tongxingzhe_region_mapping_writer`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
 
 ## 使用已有 PostgreSQL 测试库
 
@@ -211,6 +211,14 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/checks/verify_personal_relationship_stage_change_summary.sql
 psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/fixtures/0051_personal_relationship_stage_change_summary.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_report_snapshot_export.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0052_management_report_snapshot_export.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_canonical_region_version_mappings.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0053_canonical_region_version_mappings.sql
 ./tool/verify_questionnaire_publish_concurrency.sh
 ./tool/verify_questionnaire_metric_concurrency.sh
 ./tool/verify_person_institution_relationship_concurrency.sh
@@ -221,6 +229,8 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 ./tool/verify_canonical_region_tree_release_concurrency.sh
 ./tool/verify_contact_location_provenance_concurrency.sh
 ./tool/verify_personal_relationship_stage_change_summary_concurrency.sh
+./tool/verify_management_report_snapshot_export_concurrency.sh
+./tool/verify_canonical_region_version_mapping_concurrency.sh
 ```
 
 第二次执行不是重复建库，而是验证已经记录的 checksum。若历史文件被修改，脚本会拒绝继续。
@@ -369,6 +379,20 @@ workspace／project 和 `changed_at >= from_utc AND changed_at < until_utc` 过�
 生产数据分布下的成本计划；部署后仍需正常 `ANALYZE` 和查询计划监测。完整 Docker runner 还要
 运行对应 Backend adapter integration、已注册并发脚本和 dump／restore；单独通过 SQL fixture
 不能声称 HTTP 或 Backend 集成已通过。
+
+`0052_management_report_snapshot_export.sql` 为可信 v2 管理报告快照增加固定 canonical JSON v1
+导出。唯一 runtime bridge 只接受已验证身份、显式项目和快照 ID，并在同一数据库边界重新检查
+`view_anonymous_analytics` 与 `export_management_reports`。响应只从已保存快照生成稳定 UTF-8 bytes；
+`displayed` 保留受保护整数，`suppressed` 固定为 `null`。每次已授权生成都会追加不含报告格、贡献者、
+地点或 PII 的不可变导出事件。服务端审计只证明已授权并准备交付，不证明客户端已经保存或打开文件。
+
+`0053_canonical_region_version_mappings.sql` 保存已发布规范区域树之间的显式一对一映射证据。每条
+映射绑定来源和目标的 tree version、region ID、冻结内容指纹、固定 evidence contract 和 SHA-256
+evidence digest。独立的无登录 mapping writer 拥有私有登记与解析函数；区域发布身份只有函数执行权，
+没有表写入权。精确 request 重试幂等，载荷漂移、拆分和合并失败关闭。映射只可追加，不能更新、删除或
+清空；私有解析不组合链，也
+不按名称、父链或几何相似度猜测。runtime 和 PUBLIC 无表或函数权限；本 migration 不注册生产区域
+报告，也不改写 contact location provenance。
 
 Backend Store 对 0039 触发器的地点错误只做固定 `SQLSTATE 23514` 与错误文字的窄映射：已知 source 形状失败返回 `rejected / invalid_location_source`，已知 location 形状失败返回 `rejected / invalid_location`，HTTP 层将其作为 `422` permanent failure。未知 `23514` 或其他数据库错误仍向上抛出，HTTP 层返回 `503 sync_unavailable`。不得用一条宽泛的 SQLSTATE 映射掩盖新的约束或权限问题。
 

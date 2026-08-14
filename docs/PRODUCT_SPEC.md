@@ -198,6 +198,7 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `REGION-007` | 每次匹配保留解析版本和原结果；分析同时支持“当前区域视图”和用原版本复现的“原始区域视图”。 |
 | `REGION-008` | 新节点或边界建议待审核时，接触先归入当时已有的最小规范上级；审核后可用新版本重新解析，但不得抹除原匹配。 |
 | `REGION-009` | 日常分析默认使用当前区域视图；原始区域视图用于历史复现、解释跨期边界变化和审计。 |
+| `REGION-010` | 没有原始坐标可重新解析时，旧区域只能凭绑定两个已发布树内容指纹的显式一对一映射证据进入指定新版本；缺失、冲突、拆分、合并或证据漂移必须失败关闭，不按名称、父链或坐标猜测。 |
 
 ### 5.5 场景问卷
 
@@ -431,6 +432,26 @@ anchor 并释放 object URL。它不重新序列化、不再次读取服务端�
 非 Web build 使用明确的 unavailable adapter。Web 下载不复用持久文件系统 capability，也不证明
 Android、iOS、macOS、Windows 或 Linux 已支持保存。本 Slice 不增加原生保存、系统分享、文件打开、
 下载历史、File System Access API、离线缓存、CSV／PDF、Backend／PostgreSQL 变更或跨浏览器声明。
+
+#### Slice 6AK：规范区域树跨版本显式映射证据
+
+Slice 6AK 只在私有数据边界保存已发布规范区域树之间的显式一对一映射。每条事实固定来源和目标的
+`tree_version + region_id + content_fingerprint`、稳定 mapping／request ID、
+`canonical-region-version-mapping-evidence:v1` 和原始证据的 SHA-256 摘要。摘要只证明维护流程曾明确
+引用一份证据，不证明两个真实区域天然相同，也不保存自由文本、坐标、接触资料或 PII。
+
+登记函数必须重新读取并锁定两个 release，确认均已发布、请求指纹与冻结内容精确一致、两个节点属于
+相应版本且版本不同。同一 request 的完全相同重试幂等；载荷漂移，或同一来源节点到同一目标版本的
+第二个目标，必须失败关闭。映射事实只可追加，不能更新、删除、清空或静默取代。私有解析只在调用方提供的
+来源、目标版本和两个指纹与唯一登记事实一致时返回 `mapped`；缺失映射、错误指纹、未知节点、草稿树、
+拆分、合并和歧义均不可按名称、父链或坐标猜测。
+
+这张表不改写旧 contact revision 的地点来源，也不把 target tree 的 current 选择时间写进映射。
+未来报告必须另行按自己的数据截止点确定目标树，并决定有坐标时是否按当时 current 边界重新解析。
+`pending_resolution`、`not_applicable` 和来源不完整记录没有可映射的规范区域 ID。
+
+本 Slice 不注册生产区域报告，不增加 runtime／HTTP／Flutter 入口，也不交付完整网格、互补隐藏、授权、
+快照 lineage、动态下钻、缓存、导出、历史 as-of、更正版、删除或一对多／多对一映射。
 
 只有高级分析可显示：
 
@@ -692,6 +713,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-011` | 固定匿名管理报告文件导出使用共享 synthetic snapshot 和 canonical JSON golden fixture；覆盖双 capability 授权、可信 provenance、16 格顺序、`suppressed = null`、稳定字节、独立不可变导出审计和无 PII／贡献者／地点字段。 |
 | `TEST-012` | Flutter 导出 gateway 使用 canonical UTF-8 golden bytes；覆盖固定请求／响应头、一次 `401` 刷新、稳定错误、Content-Length、key 顺序、目录摘要绑定、16 格、`displayed >= 10`、`suppressed = null`、额外字段和非 canonical 响应失败关闭。 |
 | `TEST-013` | Web 下载 delivery、管理报告状态机和 Widget 覆盖两阶段操作、原始 artifact 透传、非 Web unavailable、重复点击、delivery 重试不重复导出、迟到响应和页面离开清理，以及中英文 live semantics、320×568 和 200% 字号；Web build 验证条件导入，真实浏览器证据单独记录。 |
+| `TEST-014` | 规范区域跨版本映射 fixture 覆盖已发布树与精确指纹、未知节点、草稿树、同版本、幂等、request 漂移、冲突目标、追加不可变、最小权限和缺失映射；确定性双事务测试证明同一来源到同一目标版本至多提交一个目标，完整 Docker 套件在恢复库重复验证。 |
 
 ## 9. UI、视觉与可访问性
 

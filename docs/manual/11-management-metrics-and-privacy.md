@@ -596,7 +596,7 @@ Slice 6Q 因此没有给现有生产端点增加区域参数，也没有注册�
 
 `original` 视图使用接触事实保存的最小区域 ID 和区域树版本。它回答“记录当时归到哪里”。`current` 视图回答“按今天有效的规范区域应归到哪里”，所以必须有明确跨版本映射，或保留可以按当前边界重新解析的来源坐标。
 
-现有 contact current projection 只保存 `region_id + tree_version`；`contact_region_assignments` 还是随 revision 更新的 current projection。Slice 6S 至 6V 会为有来源的 revision 保存解析前坐标，但没有建立跨版本映射或生产区域报告读取路径。系统仍不能把旧区域 ID 猜成相似名称的新城市。探针把缺失映射作为失败关闭条件，也不声称已交付两种生产视图。
+现有 contact current projection 只保存 `region_id + tree_version`；`contact_region_assignments` 还是随 revision 更新的 current projection。Slice 6S 至 6V 为有来源的 revision 保存解析前坐标，Slice 6AK 又固定了私有的一对一跨版本映射证据，但仍没有生产区域报告读取路径。系统不能把旧区域 ID 猜成相似名称的新城市；有坐标时的重新解析、无坐标时的显式映射和目标树的报告截止点仍须分别处理。探针把缺失映射作为失败关闭条件，也不声称已交付两种生产视图。
 
 `pending_resolution` 的含义不同：面对面接触已有坐标，但平台尚未给出规范区域。该记录保留坐标并排除在城市格之外。`not_applicable` 只适用于纯非线下接触，表示地点维度不适用。它不是解析失败、未知城市或零数量。
 
@@ -648,6 +648,53 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 这些文件只使用 synthetic 数据。并发脚本会提交自己的测试行，普通 fixture 会回滚；不要把测试库当作生产库，也不要把 Docker 通过写成真实维护者发布或六平台验收。
 
 冻结版本是 6S 地点 provenance 的前置条件，不是 provenance 本身。Slice 6S 在 PostgreSQL 中追加保存解析来源和原始证据；6U 接入 Flutter／Drift、Outbox 和 Backend；6V 增加四层对账。生产区域报告还必须另行确定完整网格、互补隐藏、授权、快照 lineage 和自己的重识别 fixture。本节不增加区域报告 API、管理 UI、缓存或导出。
+
+## Slice 6AK 如何固定跨版本区域映射证据
+
+有些旧 contact revision 只保留当时的规范区域，没有可按新边界重新解析的坐标。Slice 6AK 为这种
+`resolved_region_only` 来源建立私有的显式一对一映射注册表。它不是区域名称对照表，也不把 target tree
+的 current 选择写成节点映射。来源和目标分别由 `tree_version + region_id + content_fingerprint`
+标识；两个 release 都必须已经发布，节点必须真实属于相应版本，请求中的指纹必须等于 6R 冻结内容。
+
+私有登记函数同时保存稳定 mapping ID、request ID、固定 evidence contract、64 字符小写十六进制
+evidence digest 和数据库写入时间。digest 是外部审核材料的最小引用，不把自由说明、坐标、联系人或 PII
+复制进数据库。完全相同的 request 重试返回原结果；同一 request 改载荷，或同一来源节点到同一目标
+tree 的第二个目标，以及多个来源到同一 target 的合并，都会失败关闭。表级 trigger 拒绝直接插入、
+更新、删除和清空；映射只能通过由无登录、无成员的 `tongxingzhe_region_mapping_writer` 拥有的
+`SECURITY DEFINER` 函数追加。区域发布身份只有函数执行权，没有映射表写入权。
+
+映射行保存在受保护的 `app_data`，登记和解析函数位于 `app_private`。runtime、PUBLIC 和普通管理
+分析能力都不能直接读取映射表或执行这两个函数。
+
+私有解析函数只接受显式来源、目标版本和两个内容指纹。全部事实精确一致时返回唯一 `mapped` 结果；
+缺失记录返回稳定的未映射状态，错误指纹、草稿树、未知节点、同版本和冲突输入直接拒绝。v1 不表示
+拆分、合并、retired 或 ambiguous；这些情况必须保持未映射，不能按名称、父链或坐标相似度猜测。
+`pending_resolution`、`not_applicable` 和来源不完整记录没有来源区域 ID，不进入这张表。
+
+完整 Docker 套件会自动运行
+[`verify_canonical_region_version_mappings.sql`](../../backend/database/checks/verify_canonical_region_version_mappings.sql)、
+[`0053_canonical_region_version_mappings.sql`](../../backend/database/fixtures/0053_canonical_region_version_mappings.sql)
+和 [`verify_canonical_region_version_mapping_concurrency.sh`](../../tool/verify_canonical_region_version_mapping_concurrency.sh)。
+
+它从空库迁移，检查 migration checksum、对象 owner、固定 `search_path`、runtime／PUBLIC 权限和追加不可变，
+再让两个事务争用同一 source + target tree，证明至多一个目标提交。最后导出数据库，在没有源 cluster roles
+的第二个 PostgreSQL 16 容器恢复并重复 check 与 fixture。
+
+如果只在已经运行的测试数据库验证本切片，执行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_canonical_region_version_mappings.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0053_canonical_region_version_mappings.sql
+./tool/verify_canonical_region_version_mapping_concurrency.sh
+```
+
+这些测试只使用 synthetic tree、节点、指纹和 evidence digest。通过表示数据库拒绝当前列出的伪造、
+冲突和并发双写；它不证明维护者审核正确，不证明两个真实区域等价，也没有交付 production current
+区域报告、完整隐私网格、授权、快照 lineage、HTTP、Flutter、缓存或导出。
 
 ## Slice 6S 如何固定地点来源合同
 
@@ -709,7 +756,7 @@ Backend 生产写入、区域 current 映射或区域报告不可重识别。
 - 权限变更审计和一般组织业务上下文；
 - 跨时区 revision 后重新建立基线或更正版的隐私判定；
 - 可按历史 revision 水位重新执行的 `as-of` 投影、更正版取代关系和删除流程；
-- 可验证的 current 跨版本映射，以及生产区域报告自己的完整网格、互补隐藏、授权和快照 lineage；
+- 把显式映射或来源坐标重解析安全接入指定报告截止点的 current 视图，以及生产区域报告自己的完整网格、互补隐藏、授权和快照 lineage；
 - 快照目录与单份读取以外的动态 API、缓存、图表，以及除 6AH 固定 canonical JSON v1 外的其他导出。
 
 在这些前置条件完成前，不得删除个人指标 SQL 的 `app_user_id` 条件来制造团队汇总，也不得向 `tongxingzhe_runtime` 授予私有政策函数的执行权。
