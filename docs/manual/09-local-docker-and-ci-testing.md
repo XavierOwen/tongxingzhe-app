@@ -18,7 +18,7 @@
 ├── Node.js：Backend TypeScript 检查和 HTTP／命令合同测试
 └── Docker daemon
     ├── 源 PostgreSQL 16 容器：空库重建、权限、fixture、Backend 对账、并发和 dump
-    ├── Node 24 容器：编译并运行真实 Backend→PostgreSQL 地点来源对账
+    ├── Node 24 容器：编译并运行真实 Backend→PostgreSQL adapter 对账
     └── 恢复 PostgreSQL 16 容器：预置 cluster roles 后恢复和复验
 
 GitHub Actions
@@ -108,7 +108,7 @@ npm --prefix backend/server run check
 npm --prefix backend/server test
 ```
 
-PostgreSQL migration、函数、授权、fixture 或 Backend store 发生变化时，再执行 Docker 数据库套件：
+PostgreSQL migration、bridge、索引、授权、fixture 或 Backend store 发生变化时，再执行 Docker 数据库套件：
 
 ```bash
 ./tool/run_postgres_tests_in_docker.sh
@@ -302,6 +302,42 @@ flutter run \
 
 完整的权限、前台、后台、终止和旅行测试步骤见[提醒送达与旅行时区真机 Spike](../spikes/reminder-delivery-and-travel-time-zone.md)。没有真机时保留 `pending`，不能用 build 或单元测试替代。
 
+### 5.7 验证个人阶段变更汇总读取
+
+Slice 6AE-1 只改动 Backend HTTP、PostgreSQL bridge、索引和测试。它没有 Flutter、Drift、页面或
+离线历史同步步骤。先运行无数据库的 Backend 检查：
+
+```bash
+npm --prefix backend/server run check
+npm --prefix backend/server test
+```
+
+这些测试必须覆盖 Bearer 验证先于 query shape、重复／额外 query、UTC `Z` 规范化、GET body、
+`Cache-Control: no-store`、稳定的 `401`／`400`／`403`／`503`，以及成功 envelope 的 exact keys、
+安全整数、不变量和零 PII。Store 必须只把可信 issuer／subject 和期间交给 bridge，不能接受
+客户端 actor、workspace 或 project。
+
+然后运行真实 PostgreSQL 套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+完整套件会从空库应用 `0051_personal_relationship_stage_change_summary.sql`，运行
+`verify_personal_relationship_stage_change_summary.sql` 和 `0050_personal_relationship_stage_change_events.sql`，
+再在 Node 24 容器中运行阶段变更 adapter integration。检查必须证明 runtime 只有 bridge `EXECUTE`、
+`PUBLIC` 无执行权、`search_path` 固定、关闭顺序扫描后的 `EXPLAIN` 能使用 actor／project／
+changed-at 部分索引，且
+重复 revision 失败关闭。integration 必须对账 `5` 个事件、`4` 个不同关系、`3` 个上升、`2` 个下降
+和空期间四个零。SQL fixture 另证实已结束 assignment 和匿名化对象的此前合格事件仍计入；函数
+定义检查必须确认没有 target status、assignment 或 lifecycle 过滤，且 lifecycle-only／note-only
+不计入。该 `EXPLAIN` 是索引可用性的结构检查，不预测生产数据分布下的成本计划；生产仍要执行
+正常 `ANALYZE` 并监测查询计划。
+
+Docker runner 还会执行已注册的并发脚本、checksum 检查和 dump／restore。0051 check 证明当前项目
+指针锁先于 snapshot aggregate。只能在看到 Node integration、恢复库 check 和最后的总成功标志后，记录为 Backend→PostgreSQL 通过。这个
+结果不代表生产 Supabase 身份、真实用户资料或任何 Flutter／真机功能已验收。
+
 ## 6. Docker PostgreSQL 套件怎样运行
 
 ### 6.1 最短用法
@@ -326,7 +362,7 @@ Node 24 容器使用与 PostgreSQL 容器相同的 network namespace。它通过
 4. 把数据库目录和全部正式并发脚本复制到容器；
 5. 从空库执行全部 migration，再执行一次 checksum 重放；
 6. 运行全部 schema／权限 check 和可回滚 synthetic fixture；
-7. 建立一次性的 Node 24 容器，编译 Backend，并运行地点来源、当前关系阶段、同意占比开关和同意占比读取四条 PostgreSQL adapter integration test；
+7. 建立一次性的 Node 24 容器，编译 Backend，并运行地点来源、当前关系阶段、同意占比开关、同意占比读取和个人阶段变更汇总五条 PostgreSQL adapter integration test；
 8. 按文件名运行全部正式并发脚本，用独立数据库会话检查锁、撤权和唯一性合同；
 9. 修改 migration 的临时副本，确认 runner 拒绝 checksum 漂移；
 10. 执行 `pg_dump`，启动没有源 cluster roles 的第二个 PostgreSQL 容器；
@@ -337,12 +373,15 @@ Node 24 容器使用与 PostgreSQL 容器相同的 network namespace。它通过
 
 Node 阶段编译并运行 `backend/server/test/contact-location-evidence.integration.ts`、
 `backend/server/test/personal-current-relationship-stage.integration.ts`、
-`backend/server/test/personal-follow-up-consent-opt-in.integration.ts` 和
-`backend/server/test/personal-follow-up-consent-ratio.integration.ts`。开关测试用 runtime role 验证
-未配置、启用、幂等重放、冲突、停用和回滚；比例测试再对账 `not_enabled` 与启用后的
-`ready 0 / 0`。如果入口缺失、编译失败或真实 Backend 到 PostgreSQL 的任一断言失败，脚本会在
-这一步停止；设置 `KEEP_POSTGRES_TEST_CONTAINER=1` 后，PostgreSQL 容器会保留供检查。不能把
-前面的 SQL 通过单独记为 Backend 集成通过。
+`backend/server/test/personal-follow-up-consent-opt-in.integration.ts`、
+`backend/server/test/personal-follow-up-consent-ratio.integration.ts` 和
+`backend/server/test/personal-relationship-stage-change-summary.integration.ts`。开关测试用
+runtime role 验证未配置、启用、幂等重放、冲突、停用和回滚；比例测试再对账 `not_enabled` 与
+启用后的 `ready 0 / 0`；阶段变更 integration 对账 `5 / 4 / 3 / 2` 和空期间，SQL fixture 与独立
+并发脚本分别覆盖匿名化历史和当前项目锁。
+如果入口缺失、编译失败或真实 Backend 到 PostgreSQL 的任一断言失败，脚本会在这一步停止；设置
+`KEEP_POSTGRES_TEST_CONTAINER=1` 后，PostgreSQL 容器会保留供检查。不能把前面的 SQL 通过单独
+记为 Backend 集成通过。
 
 ### 6.3 怎样读输出
 
@@ -447,6 +486,9 @@ docker rm --force tongxingzhe-postgres-test-12345
 | `backend/server/test/personal-current-relationship-stage.integration.ts` | 用 runtime role 对账当前关系阶段 Store 与窄 bridge | current snapshot 参数、结果解析或隐私边界错误 |
 | `backend/server/test/personal-follow-up-consent-opt-in.integration.ts` | 用 runtime role 对账项目开关 Store 与 0048 bridge | 固定范围、版本、幂等、停用元数据或错误映射错误 |
 | `backend/server/test/personal-follow-up-consent-ratio.integration.ts` | 用 runtime role 对账未启用与启用后的个人比例结果 | identity／project 参数、开关状态或 union 解析错误 |
+| `checks/verify_personal_relationship_stage_change_summary.sql` | 检查 0051 bridge 的函数形状、权限、PII-free keys 和索引计划 | runtime 权限过大、合同漂移或历史全表扫描 |
+| `fixtures/0050_personal_relationship_stage_change_events.sql` | 对账阶段变更候选集、排除项、方向和重复 revision 失败关闭 | actor、项目、期间或历史保留边界错误 |
+| `backend/server/test/personal-relationship-stage-change-summary.integration.ts` | 用 runtime role 对账 Backend Store 与 0051 bridge 的计数、空期间和 PII 边界；SQL fixture 与并发脚本另证实匿名化历史和锁边界 | Backend 参数、结果解析或隐私边界错误 |
 | 并发脚本 | 用两个独立 `psql` 会话同时写入 | 锁、唯一约束或冲突合同错误 |
 | dump／restore | 从备份重建 schema 后重复验证 | 备份范围、owner、授权或恢复路径错误 |
 
@@ -556,7 +598,7 @@ CI 会在临时目录重新生成 v19 snapshot 和 migration helper，并与仓�
 | Backend identity, context, and sync | TypeScript check 和全部 Backend tests |
 | Build Android／Web／Linux／iOS／macOS／Windows | 六个平台独立 build |
 
-CI 的 PostgreSQL job 在 Linux runner 上执行同一个 Docker runner。默认会拉取 `postgres:16` 和 `node:24-bookworm`，在临时容器中运行 `psql`、Backend build 和四条 Backend integration；它不需要 runner 上的 PostgreSQL service，也不占用本机端口。两条路径执行相同的 migration、check、fixture、Backend 对账和并发脚本。
+CI 的 PostgreSQL job 在 Linux runner 上执行同一个 Docker runner。默认会拉取 `postgres:16` 和 `node:24-bookworm`，在临时容器中运行 `psql`、Backend build 和五条 Backend integration；它不需要 runner 上的 PostgreSQL service，也不占用本机端口。两条路径执行相同的 migration、check、fixture、Backend 对账和并发脚本。
 
 本机通过是提交前证据。远端 CI 通过是干净环境证据。合并前应同时检查两者，不能根据本机结果推断 GitHub 已通过。
 
@@ -576,6 +618,8 @@ CI 的 PostgreSQL job 在 Linux runner 上执行同一个 Docker runner。默认
 | Backend 地点来源 integration 断言失败 | 先保留 Node 阶段完整 stdout，再分别检查 Store 映射、SQL fixture 和 privacy assertion |
 | Backend 同意占比 integration 断言失败 | 检查 runtime identity／project 参数、0048 当前开关、0049 union 和 Store exact-key 解析 |
 | Backend 同意占比开关 integration 断言失败 | 检查 current project、固定 metric、0048 版本／幂等合同与 disabled metadata |
+| Backend 阶段变更汇总 integration 断言失败 | 检查 0051 的 current pointer `FOR UPDATE`、actor／project／changed-at 索引、匿名化历史和 `5 / 4 / 3 / 2` 对账 |
+| `verify_personal_relationship_stage_change_summary.sql` 失败 | 检查 runtime 是否只有 bridge `EXECUTE`、`search_path`、exact keys 和 `EXPLAIN` 是否走部分索引 |
 | restore check 失败 | dump schema 范围、role、函数授权和恢复 owner |
 | Flutter 单测通过但完整测试失败 | 共享状态、生成文件或其他模块的回归 |
 | 离线对象测试通过但真机不启用缓存 | 安全存储探针、本地数据库能力和六平台证据矩阵 |

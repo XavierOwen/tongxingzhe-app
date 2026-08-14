@@ -142,8 +142,45 @@ revision 都排除。数值上升
 
 同一关系的不同 revision 是不同事件；`relationships_with_stage_change@1` 再按对象与项目
 关系去重。相同 mutation 的幂等重放不能新增 revision；同一 revision 的重复输入或内容冲突
-必须失败关闭。这个阶段只固定个人指标合同，不新增关系历史同步、Drift 表、Outbox、HTTP
-endpoint 或管理报告。
+必须失败关闭。Slice 6AE-0 只固定个人指标合同；Slice 6AE-1 增加一个固定的 Backend HTTP
+读取，不增加关系历史同步、Drift 表、Outbox 或管理报告。
+
+### 个人阶段变更汇总的 HTTP 读取
+
+入口是
+`GET /v1/personal/relationship-stage-change-summary?from_utc=...&until_utc=...`。请求只能含一次
+`from_utc` 和一次 `until_utc`，不带 body。时间必须是 UTC `Z`，可带一至六位小数；Backend
+规范化到毫秒，并要求半开期间 `[from_utc, until_utc)` 有效。Bearer 验证发生在 query shape
+判断之前。客户端不能提交 actor、workspace、project、metric、筛选或历史 `as-of`。
+
+成功响应的 `result` 只含 `contract_id`、`project_id`、`time_basis`、`period`、
+`data_cutoff_utc`、`authorized_at_utc` 和 `value`。`contract_id` 固定为
+`personal_relationship_stage_change_summary_result_v1`，`time_basis` 固定为
+`relationshipChangedAtUtc`。`value` 只有 `event_count`、`distinct_relationship_count`、
+`upward_count` 和 `downward_count` 四个非负安全整数。事件数等于两个方向数之和，去重关系数
+不大于事件数；空期间仍返回同样形状和四个零。
+
+PostgreSQL bridge 在同一 transaction 中从 issuer／subject 重新解析 active app user，锁定
+`user_current_projects` 当前行，验证未删除的 personal workspace 和 active current project，
+再用一个 statement snapshot 按可信 actor、workspace、project 与 UTC 半开期间聚合 revision。
+项目切换、归档或删除并发时，锁只允许完整旧项目结果、完整新项目结果或 `403`，不会混合两个
+项目。`data_cutoff_utc` 与 `authorized_at_utc` 都是外层 bridge 调用 statement 开始时的可信 UTC
+时刻，不是
+历史 `as-of` 或客户端收包时刻。
+
+查询不按当前 assignment、relationship lifecycle 或 target active 状态过滤。对象匿名化或
+assignment 结束后，先前合格事件仍计入；匿名化产生的 lifecycle-only 与 note-only revision
+不计入。结果不含对象、revision、actor、原因、备注、姓名、联系方式或其他 PII。HTTP 错误固定为：
+
+| 条件 | 返回 |
+| --- | --- |
+| 缺失／无效 Bearer | `401 unauthenticated` |
+| query 或 GET body 形状错误 | `400 invalid_personal_relationship_stage_change_summary_request` |
+| 身份、workspace 或 current project 无权 | `403 personal_relationship_stage_change_summary_forbidden` |
+| bridge、数据库或合同异常 | `503 personal_relationship_stage_change_summary_unavailable` |
+
+所有响应带 `Cache-Control: no-store`。该入口只提供服务端读取，不连接 Flutter、Drift、离线
+历史同步或 UI。
 
 问卷答案经过同步时，Backend 先把受控 wire 格式解析为类型化答案，PostgreSQL 再按可信项目与精确已发布版本复验。[`0012_questionnaire_visibility.sql`](../../backend/database/migrations/0012_questionnaire_visibility.sql) 按问题顺序重算显示规则，拒绝隐藏题的真实值、可见题的 `rule_skipped` 标记和可见必填题遗漏。客户端即时预验只改善离线体验，不代替这个服务端边界。
 
@@ -333,12 +370,13 @@ Slice 6AC 已注册对象 × 项目统计单位、当前快照时间口径，以
 
 `snapshot_as_of_utc` 是当前状态的一致性读取时刻，`source_cutoff_utc` 是来源关系的截止，成功接收时刻又是第三个时间。页面分别显示这些含义和对象 × 项目的同步覆盖。只有网络失败可回退到明确标为旧数据的缓存；授权失败会清除对应范围。当前 PII vault 含对象资料、关系和共享备注，只为限时离线查看服务，不能成为分析查询源。
 
-这一层没有授予管理权限，也没有把个人事实当成可公开的管理结果。后续加入的私有管理隐私政策见[第 11 章](11-management-metrics-and-privacy.md)。管理查询仍需独立验证成员授权和报告时区；在这些前置条件完成前，不得新增可绕过它们的任意指标端点。
+这一层没有授予管理权限，也没有把个人事实当成可公开的管理结果。后续加入的私有管理隐私政策见[第 11 章](11-management-metrics-and-privacy.md)。管理查询仍需独立验证成员授权和报告时区；个人阶段变更入口不能绕过这些管理边界。
 
-阶段变更的 Dart 与 PostgreSQL 对账使用共享 [`relationship_stage_changes_v1.csv`](../../backend/database/fixtures/shared/relationship_stage_changes_v1.csv)。
+阶段变更的 Dart 与 PostgreSQL fixture 使用共享 [`relationship_stage_changes_v1.csv`](../../backend/database/fixtures/shared/relationship_stage_changes_v1.csv) 独立重算。Backend adapter integration 另用同一组 `5 / 4 / 3 / 2` 预期验证真实 Store→bridge 路径。
 它覆盖本人／他人、其他项目、UTC 左右边界、结束当前分配、初始 `project_entry`、lifecycle-only、
 同阶段、上升、下降、同一关系多次事件和重复 revision。两端分别重算事件数、`upward`／`downward`
-分布和去重关系数；重复 revision 或跨 scope 输入必须失败关闭。fixture 只含 synthetic ID，不含对象姓名、
+分布和去重关系数；重复 revision 或跨 scope 输入必须失败关闭。Docker runner 还检查 `0051` bridge
+权限、项目切换并发、`EXPLAIN` 索引路径和 dump／restore。fixture 只含 synthetic ID，不含对象姓名、
 联系方式、备注或其他 PII。
 
 ## 为什么这样测试

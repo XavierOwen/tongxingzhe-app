@@ -19,11 +19,13 @@
 
 脚本建立隔离的 PostgreSQL 16 容器，运行 migration、check、fixture、Backend→PostgreSQL 对账、并发和 dump／restore，最后自动删除容器。Backend 对账阶段使用 Node 24 容器和仓库锁定的 npm 依赖；它不连接 production，也不使用真实用户资料。第一次使用 Docker、需要保留失败容器或理解输出时，阅读[本机、Docker 与 CI 测试指南](../../docs/manual/09-local-docker-and-ci-testing.md)。
 
-Node 阶段要求地点来源、当前关系阶段、同意占比开关和同意占比读取四条 Backend integration
-入口存在。脚本先在 Node 24 中运行 `npm ci --ignore-scripts` 和 `npm run build`，再执行编译产物。
+Node 阶段要求地点来源、当前关系阶段、同意占比开关、同意占比读取和个人阶段变更汇总五条
+Backend integration 入口存在。脚本先在 Node 24 中运行 `npm ci --ignore-scripts` 和 `npm run build`，再执行编译产物。
 开关测试覆盖未配置、启用、幂等重放、冲突和停用；比例测试再读取 `not_enabled` 和启用后的
-`ready 0 / 0`。入口缺失、编译失败或断言失败都会使整套测试失败；不能把此前 SQL fixture 的
-通过单独写成 Backend adapter 集成通过。
+`ready 0 / 0`；阶段变更 integration 对账 `5 / 4 / 3 / 2` 和空期间。SQL fixture 另证实匿名化
+历史，独立并发脚本证实 current-project 锁。
+入口缺失、编译失败或断言失败都会使整套测试失败；不能把此前 SQL fixture 的通过单独写成
+Backend adapter 集成通过。
 
 schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher` 和 `tongxingzhe_contact_provenance_writer`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
 
@@ -191,6 +193,24 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/checks/verify_personal_target_response_level_ratios.sql
 psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/fixtures/0046_personal_target_response_level_ratios.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_personal_current_relationship_stage_snapshot.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0047_personal_current_relationship_stage_snapshot.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_project_follow_up_consent_opt_in.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0048_project_follow_up_consent_opt_in.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_personal_follow_up_consent_ratio.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0049_personal_follow_up_consent_ratio.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0050_personal_relationship_stage_change_events.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_personal_relationship_stage_change_summary.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0051_personal_relationship_stage_change_summary.sql
 ./tool/verify_questionnaire_publish_concurrency.sh
 ./tool/verify_questionnaire_metric_concurrency.sh
 ./tool/verify_person_institution_relationship_concurrency.sh
@@ -200,6 +220,7 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 ./tool/verify_project_reporting_time_zone_concurrency.sh
 ./tool/verify_canonical_region_tree_release_concurrency.sh
 ./tool/verify_contact_location_provenance_concurrency.sh
+./tool/verify_personal_relationship_stage_change_summary_concurrency.sh
 ```
 
 第二次执行不是重复建库，而是验证已经记录的 checksum。若历史文件被修改，脚本会拒绝继续。
@@ -317,6 +338,37 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 当前开关启用时，结果仍使用上述三个身份键和 `status: "ready"`，并增加 UTC 半开 `period` 与嵌套 `value`。`value` 保存 `yes_count`、`no_count`、`numerator`、`unknown_count`、`refused_count`、`not_applicable_count`、`unanswered_count`、`excluded_count`、`denominator` 和 `percentage_basis_points`；`numerator` 与 `yes_count` 相同。分母是 `yes + no`，`unknown_count` 与 `excluded_count` 固定为零；分母为零时返回 `0 / 0` 和 `NULL` 基点。统计只使用活动接触的 current revision contact-target link；旧 revision、作废、草稿、尝试、问卷同名答案、其他项目和期间外记录在候选集前排除。
 
 `0049` fixture 直接用 psql `\copy` 读取 [`follow_up_consent_ratio_v1.csv`](./fixtures/shared/follow_up_consent_ratio_v1.csv)，再把共享行映射为 PostgreSQL 的 contact、revision 和 contact-target link，逐场景对账结果。它必须覆盖主场景 `2 / 3 = 6667`、多对象关联、`unknown`／拒答／不适用覆盖、无 `yes`／`no` 的空分母、current revision、作废、错误统计单位、其他 scope、左含右不含的 UTC 边界，以及未启用分支的四键结果。该 migration 只交付 PostgreSQL bridge、权限、fixture 和检查；不包含 Flutter／Drift、Backend HTTP、项目设置、离线缓存、管理报告或 warehouse。
+
+`0050_personal_relationship_stage_change_events.sql` 用共享 [`relationship_stage_changes_v1.csv`](./fixtures/shared/relationship_stage_changes_v1.csv) 独立重算阶段变更候选集。它固定可信 actor、workspace、project、UTC 半开边界、`project_entry`、lifecycle-only、note-only、同阶段、上升、下降和结束分配边界；0051 的 bridge 另外固定匿名化后仍保留历史，因为查询不按 target status 过滤。主场景必须得到 `5` 个事件、`4` 个不同对象×项目关系、`3` 个上升和 `2` 个下降；重复 revision 场景必须整体失败关闭，不能用 `DISTINCT` 掩盖错误输入。
+
+`0051_personal_relationship_stage_change_summary.sql` 提供生产读取 bridge
+`app_data.read_personal_relationship_stage_change_summary_v1(text,text,timestamptz,timestamptz)`。
+函数使用 `SECURITY DEFINER` 和固定 `search_path = pg_catalog, app_data`。runtime role 只有
+`EXECUTE`，没有 revision、target、assignment、identity 或 current-project 源表的 `SELECT`；
+`PUBLIC` 也没有函数执行权。
+
+bridge 接收 Backend 从已验证身份取得的 issuer／subject 和 UTC 期间，不接收 project ID。一次
+bridge 调用在同一 PostgreSQL transaction 中把 issuer／subject 解析为 active app user，对
+`app_data.user_current_projects` 的当前行加 `FOR UPDATE`，再验证未删除的 personal workspace、
+属于该 workspace 的 active current project，最后用一个 PostgreSQL statement snapshot 聚合
+历史 revision。项目切换、归档或删除与读取并发时，锁只允许完整旧项目结果、完整新项目结果或
+`42501` 失败，不会混合两个 project。
+
+统计只读取 revision，并将 revision join 到 target 的 workspace。它按可信 actor、current
+workspace／project 和 `changed_at >= from_utc AND changed_at < until_utc` 过滤，并要求 `old_stage IS NOT NULL`、
+`old_stage <> new_stage`、`changed_fields` 包含 `stage`、`reason_code <> 'project_entry'`。
+它不按当前 assignment、relationship lifecycle 或 target `status = 'active'` 过滤，所以对象
+匿名化或 assignment 结束不会删除此前合格事件；匿名化产生的 lifecycle-only／note-only revision
+不计入。结果只有固定计数和 statement 时刻的 `data_cutoff_utc`／`authorized_at_utc`，不提供
+历史 as-of 或逐事件明细。
+
+`promotion_target_relationship_stage_change_actor_project_time` 是该候选集的部分
+索引，覆盖 actor、project 和 changed-at。`verify_personal_relationship_stage_change_summary.sql`
+检查函数形状、`SECURITY DEFINER`、search path、runtime 最小权限、PII-free keys、不变量和
+关闭顺序扫描后用 `EXPLAIN` 验证结构性索引路径。这个检查证明查询谓词可使用该部分索引，不预测
+生产数据分布下的成本计划；部署后仍需正常 `ANALYZE` 和查询计划监测。完整 Docker runner 还要
+运行对应 Backend adapter integration、已注册并发脚本和 dump／restore；单独通过 SQL fixture
+不能声称 HTTP 或 Backend 集成已通过。
 
 Backend Store 对 0039 触发器的地点错误只做固定 `SQLSTATE 23514` 与错误文字的窄映射：已知 source 形状失败返回 `rejected / invalid_location_source`，已知 location 形状失败返回 `rejected / invalid_location`，HTTP 层将其作为 `422` permanent failure。未知 `23514` 或其他数据库错误仍向上抛出，HTTP 层返回 `503 sync_unavailable`。不得用一条宽泛的 SQLSTATE 映射掩盖新的约束或权限问题。
 

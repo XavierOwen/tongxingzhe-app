@@ -5,7 +5,7 @@
 ## 状态规则
 
 - ADR-0001 至 ADR-0095 作为 `TXZ-SPEC-001` 的首批决策集，于 2026-07-31 一并接受；文件另有状态时以文件为准。
-- ADR-0096、ADR-0097 于 2026-07-31 接受；ADR-0098、ADR-0099 于 2026-08-03 接受；ADR-0100 于 2026-08-05 接受；ADR-0101、ADR-0102 于 2026-08-10 接受；ADR-0103 至 ADR-0108 于 2026-08-11 接受；ADR-0109 至 ADR-0119 于 2026-08-12 接受；ADR-0120 至 ADR-0126 于 2026-08-13 接受。
+- ADR-0096、ADR-0097 于 2026-07-31 接受；ADR-0098、ADR-0099 于 2026-08-03 接受；ADR-0100 于 2026-08-05 接受；ADR-0101、ADR-0102 于 2026-08-10 接受；ADR-0103 至 ADR-0108 于 2026-08-11 接受；ADR-0109 至 ADR-0119 于 2026-08-12 接受；ADR-0120 至 ADR-0127 于 2026-08-13 接受。
 - 被取代的 ADR 保留原文和指向新 ADR 的状态，不再作为当前实现合同。
 - 新 ADR 默认只需一个清楚的决定段落。只有背景、备选和后果能帮助未来维护者避免误读时，才增加这些章节。
 - 可逆的 UI 细节、库选择和票内实现步骤留在 Spec 或 Issue，不为增加编号而创建 ADR。
@@ -48,6 +48,7 @@
 | [0124](./0124-follow-up-consent-opt-in-is-an-audited-current-switch.md) | 已接受，2026-08-13 | Slice 6AD-1；`AUTHZ-004`、`AUTHZ-006`、`ANALYTICS-003`、`ANALYTICS-014` | 项目启用使用追加式当前开关；停用不删除事实，读取时重新授权 |
 | [0125](./0125-personal-consent-opt-in-http-binds-current-project.md) | 已接受，2026-08-13 | Slice 6AD-4；`TARGET-004`、`TARGET-010`、`ANALYTICS-003`、`ANALYTICS-014`、`TEST-005` | 个人配置 HTTP 绑定可信当前项目和固定指标；成功重放统一返回 200，内部操作者 ID 不出现在 wire |
 | [0126](./0126-relationship-stage-change-metrics-use-trusted-actor-and-distinct-relationships.md) | 已接受，2026-08-13 | Slice 6AE-0；`TARGET-009`、`TARGET-016`、`ANALYTICS-007`、`ANALYTICS-015`、`PRIVACY-012`、`TEST-005`、`TEST-008` | 阶段变更指标按可信当前用户和 UTC 半开期间统计；事件数与去重对象×项目关系数分开，未来管理 `k=10` 使用后者 |
+| [0127](./0127-personal-stage-change-summary-uses-current-project-bridge.md) | 已接受，2026-08-13 | Slice 6AE-1；Issue #136；`TARGET-016`、`ANALYTICS-015`、`PRIVACY-012`、`TEST-005`、`TEST-008` | 个人汇总由固定 HTTP 读取和单 statement PostgreSQL bridge 提供；数据库解析并锁定当前项目，保留匿名化前的合格历史，不提供 as-of |
 
 ## 按主题查找
 
@@ -59,7 +60,7 @@
 | 组织、保留、导入导出与合并 | [0030](./0030-allow-verified-users-to-create-organizations.md)–[0043](./0043-promotion-target-merges-are-reversible.md) | Slice 4、7；`ORG`、`TARGET`、`AUTHZ` |
 | 私人计划、通知与周期 | [0044](./0044-personal-action-plans-are-private-and-user-controlled.md)–[0052](./0052-late-entered-contacts-count-in-their-occurrence-period.md) | Slice 5；`PLAN`、`PLATFORM` |
 | 说明书与发布检查 | [0053](./0053-production-code-and-learning-materials-evolve-together.md)–[0059](./0059-documentation-and-statistics-checks-block-releases.md) | 全部 Slice；`MANUAL`、Definition of Done |
-| 指标、报告与隐私 | [0060](./0060-ordinal-scale-distributions-are-primary.md)–[0077](./0077-core-metrics-ship-with-code-and-project-metrics-use-safe-configuration.md)，另见 [0099](./0099-management-analytics-use-bounded-query-surfaces.md)、[0101](./0101-management-weekly-reports-use-two-complete-iso-weeks.md)–[0126](./0126-relationship-stage-change-metrics-use-trusted-actor-and-distinct-relationships.md) | Slice 6；`ANALYTICS`、`PRIVACY`、`AUTHZ`、`REGION`、`ARCH`、`TEST-005` |
+| 指标、报告与隐私 | [0060](./0060-ordinal-scale-distributions-are-primary.md)–[0077](./0077-core-metrics-ship-with-code-and-project-metrics-use-safe-configuration.md)，另见 [0099](./0099-management-analytics-use-bounded-query-surfaces.md)、[0101](./0101-management-weekly-reports-use-two-complete-iso-weeks.md)–[0127](./0127-personal-stage-change-summary-uses-current-project-bridge.md) | Slice 6；`ANALYTICS`、`PRIVACY`、`AUTHZ`、`REGION`、`ARCH`、`TEST-005` |
 | 当前上下文、问卷、草稿与导航 | [0078](./0078-a-visible-project-context-scopes-default-work.md)–[0090](./0090-contact-entry-prioritizes-core-facts-with-progressive-disclosure.md) | Slice 1、3、5；`CTX`、`QUESTION`、`DRAFT`、`UI` |
 | 尝试、渠道、触达和机构关系 | [0091](./0091-unsuccessful-direct-outreach-is-a-contact-attempt.md)–[0095](./0095-person-to-institution-relationships-use-six-stable-kinds.md) | Slice 1、2、4；`CONTACT`、`TARGET` |
 | 基础设施 | [0097](./0097-use-supabase-postgresql-for-the-initial-stage.md) | Slice 0／发布门槛；`ARCH-003`–`ARCH-010` |

@@ -69,6 +69,10 @@ import {
   type PersonalFollowUpConsentRatioStore,
 } from "./personal-follow-up-consent-ratio.js";
 import {
+  readPersonalRelationshipStageChangeSummary,
+  type PersonalRelationshipStageChangeSummaryStore,
+} from "./personal-relationship-stage-change-summary.js";
+import {
   handlePersonalFollowUpConsentOptIn,
   type PersonalFollowUpConsentOptInStore,
 } from "./personal-follow-up-consent-opt-in.js";
@@ -109,6 +113,8 @@ export interface BackendServerDependencies
     PersonalCurrentRelationshipStageStore;
   readonly personalFollowUpConsentRatioStore?:
     PersonalFollowUpConsentRatioStore;
+  readonly personalRelationshipStageChangeSummaryStore?:
+    PersonalRelationshipStageChangeSummaryStore;
   readonly personalFollowUpConsentOptInStore?:
     PersonalFollowUpConsentOptInStore;
   readonly managementReportSnapshotStore?: ManagementReportSnapshotStore;
@@ -682,6 +688,33 @@ export function createBackendServer(
           identityVerifier: dependencies.identityVerifier,
           contextStore: dependencies.contextStore,
           snapshotStore: dependencies.personalCurrentRelationshipStageStore,
+        },
+      );
+      response.statusCode = result.status;
+      response.end(JSON.stringify(result.body));
+      return;
+    }
+
+    if (
+      request.method === "GET" &&
+      requestUrl.pathname ===
+        "/v1/personal/relationship-stage-change-summary"
+    ) {
+      const result = await readPersonalRelationshipStageChangeSummary(
+        {
+          authorization: request.headers.authorization,
+          query: requestUrl.searchParams,
+          hasBody: requestDeclaresBody(request.headers),
+        },
+        {
+          identityVerifier: dependencies.identityVerifier,
+          ...(dependencies.personalRelationshipStageChangeSummaryStore ===
+            undefined
+            ? {}
+            : {
+                summaryStore:
+                  dependencies.personalRelationshipStageChangeSummaryStore,
+              }),
         },
       );
       response.statusCode = result.status;
