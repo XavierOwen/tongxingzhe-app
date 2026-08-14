@@ -13,6 +13,23 @@ import 'contact_models.dart';
 
 part 'contact_draft_operations.dart';
 
+/// Two personal contact summaries read for one scope.
+final class PersonalContactSummaryPair {
+  const PersonalContactSummaryPair({
+    required this.previous,
+    required this.current,
+  });
+
+  final PersonalContactSummary previous;
+  final PersonalContactSummary current;
+}
+
+typedef _PersonalContactSummaryRows = ({
+  ReadPersonalContactSummaryResult summary,
+  ReadPersonalContactTargetResponseSummaryResult targetResponses,
+  List<ReadPersonalContactChannelSummaryResult> channels,
+});
+
 /// 负责匿名接触本地事实的深模块。
 ///
 /// 调用者只表达保存草稿或提交接触，不分别写接触、revision 或 Outbox。草稿保存
@@ -1709,43 +1726,135 @@ final class ContactJournal {
     required DateTime fromUtc,
     required DateTime untilUtc,
   }) async {
+    _validateSummaryPeriod(fromUtc: fromUtc, untilUtc: untilUtc);
+    final queryResult = await _database.transaction(
+      () => _readPersonalContactSummaryRows(
+        appUserId: appUserId,
+        workspaceId: workspaceId,
+        projectId: projectId,
+        fromUtc: fromUtc,
+        untilUtc: untilUtc,
+      ),
+    );
+    return _personalContactSummaryFromRows(queryResult);
+  }
+
+  /// Reads two adjacent periods for one scope in one Drift transaction.
+  ///
+  /// The periods use UTC half-open bounds. The second period must start exactly
+  /// where the first period ends; this prevents accidental overlap or gaps when
+  /// callers construct a comparison outside the overview repository.
+  Future<PersonalContactSummaryPair> summarizePersonalContactsForPeriods({
+    required String appUserId,
+    required String workspaceId,
+    required String projectId,
+    required DateTime previousFromUtc,
+    required DateTime previousUntilUtc,
+    required DateTime currentFromUtc,
+    required DateTime currentUntilUtc,
+  }) async {
+    _validateSummaryPeriod(
+      fromUtc: previousFromUtc,
+      untilUtc: previousUntilUtc,
+    );
+    _validateSummaryPeriod(fromUtc: currentFromUtc, untilUtc: currentUntilUtc);
+    if (previousUntilUtc != currentFromUtc ||
+        previousUntilUtc.difference(previousFromUtc) !=
+            const Duration(days: 7) ||
+        currentUntilUtc.difference(currentFromUtc) != const Duration(days: 7) ||
+        !_isUtcMidnight(previousFromUtc) ||
+        !_isUtcMidnight(previousUntilUtc) ||
+        !_isUtcMidnight(currentUntilUtc)) {
+      throw const ContactValidationException(
+        'invalid_comparison_summary_periods',
+      );
+    }
+
+    final queryResult = await _database.transaction(() async {
+      final previous = await _readPersonalContactSummaryRows(
+        appUserId: appUserId,
+        workspaceId: workspaceId,
+        projectId: projectId,
+        fromUtc: previousFromUtc,
+        untilUtc: previousUntilUtc,
+      );
+      final current = await _readPersonalContactSummaryRows(
+        appUserId: appUserId,
+        workspaceId: workspaceId,
+        projectId: projectId,
+        fromUtc: currentFromUtc,
+        untilUtc: currentUntilUtc,
+      );
+      return (previous: previous, current: current);
+    });
+
+    return PersonalContactSummaryPair(
+      previous: _personalContactSummaryFromRows(queryResult.previous),
+      current: _personalContactSummaryFromRows(queryResult.current),
+    );
+  }
+
+  void _validateSummaryPeriod({
+    required DateTime fromUtc,
+    required DateTime untilUtc,
+  }) {
     if (!fromUtc.isUtc || !untilUtc.isUtc || !fromUtc.isBefore(untilUtc)) {
       throw const ContactValidationException('invalid_summary_period');
     }
-    final queryResult = await _database.transaction(() async {
-      final summary = await _database
-          .readPersonalContactSummary(
-            appUserId,
-            workspaceId,
-            projectId,
-            fromUtc,
-            untilUtc,
-          )
-          .getSingle();
-      final targetResponses = await _database
-          .readPersonalContactTargetResponseSummary(
-            appUserId,
-            workspaceId,
-            projectId,
-            fromUtc,
-            untilUtc,
-          )
-          .getSingle();
-      final channels = await _database
-          .readPersonalContactChannelSummary(
-            appUserId,
-            workspaceId,
-            projectId,
-            fromUtc,
-            untilUtc,
-          )
-          .get();
-      return (
-        summary: summary,
-        targetResponses: targetResponses,
-        channels: channels,
-      );
-    });
+  }
+
+  bool _isUtcMidnight(DateTime value) =>
+      value.isUtc &&
+      value.hour == 0 &&
+      value.minute == 0 &&
+      value.second == 0 &&
+      value.millisecond == 0 &&
+      value.microsecond == 0;
+
+  Future<_PersonalContactSummaryRows> _readPersonalContactSummaryRows({
+    required String appUserId,
+    required String workspaceId,
+    required String projectId,
+    required DateTime fromUtc,
+    required DateTime untilUtc,
+  }) async {
+    final summary = await _database
+        .readPersonalContactSummary(
+          appUserId,
+          workspaceId,
+          projectId,
+          fromUtc,
+          untilUtc,
+        )
+        .getSingle();
+    final targetResponses = await _database
+        .readPersonalContactTargetResponseSummary(
+          appUserId,
+          workspaceId,
+          projectId,
+          fromUtc,
+          untilUtc,
+        )
+        .getSingle();
+    final channels = await _database
+        .readPersonalContactChannelSummary(
+          appUserId,
+          workspaceId,
+          projectId,
+          fromUtc,
+          untilUtc,
+        )
+        .get();
+    return (
+      summary: summary,
+      targetResponses: targetResponses,
+      channels: channels,
+    );
+  }
+
+  PersonalContactSummary _personalContactSummaryFromRows(
+    _PersonalContactSummaryRows queryResult,
+  ) {
     final channelDistribution = List<int>.filled(
       ContactChannel.values.length,
       0,

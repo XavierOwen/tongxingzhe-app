@@ -9,7 +9,9 @@ import '../../sync/sync_engine_factory.dart';
 import '../contact_journal/contact_journal.dart';
 import '../contact_journal/contact_models.dart';
 import '../contact_metrics/current_relationship_stage.dart';
+import '../contact_metrics/metric_contract.dart';
 import '../contact_metrics/personal_contact_overview.dart';
+import '../contact_metrics/personal_interest_ratio_trend.dart';
 
 /// 首页一次性提示的稳定类别。
 enum ProductionHomeNoticeKind {
@@ -61,6 +63,9 @@ final class ProductionHomeViewState {
     required this.today,
     required this.recentSevenDays,
     required this.contacts,
+    required this.interestRatioTrend,
+    required this.interestRatioTrendIsLoading,
+    required this.interestRatioTrendLoadFailed,
     required this.currentRelationshipStage,
     required this.relationshipStageIsLoading,
     required this.relationshipStageLoadFailed,
@@ -71,6 +76,7 @@ final class ProductionHomeViewState {
   ProductionHomeViewState.initial({
     required List<ProductionHomeProjectOption> projectOptions,
     required this.relationshipStageIsLoading,
+    required this.interestRatioTrendIsLoading,
   }) : isLoading = true,
        isSynchronizing = false,
        loadFailed = false,
@@ -78,6 +84,8 @@ final class ProductionHomeViewState {
        today = null,
        recentSevenDays = null,
        contacts = null,
+       interestRatioTrend = null,
+       interestRatioTrendLoadFailed = false,
        currentRelationshipStage = null,
        relationshipStageLoadFailed = false,
        projectOptions = List.unmodifiable(projectOptions),
@@ -90,6 +98,9 @@ final class ProductionHomeViewState {
   final PersonalSummarySnapshot? today;
   final PersonalSummarySnapshot? recentSevenDays;
   final ContactOverviewSnapshot? contacts;
+  final PersonalInterestRatioTrendComparison? interestRatioTrend;
+  final bool interestRatioTrendIsLoading;
+  final bool interestRatioTrendLoadFailed;
   final CurrentRelationshipStageRepositorySuccess? currentRelationshipStage;
   final bool relationshipStageIsLoading;
   final bool relationshipStageLoadFailed;
@@ -104,11 +115,15 @@ final class ProductionHomeViewState {
     PersonalSummarySnapshot? today,
     PersonalSummarySnapshot? recentSevenDays,
     ContactOverviewSnapshot? contacts,
+    PersonalInterestRatioTrendComparison? interestRatioTrend,
+    bool? interestRatioTrendIsLoading,
+    bool? interestRatioTrendLoadFailed,
     CurrentRelationshipStageRepositorySuccess? currentRelationshipStage,
     bool? relationshipStageIsLoading,
     bool? relationshipStageLoadFailed,
     ProductionHomeNotice? notice,
     bool clearNotice = false,
+    bool clearInterestRatioTrend = false,
     bool clearCurrentRelationshipStage = false,
   }) {
     return ProductionHomeViewState(
@@ -119,6 +134,13 @@ final class ProductionHomeViewState {
       today: today ?? this.today,
       recentSevenDays: recentSevenDays ?? this.recentSevenDays,
       contacts: contacts ?? this.contacts,
+      interestRatioTrend: clearInterestRatioTrend
+          ? null
+          : interestRatioTrend ?? this.interestRatioTrend,
+      interestRatioTrendIsLoading:
+          interestRatioTrendIsLoading ?? this.interestRatioTrendIsLoading,
+      interestRatioTrendLoadFailed:
+          interestRatioTrendLoadFailed ?? this.interestRatioTrendLoadFailed,
       currentRelationshipStage: clearCurrentRelationshipStage
           ? null
           : currentRelationshipStage ?? this.currentRelationshipStage,
@@ -266,6 +288,8 @@ final class ProductionHomeViewModel extends ChangeNotifier {
   ) : _state = ProductionHomeViewState.initial(
         projectOptions: _projectOptions(availableContexts, _context),
         relationshipStageIsLoading: _relationshipStageRepository != null,
+        interestRatioTrendIsLoading:
+            _context.workspace.kind == WorkspaceKind.personal,
       );
 
   final TrustedSessionContext _context;
@@ -287,6 +311,8 @@ final class ProductionHomeViewModel extends ChangeNotifier {
   Future<void> initialize() => _synchronizeAndRefresh();
 
   Future<void> appResumed() => _synchronizeAndRefresh();
+
+  Future<void> retryInterestRatioTrend() => _synchronizeAndRefresh();
 
   Future<void> contactPageClosed({required bool submitted}) {
     if (submitted) {
@@ -395,6 +421,10 @@ final class ProductionHomeViewModel extends ChangeNotifier {
         isSynchronizing: true,
         loadFailed: false,
         syncFailed: false,
+        interestRatioTrendIsLoading:
+            _context.workspace.kind == WorkspaceKind.personal,
+        interestRatioTrendLoadFailed: false,
+        clearInterestRatioTrend: true,
         relationshipStageIsLoading: _relationshipStageRepository != null,
         relationshipStageLoadFailed: false,
       ),
@@ -410,6 +440,7 @@ final class ProductionHomeViewModel extends ChangeNotifier {
     // Relationship fetch starts after contact sync but does not delay the
     // existing personal summaries. Its panel owns a separate loading state.
     final relationshipStageFuture = _loadRelationshipStage();
+    final interestRatioTrendFuture = _loadInterestRatioTrend();
 
     try {
       final today = await _overviewRepository.loadSummary(
@@ -445,6 +476,18 @@ final class ProductionHomeViewModel extends ChangeNotifier {
       );
     }
 
+    final interestRatioTrend = await interestRatioTrendFuture;
+    _setState(
+      _state.copyWith(
+        interestRatioTrendIsLoading: false,
+        interestRatioTrendLoadFailed: interestRatioTrend.failed,
+        interestRatioTrend: interestRatioTrend.success,
+        clearInterestRatioTrend:
+            _context.workspace.kind == WorkspaceKind.personal &&
+            interestRatioTrend.success == null,
+      ),
+    );
+
     final relationshipStage = await relationshipStageFuture;
     _setState(
       _state.copyWith(
@@ -456,6 +499,37 @@ final class ProductionHomeViewModel extends ChangeNotifier {
             relationshipStage.success == null,
       ),
     );
+  }
+
+  Future<({PersonalInterestRatioTrendComparison? success, bool failed})>
+  _loadInterestRatioTrend() async {
+    if (_context.workspace.kind != WorkspaceKind.personal) {
+      return (success: null, failed: false);
+    }
+    try {
+      final pair = await _overviewRepository.loadAdjacentCompletedSevenDayPair(
+        context: _context,
+      );
+      return (
+        success: comparePersonalInterestRatioTrend(
+          previous: PersonalInterestRatioTrendObservation(
+            scope: pair.scope,
+            metric: pair.previous.metric(
+              CoreMetricCatalog.interestThreeFourRatio.reference,
+            ),
+          ),
+          current: PersonalInterestRatioTrendObservation(
+            scope: pair.scope,
+            metric: pair.current.metric(
+              CoreMetricCatalog.interestThreeFourRatio.reference,
+            ),
+          ),
+        ),
+        failed: false,
+      );
+    } catch (_) {
+      return (success: null, failed: true);
+    }
   }
 
   Future<({CurrentRelationshipStageRepositorySuccess? success, bool failed})>

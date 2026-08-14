@@ -1099,6 +1099,46 @@ final class MetricSourceFreshness {
   final DateTime? lastSuccessfulSyncAtUtc;
 }
 
+/// Identifies the trusted personal scope of a metric observation.
+final class PersonalMetricScope {
+  factory PersonalMetricScope({
+    required String appUserId,
+    required String workspaceId,
+    required String projectId,
+  }) {
+    if (appUserId.trim().isEmpty ||
+        workspaceId.trim().isEmpty ||
+        projectId.trim().isEmpty) {
+      throw ArgumentError('invalid_personal_metric_scope');
+    }
+    return PersonalMetricScope._(
+      appUserId: appUserId,
+      workspaceId: workspaceId,
+      projectId: projectId,
+    );
+  }
+
+  const PersonalMetricScope._({
+    required this.appUserId,
+    required this.workspaceId,
+    required this.projectId,
+  });
+
+  final String appUserId;
+  final String workspaceId;
+  final String projectId;
+
+  @override
+  bool operator ==(Object other) =>
+      other is PersonalMetricScope &&
+      other.appUserId == appUserId &&
+      other.workspaceId == workspaceId &&
+      other.projectId == projectId;
+
+  @override
+  int get hashCode => Object.hash(appUserId, workspaceId, projectId);
+}
+
 /// 一个可审计、可跨层传递的指标结果。
 final class MetricResult {
   factory MetricResult({

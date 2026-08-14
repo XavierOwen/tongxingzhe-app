@@ -793,19 +793,28 @@ void main() {
 
     expect(find.text('最近七日接触场次 0'), findsOneWidget);
     expect(find.textContaining('个人数据'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('暂无中位等级'),
-      120,
+    expect(
+      find.byKey(const ValueKey('personal-interest-ratio-trend-panel')),
+      findsOneWidget,
+    );
+    await _scrollUntilBuilt(
+      tester,
+      find.text('兴趣 3–4（明确愿意继续或主动提出／落实下一步）：0 / 0（暂无可计算比例）'),
       scrollable: find.byType(Scrollable).last,
     );
-    expect(find.text('暂无中位等级'), findsOneWidget);
     expect(find.textContaining('0 / 0（暂无可计算比例）'), findsWidgets);
     expect(
       find.text('兴趣 3–4（明确愿意继续或主动提出／落实下一步）：0 / 0（暂无可计算比例）'),
       findsOneWidget,
     );
     expect(find.text('兴趣 0（明确拒绝）：0 / 0（暂无可计算比例）'), findsOneWidget);
-    expect(find.textContaining('比例覆盖'), findsOneWidget);
+    expect(find.textContaining('比例覆盖'), findsWidgets);
+    await _scrollUntilBuilt(
+      tester,
+      find.text('暂无中位等级'),
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('暂无中位等级'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('对象当次反应分布'),
       120,
@@ -907,9 +916,9 @@ void main() {
     addTearDown(routeInformationProvider.dispose);
 
     final heading = find.text('单次兴趣分布');
-    await tester.scrollUntilVisible(
+    await _scrollUntilBuilt(
+      tester,
       heading,
-      120,
       scrollable: find.byType(Scrollable).last,
     );
 
@@ -1014,9 +1023,9 @@ void main() {
     addTearDown(routeInformationProvider.dispose);
 
     final heading = find.text('Interest 3–4 and 0 ratios');
-    await tester.scrollUntilVisible(
+    await _scrollUntilBuilt(
+      tester,
       heading,
-      120,
       scrollable: find.byType(Scrollable).last,
     );
     expect(
@@ -1027,25 +1036,25 @@ void main() {
       'Interest 3–4 (willing to continue or taking the next step): '
       '0 / 0 (No calculable percentage)',
     );
-    await tester.scrollUntilVisible(
+    await _scrollUntilBuilt(
+      tester,
       highRow,
-      80,
       scrollable: find.byType(Scrollable).last,
     );
     expect(highRow, findsOneWidget);
     final zeroRow = find.text(
       'Interest 0 (explicit refusal): 0 / 0 (No calculable percentage)',
     );
-    await tester.scrollUntilVisible(
+    await _scrollUntilBuilt(
+      tester,
       zeroRow,
-      80,
       scrollable: find.byType(Scrollable).last,
     );
     expect(zeroRow, findsOneWidget);
     final targetResponseHeading = find.text('Target response distribution');
-    await tester.scrollUntilVisible(
+    await _scrollUntilBuilt(
+      tester,
       targetResponseHeading,
-      80,
       scrollable: find.byType(Scrollable).last,
     );
     expect(
@@ -1536,6 +1545,11 @@ void main() {
 
     expect(find.text('最近七日接触场次 1'), findsOneWidget);
     expect(find.text('最近七日触达人数 2'), findsOneWidget);
+    await _scrollUntilBuilt(
+      tester,
+      find.text('兴趣 3：1 场；1 / 1（100.00%）'),
+      scrollable: find.byType(Scrollable).last,
+    );
     expect(find.text('兴趣 3：1 场；1 / 1（100.00%）'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('中位等级：3'),
@@ -2256,6 +2270,20 @@ Future<void> _focusByTabbing(WidgetTester tester, Finder target) async {
     if (_containsPrimaryFocus(tester, target)) return;
   }
   fail('Could not focus $target');
+}
+
+Future<void> _scrollUntilBuilt(
+  WidgetTester tester,
+  Finder target, {
+  required Finder scrollable,
+}) async {
+  for (var attempt = 0; attempt < 80 && target.evaluate().isEmpty; attempt++) {
+    await tester.drag(scrollable, const Offset(0, -200));
+    await tester.pumpAndSettle();
+  }
+  expect(target, findsOneWidget);
+  await tester.ensureVisible(target);
+  await tester.pumpAndSettle();
 }
 
 bool _containsPrimaryFocus(WidgetTester tester, Finder finder) {

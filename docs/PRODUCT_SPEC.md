@@ -354,6 +354,32 @@ Slice 6AE-2 在 personal workspace 的最近七日页面显示该固定汇总。
 历史替代值或数据截止。项目／期间变化、同步完成、项目设置返回、App 恢复和手工重试会触发
 重新读取。
 
+Slice 6AF（Issue #140）只在 personal workspace 比较个人指标 `interest_3_4_ratio@1`。一次刷新
+只读取一次当前 UTC 时钟。较晚期的 `until` 固定为当天 UTC `00:00`，该期覆盖此前完整的七个
+UTC 自然日；较早期紧接其前，满足 `previous.until = current.from`。两个期间都是不重叠的
+`[from_utc, until_utc)` 半开区间，不能包含尚未结束的日期，也不接受项目报告时区、旅行时区或
+任意期间。
+
+两期事实在同一个 Drift transaction 中读取，使用同一可信身份、personal workspace 和项目范围，
+并共享一次取得的本地 `dataCutoffUtc`。候选集继续排除草稿、接触尝试、作废记录、旧 revision、
+期间外记录和其他项目；待同步只作为同步覆盖，不伪装成后端已接受。每期显示整数分子、分母、
+既有 half-up 百分比和本地待同步接触数。分母为零时显示 `0 / 0` 和“暂无可计算比例”，不显示
+`0%`。
+
+比较器必须确认两期的 metric ID／version、统计单位、公式、时间基准、UTC 时区、七日长度、
+personalFact 隐私状态、身份／workspace／project 范围和 `dataCutoffUtc` 一致。只有两期都有
+百分比时，才显示带正负号的 `current - previous` 百分点差；可按
+`current.percentage_basis_points - previous.percentage_basis_points` 复算。任一条件不一致或
+趋势读取失败时，趋势显示不可用，不遮蔽已有“今日”和“最近七日”个人事实。该差异只是个人
+观察到的描述性事实，不表示成功、失败或因果关系。
+
+页面自动测试覆盖 320×568、小屏、200% 字号、键盘路径、heading、屏幕阅读器语义和中英文文案。
+这些测试不把 Slice 6AF 扩展为真机通知验收。
+
+Slice 6AF 不协调后续联系同意占比的两个独立 HTTP GET，也不新增管理报告、管理隐私抑制、固定
+报告导出、图表、排名、任意指标、任意期间、Backend、PostgreSQL、migration、Drift schema、
+离线趋势缓存、历史 `as-of`、报告更正／删除、区域下钻或真机通知验收。
+
 只有高级分析可显示：
 
 ```text
@@ -382,6 +408,7 @@ Slice 6AE-2 在 personal workspace 的最近七日页面显示该固定汇总。
 | `ANALYTICS-014` | “后续联系同意占比”由项目选择是否启用，不是平台必显核心指标，也不得作为个人目标、排名或考核；管理展示继续经过匿名保护。 |
 | `ANALYTICS-015` | 阶段变更三个指标固定 ID／version、事件或对象×项目统计单位、UTC `changed_at` 半开期间、`upward`／`downward` 顺序、actor scope 和排除项；个人事件数与去重关系数必须同时可复算。 |
 | `ANALYTICS-016` | 个人阶段变更汇总只通过固定 GET 读取；认证优先、当前项目由数据库解析并加锁，响应使用单 statement 的授权／数据截止时刻，不提供历史 as-of 或逐事件明细。 |
+| `ANALYTICS-017` | 个人兴趣 `3–4` 趋势只比较两个相邻、完整结束的 UTC 七日期间；两期使用同一 Drift transaction 和本地 `dataCutoffUtc`，只有两期可计算时才显示 `current - previous` 百分点差，并保持个人观察、非因果边界。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -603,6 +630,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-006` | Platform Capability／Policy 覆盖位置、持久化、认证、安全缓存、通知和后台同步的可用、拒绝、超时与降级。 |
 | `TEST-007` | Database fixture 覆盖新库初始化、每次正式升级、关键 SQL、失败恢复和 forward-fix，不拿真实用户资料试 migration。 |
 | `TEST-008` | 阶段变更共享 fixture `relationship_stage_changes_v1.csv` 由 Dart 与 PostgreSQL 独立重算；覆盖 actor、项目、UTC 边界、结束分配、排除项、上升／下降、重复关系和重复 revision，错误输入失败关闭。 |
+| `TEST-009` | Dart／Drift synthetic fixture 覆盖一次时钟读取、相邻 UTC 边界、scope／排除项、half-up、正／负／零差、空分母、同一 Drift transaction 与共享 `dataCutoffUtc`，以及不可比较结果失败关闭。 |
 
 ## 9. UI、视觉与可访问性
 

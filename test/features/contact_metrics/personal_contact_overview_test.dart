@@ -1,11 +1,73 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
+import 'package:tongxingzhe_app/features/contact_journal/contact_journal.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
 import 'package:tongxingzhe_app/features/contact_metrics/metric_contract.dart';
 import 'package:tongxingzhe_app/features/contact_metrics/personal_contact_overview.dart';
 import 'package:tongxingzhe_app/sync/sync_models.dart';
 
 void main() {
+  test('双周期边界是相邻且完整结束的 UTC 七日区间', () {
+    final bounds = adjacentCompletedSevenDayPeriodBounds(
+      now: DateTime.utc(2030, 1, 8, 18, 30),
+    );
+
+    expect(bounds.current.fromUtc, DateTime.utc(2030, 1, 1));
+    expect(bounds.current.untilUtc, DateTime.utc(2030, 1, 8));
+    expect(bounds.previous.fromUtc, DateTime.utc(2029, 12, 25));
+    expect(bounds.previous.untilUtc, DateTime.utc(2030, 1, 1));
+    expect(bounds.previous.untilUtc, bounds.current.fromUtc);
+    expect(
+      bounds.current.untilUtc.difference(bounds.current.fromUtc),
+      const Duration(days: 7),
+    );
+    expect(
+      bounds.previous.untilUtc.difference(bounds.previous.fromUtc),
+      const Duration(days: 7),
+    );
+  });
+
+  test('双周期读取只取一次时钟、复用 scope 和 data cutoff', () async {
+    final source = _FakeOverviewSource(pairSummary: _previousSummary);
+    var nowCalls = 0;
+    final repository = PersonalContactOverviewRepository(
+      source: source,
+      now: () {
+        nowCalls++;
+        return DateTime.utc(2030, 1, 8, 18, 30);
+      },
+    );
+
+    final pair = await repository.loadAdjacentCompletedSevenDayPair(
+      context: _context,
+    );
+
+    expect(nowCalls, 1);
+    expect(source.pairAppUserId, _context.appUserId);
+    expect(source.pairWorkspaceId, _context.workspace.id);
+    expect(source.pairProjectId, _context.project.id);
+    expect(source.previousPeriod?.fromUtc, DateTime.utc(2029, 12, 25));
+    expect(source.previousPeriod?.untilUtc, DateTime.utc(2030, 1, 1));
+    expect(source.currentPeriod?.fromUtc, DateTime.utc(2030, 1, 1));
+    expect(source.currentPeriod?.untilUtc, DateTime.utc(2030, 1, 8));
+    expect(pair.scope.appUserId, _context.appUserId);
+    expect(pair.scope.workspaceId, _context.workspace.id);
+    expect(pair.scope.projectId, _context.project.id);
+    expect(pair.previous.period, PersonalSummaryPeriod.previousSevenDays);
+    expect(
+      pair.current.period,
+      PersonalSummaryPeriod.currentCompletedSevenDays,
+    );
+    expect(pair.dataCutoffUtc, DateTime.utc(2030, 1, 8, 18, 30));
+    expect(
+      {
+        ...pair.previous.metrics.map((metric) => metric.dataCutoffUtc),
+        ...pair.current.metrics.map((metric) => metric.dataCutoffUtc),
+      },
+      {DateTime.utc(2030, 1, 8, 18, 30)},
+    );
+  });
+
   test('今日和最近七日使用 UTC 半开区间且同步覆盖单位是接触场次', () async {
     final source = _FakeOverviewSource();
     final repository = PersonalContactOverviewRepository(
@@ -384,7 +446,15 @@ const _health = SyncHealth(
 );
 
 final class _FakeOverviewSource implements PersonalContactOverviewSource {
+  _FakeOverviewSource({this.pairSummary = _summary});
+
+  final PersonalContactSummary pairSummary;
   String? lastAppUserId;
+  String? pairAppUserId;
+  String? pairWorkspaceId;
+  String? pairProjectId;
+  UtcMetricPeriod? previousPeriod;
+  UtcMetricPeriod? currentPeriod;
 
   @override
   Future<List<ContactRecord>> listContactRecords({
@@ -417,4 +487,30 @@ final class _FakeOverviewSource implements PersonalContactOverviewSource {
     lastAppUserId = appUserId;
     return _summary;
   }
+
+  @override
+  Future<PersonalContactSummaryPair> summarizePersonalContactsForPeriods({
+    required String appUserId,
+    required String workspaceId,
+    required String projectId,
+    required UtcMetricPeriod previousPeriod,
+    required UtcMetricPeriod currentPeriod,
+  }) async {
+    pairAppUserId = appUserId;
+    pairWorkspaceId = workspaceId;
+    pairProjectId = projectId;
+    this.previousPeriod = previousPeriod;
+    this.currentPeriod = currentPeriod;
+    return PersonalContactSummaryPair(previous: pairSummary, current: _summary);
+  }
 }
+
+const _previousSummary = PersonalContactSummary(
+  contactSessionCount: 2,
+  reachCount: 4,
+  interestDistribution: [0, 1, 1, 0, 0],
+  pendingSyncCount: 1,
+  channelDistribution: [0, 1, 1, 0, 0, 0, 0],
+  targetResponseDistribution: [0, 0, 0, 0, 0],
+  targetResponseUnansweredCount: 0,
+);
