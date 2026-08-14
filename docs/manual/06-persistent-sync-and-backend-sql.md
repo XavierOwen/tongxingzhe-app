@@ -122,6 +122,29 @@ Backend 接受 command 后返回 change feed cursor。这个回执只能证明�
 
 更正发生时间后，SQLite 和 PostgreSQL 的个人指标都使用新的当前投影重新归期。作废后，两端都因 `lifecycle_status = 'active'` 条件排除该记录。revision 历史、审计事件和 warehouse 作废事件仍保留。
 
+## 关系阶段 revision 如何成为阶段变更事件
+
+`promotion_target_relationship_revisions` 是项目关系的追加历史。每条 revision 保留
+`old_stage`、`new_stage`、`changed_by_app_user_id` 和数据库生成的 `changed_at`。当前关系投影
+只回答现在的阶段；阶段变更指标直接读取这份历史，不用当前阶段覆盖过去的事件。
+
+Backend 先从 Bearer token 映射可信 `app_user_id`，再取得可信 workspace 和 project。客户端不能
+在 payload 或 query 中指定 actor、workspace 或 project。PostgreSQL 写入的
+`changed_by_app_user_id` 必须来自这个可信上下文，个人查询只保留与可信当前用户相等的 revision。
+这条 actor 边界防止使用者把他人的操作算到自己名下，也防止跨项目读取。
+
+指标只把 `old_stage` 非空、不同于 `new_stage` 且 `changed_fields` 包含 `stage` 的 revision
+视为阶段变更事件。初始 `project_entry`、只改 lifecycle 或跟进备注的 revision，以及同阶段
+revision 都排除。数值上升
+产生 `upward`，数值下降产生 `downward`。数据库的 `timestamptz` 按 UTC 解释，查询使用
+`[from_utc, until_utc)`：左边界包含，右边界不包含。当前分配结束不会删除已经发生的事件，
+因为归属依据是事件的可信操作者和 `changed_at`，不是查询时的分配状态。
+
+同一关系的不同 revision 是不同事件；`relationships_with_stage_change@1` 再按对象与项目
+关系去重。相同 mutation 的幂等重放不能新增 revision；同一 revision 的重复输入或内容冲突
+必须失败关闭。这个阶段只固定个人指标合同，不新增关系历史同步、Drift 表、Outbox、HTTP
+endpoint 或管理报告。
+
 问卷答案经过同步时，Backend 先把受控 wire 格式解析为类型化答案，PostgreSQL 再按可信项目与精确已发布版本复验。[`0012_questionnaire_visibility.sql`](../../backend/database/migrations/0012_questionnaire_visibility.sql) 按问题顺序重算显示规则，拒绝隐藏题的真实值、可见题的 `rule_skipped` 标记和可见必填题遗漏。客户端即时预验只改善离线体验，不代替这个服务端边界。
 
 ## 跨设备更正如何合并
@@ -311,6 +334,12 @@ Slice 6AC 已注册对象 × 项目统计单位、当前快照时间口径，以
 `snapshot_as_of_utc` 是当前状态的一致性读取时刻，`source_cutoff_utc` 是来源关系的截止，成功接收时刻又是第三个时间。页面分别显示这些含义和对象 × 项目的同步覆盖。只有网络失败可回退到明确标为旧数据的缓存；授权失败会清除对应范围。当前 PII vault 含对象资料、关系和共享备注，只为限时离线查看服务，不能成为分析查询源。
 
 这一层没有授予管理权限，也没有把个人事实当成可公开的管理结果。后续加入的私有管理隐私政策见[第 11 章](11-management-metrics-and-privacy.md)。管理查询仍需独立验证成员授权和报告时区；在这些前置条件完成前，不得新增可绕过它们的任意指标端点。
+
+阶段变更的 Dart 与 PostgreSQL 对账使用共享 [`relationship_stage_changes_v1.csv`](../../backend/database/fixtures/shared/relationship_stage_changes_v1.csv)。
+它覆盖本人／他人、其他项目、UTC 左右边界、结束当前分配、初始 `project_entry`、lifecycle-only、
+同阶段、上升、下降、同一关系多次事件和重复 revision。两端分别重算事件数、`upward`／`downward`
+分布和去重关系数；重复 revision 或跨 scope 输入必须失败关闭。fixture 只含 synthetic ID，不含对象姓名、
+联系方式、备注或其他 PII。
 
 ## 为什么这样测试
 

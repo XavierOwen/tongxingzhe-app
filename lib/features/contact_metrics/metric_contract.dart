@@ -22,6 +22,9 @@ enum MetricStatisticalUnit {
 
   /// 去重的“推广对象 × 项目”当前关系。
   targetProjectRelationship,
+
+  /// 一次真正改变关系阶段的追加 revision。
+  relationshipStageChangeEvent,
 }
 
 enum MetricValueShape {
@@ -49,11 +52,25 @@ enum MetricFormula {
   calculateContactTargetLinksByFollowUpConsentRatio,
   countCurrentRelationshipStages,
   countCurrentRelationshipStagesByStage,
+  countRelationshipStageChangeEvents,
+  countDistinctRelationshipsWithStageChange,
+  countRelationshipStageChangeEventsByDirection,
 }
 
-enum MetricTimeBasis { actualOccurrenceUtc, currentSnapshotUtc }
+enum MetricTimeBasis {
+  actualOccurrenceUtc,
+  currentSnapshotUtc,
+  relationshipChangedAtUtc,
+}
 
-enum MetricExclusion { draft, contactAttempt, voidedContact }
+enum MetricExclusion {
+  draft,
+  contactAttempt,
+  voidedContact,
+  initialRelationshipEntry,
+  nonStageRelationshipRevision,
+  unchangedRelationshipStage,
+}
 
 enum MetricPrivacyRule { managementProtectedByTrueUnit }
 
@@ -71,6 +88,7 @@ final class MetricDefinition {
     required MetricTimeBasis timeBasis,
     required Set<MetricExclusion> exclusions,
     required MetricPrivacyRule privacyRule,
+    MetricStatisticalUnit? managementPrivacyUnit,
     MetricReference? denominator,
     List<String> bucketLabels = const [],
   }) {
@@ -98,6 +116,7 @@ final class MetricDefinition {
       timeBasis: timeBasis,
       exclusions: Set.unmodifiable(exclusions),
       privacyRule: privacyRule,
+      managementPrivacyUnit: managementPrivacyUnit ?? statisticalUnit,
       denominator: denominator,
       bucketLabels: List.unmodifiable(bucketLabels),
     );
@@ -111,6 +130,7 @@ final class MetricDefinition {
     required this.timeBasis,
     required this.exclusions,
     required this.privacyRule,
+    required this.managementPrivacyUnit,
     required this.denominator,
     required this.bucketLabels,
   });
@@ -122,6 +142,12 @@ final class MetricDefinition {
   final MetricTimeBasis timeBasis;
   final Set<MetricExclusion> exclusions;
   final MetricPrivacyRule privacyRule;
+
+  /// 管理报告执行最小群体阈值时使用的真实去重单位。
+  ///
+  /// 多个事件可以来自同一对象 × 项目关系，因此事件指标不能默认把事件数
+  /// 当作管理 `k`。个人结果仍使用 [statisticalUnit] 表达值的单位。
+  final MetricStatisticalUnit managementPrivacyUnit;
   final MetricReference? denominator;
   final List<String> bucketLabels;
 }
@@ -155,6 +181,8 @@ final class MetricCatalog {
             definition.exclusions,
           ) ||
           denominatorDefinition.privacyRule != definition.privacyRule ||
+          denominatorDefinition.managementPrivacyUnit !=
+              definition.managementPrivacyUnit ||
           !_usesDenominatorFormula(
             definition.formula,
             denominatorDefinition.formula,
@@ -377,6 +405,50 @@ abstract final class CoreMetricCatalog {
     bucketLabels: ['0', '1', '2', '3', '4'],
   );
 
+  /// 本人于期间内实际执行的关系阶段变更 revision 数。
+  static final relationshipStageChangeEvents = MetricDefinition(
+    reference: MetricReference('relationship_stage_change_events', 1),
+    statisticalUnit: MetricStatisticalUnit.relationshipStageChangeEvent,
+    valueShape: MetricValueShape.count,
+    formula: MetricFormula.countRelationshipStageChangeEvents,
+    timeBasis: MetricTimeBasis.relationshipChangedAtUtc,
+    exclusions: const {
+      MetricExclusion.initialRelationshipEntry,
+      MetricExclusion.nonStageRelationshipRevision,
+      MetricExclusion.unchangedRelationshipStage,
+    },
+    privacyRule: MetricPrivacyRule.managementProtectedByTrueUnit,
+    managementPrivacyUnit: MetricStatisticalUnit.targetProjectRelationship,
+  );
+
+  /// 期间内至少发生过一次本人阶段变更的去重对象 × 项目关系数。
+  static final relationshipsWithStageChange = MetricDefinition(
+    reference: MetricReference('relationships_with_stage_change', 1),
+    statisticalUnit: MetricStatisticalUnit.targetProjectRelationship,
+    valueShape: MetricValueShape.count,
+    formula: MetricFormula.countDistinctRelationshipsWithStageChange,
+    timeBasis: MetricTimeBasis.relationshipChangedAtUtc,
+    exclusions: relationshipStageChangeEvents.exclusions,
+    privacyRule: MetricPrivacyRule.managementProtectedByTrueUnit,
+  );
+
+  /// 阶段变更事件按上升、下降的固定顺序分布。
+  static final relationshipStageChangeDirectionDistribution = MetricDefinition(
+    reference: MetricReference(
+      'relationship_stage_change_direction_distribution',
+      1,
+    ),
+    statisticalUnit: MetricStatisticalUnit.relationshipStageChangeEvent,
+    valueShape: MetricValueShape.categoricalDistribution,
+    formula: MetricFormula.countRelationshipStageChangeEventsByDirection,
+    timeBasis: MetricTimeBasis.relationshipChangedAtUtc,
+    exclusions: relationshipStageChangeEvents.exclusions,
+    privacyRule: MetricPrivacyRule.managementProtectedByTrueUnit,
+    managementPrivacyUnit: MetricStatisticalUnit.targetProjectRelationship,
+    denominator: relationshipStageChangeEvents.reference,
+    bucketLabels: ['upward', 'downward'],
+  );
+
   static final catalog = MetricCatalog([
     contactSessions,
     reachedPeople,
@@ -405,10 +477,20 @@ abstract final class CoreMetricCatalog {
     followUpConsentRatio,
   ]);
 
+  /// 阶段变更是独立的历史事件目录，不混入固定 12 项接触指标。
+  static final relationshipStageChangeCatalog = MetricCatalog([
+    relationshipStageChangeEvents,
+    relationshipsWithStageChange,
+    relationshipStageChangeDirectionDistribution,
+  ]);
+
   static List<MetricDefinition> get definitions => catalog.definitions;
 
   static List<MetricDefinition> get currentSnapshotDefinitions =>
       currentSnapshotCatalog.definitions;
+
+  static List<MetricDefinition> get relationshipStageChangeDefinitions =>
+      relationshipStageChangeCatalog.definitions;
 }
 
 sealed class MetricValue {
@@ -1274,11 +1356,15 @@ bool _usesDenominatorFormula(
         MetricFormula.countContactTargetLinksWithFollowUpConsentAnswer,
   MetricFormula.countCurrentRelationshipStagesByStage =>
     denominatorFormula == MetricFormula.countCurrentRelationshipStages,
+  MetricFormula.countRelationshipStageChangeEventsByDirection =>
+    denominatorFormula == MetricFormula.countRelationshipStageChangeEvents,
   MetricFormula.countContactSessions ||
   MetricFormula.sumReachedPeople ||
   MetricFormula.countContactTargetLinksWithResponse ||
   MetricFormula.countContactTargetLinksWithFollowUpConsentAnswer ||
-  MetricFormula.countCurrentRelationshipStages => false,
+  MetricFormula.countCurrentRelationshipStages ||
+  MetricFormula.countRelationshipStageChangeEvents ||
+  MetricFormula.countDistinctRelationshipsWithStageChange => false,
 };
 
 bool _listEquals<T>(List<T> left, List<T> right) {

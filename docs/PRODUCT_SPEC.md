@@ -236,6 +236,7 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `TARGET-013` | 单次兴趣和对象当次反应的固定语义为：`0` 明确拒绝、`1` 互动但无继续意愿、`2` 中性或无法判断、`3` 明确愿意继续、`4` 主动提出或落实下一步。 |
 | `TARGET-014` | 关系阶段的固定语义为：`0` 初次建立、`1` 可以联络、`2` 持续互动、`3` 明确推进、`4` 达成项目定义的目标关系。 |
 | `TARGET-015` | 项目可为两套量表配置符合固定语义的显示名，但不得改变含义、顺序或方向；如界面显示 `0／2／4／6／8`，由 `stage * 2` 派生，不写入数据库。 |
+| `TARGET-016` | 阶段变更历史保留 `old_stage`、`new_stage`、`changed_by_app_user_id` 和 UTC `changed_at`；个人指标只接受可信当前用户实际执行的 revision，不能从客户端 actor 字段取值。 |
 
 #### 5.6.1 个人与机构关系
 
@@ -280,7 +281,9 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | 单次兴趣分布 | 有效接触 | 对 `0–4` 分别计数，不按对象去重 |
 | 对象当次反应 | 当前有效 revision 中已填反应的接触对象关联 | 与场次兴趣分开的 `0–4` 分布、中位等级和五档比例；比例共同分母只含已填关联 |
 | 当前关系阶段 | 去重的“对象 × 项目” | 每个当前有效项目关系只计一次 |
-| 阶段变更 | 阶段变更事件，阈值依不同项目关系 | 上升与下降分开；历史分布依事件还原 |
+| 阶段变更事件（`relationship_stage_change_events@1`） | 合格的阶段变更 revision | `count(event)`；按可信当前用户和可信 workspace／project 统计 |
+| 阶段变更方向分布（`relationship_stage_change_direction_distribution@1`） | 合格的阶段变更事件 | 固定 `upward`／`downward` 两格；两格之和等于事件数 |
+| 发生过阶段变更的项目关系（`relationships_with_stage_change@1`） | 去重的“对象 × 项目”关系 | `count(distinct (promotion_target_id, project_id))`；同一关系多次事件只计一次 |
 | 后续联系同意占比 | 适用且明确回答是／否的有效接触对象关联 | `yes / (yes + no)`；同一接触的不同对象分别计数，其他状态分开报告 |
 
 五级有序量表默认展示各级数量、比例和中位等级；单次兴趣另可显示 `3–4` 占比与 `0` 占比。
@@ -308,6 +311,28 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 同步覆盖；覆盖未知时不得显示“已同步”。历史某一时点的分布必须另行从 revision、分配
 有效区间和匿名化事实重建，不能使用今天的当前投影回填。
 
+阶段变更使用独立的历史事件合同，不把当前关系阶段快照回填成历史。三个指标固定为
+`relationship_stage_change_events@1`、`relationship_stage_change_direction_distribution@1`
+和 `relationships_with_stage_change@1`。它们都使用 `changed_at` 的 UTC 半开期间
+`[from_utc, until_utc)`，`MetricTimeBasis` 固定为 `relationshipChangedAtUtc`：包含左边界，
+不包含右边界。查询范围、workspace、project 和
+actor 来自可信上下文；个人结果只保留 `changed_by_app_user_id` 等于可信当前用户的 revision。
+
+一条 revision 只有在 `old_stage IS NOT NULL`、`old_stage <> new_stage` 且 `changed_fields` 包含
+`stage` 时才是合格事件。初始 `project_entry`、只改变 lifecycle 或备注的 revision、同阶段
+revision，以及同一 revision 的重复输入都不计入；重复输入必须失败关闭，不能静默加一条事件。
+`new_stage > old_stage`
+固定为 `upward`，`new_stage < old_stage` 固定为 `downward`。同一“对象 × 项目”关系的
+不同 revision 分别计入事件数和方向分布，但在 `relationships_with_stage_change@1` 中只计一次。
+事件发生后当前分配结束，不会把该事件从原 UTC 期间移除；本合同不按当前分配或历史分配区间
+归因，也不提供历史 `as-of` 快照。
+
+阶段变更指标属于个人事实，不新增生产 HTTP endpoint、Flutter 页面、Drift 表、关系历史同步、
+Outbox 或管理报告。事件数和方向分布的 `managementPrivacyUnit` 固定为
+`targetProjectRelationship`，去重关系指标本身也使用该单位。未来管理报告若使用事件数，
+`k=10` 仍必须由不同的“对象 × 项目”关系满足；同一关系的重复事件不能满足阈值，并继续遵守
+贡献者保护和互补隐藏规则。
+
 只有高级分析可显示：
 
 ```text
@@ -334,6 +359,7 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `ANALYTICS-012` | 动态分析随补录、修订和作废重算；正式导出是固定截止、指标、问卷兼容、区域、时区和计算版本的报告快照。 |
 | `ANALYTICS-013` | 后续数据或定义变更以更正版报告取代原快照；不静默覆盖原报告，也不用报告绕过删除规则。 |
 | `ANALYTICS-014` | “后续联系同意占比”由项目选择是否启用，不是平台必显核心指标，也不得作为个人目标、排名或考核；管理展示继续经过匿名保护。 |
+| `ANALYTICS-015` | 阶段变更三个指标固定 ID／version、事件或对象×项目统计单位、UTC `changed_at` 半开期间、`upward`／`downward` 顺序、actor scope 和排除项；个人事件数与去重关系数必须同时可复算。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -350,6 +376,7 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `PRIVACY-009` | 组织可以提高最小统计单位、要求更多推广者或降低单人占比上限，但不能弱化平台底线。 |
 | `PRIVACY-010` | 第一阶段只开放服务端定义、版本化的固定报告形状；后端对维度、时间／区域粒度、筛选和导出字段使用 allowlist，将请求 canonicalize 后执行完整网格与互补隐藏，并以审计和重识别 fixture 验证风险边界。 |
 | `PRIVACY-011` | 查看或修正去身份化异常需要相应 capability 并留下审计；修正采用接触 revision，不借纠错入口取得记录者或对象身份。 |
+| `PRIVACY-012` | 未来管理阶段变更报告的 `k=10` 以不同“对象 × 项目”关系为真实统计单位；事件数和方向事件数不能靠同一关系重复发生来达到阈值。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
 
@@ -553,6 +580,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-005` | Metric fixture 对账 Dart／SQLite、PostgreSQL 与未来 warehouse；`MetricResult` 固定来源层级、单位、分母、排除、时区、版本、截止、同步覆盖与隐私状态。 |
 | `TEST-006` | Platform Capability／Policy 覆盖位置、持久化、认证、安全缓存、通知和后台同步的可用、拒绝、超时与降级。 |
 | `TEST-007` | Database fixture 覆盖新库初始化、每次正式升级、关键 SQL、失败恢复和 forward-fix，不拿真实用户资料试 migration。 |
+| `TEST-008` | 阶段变更共享 fixture `relationship_stage_changes_v1.csv` 由 Dart 与 PostgreSQL 独立重算；覆盖 actor、项目、UTC 边界、结束分配、排除项、上升／下降、重复关系和重复 revision，错误输入失败关闭。 |
 
 ## 9. UI、视觉与可访问性
 

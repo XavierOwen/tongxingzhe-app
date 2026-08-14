@@ -218,6 +218,118 @@ void main() {
       ]),
       throwsArgumentError,
     );
+
+    final stageChangeDenominator = MetricDefinition(
+      reference: const MetricReference('test_stage_changes', 1),
+      statisticalUnit: MetricStatisticalUnit.relationshipStageChangeEvent,
+      valueShape: MetricValueShape.count,
+      formula: MetricFormula.countRelationshipStageChangeEvents,
+      timeBasis: MetricTimeBasis.relationshipChangedAtUtc,
+      exclusions: const {MetricExclusion.initialRelationshipEntry},
+      privacyRule: MetricPrivacyRule.managementProtectedByTrueUnit,
+      managementPrivacyUnit: MetricStatisticalUnit.relationshipStageChangeEvent,
+    );
+    final stageDirectionWithDifferentPrivacyUnit = MetricDefinition(
+      reference: const MetricReference('test_stage_change_direction', 1),
+      statisticalUnit: MetricStatisticalUnit.relationshipStageChangeEvent,
+      valueShape: MetricValueShape.categoricalDistribution,
+      formula: MetricFormula.countRelationshipStageChangeEventsByDirection,
+      timeBasis: MetricTimeBasis.relationshipChangedAtUtc,
+      exclusions: const {MetricExclusion.initialRelationshipEntry},
+      privacyRule: MetricPrivacyRule.managementProtectedByTrueUnit,
+      managementPrivacyUnit: MetricStatisticalUnit.targetProjectRelationship,
+      denominator: stageChangeDenominator.reference,
+      bucketLabels: const ['upward', 'downward'],
+    );
+    expect(
+      () => MetricCatalog([
+        stageChangeDenominator,
+        stageDirectionWithDifferentPrivacyUnit,
+      ]),
+      throwsArgumentError,
+    );
+  });
+
+  test('阶段变更目录区分事件值与管理隐私的去重关系单位', () {
+    expect(CoreMetricCatalog.definitions, hasLength(12));
+    expect(CoreMetricCatalog.relationshipStageChangeDefinitions, hasLength(3));
+    expect(
+      CoreMetricCatalog.relationshipStageChangeDefinitions
+          .map((definition) => definition.reference)
+          .toSet(),
+      {
+        const MetricReference('relationship_stage_change_events', 1),
+        const MetricReference('relationships_with_stage_change', 1),
+        const MetricReference(
+          'relationship_stage_change_direction_distribution',
+          1,
+        ),
+      },
+    );
+
+    final events = CoreMetricCatalog.relationshipStageChangeEvents;
+    expect(
+      events.statisticalUnit,
+      MetricStatisticalUnit.relationshipStageChangeEvent,
+    );
+    expect(
+      events.managementPrivacyUnit,
+      MetricStatisticalUnit.targetProjectRelationship,
+    );
+    expect(events.timeBasis, MetricTimeBasis.relationshipChangedAtUtc);
+    expect(events.exclusions, {
+      MetricExclusion.initialRelationshipEntry,
+      MetricExclusion.nonStageRelationshipRevision,
+      MetricExclusion.unchangedRelationshipStage,
+    });
+
+    final distinct = CoreMetricCatalog.relationshipsWithStageChange;
+    expect(
+      distinct.statisticalUnit,
+      MetricStatisticalUnit.targetProjectRelationship,
+    );
+    expect(
+      distinct.managementPrivacyUnit,
+      MetricStatisticalUnit.targetProjectRelationship,
+    );
+
+    final direction =
+        CoreMetricCatalog.relationshipStageChangeDirectionDistribution;
+    expect(direction.bucketLabels, ['upward', 'downward']);
+    expect(direction.denominator, events.reference);
+    expect(direction.managementPrivacyUnit, events.managementPrivacyUnit);
+
+    expect(
+      MetricResult(
+        definition: direction,
+        value: MetricDistributionValue(
+          labels: const ['upward', 'downward'],
+          counts: const [3, 2],
+        ),
+        period: MetricPeriod(
+          fromUtc: DateTime.utc(2026, 8, 1),
+          untilUtc: DateTime.utc(2026, 8, 8),
+        ),
+        timeZone: 'UTC',
+        dataCutoffUtc: DateTime.utc(2026, 8, 8),
+        sourceTier: MetricSourceTier.backendOperational,
+        privacyStatus: MetricPrivacyStatus.personalFact,
+      ).value,
+      MetricDistributionValue(
+        labels: const ['upward', 'downward'],
+        counts: const [3, 2],
+      ),
+    );
+  });
+
+  test('现有指标默认用统计单位作为管理隐私单位', () {
+    expect(
+      CoreMetricCatalog.definitions.every(
+        (definition) =>
+            definition.managementPrivacyUnit == definition.statisticalUnit,
+      ),
+      isTrue,
+    );
   });
 
   test('个人兴趣有序汇总使用奇偶下中位并保留空期间 null', () {

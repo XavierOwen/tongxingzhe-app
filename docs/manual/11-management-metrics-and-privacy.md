@@ -2,7 +2,7 @@
 
 个人分析和管理分析处理不同的信任边界。个人页可以立即显示本人设备上的事实，并说明哪些接触尚未同步。管理分析只能使用后端已接受的数据，还必须先降低小群体披露风险。
 
-当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定、不可变受保护快照、项目报告时区版本历史、管理报告能力授权、可信发布 v2、管理项目发现与选择、可信快照目录、窄 HTTPS 发布与读取端点、Flutter 只读管理报告页面、私有区域隐私威胁探针，以及已发布规范区域树和边界版本的冻结。Slice 6S 固定 PostgreSQL 地点来源合同；6U 接入 Flutter／Drift、Outbox 和 Backend；6V 用共享 synthetic fixture 对账四层。它仍没有生产成员管理、自动发布调度、生产区域报告、真实 GPS 或六平台真机证据。
+当前实现完成管理隐私政策、固定报告请求合同、完整周期间解析、私有执行管线、重叠报告发布判定、不可变受保护快照、项目报告时区版本历史、管理报告能力授权、可信发布 v2、管理项目发现与选择、可信快照目录、窄 HTTPS 发布与读取端点、Flutter 只读管理报告页面、私有区域隐私威胁探针，以及已发布规范区域树和边界版本的冻结。Slice 6AE-0 固定个人阶段变更指标合同，但不交付管理阶段变更报告。Slice 6S 固定 PostgreSQL 地点来源合同；6U 接入 Flutter／Drift、Outbox 和 Backend；6V 用共享 synthetic fixture 对账四层。它仍没有生产成员管理、自动发布调度、生产区域报告、真实 GPS 或六平台真机证据。
 
 ## 先确定统计单位
 
@@ -14,6 +14,42 @@
 - 阶段变更不能用同一关系的重复事件凑足阈值。
 
 本章实现的固定报表只处理 `contact_sessions` v1，所以统计单位是有效接触场次。草稿、接触尝试和已作废接触仍按指标目录排除。
+
+## 阶段变更的个人历史合同
+
+Slice 6AE-0 固定三个个人指标。它们不加入本章已有的管理报告网格，也不新增管理读取入口。
+
+| 指标 | 个人值的单位 | 结果 |
+| --- | --- | --- |
+| `relationship_stage_change_events@1` | 一次合格阶段变更 revision | 期间内事件数 |
+| `relationship_stage_change_direction_distribution@1` | 一次合格阶段变更 revision | `upward`、`downward` 两个固定方向数 |
+| `relationships_with_stage_change@1` | 去重的“推广对象 × 推广项目”关系 | 期间内至少发生一次合格事件的关系数 |
+
+三个指标只读取可信当前用户在可信 workspace／project 中执行的 revision。Backend 从已验证
+身份取得 `app_user_id`，SQL 再用 `changed_by_app_user_id = trusted_app_user_id` 过滤；客户端
+不能提交 actor、workspace 或 project 来改变范围。`MetricTimeBasis` 固定为
+`relationshipChangedAtUtc`；`changed_at` 以 UTC 解释，期间固定为
+`[from_utc, until_utc)`。`from_utc` 时刻的事件计入，`until_utc` 时刻的事件不计入。当前分配
+结束后，结束前已发生的合格事件仍留在原期间。
+
+合格事件满足 `old_stage IS NOT NULL AND old_stage <> new_stage`，且 `changed_fields` 包含
+`stage`。初始 `project_entry`、只改 lifecycle 或备注、同阶段 revision 和重复 revision 不计入。
+`new_stage > old_stage`
+是 `upward`，`new_stage < old_stage` 是 `downward`。同一关系的不同 revision 分别增加事件
+数和方向数；`relationships_with_stage_change@1` 使用 `count(distinct (promotion_target_id,
+project_id))`，所以一条关系无论发生多少次都只计一次。
+
+个人结果按事件数提供事实，不受管理匿名阈值限制。未来管理报告若采用事件数或方向数，
+`managementPrivacyUnit` 固定为不同的“对象 × 项目”关系；`k=10` 必须有至少十个不同关系，
+不能用同一关系的重复事件凑数。贡献者保护和互补隐藏仍按通用管理政策执行。本 Slice 不实现
+管理阶段变更报告、历史 `as-of`、当前／历史分配归因、导出或 warehouse。
+
+两层消费者读取同一个无 PII fixture：[`relationship_stage_changes_v1.csv`](../../backend/database/fixtures/shared/relationship_stage_changes_v1.csv)。
+fixture 覆盖本人／他人、其他项目、UTC 期间前后边界、结束当前分配、`project_entry`、
+lifecycle-only、同阶段、上升、下降、同一关系多次变更和重复 revision。Dart 与 PostgreSQL
+独立重算事件数、方向数和去重关系数；主场景预期依次为 `event_count = 5`、
+`distinct_relationship_count = 4`、`upward_count = 3`、`downward_count = 2`。同一 revision
+重复输入或不可信 scope 必须失败关闭。
 
 ## 为什么必须先建立完整网格
 
