@@ -379,6 +379,54 @@ check 检查固定定义、函数形状、最小列权限和旧渠道发布隔�
 primary 阈值和互补隐藏；并发脚本检查区域树 publication 和报告执行的两种锁顺序。三者不能互相替代。
 通过仍只表示 DB-only synthetic 合同成立，不表示生产快照、HTTP、Flutter、导出、真实区域或外部事实攻击已验收。
 
+### 6AO：验证 current 城市报告快照与发布 lineage
+
+6AO 在 6AN 候选之上增加私有的受保护快照和独立区域发布 lineage。它复用通用不可变 snapshot storage，
+但不复用渠道 v2 的 provenance、16 格校验、读取、目录或导出。数据库会重新验证 `release_management_reports`，
+派生可信项目报告时区 revision、`data_cutoff_utc` 和 6AM target context；target tuple、时区 revision、定义、
+期间或网格上下文漂移时失败关闭。
+
+validator／pair comparison 固定 report、metric、dimension、view、granularity、
+query fingerprint、privacy、source scope、期间、watermark、target context 和完整 cells；unavailable、额外字段、
+错误 identity、错误 tuple、缺失／重复／乱序网格和期间错误都失败关闭。被阻断的尝试只保存不含 protected document、
+cells、来源、贡献者、隐藏前值和 PII 的最小 evidence。
+
+首次成功发布建立唯一 baseline，后续成功发布链接前一 snapshot。相同 request 和固定上下文精确幂等，不新增
+snapshot 或 attempt。same／earlier cutoff、无共享期间、共享值／隐私变化和其他上下文漂移都返回稳定 blocked reason。
+snapshot 与 attempt 只追加，不能 UPDATE 或 DELETE。runtime、`PUBLIC` 和区域维护身份不能执行发布、读取区域
+provenance 或直接写区域表。retention 和 warehouse 不属于本 Slice。
+
+零基础读者可以把 Docker 理解成一次性测试环境：它会启动隔离的 PostgreSQL 容器，运行迁移和 synthetic 数据，
+结束后清理容器，不会修改生产数据库。先安装并启动 Docker Desktop，再从仓库根目录运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 会自动发现 0057 migration、结构与权限 check、fixture 和
+`verify_management_current_city_report_snapshot_lineage_concurrency.sh`，并执行 migration checksum、dump／restore
+和恢复库重跑。成功证据应同时覆盖：有效和无效 6AN 文档、首个唯一 baseline、前一 snapshot 链接、精确幂等、
+same／earlier cutoff、无共享期间、共享期间／城市值变化、target tuple／时区 revision 漂移失败关闭、
+`release_management_reports` 重检、通用快照存储复用、独立区域 attempt／provenance、value-free blocked attempt、
+snapshot／attempt 不可改删、角色读写边界，以及旧渠道 v2/read/directory/export 继续拒绝区域文档。
+最后一项由 runner 自动重跑既有 trusted release、authorized read、directory 和 export 的 check／fixture 证明，
+不是由 0057 fixture 单独替代旧合同测试。
+
+如果只调试已经运行的专用测试库，不要把命令指向 production，按以下顺序运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_current_city_report_snapshot_lineage.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0057_management_current_city_report_snapshot_lineage.sql
+./tool/verify_management_current_city_report_snapshot_lineage_concurrency.sh
+```
+
+check、fixture 和并发脚本不能互相替代。通过只表示 DB-only synthetic 快照和 lineage 合同成立，不表示 HTTP、
+Flutter、UI、读取、目录、导出、retention、warehouse、真实区域证据、生产调度或外部事实攻击已经验收。
+
 管理报告发布端点同时改动 Backend 和 PostgreSQL bridge。开发时先运行：
 
 ```bash

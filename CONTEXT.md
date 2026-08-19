@@ -309,6 +309,27 @@ _Avoid_: `is_current`、最新 release、客户端时钟、区域名称猜测
 它保存 source change watermark，但读取的是 current contact projection，不是历史 `as-of`，也尚未接入生产发布链。
 _Avoid_: original 区域视图、最小区域下钻、任意区域筛选、生产区域报告、历史重放
 
+**current 城市报告受保护快照**:
+由 6AN 固定定义、两个完整 ISO 周、完整城市网格、目标树 tuple、可信报告时区 revision、数据截至时间和
+source change watermark 组成的不可变私有报告文档；它只能在 `release_management_reports` 能力和可信时区上下文重新确认后建立，
+不能由调用方提交 JSON、时区、截止点或目标树 tuple。它可以复用通用不可变快照存储，但不是既有渠道 v2
+快照，也不是历史 `as-of`、读取、目录或导出能力。6AO validator 和 pair comparison 固定 report、metric、
+dimension、view、granularity、query fingerprint、privacy、source scope、期间、watermark、target context 和
+完整 cells；unavailable、额外字段、错误 identity、错误 target tuple、期间或网格均失败关闭。
+_Avoid_: 渠道 16 格、客户端快照、任意历史重放、生产 HTTP、UI、调度
+
+**区域报告发布 lineage**:
+围绕一份 current 城市报告受保护快照保存的、区域专属发布尝试和来源证据序列；它绑定 `release_management_reports`、可信项目
+报告时区 revision、固定数据截至时间、目标树 tuple、6AN 定义和隐私网格。首个成功文档建立基线，后续
+尝试必须保持共享期间的城市值和隐私状态不变，并把成功发布链接到前一 snapshot。相同 request 和固定上下文
+必须精确幂等，不新增 snapshot 或 attempt。current-city 与渠道发布不能复用 request UUID；trusted v2 与其
+委托的 v1 记录仍属于同一渠道发布。same／earlier cutoff、无共享期间、共享值或隐私状态变化，以及
+target tuple、时区 revision、定义、期间或网格上下文漂移，都返回稳定 blocked reason。blocked attempt 只保留
+原因、固定 identity 和最小 lineage，不保存 protected document、cells、来源、贡献者、隐藏前值或 PII。
+snapshot 与 attempt 均为追加不可变记录，不允许 UPDATE 或 DELETE；runtime、`PUBLIC` 和区域维护身份不能执行、
+读取区域 provenance 或直接写表。它不等于渠道 v2 provenance，也不授予读取、目录或导出权。
+_Avoid_: 复用渠道 lineage、绕过 release capability、值带入失败记录、HTTP/UI 发布、warehouse、retention
+
 **迁移基线观察下界**:
 0038 迁移为既有 current release 写入的基线观察只有 `recorded_at_utc`；它的 `selected_at_utc` 为 `NULL`，
 不能解释成真实选择时间。只有不早于该观察时间的报告截止点，才能把基线作为已观察证据；更早截止点必须返回

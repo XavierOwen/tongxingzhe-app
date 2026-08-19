@@ -904,6 +904,62 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 这组结果证明固定请求、归属组合、完整网格、隐私状态、最小权限和两种 publication 锁顺序。它不证明真实
 城市映射正确、外部资料攻击已被排除、生产快照已经发布或用户已在任何平台看到区域报告。
 
+## Slice 6AO 如何固定 current 城市报告快照与发布 lineage
+
+6AO 把 6AN 的私有 current 城市报告候选固定为受保护快照。它复用通用不可变快照存储
+`app_private.management_report_snapshots`，但使用独立的区域 release attempt／provenance，不把两个完整期间的
+城市网格塞进既有渠道 v2 的 provenance、16 格校验、读取、目录或导出链。
+
+区域 validator／pair comparison 固定 report、metric、dimension、view、granularity、query fingerprint、privacy、
+source scope、期间、source watermark、target context 和完整 cells。unavailable、额外字段、错误 identity、错误
+target tuple、缺失／重复／乱序网格及期间错误失败关闭；`displayed` 必须达到 6AN 的 `k=10`，`suppressed` 必须
+是 JSON `null`。
+
+私有发布只接受 request ID、可信内部用户、项目和固定报告 definition/version。调用方不能提交 JSON、capability、
+时区、截止点、城市列表或 target tree tuple。数据库在必要锁后重新验证 `release_management_reports`，派生可信
+项目报告时区 revision、`data_cutoff_utc` 和 6AM target context，再调用 6AN executor。成功文档保存固定的 6AN
+定义、两个完整期间、完整城市网格、保护状态、目标树 `version + content_fingerprint`、可信时区 revision、数据
+截至时间和 source change watermark。
+
+首个成功文档建立唯一 lineage baseline。后续发布只能推进 cutoff，链接前一 snapshot，并保持定义、期间、网格、
+target tuple 和可信时区 revision 一致。相同 request 和固定上下文精确幂等，不新增 snapshot 或 attempt。
+current-city 与渠道发布不能复用 request UUID；trusted v2 与其内部委托的 v1 记录仍视为同一渠道发布。
+
+same／
+earlier cutoff、无共享期间、共享期间的城市值或隐私状态变化，或定义、期间、网格、target tuple、时区 revision
+任何漂移，都会返回稳定 blocked reason。blocked attempt 只记录不含 protected document、cells、来源、贡献者、
+隐藏前值或 PII 的最小 attempt／provenance 证据，不能借失败记录泄漏结果。snapshot 与 attempt 均追加不可变，
+不允许 UPDATE 或 DELETE。区域 provenance 独立于渠道 v2，也不授予读取、目录或导出权。
+
+release writer 之外，runtime、`PUBLIC` 和区域维护身份不能执行发布、读取区域 provenance 或直接写区域 attempt／
+snapshot 表。
+
+这仍是 DB-only 合同：没有 HTTP、runtime bridge、Flutter、Drift、缓存、UI、读取、目录、导出、生产调度、能力
+授予／撤销、original、历史 `as-of`、更正版、删除、retention 或 warehouse 流程。验证 6AO 时从仓库根目录运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+Docker runner 会自动发现 0057 migration、check、synthetic fixture 和并发脚本，并在 checksum 和 dump／restore
+恢复库重跑。成功证据包括 validator／pair 字段、unavailable／额外字段／错误 identity、完整网格、唯一 baseline、
+前一 snapshot 链接、精确幂等、same／earlier cutoff、无共享期间、value-free blocked attempt、不可改删和角色读写
+边界。已有专用测试库可以按以下顺序检查；不要把 `DATABASE_URL` 指向 production：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_current_city_report_snapshot_lineage.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0057_management_current_city_report_snapshot_lineage.sql
+./tool/verify_management_current_city_report_snapshot_lineage_concurrency.sh
+```
+
+这些检查只证明 synthetic DB-only 快照、授权重检、可信时区、target tuple 漂移失败关闭、独立 lineage、不可改删和
+角色读写边界成立；不证明 HTTP、Flutter、UI、读取、目录、导出、retention、warehouse、真实区域证据、生产调度或
+外部事实攻击已经验收。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和
@@ -956,7 +1012,7 @@ Backend 生产写入、区域 current 映射或区域报告不可重识别。
 
 ## 当前证据不能证明什么
 
-这些条件减少直接披露和简单相减恢复的风险，不构成形式化的不可重识别保证。当前 fixture 覆盖固定渠道报告的相邻完整周、补录变化、稀疏格和互补隐藏，也用候选区域形状演练父子范围、跨版本重叠、外部已知事实、待解析与 `N/A`。它没有交付生产区域报告，也未覆盖跨账号导出组合或真实外部资料攻击。6AH 的合同只证明服务端授权、生成并准备交付固定快照，不证明客户端落盘、分享或读取。
+这些条件减少直接披露和简单相减恢复的风险，不构成形式化的不可重识别保证。当前 fixture 覆盖固定渠道报告的相邻完整周、补录变化、稀疏格和互补隐藏，也用候选区域形状演练父子范围、跨版本重叠、外部已知事实、待解析与 `N/A`。6AO 只增加私有 DB-only current 城市快照和区域 lineage 合同；它没有交付生产区域报告，也未覆盖跨账号导出组合或真实外部资料攻击。6AH 的合同只证明服务端授权、生成并准备交付固定快照，不证明客户端落盘、分享或读取。
 
 生产管理报表仍需完成：
 
@@ -964,7 +1020,7 @@ Backend 生产写入、区域 current 映射或区域报告不可重识别。
 - 权限变更审计和一般组织业务上下文；
 - 跨时区 revision 后重新建立基线或更正版的隐私判定；
 - 可按历史 revision 水位重新执行的 `as-of` 投影、更正版取代关系和删除流程；
-- 把显式映射或来源坐标重解析安全接入指定报告截止点的 current 视图，以及生产区域报告自己的完整网格、互补隐藏、授权和快照 lineage；
+- 把显式映射或来源坐标重解析安全接入指定报告截止点的 current 视图，并把 6AO 的 DB-only lineage 继续接入生产区域报告的授权、HTTP、UI、读取、导出和调度边界；
 - 快照目录与单份读取以外的动态 API、缓存、图表，以及除 6AH 固定 canonical JSON v1 外的其他导出。
 
 在这些前置条件完成前，不得删除个人指标 SQL 的 `app_user_id` 条件来制造团队汇总，也不得向 `tongxingzhe_runtime` 授予私有政策函数的执行权。

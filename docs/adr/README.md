@@ -5,7 +5,8 @@
 ## 状态规则
 
 - ADR-0001 至 ADR-0095 作为 `TXZ-SPEC-001` 的首批决策集，于 2026-07-31 一并接受；文件另有状态时以文件为准。
-- ADR-0096、ADR-0097 于 2026-07-31 接受；ADR-0098、ADR-0099 于 2026-08-03 接受；ADR-0100 于 2026-08-05 接受；ADR-0101、ADR-0102 于 2026-08-10 接受；ADR-0103 至 ADR-0108 于 2026-08-11 接受；ADR-0109 至 ADR-0119 于 2026-08-12 接受；ADR-0120 至 ADR-0129 于 2026-08-13 接受；ADR-0130 于 2026-08-13 接受；ADR-0131 至 ADR-0135 于 2026-08-14 接受。
+- ADR-0096、ADR-0097 于 2026-07-31 接受；ADR-0098、ADR-0099 于 2026-08-03 接受；ADR-0100 于 2026-08-05 接受；ADR-0101、ADR-0102 于 2026-08-10 接受；ADR-0103 至 ADR-0108 于 2026-08-11 接受；ADR-0109 至 ADR-0119 于 2026-08-12 接受；ADR-0120 至 ADR-0129 于 2026-08-13 接受；ADR-0130 于 2026-08-13 接受。
+- ADR-0131 至 ADR-0135 于 2026-08-14 接受；ADR-0136 于 2026-08-19 接受。
 - 被取代的 ADR 保留原文和指向新 ADR 的状态，不再作为当前实现合同。
 - 新 ADR 默认只需一个清楚的决定段落。只有背景、备选和后果能帮助未来维护者避免误读时，才增加这些章节。
 - 可逆的 UI 细节、库选择和票内实现步骤留在 Spec 或 Issue，不为增加编号而创建 ADR。
@@ -57,6 +58,7 @@
 | [0133](./0133-private-management-region-attribution-resolver.md) | 已接受，2026-08-14 | Slice 6AL；Issue #153；`REGION-007`–`REGION-011`、`ANALYTICS-012`、`PRIVACY-010`、`TEST-007`、`TEST-015` | 私有区域归属 resolver 只接受显式目标树和可验证来源；坐标零命中或歧义、缺失映射和不完整来源失败关闭或返回 `not_reportable` |
 | [0134](./0134-management-report-region-target-context.md) | 已接受，2026-08-14 | Slice 6AM；Issue #155；`REGION-012`、`ANALYTICS-022`、`PRIVACY-014`、`MANUAL-013`、`TEST-016` | 由可信报告截止点和追加式 selection history 派生区域目标树上下文；migration baseline 受观察下界约束，publication 与 resolver 共用事务锁，6AL 只消费显式版本和指纹 |
 | [0135](./0135-private-current-city-report-uses-a-complete-protected-grid.md) | 已接受，2026-08-14 | Slice 6AN；Issue #157；`REGION-007`–`REGION-013`、`ANALYTICS-023`、`PRIVACY-015`、`TEST-017` | 首个私有区域报告只做 current 城市两期完整网格；固定归属、阈值和互补隐藏，旧渠道发布链继续拒绝新定义 |
+| [0136](./0136-private-current-city-snapshot-lineage.md) | 已接受，2026-08-19 | Slice 6AO；Issue #159；`ANALYTICS-024`、`PRIVACY-016`、`TEST-018` | current 城市报告复用通用不可变快照存储，但区域发布尝试与 provenance 独立；发布能力、可信时区 revision 和 target tuple 漂移失败关闭，旧渠道 v2/read/directory/export 继续排除 |
 
 ## 按主题查找
 
@@ -68,7 +70,7 @@
 | 组织、保留、导入导出与合并 | [0030](./0030-allow-verified-users-to-create-organizations.md)–[0043](./0043-promotion-target-merges-are-reversible.md) | Slice 4、7；`ORG`、`TARGET`、`AUTHZ` |
 | 私人计划、通知与周期 | [0044](./0044-personal-action-plans-are-private-and-user-controlled.md)–[0052](./0052-late-entered-contacts-count-in-their-occurrence-period.md) | Slice 5；`PLAN`、`PLATFORM` |
 | 说明书与发布检查 | [0053](./0053-production-code-and-learning-materials-evolve-together.md)–[0059](./0059-documentation-and-statistics-checks-block-releases.md) | 全部 Slice；`MANUAL`、Definition of Done |
-| 指标、报告与隐私 | [0060](./0060-ordinal-scale-distributions-are-primary.md)–[0077](./0077-core-metrics-ship-with-code-and-project-metrics-use-safe-configuration.md)，另见 [0099](./0099-management-analytics-use-bounded-query-surfaces.md)、[0101](./0101-management-weekly-reports-use-two-complete-iso-weeks.md)–[0135](./0135-private-current-city-report-uses-a-complete-protected-grid.md) | Slice 6；`ANALYTICS`、`PRIVACY`、`AUTHZ`、`REGION`、`ARCH`、`TEST-005`、`TEST-014`–`TEST-017` |
+| 指标、报告与隐私 | [0060](./0060-ordinal-scale-distributions-are-primary.md)–[0077](./0077-core-metrics-ship-with-code-and-project-metrics-use-safe-configuration.md)，另见 [0099](./0099-management-analytics-use-bounded-query-surfaces.md)、[0101](./0101-management-weekly-reports-use-two-complete-iso-weeks.md)–[0136](./0136-private-current-city-snapshot-lineage.md) | Slice 6；`ANALYTICS`、`PRIVACY`、`AUTHZ`、`REGION`、`ARCH`、`TEST-005`、`TEST-014`–`TEST-018` |
 | 当前上下文、问卷、草稿与导航 | [0078](./0078-a-visible-project-context-scopes-default-work.md)–[0090](./0090-contact-entry-prioritizes-core-facts-with-progressive-disclosure.md) | Slice 1、3、5；`CTX`、`QUESTION`、`DRAFT`、`UI` |
 | 尝试、渠道、触达和机构关系 | [0091](./0091-unsuccessful-direct-outreach-is-a-contact-attempt.md)–[0095](./0095-person-to-institution-relationships-use-six-stable-kinds.md) | Slice 1、2、4；`CONTACT`、`TARGET` |
 | 基础设施 | [0097](./0097-use-supabase-postgresql-for-the-initial-stage.md) | Slice 0／发布门槛；`ARCH-003`–`ARCH-010` |

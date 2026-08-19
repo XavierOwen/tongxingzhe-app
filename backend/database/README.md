@@ -27,7 +27,7 @@ Backend integration 入口存在。脚本先在 Node 24 中运行 `npm ci --igno
 入口缺失、编译失败或断言失败都会使整套测试失败；不能把此前 SQL fixture 的通过单独写成
 Backend adapter 集成通过。
 
-schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer`、`tongxingzhe_region_mapping_writer`、`tongxingzhe_region_attribution_reader` 和 `tongxingzhe_management_region_report_reader`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
+schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer`、`tongxingzhe_region_mapping_writer`、`tongxingzhe_region_attribution_reader`、`tongxingzhe_management_region_report_reader` 和 `tongxingzhe_management_current_city_snapshot_release_writer`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
 
 ## 使用已有 PostgreSQL 测试库
 
@@ -231,6 +231,10 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/checks/verify_management_current_city_report.sql
 psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/fixtures/0056_management_current_city_report.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_current_city_report_snapshot_lineage.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0057_management_current_city_report_snapshot_lineage.sql
 ./tool/verify_questionnaire_publish_concurrency.sh
 ./tool/verify_questionnaire_metric_concurrency.sh
 ./tool/verify_person_institution_relationship_concurrency.sh
@@ -245,6 +249,7 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 ./tool/verify_canonical_region_version_mapping_concurrency.sh
 ./tool/verify_management_report_region_target_context_concurrency.sh
 ./tool/verify_management_current_city_report_concurrency.sh
+./tool/verify_management_current_city_report_snapshot_lineage_concurrency.sh
 ```
 
 第二次执行不是重复建库，而是验证已经记录的 checksum。若历史文件被修改，脚本会拒绝继续。
@@ -448,6 +453,47 @@ suppressed 值始终为 `NULL`。输出包含固定定义、期间、截止点�
 无登录、无成员的 `tongxingzhe_management_region_report_reader` 只获得所需列读取和私有函数执行权。
 runtime、PUBLIC 和区域维护身份不能执行 executor。0056 不提供 original 视图、生产快照、runtime bridge、
 HTTP、Flutter、缓存或导出；watermark 也不把 current projection 变成历史 `as-of`。
+
+`0057_management_current_city_report_snapshot_lineage.sql` 只增加 DB-only 的 6AO 固定发布合同。它复用通用的
+不可变受保护快照存储 `app_private.management_report_snapshots`，但为 current 城市报告保存独立的区域 release
+attempt／provenance；区域 provenance 不能冒充渠道 v2 provenance。私有发布在取得必要锁后重新验证
+`release_management_reports`，由数据库派生可信项目报告时区 revision、`data_cutoff_utc` 和 6AM target context，
+再调用 6AN executor。调用方不能提交 JSON、capability、时区、截止点、城市列表或 target tuple。
+
+0057 的 validator／pair comparison 固定 report、metric、dimension、view、granularity、query fingerprint、privacy、
+source scope、期间、source watermark、target context 和完整 cells。completed 以外的 unavailable、额外字段、错误
+identity、错误 target tuple、缺失／重复／乱序网格或期间错误都失败关闭；`displayed` 必须达到 6AN 的 `k=10`，
+`suppressed` 必须是 JSON `null`。
+
+首个通过 6AN 合同的文档建立唯一 baseline；后续发布只能推进 cutoff，并保持定义、期间、完整网格、target tuple
+和可信时区 revision 一致，且链接前一 snapshot。相同 request 和固定上下文精确幂等，不新增 snapshot 或 attempt。
+一张不含报告值的 request claim 表使 current-city UUID 与渠道发布 UUID 互斥；trusted v2 仍与它委托写入的 v1
+记录共享同一渠道 claim。
+
+same／earlier cutoff、无共享期间、共享期间的城市值或隐私状态变化，以及 target tuple、时区 revision、定义、期间
+或网格上下文漂移，均返回稳定 blocked reason。失败 attempt 只能保存不含 protected document、cells、来源、贡献者、
+隐藏前值和 PII 的最小 lineage 证据。snapshot 与 attempt 均追加不可变，不允许 UPDATE 或 DELETE。既有 channel v2、
+snapshot read、directory 和 export 仍只接受固定渠道定义，不接受区域文档。
+
+0057 的 release writer 之外，runtime、PUBLIC 和区域维护身份不能执行发布、读取区域 provenance 或直接写区域
+attempt／snapshot 表。0057 不实现 HTTP、UI、Flutter、Drift、缓存、目录、读取、导出、生产调度、retention 或
+warehouse。通过 0057 的数据库检查只证明 synthetic DB-only 合同，不证明生产区域报告已经发布。
+
+只在已有专用测试库调试 6AO 时，先确认 `DATABASE_URL` 不是 production，再按顺序运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_current_city_report_snapshot_lineage.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0057_management_current_city_report_snapshot_lineage.sql
+./tool/verify_management_current_city_report_snapshot_lineage_concurrency.sh
+```
+
+check、fixture 和并发脚本分别验证 6AN 文档字段、发布能力与可信时区、target tuple 漂移、基线／滚动发布、前一
+snapshot 链接、精确幂等、same／earlier cutoff、无共享期间、value-free blocked attempt、不可改删、区域 provenance
+独立性和角色读写边界。它们不能证明 HTTP、Flutter、UI、读取、导出、retention、warehouse 或生产调度。
 
 0054 的手工验证需要专用测试库：
 
