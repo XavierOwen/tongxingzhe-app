@@ -541,6 +541,39 @@ executor 由无登录、无成员的最小 reader role 拥有；runtime、`PUBLI
 不提供 original 视图、父子 rollup、任意区域集合、生产快照 lineage、runtime bridge、HTTP、Flutter、缓存、
 导出、区域治理、历史 `as-of`、更正版或删除。读取 current projection 和 watermark 不能解释成历史重放。
 
+#### Slice 6AO：固定 current 城市报告快照与发布 lineage
+
+Slice 6AO 只在私有数据库边界把 6AN 的 current 城市报告候选固定为受保护快照。它复用通用不可变快照存储，
+但使用独立的区域发布尝试和 provenance；不能把区域文档写入或伪装成既有渠道 v2 的 provenance、16 格
+validator、读取、目录或导出通道。
+
+区域 validator 和 pair comparison 固定 6AN 的 report、metric、dimension、view、granularity、query fingerprint、
+privacy、source scope、期间、source watermark、target context 和完整 cells。unavailable、额外字段、错误 report
+identity、错误 target tuple、缺失或重复网格、乱序网格及其他期间错误都失败关闭；`displayed` 必须满足 6AN 的
+`k=10` 保护，`suppressed` 必须是 JSON `null`。
+
+每次私有发布只接受 request ID、可信内部用户、项目和固定报告 definition/version。数据库在取得必要锁后
+重新验证 `release_management_reports`，并在同一 release transaction 中派生项目可信报告时区 revision、
+`data_cutoff_utc` 和 6AM target context，再调用 6AN executor。调用方不能提交 capability、JSON、时区、截止点、
+城市列表或 target tree tuple。快照文档必须保留 6AN 固定定义、两个期间、完整城市网格、保护状态、目标树
+`version + content_fingerprint`、可信时区 revision、数据截至时间和 source change watermark。
+
+首个合法文档建立唯一的区域 lineage baseline。后续同一项目的滚动发布只能推进 cutoff，并保持定义、期间、
+网格、目标 tuple 和可信时区 revision 一致；成功发布必须链接前一 snapshot。相同 request 和固定上下文必须
+精确幂等，不新增 snapshot 或 attempt。current-city 与渠道发布不能复用 request UUID；trusted v2 与其内部
+委托的 v1 记录仍属于同一渠道发布。same／earlier cutoff、无共享期间、与已发布文档共享的期间／城市值或
+隐私状态发生变化，以及目标 tuple、时区 revision、定义、期间或网格上下文漂移，都返回稳定 blocked reason。
+
+被阻断的尝试只保存不含 protected document、cells、来源、贡献者、隐藏前值和 PII 的最小 attempt／provenance
+证据，不能把候选值带入失败记录。snapshot 与 attempt 均追加不可变，不允许 UPDATE 或 DELETE。
+
+区域 release writer 之外，runtime、`PUBLIC` 和区域维护身份不能执行发布、读取区域 provenance 或直接写区域
+attempt／snapshot 表。
+
+本 Slice 仅交付 DB-only 的存储、授权重检、lineage 和失败关闭合同。它不交付 HTTP、runtime bridge、Flutter、
+Drift、缓存、UI、目录、读取、导出、生产调度、区域能力授予／撤销、original、历史 `as-of`、更正版、删除、
+retention 或 warehouse 流程；既有渠道 v2/read/directory/export 继续只接受其固定渠道定义。
+
 只有高级分析可显示：
 
 ```text
@@ -576,6 +609,7 @@ executor 由无登录、无成员的最小 reader role 拥有；runtime、`PUBLI
 | `ANALYTICS-021` | Web 管理报告下载使用两阶段操作：先准备并验证内存 artifact，再由新的用户操作把原始 bytes、固定 MIME 和文件名交给浏览器；结果只表示已请求下载，delivery 重试不重复生成服务端导出事件，非 Web 平台明确 unavailable。 |
 | `ANALYTICS-022` | 固定区域报告的 `history-derived cutoff context` 只由可信 `data_cutoff_utc` 和追加式 selection history 派生；它保存目标树、指纹、selection evidence 和发布时间。selection time 与 release `published_at_utc` 必须不晚于 cutoff，指纹必须精确一致；migration baseline 只能从 `recorded_at_utc` 观察下界使用，更早 cutoff 不可判定，不能回退到 `is_current` 或最新 release。 |
 | `ANALYTICS-023` | `contact_sessions_by_current_city_two_periods@1` 只统计两个完整 ISO 周内、截止点前已首次提交的 current active 接触，并返回固定定义、目标树选择证据、source change watermark 和完整受保护城市网格；它不声称 current projection 是历史 `as-of`。 |
+| `ANALYTICS-024` | current 城市私有 validator／pair comparison 固定 6AN 的 report、metric、dimension、view、granularity、query fingerprint、privacy、source scope、期间、watermark、target context 和完整 cells；unavailable、额外字段、错误 identity、错误 tuple、期间或网格失败关闭。发布在锁后重新验证 `release_management_reports`，由同一 release transaction 派生可信项目报告时区 revision、`data_cutoff_utc` 和 6AM target context；成功发布链接前一 snapshot，相同 request 与固定上下文精确幂等，不新增 snapshot 或 attempt。current-city 与渠道发布 UUID 互斥；trusted v2 与其委托的 v1 记录共享渠道 claim。same／earlier cutoff、无共享期间、共享值／隐私变化及定义、期间、网格、target tuple 或时区 revision 漂移返回稳定 blocked reason；区域 attempt／provenance 不得冒充渠道 v2 provenance。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -596,6 +630,7 @@ executor 由无登录、无成员的最小 reader role 拥有；runtime、`PUBLI
 | `PRIVACY-013` | 固定匿名管理报告文件导出只能接收已经完成阈值、贡献者保护、完整网格和互补隐藏的快照；`suppressed` 永远是 `null`，客户端和导出过程都不得重算或补回隐藏值。 |
 | `PRIVACY-014` | 区域目标上下文只返回固定合同、状态、原因、截止点、树版本、内容指纹和选择／发布时间证据，不返回坐标、来源、接触、贡献者、区域名称或 PII；历史不可用时失败关闭，不能用 current、名称或几何相似度补造归属。 |
 | `PRIVACY-015` | current 城市报告只返回完整城市网格中的保护后接触场次数；每格执行 `k=10`、三位贡献者和单人不超过一半，单一 primary suppression 触发确定性互补隐藏，所有 suppressed 值为 `null`，输出不含名称、边界、坐标、来源、接触、revision、贡献者或 PII。 |
+| `PRIVACY-016` | current 城市受保护快照可以复用通用不可变 snapshot storage，但区域发布 attempt／provenance 必须独立；只允许保存已通过 6AN 合同的文档，失败关闭的尝试不保存 protected document、cells、来源、贡献者、隐藏前值或 PII。snapshot 与 attempt 追加不可变，不允许 UPDATE 或 DELETE；runtime、`PUBLIC` 和区域维护身份不能读取区域 provenance 或直接写表，也不因此取得读取、目录或导出能力。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
 
@@ -616,7 +651,7 @@ executor 由无登录、无成员的最小 reader role 拥有；runtime、`PUBLI
 | `MANUAL-011` | 复杂 SQL、事务、migration、同步、冲突、统计和隐私逻辑按不变量与原因注释；不机械给每个括号、赋值或生成代码加注释。 |
 | `MANUAL-012` | 注释和说明书不引用会随编辑失效的固定行号；使用稳定类、函数、字段和 snippet marker 追溯。 |
 | `MANUAL-013` | 学习文档必须说明 6AM 的可信 cutoff、history-derived context、migration baseline 观察下界、publication 共享事务锁、私有无 runtime 边界、6AL 显式消费方式，以及 Docker 和已有测试库中的手工命令。 |
-| `MANUAL-014` | 学习文档必须说明 6AN 的固定 current 城市范围、完整网格、三项 primary 阈值、互补隐藏、source watermark、私有非生产边界、与旧渠道发布链的隔离，以及 Docker 和已有测试库中的验证步骤。 |
+| `MANUAL-014` | 学习文档必须说明 6AN 的固定 current 城市范围、完整网格、三项 primary 阈值、互补隐藏、source watermark、6AO 的 validator／pair 字段、前一 snapshot 链接、精确幂等、稳定 blocked 条件、value-free attempt、snapshot／attempt 不可改删、发布能力与可信时区 revision、角色读写边界、漂移失败关闭、warehouse／retention 非范围、私有非生产边界、与旧渠道发布链的隔离，以及 Docker 和已有测试库中的验证步骤。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -811,6 +846,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-015` | 私有区域归属 resolver fixture 覆盖 original 精确来源、current 显式目标树、坐标唯一／零命中／同链嵌套／跨链歧义／同深度歧义、region-only 同版本与 6AK 映射、错误指纹、草稿或未知树、`not_reportable` 状态、无敏感输出和最小权限；完整 Docker 套件在恢复库重复验证。 |
 | `TEST-016` | 6AM fixture 覆盖无历史、publication 在 cutoff 前／等于／之后、两次切换、migration baseline 观察下界前／等于／之后、草稿、缺失 release、指纹或发布时间不一致、稳定 blocked 状态、无敏感输出和最小权限；publication-first 与 resolver-first 并发脚本证明共享锁线性化，完整 Docker 套件在恢复库重跑。 |
 | `TEST-017` | 6AN fixture 覆盖固定请求、两完整期间、全城市网格、空格、三项 primary 阈值、单一／多个隐藏、互补隐藏、稳定排序和 watermark；current 坐标、同版本 region-only、6AK mapping、无 mapping、歧义、pending、N/A、不完整或缺失来源及嵌套城市均有失败关闭证据。publication-first 与 report-first 并发脚本证明组合仍使用 6AM 锁，完整 Docker 套件在恢复库重跑。 |
+| `TEST-018` | 6AO fixture 覆盖完整 6AN validator／pair 字段、completed／unavailable、额外字段、错误 identity、错误 tuple、缺失／重复／乱序网格、首个唯一 baseline、前一 snapshot 链接、相同 request 与上下文精确幂等、跨区域／渠道 release family 的 request UUID 冲突、稳定滚动发布、same／earlier cutoff、无共享期间、共享值／隐私变化、定义／期间／网格／target tuple／时区 revision 漂移、并发发布和 value-free blocked attempt；blocked 记录不含 protected document、cells、来源、贡献者、隐藏前值或 PII，snapshot／attempt／request claim UPDATE／DELETE、固定 reason allowlist、最小权限和旧渠道回归均有证据。还要检查 `release_management_reports`、通用 snapshot storage 复用、区域 provenance 与渠道 v2/read/directory/export 隔离、checksum 和 dump／restore。Docker 套件必须重跑这些检查。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -911,7 +947,7 @@ Slice 0、1、2 完成后可以发放内部 Alpha，用于验证匿名接触闭�
 
 交付：指标目录、个人即时分析、管理匿名汇总、区域与时间分析、问卷兼容合并、动态报表、固定报告快照、固定匿名管理报告文件导出和必要 SQL 教学样例。
 
-验收：Drift、PostgreSQL 和前端使用同一 synthetic fixture 对账；管理界面只调用版本化固定报告，后端 canonicalize 请求并统一执行 `k=10`、至少三位推广者、单人不超过一半、完整结果网格与互补隐藏；固定匿名管理报告文件导出同时检查 `view_anonymous_analytics` 与 `export_management_reports`，只序列化可信 v2 快照，保持 16 格顺序和 `suppressed = null`，并留下独立不可变导出审计。相邻周期、重叠区域、互补类别和已知外部事实的重识别 fixture 通过。Widget 只渲染已带来源、单位、版本、截止时间和抑制状态的 `MetricResult`，拿不到被隐藏的精确值。验收结论只能说明降低披露风险，不宣称形式化不可重识别。
+验收：Drift、PostgreSQL 和前端使用同一 synthetic fixture 对账；管理界面只调用版本化固定报告，后端 canonicalize 请求并统一执行 `k=10`、至少三位推广者、单人不超过一半、完整结果网格与互补隐藏；区域 current 城市候选进入快照前，重新确认 `release_management_reports`、可信报告时区 revision 和 6AM target tuple，并以独立区域 attempt／provenance 做基线、滚动发布和漂移失败关闭。固定匿名管理报告文件导出同时检查 `view_anonymous_analytics` 与 `export_management_reports`，只序列化可信 v2 快照，保持 16 格顺序和 `suppressed = null`，并留下独立不可变导出审计；区域文档不进入该渠道 v2/read/directory/export。相邻周期、重叠区域、互补类别和已知外部事实的重识别 fixture 通过。Widget 只渲染已带来源、单位、版本、截止时间和抑制状态的 `MetricResult`，拿不到被隐藏的精确值。6AO 本阶段只证明 DB-only 合同，不声称 HTTP、UI 或生产调度已完成。验收结论只能说明降低披露风险，不宣称形式化不可重识别。
 
 ### Slice 7：组织治理与数据可携带性
 

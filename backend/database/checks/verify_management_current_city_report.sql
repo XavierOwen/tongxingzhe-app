@@ -6,6 +6,7 @@
 DO $check$
 DECLARE
   reader_oid oid;
+  release_writer_oid oid;
   maintenance_oid oid;
   function_row record;
   function_definition text;
@@ -29,6 +30,15 @@ BEGIN
   WHERE role_row.rolname = 'tongxingzhe_management_region_report_reader';
   IF reader_oid IS NULL THEN
     RAISE EXCEPTION 'management region report reader role is missing';
+  END IF;
+
+  SELECT role_row.oid
+  INTO release_writer_oid
+  FROM pg_catalog.pg_roles AS role_row
+  WHERE role_row.rolname =
+      'tongxingzhe_management_current_city_snapshot_release_writer';
+  IF release_writer_oid IS NULL THEN
+    RAISE EXCEPTION 'management current city snapshot release writer role is missing';
   END IF;
 
   SELECT role_row.oid
@@ -318,9 +328,9 @@ BEGIN
     RAISE EXCEPTION 'current city report definition is incorrect';
   END IF;
 
-  -- Only the new reader and the migration identity may execute the three
-  -- public-facing private functions.  The narrow wrappers are likewise not
-  -- exposed to runtime or maintenance roles.
+  -- The report reader, the snapshot release writer and the migration identity
+  -- may execute the three private report functions.  The narrow wrappers are
+  -- likewise not exposed to runtime or maintenance roles.
   FOREACH function_name IN ARRAY ARRAY[
     to_regprocedure(
       'app_private.canonicalize_management_current_city_report_request_v1(jsonb)'
@@ -370,6 +380,7 @@ BEGIN
     LOOP
       IF function_row.grantee = 0
         OR function_row.grantee <> reader_oid
+        AND function_row.grantee <> release_writer_oid
         AND function_row.grantee <> maintenance_oid
       THEN
         RAISE EXCEPTION 'unexpected current city EXECUTE grant: %',
