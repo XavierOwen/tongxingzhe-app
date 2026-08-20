@@ -231,6 +231,127 @@ PostgreSQL 检查与 synthetic fixture 证明：
 
 CI 从空库执行全部 migration 两次，再运行检查和 fixture。随后执行 `pg_dump`／`pg_restore`，并在恢复库中重跑同一组验证。没有用过 Docker 的读者可以按[第 9 章](09-local-docker-and-ci-testing.md)从安装、启动到读取成功输出逐步执行；关系审计由 `verify_promotion_target_relationship_audit.sql` 和 `0018_promotion_target_relationship_audit.sql` fixture 覆盖。
 
+## 用模拟器预检离线 PII
+
+[`offline_pii_runtime_probe.dart`](../../tool/offline_pii_runtime_probe.dart) 是独立验证入口。它使用生产 `OfflinePiiVault`、真实平台安全存储和真实本地 Drift 数据库，但只写固定 synthetic 资料，不连接 Backend。探针导出的 JSON 只含 allowlist 状态码、轮次 ID、环境、版本和授权／过期时间，不含姓名、电话、邮箱、subject、对象 ID 或快照正文。
+
+这个探针提供预检证据，不改变发布结论：
+
+- 单元测试使用 fake store，只证明共享业务合同；
+- iOS Simulator、Android Emulator 和 unsigned／ad-hoc macOS 结果统一标记为 `simulated`；
+- Issue #161 要求的 iOS 真机和 macOS Development 签名证据仍需 Apple Developer Program；
+- Web 当前不装配离线 PII。即使浏览器安全存储可用，durable database 仍是 `runtimeProbeRequired`，探针只记录 `unsupported`，不会为了测试绕过策略。
+
+本入口不会生成 `runtime` 分类。真实设备或 Development 签名流程完成后，由人工按 #161 的证据矩阵单独复核和登记。
+
+### 运行前准备
+
+在仓库根目录执行：
+
+```bash
+flutter doctor -v
+flutter devices
+git status --short
+git rev-parse --short HEAD
+flutter --version
+```
+
+`git status --short` 必须没有输出。记下 commit、Flutter 版本、设备 ID 和模拟器 OS 版本，再替换后续命令中的尖括号。为这轮测试创建一个只含字母、数字和连字符的 run ID，例如 `probe-20260820-01`。同一轮的进程重启必须复用这个 ID；下一轮必须换新 ID。不要把邮箱、账号 token、OTP 或真实对象资料放进任何 `--dart-define`。
+
+iOS Simulator 不需要 Apple Developer Program：
+
+```bash
+xcrun simctl boot <ios-simulator-id>
+open -a Simulator
+flutter devices
+flutter run \
+  -t tool/offline_pii_runtime_probe.dart \
+  -d <ios-simulator-id> \
+  --dart-define=OFFLINE_PII_PROBE_COMMIT=<commit> \
+  --dart-define=OFFLINE_PII_PROBE_RUN_ID=<run-id> \
+  --dart-define=OFFLINE_PII_PROBE_FLUTTER_VERSION=<flutter-version> \
+  --dart-define='OFFLINE_PII_PROBE_OS_VERSION=iOS <version>' \
+  --dart-define=OFFLINE_PII_PROBE_ENVIRONMENT=ios-simulator \
+  --dart-define=OFFLINE_PII_PROBE_SIGNING=simulator
+```
+
+Android Emulator 使用同一入口：
+
+```bash
+flutter emulators
+flutter emulators --launch <android-emulator-id>
+flutter devices
+flutter run \
+  -t tool/offline_pii_runtime_probe.dart \
+  -d <android-device-id> \
+  --dart-define=OFFLINE_PII_PROBE_COMMIT=<commit> \
+  --dart-define=OFFLINE_PII_PROBE_RUN_ID=<run-id> \
+  --dart-define=OFFLINE_PII_PROBE_FLUTTER_VERSION=<flutter-version> \
+  --dart-define='OFFLINE_PII_PROBE_OS_VERSION=Android <version>' \
+  --dart-define=OFFLINE_PII_PROBE_ENVIRONMENT=android-emulator \
+  --dart-define=OFFLINE_PII_PROBE_SIGNING=simulator
+```
+
+启动 AVD 后，`flutter devices` 才会显示运行设备 ID，例如 `emulator-5554`。如果 shell 找不到 `adb`，使用 Android SDK 中 `platform-tools/adb` 的绝对路径；macOS 默认位置是 `$HOME/Library/Android/sdk/platform-tools/adb`。
+
+Web 的命令只验证失败关闭。页面中的写入按钮应保持禁用，`platformGate` 应记录 `unsupported` 和 `sensitiveStorageDisabled`：
+
+```bash
+flutter run \
+  -t tool/offline_pii_runtime_probe.dart \
+  -d chrome \
+  --dart-define=OFFLINE_PII_PROBE_COMMIT=<commit> \
+  --dart-define=OFFLINE_PII_PROBE_RUN_ID=<run-id> \
+  --dart-define=OFFLINE_PII_PROBE_FLUTTER_VERSION=<flutter-version> \
+  --dart-define='OFFLINE_PII_PROBE_OS_VERSION=Chrome <version>' \
+  --dart-define=OFFLINE_PII_PROBE_ENVIRONMENT=web-browser \
+  --dart-define=OFFLINE_PII_PROBE_SIGNING=not-applicable
+```
+
+macOS 只有在当前 App 能启动时才运行本探针。`build_macos_unsigned.sh` 只做构建检查，不提供已验证的探针启动路径。没有 provisioning profile 时，把运行格保留为 `blocked`。不要反复执行会停在 Xcode provisioning 的 `flutter run -d macos`，也不要把 unsigned build 写成 Keychain runtime pass。
+
+Windows 原生主机使用 PowerShell。先执行 `flutter devices`，确认输出含 Windows，再运行：
+
+```powershell
+flutter run `
+  -t tool/offline_pii_runtime_probe.dart `
+  -d windows `
+  --dart-define=OFFLINE_PII_PROBE_COMMIT=<commit> `
+  --dart-define=OFFLINE_PII_PROBE_RUN_ID=<run-id> `
+  --dart-define=OFFLINE_PII_PROBE_FLUTTER_VERSION=<flutter-version> `
+  --dart-define='OFFLINE_PII_PROBE_OS_VERSION=Windows <version>' `
+  --dart-define=OFFLINE_PII_PROBE_ENVIRONMENT=native-host `
+  --dart-define=OFFLINE_PII_PROBE_SIGNING=not-applicable
+```
+
+Linux 原生主机要先提供可用的 `libsecret`／keyring session。没有 keyring 时，预期结果是 `unsupported` 或 `blocked`，不是失败的 runtime pass：
+
+```bash
+flutter run \
+  -t tool/offline_pii_runtime_probe.dart \
+  -d linux \
+  --dart-define=OFFLINE_PII_PROBE_COMMIT=<commit> \
+  --dart-define=OFFLINE_PII_PROBE_RUN_ID=<run-id> \
+  --dart-define=OFFLINE_PII_PROBE_FLUTTER_VERSION=<flutter-version> \
+  --dart-define='OFFLINE_PII_PROBE_OS_VERSION=Linux <version>' \
+  --dart-define=OFFLINE_PII_PROBE_ENVIRONMENT=native-host \
+  --dart-define=OFFLINE_PII_PROBE_SIGNING=not-applicable
+```
+
+### 按阶段操作
+
+1. 点击“写入并读回 synthetic 快照”。
+2. 从操作系统完全结束 App，并停止当前 `flutter run`。重新执行同一条命令，再点击“检查恢复”。热重载和 hot restart 不是新进程；探针会比较 OS 进程 ID 和首次授权时间，并拒绝同一进程或续期快照通过。
+3. 依次检查 `72h` 前一分钟和 `72h` 整。探针写入 synthetic 授权时间，不修改系统时钟，也不等待七十二小时。
+4. 点击“模拟授权撤销并立即删除”。结果必须使用 `unauthorized` 锁因，并确认密文已经删除。
+5. 点击“模拟登出并让下一次删除失败”。此时安全存储值故意保留，但 `signedOut` 持久锁必须使它不可读。
+6. 再次完全结束 App 并重新运行，然后点击“重试删除”。同一进程或不同 run ID 直接重试会得到 `restartRequired`。
+7. 复制脱敏证据 JSON，最后点击“清除全部 synthetic 密文”。清理只操作五个固定探针 scope，不调用安全存储的全量删除。普通 Drift 会保留五条不含 PII 的 fail-closed 锁；下一轮成功 synthetic 写入会替换对应锁。
+
+操作系统可能重用 PID。若新进程仍得到 `restartRequired`，先清理，再从第 1 步开始新一轮；不要手工改 checkpoint。
+
+每个 `pass` 只说明该模拟环境观察到对应代码路径。它不能填入 #161 的真机／正式签名通过格，也不能关闭父 Issue #6。
+
 ## 当前边界
 
 当前实现完成对象目录、个人或机构资料建立、初始分配、当前分配读取、接触关联、对象当次反应、项目关系阶段、独立生命周期、共享备注历史、显式冲突、阶段显示别名、个人与机构的六类历史关系、十二个月上限的保留复核、明确续期、不可逆匿名化，以及当前分配对象的七十二小时加密只读快照。组织切片仍需把组织角色和较短保留期的管理界面接入已经存在的策略表。
