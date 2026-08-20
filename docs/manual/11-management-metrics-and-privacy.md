@@ -1023,6 +1023,69 @@ check、fixture 和并发脚本不能互相替代。fixture 覆盖 approved clai
 snapshot 对齐、固定 protected grid、`suppressed = null`、legacy／unknown／cross-project／untrusted 失败关闭、撤权和
 不可变审计。并发脚本覆盖 read-first 与 revoke-first 的锁线性化。
 
+## Slice 6AQ 如何把 current 城市读取交给 Backend runtime
+
+6AQ 在 6AP 和 Backend 之间增加一个 PostgreSQL runtime bridge。它接收 external identity 的 exact `issuer + subject`、
+project UUID 和 snapshot UUID：
+
+```text
+app_data.read_authorized_management_current_city_report_snapshot_v1(
+  trusted_issuer,
+  trusted_subject,
+  requested_project_id,
+  requested_snapshot_id
+)
+```
+
+bridge 只查 exact issuer／subject，并要求 identity 仍绑定 active app user。它不 trim 数据库中保存的 issuer 或 subject，
+所以带空格的存储值不会被干净 token 错误命中。它随后只调用 0058 的 current-city private function，并原样返回 6AP
+固定合同。completed 报告内的 project 必须匹配请求。它不调用 0032 渠道 read、generic reader、session context、
+bootstrap、目录、导出或任意查询。
+
+bridge 是 `SECURITY DEFINER`，固定 `search_path = pg_catalog`。runtime 只有 bridge `EXECUTE`，不能使用 `app_private`，
+不能读取关键 private table、`app_users` 或 `external_identities`。bridge owner 与 0058 private function owner 相同，
+且 owner 不是 runtime、区域维护或 release writer。adapter 只把 SQLSTATE `42501` 映射为稳定的 `forbidden`，不返回权限
+细节、内部用户 ID 或表内容。其他数据库错误仍是内部异常；本 Slice 没有 HTTP／wire 入口，完整错误映射留给后续切片。
+
+Backend adapter 对结果执行固定 allowlist 解析。它核对 root keys、请求 project／snapshot、固定 report／metric／query／
+privacy／source、period 和 target context shape、两个期间的 city 配对网格、cell keys 与顺序。cell 只能返回安全整数的
+`displayed` 或 `null` 的 `suppressed`。它拒绝 contact、source、contributor、城市名称、坐标、geometry 和其他额外字段。
+解析失败关闭，不能把数据库 JSON 当作已验证的 wire response。
+
+### 如何验证 6AQ
+
+第一次使用 Docker 时，先启动 Docker Desktop。Docker 是一次性测试环境：runner 创建隔离的 PostgreSQL 容器，运行测试，
+然后删除容器。测试使用 synthetic 数据，不连接 production，也不会修改生产数据库。仓库根目录运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+完整 runner 会显式运行 0059 migration、结构 check、可回滚 fixture、真实 Node 24 adapter integration、并发检查、migration
+checksum 和 dump／restore 恢复库。adapter integration 在自己的 transaction 中建立数据并回滚，因此不会依赖 fixture 的
+回滚状态。最终看到 `PostgreSQL Docker 测试全部通过。`，才表示这套本地 DB-only 证据齐全。
+
+没有 Docker 时，可以在专用 PostgreSQL 测试库按顺序运行。先确认 `DATABASE_URL` 不是 production：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_runtime_authorized_management_current_city_report_snapshot_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0059_runtime_authorized_management_current_city_report_snapshot_read.sql
+cd backend/server
+npm ci --ignore-scripts
+npm run build
+DATABASE_URL="$DATABASE_URL" \
+CURRENT_CITY_RUNTIME_FIXTURE=../../backend/database/fixtures/0059_runtime_authorized_management_current_city_report_snapshot_read.sql \
+node dist/test/management-current-city-report-snapshots.integration.js
+```
+
+fixture 证明数据库身份边界、0058 claim、project／snapshot 对齐、value-free audit 和 runtime ACL。adapter integration
+证明真实 PostgreSQL 返回值经过 Backend parser 后仍满足固定合同。二者都不证明 HTTP handler、Flutter、目录、导出、
+生产 identity provider、六平台 runtime 或真实区域证据已经完成。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和
