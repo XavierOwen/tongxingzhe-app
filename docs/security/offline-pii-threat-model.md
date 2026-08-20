@@ -67,4 +67,4 @@ flowchart LR
 
 [`drift_offline_pii_lock_store_test.dart`](../../test/privacy/drift_offline_pii_lock_store_test.dart) 直接检查普通 Drift 中没有身份 subject、姓名、电话或邮箱。[`secure_value_store_capability_probe_test.dart`](../../test/privacy/secure_value_store_capability_probe_test.dart) 固定安全存储探针的写、读、删合同。
 
-这些自动测试使用可控存储接缝，不是六平台运行时证据。各平台的真实结果和未验证项以[六平台能力证据矩阵](../spikes/six-platform-capability-matrix.md)为准。
+这些自动测试使用可控存储接缝，不是六平台运行时证据。各平台的真实结果和未验证项以[六平台能力证据矩阵](../spikes/six-platform-capability-matrix.md)为准。人工验证矩阵由 [Issue #161](https://github.com/XavierOwen/tongxingzhe-app/issues/161) 跟踪。

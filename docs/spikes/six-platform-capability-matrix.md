@@ -1,6 +1,6 @@
 # 六平台能力证据矩阵
 
-状态：**持续更新；截至 2026-08-14，确认六平台 build 和 iOS／Web／macOS／Windows 认证运行时证据。离线 PII 尚无平台运行时通过结论。**
+状态：**持续更新；截至 2026-08-20，确认六平台 build 和 iOS／Web／macOS／Windows 认证运行时证据。离线 PII 尚无平台运行时通过结论。**
 
 适用需求：`GOAL-006`、`AUTH-004`、`PLATFORM-001` 至 `PLATFORM-007`、`TEST-006`
 
@@ -27,6 +27,10 @@
 | Linux | CI pass | 待测；libsecret／keyring 待测 | 只有共享 migration 自动测试，平台持久化待测 | 共享自动测试通过；设备重启恢复待测 | 实现和启动探针已接线；libsecret／keyring 运行时待测 | 未验收 | build only |
 
 认证逐步证据和测试环境见 [Supabase Auth 六平台 Spike](./supabase-auth-six-platform.md)。离线对象资料的信任边界和残余风险见[威胁模型](../security/offline-pii-threat-model.md)。共享 Drift schema 和 migration 测试证明代码路径可重建旧库，但在每个平台完成关闭进程、重新打开和持久化探针前，不能把“测试通过”扩大为平台 runtime 通过。
+
+六平台离线 PII 的人工证据由 [Issue #161](https://github.com/XavierOwen/tongxingzhe-app/issues/161) 统一跟踪。原生五平台必须验证真实安全存储、跨进程、七十二小时、撤权和删除失败。Web 当前应证明禁用和失败关闭，不能登记 PII runtime pass。
+
+2026-08-20 在 `1b370d9` 复查 macOS：51 项离线 PII 定向自动测试和 unsigned build 通过；Development 构建因 Xcode 没有登录开发账号和匹配的 Mac App Development profile 而停止。本次没有运行 Keychain PII 流程，因此 macOS 离线 PII 仍为待测。
 
 ## 公开发布前必须补齐
 

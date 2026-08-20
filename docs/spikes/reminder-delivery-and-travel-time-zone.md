@@ -117,7 +117,7 @@ macOS 的设备 ID 通常是 `macos`。iPhone 和 Android 的 ID 以 `flutter de
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Android | Android Studio Medium Phone AVD，Android 16 API 36（模拟器） | pending | pending | pending | pending | pending | 见 2026-08-10 诊断记录；模拟器不计发布证据 |
 | iOS | iPhone 14 Pro，iOS 26.5.2（签名阻塞） | pending | pending | pending | pending | pending | 见 2026-08-10 诊断记录 |
-| macOS | Apple silicon Mac，macOS 26.5.2（ad-hoc 诊断） | pending | pending | pending | pending | pending | 见 2026-08-10 诊断记录；缺少 Development 描述文件 |
+| macOS | Apple silicon Mac，macOS 26.5.2（ad-hoc 诊断） | pending | pending | pending | pending | pending | 见 2026-08-10 诊断和 2026-08-20 重检；缺少 Development 描述文件 |
 
 `pass` 表示观察结果符合当前合同，并且有截图和 JSON。`failed` 表示有可复现的合同偏差。没有设备或没有完成场景时保留 `pending`。
 
@@ -154,6 +154,12 @@ Flutter 识别到已连接的 iPhone 14 Pro，系统版本为 iOS 26.5.2。设�
 - 前台、后台、终止、权限拒绝和旅行场景都没有取得 Development 签名下的完整截图与 JSON，因此全部保持 `pending`。
 
 本次 macOS 运行还暴露了一个探针缺陷。Darwin 插件在初始化时延后权限请求会返回 `false`，旧代码将它误判为初始化失败。commit `41b28c9` 只在 iOS 和 macOS 接受这个预期返回值，并保留 Android 的失败关闭行为。回归测试覆盖该路径。
+
+### 2026-08-20 macOS 重检
+
+在 `1b370d9`、Flutter 3.44.2、Xcode 26.6 和 macOS 26.5.2 上重新检查 Development 构建条件。计划、提醒、离线草稿、可访问性和探针的 103 项定向测试通过，unsigned macOS build 也通过。
+
+Development 构建在运行前停止。Xcode 没有登录开发账号，也没有 `com.tongxingzhe.app` 的 Mac App Development profile。允许 Xcode 更新 provisioning 后结论不变。本次没有观察通知首次呈现，也没有生成新的截图或探针 JSON，五个 macOS 场景继续保持 `pending`。
 
 ## Spike 的退出条件
 
