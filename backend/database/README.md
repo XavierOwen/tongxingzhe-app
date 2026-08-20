@@ -476,8 +476,34 @@ same／earlier cutoff、无共享期间、共享期间的城市值或隐私状�
 snapshot read、directory 和 export 仍只接受固定渠道定义，不接受区域文档。
 
 0057 的 release writer 之外，runtime、PUBLIC 和区域维护身份不能执行发布、读取区域 provenance 或直接写区域
-attempt／snapshot 表。0057 不实现 HTTP、UI、Flutter、Drift、缓存、目录、读取、导出、生产调度、retention 或
-warehouse。通过 0057 的数据库检查只证明 synthetic DB-only 合同，不证明生产区域报告已经发布。
+attempt／snapshot 表。0057 本身不实现 HTTP、UI、Flutter、Drift、缓存、目录、读取、导出、生产调度、retention 或
+warehouse。通过 0057 的数据库检查只证明 synthetic DB-only 合同，不证明生产区域报告已经发布。0058 单独增加
+current 城市快照读取，不改变 0057 的发布和 provenance 边界。
+
+`0058_authorized_management_current_city_report_snapshot_read.sql` 增加 DB-only 的 6AP 读取合同。调用方必须提供
+用户、项目和 snapshot UUID。函数先重新解析 `view_anonymous_analytics`，再只接受有
+`current_city_management_report_snapshot_release` claim 的 0057 `approved`／`approved_baseline` attempt。
+`reason_codes` 必须是空数组。attempt 与 snapshot 的 report、query、lineage、reporting time zone、cutoff、previous
+snapshot 和 target tuple 必须对齐，函数还会再次调用 0057 current-city document validator。
+
+成功读取在同一 transaction 写入不可变、value-free 的访问审计。unknown、cross-project、legacy channel 或不可信
+provenance 只返回失败状态，不返回 protected report。撤权与读取共享授权锁；runtime、PUBLIC 和区域维护身份不能
+读取审计表或执行函数。0058 不增加 HTTP、Flutter、Drift、缓存、目录或导出。
+
+在专用测试库中验证 6AP：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_authorized_management_current_city_report_snapshot_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0058_authorized_management_current_city_report_snapshot_read.sql
+./tool/verify_authorized_management_current_city_report_snapshot_read_concurrency.sh
+```
+
+完整 Docker runner 会自动发现 0058 的 migration、check、fixture 和并发脚本，并在 checksum、dump／restore 和恢复库
+中重跑。通过只证明 synthetic DB-only 合同成立，不证明生产区域证据或 HTTP／客户端已经完成。
 
 只在已有专用测试库调试 6AO 时，先确认 `DATABASE_URL` 不是 production，再按顺序运行：
 
