@@ -81,6 +81,10 @@ import {
   type ManagementReportSnapshotStore,
 } from "./management-report-snapshots.js";
 import {
+  readManagementCurrentCityReportSnapshot,
+  type ManagementCurrentCityReportSnapshotStore,
+} from "./management-current-city-report-snapshots.js";
+import {
   exportManagementReportSnapshot,
   type ManagementReportSnapshotExportStore,
 } from "./management-report-snapshot-exports.js";
@@ -122,6 +126,8 @@ export interface BackendServerDependencies
   readonly personalFollowUpConsentOptInStore?:
     PersonalFollowUpConsentOptInStore;
   readonly managementReportSnapshotStore?: ManagementReportSnapshotStore;
+  readonly managementCurrentCityReportSnapshotStore?:
+    ManagementCurrentCityReportSnapshotStore;
   readonly managementReportSnapshotExportStore?:
     ManagementReportSnapshotExportStore;
   readonly managementReportSnapshotDirectoryStore?:
@@ -288,6 +294,37 @@ export function createBackendServer(
       } else {
         response.end(JSON.stringify(result.body));
       }
+      return;
+    }
+
+    const managementCurrentCityReportSnapshotMatch =
+      requestUrl.pathname.match(
+        /^\/v1\/projects\/([^/]+)\/management-current-city-report-snapshots\/([^/]+)$/,
+      );
+    if (
+      request.method === "GET" &&
+      managementCurrentCityReportSnapshotMatch !== null
+    ) {
+      const result = await readManagementCurrentCityReportSnapshot(
+        {
+          authorization: request.headers.authorization,
+          projectId: managementCurrentCityReportSnapshotMatch[1] ?? "",
+          snapshotId: managementCurrentCityReportSnapshotMatch[2] ?? "",
+          hasQuery: requestUrl.search.length > 0,
+          hasBody: requestDeclaresBody(request.headers),
+        },
+        {
+          identityVerifier: dependencies.identityVerifier,
+          ...(dependencies.managementCurrentCityReportSnapshotStore === undefined
+            ? {}
+            : {
+              snapshotStore:
+                dependencies.managementCurrentCityReportSnapshotStore,
+            }),
+        },
+      );
+      response.statusCode = result.status;
+      response.end(JSON.stringify(result.body));
       return;
     }
 

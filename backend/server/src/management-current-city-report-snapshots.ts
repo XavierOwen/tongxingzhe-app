@@ -1,3 +1,8 @@
+import {bearerToken} from "./authorization.js";
+import {
+  IdentityVerificationError,
+  type IdentityVerifier,
+} from "./identity.js";
 import type {VerifiedIdentity} from "./identity.js";
 
 export type ManagementCurrentCityReportSnapshotRead = {
@@ -24,6 +29,113 @@ export interface ManagementCurrentCityReportSnapshotStore {
     projectId: string,
     snapshotId: string,
   ): Promise<ManagementCurrentCityReportSnapshotRead>;
+}
+
+export interface ManagementCurrentCityReportSnapshotHttpRequest {
+  readonly authorization: string | undefined;
+  readonly projectId: string;
+  readonly snapshotId: string;
+  readonly hasQuery: boolean;
+  readonly hasBody: boolean;
+}
+
+export interface ManagementCurrentCityReportSnapshotHttpDependencies {
+  readonly identityVerifier: IdentityVerifier;
+  readonly snapshotStore?: ManagementCurrentCityReportSnapshotStore;
+}
+
+export interface ManagementCurrentCityReportSnapshotHttpResult {
+  readonly status: number;
+  readonly body: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * Reads one current-city snapshot after authentication and strict route checks.
+ *
+ * The adapter is responsible for the fixed 6AP report contract. This boundary
+ * only serializes its value-free outcomes and maps implementation failures to
+ * stable HTTP responses.
+ */
+export async function readManagementCurrentCityReportSnapshot(
+  request: ManagementCurrentCityReportSnapshotHttpRequest,
+  dependencies: ManagementCurrentCityReportSnapshotHttpDependencies,
+): Promise<ManagementCurrentCityReportSnapshotHttpResult> {
+  const accessToken = bearerToken(request.authorization);
+  if (accessToken === null) return failure(401, "unauthenticated");
+
+  let identity: VerifiedIdentity;
+  try {
+    identity = await dependencies.identityVerifier.verify(accessToken);
+  } catch (error) {
+    return error instanceof IdentityVerificationError
+      ? failure(401, "unauthenticated")
+      : failure(
+        503,
+        "management_current_city_report_snapshot_unavailable",
+      );
+  }
+
+  if (
+    !uuidPattern.test(request.projectId) ||
+    !uuidPattern.test(request.snapshotId) ||
+    request.hasQuery ||
+    request.hasBody
+  ) {
+    return failure(
+      400,
+      "invalid_management_current_city_report_snapshot_request",
+    );
+  }
+  if (dependencies.snapshotStore === undefined) {
+    return failure(
+      503,
+      "management_current_city_report_snapshot_unavailable",
+    );
+  }
+
+  try {
+    const result = await dependencies.snapshotStore.read(
+      identity,
+      request.projectId,
+      request.snapshotId,
+    );
+    if (result.status === "completed") {
+      return {
+        status: 200,
+        body: {
+          access_event_id: result.accessEventId,
+          snapshot_id: result.resolvedSnapshotId,
+          report: result.protectedReport,
+        },
+      };
+    }
+    if (result.status === "not_found") {
+      return auditedFailure(
+        404,
+        "management_current_city_report_snapshot_not_found",
+        result.accessEventId,
+      );
+    }
+    return auditedFailure(
+      409,
+      "management_current_city_report_snapshot_untrusted",
+      result.accessEventId,
+    );
+  } catch (error) {
+    if (
+      error instanceof ManagementCurrentCityReportSnapshotStoreError &&
+      error.code === "forbidden"
+    ) {
+      return failure(
+        403,
+        "management_current_city_report_snapshot_forbidden",
+      );
+    }
+    return failure(
+      503,
+      "management_current_city_report_snapshot_unavailable",
+    );
+  }
 }
 
 export type ManagementCurrentCityReportSnapshotQuery = (
@@ -66,6 +178,24 @@ export class ManagementCurrentCityReportSnapshotStoreError extends Error {
     super(code);
     this.name = "ManagementCurrentCityReportSnapshotStoreError";
   }
+}
+
+function failure(
+  status: number,
+  code: string,
+): ManagementCurrentCityReportSnapshotHttpResult {
+  return {status, body: {error: {code}}};
+}
+
+function auditedFailure(
+  status: number,
+  code: string,
+  accessEventId: string,
+): ManagementCurrentCityReportSnapshotHttpResult {
+  return {
+    status,
+    body: {error: {code, access_event_id: accessEventId}},
+  };
 }
 
 function parseAccessResult(

@@ -6,7 +6,7 @@
 
 - ADR-0001 至 ADR-0095 作为 `TXZ-SPEC-001` 的首批决策集，于 2026-07-31 一并接受；文件另有状态时以文件为准。
 - ADR-0096、ADR-0097 于 2026-07-31 接受；ADR-0098、ADR-0099 于 2026-08-03 接受；ADR-0100 于 2026-08-05 接受；ADR-0101、ADR-0102 于 2026-08-10 接受；ADR-0103 至 ADR-0108 于 2026-08-11 接受；ADR-0109 至 ADR-0119 于 2026-08-12 接受；ADR-0120 至 ADR-0129 于 2026-08-13 接受；ADR-0130 于 2026-08-13 接受。
-- ADR-0131 至 ADR-0135 于 2026-08-14 接受；ADR-0136 于 2026-08-19 接受；ADR-0137 至 ADR-0138 于 2026-08-20 接受。
+- ADR-0131 至 ADR-0135 于 2026-08-14 接受；ADR-0136 于 2026-08-19 接受；ADR-0137 至 ADR-0139 于 2026-08-20 接受。
 - 被取代的 ADR 保留原文和指向新 ADR 的状态，不再作为当前实现合同。
 - 新 ADR 默认只需一个清楚的决定段落。只有背景、备选和后果能帮助未来维护者避免误读时，才增加这些章节。
 - 可逆的 UI 细节、库选择和票内实现步骤留在 Spec 或 Issue，不为增加编号而创建 ADR。
@@ -61,6 +61,7 @@
 | [0136](./0136-private-current-city-snapshot-lineage.md) | 已接受，2026-08-19 | Slice 6AO；Issue #159；`ANALYTICS-024`、`PRIVACY-016`、`TEST-018` | current 城市报告复用通用不可变快照存储，但区域发布尝试与 provenance 独立；发布能力、可信时区 revision 和 target tuple 漂移失败关闭，旧渠道 v2/read/directory/export 继续排除 |
 | [0137](./0137-authorized-current-city-snapshot-reads-use-independent-provenance.md) | 已接受，2026-08-20 | Slice 6AP；Issue #165；`ANALYTICS-025`、`PRIVACY-017`、`TEST-019` | current 城市快照读取只接受 0057 的独立区域 provenance；授权重检、validator、时区／截止点／前一快照对齐和 value-free 访问审计在同一事务中完成 |
 | [0138](./0138-runtime-current-city-snapshot-read-uses-an-exact-identity-bridge.md) | 已接受，2026-08-20 | Slice 6AQ；Issue #167；`ANALYTICS-026`、`PRIVACY-018`、`TEST-020` | Backend runtime 通过 exact external identity 和显式 project／snapshot 调用 0059 narrow bridge；runtime 只有 bridge EXECUTE，adapter 严格 allowlist 受保护 current-city JSON |
+| [0139](./0139-current-city-snapshot-http-reads-authenticate-before-route-validation.md) | 已接受，2026-08-20 | Slice 6AR；`ANALYTICS-027`、`PRIVACY-019`、`TEST-021` | current-city HTTP 读取使用独立固定 route；认证先于 UUID／query／body／store，handler 只调用 6AQ adapter 并统一脱敏错误 |
 
 ## 按主题查找
 
@@ -72,7 +73,7 @@
 | 组织、保留、导入导出与合并 | [0030](./0030-allow-verified-users-to-create-organizations.md)–[0043](./0043-promotion-target-merges-are-reversible.md) | Slice 4、7；`ORG`、`TARGET`、`AUTHZ` |
 | 私人计划、通知与周期 | [0044](./0044-personal-action-plans-are-private-and-user-controlled.md)–[0052](./0052-late-entered-contacts-count-in-their-occurrence-period.md) | Slice 5；`PLAN`、`PLATFORM` |
 | 说明书与发布检查 | [0053](./0053-production-code-and-learning-materials-evolve-together.md)–[0059](./0059-documentation-and-statistics-checks-block-releases.md) | 全部 Slice；`MANUAL`、Definition of Done |
-| 指标、报告与隐私 | [0060](./0060-ordinal-scale-distributions-are-primary.md)–[0077](./0077-core-metrics-ship-with-code-and-project-metrics-use-safe-configuration.md)，另见 [0099](./0099-management-analytics-use-bounded-query-surfaces.md)、[0101](./0101-management-weekly-reports-use-two-complete-iso-weeks.md)–[0138](./0138-runtime-current-city-snapshot-read-uses-an-exact-identity-bridge.md) | Slice 6；`ANALYTICS`、`PRIVACY`、`AUTHZ`、`REGION`、`ARCH`、`TEST-005`、`TEST-014`–`TEST-020` |
+| 指标、报告与隐私 | [0060](./0060-ordinal-scale-distributions-are-primary.md)–[0077](./0077-core-metrics-ship-with-code-and-project-metrics-use-safe-configuration.md)，另见 [0099](./0099-management-analytics-use-bounded-query-surfaces.md)、[0101](./0101-management-weekly-reports-use-two-complete-iso-weeks.md)–[0139](./0139-current-city-snapshot-http-reads-authenticate-before-route-validation.md) | Slice 6；`ANALYTICS`、`PRIVACY`、`AUTHZ`、`REGION`、`ARCH`、`TEST-005`、`TEST-014`–`TEST-021` |
 | 当前上下文、问卷、草稿与导航 | [0078](./0078-a-visible-project-context-scopes-default-work.md)–[0090](./0090-contact-entry-prioritizes-core-facts-with-progressive-disclosure.md) | Slice 1、3、5；`CTX`、`QUESTION`、`DRAFT`、`UI` |
 | 尝试、渠道、触达和机构关系 | [0091](./0091-unsuccessful-direct-outreach-is-a-contact-attempt.md)–[0095](./0095-person-to-institution-relationships-use-six-stable-kinds.md) | Slice 1、2、4；`CONTACT`、`TARGET` |
 | 基础设施 | [0097](./0097-use-supabase-postgresql-for-the-initial-stage.md) | Slice 0／发布门槛；`ARCH-003`–`ARCH-010` |

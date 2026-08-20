@@ -1086,6 +1086,71 @@ fixture 证明数据库身份边界、0058 claim、project／snapshot 对齐、v
 证明真实 PostgreSQL 返回值经过 Backend parser 后仍满足固定合同。二者都不证明 HTTP handler、Flutter、目录、导出、
 生产 identity provider、六平台 runtime 或真实区域证据已经完成。
 
+## Slice 6AR 如何通过 Backend HTTP 读取 current 城市快照
+
+6AR 在 6AQ adapter 外增加一个固定的只读 HTTP 入口：
+
+```text
+GET /v1/projects/:projectId/management-current-city-report-snapshots/:snapshotId
+```
+
+请求只带两个 UUID path 参数。它不接受 query、GET body、筛选、报告定义、时区、截止点或 SQL。Backend 先解析并验证
+Bearer token，再检查 UUID、query、body 和 store。无 token 或无效 token 时，即使 path、query、body 或 store 不合法，
+也先返回 `401`。认证不使用 `SessionContext`，只把 verified issuer、subject、project ID 和 snapshot ID 交给 6AQ
+adapter。
+
+成功响应沿用 6AP 的固定 protected report：
+
+```json
+{
+  "access_event_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "snapshot_id": "88888888-8888-4888-8888-888888888888",
+  "report": {"...": "6AP protected report"}
+}
+```
+
+handler 等待 adapter 的 PostgreSQL Promise 完成后才写响应。错误只返回稳定 code。`404` 和 `409` 可以带 value-free
+`access_event_id`，不返回报告格、授权关系、external subject、数据库消息、SQL 或栈：
+
+| 情况 | 状态和 code |
+| --- | --- |
+| token 缺失或无效 | `401 unauthenticated` |
+| UUID、query 或 GET body 无效 | `400 invalid_management_current_city_report_snapshot_request` |
+| 6AP 重新授权拒绝 | `403 management_current_city_report_snapshot_forbidden` |
+| 快照不存在或跨项目 | `404 management_current_city_report_snapshot_not_found` |
+| provenance 不可信 | `409 management_current_city_report_snapshot_untrusted` |
+| verifier、adapter、数据库或未知 SQLSTATE 异常 | `503 management_current_city_report_snapshot_unavailable` |
+
+server 对该 JSON 路由的成功和错误响应都设置 `Content-Type: application/json; charset=utf-8` 与
+`Cache-Control: no-store`。生产 `main.ts` 只注入 `PostgresManagementCurrentCityReportSnapshotStore`，因此 route
+不会退回渠道快照 reader、通用 reader、私有表或任意查询。
+
+### 如何验证 6AR
+
+这是 Backend HTTP 合同，不需要真实设备。先在 `backend/server` 安装 Node 依赖并运行静态检查和完整 Backend 测试：
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+测试包含 handler 的认证顺序、UUID／query／body 拒绝、六类状态映射、未知 SQLSTATE 脱敏和 Promise gate；route 测试还会
+发送带 `transfer-encoding` 的 GET body，检查固定 path、错误响应和 `no-store`。这些 synthetic HTTP 测试不证明真实身份
+提供方、生产 PostgreSQL 权限或六平台运行时能力。
+
+Docker runner 仍用于 0058／0059 的 PostgreSQL 证据，不替代 6AR 的 Node HTTP 测试。第一次使用 Docker 时，启动
+Docker Desktop，然后在仓库根目录运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 会创建隔离的 PostgreSQL 容器，运行 migration、结构 check、fixture、adapter integration、并发检查、checksum 和
+dump／restore，再删除容器。它不连接 production，也不会证明 HTTP、Flutter、真实账号或设备验收。若只修改 6AR HTTP，
+Backend `check` 与 `test` 是最小验证集；涉及 0058／0059 数据库代码时，再运行完整 Docker 套件。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和
