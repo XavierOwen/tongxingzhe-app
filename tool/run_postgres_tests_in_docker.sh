@@ -538,6 +538,7 @@ docker run \
   --mount 'type=volume,dst=/work' \
   --workdir /work \
   --env DATABASE_URL="${database_url}" \
+  --env CURRENT_CITY_RUNTIME_FIXTURE=/source/backend/database/fixtures/0059_runtime_authorized_management_current_city_report_snapshot_read.sql \
   "${backend_image}" \
   bash -lc \
     'mkdir -p backend/server backend/database/fixtures &&
@@ -557,7 +558,8 @@ docker run \
        dist/test/personal-current-relationship-stage.integration.js \
        dist/test/personal-relationship-stage-change-summary.integration.js \
        dist/test/personal-follow-up-consent-ratio.integration.js \
-       dist/test/personal-follow-up-consent-opt-in.integration.js'
+       dist/test/personal-follow-up-consent-opt-in.integration.js \
+       dist/test/management-current-city-report-snapshots.integration.js'
 
 echo '用独立数据库会话验证并发不变量。'
 # Concurrency scripts commit their synthetic rows, and the later pg_dump keeps

@@ -505,6 +505,41 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 完整 Docker runner 会自动发现 0058 的 migration、check、fixture 和并发脚本，并在 checksum、dump／restore 和恢复库
 中重跑。通过只证明 synthetic DB-only 合同成立，不证明生产区域证据或 HTTP／客户端已经完成。
 
+`0059_runtime_authorized_management_current_city_report_snapshot_read.sql` 增加 Backend runtime 的窄读取桥。调用方
+提供 external identity 的 exact issuer／subject、project UUID 和 snapshot UUID。bridge 只映射现有 active identity，
+随后调用 0058 current-city 私有函数。它不 trim 数据库中的 identity 值，也不调用渠道 read。runtime 本身不能直接读取
+用户、identity、snapshot 或审计表。
+
+0059 使用 `SECURITY DEFINER` 和 `search_path = pg_catalog`。runtime 只有 bridge `EXECUTE`，没有 `app_private` schema
+usage、关键私有表或函数权限。bridge owner 必须与 0058 私有函数 owner 相同，且不能是 runtime、区域维护或 release
+writer。Backend adapter 只执行一次固定 SQL，并严格检查 root keys、project／snapshot 绑定、固定报告定义、period、
+target context、两个期间的 city grid、cell keys 和顺序。它拒绝 contact、source、contributor、城市名称、坐标、
+geometry 和其他额外字段。
+
+真实 adapter integration 不依赖会回滚的 psql fixture。它在自己的 transaction 中建立 fixture 数据，读取 active identity，
+验证未知 identity 失败关闭，最后回滚。完整 Docker runner 会显式运行该 integration，并在 checksum、并发和 dump／restore
+恢复库中重跑 0059。
+
+在专用测试库中验证 6AQ：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_runtime_authorized_management_current_city_report_snapshot_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0059_runtime_authorized_management_current_city_report_snapshot_read.sql
+cd backend/server
+npm run build
+DATABASE_URL="$DATABASE_URL" \
+CURRENT_CITY_RUNTIME_FIXTURE=../../backend/database/fixtures/0059_runtime_authorized_management_current_city_report_snapshot_read.sql \
+node dist/test/management-current-city-report-snapshots.integration.js
+```
+
+fixture、integration 和并发脚本不能互相替代。fixture 证明 exact identity、0058 claim、project／snapshot 对齐、runtime
+ACL 和 value-free audit。integration 证明真实 Node adapter 的单次 bridge 调用和严格 JSON 对账。通过只证明 DB-only
+runtime bridge 合同，不证明 HTTP、Flutter、目录、导出或真实平台运行时证据。
+
 只在已有专用测试库调试 6AO 时，先确认 `DATABASE_URL` 不是 production，再按顺序运行：
 
 ```bash
