@@ -225,6 +225,64 @@ production store 只执行一条参数化 `pool.query`。PostgreSQL 提交这条
 
 所有响应使用 `Cache-Control: no-store`。错误不包含报告格、授权关系、external subject 或 PostgreSQL 消息。runtime 只能执行 `app_data` bridge，不能使用 `app_private`。
 
+## current 城市快照 HTTP 读取合同
+
+6AR 使用独立路由读取 6AP 的 current-city protected snapshot：
+
+```text
+GET /v1/projects/:projectId/management-current-city-report-snapshots/:snapshotId
+```
+
+请求只接受两个 UUID path 参数。它不接受 query、GET body、筛选、报告定义、时区、截止点或 SQL。handler 先解析并
+验证 Bearer token，再检查 UUID、query、body 和 store。认证失败时，其他输入即使无效，也先返回 `401`。handler 不调用
+`SessionContext`，只把 verified issuer、subject、project ID 和 snapshot ID 传给 6AQ adapter。
+
+成功响应如下：
+
+```json
+{
+  "access_event_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "snapshot_id": "88888888-8888-4888-8888-888888888888",
+  "report": {}
+}
+```
+
+`report` 是 6AP 的固定 current-city protected report。adapter 的 PostgreSQL Promise 解决后，handler 才发送响应。
+错误只返回稳定 code。`404` 和 `409` 可以带 value-free `access_event_id`，不返回报告格、授权关系、external subject、
+数据库消息、SQL 或栈：
+
+| 结果 | HTTP 合同 |
+| --- | --- |
+| token 缺失或无效 | `401 unauthenticated` |
+| UUID、query 或 GET body 无效 | `400 invalid_management_current_city_report_snapshot_request` |
+| 6AP 重新授权拒绝 | `403 management_current_city_report_snapshot_forbidden` |
+| 快照不存在或跨项目 | `404 management_current_city_report_snapshot_not_found` |
+| provenance 不可信 | `409 management_current_city_report_snapshot_untrusted` |
+| verifier、adapter、数据库或未知 SQLSTATE 异常 | `503 management_current_city_report_snapshot_unavailable` |
+
+server 对成功和错误响应都设置 `Content-Type: application/json; charset=utf-8` 与 `Cache-Control: no-store`。`main.ts`
+只组合 `PostgresManagementCurrentCityReportSnapshotStore`，因此该 route 不调用渠道快照 reader、通用 reader、私有表或
+任意查询。该 route 不提供目录、导出、离线缓存、同步或 Flutter 页面。
+
+### 6AR 的本地测试
+
+在仓库根目录运行 Backend 测试：
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+HTTP 测试使用 synthetic identity 和 store。它覆盖认证顺序、UUID／query／GET body 拒绝、401／400／403／404／409／503
+映射、未知 SQLSTATE 脱敏、Promise gate、固定 route 和 `no-store`。带 body 的 GET 使用 `transfer-encoding` 发送，避免只
+测试请求头而没有测试 route 的真实 body 判定。
+
+`./tool/run_postgres_tests_in_docker.sh` 仍用于 0058／0059 的 PostgreSQL migration、fixture、adapter integration、并发、
+checksum 和 dump／restore。它不会替代 Node HTTP 测试，也不证明生产身份、Flutter 或真实平台运行时。第一次使用时先
+启动 Docker Desktop，再在仓库根目录运行该脚本。测试 runner 使用隔离容器和 synthetic 数据，完成后删除容器。
+
 ## 管理报告快照目录合同
 
 `GET /v1/projects/:projectId/management-report-snapshots` 只接受一个显式项目 UUID。它不接受 body、query、筛选、分页、报告 ID、时区、capability 或内部用户 ID。6M 保存的管理分析选择只帮助导航，不是授权，也不会替代 path 中的项目。

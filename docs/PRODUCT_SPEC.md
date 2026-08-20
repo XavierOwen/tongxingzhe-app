@@ -615,6 +615,38 @@ report identity、query fingerprint、privacy、source、period／target context
 本 Slice 仍是 DB-only runtime bridge，不交付 HTTP handler、Flutter、Drift、缓存、目录、导出、区域名称、边界、
 坐标、生产 identity provider 或六平台 runtime 证据。
 
+#### Slice 6AR：通过 Backend HTTP 读取 current 城市快照
+
+Slice 6AR 为 6AQ adapter 增加一个固定的 Backend HTTP 读取入口：
+
+```text
+GET /v1/projects/:projectId/management-current-city-report-snapshots/:snapshotId
+```
+
+请求只接受路径中的 project UUID 和 snapshot UUID。handler 先验证 Bearer token，再检查 UUID、query、GET body
+和 adapter 是否可用。它不读取 SessionContext，不接受筛选、报告定义、时区、截止点或客户端 SQL。认证失败时，
+即使路径、query、body 或 adapter 状态无效，也先返回 `401`。
+
+通过验证后，handler 只调用 6AQ 的 current-city adapter。adapter 的单次 PostgreSQL Promise 完成后，handler 才发送
+响应。成功响应保留 6AP 的受保护报告形状，并包含 `access_event_id` 与 `snapshot_id`。错误响应只含稳定错误码和
+必要的访问事件 ID，不含数据库消息、SQL、栈、external subject、报告格、城市名称或坐标。
+
+| 结果 | HTTP 合同 |
+| --- | --- |
+| token 缺失或验证失败 | `401 unauthenticated` |
+| UUID、query 或 GET body 无效 | `400 invalid_management_current_city_report_snapshot_request` |
+| 6AP 授权拒绝 | `403 management_current_city_report_snapshot_forbidden` |
+| 快照不存在或跨项目 | `404 management_current_city_report_snapshot_not_found` |
+| current-city provenance 不可信 | `409 management_current_city_report_snapshot_untrusted` |
+| adapter、数据库或未知 SQLSTATE 异常 | `503 management_current_city_report_snapshot_unavailable` |
+
+成功和错误响应都使用 JSON `Content-Type` 与 `Cache-Control: no-store`。生产入口只组合
+`PostgresManagementCurrentCityReportSnapshotStore`，不调用渠道快照 reader、通用 reader、私有表或任意查询。
+
+本 Slice 不增加 Flutter、目录、分页、搜索、导出、下载、离线缓存、同步、快照创建／刷新／更正／删除、六平台
+真机验收或 Apple Developer Program 工作。Backend handler、route、composition 和错误映射由单元、HTTP、静态边界及
+既有 PostgreSQL Docker 测试覆盖。
+
 只有高级分析可显示：
 
 ```text
@@ -653,6 +685,7 @@ report identity、query fingerprint、privacy、source、period／target context
 | `ANALYTICS-024` | current 城市私有 validator／pair comparison 固定 6AN 的 report、metric、dimension、view、granularity、query fingerprint、privacy、source scope、期间、watermark、target context 和完整 cells；unavailable、额外字段、错误 identity、错误 tuple、期间或网格失败关闭。发布在锁后重新验证 `release_management_reports`，由同一 release transaction 派生可信项目报告时区 revision、`data_cutoff_utc` 和 6AM target context；成功发布链接前一 snapshot，相同 request 与固定上下文精确幂等，不新增 snapshot 或 attempt。current-city 与渠道发布 UUID 互斥；trusted v2 与其委托的 v1 记录共享渠道 claim。same／earlier cutoff、无共享期间、共享值／隐私变化及定义、期间、网格、target tuple 或时区 revision 漂移返回稳定 blocked reason；区域 attempt／provenance 不得冒充渠道 v2 provenance。 |
 | `ANALYTICS-025` | current 城市快照读取只接受显式 project／snapshot、重新解析的 `view_anonymous_analytics` 和通过 current-city release family claim 的 0057 approved attempt；attempt 与 snapshot 的 report、query、lineage、reporting time zone、`data_cutoff_utc`、previous pointer 和 target tuple 必须一致，并在返回前重新运行 current-city document validator。 |
 | `ANALYTICS-026` | Backend runtime current 城市读取只通过 0059 narrow bridge；bridge 用 exact external identity、显式 project／snapshot 和 0058 current-city private function，不调用渠道 read、generic reader、目录、导出或任意查询；它原样返回 6AP 固定合同，completed 报告的 project 必须匹配请求。 |
+| `ANALYTICS-027` | Backend HTTP 只接受固定 current-city snapshot path；认证先于 UUID、query、GET body 和 store 检查，成功只通过 6AQ adapter 返回 6AP 固定报告，响应在 adapter Promise 完成后发送。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -676,6 +709,7 @@ report identity、query fingerprint、privacy、source、period／target context
 | `PRIVACY-016` | current 城市受保护快照可以复用通用不可变 snapshot storage，但区域发布 attempt／provenance 必须独立；只允许保存已通过 6AN 合同的文档，失败关闭的尝试不保存 protected document、cells、来源、贡献者、隐藏前值或 PII。snapshot 与 attempt 追加不可变，不允许 UPDATE 或 DELETE；runtime、`PUBLIC` 和区域维护身份不能读取区域 provenance 或直接写表，也不因此取得读取、目录或导出能力。 |
 | `PRIVACY-017` | current 城市快照读取只在 provenance、授权和 validator 全部通过时返回受保护报告；未知、跨项目或不可信快照不返回正文。访问审计不可变且 value-free，只保存最小授权 lineage、结果和稳定 reason code；runtime、`PUBLIC` 和区域维护身份不能读取审计或执行读取函数。 |
 | `PRIVACY-018` | 0059 runtime bridge 使用 `SECURITY DEFINER`、固定 `pg_catalog` search path 和 exact external identity 映射；runtime 只拥有 bridge `EXECUTE`，不能使用 `app_private` 或读取 identity／用户／快照／审计表。Backend parser 只接受固定 current-city protected JSON，拒绝 contact、source、contributor、城市名称、坐标、geometry 和其他多余字段。 |
+| `PRIVACY-019` | current-city HTTP 错误只返回稳定 code 和必要的访问事件 ID；未知 SQLSTATE、数据库消息、SQL、栈、external subject、报告格、城市名称和坐标不进入响应。所有响应使用 `Cache-Control: no-store`。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
 
@@ -894,6 +928,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-018` | 6AO fixture 覆盖完整 6AN validator／pair 字段、completed／unavailable、额外字段、错误 identity、错误 tuple、缺失／重复／乱序网格、首个唯一 baseline、前一 snapshot 链接、相同 request 与上下文精确幂等、跨区域／渠道 release family 的 request UUID 冲突、稳定滚动发布、same／earlier cutoff、无共享期间、共享值／隐私变化、定义／期间／网格／target tuple／时区 revision 漂移、并发发布和 value-free blocked attempt；blocked 记录不含 protected document、cells、来源、贡献者、隐藏前值或 PII，snapshot／attempt／request claim UPDATE／DELETE、固定 reason allowlist、最小权限和旧渠道回归均有证据。还要检查 `release_management_reports`、通用 snapshot storage 复用、区域 provenance 与渠道 v2/read/directory/export 隔离、checksum 和 dump／restore。Docker 套件必须重跑这些检查。 |
 | `TEST-019` | 6AP fixture 覆盖 approved／approved_baseline 与 current-city family claim、`reason_codes = []`、reporting time zone／cutoff／previous snapshot 对齐、再次 current-city validator、固定 protected grid 与 `suppressed = null`、unknown／cross-project／legacy channel／untrusted provenance 失败关闭、撤权和不可变 value-free read audit。并发脚本覆盖 read-first 与 revoke-first 的锁线性化；完整 Docker 套件在 checksum 和 dump／restore 后重跑。 |
 | `TEST-020` | 6AQ fixture 覆盖 exact issuer／subject、active／停用／未知 identity、trim 不映射、显式 project／snapshot、0058 private bridge、runtime ACL、owner 对齐、固定 root／period／target／cell keys、两期间 city grid 和 rejected extra fields。真实 PostgreSQL adapter integration 自建数据并回滚；Docker runner 运行 migration、check、fixture、integration、并发、checksum 和 dump／restore。 |
+| `TEST-021` | 6AR handler 覆盖认证先于 UUID／query／GET body／store、401／400／403／404／409／503 稳定映射、未知 SQLSTATE 不泄漏、adapter Promise gate 和固定 route；route 覆盖 method、path、transfer-encoding body 与 no-store；production entry 只组合 6AQ adapter。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -1000,7 +1035,9 @@ Slice 0、1、2 完成后可以发放内部 Alpha，用于验证匿名接触闭�
 
 固定匿名管理报告文件导出同时检查 `view_anonymous_analytics` 与 `export_management_reports`，只序列化可信 v2 快照，保持 16 格顺序和 `suppressed = null`，并留下独立不可变导出审计。区域文档不进入该渠道 v2/read/directory/export。相邻周期、重叠区域、互补类别和已知外部事实的重识别 fixture 通过。
 
-Widget 只渲染已带来源、单位、版本、截止时间和抑制状态的 `MetricResult`，拿不到被隐藏的精确值。6AO 与 6AP 本阶段只证明 DB-only 合同，不声称 HTTP、UI 或生产调度已完成。验收结论只能说明降低披露风险，不宣称形式化不可重识别。
+Widget 只渲染已带来源、单位、版本、截止时间和抑制状态的 `MetricResult`，拿不到被隐藏的精确值。6AO 与 6AP
+仍只证明 DB-only 合同；6AQ 与 6AR 增加 Backend runtime bridge 和固定 HTTP 读取，但不交付 Flutter UI 或生产调度。
+验收结论只能说明降低披露风险，不宣称形式化不可重识别。
 
 ### Slice 7：组织治理与数据可携带性
 
