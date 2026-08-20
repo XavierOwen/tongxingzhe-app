@@ -59,6 +59,7 @@
 | [0134](./0134-management-report-region-target-context.md) | 已接受，2026-08-14 | Slice 6AM；Issue #155；`REGION-012`、`ANALYTICS-022`、`PRIVACY-014`、`MANUAL-013`、`TEST-016` | 由可信报告截止点和追加式 selection history 派生区域目标树上下文；migration baseline 受观察下界约束，publication 与 resolver 共用事务锁，6AL 只消费显式版本和指纹 |
 | [0135](./0135-private-current-city-report-uses-a-complete-protected-grid.md) | 已接受，2026-08-14 | Slice 6AN；Issue #157；`REGION-007`–`REGION-013`、`ANALYTICS-023`、`PRIVACY-015`、`TEST-017` | 首个私有区域报告只做 current 城市两期完整网格；固定归属、阈值和互补隐藏，旧渠道发布链继续拒绝新定义 |
 | [0136](./0136-private-current-city-snapshot-lineage.md) | 已接受，2026-08-19 | Slice 6AO；Issue #159；`ANALYTICS-024`、`PRIVACY-016`、`TEST-018` | current 城市报告复用通用不可变快照存储，但区域发布尝试与 provenance 独立；发布能力、可信时区 revision 和 target tuple 漂移失败关闭，旧渠道 v2/read/directory/export 继续排除 |
+| [0137](./0137-authorized-current-city-snapshot-reads-use-independent-provenance.md) | 已接受，2026-08-20 | Slice 6AP；Issue #165；`ANALYTICS-025`、`PRIVACY-017`、`TEST-019` | current 城市快照读取只接受 0057 的独立区域 provenance；授权重检、validator、时区／截止点／前一快照对齐和 value-free 访问审计在同一事务中完成 |
 
 ## 按主题查找
 
@@ -70,7 +71,7 @@
 | 组织、保留、导入导出与合并 | [0030](./0030-allow-verified-users-to-create-organizations.md)–[0043](./0043-promotion-target-merges-are-reversible.md) | Slice 4、7；`ORG`、`TARGET`、`AUTHZ` |
 | 私人计划、通知与周期 | [0044](./0044-personal-action-plans-are-private-and-user-controlled.md)–[0052](./0052-late-entered-contacts-count-in-their-occurrence-period.md) | Slice 5；`PLAN`、`PLATFORM` |
 | 说明书与发布检查 | [0053](./0053-production-code-and-learning-materials-evolve-together.md)–[0059](./0059-documentation-and-statistics-checks-block-releases.md) | 全部 Slice；`MANUAL`、Definition of Done |
-| 指标、报告与隐私 | [0060](./0060-ordinal-scale-distributions-are-primary.md)–[0077](./0077-core-metrics-ship-with-code-and-project-metrics-use-safe-configuration.md)，另见 [0099](./0099-management-analytics-use-bounded-query-surfaces.md)、[0101](./0101-management-weekly-reports-use-two-complete-iso-weeks.md)–[0136](./0136-private-current-city-snapshot-lineage.md) | Slice 6；`ANALYTICS`、`PRIVACY`、`AUTHZ`、`REGION`、`ARCH`、`TEST-005`、`TEST-014`–`TEST-018` |
+| 指标、报告与隐私 | [0060](./0060-ordinal-scale-distributions-are-primary.md)–[0077](./0077-core-metrics-ship-with-code-and-project-metrics-use-safe-configuration.md)，另见 [0099](./0099-management-analytics-use-bounded-query-surfaces.md)、[0101](./0101-management-weekly-reports-use-two-complete-iso-weeks.md)–[0137](./0137-authorized-current-city-snapshot-reads-use-independent-provenance.md) | Slice 6；`ANALYTICS`、`PRIVACY`、`AUTHZ`、`REGION`、`ARCH`、`TEST-005`、`TEST-014`–`TEST-019` |
 | 当前上下文、问卷、草稿与导航 | [0078](./0078-a-visible-project-context-scopes-default-work.md)–[0090](./0090-contact-entry-prioritizes-core-facts-with-progressive-disclosure.md) | Slice 1、3、5；`CTX`、`QUESTION`、`DRAFT`、`UI` |
 | 尝试、渠道、触达和机构关系 | [0091](./0091-unsuccessful-direct-outreach-is-a-contact-attempt.md)–[0095](./0095-person-to-institution-relationships-use-six-stable-kinds.md) | Slice 1、2、4；`CONTACT`、`TARGET` |
 | 基础设施 | [0097](./0097-use-supabase-postgresql-for-the-initial-stage.md) | Slice 0／发布门槛；`ARCH-003`–`ARCH-010` |

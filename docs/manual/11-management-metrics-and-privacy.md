@@ -960,6 +960,69 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 角色读写边界成立；不证明 HTTP、Flutter、UI、读取、目录、导出、retention、warehouse、真实区域证据、生产调度或
 外部事实攻击已经验收。
 
+## Slice 6AP 如何授权读取 current 城市报告快照
+
+6AP 为 6AO 的 current 城市受保护快照增加一个私有 PostgreSQL 读取合同。它和 0032 的渠道 v2 读取合同分开，
+因为 6AO 使用区域 release attempt／provenance。调用方必须同时给出用户 UUID、项目 UUID 和 snapshot UUID：
+
+```text
+app_private.read_authorized_management_current_city_report_snapshot_v1(
+  requested_app_user_id,
+  requested_project_id,
+  requested_snapshot_id
+)
+```
+
+函数先调用 0030 的授权解析器，重新检查用户、组织成员、项目成员、项目状态和
+`view_anonymous_analytics`。授权解析器和撤权事务使用同一 advisory lock。若读取先取得锁，撤权会等待读取事务；若撤权
+先取得锁，读取会在锁后重新看到失效 capability。这两个顺序都失败关闭，不用缓存中的旧授权。
+
+读取成功还需要满足以下条件：
+
+- snapshot 属于请求的 project；
+- 0057 attempt 有 `current_city_management_report_snapshot_release` family claim，状态是 `approved` 或
+  `approved_baseline`；
+- `reason_codes` 是空数组；
+- attempt 与 snapshot 的报告定义、query fingerprint、release lineage、`reporting_time_zone`、
+  `data_cutoff_utc` 和 `previous_snapshot_id` 对齐；
+- target tree version 和 content fingerprint 对齐；
+- 数据库再次调用 current-city document validator。
+
+成功返回受保护报告，并在同一事务追加一条 value-free、不可变访问事件。审计只保留授权 lineage、project／snapshot
+ID、报告定义、截止点、target fingerprint、结果和 reason code，不保存 cells、贡献者、来源、城市名称或 PII。
+未知 snapshot 和跨 project 请求返回 `not_found`。存在但未通过上述 provenance 的快照返回
+`untrusted_provenance`。两者都不返回报告正文。legacy channel snapshot 也只能得到 `untrusted_provenance`。
+
+runtime、`PUBLIC` 和区域维护身份不能读取审计表、执行读取函数或直接操作区域 attempt／snapshot。6AP 不增加 HTTP、
+Flutter、Drift、缓存、目录、导出、区域名称、边界或任意查询。目录和发现流程如果以后需要，必须另建受限合同。
+
+零基础读者可以把 Docker 理解为一次性测试环境。runner 启动隔离的 PostgreSQL 容器，运行 migration、结构 check、
+synthetic fixture 和并发脚本，最后删除容器。它不会修改 production 数据库。先启动 Docker Desktop，再从仓库根目录运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 会自动发现 0058 的 migration、check、fixture 和并发脚本，并在 checksum、dump／restore 和恢复库中重跑它们。
+完整套件还会重跑既有授权读取、trusted release、directory 和 export 合同。通过表示合成 PostgreSQL 合同成立，
+不表示 HTTP、Flutter、UI、生产区域证据或真实平台验收完成。
+
+如果只调试已经运行的专用测试库，先确认 `DATABASE_URL` 不是 production，再按顺序运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_authorized_management_current_city_report_snapshot_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0058_authorized_management_current_city_report_snapshot_read.sql
+./tool/verify_authorized_management_current_city_report_snapshot_read_concurrency.sh
+```
+
+check、fixture 和并发脚本不能互相替代。fixture 覆盖 approved claim、空 reason、reporting time zone／cutoff／previous
+snapshot 对齐、固定 protected grid、`suppressed = null`、legacy／unknown／cross-project／untrusted 失败关闭、撤权和
+不可变审计。并发脚本覆盖 read-first 与 revoke-first 的锁线性化。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和
