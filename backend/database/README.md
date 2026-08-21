@@ -36,6 +36,7 @@ schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部�
 ```bash
 export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
 ./tool/postgres_migrate.sh
+# 第二次运行用于验证历史 checksum；不是重复输入。
 ./tool/postgres_migrate.sh
 psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/checks/verify_bootstrap.sql
@@ -653,6 +654,55 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 Docker、check、fixture 和并发脚本不能互相替代。通过只证明 DB-only synthetic snapshot、lineage、并发和 ACL，不证明 HTTP、
 Flutter、runtime bridge、读取、目录、导出、生产发布、真实账号、六平台真人运行或形式化不可重识别保证。
+
+### 6AX：授权读取单份管理兴趣快照
+
+`0063_authorized_management_interest_report_snapshot_read.sql` 在 6AW 的 interest snapshot lineage 之上增加 private
+DB-only 读取合同。读取函数只接收内部用户、显式 project 和 snapshot UUID。它在同一事务中重新解析
+`view_anonymous_analytics`，再检查 0062 的 interest request claim、`approved`／`approved_baseline` attempt、空
+`reason_codes`，以及 attempt 与 snapshot 的 project、report、version、query fingerprint、release lineage、报告时区、
+`data_cutoff_utc`、`source_change_sequence`（source watermark）、previous pointer 和 released snapshot 对齐。返回前再次运行 6AV interest document
+validator，不能让调用方提交报告 JSON、capability、时区或截止点。
+
+`completed` 才返回原始的 `previous/current × interest_level 0..4` 十格 protected report；`suppressed` 继续是 JSON
+`null`。未知或跨项目 snapshot 统一返回 `not_found`。同项目但属于 channel、current-city、legacy、blocked、缺失或漂移
+provenance 的 snapshot 返回 `untrusted_provenance`。这两种结果都不带报告正文。读取函数不重算、不拼接其他报告，也不把
+`view=management` 加入 6AV/6AW 没有定义的 DB 输出字段。
+
+每次已授权尝试在同一事务追加兴趣专用的不可变、value-free audit。审计不保存 `protected_report`、cells、
+`value_count`、贡献者、contact、来源或 PII。未授权、撤权、过期、release-only 和无项目成员调用失败关闭且不写 audit。
+读取和撤权共享授权锁，因此 read-first 与 revoke-first 都有确定的数据库结果。runtime、`PUBLIC`、普通 app role、interest
+reader、current-city writer 和区域角色不能执行读取函数或读取 audit／provenance。6AX 不增加 runtime bridge、HTTP、目录、
+Flutter、Drift、缓存、离线、同步、导出、warehouse、retention 或生产调度。
+
+在 Docker 中运行完整验证：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 按 migration 文件名自动发现 0063 migration、结构／权限 check、synthetic fixture 和
+`verify_authorized_management_interest_report_snapshot_read_concurrency.sh`。它还运行 checksum、dump／restore，并在
+没有源 cluster roles 的恢复库重跑 migration、check 和 fixture。恢复阶段不重跑会提交 synthetic 行的并发脚本，避免把相同
+并发写入再次导入恢复库。成功必须同时证明合法读取、三类失败状态、授权撤权并发、value-free audit、不可改删、最小 ACL 和
+旧 channel、current-city、6AV、6AW 回归。
+
+如果只调试已有专用 PostgreSQL 测试库，先确认它不是 production，再按顺序运行：
+
+并发脚本会提交固定 `6d*` synthetic 行。每次运行请使用新建的空测试库；重复运行前应重建该测试库，否则固定主键会按预期冲突。
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_authorized_management_interest_report_snapshot_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0063_authorized_management_interest_report_snapshot_read.sql
+./tool/verify_authorized_management_interest_report_snapshot_read_concurrency.sh
+```
+
+check、fixture 和并发脚本不能互相替代。通过只证明当前 PostgreSQL 的 private authorization、兴趣 provenance、失败关闭、
+value-free audit、并发和 ACL。它不证明 runtime、HTTP、Flutter、导出、生产发布、真实账号、六平台运行或形式化不可重识别。
 
 ### 如何验证 6AS PostgreSQL 合同
 

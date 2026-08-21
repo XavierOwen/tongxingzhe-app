@@ -604,6 +604,14 @@ blocked reason；blocked attempt 只保留最小 value-free lineage evidence，�
 前值或 PII。它与 channel／current-city request UUID 和 provenance 互斥，不授予读取、目录、导出或 HTTP 权限。
 _Avoid_: 复用渠道 claim、跨报告 provenance、失败记录带值、发布即读取、生产 HTTP、warehouse、retention
 
+**管理兴趣快照读取**:
+拥有 `view_anonymous_analytics` 的项目成员按显式 project 和 snapshot ID 读取一份 6AW 兴趣快照的 private DB-only 操作。
+数据库重新确认完整成员授权链，只接受 interest release attempt、request claim 和 provenance 全部匹配的 approved 快照，
+并在返回前再次验证 6AV 十格文档。未知或跨项目 snapshot 返回 `not_found`；同项目但属于 channel、current-city、legacy、
+blocked 或其他不可信来源的 snapshot 返回 `untrusted_provenance`，两者都不返回报告正文。每次已授权尝试追加不含格值的不可变
+访问审计；撤权与读取使用同一授权锁。该操作不提供 runtime、HTTP、目录、Flutter、导出或客户端授权 token。
+_Avoid_: 发布即查看、跨项目探测、复用渠道 read、把管理项目选择当作再次授权、客户端重算十格
+
 **更正版报告**:
 补录、修订、作废或分析定义修正后重新生成并明确取代某份报告快照的新快照；原报告保留但标记已被取代。
 _Avoid_: 静默改写、删除旧报告

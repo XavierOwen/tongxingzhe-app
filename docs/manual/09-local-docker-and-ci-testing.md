@@ -492,6 +492,65 @@ check、fixture 和并发脚本不能互相替代。已有测试库含有旧数�
 实现中成立。它们不证明 Backend HTTP、runtime bridge、Flutter、Drift、读取、目录、导出、生产发布调度、真实账号、
 Apple／Android／iOS／macOS／Windows／Linux／Web 真人平台运行或真机证据，也不构成形式化不可重识别保证。
 
+### 6AX：验证授权兴趣快照读取
+
+6AX 只在 private PostgreSQL 中读取一份明确指定的 6AW 兴趣快照。它重新验证
+`view_anonymous_analytics`，检查 0062 interest request claim、approved release attempt、空 `reason_codes` 和完整
+snapshot lineage（包括 `source_change_sequence` source watermark），再运行 6AV interest document validator。它不增加 runtime bridge、HTTP、目录、Flutter、导出或真人平台
+验收。
+
+第一次使用 Docker 时：
+
+1. 打开 Docker Desktop，等待 Docker Engine 完成启动。
+2. 打开 Terminal，进入仓库根目录：
+
+   ```bash
+   cd "$(git rev-parse --show-toplevel)"
+   ```
+
+3. 确认 Docker 同时显示 Client 和 Server：
+
+   ```bash
+   docker version
+   ```
+
+4. 运行完整 PostgreSQL 套件：
+
+   ```bash
+   ./tool/run_postgres_tests_in_docker.sh
+   ```
+
+runner 按文件名自动发现 0063 migration、private read check、synthetic fixture 和
+`verify_authorized_management_interest_report_snapshot_read_concurrency.sh`。它还执行 checksum、dump／restore，并在没有源
+cluster roles 的恢复库重跑 migration、check 和 fixture。恢复库不重跑并发脚本，因为并发脚本会提交 synthetic 行；重跑它会把
+同一批并发写入再次导入恢复库。
+
+通过时应同时看到以下证据：
+
+- 合法读取和重复读取保持完整的 `previous/current × interest_level 0..4` 十格；
+- unknown／cross-project 返回 `not_found`，没有正文；
+- same-project channel、current-city、legacy、blocked 或缺失／漂移 provenance 返回 `untrusted_provenance`，没有正文；
+- active、撤权、过期、release-only 和无项目成员请求失败关闭且不写 audit；
+- audit 不含 `protected_report`、cells、`value_count`、贡献者、contact、来源或 PII，且 UPDATE／DELETE 被拒绝；
+- read-first 与 revoke-first 并发结果符合授权锁；旧 channel、current-city、6AV 和 6AW 检查继续通过。
+
+如果只调试已有专用 PostgreSQL 测试库，先确认它不是 production。并发脚本会提交固定 `6d*` synthetic 行；每次运行请使用
+新建的空测试库，重复运行前先重建该测试库，否则固定主键会按预期冲突。
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_authorized_management_interest_report_snapshot_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0063_authorized_management_interest_report_snapshot_read.sql
+./tool/verify_authorized_management_interest_report_snapshot_read_concurrency.sh
+```
+
+这些命令只使用 synthetic 数据。check、fixture 和并发脚本不能互相替代。Docker 通过只证明当前 PostgreSQL 的 private
+authorization、interest provenance、失败关闭、value-free audit、并发和 ACL；它不证明 runtime、HTTP、Flutter、导出、生产
+发布、真实账号、六平台运行或形式化不可重识别保证。
+
 管理报告发布端点同时改动 Backend 和 PostgreSQL bridge。开发时先运行：
 
 ```bash
