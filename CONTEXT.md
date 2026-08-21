@@ -310,7 +310,7 @@ _Avoid_: `is_current`、最新 release、客户端时钟、区域名称猜测
 _Avoid_: original 区域视图、最小区域下钻、任意区域筛选、生产区域报告、历史重放
 
 **current 城市报告受保护快照**:
-由 6AN 固定定义、两个完整 ISO 周、完整城市网格、目标树 tuple、可信报告时区 revision、数据截至时间和
+由 6AN 固定定义、两个完整 ISO 周、完整城市网格、目标树 tuple、可信报告时区 revision、数据截止时间和
 source change watermark 组成的不可变私有报告文档；它只能在 `release_management_reports` 能力和可信时区上下文重新确认后建立，
 不能由调用方提交 JSON、时区、截止点或目标树 tuple。它可以复用通用不可变快照存储，但不是既有渠道 v2
 快照，也不是历史 `as-of`、读取、目录或导出能力。6AO validator 和 pair comparison 固定 report、metric、
@@ -320,7 +320,7 @@ _Avoid_: 渠道 16 格、客户端快照、任意历史重放、生产 HTTP、UI
 
 **区域报告发布 lineage**:
 围绕一份 current 城市报告受保护快照保存的、区域专属发布尝试和来源证据序列；它绑定 `release_management_reports`、可信项目
-报告时区 revision、固定数据截至时间、目标树 tuple、6AN 定义和隐私网格。首个成功文档建立基线，后续
+报告时区 revision、固定数据截止时间、目标树 tuple、6AN 定义和隐私网格。首个成功文档建立基线，后续
 尝试必须保持共享期间的城市值和隐私状态不变，并把成功发布链接到前一 snapshot。相同 request 和固定上下文
 必须精确幂等，不新增 snapshot 或 attempt。current-city 与渠道发布不能复用 request UUID；trusted v2 与其
 委托的 v1 记录仍属于同一渠道发布。same／earlier cutoff、无共享期间、共享值或隐私状态变化，以及
@@ -553,13 +553,13 @@ _Avoid_: 正式报告、不变快照
 由 UTC `from` 和 `until` 定义的 `[from, until)` 时间范围；包含等于 `from` 的 `changed_at`，不包含等于 `until` 的 `changed_at`，相邻期间不会重复计数。
 _Avoid_: 本地设备时区、闭区间、按录入时间切段
 
-**数据截至时间**:
+**数据截止时间**:
 一份分析或报告确定已纳入服务器接受数据的最新时间边界；它说明结果包含到哪里，不等于页面最后打开或刷新的时间。
 _Avoid_: 页面刷新时间、当前时间、未同步数据截止时间
 
 **当前快照时刻**:
 动态状态查询在同一一致性读取中判断“当前”的 UTC 时刻；它不接受使用者选择，也不表示系统能够重建该时刻以前的历史状态。
-_Avoid_: 历史查询截止时间、数据截至时间、接触发生时间
+_Avoid_: 历史查询截止时间、数据截止时间、接触发生时间
 
 **报告快照**:
 在明确数据截止时间和计算定义下生成的可复现正式报告；后续数据变化不静默覆盖它。
@@ -578,7 +578,7 @@ _Avoid_: 个人 session capability、app_private 通用代理、任意报告查�
 _Avoid_: 普通快照读取审计、客户端保存证明、报告内容日志
 
 **管理报告快照目录**:
-按显式项目返回至多 20 份可信 v2 报告快照元数据的只读目录；数据库在每次请求中重新确认管理分析查看能力，并在同一事务中保存不含快照 ID、报告元数据或格值的目录访问审计。目录按数据截至时间、发布时间和快照 ID 降序排列，但不宣称第一项是当前、最新有效或未被取代的报告。
+按显式项目返回至多 20 份可信 v2 报告快照元数据的只读目录；数据库在每次请求中重新确认管理分析查看能力，并在同一事务中保存不含快照 ID、报告元数据或格值的目录访问审计。目录按数据截止时间、发布时间和快照 ID 降序排列，但不宣称第一项是当前、最新有效或未被取代的报告。
 _Avoid_: 最新报告、当前报告、历史查询、分页目录、授权 token
 
 **管理分析导航上下文**:
@@ -588,6 +588,21 @@ _Avoid_: 个人 session context、授权 token、只保存项目 ID、自动复�
 **可信报告发布**:
 在同一数据库事务中确认发布能力、固定数据库数据截止点、解析项目报告时区 revision、检查既有报告 lineage，并只在全部条件通过后建立报告快照的私有操作；调用方不能提交时区、截止时间或可复用授权 token。
 _Avoid_: 客户端指定时区、先生成后授权、跨时区重置基线
+
+**管理兴趣报告受保护快照**:
+由 6AV 固定定义、两个相邻完整 ISO 周、`previous/current × interest_level 0..4` 十格 count-only 网格、隐私状态、
+可信报告时区 revision 和数据截止时间组成的不可变私有报告文档。它可以复用通用 snapshot storage，但必须经过
+兴趣专用 validator，并且不是渠道 16 格或 current-city 区域快照；中位数、比例、总计格和其他派生值不在此定义中。
+_Avoid_: 客户端组装十格、跨报告拼接、把 `suppressed` 当零、渠道快照、区域快照
+
+**兴趣报告发布 lineage**:
+围绕一份管理兴趣受保护快照保存的兴趣专属 release attempt、request claim 和 provenance 序列。首个合法文档建立唯一
+baseline；后续成功发布只能推进 cutoff，保持定义、period definition／boundary、网格顺序和时区 revision 一致，并链接前一 snapshot。相同
+request 和固定上下文必须精确幂等，不新增 snapshot 或 attempt。same／earlier cutoff、无共享期间、共享期间内的兴趣格值或隐私
+状态变化以及定义、期间、网格、query fingerprint、privacy policy、source scope 或时区 revision 漂移，返回稳定
+blocked reason；blocked attempt 只保留最小 value-free lineage evidence，不保存候选文档、cells、来源、贡献者、隐藏
+前值或 PII。它与 channel／current-city request UUID 和 provenance 互斥，不授予读取、目录、导出或 HTTP 权限。
+_Avoid_: 复用渠道 claim、跨报告 provenance、失败记录带值、发布即读取、生产 HTTP、warehouse、retention
 
 **更正版报告**:
 补录、修订、作废或分析定义修正后重新生成并明确取代某份报告快照的新快照；原报告保留但标记已被取代。

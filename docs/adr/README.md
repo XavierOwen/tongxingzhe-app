@@ -6,7 +6,7 @@
 
 - ADR-0001 至 ADR-0095 作为 `TXZ-SPEC-001` 的首批决策集，于 2026-07-31 一并接受；文件另有状态时以文件为准。
 - ADR-0096、ADR-0097 于 2026-07-31 接受；ADR-0098、ADR-0099 于 2026-08-03 接受；ADR-0100 于 2026-08-05 接受；ADR-0101、ADR-0102 于 2026-08-10 接受；ADR-0103 至 ADR-0108 于 2026-08-11 接受；ADR-0109 至 ADR-0119 于 2026-08-12 接受；ADR-0120 至 ADR-0129 于 2026-08-13 接受；ADR-0130 于 2026-08-13 接受。
-- ADR-0131 至 ADR-0135 于 2026-08-14 接受；ADR-0136 于 2026-08-19 接受；ADR-0137 至 ADR-0140 于 2026-08-20 接受。
+- ADR-0131 至 ADR-0135 于 2026-08-14 接受；ADR-0136 于 2026-08-19 接受；ADR-0137 至 ADR-0140 于 2026-08-20 接受；ADR-0141 至 ADR-0142 于 2026-08-21 接受。
 - 被取代的 ADR 保留原文和指向新 ADR 的状态，不再作为当前实现合同。
 - 新 ADR 默认只需一个清楚的决定段落。只有背景、备选和后果能帮助未来维护者避免误读时，才增加这些章节。
 - 可逆的 UI 细节、库选择和票内实现步骤留在 Spec 或 Issue，不为增加编号而创建 ADR。
@@ -63,6 +63,8 @@
 | [0138](./0138-runtime-current-city-snapshot-read-uses-an-exact-identity-bridge.md) | 已接受，2026-08-20 | Slice 6AQ；Issue #167；`ANALYTICS-026`、`PRIVACY-018`、`TEST-020` | Backend runtime 通过 exact external identity 和显式 project／snapshot 调用 0059 narrow bridge；runtime 只有 bridge EXECUTE，adapter 严格 allowlist 受保护 current-city JSON |
 | [0139](./0139-current-city-snapshot-http-reads-authenticate-before-route-validation.md) | 已接受，2026-08-20 | Slice 6AR；`ANALYTICS-027`、`PRIVACY-019`、`TEST-021` | current-city HTTP 读取使用独立固定 route；认证先于 UUID／query／body／store，handler 只调用 6AQ adapter 并统一脱敏错误 |
 | [0140](./0140-authorized-current-city-snapshot-directory-uses-independent-provenance.md) | 已接受，2026-08-20 | Slice 6AS；`ANALYTICS-028`、`PRIVACY-020`、`TEST-022` | current-city 目录使用独立 0060 provenance／runtime bridge；固定 route 只返回至多 20 项 metadata，并在认证后检查显式 project |
+| [0141](./0141-management-interest-distribution-uses-period-closed-suppression.md) | 已接受，2026-08-21 | Slice 6AV；`ANALYTICS-031`、`PRIVACY-023`、`TEST-025` | 管理兴趣五档分布按期间整体隐藏；固定十格 count-only 合同，另一期间独立判断，不依赖渠道或 current-city 总数 |
+| [0142](./0142-management-interest-snapshots-use-independent-release-lineage.md) | 已接受，2026-08-21 | Slice 6AW；Issue #179；`ANALYTICS-032`、`PRIVACY-024`、`TEST-026`、`MANUAL-016` | 管理兴趣十格快照复用通用不可变存储但使用独立 claim／release provenance；baseline、幂等、滚动和 value-free blocked attempt 失败关闭 |
 
 ## 按主题查找
 

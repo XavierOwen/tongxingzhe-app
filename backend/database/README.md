@@ -27,7 +27,7 @@ Backend integration 入口存在。脚本先在 Node 24 中运行 `npm ci --igno
 入口缺失、编译失败或断言失败都会使整套测试失败；不能把此前 SQL fixture 的通过单独写成
 Backend adapter 集成通过。
 
-schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer`、`tongxingzhe_region_mapping_writer`、`tongxingzhe_region_attribution_reader`、`tongxingzhe_management_region_report_reader`、`tongxingzhe_management_interest_report_reader` 和 `tongxingzhe_management_current_city_snapshot_release_writer`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
+schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer`、`tongxingzhe_region_mapping_writer`、`tongxingzhe_region_attribution_reader`、`tongxingzhe_management_region_report_reader`、`tongxingzhe_management_interest_report_reader`、`tongxingzhe_management_current_city_snapshot_release_writer` 和 `tongxingzhe_management_interest_snapshot_release_writer`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
 
 ## 使用已有 PostgreSQL 测试库
 
@@ -331,7 +331,7 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 `0034_management_analysis_contexts.sql` 提供独立于个人 session 的管理分析项目发现与选择。列表只返回当前完整授权链含 `view_anonymous_analytics` 的组织项目。选择在同一事务中消费 `0030` 解析器，并保存组织成员、项目成员和 grant 的精确证据；撤权或以新关系重新加入后旧选择不会复活。runtime 只能执行两个窄函数，不能直接读取选择或授权表。
 
-`0035_management_report_snapshot_directory.sql` 提供按显式项目列出可信 v2 管理报告快照的只读目录。数据库在同一事务中重新检查完整 `view_anonymous_analytics` 授权链，只返回至多 20 项固定元数据，并按数据截至时间、发布时间和快照 ID 降序排列。每次成功访问都追加一条不可变目录审计；审计保存精确授权证据和返回数量，但不保存快照 ID、报告元数据或格值。runtime 只能执行一个窄 bridge。目录不判断“当前”或“最新有效”，也不提供筛选、分页或任意历史查询。
+`0035_management_report_snapshot_directory.sql` 提供按显式项目列出可信 v2 管理报告快照的只读目录。数据库在同一事务中重新检查完整 `view_anonymous_analytics` 授权链，只返回至多 20 项固定元数据，并按数据截止时间、发布时间和快照 ID 降序排列。每次成功访问都追加一条不可变目录审计；审计保存精确授权证据和返回数量，但不保存快照 ID、报告元数据或格值。runtime 只能执行一个窄 bridge。目录不判断“当前”或“最新有效”，也不提供筛选、分页或任意历史查询。
 
 `0036_runtime_trusted_management_report_release.sql` 是生产 Backend 唯一可执行的管理报告发布 bridge。它只接收已验证 token 的 issuer、subject、显式项目和请求幂等 UUID，并固定发布 `contact_sessions_by_channel_two_periods` v1。未知或停用身份不会 bootstrap 个人上下文。runtime 只能执行这个 `SECURITY DEFINER` 函数，仍不能进入 `app_private`、读取发布记录或接触事实。bridge 在同一 statement 中调用 `0031`，因此发布继续使用相同的授权、时区和 lineage 锁。
 
@@ -602,6 +602,57 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 确认 `DATABASE_URL` 指向本机专用测试库。没有 `psql` 时使用 Docker runner。Dart 纯政策测试仍需单独运行，数据库 fixture 通过不替代
 Dart 对账。Docker、PostgreSQL fixture 和 Dart 测试都不能证明 Backend HTTP、Flutter UI、真实身份提供方、六平台真人运行或
 形式化不可重识别保证。
+
+### 6AW：管理兴趣报告快照与独立发布 lineage
+
+`0062_management_interest_report_snapshot_lineage.sql` 在 6AV 的十格 count-only 保护合同之上增加 DB-only 的不可变
+兴趣报告快照与 release lineage。它复用 `app_private.management_report_snapshots` 的通用 snapshot storage，但使用独立的
+兴趣 request claim family、release attempt 和 provenance；不能把兴趣十格文档当作 channel 16 格或 current-city 区域文档。
+
+兴趣 validator／pair comparison 固定 6AV 的 report、metric、dimension、统计单位、两个相邻完整 ISO 周、period boundary、
+query fingerprint、privacy policy、source scope 和 `previous/current × interest_level 0..4` 十格顺序。只接受符合 6AV 完整受保护文档合同的
+文档；私有 release 在固定事务内调用 6AV executor 生成候选；`displayed` 只能保存安全整数 count，`suppressed` 必须是 JSON `null`。它不增加中位数、比例、total cell
+或其他派生值。unavailable、额外字段、错误固定 identity／metadata、缺失／重复／乱序网格和贡献者、接触、地点或其他 PII
+都失败关闭。
+
+私有 release 只提交 request、可信内部 user、project 和固定 report identity。数据库在锁内重新验证
+`release_management_reports`，在同一 release transaction 中派生可信项目报告时区 revision 和 `data_cutoff_utc`，再执行
+6AV executor；调用方不能提交报告 JSON、时区、cutoff、期间、兴趣等级、筛选或 SQL。首个合法发布建立唯一 baseline；后续
+发布只能推进 cutoff，保持固定定义、period definition／boundary、十格顺序、query fingerprint、privacy policy、source scope 和时区 revision 一致，
+并链接前一 snapshot。相同 request 与固定上下文精确幂等，不新增 snapshot 或 attempt。
+
+same／earlier cutoff、没有共享期间、共享期间内的兴趣格值或隐私状态变化，以及定义、period definition／boundary、网格、query fingerprint、privacy
+policy、source scope 或时区 revision 漂移，返回稳定 blocked reason。blocked attempt 只保存最小 value-free lineage 和
+reason，不保存候选文档、cells、来源、贡献者、隐藏前值或 PII。snapshot、attempt 和 request claim 追加不可变，不允许
+UPDATE 或 DELETE。兴趣 request UUID 与 channel、current-city request UUID 互斥，兴趣 provenance 不能冒充其他发布 family。
+
+release writer 之外，`tongxingzhe_runtime`、`PUBLIC`、普通 app role 和区域维护角色不能执行兴趣发布、读取兴趣 provenance
+或直接写兴趣 snapshot／attempt 表。共享 snapshot 表用 report-family RLS 限制两个专用 release writer：current-city writer
+只能访问自己的 report 与 lineage，兴趣 writer 也只能访问兴趣 report 与 lineage。表 owner 保留已有内部维护与受控读取路径。
+check 应同时固定 owner、`SECURITY DEFINER`、`search_path`、函数执行权、表／列 ACL、RLS policy 和
+旧 channel、current-city、6AV 合同隔离。
+
+第一次使用 Docker 时，从仓库根目录运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 会按完整 migration 顺序自动发现 0062 migration、check、fixture、并发脚本、checksum 和 dump／restore，并在恢复库重跑。
+也可以在确认不是 production 的专用测试库中按顺序运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_interest_report_snapshot_lineage.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0062_management_interest_report_snapshot_lineage.sql
+./tool/verify_management_interest_report_snapshot_lineage_concurrency.sh
+```
+
+Docker、check、fixture 和并发脚本不能互相替代。通过只证明 DB-only synthetic snapshot、lineage、并发和 ACL，不证明 HTTP、
+Flutter、runtime bridge、读取、目录、导出、生产发布、真实账号、六平台真人运行或形式化不可重识别保证。
 
 ### 如何验证 6AS PostgreSQL 合同
 

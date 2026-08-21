@@ -556,7 +556,7 @@ identity、错误 target tuple、缺失或重复网格、乱序网格及其他�
 重新验证 `release_management_reports`，并在同一 release transaction 中派生项目可信报告时区 revision、
 `data_cutoff_utc` 和 6AM target context，再调用 6AN executor。调用方不能提交 capability、JSON、时区、截止点、
 城市列表或 target tree tuple。快照文档必须保留 6AN 固定定义、两个期间、完整城市网格、保护状态、目标树
-`version + content_fingerprint`、可信时区 revision、数据截至时间和 source change watermark。
+`version + content_fingerprint`、可信时区 revision、数据截止时间和 source change watermark。
 
 首个合法文档建立唯一的区域 lineage baseline。后续同一项目的滚动发布只能推进 cutoff，并保持定义、期间、
 网格、目标 tuple 和可信时区 revision 一致；成功发布必须链接前一 snapshot。相同 request 和固定上下文必须
@@ -813,6 +813,35 @@ revision、原始答案、地点、推广对象、PII 或隐藏前值。
 真实平台／真人证据。不修改已有渠道或 current-city 报告合同，也不交付 original、parent、overlap 区域视图、报告更正／取代或
 retention。
 
+#### Slice 6AW：固定管理兴趣报告快照与发布 lineage
+
+Slice 6AW 只在私有 PostgreSQL 边界把符合 6AV 完整受保护文档合同的兴趣五档候选保存为不可变快照。它复用通用的受保护 snapshot
+storage，但必须使用独立的兴趣 release attempt、request claim family 和 provenance；不能把十格兴趣文档塞入渠道
+16 格发布链或 current-city 区域 lineage。
+
+兴趣专用 validator／pair comparison 固定 6AV 的 report、metric、dimension、统计单位、两个完整 ISO 周、period
+boundary、query fingerprint、privacy policy、source scope 和 `previous/current × interest_level 0..4` 的十格顺序。
+只有符合 6AV 完整受保护文档合同的文档可以建立快照；私有 release 在固定事务内调用 6AV executor 生成候选；`displayed` 只能有通过 6AV 保护的整数 count，`suppressed` 必须是 JSON `null`。
+它仍然是 count-only，不增加中位数、比例、百分点差、total cell 或其他派生值。unavailable、额外字段、错误固定 identity／
+metadata、缺失／重复／乱序网格和敏感字段都必须失败关闭。
+
+私有 release 只提交 request UUID、可信内部用户、项目和固定报告 definition／version。数据库在锁内重新验证
+`release_management_reports`，在同一 release transaction 中派生可信项目报告时区 revision 与 `data_cutoff_utc`，再执行
+6AV executor；调用方不能提交报告 JSON、时区、截止点、期间、兴趣等级、筛选或 SQL。首次合法发布建立唯一
+baseline；后续成功发布只能推进 cutoff，保持定义、period definition／boundary、网格、query fingerprint、privacy policy、source scope 和
+时区 revision 一致，并链接前一 snapshot。相同 request 与固定上下文必须精确幂等，不新增 snapshot 或 attempt。
+
+same／earlier cutoff、没有共享期间、共享期间内的兴趣格值或隐私状态变化，以及报告定义、period definition／boundary、网格、query fingerprint、privacy
+policy、source scope 或可信时区 revision 漂移，都返回稳定 blocked reason。blocked attempt 只保存最小 lineage 和 reason，
+不保存候选文档、cells、来源、贡献者、隐藏前值或 PII；snapshot、attempt 和 request claim 均追加不可变，不允许 UPDATE
+或 DELETE。兴趣 request UUID 与 channel、current-city request UUID 互斥，兴趣 provenance 不能冒充它们的 provenance。
+
+release writer 之外，runtime、`PUBLIC`、普通 app role 和区域维护角色不能执行兴趣发布、读取兴趣 provenance 或直接写兴趣
+snapshot／attempt 表。通用 snapshot storage 必须对专用 release writer 实施 report-family 行级隔离；current-city writer 不能读取或
+插入兴趣 snapshot，兴趣 writer 也不能越过自己的固定 report 与 lineage。6AW 不交付 authorized read、runtime bridge、HTTP、Flutter、Drift、缓存、离线、同步、目录、导出、
+warehouse、retention、报告更正／取代、生产调度或任何 Apple／Android／iOS／macOS／Windows／Linux／Web 真人平台证据；
+完整 Docker、checksum、dump／restore 和 synthetic fixture 只证明当前 DB-only 合同与 ACL 边界。
+
 #### 5.8.2 时间、趋势、版本与因果边界
 
 | ID | 需求 |
@@ -848,6 +877,7 @@ retention。
 | `ANALYTICS-029` | Flutter current-city typed gateway 将 6AS 目录仅作为有序元数据，将显式选择的 project／snapshot 传给 6AR 详情；它不把第一项解释为 current／latest，不复用 channel gateway，不在客户端聚合、重算或推断报告。 |
 | `ANALYTICS-030` | Flutter current-city consumer 只在用户明确选择当前城市视图后，使用已重新授权的 `ManagementAnalysisContext` 项目读取目录；它不使用个人 workspace 项目、不自动打开第一项，切换项目或视图时清除旧状态并隔离迟到响应。 |
 | `ANALYTICS-031` | `contact_sessions_by_interest_level_two_periods@1` 使用可信项目 IANA 时区、`data_cutoff_utc` 和两个相邻完整 ISO 周，按 `previous/current × interest_level 0..4` 返回 count-only 完整网格；统计单位是 Backend 已接受的有效接触场次，贡献者是可信 `app_user_id`，metric identity 固定为 `interest_distribution@1`，不返回中位数、比例或总计格。 |
+| `ANALYTICS-032` | 6AW 只接受符合 6AV 完整受保护文档合同的十格文档，使用独立 request claim／release provenance 和通用不可变 snapshot storage；私有 release 在固定事务内调用 6AV executor 生成候选，validator 固定 6AV 定义、两个期间、十格顺序、count-only 状态和值。首个成功发布建立唯一 baseline，后续发布只能推进 cutoff、保持定义／period definition／boundary／网格／query fingerprint／privacy／source scope／时区 revision 一致并链接前一 snapshot；相同 request 与固定上下文精确幂等。same／earlier cutoff、无共享期间、共享期间内的兴趣格值或隐私状态变化及任一固定上下文漂移返回稳定 blocked reason；失败尝试不得保存候选报告值。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -876,6 +906,7 @@ retention。
 | `PRIVACY-021` | Flutter current-city gateway 只在内存中保存严格解析后的受保护类型；不写 Drift、不做缓存、离线、同步或导出，不暴露 PII 或隐藏前值。授权、隐私和 provenance 仍由 Backend 决定，解析失败和授权失败均失败关闭。 |
 | `PRIVACY-022` | current-city panel 只渲染 6AT 受保护类型中的固定元数据、城市 ID、`displayed` 计数和 `suppressed` 状态；它不收到隐藏前值、不把隐藏值当零、不猜测城市名称，也不把 Widget 显示门控冒充 Backend 授权。 |
 | `PRIVACY-023` | 6AV 对每个期间×兴趣档分别执行 `N >= 10`、至少三位可信 `app_user_id` 和 `2 × M <= N`；任一档不安全时，该期间五档整体 `suppressed` 且 count 为 `null`，另一期间独立判断，不依赖渠道或 current-city 总数隐藏，不允许跨报告相减恢复值。 |
+| `PRIVACY-024` | 6AW 的兴趣快照只接受 6AV 保护后的十格；`suppressed` 永远为 JSON `null`，不把隐藏前值带入 snapshot、attempt、claim、audit 或错误。兴趣 request claim／provenance 与 channel／current-city family 互斥；blocked attempt 只保存最小 value-free lineage 和稳定 reason。snapshot、attempt、claim 追加不可变且不可 UPDATE／DELETE；通用 snapshot storage 对专用 writer 实施 report-family 行级隔离，runtime、`PUBLIC`、普通 app role 和区域维护角色不能执行兴趣发布、读取兴趣 provenance 或直接写表。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
 
@@ -898,6 +929,7 @@ retention。
 | `MANUAL-013` | 学习文档必须说明 6AM 的可信 cutoff、history-derived context、migration baseline 观察下界、publication 共享事务锁、私有无 runtime 边界、6AL 显式消费方式，以及 Docker 和已有测试库中的手工命令。 |
 | `MANUAL-014` | 学习文档必须说明 6AN 的固定 current 城市范围、完整网格、三项 primary 阈值、互补隐藏、source watermark、6AO 的 validator／pair 字段、前一 snapshot 链接、精确幂等、稳定 blocked 条件、value-free attempt、snapshot／attempt 不可改删、发布能力与可信时区 revision、6AP 的显式授权读取、current-city claim、时区／截止点／前一 snapshot 对齐、再次 validator、value-free read audit、角色读写边界、漂移失败关闭、warehouse／retention 非范围、私有非生产边界、与旧渠道发布链的隔离，以及 Docker 和已有测试库中的验证步骤。 |
 | `MANUAL-015` | 学习文档必须用零基础读者可以复制的步骤说明 6AV 的 Dart 与 PostgreSQL 测试、Docker 首次启动、预期输出、常见失败排查、专用测试库边界和证据限制；必须明确自动测试和 Docker 不证明真人平台运行时。 |
+| `MANUAL-016` | 学习文档必须用零基础读者可以复制的步骤说明 6AW 的 0062 migration、validator／fixture／并发检查、Docker 首次启动和专用测试库命令；必须解释十格 count-only、独立 request claim／provenance、baseline、精确幂等、稳定滚动、blocked 与 value-free attempt、不可变和最小 ACL，并明确这些 DB-only synthetic 证据不证明 HTTP、Flutter、生产发布、真实账号、真人平台或形式化不可重识别保证。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -1100,6 +1132,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-023` | 6AT Flutter typed gateway 使用 synthetic HTTP 与 fake `IdentitySession` 覆盖目录／详情固定 path、显式 project／snapshot、无 query／GET body、Bearer 注入、一次 401 刷新、strict parser、目录排序与空结果、第一项不代表 current/latest、详情 project 对齐、错误映射、PII／额外字段拒绝、timeout、gateway close 和 no-store；不以此声称 UI、Drift、离线、导出或真实平台证据。 |
 | `TEST-024` | 6AU ViewModel、Widget 和 composition 测试覆盖显式管理项目、视图选择、空目录、不自动选第一项、详情返回与焦点恢复、项目／视图切换、逐阶段重试、迟到响应、dispose、稳定错误、displayed／suppressed 语义、320×568 和 200% 字号；build smoke 不冒充真实平台 runtime 证据。 |
 | `TEST-025` | 6AV Dart 与 PostgreSQL 对同一无 PII synthetic fixture 对账 `previous/current × 0..4` 十格、完整顺序、count-only、边界 `10`／三人／`50%`、`9`／两人／`6/10`、期间整体闭包、跨期间独立判断、跨报告相减反例、截止点／半开周边界、草稿／尝试／作废／其他项目排除、畸形输入、最小权限、checksum 和 dump／restore；通过不声称 HTTP、Flutter、真人平台或真机证据。 |
+| `TEST-026` | 6AW fixture 覆盖符合 6AV 完整受保护文档合同的十格、unavailable、额外字段、错误 report／metric／dimension／统计单位／fingerprint／privacy／source scope、缺失／重复／乱序网格、`displayed`／`suppressed` 值语义、唯一 baseline、相同 request 精确幂等、稳定滚动、same／earlier cutoff、无共享期间、共享期间内的兴趣格值／隐私变化、定义／period definition／boundary／网格／query／privacy／source／时区 revision 漂移、期间整体隐藏和跨报告相减反例；并发覆盖同 request、不同 request、baseline、previous pointer 和跨 family claim 冲突。另检查 value-free blocked attempt、snapshot／attempt／claim 不可 UPDATE／DELETE、owner／`SECURITY DEFINER`／固定 `search_path`、最小 ACL、release writer 之外角色拒绝、旧 channel／current-city／6AV 回归、checksum、dump／restore。通过不声称 HTTP、Flutter、生产发布、真人平台或真机证据。 |
 
 ## 9. UI、视觉与可访问性
 

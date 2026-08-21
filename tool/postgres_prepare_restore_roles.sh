@@ -29,7 +29,8 @@ BEGIN
     'tongxingzhe_region_attribution_reader',
     'tongxingzhe_management_region_report_reader',
     'tongxingzhe_management_interest_report_reader',
-    'tongxingzhe_management_current_city_snapshot_release_writer'
+    'tongxingzhe_management_current_city_snapshot_release_writer',
+    'tongxingzhe_management_interest_snapshot_release_writer'
   ]
   LOOP
     IF NOT EXISTS (
@@ -201,6 +202,28 @@ BEGIN
   END LOOP;
 END
 $management_current_city_snapshot_release_writer_membership$;
+
+DO $management_interest_snapshot_release_writer_membership$
+DECLARE
+  member_name text;
+BEGIN
+  FOR member_name IN
+    SELECT member_role.rolname
+    FROM pg_catalog.pg_auth_members AS membership
+    JOIN pg_catalog.pg_roles AS writer_role
+      ON writer_role.oid = membership.roleid
+    JOIN pg_catalog.pg_roles AS member_role
+      ON member_role.oid = membership.member
+    WHERE writer_role.rolname =
+      'tongxingzhe_management_interest_snapshot_release_writer'
+  LOOP
+    EXECUTE format(
+      'REVOKE tongxingzhe_management_interest_snapshot_release_writer FROM %I',
+      member_name
+    );
+  END LOOP;
+END
+$management_interest_snapshot_release_writer_membership$;
 SQL
 
 echo 'PostgreSQL restore 所需 cluster roles 已准备。'

@@ -427,6 +427,71 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 check、fixture 和并发脚本不能互相替代。通过只表示 DB-only synthetic 快照和 lineage 合同成立，不表示 HTTP、
 Flutter、UI、读取、目录、导出、retention、warehouse、真实区域证据、生产调度或外部事实攻击已经验收。
 
+### 6AW：验证管理兴趣报告快照与独立发布 lineage
+
+6AW 在 6AV 的十格 count-only 兴趣合同之上增加私有的不可变快照和独立 release lineage。它复用通用 snapshot
+storage，但不复用 channel 的 16 格 claim／provenance，也不复用 current-city 的区域 provenance。validator 固定
+`previous/current × interest_level 0..4` 十格、6AV 的报告定义和隐私状态；`displayed` 只能是受保护整数，
+`suppressed` 必须是 JSON `null`。
+
+对没有用过 Docker 的读者，Docker 可以理解成一次性测试环境：它启动一个隔离的 PostgreSQL 容器，向容器内运行
+migration 和 synthetic fixture，结束后删除容器。它不会连接 production，也不会把 fixture 写入真实项目。第一次运行：
+
+1. 安装 Docker Desktop 并打开它。等待 Docker Engine 完全启动。
+2. 打开 Terminal，进入同行者 APP 的仓库根目录：
+
+   ```bash
+   cd "$(git rev-parse --show-toplevel)"
+   ```
+
+   如果提示当前目录不是 Git 仓库，先用 `cd` 进入你 pull 下来的项目目录。
+3. 确认 Docker 同时有 Client 和 Server：
+
+   ```bash
+   docker version
+   ```
+
+   只有 Client 没有 Server 时，Docker Desktop 仍未就绪；不要继续运行数据库测试。
+4. 从仓库根目录运行完整套件：
+
+   ```bash
+   ./tool/run_postgres_tests_in_docker.sh
+   ```
+
+runner 会按完整 migration 顺序运行，并自动发现 0062 的兴趣 snapshot lineage 结构／权限 check、synthetic fixture 和并发脚本，并执行
+checksum、dump／restore 以及恢复库重跑。预期证据包括：合法与拒绝的 6AV 文档、唯一 baseline、相同 request 的精确
+幂等、稳定滚动和 `previous_snapshot_id`、same／earlier cutoff、无共享期间、共享期间内的兴趣格值／隐私变化、定义／period definition／boundary／网格／
+query／privacy／source／时区 revision 漂移的稳定 blocked reason、value-free blocked attempt、通用 snapshot storage
+复用、独立 request claim／provenance、snapshot／attempt／claim 不可改删和最小 ACL。runner 还应证明旧 channel、
+current-city 与 6AV 合同没有回归。成功时命令退出码为 `0`；不要只看某一行输出而忽略末尾的 exit code。
+
+如果已有专用 PostgreSQL 测试库，也可以单独调试。先确认地址是本机测试库，不是 production：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_interest_report_snapshot_lineage.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0062_management_interest_report_snapshot_lineage.sql
+./tool/verify_management_interest_report_snapshot_lineage_concurrency.sh
+```
+
+check、fixture 和并发脚本不能互相替代。已有测试库含有旧数据时，应建立新的专用库或重新运行一次性 Docker 容器，
+不要删除 production 数据，也不要把 synthetic fixture 当作业务数据。
+
+常见问题：
+
+- `Cannot connect to the Docker daemon`：打开 Docker Desktop，等待 Engine 就绪，再运行 `docker version`。
+- `psql: command not found`：本机没有 PostgreSQL 客户端，使用 Docker runner，不要改用 production 连接。
+- checksum 失败：不要编辑已执行的 migration；保留输出并改用干净测试容器核对。
+- fixture 或 check 失败：保留首次失败输出，先检查 migration 顺序、分支和数据库地址，不要为了通过而降低隐私条件。
+- Docker 下载超时或磁盘不足：检查网络、Docker Desktop 磁盘空间和容器状态。
+
+这些检查只证明 DB-only synthetic 快照、claim／provenance 隔离、lineage 不变量、并发行为和 ACL 在当前 PostgreSQL
+实现中成立。它们不证明 Backend HTTP、runtime bridge、Flutter、Drift、读取、目录、导出、生产发布调度、真实账号、
+Apple／Android／iOS／macOS／Windows／Linux／Web 真人平台运行或真机证据，也不构成形式化不可重识别保证。
+
 管理报告发布端点同时改动 Backend 和 PostgreSQL bridge。开发时先运行：
 
 ```bash
