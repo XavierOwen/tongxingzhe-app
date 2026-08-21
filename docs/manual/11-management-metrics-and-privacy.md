@@ -1858,6 +1858,105 @@ npm test
 `no-store`。Docker 只证明 PostgreSQL synthetic 合同；Backend 测试只证明 HTTP 和 adapter 合同。两者都不证明 Flutter、导出、缓存、离线、
 生产身份、真实账号或六平台真人运行时。
 
+## Slice 6BB：Flutter 如何读取管理兴趣快照目录与详情
+
+6BB 是一层独立的 Flutter typed gateway。它把已经由 6BA／6AZ 保护和授权的 HTTPS JSON 变成不可变 Dart 类型，供后续 consumer
+使用；它不是页面、ViewModel、Widget，也不负责选择管理项目、计算指标或保存报告。与 current-city 和 legacy channel 一样，interest
+有自己的 gateway 类型，不要把三种 report family 混在一个 parser 或 repository 中。
+
+### 两个固定请求和两个“三字段”边界
+
+目录和详情使用以下固定入口：
+
+```text
+GET /v1/projects/:projectId/management-interest-report-snapshots
+GET /v1/projects/:projectId/management-interest-report-snapshots/:snapshotId
+```
+
+两个请求只把显式 project／snapshot UUID 放在 path 中。不要附加 query、GET body、筛选、分页、报告定义、时区或截止点。
+
+这里有一个容易混淆的 DB／HTTP 边界。6BA 的数据库 bridge 为 DB-only 合同，内部根对象有四个字段：
+
+```text
+access_contract_id
+access_event_id
+project_id
+snapshots
+```
+
+HTTP 目录会把内部 `access_contract_id` 去掉，只发送三个字段：
+
+```text
+access_event_id
+project_id
+snapshots
+```
+
+因此 Flutter directory parser 必须严格要求这三个 HTTP 字段，不能因为数据库函数返回过四个字段就把第四个字段加入 wire 或 Dart
+模型。每个目录项只有 `snapshot_id`、`report_id`、`report_version`、`reporting_time_zone`、`data_cutoff_utc` 和
+`released_at_utc` 六个字段。目录最多 20 项，顺序由 Backend 固定为 `data_cutoff_utc DESC`、`released_at_utc DESC`、
+`snapshot_id DESC`。空目录是成功的空列表；第一项只是排序后的第一项，不是 current、latest、最新有效或未被取代的报告。
+
+详情 HTTP 根对象也只有三个字段：
+
+```text
+access_event_id
+snapshot_id
+report
+```
+
+调用方必须把用户明确选择的目录摘要、同一个 `projectId` 和其中的 `snapshotId` 传给详情请求。不能自动取第一项，也不能由目录
+顺序猜测 current／latest。详情中的 `report` 是 6AV 的固定十格 count-only interest report：`previous/current × interest_level
+0..4` 必须完整且顺序固定，显示格是安全整数，隐藏格的 `value_count` 必须是 JSON `null`。parser 还要核对固定报告／指标
+identity、项目绑定、两个期间、IANA 时区和 canonical UTC；额外字段、缺失字段、重复或乱序格、错误 project／snapshot、source、
+contributor、contact、location、geometry 和 PII 都必须失败关闭。
+
+### 身份、一次 401 和内存边界
+
+gateway 从 `IdentitySession` 取得 Bearer token。Widget、ViewModel 或方法调用参数不能提供 token。每次请求按以下顺序处理：
+
+1. 取得当前 token；没有 token 就返回未认证，不发送伪造身份的请求；
+2. 发送没有 query 和 body 的固定 HTTPS 请求；
+3. 如果收到一次 `401`，刷新身份并只重试一次；第二次 `401` 直接失败，不循环刷新；
+4. 将 `400`、`403`、`404`、`409`、`503`、网络／timeout、非 JSON、错误 `Content-Type`、错误 `no-store` 或 parser 失败映射为稳定
+   typed failure，不返回部分目录或报告。
+
+token、external subject、响应正文和数据库错误不能写入日志。成功响应必须是 JSON 并带 `Cache-Control: no-store`。解析后的对象只
+在当前调用期间留在内存；6BB 不写 Drift／SQLite、文件或 secure storage，不做缓存、离线、同步、导出或下载。gateway `close` 后
+不能继续发起请求。
+
+### 第一次验证 Flutter gateway
+
+这组测试不需要真实账号、真实网络、Docker 或手机。它使用 synthetic HTTP、fake `IdentitySession` 和内存 `MockClient`，只验证
+transport 合同：
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+flutter pub get
+dart analyze
+flutter test --no-pub test/management_reports/
+```
+
+测试应覆盖固定 path、无 query／GET body、Bearer 注入、一次 `401` 刷新、三字段目录 parser、三字段详情 parser、六字段摘要、20
+项和服务端排序、空目录、首项没有 current／latest 语义、显式 project／snapshot、十格报告、PII／额外字段拒绝、错误映射、
+`no-store`、timeout、网络失败和 `close`。测试通过只说明 Dart gateway 能拒绝不符合合同的响应；它不证明数据库授权、Backend
+production identity、UI、键盘或屏幕阅读器、Drift、缓存、离线、导出、真实账号或 Android、iOS、macOS、Windows、Linux、Web
+运行时。
+
+需要验证 6BA 的 PostgreSQL directory、6AZ 的 Backend HTTP 或其既有 Docker 合同时，另从仓库根目录运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+Docker runner 继续自动发现并运行既有 6BA migration／check／fixture／并发／integration、6AZ Backend 测试以及 checksum 和
+dump／restore；6BB 不新增数据库 migration 或数据库 fixture。恢复库仍只重跑 migration、check 和 fixture，不重跑会提交
+synthetic 行的并发脚本。Docker 证据说明 DB／Backend 合同，Flutter 命令说明 Dart transport 合同，二者都不能互相替代，也不能
+声称生产身份或六平台真机证据。
+
+6BB 的边界明确不包括 UI、ViewModel、Widget、composition／AppDependencies 接线、管理导航、Drift、缓存、离线、同步、导出／下载、
+搜索、分页、报告创建／刷新／更正／删除或真实平台验收。这些工作必须在后续切片中单独定义和验证。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和
