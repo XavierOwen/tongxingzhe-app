@@ -842,6 +842,28 @@ snapshot／attempt 表。通用 snapshot storage 必须对专用 release writer 
 warehouse、retention、报告更正／取代、生产调度或任何 Apple／Android／iOS／macOS／Windows／Linux／Web 真人平台证据；
 完整 Docker、checksum、dump／restore 和 synthetic fixture 只证明当前 DB-only 合同与 ACL 边界。
 
+#### Slice 6AY：向 Backend runtime 开放管理兴趣快照读取桥
+
+Slice 6AY 只把 6AX 的 private read 接到 Backend runtime。它依赖已交付的 0063 合同，不重复实现授权、interest provenance、6AV
+validator、撤权锁或 value-free audit。bridge 接收 Backend 已验证的 exact external `issuer + subject`、显式 project UUID 和
+snapshot UUID。它只映射现有且 active 的 identity，不 trim、bootstrap、读取 session context 或接受客户端提交的内部用户、capability、
+时区、截止点、期间、筛选或 SQL。
+
+0064 bridge 使用 `SECURITY DEFINER` 和固定 `search_path = pg_catalog`，只调用
+`app_private.read_authorized_management_interest_report_snapshot_v1(uuid, uuid, uuid)`。runtime 只拥有 bridge 的
+`EXECUTE`，不能使用 `app_private`，不能执行 0063 private function，也不能读取用户、identity、snapshot、provenance 或 audit 表。
+bridge owner 必须与 0063 private function owner 相同，且不能是 runtime、reader 或 release-writer。
+
+Backend adapter 接收已有 `VerifiedIdentity`，只执行一次固定参数化 SQL。它严格解析 0063 的 root keys、access contract、请求和解析出的
+snapshot、结果状态、reason code 及 6AX protected report。它只接受 `previous/current × interest_level 0..4` 的十格、合法 count 和
+`suppressed = null`，拒绝额外字段、PII、报告值漂移和其他 report family。它只把 `42501` 映射为 typed `forbidden`；未知 SQLSTATE、SQL、
+数据库消息和栈不进入 runtime 结果。此 Slice 不增加 HTTP route；wire 错误映射留给后续切片。
+
+真实 PostgreSQL integration 在自己的事务中建立 synthetic identity、project 和 6AW snapshot，设置 runtime role，验证一次 bridge
+调用、严格 parser 和未知 identity 的失败关闭，最后回滚。Docker runner 自动发现 0064 migration、check 和 fixture，并显式运行第八条
+Backend integration；现有 0063 read/revoke 并发、checksum 和 dump／restore 继续运行。恢复库重跑 migration、check 和 fixture，不重跑
+会提交 synthetic 行的并发脚本。所有结果仍是 DB-only 证据，不证明 HTTP、Flutter、导出、生产 identity provider、真实账号或真人平台。
+
 #### 5.8.2 时间、趋势、版本与因果边界
 
 | ID | 需求 |
@@ -879,6 +901,7 @@ warehouse、retention、报告更正／取代、生产调度或任何 Apple／An
 | `ANALYTICS-031` | `contact_sessions_by_interest_level_two_periods@1` 使用可信项目 IANA 时区、`data_cutoff_utc` 和两个相邻完整 ISO 周，按 `previous/current × interest_level 0..4` 返回 count-only 完整网格；统计单位是 Backend 已接受的有效接触场次，贡献者是可信 `app_user_id`，metric identity 固定为 `interest_distribution@1`，不返回中位数、比例或总计格。 |
 | `ANALYTICS-032` | 6AW 只接受符合 6AV 完整受保护文档合同的十格文档，使用独立 request claim／release provenance 和通用不可变 snapshot storage；私有 release 在固定事务内调用 6AV executor 生成候选，validator 固定 6AV 定义、两个期间、十格顺序、count-only 状态和值。首个成功发布建立唯一 baseline，后续发布只能推进 cutoff、保持定义／period definition／boundary／网格／query fingerprint／privacy／source scope／时区 revision 一致并链接前一 snapshot；相同 request 与固定上下文精确幂等。same／earlier cutoff、无共享期间、共享期间内的兴趣格值或隐私状态变化及任一固定上下文漂移返回稳定 blocked reason；失败尝试不得保存候选报告值。 |
 | `ANALYTICS-033` | 6AX 只按显式 project／snapshot ID 读取一份兴趣快照；数据库重新验证 `view_anonymous_analytics`，只接受 0062 interest release family 的 approved／approved_baseline attempt、空 reason 和完整匹配的 project／report／version／fingerprint／lineage／时区／cutoff／`source_change_sequence`／previous pointer，并在返回前再次运行 6AV 文档 validator。`completed` 才返回原始十格 protected report；unknown／cross-project 返回 `not_found`，同项目但 foreign 或不可信 provenance 返回 `untrusted_provenance`，两者都不返回正文。6AX 是 private DB-only 合同，不增加 runtime、HTTP、目录、Flutter 或导出。 |
+| `ANALYTICS-034` | 6AY 只通过受控 Backend runtime bridge 调用 0063 private read。bridge 使用 exact external `issuer + subject`、显式 project／snapshot UUID 和 active identity 映射；它不 bootstrap、trim、读取 session context 或开放任意查询。Backend adapter 只执行一次固定参数化 SQL，严格解析 0063 的固定 envelope 和 6AX 十格 protected report；它不增加 HTTP、目录、导出或客户端计算。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -909,6 +932,7 @@ warehouse、retention、报告更正／取代、生产调度或任何 Apple／An
 | `PRIVACY-023` | 6AV 对每个期间×兴趣档分别执行 `N >= 10`、至少三位可信 `app_user_id` 和 `2 × M <= N`；任一档不安全时，该期间五档整体 `suppressed` 且 count 为 `null`，另一期间独立判断，不依赖渠道或 current-city 总数隐藏，不允许跨报告相减恢复值。 |
 | `PRIVACY-024` | 6AW 的兴趣快照只接受 6AV 保护后的十格；`suppressed` 永远为 JSON `null`，不把隐藏前值带入 snapshot、attempt、claim、audit 或错误。兴趣 request claim／provenance 与 channel／current-city family 互斥；blocked attempt 只保存最小 value-free lineage 和稳定 reason。snapshot、attempt、claim 追加不可变且不可 UPDATE／DELETE；通用 snapshot storage 对专用 writer 实施 report-family 行级隔离，runtime、`PUBLIC`、普通 app role 和区域维护角色不能执行兴趣发布、读取兴趣 provenance 或直接写表。 |
 | `PRIVACY-025` | 6AX 只有在 `view_anonymous_analytics`、项目／组织成员关系和 interest release provenance 全部有效时才返回十格；unknown／cross-project 与 same-project foreign／untrusted provenance 均不返回正文。每次已授权尝试追加不含 `protected_report`、cells、`value_count`、贡献者、contact、来源或 PII 的不可变 value-free audit；未授权、撤权、过期、release-only 和无项目成员调用失败关闭且不写 audit。读取和撤权共享授权锁；runtime、`PUBLIC`、普通 app role、interest reader、current-city writer 和区域角色不能执行读取或读取审计。 |
+| `PRIVACY-026` | 6AY bridge 使用 `SECURITY DEFINER`、固定 `search_path = pg_catalog` 和 exact active identity 映射；runtime 只有 bridge `EXECUTE`，不能使用 `app_private`、执行 0063 private read 或读取用户、identity、snapshot、provenance、audit 表。adapter 只接受固定 root keys、固定 snapshot/project 绑定和 6AX protected report keys；它拒绝额外字段、PII、报告值错误、SQL、数据库消息和栈信息进入 runtime 结果。0063 是唯一授权和 audit 来源，bridge 不复制授权或追加第二条 audit。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
 
@@ -933,6 +957,7 @@ warehouse、retention、报告更正／取代、生产调度或任何 Apple／An
 | `MANUAL-015` | 学习文档必须用零基础读者可以复制的步骤说明 6AV 的 Dart 与 PostgreSQL 测试、Docker 首次启动、预期输出、常见失败排查、专用测试库边界和证据限制；必须明确自动测试和 Docker 不证明真人平台运行时。 |
 | `MANUAL-016` | 学习文档必须用零基础读者可以复制的步骤说明 6AW 的 0062 migration、validator／fixture／并发检查、Docker 首次启动和专用测试库命令；必须解释十格 count-only、独立 request claim／provenance、baseline、精确幂等、稳定滚动、blocked 与 value-free attempt、不可变和最小 ACL，并明确这些 DB-only synthetic 证据不证明 HTTP、Flutter、生产发布、真实账号、真人平台或形式化不可重识别保证。 |
 | `MANUAL-017` | 学习文档必须用零基础读者可以复制的步骤说明 6AX 的 0063 migration、private read check、synthetic fixture、read/revoke 并发检查、Docker 首次启动和专用测试库命令；必须解释 0062 interest attempt／claim lineage、`completed`／`not_found`／`untrusted_provenance`、value-free immutable audit、撤权锁、完整 Docker 自动发现以及 restore 只重跑 migration／check／fixture 而不重跑会提交测试行的并发脚本，并明确这些 DB-only synthetic 证据不证明 runtime、HTTP、Flutter、导出、生产发布、真实账号或真人平台。 |
+| `MANUAL-018` | 学习文档必须用零基础读者可以复制的步骤说明 6AY 的 exact identity bridge、一次固定 SQL、strict parser、runtime 最小 ACL、Backend integration、Docker 自动发现和 restore 行为，并明确这组 DB-only synthetic 证据不证明 HTTP、Flutter、导出、生产身份或真人平台。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -1137,6 +1162,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-025` | 6AV Dart 与 PostgreSQL 对同一无 PII synthetic fixture 对账 `previous/current × 0..4` 十格、完整顺序、count-only、边界 `10`／三人／`50%`、`9`／两人／`6/10`、期间整体闭包、跨期间独立判断、跨报告相减反例、截止点／半开周边界、草稿／尝试／作废／其他项目排除、畸形输入、最小权限、checksum 和 dump／restore；通过不声称 HTTP、Flutter、真人平台或真机证据。 |
 | `TEST-026` | 6AW fixture 覆盖符合 6AV 完整受保护文档合同的十格、unavailable、额外字段、错误 report／metric／dimension／统计单位／fingerprint／privacy／source scope、缺失／重复／乱序网格、`displayed`／`suppressed` 值语义、唯一 baseline、相同 request 精确幂等、稳定滚动、same／earlier cutoff、无共享期间、共享期间内的兴趣格值／隐私变化、定义／period definition／boundary／网格／query／privacy／source／时区 revision 漂移、期间整体隐藏和跨报告相减反例；并发覆盖同 request、不同 request、baseline、previous pointer 和跨 family claim 冲突。另检查 value-free blocked attempt、snapshot／attempt／claim 不可 UPDATE／DELETE、owner／`SECURITY DEFINER`／固定 `search_path`、最小 ACL、release writer 之外角色拒绝、旧 channel／current-city／6AV 回归、checksum、dump／restore。通过不声称 HTTP、Flutter、生产发布、真人平台或真机证据。 |
 | `TEST-027` | 6AX fixture 覆盖合法与重复读取、完整十格 validator、approved／approved_baseline、0062 claim／attempt／snapshot 对齐、unknown／cross-project 的 `not_found`、same-project channel／current-city／legacy／blocked／缺失或漂移 provenance 的 `untrusted_provenance`、`suppressed = null`、额外敏感字段、active／撤权／过期／release-only／无项目成员和 value-free audit。检查必须拒绝 audit UPDATE／DELETE，固定 owner／`SECURITY DEFINER`／`search_path` 和最小 ACL；并发覆盖 read-first／revoke-first。完整 Docker 自动发现 0063 migration、check、fixture 和并发脚本，checksum／dump／restore 重跑 migration、check 和 fixture，但不重跑会提交测试行的并发脚本；旧 channel、current-city、6AV 和 6AW 回归继续通过。通过不声称 runtime、HTTP、Flutter、导出、真人平台或真机证据。 |
+| `TEST-028` | 6AY 检查 0064 bridge 的 exact issuer／subject、active／停用／未知 identity、trim 不映射、显式 project／snapshot、0063 private call、owner、`SECURITY DEFINER`、固定 `search_path` 和最小 ACL。Backend unit test 必须证明一次固定 SQL、参数顺序、`42501` 窄映射、strict root／report parser、十格顺序、`suppressed = null`、extra key／PII／错误 project 拒绝和 `not_found`／`untrusted_provenance` 无正文；真实 PostgreSQL integration 自建数据并回滚。Docker runner 运行 migration、check、fixture、八条 Backend integration、既有 0063 并发、checksum 和 dump／restore；restore 重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。通过不声称 HTTP、Flutter、导出、生产身份或真人平台证据。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -1258,6 +1284,15 @@ Drift、离线、导出或真实平台证据。
 6AX 的 Docker 证据自动发现 0063 migration、check、fixture 和 read/revoke 并发脚本。恢复库重跑 migration、check 和
 fixture，不重跑会提交 synthetic 行的并发脚本。这样恢复测试不会把同一批并发写入重复导入恢复库。
 验收结论只能说明降低披露风险，不宣称形式化不可重识别。
+
+6AY（#183）只通过 0064 narrow bridge 和 Backend adapter 调用 0063 private read。bridge 使用 exact external
+`issuer + subject`、显式 project／snapshot 和 active identity，不 bootstrap 或复用其他 report family；runtime 只有 bridge `EXECUTE`。
+adapter 只执行一次固定 SQL，并严格解析 0063 envelope、十格兴趣 protected report 和 `suppressed = null`。6AY 不增加 HTTP、目录、导出、
+Flutter、Drift、缓存、离线、同步或真人平台证据。
+
+6AY 的 Docker 证据包括 0064 migration、check、fixture、第八条 Backend integration、既有 0063 并发、checksum 和 dump／restore。恢复库只
+重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。通过只能证明 runtime bridge、adapter parser 和 PostgreSQL ACL 的
+DB-only 合同。
 
 ### Slice 7：组织治理与数据可携带性
 

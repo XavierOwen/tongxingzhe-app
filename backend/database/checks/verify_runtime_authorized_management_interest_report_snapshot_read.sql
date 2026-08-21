@@ -1,0 +1,161 @@
+\set ON_ERROR_STOP on
+
+DO $check$
+DECLARE
+  bridge regprocedure := to_regprocedure(
+    'app_data.read_authorized_management_interest_report_snapshot_v1(text,text,uuid,uuid)'
+  );
+  private_read regprocedure := to_regprocedure(
+    'app_private.read_authorized_management_interest_report_snapshot_v1(uuid,uuid,uuid)'
+  );
+  function_definition text;
+  function_owner text;
+  private_owner text;
+  function_config text[];
+  function_volatility "char";
+  function_security_definer boolean;
+  forbidden_role text;
+BEGIN
+  IF bridge IS NULL OR private_read IS NULL THEN
+    RAISE EXCEPTION 'runtime interest snapshot bridge is incomplete';
+  END IF;
+
+  SELECT
+    pg_catalog.pg_get_userbyid(function_row.proowner),
+    function_row.proconfig,
+    function_row.provolatile,
+    function_row.prosecdef,
+    pg_catalog.pg_get_functiondef(function_row.oid)
+  INTO
+    function_owner,
+    function_config,
+    function_volatility,
+    function_security_definer,
+    function_definition
+  FROM pg_catalog.pg_proc AS function_row
+  WHERE function_row.oid = bridge;
+
+  SELECT pg_catalog.pg_get_userbyid(function_row.proowner)
+  INTO STRICT private_owner
+  FROM pg_catalog.pg_proc AS function_row
+  WHERE function_row.oid = private_read;
+
+  IF NOT function_security_definer
+    OR function_volatility <> 'v'
+    OR function_config IS DISTINCT FROM
+      ARRAY['search_path=pg_catalog']::text[]
+    OR function_owner IS DISTINCT FROM private_owner
+    OR function_owner = ANY (ARRAY[
+      'tongxingzhe_runtime',
+      'tongxingzhe_region_publisher',
+      'tongxingzhe_region_mapping_writer',
+      'tongxingzhe_contact_provenance_writer',
+      'tongxingzhe_region_attribution_reader',
+      'tongxingzhe_management_region_report_reader',
+      'tongxingzhe_management_interest_report_reader',
+      'tongxingzhe_management_current_city_snapshot_release_writer',
+      'tongxingzhe_management_interest_snapshot_release_writer'
+    ]::text[])
+  THEN
+    RAISE EXCEPTION 'runtime interest snapshot bridge owner/security is incorrect';
+  END IF;
+
+  IF NOT has_function_privilege('tongxingzhe_runtime', bridge, 'EXECUTE')
+    OR EXISTS (
+      SELECT 1
+      FROM information_schema.routine_privileges
+      WHERE specific_schema = 'app_data'
+        AND routine_name =
+          'read_authorized_management_interest_report_snapshot_v1'
+        AND grantee = 'PUBLIC'
+    )
+  THEN
+    RAISE EXCEPTION 'runtime interest snapshot bridge ACL is incorrect';
+  END IF;
+
+  FOREACH forbidden_role IN ARRAY ARRAY[
+    'tongxingzhe_region_publisher',
+    'tongxingzhe_region_mapping_writer',
+    'tongxingzhe_contact_provenance_writer',
+    'tongxingzhe_region_attribution_reader',
+    'tongxingzhe_management_region_report_reader',
+    'tongxingzhe_management_interest_report_reader',
+    'tongxingzhe_management_current_city_snapshot_release_writer',
+    'tongxingzhe_management_interest_snapshot_release_writer'
+  ] LOOP
+    IF has_function_privilege(forbidden_role, bridge, 'EXECUTE') THEN
+      RAISE EXCEPTION
+        'forbidden role can execute runtime interest snapshot bridge: %',
+        forbidden_role;
+    END IF;
+  END LOOP;
+
+  IF has_schema_privilege('tongxingzhe_runtime', 'app_private', 'USAGE')
+    OR has_function_privilege('tongxingzhe_runtime', private_read, 'EXECUTE')
+    OR has_function_privilege(
+      'tongxingzhe_runtime',
+      'app_private.validate_management_interest_snapshot_access_insert_v1()',
+      'EXECUTE'
+    )
+    OR has_table_privilege(
+      'tongxingzhe_runtime',
+      'app_private.management_report_snapshots',
+      'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'
+    )
+    OR has_table_privilege(
+      'tongxingzhe_runtime',
+      'app_private.management_interest_report_release_attempts',
+      'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'
+    )
+    OR has_table_privilege(
+      'tongxingzhe_runtime',
+      'app_private.management_report_release_request_claims',
+      'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'
+    )
+    OR has_table_privilege(
+      'tongxingzhe_runtime',
+      'app_private.management_interest_report_snapshot_access_events',
+      'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'
+    )
+    OR has_table_privilege(
+      'tongxingzhe_runtime',
+      'app_data.app_users',
+      'SELECT'
+    )
+    OR has_table_privilege(
+      'tongxingzhe_runtime',
+      'app_data.external_identities',
+      'SELECT'
+    )
+  THEN
+    RAISE EXCEPTION 'runtime received direct interest identity or private access';
+  END IF;
+
+  IF function_definition IS NULL
+    OR function_definition NOT ILIKE '%length(btrim(trusted_issuer)) NOT BETWEEN 1 AND 2048%'
+    OR function_definition NOT ILIKE '%length(btrim(trusted_subject)) NOT BETWEEN 1 AND 512%'
+    OR function_definition NOT ILIKE '%identity_row.issuer = trusted_issuer%'
+    OR function_definition NOT ILIKE '%identity_row.subject = trusted_subject%'
+    OR function_definition NOT ILIKE '%app_user.status = ''active''%'
+    OR function_definition NOT ILIKE '%ERRCODE = ''22023''%'
+    OR function_definition NOT ILIKE '%ERRCODE = ''42501''%'
+    OR function_definition NOT ILIKE '%RETURN app_private.read_authorized_management_interest_report_snapshot_v1(%'
+    OR function_definition ILIKE '%app_private.read_authorized_management_report_snapshot_v1(%'
+    OR function_definition ILIKE '%app_private.read_authorized_management_current_city_report_snapshot_v1(%'
+    OR function_definition ILIKE '%bootstrap_personal_context%'
+    OR function_definition ILIKE '%create_personal_project_context%'
+  THEN
+    RAISE EXCEPTION 'runtime interest snapshot bridge body contract is incomplete';
+  END IF;
+
+  IF (
+    SELECT count(*)
+    FROM app_migrations.schema_migrations
+    WHERE version =
+      '0064_runtime_authorized_management_interest_report_snapshot_read'
+  ) <> 1 THEN
+    RAISE EXCEPTION
+      'runtime interest snapshot bridge migration was not recorded once';
+  END IF;
+END
+$check$;
