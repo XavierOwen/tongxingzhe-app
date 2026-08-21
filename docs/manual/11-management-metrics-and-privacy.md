@@ -1284,6 +1284,76 @@ HTTP 测试覆盖认证顺序、固定 collection route、query／GET body、401
 bridge query、strict metadata parser、重复或乱序目录、Promise gate、`transfer-encoding` body 和 `no-store`。这些测试
 使用 synthetic identity 和 store，不证明真实身份提供方或六平台设备能力。
 
+## Slice 6AT：Flutter 如何通过 typed gateway 选择并读取 current 城市快照
+
+这一节说明 6AT 的 Flutter transport 接缝。它不是给用户看的页面，而是一层把固定 HTTPS JSON 转成不可变 Dart 类型的
+typed gateway。可以把 gateway 理解为“门口的翻译员”：它负责带上当前身份、发送固定请求、检查完整响应和分类失败；它不
+决定页面布局，也不保存报告。
+
+6AT 把两个已有的 Backend 合同接在一起：6AS 提供 metadata-only 目录，6AR 提供一份显式快照的 protected report。它们
+使用独立的 current-city 类型和方法，不复用 legacy channel gateway。目录与 channel 是两个独立来源，目录第一项只是
+固定排序中的第一项，不能称为 current、latest、最新有效或取代快照。
+
+### 两个固定请求
+
+```text
+GET /v1/projects/:projectId/management-current-city-report-snapshots
+GET /v1/projects/:projectId/management-current-city-report-snapshots/:snapshotId
+```
+
+请求只放显式 UUID path 参数。不要附加 query、GET body、筛选、分页、报告定义、时区或截止点。目录成功响应的根对象
+只有 `access_event_id`、`project_id` 和 `snapshots`；每个目录项只有以下六个字段：
+
+- `snapshot_id`
+- `report_id`
+- `report_version`
+- `reporting_time_zone`
+- `data_cutoff_utc`
+- `released_at_utc`
+
+目录最多有 20 项，服务端按 `data_cutoff_utc DESC`、`released_at_utc DESC`、`snapshot_id DESC` 排序。空目录仍是成功的
+空列表。用户选择一项后，gateway 必须把该项的 `projectId` 和 `snapshotId` 原样传给第二个请求；不能自动选择第一项，
+也不能把排序推断成“当前报告”。
+
+详情成功响应只有 `access_event_id`、`snapshot_id` 和 `report`。`report` 是 6AP 的固定 current-city protected report，
+其中 periods、target context 和完整 city grid 的字段、类型、顺序以及 `suppressed = null` 都要完整检查。客户端不重算
+指标、不把隐藏值当作零、不把城市 ID 转成城市名称，也不接受来源、贡献者、坐标、geometry、contact 或其他 PII。多余、
+缺失、类型错误或 project／snapshot 不匹配都应当失败关闭。
+
+### 身份和失败为什么要放在 gateway
+
+gateway 从 `IdentitySession` 取得 Bearer token。调用方不能传 token，页面和 ViewModel 也不能保存 token。一次读取的流程是：
+
+1. gateway 取得当前身份的 token；没有 token 时返回未认证，不发送带有伪造身份的请求；
+2. gateway 发送没有 query 和 body 的固定 HTTPS 请求；
+3. 如果收到一次 `401`，刷新身份并只重试一次；不能无限刷新，也不能把 token、external subject 或响应正文写入日志；
+4. 对第二次 `401`、`400`、`403`、`404`、`409`、`503`、网络失败、非 JSON、错误 `Content-Type`、错误 `no-store`、字段错误或
+   严格解析失败，返回稳定的 typed failure，不返回部分目录或报告。
+
+Backend 仍是授权、隐私和 provenance 的边界。Flutter 的 parser 只能证明“收到的 JSON 符合固定合同”，不能把 parser 通过
+解释成“用户有权看到所有数据”。成功响应必须有 JSON `Content-Type` 和 `Cache-Control: no-store`；非成功响应按状态码
+分类，不解析或显示响应正文。
+
+### 第一次验证 gateway
+
+gateway 的测试使用 synthetic HTTP、fake `IdentitySession` 和内存中的 `MockClient`。这意味着第一次验证不需要真实账号、
+真实网络、Docker 或手机；它检查的是请求和响应合同。首次检出仓库或 `pubspec.lock` 改变后，从仓库根目录运行：
+
+```bash
+flutter pub get
+dart analyze
+flutter test --no-pub test/management_reports/
+```
+
+已有依赖没有变化时可以跳过 `flutter pub get`。看到测试通过，至少说明当前管理报告 gateway 测试目录中的固定 path、
+Bearer 注入、一次 `401` 刷新、目录／详情 strict parser、错误映射、空目录、稳定排序、显式 snapshot 传递、timeout 和 close
+通过；它不证明 Backend 数据库权限，也不证明真实 identity provider。
+
+需要验证 PostgreSQL、migration、0060 directory 或 0059 bridge 时，另外按 [本章的 Docker 与 CI 测试说明](09-local-docker-and-ci-testing.md)
+运行 `./tool/run_postgres_tests_in_docker.sh`。Docker 测试证明 Backend／数据库合同，不会替代上述 Flutter gateway 测试，
+也不证明 UI、Drift、离线、导出、真实平台或真机行为。6AT 本身不交付页面、导航、缓存、同步、下载／导出、分页、搜索或
+任何六平台 runtime 证据；完整边界以[产品规格](../PRODUCT_SPEC.md)的 Slice 6AT 合同为准。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和

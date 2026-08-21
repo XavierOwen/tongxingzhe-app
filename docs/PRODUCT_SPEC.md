@@ -715,6 +715,42 @@ query／GET body、错误脱敏、Promise gate 和 `no-store`。Docker runner �
 本 Slice 不增加 Flutter、Drift、管理导航上下文、分页、搜索、筛选、导出、下载、缓存、离线、同步、动态报告、快照
 创建／刷新／更正／删除、retention、warehouse、区域发布、授权授予／撤销、六平台真机验收或生产 identity provider。
 
+#### Slice 6AT：Flutter current-city 目录与详情 typed gateway
+
+Slice 6AT 只把 6AS 的 metadata-only 目录和 6AR 的单份受保护详情接入 Flutter transport。它定义独立的 current-city
+typed gateway、目录类型和详情类型；不复用 legacy channel gateway，因为两者的目录、授权来源和报告合同不同。gateway
+是把 HTTPS JSON 转成不可变 Dart 类型的窄适配器，不是 Widget、管理导航上下文或 Drift repository。
+
+固定入口为：
+
+```text
+GET /v1/projects/:projectId/management-current-city-report-snapshots
+GET /v1/projects/:projectId/management-current-city-report-snapshots/:snapshotId
+```
+
+两个请求都只接受显式 UUID path 参数，不接受 query、GET body、筛选、分页、报告定义、时区、截止点或客户端提供的
+内部身份。目录响应的根对象严格只含 `access_event_id`、`project_id` 和 `snapshots`；每个目录项严格只含
+`snapshot_id`、`report_id`、`report_version`、`reporting_time_zone`、`data_cutoff_utc` 和 `released_at_utc`。目录最多
+返回 20 项，顺序由 Backend 固定为 `data_cutoff_utc DESC`、`released_at_utc DESC`、`snapshot_id DESC`。第一项只是
+这个排序结果，绝不表示 current、latest、最新有效或取代关系；调用方必须把用户选择的显式 `projectId` 和
+`snapshotId` 原样传给详情入口。
+
+详情响应沿用 6AP／6AR 的固定 protected report root：`access_event_id`、`snapshot_id` 和 `report`。Flutter 只解码
+已通过 Backend 隐私和 provenance 检查的报告，严格检查 report、periods、target context 与 city grid 的固定字段、
+类型、顺序和 `suppressed = null`；不重算指标、不解释隐藏值、不把城市 ID 变成城市名称，也不接受 source、contributor、
+坐标、geometry、contact 或其他 PII 字段。目录和详情类型均不暴露任意 JSON。
+
+gateway 从 `IdentitySession` 取得 Bearer token，不能从 Widget、ViewModel 或调用参数接收 token。请求顺序和失败关闭规则
+如下：先取得并验证当前身份，再发送请求；收到一次 `401` 时刷新一次并重试一次，不能循环刷新或把 token 写入日志；其余
+`401`、`400`、`403`、`404`、`409`、`503`、网络失败、非 JSON、响应头错误、字段缺失、额外字段、类型错误或项目／快照
+不匹配都映射为稳定 typed failure，不显示部分报告。成功响应要求 JSON `Content-Type` 与
+`Cache-Control: no-store`；非成功响应按状态码映射，不解析或暴露响应正文。
+
+本 Slice 的自动测试使用 synthetic HTTP 和 fake `IdentitySession`，必须覆盖固定 path、无 query／GET body、Bearer 注入、
+一次 401 刷新、目录与详情的 strict parser、显式 ID 传递、目录空结果和稳定排序、第一项不具 current/latest 语义、所有
+错误映射、无 PII 字段、重复目录项、timeout 和 gateway close。它不增加 UI、Drift／SQLite、缓存、离线、同步、导出／下载、搜索、
+分页、管理导航、报告创建／刷新／删除、生产 identity provider、真实平台或真机验收；这些边界另行交付。
+
 只有高级分析可显示：
 
 ```text
@@ -755,6 +791,7 @@ query／GET body、错误脱敏、Promise gate 和 `no-store`。Docker runner �
 | `ANALYTICS-026` | Backend runtime current 城市读取只通过 0059 narrow bridge；bridge 用 exact external identity、显式 project／snapshot 和 0058 current-city private function，不调用渠道 read、generic reader、目录、导出或任意查询；它原样返回 6AP 固定合同，completed 报告的 project 必须匹配请求。 |
 | `ANALYTICS-027` | Backend HTTP 只接受固定 current-city snapshot path；认证先于 UUID、query、GET body 和 store 检查，成功只通过 6AQ adapter 返回 6AP 固定报告，响应在 adapter Promise 完成后发送。 |
 | `ANALYTICS-028` | current-city 快照目录只通过 0060 独立 DB／runtime bridge 和固定 HTTP collection route 返回至多 20 项可信 current-city metadata；它重新授权、复核 0057 provenance、固定排序并保持显式 project scope，不把第一项解释为当前或最新。 |
+| `ANALYTICS-029` | Flutter current-city typed gateway 将 6AS 目录仅作为有序元数据，将显式选择的 project／snapshot 传给 6AR 详情；它不把第一项解释为 current／latest，不复用 channel gateway，不在客户端聚合、重算或推断报告。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -780,6 +817,7 @@ query／GET body、错误脱敏、Promise gate 和 `no-store`。Docker runner �
 | `PRIVACY-018` | 0059 runtime bridge 使用 `SECURITY DEFINER`、固定 `pg_catalog` search path 和 exact external identity 映射；runtime 只拥有 bridge `EXECUTE`，不能使用 `app_private` 或读取 identity／用户／快照／审计表。Backend parser 只接受固定 current-city protected JSON，拒绝 contact、source、contributor、城市名称、坐标、geometry 和其他多余字段。 |
 | `PRIVACY-019` | current-city HTTP 错误只返回稳定 code 和必要的访问事件 ID；未知 SQLSTATE、数据库消息、SQL、栈、external subject、报告格、城市名称和坐标不进入响应。所有响应使用 `Cache-Control: no-store`。 |
 | `PRIVACY-020` | current-city 目录使用独立 release family provenance、value-free directory audit 和最小 runtime ACL；响应只含固定快照 metadata，不含报告格、来源、贡献者、城市名称、边界、坐标、PII 或 generic channel provenance。 |
+| `PRIVACY-021` | Flutter current-city gateway 只在内存中保存严格解析后的受保护类型；不写 Drift、不做缓存、离线、同步或导出，不暴露 PII 或隐藏前值。授权、隐私和 provenance 仍由 Backend 决定，解析失败和授权失败均失败关闭。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
 
@@ -1000,6 +1038,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-020` | 6AQ fixture 覆盖 exact issuer／subject、active／停用／未知 identity、trim 不映射、显式 project／snapshot、0058 private bridge、runtime ACL、owner 对齐、固定 root／period／target／cell keys、两期间 city grid 和 rejected extra fields。真实 PostgreSQL adapter integration 自建数据并回滚；Docker runner 运行 migration、check、fixture、integration、并发、checksum 和 dump／restore。 |
 | `TEST-021` | 6AR handler 覆盖认证先于 UUID／query／GET body／store、401／400／403／404／409／503 稳定映射、未知 SQLSTATE 不泄漏、adapter Promise gate 和固定 route；route 覆盖 method、path、transfer-encoding body 与 no-store；production entry 只组合 6AQ adapter。 |
 | `TEST-022` | 6AS 覆盖 current-city provenance 过滤、approved／approved_baseline、legacy／blocked／unavailable／tuple 漂移、精确 identity、授权撤权、跨项目、空目录、20 项上限、稳定排序、value-free audit、不可改删、runtime ACL、checksum、dump／restore、真实 PostgreSQL adapter parser，以及 HTTP 认证顺序、固定 collection route、query／GET body、错误脱敏、Promise gate 和 no-store。 |
+| `TEST-023` | 6AT Flutter typed gateway 使用 synthetic HTTP 与 fake `IdentitySession` 覆盖目录／详情固定 path、显式 project／snapshot、无 query／GET body、Bearer 注入、一次 401 刷新、strict parser、目录排序与空结果、第一项不代表 current/latest、详情 project 对齐、错误映射、PII／额外字段拒绝、timeout、gateway close 和 no-store；不以此声称 UI、Drift、离线、导出或真实平台证据。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -1108,7 +1147,7 @@ Slice 0、1、2 完成后可以发放内部 Alpha，用于验证匿名接触闭�
 
 Widget 只渲染已带来源、单位、版本、截止时间和抑制状态的 `MetricResult`，拿不到被隐藏的精确值。6AO 与 6AP
 仍只证明 DB-only 合同；6AQ、6AR 与 6AS 增加 Backend runtime bridge、固定 HTTP 读取和 metadata-only 目录，但不交付
-Flutter UI 或生产调度。
+Flutter UI 或生产调度；6AT 只增加独立的 Flutter current-city typed gateway，不增加 UI、Drift、离线、导出或真实平台证据。
 验收结论只能说明降低披露风险，不宣称形式化不可重识别。
 
 ### Slice 7：组织治理与数据可携带性
