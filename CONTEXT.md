@@ -639,6 +639,18 @@ project／report／version／query fingerprint／lineage／报告时区／data c
 它为 6AZ 提供可选择的显式 snapshot ID，但不替代 6AX 的再次授权、读取审计或详情读取。
 _Avoid_: 复用 0035／0060 provenance、最新报告推断、跨项目探测、分页搜索、报告正文、Flutter、导出、缓存、离线、同步、真机证据
 
+**管理兴趣快照 Flutter typed gateway**:
+6BB 为 6BA 的有界目录和 6AZ 的显式详情提供独立的 `InterestReportGateway`。目录使用固定 collection path，HTTP 根对象只有
+`access_event_id`、`project_id` 和 `snapshots` 三项；数据库 bridge 的内部 envelope 虽有四项（另含
+`access_contract_id`），该内部字段不得进入 HTTP 或 Dart。详情使用固定 snapshot path，根对象只有 `access_event_id`、
+`snapshot_id` 和 `report` 三项。目录最多 20 项，保持服务端的 `data_cutoff_utc`、`released_at_utc`、`snapshot_id` 降序；第一项
+不具有 current、latest 或未被取代语义，详情必须使用用户明确选择的 project／snapshot。
+gateway 从 `IdentitySession` 取得 Bearer token，最多对一次 `401` 刷新并重试一次；目录和十格 interest report 都由 strict
+parser 检查固定根键、字段、类型、顺序、项目／快照绑定、`suppressed = null` 及无 PII，解析失败即失败关闭。类型只在本次调用
+期间保存在内存，不写 Drift、缓存、离线存储、同步队列或导出，也不承担 UI、ViewModel、Widget、导航、管理项目上下文或真机验收。
+_Avoid_: 暴露 `access_contract_id`、自动选择首项、客户端重算或隐藏、复用 channel／current-city gateway、重复刷新、持久化受保护报告、
+把 synthetic HTTP／Dart 测试当作 Backend 授权或平台运行时证据
+
 **更正版报告**:
 补录、修订、作废或分析定义修正后重新生成并明确取代某份报告快照的新快照；原报告保留但标记已被取代。
 _Avoid_: 静默改写、删除旧报告

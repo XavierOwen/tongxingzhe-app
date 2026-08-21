@@ -69,6 +69,7 @@
 | [0144](./0144-runtime-authorized-interest-snapshot-reads-use-independent-provenance.md) | 已接受，2026-08-21 | Slice 6AY；Issue #183；`ANALYTICS-034`、`PRIVACY-026`、`TEST-028`、`MANUAL-018` | Backend runtime 通过 exact identity 和显式 project／snapshot 调用 0064 bridge；bridge 只调用 0063 private read，adapter 执行一次固定 SQL 并严格解析 6AX 合同 |
 | [0145](./0145-interest-snapshot-http-reads-authenticate-before-route-validation.md) | 已接受，2026-08-21 | Slice 6AZ；Issue #185；`ANALYTICS-035`、`PRIVACY-027`、`TEST-029`、`MANUAL-019` | 管理兴趣快照 HTTP GET 先认证再验证请求，只调用 6AY store；固定 wire mapping、no-store 和无数据库变更边界 |
 | [0146](./0146-authorized-interest-snapshot-directory-uses-independent-provenance.md) | 已接受，2026-08-21 | Slice 6BA；`ANALYTICS-036`、`PRIVACY-028`、`TEST-030`、`MANUAL-020` | 管理兴趣快照目录使用独立 provenance、runtime bridge 和 value-free audit；固定最多 20 项 metadata-only 结果与排序，第一项不表示 current 或 latest |
+| [0147](./0147-interest-report-typed-gateway-keeps-db-and-http-contracts-separate.md) | 已接受，2026-08-21 | Slice 6BB；`ANALYTICS-037`、`PRIVACY-029`、`TEST-031`、`MANUAL-021` | Flutter 使用独立 interest typed gateway；DB 四字段 envelope 与 HTTP 三字段 wire 分离，详情显式选择、strict parser、一次 401、只保留内存结果 |
 
 ## 按主题查找
 
@@ -80,7 +81,7 @@
 | 组织、保留、导入导出与合并 | [0030](./0030-allow-verified-users-to-create-organizations.md)–[0043](./0043-promotion-target-merges-are-reversible.md) | Slice 4、7；`ORG`、`TARGET`、`AUTHZ` |
 | 私人计划、通知与周期 | [0044](./0044-personal-action-plans-are-private-and-user-controlled.md)–[0052](./0052-late-entered-contacts-count-in-their-occurrence-period.md) | Slice 5；`PLAN`、`PLATFORM` |
 | 说明书与发布检查 | [0053](./0053-production-code-and-learning-materials-evolve-together.md)–[0059](./0059-documentation-and-statistics-checks-block-releases.md) | 全部 Slice；`MANUAL`、Definition of Done |
-| 指标、报告与隐私 | [0060](./0060-ordinal-scale-distributions-are-primary.md)–[0077](./0077-core-metrics-ship-with-code-and-project-metrics-use-safe-configuration.md)，另见 [0099](./0099-management-analytics-use-bounded-query-surfaces.md)、[0101](./0101-management-weekly-reports-use-two-complete-iso-weeks.md)–[0145](./0145-interest-snapshot-http-reads-authenticate-before-route-validation.md) | Slice 6；`ANALYTICS`、`PRIVACY`、`AUTHZ`、`REGION`、`ARCH`、`TEST-005`、`TEST-014`–`TEST-022` |
+| 指标、报告与隐私 | [0060](./0060-ordinal-scale-distributions-are-primary.md)–[0077](./0077-core-metrics-ship-with-code-and-project-metrics-use-safe-configuration.md)，另见 [0099](./0099-management-analytics-use-bounded-query-surfaces.md)、[0101](./0101-management-weekly-reports-use-two-complete-iso-weeks.md)–[0147](./0147-interest-report-typed-gateway-keeps-db-and-http-contracts-separate.md) | Slice 6；`ANALYTICS`、`PRIVACY`、`AUTHZ`、`REGION`、`ARCH`、`TEST-005`、`TEST-014`–`TEST-031` |
 | 当前上下文、问卷、草稿与导航 | [0078](./0078-a-visible-project-context-scopes-default-work.md)–[0090](./0090-contact-entry-prioritizes-core-facts-with-progressive-disclosure.md) | Slice 1、3、5；`CTX`、`QUESTION`、`DRAFT`、`UI` |
 | 尝试、渠道、触达和机构关系 | [0091](./0091-unsuccessful-direct-outreach-is-a-contact-attempt.md)–[0095](./0095-person-to-institution-relationships-use-six-stable-kinds.md) | Slice 1、2、4；`CONTACT`、`TARGET` |
 | 基础设施 | [0097](./0097-use-supabase-postgresql-for-the-initial-stage.md) | Slice 0／发布门槛；`ARCH-003`–`ARCH-010` |
