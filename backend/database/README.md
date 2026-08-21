@@ -540,6 +540,55 @@ fixture、integration 和并发脚本不能互相替代。fixture 证明 exact i
 ACL 和 value-free audit。integration 证明真实 Node adapter 的单次 bridge 调用和严格 JSON 对账。通过只证明 DB-only
 runtime bridge 合同，不证明 HTTP、Flutter、目录、导出或真实平台运行时证据。
 
+`0060_authorized_management_current_city_report_snapshot_directory.sql` 增加 current-city 快照目录的独立 DB 合同。它
+不复用 0035 渠道目录。private 函数重新解析 `view_anonymous_analytics`，只返回通过 0057 current-city release family
+claim 的 `approved`／`approved_baseline` 快照，且 attempt 的 project、report、version、query fingerprint、release lineage、
+可信报告时区、cutoff、previous snapshot 和 target tree tuple 与 snapshot 对齐。固定报告为
+`contact_sessions_by_current_city_two_periods@1`，`reason_codes` 必须为空；legacy channel、blocked／unavailable、跨项目、
+claim 不匹配和 tuple 漂移的记录不会进入目录。
+
+目录最多返回 20 项，按 `data_cutoff_utc`、`released_at_utc`、`snapshot_id` 降序排列。每项只含 snapshot UUID、报告 ID／版本、
+报告时区、数据截止和发布时间。每次成功读取，包括空目录，都会在同一事务追加不可变、value-free 的目录审计。审计保存
+授权 lineage、项目、访问时刻、结果和返回数量，不保存 snapshot ID、报告元数据、格值、来源、贡献者、城市名称、坐标或 PII。
+
+runtime bridge 的签名是
+`app_data.list_authorized_management_current_city_report_snapshots_v1(text,text,uuid)`。它使用
+`SECURITY DEFINER`、`search_path = pg_catalog` 和 exact issuer／subject 的 active identity 映射，只调用 0060 private
+函数。runtime 只有 bridge `EXECUTE`，没有 `app_private` schema usage、目录／snapshot／attempt／claim 表、用户表或
+identity 表权限；区域发布、区域映射、接触来源、区域归属和 current-city release writer 角色也没有 bridge 或目录审计权限。
+bridge owner 与 private function owner 相同，且不能属于这些 runtime 或写入角色。
+
+### 如何验证 6AS PostgreSQL 合同
+
+第一次使用 Docker 时，先启动 Docker Desktop。Docker 是一次性测试环境：runner 创建隔离的 PostgreSQL 容器，运行
+migration、结构 check、synthetic fixture 和并发脚本，然后删除容器。它不连接 production，也不会修改 production 数据。
+从仓库根目录运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+完整 runner 会按仓库约定执行 0060 migration、check、fixture、并发脚本、migration checksum 和 dump／restore。恢复库会
+再次检查函数存在性、`SECURITY DEFINER`、固定 search path、owner 对齐、最小 ACL、审计触发器、current-city provenance
+过滤、20 项上限和稳定排序。
+
+如果只调试已经运行的专用测试库，先确认 `DATABASE_URL` 不是 production，再按顺序运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_authorized_management_current_city_report_snapshot_directory.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0060_authorized_management_current_city_report_snapshot_directory.sql
+./tool/verify_authorized_management_current_city_report_snapshot_directory_concurrency.sh
+```
+
+fixture 覆盖 approved／approved_baseline、legacy channel、blocked／unavailable、claim 与 tuple 漂移、未知／停用 exact
+identity、跨项目、撤权、空目录、20 项上限、稳定排序、value-free audit 和 UPDATE／DELETE 拒绝。并发脚本分别验证目录
+读取先取得授权锁和撤权先取得授权锁。通过这些检查只证明 synthetic PostgreSQL 合同成立，不证明 Backend HTTP、Flutter、
+生产 identity provider 或六平台运行时证据。
+
 只在已有专用测试库调试 6AO 时，先确认 `DATABASE_URL` 不是 production，再按顺序运行：
 
 ```bash

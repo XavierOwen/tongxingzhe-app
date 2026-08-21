@@ -32,6 +32,9 @@ import {
   PostgresManagementReportSnapshotExportStore,
 } from "./management-report-snapshot-exports.js";
 import { PostgresManagementReportSnapshotDirectoryStore } from "./management-report-snapshot-directory.js";
+import {
+  PostgresManagementCurrentCityReportSnapshotDirectoryStore,
+} from "./management-current-city-report-snapshot-directory.js";
 import { PostgresManagementReportReleaseStore } from "./management-report-release.js";
 import { PostgresManagementAnalysisContextStore } from "./management-analysis-contexts.js";
 
@@ -117,6 +120,10 @@ const managementReportSnapshotDirectoryStore =
   new PostgresManagementReportSnapshotDirectoryStore(
     async (text, values) => pool.query(text, [...values]),
   );
+const managementCurrentCityReportSnapshotDirectoryStore =
+  new PostgresManagementCurrentCityReportSnapshotDirectoryStore(
+    async (text, values) => pool.query(text, [...values]),
+  );
 // One pool query is also the transaction boundary for the trusted release.
 // Awaiting it keeps the HTTP response behind PostgreSQL commit acknowledgement.
 const managementReportReleaseStore = new PostgresManagementReportReleaseStore(
@@ -147,6 +154,7 @@ const server = createBackendServer({
   managementCurrentCityReportSnapshotStore,
   managementReportSnapshotExportStore,
   managementReportSnapshotDirectoryStore,
+  managementCurrentCityReportSnapshotDirectoryStore,
   managementReportReleaseStore,
   managementAnalysisContextStore,
 });

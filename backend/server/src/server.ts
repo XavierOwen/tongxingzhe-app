@@ -93,6 +93,10 @@ import {
   type ManagementReportSnapshotDirectoryStore,
 } from "./management-report-snapshot-directory.js";
 import {
+  listManagementCurrentCityReportSnapshotDirectory,
+  type ManagementCurrentCityReportSnapshotDirectoryStore,
+} from "./management-current-city-report-snapshot-directory.js";
+import {
   releaseManagementReportSnapshot,
   type ManagementReportReleaseStore,
 } from "./management-report-release.js";
@@ -132,6 +136,8 @@ export interface BackendServerDependencies
     ManagementReportSnapshotExportStore;
   readonly managementReportSnapshotDirectoryStore?:
     ManagementReportSnapshotDirectoryStore;
+  readonly managementCurrentCityReportSnapshotDirectoryStore?:
+    ManagementCurrentCityReportSnapshotDirectoryStore;
   readonly managementReportReleaseStore?: ManagementReportReleaseStore;
   readonly managementAnalysisContextStore?: ManagementAnalysisContextStore;
 }
@@ -246,6 +252,37 @@ export function createBackendServer(
         {
           identityVerifier: dependencies.identityVerifier,
           directoryStore: dependencies.managementReportSnapshotDirectoryStore,
+        },
+      );
+      response.statusCode = result.status;
+      response.end(JSON.stringify(result.body));
+      return;
+    }
+
+    const managementCurrentCityReportSnapshotDirectoryMatch =
+      requestUrl.pathname.match(
+        /^\/v1\/projects\/([^/]+)\/management-current-city-report-snapshots$/,
+      );
+    if (
+      request.method === "GET" &&
+      managementCurrentCityReportSnapshotDirectoryMatch !== null
+    ) {
+      const result = await listManagementCurrentCityReportSnapshotDirectory(
+        {
+          authorization: request.headers.authorization,
+          projectId:
+            managementCurrentCityReportSnapshotDirectoryMatch[1] ?? "",
+          hasQuery: requestUrl.search.length > 0,
+          hasBody: requestDeclaresBody(request.headers),
+        },
+        {
+          identityVerifier: dependencies.identityVerifier,
+          ...(dependencies.managementCurrentCityReportSnapshotDirectoryStore === undefined
+            ? {}
+            : {
+              directoryStore:
+                dependencies.managementCurrentCityReportSnapshotDirectoryStore,
+            }),
         },
       );
       response.statusCode = result.status;
