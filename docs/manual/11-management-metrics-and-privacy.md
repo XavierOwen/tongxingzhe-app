@@ -1354,6 +1354,56 @@ Bearer 注入、一次 `401` 刷新、目录／详情 strict parser、错误映�
 也不证明 UI、Drift、离线、导出、真实平台或真机行为。6AT 本身不交付页面、导航、缓存、同步、下载／导出、分页、搜索或
 任何六平台 runtime 证据；完整边界以[产品规格](../PRODUCT_SPEC.md)的 Slice 6AT 合同为准。
 
+## Slice 6AU：为什么 current 城市面板使用管理项目上下文
+
+6AU 把 6AT 的 transport 接到管理报告页面。这里有两种容易混淆的“当前项目”：
+
+- 个人 `TrustedSessionContext` 是本人记录接触、计划和个人分析所用的工作区项目；
+- `ManagementAnalysisContext` 是 Backend 重新核对匿名管理分析权限后返回的组织和项目。
+
+current 城市报告属于第二种。面板只能使用既有管理报告浏览器当前选中的 `ManagementAnalysisContext.projectId`，不能从个人
+工作区、Widget 输入框、目录第一项或响应正文猜项目。这个限制既防止跨项目混淆，也让 Backend 每次读取时可以继续独立
+复核 `view_anonymous_analytics`；页面是否显示入口不是授权证据。
+
+### 用户明确选择报告类型和快照
+
+打开“管理报告”时，原有渠道报告保持默认。用户选择“当前城市”后，Panel 才读取该管理项目的 current-city 目录。目录是
+已经排序的元数据列表，不是“最新报告”列表，因此页面不会自动打开第一项，也不会给第一项加 current、latest 或最新有效
+标签。用户选择一个 snapshot 后，Panel 把同一个 typed summary 交给 6AT gateway 读取详情。
+
+详情只显示服务端已经保护的字段：报告和指标版本、来源范围、隐私规则、报告时区、数据截止点、两段期间、target context、
+城市 ID，以及每期的 `displayed` 或 `suppressed` 状态。`displayed` 显示服务端返回的计数；`suppressed` 只显示“已隐藏”，
+不显示 `0`，也不尝试用其他行或期间相减。城市 ID 不是城市名称，Panel 不做名称或 geometry 查询。
+
+### 为什么切换时要丢弃迟到响应
+
+网络请求返回的顺序不一定等于发出的顺序。用户可能在目录仍加载时切换项目、切回渠道报告或退出页面。ViewModel 为每一轮
+操作保存 generation；项目、视图、重试或 dispose 改变 generation 后，旧请求即使稍后成功也不能写回页面。切换项目时先
+清除旧目录、旧选择和旧报告，避免上一项目内容短暂出现在新项目标题下。
+
+空目录是一次成功读取，不是错误。未配置、未认证、禁止、未找到、不可信、服务不可用、网络和协议失败使用稳定文案；页面
+不显示服务器正文。错误区域使用 live region，键盘可以进入详情、返回目录并恢复到原快照。城市网格使用按需构建的纵向
+列表，使 320×568 和 200% 字号不需要横向宽表。
+
+### 本机如何验证
+
+6AU 没有修改 PostgreSQL 或 Backend，因此验证 Panel 和状态机不需要先启动 Docker：
+
+```bash
+dart analyze
+flutter test --no-pub test/features/management_reports/
+flutter test --no-pub test/app/
+flutter test --no-pub
+dart run tool/check_production_boundary.dart
+dart run tool/check_markdown_links.dart
+```
+
+定向测试检查目录、显式选择、逐阶段重试、迟到响应、项目切换、焦点、语义、小屏和大字号；全量测试检查个人分析和既有渠道
+报告没有回归。CI 的 Android、iOS、macOS、Windows、Linux 和 Web build 只证明这些 target 可以编译，不证明真实账号、
+真实 identity provider、设备键盘或屏幕阅读器行为。数据库合同需要复核时，仍按
+[Docker 与 CI 测试说明](09-local-docker-and-ci-testing.md)运行 PostgreSQL runner；它不能替代 Flutter Widget 测试或真人设备证据。
+完整边界以[产品规格](../PRODUCT_SPEC.md)的 Slice 6AU 合同为准。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和

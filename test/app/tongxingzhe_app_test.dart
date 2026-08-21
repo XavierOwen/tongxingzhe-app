@@ -18,6 +18,7 @@ import 'package:tongxingzhe_app/features/contact_metrics/personal_follow_up_cons
 import 'package:tongxingzhe_app/features/contact_metrics/relationship_stage_change_summary.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
+import 'package:tongxingzhe_app/management_reports/current_city_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
 import 'package:tongxingzhe_app/project_settings/personal_follow_up_consent_opt_in.dart';
 import 'package:tongxingzhe_app/questionnaires/questionnaire_contract.dart';
@@ -47,6 +48,7 @@ void main() {
     );
     final ratioGateway = _ReadyConsentRatioGateway();
     final stageChangeGateway = _ReadyRelationshipStageChangeSummaryGateway();
+    final currentCityGateway = _TrackingCurrentCityReportGateway();
     final dependencies = AppDependencies(
       databaseFactory: _SingleDatabaseFactory(database),
       clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
@@ -58,6 +60,7 @@ void main() {
           const _EmptyPublishedQuestionnaireSource(),
       managementReportGatewayBuilder: (_) =>
           const _EmptyManagementReportGateway(),
+      currentCityReportGatewayBuilder: (_) => currentCityGateway,
       currentRelationshipStageGatewayBuilder: (_) =>
           const _OneRelationshipStageGateway(),
       personalFollowUpConsentRatioGatewayBuilder: (_) => ratioGateway,
@@ -116,6 +119,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('management-report-view')));
     await tester.pumpAndSettle();
     expect(find.text('没有可读取管理报告的项目。'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+    expect(currentCityGateway.closeCount, 1);
   });
 
   testWidgets('占比服务失败时最近七日本地事实仍可读', (tester) async {
@@ -1959,6 +1966,28 @@ final class _EmptyManagementReportGateway implements ManagementReportGateway {
   Future<ManagementReportResult<ManagementAnalysisContextSnapshot>>
   selectContext(String projectId) async =>
       const ManagementReportRejected(ManagementReportFailureCode.unauthorized);
+}
+
+final class _TrackingCurrentCityReportGateway
+    implements CurrentCityReportGateway {
+  var closeCount = 0;
+
+  @override
+  Future<void> close() async => closeCount++;
+
+  @override
+  Future<CurrentCityReportResult<CurrentCityReportSnapshotDirectory>>
+  listSnapshots(String projectId) async => const CurrentCityReportRejected(
+    CurrentCityReportFailureCode.notConfigured,
+  );
+
+  @override
+  Future<CurrentCityReportResult<CurrentCityReportSnapshot>> readSnapshot({
+    required String projectId,
+    required CurrentCityReportSnapshotSummary summary,
+  }) async => const CurrentCityReportRejected(
+    CurrentCityReportFailureCode.notConfigured,
+  );
 }
 
 final class _OneRelationshipStageGateway

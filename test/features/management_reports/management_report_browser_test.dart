@@ -1,12 +1,62 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/features/management_reports/management_report_browser.dart';
 import 'package:tongxingzhe_app/l10n/app_strings.dart';
+import 'package:tongxingzhe_app/management_reports/current_city_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_export_delivery.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
 
 void main() {
+  testWidgets('渠道视图默认，明确选择 current-city 后才读取管理项目目录', (tester) async {
+    final currentCityGateway = _CurrentCityGateway();
+    await tester.pumpWidget(
+      _app(
+        _Gateway(
+          context: _contextSnapshot(current: _projectA),
+          summaries: [_summary],
+        ),
+        currentCityGateway: currentCityGateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final channelView = find.byKey(
+      const ValueKey('management-channel-report-view'),
+    );
+    final currentCityView = find.byKey(
+      const ValueKey('management-current-city-report-view'),
+    );
+    expect(tester.widget<ChoiceChip>(channelView).selected, isTrue);
+    expect(tester.widget<ChoiceChip>(currentCityView).selected, isFalse);
+    expect(find.text('渠道报告'), findsOneWidget);
+    expect(find.text('当前城市'), findsOneWidget);
+    expect(find.text('managementReportChannelView'), findsNothing);
+    expect(currentCityGateway.listedProjectIds, isEmpty);
+    expect(currentCityGateway.readRequests, isEmpty);
+
+    await _tabTo(tester, currentCityView);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<ChoiceChip>(currentCityView).selected, isTrue);
+    expect(currentCityGateway.listedProjectIds, [_projectA.projectId]);
+    expect(currentCityGateway.readRequests, isEmpty);
+    expect(
+      find.byKey(ValueKey('management-report-${_summary.snapshotId}')),
+      findsNothing,
+    );
+
+    await _shiftTab(tester);
+    expect(_containsPrimaryFocus(tester, channelView), isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(tester.widget<ChoiceChip>(channelView).selected, isTrue);
+    expect(currentCityGateway.readRequests, isEmpty);
+  });
+
   testWidgets('320 宽和 200% 文字下目录与项目选择不溢出', (tester) async {
     _compactView(tester);
 
@@ -210,6 +260,131 @@ void main() {
     expect(find.text('无法连接管理报告服务，请检查网络后重试。'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('management-report-retry')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('current-city 项目切换失败保留管理上下文重试入口', (tester) async {
+    final gateway = _Gateway(
+      context: _contextSnapshot(current: _projectA),
+      summaries: [_summary],
+      selectResult: const ManagementReportRejected(
+        ManagementReportFailureCode.networkUnavailable,
+      ),
+    );
+    final currentCityGateway = _CurrentCityGateway();
+    await tester.pumpWidget(
+      _app(gateway, currentCityGateway: currentCityGateway),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('management-current-city-report-view')),
+    );
+    await tester.pumpAndSettle();
+    expect(currentCityGateway.listedProjectIds, [_projectA.projectId]);
+
+    await tester.tap(find.byKey(const ValueKey('management-project-picker')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('第二组织 · 第二项目').last);
+    await tester.pumpAndSettle();
+
+    expect(gateway.selectProjectIds, [_projectB.projectId]);
+    expect(find.text('无法连接管理报告服务，请检查网络后重试。'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('management-report-retry')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('current-city-report-panel')),
+      findsNothing,
+    );
+
+    gateway.selectResult = ManagementReportSuccess(
+      _contextSnapshot(current: _projectB),
+    );
+    await tester.tap(find.byKey(const ValueKey('management-report-retry')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.selectProjectIds, [
+      _projectB.projectId,
+      _projectB.projectId,
+    ]);
+    expect(currentCityGateway.listedProjectIds, [
+      _projectA.projectId,
+      _projectB.projectId,
+    ]);
+    expect(
+      find.byKey(const ValueKey('current-city-report-panel')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('current-city 目录迟到响应不覆盖已切回的渠道视图', (tester) async {
+    final currentCityGateway = _DeferredCurrentCityGateway();
+    await tester.pumpWidget(
+      _app(
+        _Gateway(
+          context: _contextSnapshot(current: _projectA),
+          summaries: [_summary],
+        ),
+        currentCityGateway: currentCityGateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('management-current-city-report-view')),
+    );
+    await tester.pump();
+    expect(currentCityGateway.listedProjectIds, [_projectA.projectId]);
+    expect(
+      find.byKey(const ValueKey('current-city-report-panel')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('management-channel-report-view')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<ChoiceChip>(
+            find.byKey(const ValueKey('management-channel-report-view')),
+          )
+          .selected,
+      isTrue,
+    );
+    expect(
+      find.byKey(ValueKey('management-report-${_summary.snapshotId}')),
+      findsOneWidget,
+    );
+
+    currentCityGateway.directory.complete(
+      CurrentCityReportSuccess(
+        CurrentCityReportSnapshotDirectory(
+          accessEventId: '77777777-7777-4777-8777-777777777777',
+          projectId: _projectA.projectId,
+          snapshots: [_currentCitySummary],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<ChoiceChip>(
+            find.byKey(const ValueKey('management-channel-report-view')),
+          )
+          .selected,
+      isTrue,
+    );
+    expect(
+      find.byKey(const ValueKey('current-city-report-panel')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(ValueKey('management-report-${_summary.snapshotId}')),
       findsOneWidget,
     );
   });
@@ -452,6 +627,7 @@ Widget _app(
   AppStrings text = const AppStrings('zh'),
   TextScaler textScaler = TextScaler.noScaling,
   ManagementReportExportDelivery? delivery,
+  CurrentCityReportGateway? currentCityGateway,
 }) => MaterialApp(
   builder: (context, child) => MediaQuery(
     data: MediaQuery.of(context).copyWith(textScaler: textScaler),
@@ -461,6 +637,8 @@ Widget _app(
     body: ManagementReportBrowser(
       text: text,
       gateway: gateway,
+      currentCityGateway:
+          currentCityGateway ?? const DeferredCurrentCityReportGateway(),
       exportDelivery: delivery ?? _Delivery(isAvailable: false),
     ),
   ),
@@ -513,9 +691,19 @@ void _compactView(WidgetTester tester) {
 }
 
 Future<void> _tabTo(WidgetTester tester, Finder target) async {
+  for (var attempt = 0; attempt < 12; attempt++) {
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    if (_containsPrimaryFocus(tester, target)) return;
+  }
+  fail('Tab sequence did not reach $target');
+}
+
+Future<void> _shiftTab(WidgetTester tester) async {
+  await tester.sendKeyDownEvent(LogicalKeyboardKey.shift);
   await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+  await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
   await tester.pump();
-  expect(_containsPrimaryFocus(tester, target), isTrue);
 }
 
 bool _containsPrimaryFocus(WidgetTester tester, Finder finder) {
@@ -541,6 +729,7 @@ final class _Gateway implements ManagementReportGateway {
     this.summaries = const [],
     this.snapshot,
     ManagementReportResult<ManagementReportExportArtifact>? exportResult,
+    this.selectResult,
   }) : contextResult =
            contextResult ??
            ManagementReportSuccess(context ?? _contextSnapshot(current: null)),
@@ -552,7 +741,9 @@ final class _Gateway implements ManagementReportGateway {
   final List<ManagementReportSnapshotSummary> summaries;
   final ManagementReportSnapshot? snapshot;
   ManagementReportResult<ManagementReportExportArtifact> exportResult;
+  ManagementReportResult<ManagementAnalysisContextSnapshot>? selectResult;
   final exportRequests = <(String, ManagementReportSnapshotSummary)>[];
+  final selectProjectIds = <String>[];
 
   @override
   Future<void> close() async {}
@@ -585,7 +776,65 @@ final class _Gateway implements ManagementReportGateway {
 
   @override
   Future<ManagementReportResult<ManagementAnalysisContextSnapshot>>
-  selectContext(String projectId) async => contextResult;
+  selectContext(String projectId) async {
+    selectProjectIds.add(projectId);
+    return selectResult ?? contextResult;
+  }
+}
+
+final class _CurrentCityGateway implements CurrentCityReportGateway {
+  final listedProjectIds = <String>[];
+  final readRequests = <(String, CurrentCityReportSnapshotSummary)>[];
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  Future<CurrentCityReportResult<CurrentCityReportSnapshotDirectory>>
+  listSnapshots(String projectId) async {
+    listedProjectIds.add(projectId);
+    return CurrentCityReportSuccess(
+      CurrentCityReportSnapshotDirectory(
+        accessEventId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        projectId: projectId,
+        snapshots: [_currentCitySummary],
+      ),
+    );
+  }
+
+  @override
+  Future<CurrentCityReportResult<CurrentCityReportSnapshot>> readSnapshot({
+    required String projectId,
+    required CurrentCityReportSnapshotSummary summary,
+  }) async {
+    readRequests.add((projectId, summary));
+    return const CurrentCityReportRejected(
+      CurrentCityReportFailureCode.notFound,
+    );
+  }
+}
+
+final class _DeferredCurrentCityGateway implements CurrentCityReportGateway {
+  final directory =
+      Completer<CurrentCityReportResult<CurrentCityReportSnapshotDirectory>>();
+  final listedProjectIds = <String>[];
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  Future<CurrentCityReportResult<CurrentCityReportSnapshotDirectory>>
+  listSnapshots(String projectId) {
+    listedProjectIds.add(projectId);
+    return directory.future;
+  }
+
+  @override
+  Future<CurrentCityReportResult<CurrentCityReportSnapshot>> readSnapshot({
+    required String projectId,
+    required CurrentCityReportSnapshotSummary summary,
+  }) async =>
+      const CurrentCityReportRejected(CurrentCityReportFailureCode.notFound);
 }
 
 final class _Delivery implements ManagementReportExportDelivery {
@@ -624,6 +873,15 @@ const _projectB = ManagementAnalysisContext(
   organizationName: '第二组织',
   projectId: '44444444-4444-4444-8444-444444444444',
   projectName: '第二项目',
+);
+
+final _currentCitySummary = CurrentCityReportSnapshotSummary(
+  snapshotId: '66666666-6666-4666-8666-666666666666',
+  reportId: 'contact_sessions_by_current_city_two_periods',
+  reportVersion: 1,
+  reportingTimeZone: 'America/Chicago',
+  dataCutoffUtc: DateTime.utc(2030, 1, 22),
+  releasedAtUtc: DateTime.utc(2030, 1, 22, 0, 1),
 );
 
 final _summary = ManagementReportSnapshotSummary(

@@ -751,6 +751,29 @@ gateway 从 `IdentitySession` 取得 Bearer token，不能从 Widget、ViewModel
 错误映射、无 PII 字段、重复目录项、timeout 和 gateway close。它不增加 UI、Drift／SQLite、缓存、离线、同步、导出／下载、搜索、
 分页、管理导航、报告创建／刷新／删除、生产 identity provider、真实平台或真机验收；这些边界另行交付。
 
+#### Slice 6AU：Flutter current-city 管理报告 consumer
+
+Slice 6AU 把 6AT gateway 接入已有管理报告浏览器。项目坐标只来自该浏览器已经通过 management-analysis context 端点
+重新授权的 `ManagementAnalysisContext`；它不从个人 `TrustedSessionContext`、Widget 自由输入或 current-city 响应正文
+推导项目。个人项目和管理项目继续保持独立。
+
+已有渠道报告仍是默认视图。用户必须明确选择“当前城市”后，客户端才为当前管理项目读取 current-city 目录；目录第一项
+不自动打开，也不称为 current、latest、最新有效或取代快照。详情只使用用户选中的
+`CurrentCityReportSnapshotSummary`。切换管理项目、切回渠道视图、重试或销毁页面时，ViewModel 增加 generation 并清除
+旧目录、旧选择和旧报告；迟到响应不能恢复已清除的状态。
+
+current-city panel 只显示 6AT 已严格解析的固定元数据、报告版本、来源范围、隐私规则、时区、截止点、两个期间、target
+context、城市 ID、`displayed` 计数和 `suppressed` 状态。它不重算指标或隐私，不把隐藏值显示为 `0`，也不把城市 ID
+转换或猜测成名称。城市行使用按需构建的纵向列表，不使用要求横向滚动的宽表。
+
+composition root 构造、传递并关闭独立 `CurrentCityReportGateway`；未配置 Backend、未认证、禁止、未找到、不可信、服务
+不可用、网络或协议失败都显示稳定文案，不显示响应正文。空目录是成功空态。目录、报告和错误状态提供 heading／live
+region 语义；320×568、200% 字号和键盘进入详情、返回目录、焦点恢复必须有 Widget 测试。
+
+本 Slice 不修改 PostgreSQL、Backend HTTP、6AT parser 或渠道 wire／DTO，不增加 Drift、缓存、离线、同步、导出、地图、
+城市名称、geometry、搜索、分页、筛选、original／parent／overlap 区域视图、报告更正／删除／retention、warehouse、真实
+identity provider 或六平台 runtime 证据。
+
 只有高级分析可显示：
 
 ```text
@@ -792,6 +815,7 @@ gateway 从 `IdentitySession` 取得 Bearer token，不能从 Widget、ViewModel
 | `ANALYTICS-027` | Backend HTTP 只接受固定 current-city snapshot path；认证先于 UUID、query、GET body 和 store 检查，成功只通过 6AQ adapter 返回 6AP 固定报告，响应在 adapter Promise 完成后发送。 |
 | `ANALYTICS-028` | current-city 快照目录只通过 0060 独立 DB／runtime bridge 和固定 HTTP collection route 返回至多 20 项可信 current-city metadata；它重新授权、复核 0057 provenance、固定排序并保持显式 project scope，不把第一项解释为当前或最新。 |
 | `ANALYTICS-029` | Flutter current-city typed gateway 将 6AS 目录仅作为有序元数据，将显式选择的 project／snapshot 传给 6AR 详情；它不把第一项解释为 current／latest，不复用 channel gateway，不在客户端聚合、重算或推断报告。 |
+| `ANALYTICS-030` | Flutter current-city consumer 只在用户明确选择当前城市视图后，使用已重新授权的 `ManagementAnalysisContext` 项目读取目录；它不使用个人 workspace 项目、不自动打开第一项，切换项目或视图时清除旧状态并隔离迟到响应。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -818,6 +842,7 @@ gateway 从 `IdentitySession` 取得 Bearer token，不能从 Widget、ViewModel
 | `PRIVACY-019` | current-city HTTP 错误只返回稳定 code 和必要的访问事件 ID；未知 SQLSTATE、数据库消息、SQL、栈、external subject、报告格、城市名称和坐标不进入响应。所有响应使用 `Cache-Control: no-store`。 |
 | `PRIVACY-020` | current-city 目录使用独立 release family provenance、value-free directory audit 和最小 runtime ACL；响应只含固定快照 metadata，不含报告格、来源、贡献者、城市名称、边界、坐标、PII 或 generic channel provenance。 |
 | `PRIVACY-021` | Flutter current-city gateway 只在内存中保存严格解析后的受保护类型；不写 Drift、不做缓存、离线、同步或导出，不暴露 PII 或隐藏前值。授权、隐私和 provenance 仍由 Backend 决定，解析失败和授权失败均失败关闭。 |
+| `PRIVACY-022` | current-city panel 只渲染 6AT 受保护类型中的固定元数据、城市 ID、`displayed` 计数和 `suppressed` 状态；它不收到隐藏前值、不把隐藏值当零、不猜测城市名称，也不把 Widget 显示门控冒充 Backend 授权。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
 
@@ -1039,6 +1064,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-021` | 6AR handler 覆盖认证先于 UUID／query／GET body／store、401／400／403／404／409／503 稳定映射、未知 SQLSTATE 不泄漏、adapter Promise gate 和固定 route；route 覆盖 method、path、transfer-encoding body 与 no-store；production entry 只组合 6AQ adapter。 |
 | `TEST-022` | 6AS 覆盖 current-city provenance 过滤、approved／approved_baseline、legacy／blocked／unavailable／tuple 漂移、精确 identity、授权撤权、跨项目、空目录、20 项上限、稳定排序、value-free audit、不可改删、runtime ACL、checksum、dump／restore、真实 PostgreSQL adapter parser，以及 HTTP 认证顺序、固定 collection route、query／GET body、错误脱敏、Promise gate 和 no-store。 |
 | `TEST-023` | 6AT Flutter typed gateway 使用 synthetic HTTP 与 fake `IdentitySession` 覆盖目录／详情固定 path、显式 project／snapshot、无 query／GET body、Bearer 注入、一次 401 刷新、strict parser、目录排序与空结果、第一项不代表 current/latest、详情 project 对齐、错误映射、PII／额外字段拒绝、timeout、gateway close 和 no-store；不以此声称 UI、Drift、离线、导出或真实平台证据。 |
+| `TEST-024` | 6AU ViewModel、Widget 和 composition 测试覆盖显式管理项目、视图选择、空目录、不自动选第一项、详情返回与焦点恢复、项目／视图切换、逐阶段重试、迟到响应、dispose、稳定错误、displayed／suppressed 语义、320×568 和 200% 字号；build smoke 不冒充真实平台 runtime 证据。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -1147,7 +1173,8 @@ Slice 0、1、2 完成后可以发放内部 Alpha，用于验证匿名接触闭�
 
 Widget 只渲染已带来源、单位、版本、截止时间和抑制状态的 `MetricResult`，拿不到被隐藏的精确值。6AO 与 6AP
 仍只证明 DB-only 合同；6AQ、6AR 与 6AS 增加 Backend runtime bridge、固定 HTTP 读取和 metadata-only 目录，但不交付
-Flutter UI 或生产调度；6AT 只增加独立的 Flutter current-city typed gateway，不增加 UI、Drift、离线、导出或真实平台证据。
+Flutter UI 或生产调度；6AT 增加独立 typed gateway，6AU 再以已重新授权的管理项目接入 Flutter panel。两者都不增加
+Drift、离线、导出或真实平台证据。
 验收结论只能说明降低披露风险，不宣称形式化不可重识别。
 
 ### Slice 7：组织治理与数据可携带性
