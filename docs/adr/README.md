@@ -68,6 +68,7 @@
 | [0143](./0143-authorized-interest-snapshot-reads-use-independent-provenance.md) | 已接受，2026-08-21 | Slice 6AX；Issue #181；`ANALYTICS-033`、`PRIVACY-025`、`TEST-027`、`MANUAL-017` | 管理兴趣快照读取重新验证 `view_anonymous_analytics`，只接受 0062 interest provenance；unknown／cross-project 为 `not_found`，同项目 foreign provenance 为 `untrusted_provenance`，并追加 value-free 读取审计 |
 | [0144](./0144-runtime-authorized-interest-snapshot-reads-use-independent-provenance.md) | 已接受，2026-08-21 | Slice 6AY；Issue #183；`ANALYTICS-034`、`PRIVACY-026`、`TEST-028`、`MANUAL-018` | Backend runtime 通过 exact identity 和显式 project／snapshot 调用 0064 bridge；bridge 只调用 0063 private read，adapter 执行一次固定 SQL 并严格解析 6AX 合同 |
 | [0145](./0145-interest-snapshot-http-reads-authenticate-before-route-validation.md) | 已接受，2026-08-21 | Slice 6AZ；Issue #185；`ANALYTICS-035`、`PRIVACY-027`、`TEST-029`、`MANUAL-019` | 管理兴趣快照 HTTP GET 先认证再验证请求，只调用 6AY store；固定 wire mapping、no-store 和无数据库变更边界 |
+| [0146](./0146-authorized-interest-snapshot-directory-uses-independent-provenance.md) | 已接受，2026-08-21 | Slice 6BA；`ANALYTICS-036`、`PRIVACY-028`、`TEST-030`、`MANUAL-020` | 管理兴趣快照目录使用独立 provenance、runtime bridge 和 value-free audit；固定最多 20 项 metadata-only 结果与排序，第一项不表示 current 或 latest |
 
 ## 按主题查找
 

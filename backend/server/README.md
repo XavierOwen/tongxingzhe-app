@@ -445,6 +445,76 @@ cd ../..
 这条命令仍运行既有 6AY migration、check、fixture、integration、并发、checksum 和 dump／restore。6AZ 不新增数据库步骤，也不因此证明
 Flutter、导出、缓存、离线、生产身份或真实平台运行时。
 
+## 管理兴趣快照 metadata-only 目录合同
+
+6BA 为 6AW interest snapshot 增加一个独立的 metadata-only directory。它不调用 0035 channel directory、0060 current-city directory、
+6AX 单份读取或 6AY bridge。Backend 只把显式 project UUID 传给专用 interest directory store。
+
+固定入口为：
+
+```text
+GET /v1/projects/:projectId/management-interest-report-snapshots
+```
+
+handler 先验证 Bearer token，再检查 project UUID、query、GET body 和 directory store。无 token 或无效 token 时，即使 project、query、body 或
+store 不合法，也先返回 `401 unauthenticated`。认证通过后，handler 等待一次 directory adapter Promise，再发送响应。它不使用
+`SessionContext`、通用 reader、current-city reader、6AX/6AY 单份读取、private schema 或客户端 SQL。
+
+directory adapter 只调用一个固定的 runtime bridge：
+
+```sql
+SELECT app_data.list_authorized_management_interest_report_snapshots_v1(
+  $1::text, $2::text, $3::uuid
+) AS directory_result
+```
+
+PostgreSQL 重新确认 `view_anonymous_analytics` 和完整项目授权链，只列出 6AW interest release family 中 approved／approved_baseline、空
+reason 且 project、report、version、query fingerprint、release lineage、报告时区、data cutoff、previous snapshot 和 source watermark
+完全对齐的快照。channel、current-city、legacy、blocked、跨项目和 metadata drift 的记录被排除。结果最多 20 项，固定按
+`data_cutoff_utc DESC`、`released_at_utc DESC`、`snapshot_id DESC` 排序。
+
+响应根对象严格只含 `access_event_id`、`project_id` 和 `snapshots`。每个 item 严格只含 `snapshot_id`、`report_id`、`report_version`、
+`reporting_time_zone`、`data_cutoff_utc` 和 `released_at_utc`。parser 拒绝额外字段、重复项、乱序项、非法 UUID／时间戳和超过 20 项。响应不含
+protected report、cells、suppressed 前值、来源、贡献者或 PII。第一项只是排序结果，不表示 current、latest、最新有效或未被取代。
+
+HTTP 错误使用稳定 code：
+
+| 情况 | 状态和 code |
+| --- | --- |
+| token 缺失或验证失败 | `401 unauthenticated` |
+| project UUID、query 或 GET body 无效 | `400 invalid_management_interest_report_snapshot_directory_request` |
+| directory authorization forbidden | `403 management_interest_report_snapshot_directory_forbidden` |
+| verifier、adapter、数据库、返回合同或未知 SQLSTATE 异常 | `503 management_interest_report_snapshot_directory_unavailable` |
+
+被过滤的单个 snapshot 不产生 `404` 或 `409`。所有响应使用 `Content-Type: application/json; charset=utf-8` 和
+`Cache-Control: no-store`。directory audit 与 6AX read audit 分离，追加且不可变，只保存最小授权 lineage、project、访问时间、结果和返回数量，
+不保存 snapshot ID、metadata、protected report、cells、来源、贡献者或 PII。
+
+### 6BA 的本地测试
+
+先运行 Backend 的静态检查和无数据库合同测试：
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+测试覆盖认证顺序、固定 collection route、GET body／query 拒绝、400／403／503 映射、未知 SQLSTATE 脱敏、一次 adapter Promise、strict
+metadata parser、20 项上限、稳定排序和 `no-store`。production composition 必须注入专用 interest directory store。
+
+涉及 0065 数据库合同时，从仓库根目录运行：
+
+```bash
+cd ../..
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 自动发现 0065 migration、check 和 fixture，并运行 interest directory integration、独立并发、checksum 和 dump／restore。恢复库重跑
+migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。integration 必须读取自己的 interest directory fixture，不得使用
+`CURRENT_CITY_RUNTIME_FIXTURE`。上述证据只证明 DB、Backend 和 HTTP 合同，不证明 Flutter、导出、缓存、离线、生产身份或真实平台运行时。
+
 ## 管理报告快照目录合同
 
 `GET /v1/projects/:projectId/management-report-snapshots` 只接受一个显式项目 UUID。它不接受 body、query、筛选、分页、报告 ID、时区、capability 或内部用户 ID。6M 保存的管理分析选择只帮助导航，不是授权，也不会替代 path 中的项目。
@@ -507,8 +577,8 @@ npm run check
 
 接触对象关联见 [`0017_contact_target_links.sql`](../database/migrations/0017_contact_target_links.sql)。对应 fixture 验证零到多关联、阶段 0 确认、跨空间与未分配拒绝、机构代表约束、幂等重放、revision 历史、冲突比较和 warehouse PII 隔离。
 
-Node 24 Docker 阶段会在已迁移的 PostgreSQL 上运行八条 integration：地点来源、当前关系阶段、同意占比开关和
-同意占比读取、个人阶段变更汇总、current-city 快照读取、current-city 快照目录和兴趣快照 runtime 读取。地点来源测试和 Flutter 读取同一份
+Node 24 Docker 阶段会在已迁移的 PostgreSQL 上运行九条 integration：地点来源、当前关系阶段、同意占比开关和
+同意占比读取、个人阶段变更汇总、current-city 快照读取、current-city 快照目录、兴趣快照 runtime 读取和兴趣快照目录。地点来源测试和 Flutter 读取同一份
 `contact_location_source_v1.csv`；其余测试分别对账当前快照 bridge、开关的版本／幂等合同，以及
 比例的 `not_enabled`／`ready` union，以及阶段变更汇总的 `5 / 4 / 3 / 2` 和空期间。SQL fixture
 另证实匿名化历史，独立并发脚本证实项目锁边界。`npm test` 仍是无数据库的合同测试；它不能

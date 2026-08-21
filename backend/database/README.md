@@ -19,8 +19,9 @@
 
 脚本建立隔离的 PostgreSQL 16 容器，运行 migration、check、fixture、Backend→PostgreSQL 对账、并发和 dump／restore，最后自动删除容器。Backend 对账阶段使用 Node 24 容器和仓库锁定的 npm 依赖；它不连接 production，也不使用真实用户资料。第一次使用 Docker、需要保留失败容器或理解输出时，阅读[本机、Docker 与 CI 测试指南](../../docs/manual/09-local-docker-and-ci-testing.md)。
 
-Node 阶段要求八条 Backend integration 入口存在：地点来源、当前关系阶段、同意占比开关、同意占比读取、个人阶段变更汇总、current-city
-快照读取、current-city 快照目录和兴趣快照 runtime 读取。脚本先在 Node 24 中运行 `npm ci --ignore-scripts` 和 `npm run build`，再执行编译产物。
+Node 阶段要求九条 Backend integration 入口存在：地点来源、当前关系阶段、同意占比开关、同意占比读取、个人阶段变更汇总、current-city
+快照读取、current-city 快照目录、兴趣快照 runtime 读取和兴趣快照目录。脚本先在 Node 24 中运行 `npm ci --ignore-scripts` 和
+`npm run build`，再执行编译产物。
 开关测试覆盖未配置、启用、幂等重放、冲突和停用；比例测试再读取 `not_enabled` 和启用后的
 `ready 0 / 0`；阶段变更 integration 对账 `5 / 4 / 3 / 2` 和空期间。SQL fixture 另证实匿名化
 历史，独立并发脚本证实 current-project 锁。
@@ -744,6 +745,62 @@ node dist/test/management-interest-report-snapshots.integration.js
 
 fixture 证明 identity、project／snapshot、0063 状态和 runtime ACL；adapter integration 证明真实 Node adapter 的一次 bridge 调用和严格 JSON
 对账。通过只证明 DB-only runtime bridge 合同，不证明 HTTP、Flutter、目录、导出、真实身份提供方或六平台运行时。
+
+### Slice 6BA：验证管理兴趣快照 metadata-only 目录
+
+6BA 为 6AW interest snapshot 增加独立的 directory function、runtime bridge 和 value-free directory audit。它不复用 0035 channel directory 或
+0060 current-city directory。数据库重新确认 `view_anonymous_analytics`，只列出 interest release family 中 approved／approved_baseline、空
+reason 且 metadata 完全对齐的快照。目录最多返回 20 项，按 `data_cutoff_utc DESC`、`released_at_utc DESC`、`snapshot_id DESC` 排序。
+第一项只是固定排序结果，不表示 current、latest、最新有效或未被取代。
+
+固定目录函数和 HTTP collection route 为：
+
+```text
+app_private.list_authorized_management_interest_report_snapshots_v1(uuid, uuid)
+app_data.list_authorized_management_interest_report_snapshots_v1(text, text, uuid)
+GET /v1/projects/:projectId/management-interest-report-snapshots
+```
+
+private function 在一次事务中检查完整项目授权链，并过滤跨项目、channel、current-city、legacy、blocked、claim 不匹配和
+lineage／metadata drift。数据库响应根对象只含 `access_contract_id`、`access_event_id`、`project_id` 和 `snapshots`。HTTP 成功正文不转发
+内部 `access_contract_id`。每项只含 snapshot ID、固定 report ID／version、报告时区、data cutoff 和发布时间。响应和 audit 不含 protected
+report、cells、suppressed 前值、来源、贡献者或 PII。
+
+runtime bridge 使用 exact `issuer + subject`、`SECURITY DEFINER` 和固定 `search_path = pg_catalog`。runtime 只有 bridge `EXECUTE`，不能使用
+`app_private` schema、读取目录或快照私有表，也不能执行 private function。目录 audit 追加且不可变，只保存最小授权 lineage、project、访问
+时间、结果和返回数量。
+
+#### Docker 完整验证
+
+没有使用过 Docker 时，可以把它理解成一次性测试环境。Docker Desktop 启动隔离的 PostgreSQL 和 Node 容器，runner 使用 synthetic 数据运行
+测试，完成后删除容器。它不连接 production。
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 自动发现 0065 migration、directory check 和 fixture，并运行 interest directory Backend integration、独立 concurrency script、checksum
+和 dump／restore。恢复库重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。6BA integration 必须使用自己的 interest
+directory fixture，不得读取 `CURRENT_CITY_RUNTIME_FIXTURE` 或 current-city directory fixture。
+
+#### 专用测试库验证
+
+先确认 `DATABASE_URL` 不是 production。并发脚本会提交 synthetic 行，所以每次使用新的空库：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_authorized_management_interest_report_snapshot_directory.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0065_authorized_management_interest_report_snapshot_directory.sql
+./tool/verify_authorized_management_interest_report_snapshot_directory_concurrency.sh
+```
+
+fixture 和 check 必须覆盖 exact identity、撤权、跨项目、approved interest provenance、legacy／blocked 排除、空目录、20 项上限、
+固定排序、strict metadata、value-free audit、UPDATE／DELETE 拒绝和 runtime 最小 ACL。通过只证明 DB-only synthetic 合同，不证明 HTTP、
+Flutter、导出、缓存、离线、生产身份或真人平台运行时。
 
 ### 如何验证 6AS PostgreSQL 合同
 

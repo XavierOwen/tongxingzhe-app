@@ -629,6 +629,16 @@ _Avoid_: runtime 直接读 private schema、发布即读取、宽泛 SQL、客�
 composition 测试提供。它不增加目录、Flutter、导出、缓存、离线、同步或真人平台证据。
 _Avoid_: HTTP 层重新授权、SessionContext 授权、暴露数据库错误、缓存受保护报告、把 6AY DB integration 当作 HTTP 测试
 
+**管理兴趣快照目录**:
+6BA 按显式 project 返回至多 20 份 6AW interest snapshot 的 metadata-only 只读目录。数据库每次请求重新确认
+`view_anonymous_analytics` 和完整项目成员授权链，并只接受 interest release family 中 `approved`／`approved_baseline`、空 reason、
+project／report／version／query fingerprint／lineage／报告时区／data cutoff／previous snapshot／source watermark 全部对齐的快照。
+目录使用独立的 interest provenance、runtime bridge 和 value-free directory audit，不复用 channel 或 current-city directory。结果按
+`data_cutoff_utc`、`released_at_utc` 和 `snapshot_id` 降序排列，最多 20 项；第一项不表示 current、latest、最新有效或未被取代。
+响应只含快照 ID、固定报告 ID／版本、报告时区、截止时间和发布时间，不含 protected report、cells、suppressed 前值、来源、贡献者或 PII。
+它为 6AZ 提供可选择的显式 snapshot ID，但不替代 6AX 的再次授权、读取审计或详情读取。
+_Avoid_: 复用 0035／0060 provenance、最新报告推断、跨项目探测、分页搜索、报告正文、Flutter、导出、缓存、离线、同步、真机证据
+
 **更正版报告**:
 补录、修订、作废或分析定义修正后重新生成并明确取代某份报告快照的新快照；原报告保留但标记已被取代。
 _Avoid_: 静默改写、删除旧报告

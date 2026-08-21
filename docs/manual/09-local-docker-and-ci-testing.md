@@ -645,6 +645,89 @@ npm test
 这些命令证明认证顺序、固定 route、wire mapping、错误脱敏、Promise gate 和 `no-store`。Docker 证据仍只证明既有 DB-only 6AY 合同，
 不证明 Flutter、导出、缓存、离线、生产身份、真实账号或真人平台运行时。
 
+### 6BA：验证管理兴趣快照 metadata-only 目录
+
+6BA 为 6AW interest snapshot 增加独立的 metadata-only directory。它不复用 0035 channel directory 或 0060 current-city directory。
+数据库重新验证 `view_anonymous_analytics`，只列出 approved interest provenance。目录最多返回 20 项，按
+`data_cutoff_utc`、`released_at_utc` 和 `snapshot_id` 降序排列。第一项只是排序结果，不表示 current、latest、最新有效或未被取代。
+
+目录的固定 HTTP 入口是：
+
+```text
+GET /v1/projects/:projectId/management-interest-report-snapshots
+```
+
+目录响应只含 `access_event_id`、`project_id` 和 metadata-only `snapshots`。每项只含 snapshot ID、固定 report ID／version、报告时区、
+data cutoff 和发布时间。响应不含报告格、suppressed 前值、来源、贡献者或 PII。数据库目录 audit 也不保存 snapshot ID 或 metadata。
+
+#### 用 Docker 运行完整测试
+
+如果没有使用过 Docker，可以把它理解成一次性测试环境。Docker Desktop 提供 Docker Engine。测试 runner 启动隔离的 PostgreSQL 和 Node
+容器，使用 synthetic 数据运行 migration、check、fixture、integration 和并发测试，然后删除容器。它不连接 production，也不会修改 production
+数据。
+
+1. 打开 Docker Desktop，等待 Engine 完成启动。
+2. 在仓库根目录确认当前目录：
+
+   ```bash
+   cd "$(git rev-parse --show-toplevel)"
+   ```
+
+3. 确认 Docker 同时显示 Client 和 Server：
+
+   ```bash
+   docker version
+   ```
+
+4. 运行完整套件：
+
+   ```bash
+   ./tool/run_postgres_tests_in_docker.sh
+   ```
+
+runner 会按 migration 文件名发现 0065 migration、directory check 和 fixture，并运行独立的 interest directory concurrency script、Backend
+directory integration、checksum 和 dump／restore。恢复库重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。
+6BA 的 integration 必须读取自己的 interest directory fixture，不能读取 current-city integration 使用的
+`CURRENT_CITY_RUNTIME_FIXTURE`。
+
+#### 只调试专用 PostgreSQL 测试库
+
+先确认 `DATABASE_URL` 不是 production。并发脚本会提交 synthetic 行，所以每次运行都使用新的空测试库。重复运行前先重建测试库，否则固定
+主键冲突是预期结果。
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_authorized_management_interest_report_snapshot_directory.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0065_authorized_management_interest_report_snapshot_directory.sql
+./tool/verify_authorized_management_interest_report_snapshot_directory_concurrency.sh
+```
+
+这些步骤分别检查 function signature、owner、`SECURITY DEFINER`、固定 search path、最小 ACL、approved interest provenance、撤权、跨项目、
+空目录、20 项上限、稳定排序、value-free audit、audit 不可变和 runtime 不能直接调用 private function。check、fixture 和并发脚本不能互相
+替代。
+
+#### Backend directory integration 和 HTTP 测试
+
+Backend adapter integration 应在自己的 transaction 中建立 synthetic identity、项目和快照，结束时回滚。它必须严格解析固定 root/item keys，
+拒绝额外字段、重复项、乱序项、非法时间戳和超过 20 项。若单独运行编译后的 integration，使用该测试声明的 interest directory fixture 变量，
+不要传入 current-city fixture。
+
+从 `backend/server` 运行无数据库的 Backend 测试：
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+测试覆盖认证先于 project UUID、query、GET body 和 store，固定 collection route、400／403／503 映射、错误脱敏、Promise gate、strict
+metadata parser 和 `no-store`。这些测试证明 HTTP 和 adapter 合同。Docker 测试证明 PostgreSQL 合同；两者都不证明 Flutter、导出、缓存、离线、
+生产身份、真实账号或六平台运行时。
+
 管理报告发布端点同时改动 Backend 和 PostgreSQL bridge。开发时先运行：
 
 ```bash
@@ -789,7 +872,7 @@ Node 24 容器使用与 PostgreSQL 容器相同的 network namespace。它通过
 4. 把数据库目录和全部正式并发脚本复制到容器；
 5. 从空库执行全部 migration，再执行一次 checksum 重放；
 6. 运行全部 schema／权限 check 和可回滚 synthetic fixture；
-7. 建立一次性的 Node 24 容器，编译 Backend，并运行八条 PostgreSQL adapter integration test：地点来源、当前关系阶段、同意占比开关、同意占比读取、个人阶段变更汇总、current-city 快照读取、current-city 快照目录和兴趣快照 runtime 读取；
+7. 建立一次性的 Node 24 容器，编译 Backend，并运行九条 PostgreSQL adapter integration test：地点来源、当前关系阶段、同意占比开关、同意占比读取、个人阶段变更汇总、current-city 快照读取、current-city 快照目录、兴趣快照 runtime 读取和兴趣快照目录；
 8. 按文件名运行全部正式并发脚本，用独立数据库会话检查锁、撤权和唯一性合同；
 9. 修改 migration 的临时副本，确认 runner 拒绝 checksum 漂移；
 10. 执行 `pg_dump`，启动没有源 cluster roles 的第二个 PostgreSQL 容器；
@@ -804,8 +887,9 @@ Node 阶段编译并运行 `backend/server/test/contact-location-evidence.integr
 `backend/server/test/personal-follow-up-consent-ratio.integration.ts`、
 `backend/server/test/personal-relationship-stage-change-summary.integration.ts`、
 `backend/server/test/management-current-city-report-snapshots.integration.ts`、
-`backend/server/test/management-current-city-report-snapshot-directory.integration.ts` 和
-`backend/server/test/management-interest-report-snapshots.integration.ts`。开关测试用
+`backend/server/test/management-current-city-report-snapshot-directory.integration.ts`、
+`backend/server/test/management-interest-report-snapshots.integration.ts` 和
+`backend/server/test/management-interest-report-snapshot-directory.integration.ts`。开关测试用
 runtime role 验证未配置、启用、幂等重放、冲突、停用和回滚；比例测试再对账 `not_enabled` 与
 启用后的 `ready 0 / 0`；阶段变更 integration 对账 `5 / 4 / 3 / 2` 和空期间，SQL fixture 与独立
 并发脚本分别覆盖匿名化历史和当前项目锁。
@@ -1031,7 +1115,7 @@ CI 会在临时目录重新生成 v19 snapshot 和 migration helper，并与仓�
 | Backend identity, context, and sync | TypeScript check 和全部 Backend tests |
 | Build Android／Web／Linux／iOS／macOS／Windows | 六个平台独立 build |
 
-CI 的 PostgreSQL job 在 Linux runner 上执行同一个 Docker runner。默认会拉取 `postgres:16` 和 `node:24-bookworm`，在临时容器中运行 `psql`、Backend build 和八条 Backend integration；它不需要 runner 上的 PostgreSQL service，也不占用本机端口。两条路径执行相同的 migration、check、fixture、Backend 对账和并发脚本。
+CI 的 PostgreSQL job 在 Linux runner 上执行同一个 Docker runner。默认会拉取 `postgres:16` 和 `node:24-bookworm`，在临时容器中运行 `psql`、Backend build 和九条 Backend integration；它不需要 runner 上的 PostgreSQL service，也不占用本机端口。两条路径执行相同的 migration、check、fixture、Backend 对账和并发脚本。
 
 本机通过是提交前证据。远端 CI 通过是干净环境证据。合并前应同时检查两者，不能根据本机结果推断 GitHub 已通过。
 
