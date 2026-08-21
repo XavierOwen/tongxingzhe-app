@@ -1774,6 +1774,90 @@ npm test
 
 这些测试只证明固定 HTTP wire contract 与既有 DB-only 6AY 合同，不证明 Flutter、导出、缓存、离线、生产身份、真实账号或真人平台运行时。
 
+## Slice 6BA：如何发现管理兴趣快照目录
+
+6BA 为 6AW interest snapshot 增加一个独立的 metadata-only directory。它不复用 0035 channel directory 或 0060 current-city directory，
+也不替代 6AX 的单份读取授权和审计。
+
+固定入口为：
+
+```text
+GET /v1/projects/:projectId/management-interest-report-snapshots
+```
+
+调用方必须提供显式 project UUID。handler 先验证 Bearer token，再检查 UUID、query、GET body 和 directory store。认证失败先返回
+`401 unauthenticated`。认证通过后，Backend 只调用 interest directory adapter，不调用 `SessionContext`、通用 reader、6AX/6AY 单份读取、
+current-city reader、private schema 或客户端查询。
+
+### 目录只列出可信 interest provenance
+
+数据库在同一事务重新检查 `view_anonymous_analytics`、组织成员、项目成员和项目状态。只有以下记录可以进入目录：
+
+- 记录属于请求 project；
+- report 固定为 `contact_sessions_by_interest_level_two_periods@1`；
+- release lineage、query fingerprint、报告时区、data cutoff、previous snapshot 和 source watermark 与 release attempt 完全一致；
+- interest release attempt 为 `approved` 或 `approved_baseline`，且 `reason_codes = []`；
+- request claim 属于 interest release family。
+
+channel、current-city、legacy、blocked、跨项目、claim 不匹配或 metadata drift 的记录直接排除。目录不把排除原因转换为逐 snapshot
+的 `404` 或 `409`，因此调用方不能通过目录探测其他 report family 的 provenance。
+
+### 固定 metadata 合同
+
+数据库 bridge 返回的根对象只含：
+
+```text
+access_contract_id
+access_event_id
+project_id
+snapshots
+```
+
+HTTP 成功正文不转发内部 `access_contract_id`，只含 `access_event_id`、`project_id` 和 `snapshots`。
+
+每项只含：
+
+```text
+snapshot_id
+report_id
+report_version
+reporting_time_zone
+data_cutoff_utc
+released_at_utc
+```
+
+目录最多返回 20 项，按 `data_cutoff_utc DESC`、`released_at_utc DESC`、`snapshot_id DESC` 排序。第一项只是固定排序中的第一项，不表示
+current、latest、最新有效或未被取代。响应不含 protected report、cells、suppressed 前值、来源、贡献者、城市/区域信息或 PII。
+
+目录访问 audit 与 6AX 单份读取 audit 分开保存。它只记录最小授权 lineage、project、访问时间、结果和返回数量，不记录 snapshot ID、metadata、
+报告格或 PII。audit 追加且不可变；未认证或未授权请求不产生成功目录 audit。
+
+### Docker 和 Backend 测试
+
+没有使用过 Docker 时，可以把它理解成一次性测试环境。Docker Desktop 启动隔离的 PostgreSQL 和 Node 容器，runner 使用 synthetic 数据运行
+测试，完成后删除容器。它不连接 production。
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 自动发现 0065 migration、directory check 和 fixture，并运行 interest directory integration、独立并发、checksum 和 dump／restore。
+恢复库重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。6BA integration 必须读取自己的 interest directory fixture，
+不得读取 current-city integration 使用的 `CURRENT_CITY_RUNTIME_FIXTURE`。
+
+如果只修改或调试 Backend HTTP 文件，从 `backend/server` 运行：
+
+```bash
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+这些 Backend 测试覆盖认证顺序、固定 collection route、query／GET body、稳定错误、strict metadata parser、Promise gate、错误脱敏和
+`no-store`。Docker 只证明 PostgreSQL synthetic 合同；Backend 测试只证明 HTTP 和 adapter 合同。两者都不证明 Flutter、导出、缓存、离线、
+生产身份、真实账号或六平台真人运行时。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和

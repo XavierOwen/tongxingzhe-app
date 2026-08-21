@@ -101,6 +101,10 @@ import {
   type ManagementCurrentCityReportSnapshotDirectoryStore,
 } from "./management-current-city-report-snapshot-directory.js";
 import {
+  listManagementInterestReportSnapshotDirectory,
+  type ManagementInterestReportSnapshotDirectoryStore,
+} from "./management-interest-report-snapshot-directory.js";
+import {
   releaseManagementReportSnapshot,
   type ManagementReportReleaseStore,
 } from "./management-report-release.js";
@@ -144,6 +148,8 @@ export interface BackendServerDependencies
     ManagementReportSnapshotDirectoryStore;
   readonly managementCurrentCityReportSnapshotDirectoryStore?:
     ManagementCurrentCityReportSnapshotDirectoryStore;
+  readonly managementInterestReportSnapshotDirectoryStore?:
+    ManagementInterestReportSnapshotDirectoryStore;
   readonly managementReportReleaseStore?: ManagementReportReleaseStore;
   readonly managementAnalysisContextStore?: ManagementAnalysisContextStore;
 }
@@ -363,6 +369,36 @@ export function createBackendServer(
             : {
               snapshotStore:
                 dependencies.managementCurrentCityReportSnapshotStore,
+            }),
+        },
+      );
+      response.statusCode = result.status;
+      response.end(JSON.stringify(result.body));
+      return;
+    }
+
+    const managementInterestReportSnapshotDirectoryMatch =
+      requestUrl.pathname.match(
+        /^\/v1\/projects\/([^/]+)\/management-interest-report-snapshots$/,
+      );
+    if (
+      request.method === "GET" &&
+      managementInterestReportSnapshotDirectoryMatch !== null
+    ) {
+      const result = await listManagementInterestReportSnapshotDirectory(
+        {
+          authorization: request.headers.authorization,
+          projectId: managementInterestReportSnapshotDirectoryMatch[1] ?? "",
+          hasQuery: requestUrl.search.length > 0,
+          hasBody: requestDeclaresBody(request.headers),
+        },
+        {
+          identityVerifier: dependencies.identityVerifier,
+          ...(dependencies.managementInterestReportSnapshotDirectoryStore === undefined
+            ? {}
+            : {
+              directoryStore:
+                dependencies.managementInterestReportSnapshotDirectoryStore,
             }),
         },
       );
