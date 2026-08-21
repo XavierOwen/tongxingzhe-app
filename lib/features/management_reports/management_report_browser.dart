@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_strings.dart';
+import '../../management_reports/current_city_report_gateway.dart';
 import '../../management_reports/management_report_export_delivery.dart';
 import '../../management_reports/management_report_gateway.dart';
 import '../contact_entry/contact_channel_label.dart';
 import '../contact_journal/contact_models.dart';
+import 'current_city_report_panel.dart';
 import 'management_report_browser_view_model.dart';
 
 final class ManagementReportBrowser extends StatefulWidget {
@@ -14,11 +16,13 @@ final class ManagementReportBrowser extends StatefulWidget {
     super.key,
     required this.text,
     required this.gateway,
+    required this.currentCityGateway,
     required this.exportDelivery,
   });
 
   final AppStrings text;
   final ManagementReportGateway gateway;
+  final CurrentCityReportGateway currentCityGateway;
   final ManagementReportExportDelivery exportDelivery;
 
   @override
@@ -38,6 +42,7 @@ final class _ManagementReportBrowserState
   ManagementReportBrowserStage? _previousStage;
   ManagementReportExportStage? _previousExportStage;
   String? _returnFocusSnapshotId;
+  var _showCurrentCity = false;
 
   @override
   void initState() {
@@ -50,6 +55,7 @@ final class _ManagementReportBrowserState
   void didUpdateWidget(covariant ManagementReportBrowser oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.gateway == widget.gateway &&
+        oldWidget.currentCityGateway == widget.currentCityGateway &&
         oldWidget.exportDelivery == widget.exportDelivery) {
       return;
     }
@@ -58,6 +64,7 @@ final class _ManagementReportBrowserState
       ..dispose();
     _clearSnapshotFocusNodes();
     _returnFocusSnapshotId = null;
+    _showCurrentCity = false;
     _viewModel = _createViewModel();
     unawaited(_viewModel.initialize());
   }
@@ -88,6 +95,8 @@ final class _ManagementReportBrowserState
   Widget build(BuildContext context) {
     final state = _viewModel.state;
     final text = widget.text;
+    final showCurrentCityPanel =
+        _showCurrentCity && state.currentContext != null;
     return ListView(
       key: const ValueKey('management-report-browser'),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
@@ -102,7 +111,19 @@ final class _ManagementReportBrowserState
         const SizedBox(height: 8),
         Text(text.t('managementReportIntro')),
         const SizedBox(height: 20),
-        if (_showsBackAction(state)) ...[
+        if (state.currentContext != null) ...[
+          _ReportTypePicker(
+            text: text,
+            showCurrentCity: _showCurrentCity,
+            enabled:
+                state.stage != ManagementReportBrowserStage.selectingContext,
+            onSelected: (showCurrentCity) {
+              setState(() => _showCurrentCity = showCurrentCity);
+            },
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (!showCurrentCityPanel && _showsBackAction(state)) ...[
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
@@ -115,7 +136,8 @@ final class _ManagementReportBrowserState
           ),
           const SizedBox(height: 8),
         ] else if (state.stage != ManagementReportBrowserStage.loadingContext &&
-            state.availableContexts.isNotEmpty)
+            state.availableContexts.isNotEmpty &&
+            (_showCurrentCity || !_showsBackAction(state)))
           _ProjectPicker(
             text: text,
             focusNode: _projectFocusNode,
@@ -135,20 +157,32 @@ final class _ManagementReportBrowserState
             Text(text.t('managementReportNoProjects')),
           ],
         ],
-        if (_loadingLabel(state) case final label?) ...[
-          const SizedBox(height: 20),
-          LinearProgressIndicator(semanticsLabel: label),
-          const SizedBox(height: 8),
-          Text(label, textAlign: TextAlign.center),
-        ],
-        if (state.stage == ManagementReportBrowserStage.directory)
+        if (!showCurrentCityPanel)
+          if (_loadingLabel(state) case final label?) ...[
+            const SizedBox(height: 20),
+            LinearProgressIndicator(semanticsLabel: label),
+            const SizedBox(height: 8),
+            Text(label, textAlign: TextAlign.center),
+          ],
+        if (showCurrentCityPanel)
+          CurrentCityReportPanel(
+            key: ValueKey(
+              'current-city-report/${state.currentContext!.projectId}',
+            ),
+            text: text,
+            gateway: widget.currentCityGateway,
+            projectId: state.currentContext!.projectId,
+          )
+        else if (!showCurrentCityPanel &&
+            state.stage == ManagementReportBrowserStage.directory)
           _Directory(
             text: text,
             snapshots: state.snapshots,
             focusNodeFor: _snapshotFocusNode,
             onOpen: _openSnapshot,
           ),
-        if (state.stage == ManagementReportBrowserStage.report &&
+        if (!showCurrentCityPanel &&
+            state.stage == ManagementReportBrowserStage.report &&
             state.snapshot != null)
           _ReportDetail(
             text: text,
@@ -160,7 +194,8 @@ final class _ManagementReportBrowserState
             onPrepareExport: () => unawaited(_viewModel.prepareExport()),
             onRequestDownload: () => unawaited(_viewModel.requestDownload()),
           ),
-        if (state.stage == ManagementReportBrowserStage.failure)
+        if (!showCurrentCityPanel &&
+            state.stage == ManagementReportBrowserStage.failure)
           _FailurePanel(
             text: text,
             code: state.failureCode!,
@@ -243,6 +278,46 @@ final class _ManagementReportBrowserState
       node.dispose();
     }
     _snapshotFocusNodes.clear();
+  }
+}
+
+final class _ReportTypePicker extends StatelessWidget {
+  const _ReportTypePicker({
+    required this.text,
+    required this.showCurrentCity,
+    required this.enabled,
+    required this.onSelected,
+  });
+
+  final AppStrings text;
+  final bool showCurrentCity;
+  final bool enabled;
+  final ValueChanged<bool> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      label: text.t('managementReportViewLabel'),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          ChoiceChip(
+            key: const ValueKey('management-channel-report-view'),
+            label: Text(text.t('managementReportChannelView')),
+            selected: !showCurrentCity,
+            onSelected: enabled ? (_) => onSelected(false) : null,
+          ),
+          ChoiceChip(
+            key: const ValueKey('management-current-city-report-view'),
+            label: Text(text.t('managementReportCurrentCityView')),
+            selected: showCurrentCity,
+            onSelected: enabled ? (_) => onSelected(true) : null,
+          ),
+        ],
+      ),
+    );
   }
 }
 

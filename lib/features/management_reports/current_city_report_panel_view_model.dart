@@ -65,10 +65,9 @@ final class CurrentCityReportPanelState {
 /// 目录和 dispose 会使旧响应失效。
 final class CurrentCityReportPanelViewModel extends ChangeNotifier {
   CurrentCityReportPanelViewModel({
-    required CurrentCityReportGateway gateway,
+    required this._gateway,
     required String? projectId,
-  }) : _gateway = gateway,
-       _projectId = projectId,
+  }) : _projectId = projectId,
        _state = CurrentCityReportPanelState.initial(projectId);
 
   final CurrentCityReportGateway _gateway;

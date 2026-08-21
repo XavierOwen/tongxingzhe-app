@@ -14,6 +14,7 @@ import 'package:tongxingzhe_app/features/contact_metrics/relationship_stage_chan
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/legacy_demo/legacy_demo_dependencies.dart';
+import 'package:tongxingzhe_app/management_reports/current_city_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_export_delivery.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
 import 'package:tongxingzhe_app/privacy/drift_offline_pii_lock_store.dart';
@@ -181,6 +182,32 @@ void main() {
     await database.close();
   });
 
+  test('composition root 装配并释放 current-city gateway', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final gateway = _TrackingCurrentCityReportGateway();
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      currentCityReportGatewayBuilder: (_) => gateway,
+    );
+
+    final startup = await dependencies.start();
+
+    expect(startup, isA<AppStartupReady>());
+    final ready = startup as AppStartupReady;
+    expect(identical(ready.currentCityReportGateway, gateway), isTrue);
+    await ready.currentCityReportGateway.close();
+    expect(gateway.closeCount, 1);
+    await ready.appSession.close();
+    await ready.identitySession.close();
+    ready.controller.dispose();
+    await database.close();
+  });
+
   test('配置 Backend 时 composition root 把当前项目绑定到 HTTP gateway', () async {
     final database = LocalDatabase(NativeDatabase.memory());
     final identity = FakeIdentitySession(
@@ -280,6 +307,7 @@ void main() {
   test('composition root 在后续启动失败时关闭已经装配的 gateways', () async {
     final database = LocalDatabase(NativeDatabase.memory());
     final gateway = _TrackingManagementReportGateway();
+    final currentCityGateway = _TrackingCurrentCityReportGateway();
     final relationshipGateway = _TrackingCurrentRelationshipStageGateway();
     final dependencies = AppDependencies(
       databaseFactory: _SingleDatabaseFactory(database),
@@ -289,6 +317,7 @@ void main() {
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       managementReportGatewayBuilder: (_) => gateway,
+      currentCityReportGatewayBuilder: (_) => currentCityGateway,
       currentRelationshipStageGatewayBuilder: (_) => relationshipGateway,
       reminderSchedulerBuilder: (_) => throw StateError('synthetic failure'),
     );
@@ -297,6 +326,7 @@ void main() {
 
     expect(startup, isA<AppStartupFailed>());
     expect(gateway.closeCount, 1);
+    expect(currentCityGateway.closeCount, 1);
     expect(relationshipGateway.closeCount, 1);
   });
 
@@ -472,6 +502,28 @@ final class _TrackingManagementReportGateway
   Future<ManagementReportResult<ManagementAnalysisContextSnapshot>>
   selectContext(String projectId) async =>
       const ManagementReportRejected(ManagementReportFailureCode.notConfigured);
+}
+
+final class _TrackingCurrentCityReportGateway
+    implements CurrentCityReportGateway {
+  var closeCount = 0;
+
+  @override
+  Future<void> close() async => closeCount++;
+
+  @override
+  Future<CurrentCityReportResult<CurrentCityReportSnapshotDirectory>>
+  listSnapshots(String projectId) async => const CurrentCityReportRejected(
+    CurrentCityReportFailureCode.notConfigured,
+  );
+
+  @override
+  Future<CurrentCityReportResult<CurrentCityReportSnapshot>> readSnapshot({
+    required String projectId,
+    required CurrentCityReportSnapshotSummary summary,
+  }) async => const CurrentCityReportRejected(
+    CurrentCityReportFailureCode.notConfigured,
+  );
 }
 
 final class _TrackingManagementReportExportDelivery
