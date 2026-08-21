@@ -27,7 +27,7 @@ Backend integration 入口存在。脚本先在 Node 24 中运行 `npm ci --igno
 入口缺失、编译失败或断言失败都会使整套测试失败；不能把此前 SQL fixture 的通过单独写成
 Backend adapter 集成通过。
 
-schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer`、`tongxingzhe_region_mapping_writer`、`tongxingzhe_region_attribution_reader`、`tongxingzhe_management_region_report_reader` 和 `tongxingzhe_management_current_city_snapshot_release_writer`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
+schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer`、`tongxingzhe_region_mapping_writer`、`tongxingzhe_region_attribution_reader`、`tongxingzhe_management_region_report_reader`、`tongxingzhe_management_interest_report_reader` 和 `tongxingzhe_management_current_city_snapshot_release_writer`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
 
 ## 使用已有 PostgreSQL 测试库
 
@@ -557,6 +557,51 @@ runtime bridge 的签名是
 函数。runtime 只有 bridge `EXECUTE`，没有 `app_private` schema usage、目录／snapshot／attempt／claim 表、用户表或
 identity 表权限；区域发布、区域映射、接触来源、区域归属和 current-city release writer 角色也没有 bridge 或目录审计权限。
 bridge owner 与 private function owner 相同，且不能属于这些 runtime 或写入角色。
+
+`0061_management_interest_distribution_report.sql` 固定一个独立的 DB-only 管理报告候选
+`contact_sessions_by_interest_level_two_periods@1`。metric identity 是 `interest_distribution@1`，维度是
+`interest_level`，产品视图分类是 `management`（不是 DB 输出字段），粒度是 `iso_week_monday_v1`，query fingerprint 是
+`management-report:contact_sessions_by_interest_level_two_periods:v1`，privacy policy 是
+`management_interest_distribution_privacy_v1`，source scope 是
+`backend_accepted_active_contacts_current_revision`。它只统计 Backend 已接受的有效接触场次，并以可信 `app_user_id` 作为
+贡献者。
+
+private policy／executor 使用项目报告 IANA 时区和可信 `data_cutoff_utc`，解析两个相邻、已经结束的完整 ISO 周。输出固定为
+`previous/current × 0..4` 的十个格，只有 count-only 的 `displayed` 或 `suppressed` 状态，没有 total cell、中位数、比例或
+其他派生值。每个期间的每个兴趣等级都检查 `N >= 10`、至少三位贡献者和 `2 × M <= N`；同一期任一等级不安全时，五格
+整体 suppressed，count 全部为 `NULL`，另一期间独立判断。这个规则不依赖既有 channel 或 current-city 报告的隐藏状态，防止
+跨报告相减恢复隐藏等级。
+
+0061 的结构 check、fixture 和 Dart 对账必须覆盖恰好 `10`、三位贡献者、`50%` 上限，以及 `9`、两位贡献者、`6/10` 主导者；
+还要覆盖半开周边界、可信截止点、项目隔离、草稿／尝试／作废排除、畸形输入、无 PII 输出和“同期渠道与城市总数可显示但兴趣
+某档不安全”的跨报告反例。private policy／executor 不授予 `PUBLIC`、runtime 或普通 app role 执行权，也不提供 HTTP、快照、
+发布、目录、Flutter、缓存、离线、同步、导出或 warehouse 入口。
+
+### 如何验证 6AV PostgreSQL 合同
+
+第一次使用 Docker 时，启动 Docker Desktop，从仓库根目录运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 会自动发现 0061 migration、check、fixture、checksum 和 dump／restore。它使用隔离的 PostgreSQL 容器和 synthetic 数据，
+最后删除临时容器。成功只说明当前 DB-only 合同在自动检查中成立。
+
+如果本机已有专用测试库，可以单独运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_interest_distribution_report.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0061_management_interest_distribution_report.sql
+```
+
+确认 `DATABASE_URL` 指向本机专用测试库。没有 `psql` 时使用 Docker runner。Dart 纯政策测试仍需单独运行，数据库 fixture 通过不替代
+Dart 对账。Docker、PostgreSQL fixture 和 Dart 测试都不能证明 Backend HTTP、Flutter UI、真实身份提供方、六平台真人运行或
+形式化不可重识别保证。
 
 ### 如何验证 6AS PostgreSQL 合同
 
