@@ -1151,6 +1151,139 @@ runner 会创建隔离的 PostgreSQL 容器，运行 migration、结构 check、
 dump／restore，再删除容器。它不连接 production，也不会证明 HTTP、Flutter、真实账号或设备验收。若只修改 6AR HTTP，
 Backend `check` 与 `test` 是最小验证集；涉及 0058／0059 数据库代码时，再运行完整 Docker 套件。
 
+## Slice 6AS 如何发现 current 城市快照目录
+
+6AS 为 current 城市快照提供一个只返回元数据的目录。它使用 0060 的独立 DB 合同，不调用 0035 渠道目录、6AP 单份
+读取、`SessionContext` 或客户端查询。
+
+数据库提供两个固定函数：
+
+```text
+app_private.list_authorized_management_current_city_report_snapshots_v1(
+  requested_app_user_id,
+  requested_project_id
+)
+
+app_data.list_authorized_management_current_city_report_snapshots_v1(
+  trusted_issuer,
+  trusted_subject,
+  requested_project_id
+)
+```
+
+private 函数先在同一事务重新检查 `view_anonymous_analytics`、组织成员、项目成员、项目状态和 capability 有效时间。
+它只列出 0057 current-city release family 中 `approved` 或 `approved_baseline` 且 `reason_codes = []` 的快照。attempt
+必须和 snapshot 对齐 project、`contact_sessions_by_current_city_two_periods@1`、report version、query fingerprint、
+release lineage、报告时区、数据截止、previous snapshot 和 target tree tuple。legacy channel、blocked／unavailable、
+跨项目、claim 不匹配或 tuple 漂移的记录会被排除。
+
+目录最多返回 20 项，顺序固定为 `data_cutoff_utc`、`released_at_utc`、`snapshot_id` 降序。每项只包含：
+
+- `snapshot_id`
+- `report_id`
+- `report_version`
+- `reporting_time_zone`
+- `data_cutoff_utc`
+- `released_at_utc`
+
+根对象还包含 `access_contract_id`、`access_event_id`、`project_id` 和 `snapshots`。空目录仍是成功结果。数据库在同一
+事务追加不可变、value-free 的目录访问审计，保存授权 lineage、项目、访问时刻、结果和返回数量，不保存 snapshot ID、
+报告 metadata、报告格、来源、贡献者、城市名称、边界、坐标或 PII。目录第一项只是排序结果，不表示当前、最新有效或取代。
+
+runtime bridge 使用 `SECURITY DEFINER` 和 `search_path = pg_catalog`。它只按 exact `issuer + subject` 映射现有 active
+identity，再调用 0060 private 函数。runtime 只有 bridge `EXECUTE`，不能使用 `app_private`，不能读取目录／snapshot／
+attempt／claim、app user 或 external identity 表，也不能执行 private 函数。区域发布、区域映射、接触来源、区域归属和
+current-city release writer 角色同样没有 bridge 或目录审计权限。bridge owner 必须与 private function owner 相同，并且
+不能属于这些 runtime 或写入角色。
+
+HTTP 入口是：
+
+```text
+GET /v1/projects/:projectId/management-current-city-report-snapshots
+```
+
+它只接受显式项目 UUID，不接受 query、GET body、筛选、分页、报告 ID、时区、截止点、capability、内部用户 ID 或 SQL。
+Backend 先验证 Bearer token，再检查 UUID、请求形状和 store。无 token 或 token 无效时，即使其他输入有问题，也先返回
+`401 unauthenticated`。认证通过后只把 verified issuer、subject 和 project UUID 传给 0060 adapter，不读取
+`SessionContext`。adapter 的 PostgreSQL Promise 完成后，handler 才发送响应。
+
+成功响应示例：
+
+```json
+{
+  "access_event_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "project_id": "11111111-1111-4111-8111-111111111111",
+  "snapshots": [
+    {
+      "snapshot_id": "88888888-8888-4888-8888-888888888888",
+      "report_id": "contact_sessions_by_current_city_two_periods",
+      "report_version": 1,
+      "reporting_time_zone": "America/Chicago",
+      "data_cutoff_utc": "2026-08-20T06:00:00.000Z",
+      "released_at_utc": "2026-08-20T07:00:00.000Z"
+    }
+  ]
+}
+```
+
+| 结果 | HTTP 合同 |
+| --- | --- |
+| token 缺失或验证失败 | `401 unauthenticated` |
+| project UUID、query 或 GET body 无效 | `400 invalid_management_current_city_report_snapshot_directory_request` |
+| 0060 重新授权拒绝 | `403 management_current_city_report_snapshot_directory_forbidden` |
+| verifier、adapter、数据库、返回合同或未知 SQLSTATE 异常 | `503 management_current_city_report_snapshot_directory_unavailable` |
+
+错误只返回稳定 code，不返回数据库消息、SQL、栈、external subject、报告格、城市名称、坐标或 PII。成功和错误响应都
+使用 JSON `Content-Type` 与 `Cache-Control: no-store`。不可信 provenance 被过滤，不单独生成逐 snapshot 的 `404` 或
+`409`，调用方仍须用 6AR detail route 读取一份显式 snapshot。
+
+### 如何验证 6AS
+
+#### 第一次使用 Docker
+
+Docker 可以理解为一次性测试环境。runner 创建隔离的 PostgreSQL 容器，在其中运行 migration、结构 check、synthetic
+fixture、并发脚本、adapter integration、checksum 和 dump／restore。它不连接 production。测试完成后，runner 删除容器。
+
+先启动 Docker Desktop。然后从仓库根目录运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+看到 `PostgreSQL Docker 测试全部通过。`，表示 synthetic PostgreSQL 合同和恢复检查通过。它不表示真实账号、生产权限、
+HTTP、Flutter、真实区域事实或六平台运行时已经验收。Docker 测试不能替代 `backend/server` 的 Node HTTP 测试。
+
+#### 不使用 Docker 的专用测试库
+
+只在专用测试库调试时，先确认 `DATABASE_URL` 不是 production，再从仓库根目录按顺序运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_authorized_management_current_city_report_snapshot_directory.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0060_authorized_management_current_city_report_snapshot_directory.sql
+./tool/verify_authorized_management_current_city_report_snapshot_directory_concurrency.sh
+```
+
+fixture、check 和并发脚本不能互相替代。fixture 覆盖 approved／approved_baseline、legacy channel、blocked／unavailable、
+current-city claim、tuple 漂移、exact identity、停用／未知身份、跨项目、撤权、空目录、20 项上限、稳定排序、value-free
+审计和不可改删。并发脚本覆盖目录读取先取得授权锁，以及撤权先取得授权锁。通过只证明 synthetic DB 合同成立。
+
+#### Backend HTTP 测试
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+HTTP 测试覆盖认证顺序、固定 collection route、query／GET body、401／400／403／503 映射、未知 SQLSTATE 脱敏、单次
+bridge query、strict metadata parser、重复或乱序目录、Promise gate、`transfer-encoding` body 和 `no-store`。这些测试
+使用 synthetic identity 和 store，不证明真实身份提供方或六平台设备能力。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和

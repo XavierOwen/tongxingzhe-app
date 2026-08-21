@@ -647,6 +647,74 @@ GET /v1/projects/:projectId/management-current-city-report-snapshots/:snapshotId
 真机验收或 Apple Developer Program 工作。Backend handler、route、composition 和错误映射由单元、HTTP、静态边界及
 既有 PostgreSQL Docker 测试覆盖。
 
+#### Slice 6AS：发现 current 城市受保护快照目录
+
+Slice 6AS 为 6AP／6AQ／6AR 增加一个只返回元数据的 current-city 快照目录。它使用独立的 0060 DB 合同，不调用 0035
+渠道目录、6AP 单份读取或任何客户端提供的查询。
+
+private 函数固定为：
+
+```text
+app_private.list_authorized_management_current_city_report_snapshots_v1(
+  requested_app_user_id,
+  requested_project_id
+) -> jsonb
+
+app_data.list_authorized_management_current_city_report_snapshots_v1(
+  trusted_issuer,
+  trusted_subject,
+  requested_project_id
+) -> jsonb
+```
+
+private 函数在同一事务重新解析 `view_anonymous_analytics` 的组织成员、项目成员、项目状态和有效时间。它只接受
+0057 current-city release family 的 `approved`／`approved_baseline` attempt，且 `reason_codes = []`。attempt 必须与
+snapshot 对齐 project、report、version、query fingerprint、release lineage、`reporting_time_zone`、`data_cutoff_utc`、
+`previous_snapshot_id` 和 target tree tuple，并使用 0057 的 provenance 边界。报告固定为
+`contact_sessions_by_current_city_two_periods@1`，固定 release lineage 和 query fingerprint 也必须匹配。
+
+目录最多返回 20 项，按 `data_cutoff_utc DESC`、`released_at_utc DESC`、`snapshot_id DESC` 排序。根对象只含固定的
+`access_contract_id`、`access_event_id`、`project_id` 和 `snapshots`。每项只含 `snapshot_id`、`report_id`、
+`report_version`、`reporting_time_zone`、`data_cutoff_utc` 和 `released_at_utc`。目录不返回报告格、来源、贡献者、
+城市名称、边界、坐标或 PII。空目录仍返回 `200`，并追加返回数量为 0 的不可变 value-free 访问审计。legacy channel、
+blocked／unavailable、跨项目、claim 不匹配、tuple 漂移或其他不可信 provenance 记录只被排除，不转换为逐 snapshot
+的可观察资源错误。
+
+0060 runtime bridge 使用 `SECURITY DEFINER` 和固定 `search_path = pg_catalog`，只做 exact `issuer + subject` 的
+active identity 映射，再调用上述 private 函数。runtime 只拥有 bridge `EXECUTE`，没有 `app_private` schema usage、
+private directory／snapshot／attempt／claim 表、`app_users` 或 `external_identities` 的读取权，也不能执行 private
+函数。区域发布、区域映射、接触来源、区域归属和 current-city release writer 角色同样没有 bridge 或目录审计权；bridge
+owner 与 private function owner 相同，且不能是这些运行或写入角色。
+
+Backend 使用固定 HTTP 入口：
+
+```text
+GET /v1/projects/:projectId/management-current-city-report-snapshots
+```
+
+handler 先验证 Bearer token，再检查 project UUID、query、GET body 和 adapter 是否可用。认证失败时，即使 path、query、
+body 或 store 状态无效，也先返回 `401 unauthenticated`。认证通过后只把 verified issuer、subject 和显式 project UUID
+交给 0060 adapter；不读取 `SessionContext`。adapter 的单次 PostgreSQL Promise 完成后，handler 才写响应。
+
+| 结果 | HTTP 合同 |
+| --- | --- |
+| token 缺失或验证失败 | `401 unauthenticated` |
+| project UUID、query 或 GET body 无效 | `400 invalid_management_current_city_report_snapshot_directory_request` |
+| 0060 重新授权拒绝 | `403 management_current_city_report_snapshot_directory_forbidden` |
+| adapter、数据库、返回合同或未知 SQLSTATE 异常 | `503 management_current_city_report_snapshot_directory_unavailable` |
+
+成功响应包含 `access_event_id`、`project_id` 和 metadata-only `snapshots`。所有响应使用 JSON `Content-Type` 与
+`Cache-Control: no-store`。目录只帮助调用方选择显式 snapshot，第一项不表示“当前”“最新有效”或“取代”。
+
+新增的 DB check、synthetic fixture、真实 PostgreSQL adapter integration、并发脚本、strict parser unit／HTTP／route 测试
+必须覆盖 active／停用／未知 exact identity、授权与撤权、跨项目、current-city claim、legacy channel、blocked／unavailable、
+tuple 漂移、空目录、20 项上限、稳定排序、value-free audit、不可改删、runtime ACL、直接 private access 拒绝、认证顺序、
+query／GET body、错误脱敏、Promise gate 和 `no-store`。Docker runner 还要在 checksum 与 dump／restore 恢复库重跑
+0060 migration、check、fixture 和并发证据。
+
+本 Slice 不增加 Flutter、Drift、管理导航上下文、分页、搜索、筛选、导出、下载、缓存、离线、同步、动态报告、快照
+创建／刷新／更正／删除、retention、warehouse、区域发布、授权授予／撤销、六平台真机验收或生产 identity provider。
+
 只有高级分析可显示：
 
 ```text
@@ -686,6 +754,7 @@ GET /v1/projects/:projectId/management-current-city-report-snapshots/:snapshotId
 | `ANALYTICS-025` | current 城市快照读取只接受显式 project／snapshot、重新解析的 `view_anonymous_analytics` 和通过 current-city release family claim 的 0057 approved attempt；attempt 与 snapshot 的 report、query、lineage、reporting time zone、`data_cutoff_utc`、previous pointer 和 target tuple 必须一致，并在返回前重新运行 current-city document validator。 |
 | `ANALYTICS-026` | Backend runtime current 城市读取只通过 0059 narrow bridge；bridge 用 exact external identity、显式 project／snapshot 和 0058 current-city private function，不调用渠道 read、generic reader、目录、导出或任意查询；它原样返回 6AP 固定合同，completed 报告的 project 必须匹配请求。 |
 | `ANALYTICS-027` | Backend HTTP 只接受固定 current-city snapshot path；认证先于 UUID、query、GET body 和 store 检查，成功只通过 6AQ adapter 返回 6AP 固定报告，响应在 adapter Promise 完成后发送。 |
+| `ANALYTICS-028` | current-city 快照目录只通过 0060 独立 DB／runtime bridge 和固定 HTTP collection route 返回至多 20 项可信 current-city metadata；它重新授权、复核 0057 provenance、固定排序并保持显式 project scope，不把第一项解释为当前或最新。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -710,6 +779,7 @@ GET /v1/projects/:projectId/management-current-city-report-snapshots/:snapshotId
 | `PRIVACY-017` | current 城市快照读取只在 provenance、授权和 validator 全部通过时返回受保护报告；未知、跨项目或不可信快照不返回正文。访问审计不可变且 value-free，只保存最小授权 lineage、结果和稳定 reason code；runtime、`PUBLIC` 和区域维护身份不能读取审计或执行读取函数。 |
 | `PRIVACY-018` | 0059 runtime bridge 使用 `SECURITY DEFINER`、固定 `pg_catalog` search path 和 exact external identity 映射；runtime 只拥有 bridge `EXECUTE`，不能使用 `app_private` 或读取 identity／用户／快照／审计表。Backend parser 只接受固定 current-city protected JSON，拒绝 contact、source、contributor、城市名称、坐标、geometry 和其他多余字段。 |
 | `PRIVACY-019` | current-city HTTP 错误只返回稳定 code 和必要的访问事件 ID；未知 SQLSTATE、数据库消息、SQL、栈、external subject、报告格、城市名称和坐标不进入响应。所有响应使用 `Cache-Control: no-store`。 |
+| `PRIVACY-020` | current-city 目录使用独立 release family provenance、value-free directory audit 和最小 runtime ACL；响应只含固定快照 metadata，不含报告格、来源、贡献者、城市名称、边界、坐标、PII 或 generic channel provenance。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
 
@@ -929,6 +999,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-019` | 6AP fixture 覆盖 approved／approved_baseline 与 current-city family claim、`reason_codes = []`、reporting time zone／cutoff／previous snapshot 对齐、再次 current-city validator、固定 protected grid 与 `suppressed = null`、unknown／cross-project／legacy channel／untrusted provenance 失败关闭、撤权和不可变 value-free read audit。并发脚本覆盖 read-first 与 revoke-first 的锁线性化；完整 Docker 套件在 checksum 和 dump／restore 后重跑。 |
 | `TEST-020` | 6AQ fixture 覆盖 exact issuer／subject、active／停用／未知 identity、trim 不映射、显式 project／snapshot、0058 private bridge、runtime ACL、owner 对齐、固定 root／period／target／cell keys、两期间 city grid 和 rejected extra fields。真实 PostgreSQL adapter integration 自建数据并回滚；Docker runner 运行 migration、check、fixture、integration、并发、checksum 和 dump／restore。 |
 | `TEST-021` | 6AR handler 覆盖认证先于 UUID／query／GET body／store、401／400／403／404／409／503 稳定映射、未知 SQLSTATE 不泄漏、adapter Promise gate 和固定 route；route 覆盖 method、path、transfer-encoding body 与 no-store；production entry 只组合 6AQ adapter。 |
+| `TEST-022` | 6AS 覆盖 current-city provenance 过滤、approved／approved_baseline、legacy／blocked／unavailable／tuple 漂移、精确 identity、授权撤权、跨项目、空目录、20 项上限、稳定排序、value-free audit、不可改删、runtime ACL、checksum、dump／restore、真实 PostgreSQL adapter parser，以及 HTTP 认证顺序、固定 collection route、query／GET body、错误脱敏、Promise gate 和 no-store。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -1036,7 +1107,8 @@ Slice 0、1、2 完成后可以发放内部 Alpha，用于验证匿名接触闭�
 固定匿名管理报告文件导出同时检查 `view_anonymous_analytics` 与 `export_management_reports`，只序列化可信 v2 快照，保持 16 格顺序和 `suppressed = null`，并留下独立不可变导出审计。区域文档不进入该渠道 v2/read/directory/export。相邻周期、重叠区域、互补类别和已知外部事实的重识别 fixture 通过。
 
 Widget 只渲染已带来源、单位、版本、截止时间和抑制状态的 `MetricResult`，拿不到被隐藏的精确值。6AO 与 6AP
-仍只证明 DB-only 合同；6AQ 与 6AR 增加 Backend runtime bridge 和固定 HTTP 读取，但不交付 Flutter UI 或生产调度。
+仍只证明 DB-only 合同；6AQ、6AR 与 6AS 增加 Backend runtime bridge、固定 HTTP 读取和 metadata-only 目录，但不交付
+Flutter UI 或生产调度。
 验收结论只能说明降低披露风险，不宣称形式化不可重识别。
 
 ### Slice 7：组织治理与数据可携带性
