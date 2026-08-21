@@ -620,6 +620,15 @@ Backend adapter 只执行一次固定 SQL，并严格解析 0063 envelope、6AX 
 Drift、缓存、离线、同步或真人平台证据。
 _Avoid_: runtime 直接读 private schema、发布即读取、宽泛 SQL、客户端重算、用 HTTP 测试冒充 DB-only bridge 证据
 
+**管理兴趣快照 HTTP 读取**:
+6AZ 通过固定的 `GET /v1/projects/:projectId/management-interest-report-snapshots/:snapshotId` 调用 6AY store。handler 先验证 Bearer token，
+再检查两个 UUID、query、GET body 和 store；认证失败先返回 `401`。认证通过后只把 verified identity、显式 project 和 snapshot 传给 6AY，
+不使用 `SessionContext`、通用 reader、current-city reader 或客户端查询。成功返回 6AX protected report、snapshot ID 和 value-free access event ID；`not_found`、
+`untrusted_provenance`、`forbidden` 和内部错误分别映射为稳定的 `404`、`409`、`403` 和 `503`。所有响应使用 JSON 和 `Cache-Control: no-store`。
+6AZ 不修改数据库，不增加 DB fixture、migration 或并发协议；既有 6AY PostgreSQL suite 仍由 CI 运行，HTTP 证据由 Backend unit、route 和
+composition 测试提供。它不增加目录、Flutter、导出、缓存、离线、同步或真人平台证据。
+_Avoid_: HTTP 层重新授权、SessionContext 授权、暴露数据库错误、缓存受保护报告、把 6AY DB integration 当作 HTTP 测试
+
 **更正版报告**:
 补录、修订、作废或分析定义修正后重新生成并明确取代某份报告快照的新快照；原报告保留但标记已被取代。
 _Avoid_: 静默改写、删除旧报告

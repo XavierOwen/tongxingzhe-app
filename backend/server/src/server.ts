@@ -85,6 +85,10 @@ import {
   type ManagementCurrentCityReportSnapshotStore,
 } from "./management-current-city-report-snapshots.js";
 import {
+  readManagementInterestReportSnapshot,
+  type ManagementInterestReportSnapshotStore,
+} from "./management-interest-report-snapshots.js";
+import {
   exportManagementReportSnapshot,
   type ManagementReportSnapshotExportStore,
 } from "./management-report-snapshot-exports.js";
@@ -132,6 +136,8 @@ export interface BackendServerDependencies
   readonly managementReportSnapshotStore?: ManagementReportSnapshotStore;
   readonly managementCurrentCityReportSnapshotStore?:
     ManagementCurrentCityReportSnapshotStore;
+  readonly managementInterestReportSnapshotStore?:
+    ManagementInterestReportSnapshotStore;
   readonly managementReportSnapshotExportStore?:
     ManagementReportSnapshotExportStore;
   readonly managementReportSnapshotDirectoryStore?:
@@ -357,6 +363,37 @@ export function createBackendServer(
             : {
               snapshotStore:
                 dependencies.managementCurrentCityReportSnapshotStore,
+            }),
+        },
+      );
+      response.statusCode = result.status;
+      response.end(JSON.stringify(result.body));
+      return;
+    }
+
+    const managementInterestReportSnapshotMatch =
+      requestUrl.pathname.match(
+        /^\/v1\/projects\/([^/]+)\/management-interest-report-snapshots\/([^/]+)$/,
+      );
+    if (
+      request.method === "GET" &&
+      managementInterestReportSnapshotMatch !== null
+    ) {
+      const result = await readManagementInterestReportSnapshot(
+        {
+          authorization: request.headers.authorization,
+          projectId: managementInterestReportSnapshotMatch[1] ?? "",
+          snapshotId: managementInterestReportSnapshotMatch[2] ?? "",
+          hasQuery: requestUrl.search.length > 0,
+          hasBody: requestDeclaresBody(request.headers),
+        },
+        {
+          identityVerifier: dependencies.identityVerifier,
+          ...(dependencies.managementInterestReportSnapshotStore === undefined
+            ? {}
+            : {
+              snapshotStore:
+                dependencies.managementInterestReportSnapshotStore,
             }),
         },
       );

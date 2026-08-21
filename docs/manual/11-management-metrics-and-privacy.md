@@ -1708,6 +1708,72 @@ node dist/test/management-interest-report-snapshots.integration.js
 fixture 证明数据库 identity、project／snapshot、0063 状态和 runtime ACL。integration 证明真实 Node adapter 的一次 bridge 调用和 strict JSON
 对账。通过只证明 DB-only bridge 和 parser 合同，不证明 HTTP、Flutter、目录、导出、生产身份提供方、真实账号或六平台运行时。
 
+## Slice 6AZ：如何通过 HTTP 读取管理兴趣快照
+
+6AZ 只把 6AY store 接到一个固定的只读入口：
+
+```text
+GET /v1/projects/:projectId/management-interest-report-snapshots/:snapshotId
+```
+
+### 认证顺序和 6AY 复用
+
+handler 先解析并验证 Bearer token，再检查 project／snapshot UUID、query、GET body 和 6AY store。无 token 或无效 token 时，其他输入即使无效，
+也先返回 `401 unauthenticated`。认证通过后，handler 只把 verified issuer、subject、显式 project UUID 和 snapshot UUID 传给 6AY store。
+它不调用 `SessionContext`、通用 reader、current-city reader、private schema，也不接受筛选、报告定义、时区、截止点或 SQL。
+
+6AY 继续负责 `view_anonymous_analytics`、interest provenance、6AV validator、撤权锁和 value-free audit。6AZ 不复制这些逻辑，也不增加第二
+条审计或改变 protected report。
+
+### 固定 HTTP 合同
+
+成功响应保留 6AX protected report：
+
+```json
+{
+  "access_event_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "snapshot_id": "88888888-8888-4888-8888-888888888888",
+  "report": {}
+}
+```
+
+错误只返回稳定 code：
+
+| 情况 | 状态和 code |
+| --- | --- |
+| token 缺失或验证失败 | `401 unauthenticated` |
+| UUID、query 或 GET body 无效 | `400 invalid_management_interest_report_snapshot_request` |
+| 6AY authorization forbidden | `403 management_interest_report_snapshot_forbidden` |
+| 快照不存在或跨项目 | `404 management_interest_report_snapshot_not_found` |
+| interest provenance 不可信 | `409 management_interest_report_snapshot_untrusted` |
+| verifier、adapter、数据库或未知 SQLSTATE 异常 | `503 management_interest_report_snapshot_unavailable` |
+
+`404` 和 `409` 可以带不含报告值的 `access_event_id`。错误不包含数据库消息、SQL、栈、external subject、授权关系、报告格或 PII。成功和错误
+响应都使用 `Content-Type: application/json; charset=utf-8` 与 `Cache-Control: no-store`。handler 等待 adapter Promise 完成后才写响应。
+
+### 为什么没有新的数据库测试
+
+6AZ 没有 PostgreSQL migration、check、fixture 或并发脚本。6AY 已经提供 runtime bridge、ACL、parser、审计、并发、checksum 和 restore 证据。
+6AZ 的新增行为是 HTTP handler、route 和 composition，所以 HTTP 测试使用 synthetic identity 与 fake 6AY store。CI 仍运行既有 6AY Docker suite，
+保持数据库合同回归。Docker 不替代 HTTP 测试。
+
+没有用过 Docker 时，可以把 runner 理解为一次性测试环境。Docker Desktop 启动隔离的 PostgreSQL 和 Node 容器，使用 synthetic 数据，完成后删除
+容器。它不连接 production。只修改 6AZ HTTP 文件时，从 `backend/server` 运行：
+
+```bash
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+如果同时修改或核对 6AY 数据库合同，再从仓库根目录运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+这些测试只证明固定 HTTP wire contract 与既有 DB-only 6AY 合同，不证明 Flutter、导出、缓存、离线、生产身份、真实账号或真人平台运行时。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和

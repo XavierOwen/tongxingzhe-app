@@ -400,6 +400,51 @@ runner 会自动发现 0064 migration、check 和 fixture，并显式运行兴�
 dump／restore。恢复库只重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。通过只证明 DB-only bridge、adapter parser 和
 ACL，不证明 HTTP、Flutter、目录、导出、生产身份提供方或真实平台运行时。
 
+## 管理兴趣快照 HTTP 读取合同
+
+6AZ 把 6AY store 接到一个固定的 HTTP GET：
+
+```text
+GET /v1/projects/:projectId/management-interest-report-snapshots/:snapshotId
+```
+
+handler 先验证 Bearer token，再检查两个 UUID、query、GET body 和 store。认证失败时，其他输入即使无效，也先返回
+`401 unauthenticated`。认证通过后，handler 只把 verified identity、显式 project UUID 和 snapshot UUID 传给 6AY store。
+它不调用 `SessionContext`、通用 reader、current-city reader、private schema 或客户端 SQL。
+
+成功响应包含 6AX protected report、`access_event_id` 和 `snapshot_id`。错误使用固定 code：
+`400 invalid_management_interest_report_snapshot_request`、`403 management_interest_report_snapshot_forbidden`、
+`404 management_interest_report_snapshot_not_found`、`409 management_interest_report_snapshot_untrusted` 和
+`503 management_interest_report_snapshot_unavailable`。`404`／`409` 可以带 value-free `access_event_id`。所有响应使用
+`Content-Type: application/json; charset=utf-8` 和 `Cache-Control: no-store`。错误不包含数据库消息、SQL、栈、external subject、授权关系、
+报告格或 PII。
+
+6AZ 不增加 PostgreSQL migration、check、fixture、并发脚本或新的 Docker 数据库合同。HTTP 测试使用 synthetic identity 和 fake 6AY store，
+因此可以在没有数据库的情况下验证认证顺序、wire mapping、Promise gate 和 no-store。CI 仍运行既有 6AY PostgreSQL suite，以保持 runtime
+bridge、ACL、parser 和 restore 证据。Docker 数据库测试不替代 HTTP 测试。
+
+### 6AZ 的本地测试
+
+从仓库根目录运行：
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+测试覆盖 handler、固定 route、GET body／query 拒绝、401／400／403／404／409／503 映射、未知 SQLSTATE 脱敏、adapter Promise gate 和
+production composition。涉及 6AY 数据库合同时，再运行：
+
+```bash
+cd ../..
+./tool/run_postgres_tests_in_docker.sh
+```
+
+这条命令仍运行既有 6AY migration、check、fixture、integration、并发、checksum 和 dump／restore。6AZ 不新增数据库步骤，也不因此证明
+Flutter、导出、缓存、离线、生产身份或真实平台运行时。
+
 ## 管理报告快照目录合同
 
 `GET /v1/projects/:projectId/management-report-snapshots` 只接受一个显式项目 UUID。它不接受 body、query、筛选、分页、报告 ID、时区、capability 或内部用户 ID。6M 保存的管理分析选择只帮助导航，不是授权，也不会替代 path 中的项目。

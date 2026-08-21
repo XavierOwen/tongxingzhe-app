@@ -599,6 +599,52 @@ node dist/test/management-interest-report-snapshots.integration.js
 fixture 证明数据库 identity、project／snapshot、0063 状态和 runtime ACL。integration 证明真实 Node adapter 的一次 bridge 调用和 strict JSON
 对账。通过只证明 DB-only runtime bridge 合同，不证明 HTTP、Flutter、目录、导出、生产身份提供方、真实账号或六平台运行时。
 
+### 6AZ：验证管理兴趣快照 HTTP 读取
+
+6AZ 只把 6AY store 接到一个固定的只读 HTTP GET：
+
+```text
+GET /v1/projects/:projectId/management-interest-report-snapshots/:snapshotId
+```
+
+handler 先验证 Bearer token，再检查两个 UUID、query、GET body 和 store。认证失败时，其他输入即使无效，也先返回 `401`。认证通过后，
+handler 只调用 6AY store，不使用 `SessionContext`、通用 reader、current-city reader、private schema 或客户端 SQL。
+
+成功响应保留 6AX protected report，并返回 `access_event_id` 和 `snapshot_id`。`403`、`404`、`409` 和 `503` 使用固定错误 code；`404` 和
+`409` 可以带不含报告值的 `access_event_id`。所有响应使用 JSON 和 `Cache-Control: no-store`。HTTP 层不重新执行 6AX／6AY 授权，
+也不修改报告数据。
+
+#### 为什么 6AZ 不新增数据库测试
+
+6AY 已经验证 PostgreSQL bridge、ACL、parser、审计、并发、checksum 和 restore。6AZ 只增加 HTTP handler、route 和 production composition。
+它使用已有的 6AY store 接口，不增加 migration、check、fixture 或新的数据库状态。因此，HTTP 测试可以用 synthetic identity 和 fake store
+独立运行，避免重复建立数据库合同。
+
+没有用过 Docker 时，仍可以运行完整套件。Docker 是一次性测试环境：runner 启动隔离的 PostgreSQL 和 Node 容器，使用 synthetic 数据，
+完成后删除容器。它不连接 production。
+
+1. 打开 Docker Desktop，等待 Docker Engine 就绪。
+2. 在仓库根目录运行：
+
+   ```bash
+   ./tool/run_postgres_tests_in_docker.sh
+   ```
+
+CI 仍运行既有 6AY PostgreSQL suite。它继续自动发现 0064 migration、check 和 fixture，运行 interest runtime integration、既有并发、checksum
+和 dump／restore。6AZ 不会让 runner 多出一个数据库步骤。
+
+如果只修改 6AZ HTTP 文件，最小验证集是不启动 Docker 的 Backend 检查和测试：
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+这些命令证明认证顺序、固定 route、wire mapping、错误脱敏、Promise gate 和 `no-store`。Docker 证据仍只证明既有 DB-only 6AY 合同，
+不证明 Flutter、导出、缓存、离线、生产身份、真实账号或真人平台运行时。
+
 管理报告发布端点同时改动 Backend 和 PostgreSQL bridge。开发时先运行：
 
 ```bash

@@ -1,4 +1,9 @@
-import type {VerifiedIdentity} from "./identity.js";
+import {bearerToken} from "./authorization.js";
+import {
+  IdentityVerificationError,
+  type IdentityVerifier,
+  type VerifiedIdentity,
+} from "./identity.js";
 
 export type ManagementInterestReportSnapshotRead = {
   readonly status: "completed";
@@ -24,6 +29,99 @@ export interface ManagementInterestReportSnapshotStore {
     projectId: string,
     snapshotId: string,
   ): Promise<ManagementInterestReportSnapshotRead>;
+}
+
+export interface ManagementInterestReportSnapshotHttpRequest {
+  readonly authorization: string | undefined;
+  readonly projectId: string;
+  readonly snapshotId: string;
+  readonly hasQuery: boolean;
+  readonly hasBody: boolean;
+}
+
+export interface ManagementInterestReportSnapshotHttpDependencies {
+  readonly identityVerifier: IdentityVerifier;
+  readonly snapshotStore?: ManagementInterestReportSnapshotStore;
+}
+
+export interface ManagementInterestReportSnapshotHttpResult {
+  readonly status: number;
+  readonly body: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * Authenticates and reads one fixed interest snapshot through the 6AY store.
+ * Route validation follows authentication so malformed resource identifiers
+ * cannot reveal whether a protected project or snapshot exists.
+ */
+export async function readManagementInterestReportSnapshot(
+  request: ManagementInterestReportSnapshotHttpRequest,
+  dependencies: ManagementInterestReportSnapshotHttpDependencies,
+): Promise<ManagementInterestReportSnapshotHttpResult> {
+  const accessToken = bearerToken(request.authorization);
+  if (accessToken === null) return failure(401, "unauthenticated");
+
+  let identity: VerifiedIdentity;
+  try {
+    identity = await dependencies.identityVerifier.verify(accessToken);
+  } catch (error) {
+    return error instanceof IdentityVerificationError
+      ? failure(401, "unauthenticated")
+      : failure(503, "management_interest_report_snapshot_unavailable");
+  }
+
+  if (
+    !uuidPattern.test(request.projectId) ||
+    !uuidPattern.test(request.snapshotId) ||
+    request.hasQuery ||
+    request.hasBody
+  ) {
+    return failure(
+      400,
+      "invalid_management_interest_report_snapshot_request",
+    );
+  }
+  if (dependencies.snapshotStore === undefined) {
+    return failure(503, "management_interest_report_snapshot_unavailable");
+  }
+
+  try {
+    const result = await dependencies.snapshotStore.read(
+      identity,
+      request.projectId,
+      request.snapshotId,
+    );
+    if (result.status === "completed") {
+      return {
+        status: 200,
+        body: {
+          access_event_id: result.accessEventId,
+          snapshot_id: result.resolvedSnapshotId,
+          report: result.protectedReport,
+        },
+      };
+    }
+    if (result.status === "not_found") {
+      return auditedFailure(
+        404,
+        "management_interest_report_snapshot_not_found",
+        result.accessEventId,
+      );
+    }
+    return auditedFailure(
+      409,
+      "management_interest_report_snapshot_untrusted",
+      result.accessEventId,
+    );
+  } catch (error) {
+    if (
+      error instanceof ManagementInterestReportSnapshotStoreError &&
+      error.code === "forbidden"
+    ) {
+      return failure(403, "management_interest_report_snapshot_forbidden");
+    }
+    return failure(503, "management_interest_report_snapshot_unavailable");
+  }
 }
 
 export type ManagementInterestReportSnapshotQuery = (
@@ -72,6 +170,24 @@ export class ManagementInterestReportSnapshotStoreError extends Error {
     super(code);
     this.name = "ManagementInterestReportSnapshotStoreError";
   }
+}
+
+function failure(
+  status: number,
+  code: string,
+): ManagementInterestReportSnapshotHttpResult {
+  return {status, body: {error: {code}}};
+}
+
+function auditedFailure(
+  status: number,
+  code: string,
+  accessEventId: string,
+): ManagementInterestReportSnapshotHttpResult {
+  return {
+    status,
+    body: {error: {code, access_event_id: accessEventId}},
+  };
 }
 
 function parseAccessResult(
