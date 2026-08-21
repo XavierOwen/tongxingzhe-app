@@ -1491,6 +1491,67 @@ fixture 与 Docker runner 证明 synthetic 数据上的 accepted active contact 
 Android／iOS／macOS／Windows／Linux／Web 的真人运行，或屏幕阅读器行为。自动测试和 Docker 也不构成形式化“不可重识别”保证。
 它们只证明当前列出的 synthetic 合同和失败关闭规则。
 
+## Slice 6AW：如何验证管理兴趣报告快照与独立发布 lineage
+
+6AW 把符合 6AV 完整受保护文档合同的管理兴趣文档固定为不可变私有 snapshot。它复用通用 snapshot storage，但使用兴趣专属
+release attempt、request claim family 和 provenance；不能使用 channel 的 16 格发布链，也不能使用 current-city 的区域
+provenance。兴趣 validator 固定 6AV 的 report、metric、dimension、统计单位、privacy policy、source scope、两个相邻完整
+ISO 周和 `previous/current × interest_level 0..4` 十格顺序。每格只有 `displayed` 的安全整数 count 或 `suppressed` 与
+JSON `null`，没有中位数、比例、total cell 或其他派生值。
+
+发布只提交 request UUID、可信内部用户、项目和固定 report identity。数据库在锁内重新验证
+`release_management_reports`，在同一 release transaction 中派生可信报告时区 revision 和 `data_cutoff_utc`，再执行 6AV
+executor；调用方不能提交报告 JSON、时区、截止点、期间、兴趣等级、筛选或 SQL。首个合法文档建立唯一 baseline，后续
+发布只能推进 cutoff，保持报告定义、period definition／boundary、十格顺序、query fingerprint、privacy policy、source scope 和时区 revision
+一致，并链接前一 snapshot。相同 request 与固定上下文精确幂等，不新增 snapshot 或 attempt。
+
+same／earlier cutoff、没有共享期间、共享期间内的兴趣格值或隐私状态变化，以及定义、期间、网格、query fingerprint、privacy
+policy、source scope 或时区 revision 漂移，都会返回稳定 blocked reason。blocked attempt 只保存最小 value-free lineage 和
+reason，不保存候选文档、cells、来源、贡献者、隐藏前值或 PII。snapshot、attempt 和 request claim 追加不可变，不允许
+UPDATE 或 DELETE；兴趣 request UUID 与 channel、current-city request UUID 互斥，兴趣 provenance 不能冒充其他 family。
+
+release writer 之外，runtime、`PUBLIC`、普通 app role 和区域维护角色不能执行兴趣发布、读取兴趣 provenance 或直接写兴趣
+snapshot／attempt 表。虽然两个报告族复用 snapshot storage，report-family RLS 仍把专用 writer 限制在自己的固定 report 和
+lineage 内；current-city writer 看不到也不能插入兴趣 snapshot。这个切片只证明 DB-only contract，不增加 authorized read、runtime bridge、HTTP、Flutter、Drift、缓存、
+离线、同步、目录、导出、warehouse、retention、报告更正／取代或生产调度。
+
+### 6AW 的验证步骤
+
+第一次使用 Docker 时，安装并打开 Docker Desktop，等待 Docker Engine 就绪。Docker 可以理解为一次性测试环境：它创建
+隔离的 PostgreSQL 容器，运行迁移和无 PII synthetic fixture，完成后清理容器，不连接 production。打开 Terminal 后进入仓库
+根目录，确认 Docker 同时有 Client 和 Server：
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+docker version
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 会发现 0062 migration、结构／权限 check、fixture、并发脚本、checksum 和 dump／restore，并在恢复库重跑。完整证据
+应包括合法与拒绝的十格文档、唯一 baseline、精确幂等、稳定 rolling、`previous_snapshot_id`、same／earlier cutoff、无共享
+期间、共享期间内格值／隐私变化、固定定义／period definition／boundary／网格／query／privacy／source／时区 revision 漂移、value-free blocked
+attempt、独立 claim／provenance、不可改删和最小 ACL。旧 channel、current-city 和 6AV 回归也必须继续通过。
+
+如果本机已有专用测试库，先确认 `DATABASE_URL` 不是 production，再按顺序运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_interest_report_snapshot_lineage.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0062_management_interest_report_snapshot_lineage.sql
+./tool/verify_management_interest_report_snapshot_lineage_concurrency.sh
+```
+
+check、fixture 和并发脚本不能互相替代。`Cannot connect to the Docker daemon` 时先打开 Docker Desktop；只有 Docker Client 时
+等待 Server；没有 `psql` 时使用完整 runner；checksum 失败时不要编辑已执行 migration，改用干净测试容器；fixture 失败时保留
+首次输出并检查 migration 顺序、分支和数据库地址。不要为了通过检查而降低隐私条件或把命令指向 production。
+
+这些自动检查只证明当前 PostgreSQL 实现中的 DB-only snapshot、lineage、并发、失败关闭和 ACL。它们不证明 Backend HTTP、
+runtime bridge、Flutter UI、Drift、缓存、离线同步、读取、目录、导出、生产发布、真实账号、Apple／Android／iOS／macOS／
+Windows／Linux／Web 真人平台运行或真机证据，也不构成形式化不可重识别保证。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和
