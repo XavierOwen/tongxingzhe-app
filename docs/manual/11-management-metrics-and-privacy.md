@@ -1404,6 +1404,93 @@ dart run tool/check_markdown_links.dart
 [Docker 与 CI 测试说明](09-local-docker-and-ci-testing.md)运行 PostgreSQL runner；它不能替代 Flutter Widget 测试或真人设备证据。
 完整边界以[产品规格](../PRODUCT_SPEC.md)的 Slice 6AU 合同为准。
 
+## Slice 6AV：如何验证管理兴趣五档分布
+
+6AV 是一个只在私有数据库边界验证的管理报告候选。固定报告 ID 是
+`contact_sessions_by_interest_level_two_periods@1`，metric identity 是
+`interest_distribution@1`。它统计 Backend 已接受的有效接触场次，使用可信的
+`app_user_id` 作为贡献者，按项目 IANA 报告时区和可信 `data_cutoff_utc` 取最近两个已经结束的完整 ISO 周。
+
+结果永远是 `previous/current × 0..4` 的十个格。它只返回 count，不返回中位数、比例、百分点差、算术指数或 total cell。
+每个期间的每个等级检查 `N >= 10`、至少三位贡献者和 `2 × M <= N`。只要一个等级不安全，该期间五格全部标为
+`suppressed`，count 全部是 `null`；另一期间独立判断。这个规则不依赖渠道报告或 current-city 报告是否隐藏同期总数。
+因此，读者不能通过另一个报告减去兴趣报告以外的数值来恢复隐藏档位。
+
+### 第一次使用 Docker
+
+Docker 是一个临时测试环境。它不会连接 production，也不会把 synthetic 数据写入真实项目。第一次使用时按以下顺序操作：
+
+1. 安装并打开 Docker Desktop，等待界面显示 Docker Engine 正在运行。
+2. 打开 Terminal，进入仓库根目录。已有仓库时可以复制：
+
+   ```bash
+   cd "$(git rev-parse --show-toplevel)"
+   ```
+
+   如果命令提示当前目录不是 Git 仓库，先用 `cd` 进入你检出的同行者 APP 目录，再运行该命令。
+3. 确认 Docker 可以响应：
+
+   ```bash
+   docker version
+   ```
+
+   输出应同时包含 Client 和 Server。只有 Client 时，Docker Desktop 尚未完成启动。
+4. 从仓库根目录运行完整数据库套件：
+
+   ```bash
+   ./tool/run_postgres_tests_in_docker.sh
+   ```
+
+脚本会创建临时 PostgreSQL 容器，按 migration 顺序运行 0061 的结构检查和 synthetic fixture，并运行仓库已有的 checksum、
+dump／restore 及适用的对账检查。成功时可以看到各阶段通过，最后脚本清理临时容器并返回退出码 `0`。输出文字会随 runner
+版本变化，不能只看某一行；应确认没有未处理的 `ERROR`，并检查命令最后的退出码。
+
+### 不使用 Docker 的两组本机检查
+
+如果本机已有专用 PostgreSQL 测试库，可以单独运行 0061 的检查。先确认连接地址是本机测试库，不是 production：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_interest_distribution_report.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0061_management_interest_distribution_report.sql
+```
+
+本机没有 `psql` 时不要修改 production 连接来绕过错误，改用上面的 Docker runner。专用测试库中已有旧数据时，优先建立新的
+测试库或重新启动一次性容器；不要删除生产数据，也不要把 fixture 当成业务数据导入。
+
+Dart 纯政策合同不依赖 Docker，可以从仓库根目录运行：
+
+```bash
+dart analyze
+flutter test --no-pub test/features/contact_metrics/management_interest_distribution_policy_test.dart
+```
+
+这两组检查互相不能替代。Dart 检查政策输入和输出，PostgreSQL 检查真实 SQL 聚合、权限、migration 和 fixture。两端必须
+读取同一组无 PII synthetic 场景，并对账十格的顺序、显示状态和值。
+
+### 预期失败与排查
+
+- `Cannot connect to the Docker daemon`：打开 Docker Desktop，等待 Docker Engine 就绪，再重新运行 `docker version`。
+- 只有 Docker Client 输出：桌面程序仍在启动，或 Docker Engine 没有运行。先修复 Docker，再重跑测试。
+- `psql: command not found`：本机没有 PostgreSQL 客户端。使用完整 Docker runner，不要把命令改为 production 数据库。
+- migration checksum 失败：不要编辑已经执行的 migration。保存输出，检查是否使用了含旧数据的测试库，必要时改用干净测试容器。
+- fixture 或结构检查失败：保留首次失败的完整输出。重复运行不能修复合同错误；先确认 migration 顺序、数据库地址和 Docker 日志。
+- Flutter 测试失败：先运行 `dart analyze`，再只重跑失败的测试文件。Flutter 测试失败不等同于 PostgreSQL 权限失败。
+- Docker 下载超时或磁盘不足：检查网络、Docker Desktop 的磁盘空间和容器状态。不要为了通过检查而删改 fixture 或降低隐私条件。
+
+### 这些检查能证明什么
+
+Dart policy 测试证明固定阈值、`10`／三位／`50%` 边界、期间整体闭包、两期间独立判断和畸形输入的确定性。PostgreSQL
+fixture 与 Docker runner 证明 synthetic 数据上的 accepted active contact 过滤、时区／截止点、半开周边界、项目隔离、作废／
+尝试／草稿排除、跨报告相减反例、private policy／executor、最小权限、checksum 和 dump／restore。
+
+这些结果不证明 Backend HTTP、runtime bridge、快照、Flutter UI、缓存、离线同步、导出、真实账号、Apple Developer Program、
+Android／iOS／macOS／Windows／Linux／Web 的真人运行，或屏幕阅读器行为。自动测试和 Docker 也不构成形式化“不可重识别”保证。
+它们只证明当前列出的 synthetic 合同和失败关闭规则。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和
