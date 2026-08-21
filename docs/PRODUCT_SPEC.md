@@ -975,6 +975,30 @@ Flutter 各自的测试证据不得相互冒充。
 传递、错误映射、项目／快照不匹配、PII／额外字段拒绝、`no-store`、timeout、网络失败和 gateway `close`。这些测试证明 Dart
 transport 合同，不证明 6BA／6AZ 的数据库授权、HTTP 生产身份、UI、Drift、缓存、离线、导出、真实账号或六平台 runtime。
 
+#### Slice 6BC：为管理兴趣报告提供 Flutter UI consumer
+
+Slice 6BC 在既有管理报告浏览器中增加独立 interest consumer。浏览器使用一个互斥 report-family 状态表示
+渠道、当前城市和兴趣三个视图，不使用多个布尔开关组合隐式状态。渠道报告仍是默认视图；未选择 interest 时，
+`InterestReportGateway` 不发请求。
+
+interest project ID 只来自当前已解析并重新授权的 `ManagementAnalysisContext`。无管理上下文时不请求，也不回退到
+个人 `TrustedSessionContext`、Widget 自由输入或响应正文的 project ID。切换管理项目或 report family 会立即移除旧 interest
+panel，使待定目录或详情响应无法恢复旧项目或旧 family。
+
+独立 `InterestReportPanel` 和 ViewModel 使用 6BB 的 typed directory、summary、snapshot、period 和 cell，不复用 channel 或
+current-city DTO。目录保留服务端顺序，空目录是成功状态，第一项不会自动打开，也不获得 current、latest 或 as-of
+语义。只有用户明确选择当前目录成员后，ViewModel 才将同一 project 和 summary 交给详情 gateway。
+
+详情只显示固定报告 identity、项目、时区、截止时间、期间、来源／隐私元数据和十格服务端已保护结果。`displayed`
+显示计数；`suppressed` 只显示“已隐藏 / Hidden”，不显示为零。consumer 不计算总计、比例、平均等级、中位数或趋势。
+
+ViewModel 使用 generation 隔离目录、详情、项目切换、返回目录、重试和 dispose；旧响应不能改变当前状态。UI 提供中英文、
+320×568、200% 字号、Tab／Shift-Tab、Enter／Space、Escape／返回、焦点恢复、heading 和错误 live region。composition root 构造、
+传递并关闭独立 gateway；未配置 Backend 时使用 deferred 失败状态，不访问网络。
+
+6BC 不修改 6BB parser、Backend、PostgreSQL、channel／current-city 合同，不建立共享 report-family DTO 或泛型 panel，也不增加
+Drift、缓存、离线、同步、导出、下载、分享、报告生成／更正／删除、生产身份或真机证据。
+
 #### 5.8.2 时间、趋势、版本与因果边界
 
 | ID | 需求 |
@@ -1016,6 +1040,7 @@ transport 合同，不证明 6BA／6AZ 的数据库授权、HTTP 生产身份、
 | `ANALYTICS-035` | 6AZ 只通过固定 HTTP GET 调用 6AY interest snapshot store。handler 先完成 Bearer identity verification，再检查显式 project／snapshot UUID、query、GET body 和 store；认证通过后只传递 verified identity 与显式资源 ID，不使用 `SessionContext`、通用 reader、current-city reader 或客户端查询。成功响应保留 6AX protected report、`access_event_id` 和 `snapshot_id`，并等待 adapter Promise 完成。 |
 | `ANALYTICS-036` | 6BA 只通过 interest 专用 DB／runtime bridge 和固定 HTTP collection route 返回至多 20 项 metadata-only snapshot；数据库重新授权并复核 6AW interest provenance 的 project、report、version、fingerprint、lineage、时区、cutoff、previous pointer 和 source watermark 对齐。结果固定排序，第一项不表示 current、latest 或未被取代。 |
 | `ANALYTICS-037` | 6BB 通过独立的 Flutter `InterestReportGateway` 消费 6BA 有界目录和 6AZ 显式详情；目录 HTTP 根只含三项 wire 字段，不能暴露 DB envelope 的内部 `access_contract_id`，详情只按用户明确选择的 project／snapshot 读取固定十格 interest report。gateway 保持服务端最多 20 项及固定排序，不把第一项解释为 current／latest，不在客户端重算、聚合或推断报告。 |
+| `ANALYTICS-038` | 6BC 只在用户明确选择 interest report family 后，使用当前已重新授权的 `ManagementAnalysisContext.projectId` 读取目录；默认 channel 视图不调用 interest gateway。consumer 不使用个人项目，不自动打开首项，只读取用户明确选择的当前目录 summary，不重算总计、比例、平均等级或趋势；切换项目／family、返回目录、重试和 dispose 会隔离迟到响应。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -1050,6 +1075,7 @@ transport 合同，不证明 6BA／6AZ 的数据库授权、HTTP 生产身份、
 | `PRIVACY-027` | 6AZ HTTP 只返回固定 JSON wire contract。`401`、`400`、`403`、`404`、`409` 和 `503` 使用稳定 code；`404`／`409` 只可带 value-free `access_event_id`。响应不得包含数据库消息、SQL、栈、external subject、授权关系、报告格或 PII，成功和错误响应都使用 `Cache-Control: no-store`。HTTP 层不复制 6AY 的授权、provenance 或 audit 逻辑。 |
 | `PRIVACY-028` | 6BA 目录使用独立 interest release family provenance、value-free immutable directory audit 和最小 runtime ACL。响应只含固定 snapshot metadata，最多 20 项，不能含 protected report、cells、suppressed 前值、来源、贡献者、PII 或 generic/current-city provenance；第一项不获得 current、latest 或取代语义。 |
 | `PRIVACY-029` | 6BB 的 Dart 类型只保存已通过 strict parser 的固定 interest 目录摘要和十格 count-only report；DB 内部 `access_contract_id` 不进入 HTTP 或 Dart，`suppressed` 只表示隐藏而不是零。gateway 不接收或暴露 source、contributor、contact、location、geometry、PII 或隐藏前值；结果只在内存存在，失败关闭，不写 Drift、缓存、离线存储、同步队列或导出。 |
+| `PRIVACY-030` | 6BC 只渲染 6BB typed metadata 和服务端已保护的十格计数；`suppressed` 只显示“已隐藏 / Hidden”，不显示为零、不读取隐藏前值，不引入 PII、个人绩效、排名或因果结论。panel 状态只留在内存，不写 Drift、缓存、离线存储、同步队列或导出。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
 
@@ -1078,6 +1104,7 @@ transport 合同，不证明 6BA／6AZ 的数据库授权、HTTP 生产身份、
 | `MANUAL-019` | 学习文档必须用零基础读者可以复制的步骤说明 6AZ 的固定 HTTP GET、认证先于请求验证、6AY store 复用、wire 错误映射、`no-store`、Backend unit／route／composition 测试和无数据库变更边界；必须解释本切片不新增 DB test，但 CI 仍运行既有 6AY Docker suite，并明确不证明 Flutter、导出、缓存、离线、生产身份或真人平台。 |
 | `MANUAL-020` | 学习文档必须用零基础读者可以复制的步骤说明 6BA 的 interest 专用 directory provenance、metadata-only 根／item 合同、20 项稳定排序、第一项没有 current/latest 语义、授权与撤权、value-free audit、runtime ACL、strict parser、HTTP collection route、Docker migration／check／fixture／并发／restore 步骤和证据边界；必须明确不证明 Flutter、导出、缓存、离线、生产身份或真人平台。 |
 | `MANUAL-021` | 学习文档必须用零基础读者可以复制的步骤说明 6BB Flutter `InterestReportGateway` 的两个固定 path、DB 四字段与 HTTP 三字段边界、6AZ 三字段详情、`IdentitySession`、一次 `401` 刷新、strict parser、内存边界、typed failure、`no-store` 和测试命令；必须明确没有 UI、ViewModel、Widget、Drift、缓存、离线、同步、导出或六平台真机证据。 |
+| `MANUAL-022` | 学习文档必须用零基础读者可以复制的步骤说明 6BC 的三个互斥 report family、channel 默认、管理项目唯一来源、显式 summary 选择、十格 displayed／suppressed 语义、generation 隔离、焦点恢复、小屏／大字号测试和 composition 关闭；必须明确没有 Backend／DB 变更、Drift、缓存、离线、导出或真机证据。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -1286,6 +1313,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-029` | 6AZ handler／route／composition 测试覆盖认证先于 UUID、query、GET body 和 store，固定 route 与 GET 方法，200、401、400、403、404、409、503 映射，未知 SQLSTATE 脱敏，adapter Promise gate，value-free `access_event_id` 和 `no-store`。测试必须证明 production entry 只复用 6AY store，不调用 `SessionContext`、通用 reader、current-city reader 或 private schema。既有 6AY PostgreSQL Docker suite 继续运行；6AZ 不新增数据库 fixture 或 migration。 |
 | `TEST-030` | 6BA SQL check／fixture／并发／adapter integration／HTTP route／composition 测试覆盖 exact identity、授权撤权、approved interest provenance、channel/current-city/legacy/blocked/跨项目/drift 排除、空目录、20 项上限、固定降序、strict metadata parser、value-free audit、不可改删、runtime ACL、认证顺序、GET body、Promise gate、错误脱敏和 `no-store`。Docker 在 checksum 与 dump／restore 后重跑 migration、check 和 fixture，不重跑提交 synthetic 行的并发脚本；通过不声称 Flutter、导出、缓存、离线、生产身份或真人平台证据。 |
 | `TEST-031` | 6BB Flutter synthetic HTTP／fake `IdentitySession` 测试覆盖两个固定 path、显式 project／snapshot、无 query／GET body、Bearer、一次 `401` 刷新、严格目录与十格详情 parser、20 项和服务端排序、空目录、首项无 current／latest 语义、项目／快照绑定、PII／额外字段拒绝、稳定错误、`no-store`、timeout、网络失败和 `close`。通过只证明 Dart transport 与内存边界，不声称 DB／Backend 授权、UI、Drift、缓存、离线、导出、生产身份或六平台运行时。 |
+| `TEST-032` | 6BC ViewModel／Widget／browser／composition 测试覆盖三个互斥 report family、channel 默认、interest 明确启用、`ManagementAnalysisContext` project 来源、空目录、显式 summary、十格 displayed／suppressed、分阶段 retry、项目／family／返回／dispose 的迟到响应隔离、稳定错误、heading／live region、320×568、200% 字号、键盘／焦点恢复以及 gateway 构造／传递／关闭。通过只证明 Flutter consumer 与可访问性模拟路径，不声称 Backend／DB 授权、离线、导出或真机运行时。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -1433,6 +1461,11 @@ snapshot ID 稳定降序排列；第一项不表示 current、latest 或未被�
 `snapshot_id`、`report` 三项。gateway 从 `IdentitySession` 取得 token，最多刷新一次 `401`，严格解析固定目录和 6AV 十格报告，
 保持最多 20 项服务端顺序，并把用户明确选择的 snapshot ID 传给详情。它只在内存保存不可变结果，不交付 UI、Drift、缓存、离线、同步、
 导出或六平台真机证据；synthetic Flutter 测试不能替代 DB／Backend 授权证据。
+
+6BC（#191）把独立 interest gateway 接入管理报告浏览器。渠道仍是默认 report family；用户明确选择 interest 后，
+consumer 只用当前 `ManagementAnalysisContext.projectId` 读取目录，不回退到个人项目，不自动打开首项。独立 panel 只显示
+用户明确选择的两期十格结果；隐藏格不显示为零。项目／family／返回／重试／dispose 使旧 generation 失效。该切片只增加
+Flutter consumer、composition、中英文和小屏／大字号／键盘／语义模拟测试，不修改 Backend／DB，不增加持久化、导出或真机证据。
 
 ### Slice 7：组织治理与数据可携带性
 

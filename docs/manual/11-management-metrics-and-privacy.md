@@ -1957,6 +1957,88 @@ synthetic 行的并发脚本。Docker 证据说明 DB／Backend 合同，Flutter
 6BB 的边界明确不包括 UI、ViewModel、Widget、composition／AppDependencies 接线、管理导航、Drift、缓存、离线、同步、导出／下载、
 搜索、分页、报告创建／刷新／更正／删除或真实平台验收。这些工作必须在后续切片中单独定义和验证。
 
+## Slice 6BC：在 Flutter 中选择并阅读管理兴趣报告
+
+6BC 把 6BB gateway 接到用户可见的管理报告浏览器。这一层不改变服务端报告，只负责明确选择、内存状态、
+受保护结果显示和可访问交互。
+
+### 先选报告类型，再读目录
+
+管理报告浏览器有三个互斥的 report family：
+
+```text
+渠道报告（默认）
+当前城市
+兴趣报告
+```
+
+“互斥”表示同一时刻只有一个视图。不要用多个布尔开关表示这三种状态，否则可能出现同时选中两种报告的无效组合。
+打开浏览器时仍显示渠道报告。只有用户明确选择“兴趣报告”后，interest gateway 才读取目录。
+
+请求中的 project ID 只能来自当前 `ManagementAnalysisContext`。这个 context 是服务端重新授权后的管理范围。它不是个人项目菜单中的
+`TrustedSessionContext`。没有管理 context 时，界面不发 interest 请求，也不用个人项目作为替代。
+
+### 目录顺序不是“最新”指令
+
+interest 目录最多 20 项，并保留服务端的固定排序。空目录是成功结果。有目录项时，界面不自动打开第一项，也不把第一项称为
+current、latest、最新有效或 as-of。用户需要通过点击、Enter、Space 或辅助技术明确选择一个当前目录成员。ViewModel 随后把同一
+project 和 summary 交给详情 gateway。
+
+详情显示报告定义、指标、项目、时区、数据截止、期间、来源和隐私元数据，然后显示十格：
+
+```text
+previous × interest level 0..4
+current  × interest level 0..4
+```
+
+`displayed` 格只显示服务端返回的计数。`suppressed` 格显示“已隐藏 / Hidden”，不显示为 `0`。UI 不把十格求和，也不计算比例、
+平均等级、中位数或趋势。
+
+### 为什么需要 generation
+
+网络响应可能乱序到达。例如，项目 A 的目录尚未返回时，用户已经切换到项目 B。如果不做隔离，A 的迟到响应可能覆盖 B 的界面。
+ViewModel 为每次目录、详情、项目切换、返回目录、重试和 dispose 递增 generation。响应只有在 generation 和项目仍匹配时才能更新状态。
+
+返回目录后，焦点回到刚才选择的快照项。详情载入完成后，焦点进入返回按钮。错误文案使用 live region，但不包含响应正文、SQL、token 或内部用户 ID。
+
+### 从零开始运行 Flutter consumer 测试
+
+在仓库根目录打开终端。第一次运行先下载 Flutter 依赖：
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+flutter pub get
+```
+
+先运行 6BC 的窄测试，便于快速找到界面或状态机问题：
+
+```bash
+flutter test --no-pub test/features/management_reports/interest_report_panel_view_model_test.dart
+flutter test --no-pub test/features/management_reports/interest_report_panel_test.dart
+flutter test --no-pub test/features/management_reports/management_report_browser_test.dart
+flutter test --no-pub test/app/app_dependencies_test.dart
+flutter test --no-pub test/app/tongxingzhe_app_test.dart
+```
+
+然后运行整个 Flutter 和文档门槛：
+
+```bash
+dart format --output=none --set-exit-if-changed lib test
+dart analyze
+flutter test --no-pub
+dart run tool/check_production_boundary.dart
+dart run tool/check_markdown_links.dart
+git diff --check
+```
+
+Widget 测试使用 synthetic gateway，并在 320×568 和 200% 字号下检查溢出。它还要验证 Tab／Shift-Tab、Enter／Space、Escape／返回、焦点恢复、
+heading 和 live region。App 测试检查 gateway 的构造、传递、启动失败清理和应用销毁。
+
+6BC 不改变 Backend 或 PostgreSQL，因此不新增 Docker fixture。CI 仍会运行既有数据库套件和六平台 build smoke，但本地 Flutter 测试只证明 consumer、
+composition、状态隔离和可访问性模拟路径。它不证明生产身份、真实账号、Drift、缓存、离线、导出或 Android、iOS、macOS、Windows、Linux、Web 真机运行时。
+
+6BC 的非范围还包括共享 report-family DTO／泛型 panel 重构、报告创建／刷新／更正／删除、retention、warehouse、分页、搜索、筛选、as-of／latest 查询、下载和分享。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和

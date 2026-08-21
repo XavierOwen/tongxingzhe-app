@@ -18,6 +18,7 @@ import '../foundation/runtime_values.dart';
 import '../identity/identity_session.dart';
 import '../l10n/app_strings.dart';
 import '../management_reports/current_city_report_gateway.dart';
+import '../management_reports/interest_report_gateway.dart';
 import '../management_reports/management_report_gateway.dart';
 import '../management_reports/management_report_export_delivery.dart';
 import '../plans/personal_action_plan.dart';
@@ -82,6 +83,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
   _personalRelationshipStageChangeSummaryGateway;
   ManagementReportGateway? _managementReportGateway;
   CurrentCityReportGateway? _currentCityReportGateway;
+  InterestReportGateway? _interestReportGateway;
   CurrentRelationshipStageGateway? _currentRelationshipStageGateway;
   ReminderNotificationScheduler? _reminderNotificationScheduler;
   PrivateSessionDataGuard? _privateSessionDataGuard;
@@ -110,6 +112,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       :final personalRelationshipStageChangeSummaryGateway,
       :final managementReportGateway,
       :final currentCityReportGateway,
+      :final interestReportGateway,
       :final currentRelationshipStageGateway,
       :final reminderNotificationScheduler,
       :final privateSessionDataGuard,
@@ -132,6 +135,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
           personalRelationshipStageChangeSummaryGateway;
       _managementReportGateway = managementReportGateway;
       _currentCityReportGateway = currentCityReportGateway;
+      _interestReportGateway = interestReportGateway;
       _currentRelationshipStageGateway = currentRelationshipStageGateway;
       _reminderNotificationScheduler = reminderNotificationScheduler;
       _privateSessionDataGuard = privateSessionDataGuard;
@@ -155,6 +159,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
     unawaited(_personalRelationshipStageChangeSummaryGateway?.close());
     unawaited(_managementReportGateway?.close());
     unawaited(_currentCityReportGateway?.close());
+    unawaited(_interestReportGateway?.close());
     unawaited(_currentRelationshipStageGateway?.close());
     unawaited(_privateSessionDataGuard?.close());
     unawaited(_reminderNotificationScheduler?.close());
@@ -196,6 +201,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
             :final personalRelationshipStageChangeSummaryGateway,
             :final managementReportGateway,
             :final currentCityReportGateway,
+            :final interestReportGateway,
             :final managementReportExportDelivery,
             :final currentRelationshipStageRepository,
             :final deviceReminderPreferenceStore,
@@ -226,6 +232,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
                   personalRelationshipStageChangeSummaryGateway,
               managementReportGateway: managementReportGateway,
               currentCityReportGateway: currentCityReportGateway,
+              interestReportGateway: interestReportGateway,
               managementReportExportDelivery: managementReportExportDelivery,
               currentRelationshipStageRepository:
                   currentRelationshipStageRepository,
@@ -266,6 +273,7 @@ class _ReadyApp extends StatefulWidget {
     required this.personalRelationshipStageChangeSummaryGateway,
     required this.managementReportGateway,
     required this.currentCityReportGateway,
+    required this.interestReportGateway,
     required this.managementReportExportDelivery,
     required this.currentRelationshipStageRepository,
     required this.deviceReminderPreferenceStore,
@@ -296,6 +304,7 @@ class _ReadyApp extends StatefulWidget {
   personalRelationshipStageChangeSummaryGateway;
   final ManagementReportGateway managementReportGateway;
   final CurrentCityReportGateway currentCityReportGateway;
+  final InterestReportGateway interestReportGateway;
   final ManagementReportExportDelivery managementReportExportDelivery;
   final CurrentRelationshipStageRepository currentRelationshipStageRepository;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
@@ -395,6 +404,7 @@ final class _ReadyAppState extends State<_ReadyApp> {
             widget.personalRelationshipStageChangeSummaryGateway,
         managementReportGateway: widget.managementReportGateway,
         currentCityReportGateway: widget.currentCityReportGateway,
+        interestReportGateway: widget.interestReportGateway,
         managementReportExportDelivery: widget.managementReportExportDelivery,
         currentRelationshipStageRepository:
             widget.currentRelationshipStageRepository,

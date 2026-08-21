@@ -30,6 +30,7 @@ import '../features/targets/promotion_target_directory_page.dart';
 import '../features/management_reports/management_report_browser.dart';
 import '../l10n/app_strings.dart';
 import '../management_reports/current_city_report_gateway.dart';
+import '../management_reports/interest_report_gateway.dart';
 import '../management_reports/management_report_gateway.dart';
 import '../management_reports/management_report_export_delivery.dart';
 import '../plans/personal_action_plan.dart';
@@ -68,6 +69,7 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.personalRelationshipStageChangeSummaryGateway,
     required this.managementReportGateway,
     required this.currentCityReportGateway,
+    required this.interestReportGateway,
     required this.managementReportExportDelivery,
     required this.currentRelationshipStageRepository,
     required this.deviceReminderPreferenceStore,
@@ -100,6 +102,7 @@ final class ProductionHomeShell extends StatefulWidget {
   personalRelationshipStageChangeSummaryGateway;
   final ManagementReportGateway managementReportGateway;
   final CurrentCityReportGateway currentCityReportGateway;
+  final InterestReportGateway interestReportGateway;
   final ManagementReportExportDelivery managementReportExportDelivery;
   final CurrentRelationshipStageRepository currentRelationshipStageRepository;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
@@ -349,6 +352,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
           text: strings,
           gateway: widget.managementReportGateway,
           currentCityGateway: widget.currentCityReportGateway,
+          interestGateway: widget.interestReportGateway,
           exportDelivery: widget.managementReportExportDelivery,
         ),
       ),
