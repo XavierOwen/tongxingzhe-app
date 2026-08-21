@@ -1552,6 +1552,91 @@ check、fixture 和并发脚本不能互相替代。`Cannot connect to the Docke
 runtime bridge、Flutter UI、Drift、缓存、离线同步、读取、目录、导出、生产发布、真实账号、Apple／Android／iOS／macOS／
 Windows／Linux／Web 真人平台运行或真机证据，也不构成形式化不可重识别保证。
 
+## Slice 6AX：如何授权读取单份管理兴趣快照
+
+6AX 只处理 6AW 兴趣 snapshot 的 private DB-only 读取。调用者必须同时提供内部 `app_user_id`、显式 `project_id` 和
+`snapshot_id`。数据库重新解析 `view_anonymous_analytics`，再检查 0062 的 interest request claim、approved release attempt、
+空 `reason_codes` 以及 attempt 与 snapshot 的 project、report、version、query fingerprint、release lineage、报告时区、数据截止、
+`source_change_sequence`（source watermark）、previous pointer 和 released snapshot 对齐。函数返回前再次执行 6AV interest document validator。
+
+读取不接受客户端提交的 capability、授权时间、时区、截止点、期间、兴趣等级、筛选或 JSON。它不重算十格，也不把其他报告的值
+拼接进兴趣报告。
+
+### 返回状态
+
+成功结果是 `completed`，并带有原始的 `previous/current × interest_level 0..4` 十格 protected report。`displayed` 仍是安全整数，
+`suppressed` 永远是 JSON `null`。
+
+以下结果不带报告正文：
+
+- `not_found`：未知 snapshot 或 snapshot 属于其他 project；
+- `untrusted_provenance`：snapshot 属于请求 project，但其来源是 channel、current-city、legacy、blocked、缺失或漂移的
+  interest provenance。
+
+这两个状态不用于向调用者确认其他项目是否存在指定 snapshot。错误也不能包含报告格、贡献者、contact、来源、隐藏前值或 PII。
+
+### 授权、撤权和审计
+
+每次已授权尝试都会在同一事务追加一条兴趣专用的不可变、value-free 访问事件。事件保存最小授权 lineage、请求 project／snapshot、
+固定报告元数据、结果和 reason code，不复制 `protected_report`、cells 或 `value_count`。未授权、已撤权、过期、只有
+`release_management_reports` 或缺少项目成员的调用失败关闭且不写 audit。
+
+读取和撤权使用同一组 transaction lock。读取先取得锁时，撤权等待读取完成；撤权先取得锁时，读取重新看到失效的
+`view_anonymous_analytics` 并失败。管理项目选择只能帮助导航，不能代替这次读取的重新授权。
+
+`PUBLIC`、`tongxingzhe_runtime`、普通 app role、interest reader、current-city writer 和区域角色不能执行 private read 函数，
+也不能读取 interest audit、attempt 或 provenance。6AX 不增加 runtime bridge、HTTP、目录、Flutter、Drift、缓存、离线、同步、
+导出、warehouse、retention、报告更正、生产调度或六平台证据。
+
+### 第一次使用 Docker
+
+没有用过 Docker 的读者可以把它理解成一次性测试环境。它创建隔离的 PostgreSQL 容器，运行 migration 和 synthetic 数据，完成
+后删除容器，不连接 production。
+
+1. 打开 Docker Desktop，等待 Docker Engine 完成启动。
+2. 打开 Terminal，进入仓库根目录：
+
+   ```bash
+   cd "$(git rev-parse --show-toplevel)"
+   ```
+
+3. 确认 Docker 同时显示 Client 和 Server：
+
+   ```bash
+   docker version
+   ```
+
+4. 运行完整套件：
+
+   ```bash
+   ./tool/run_postgres_tests_in_docker.sh
+   ```
+
+runner 按文件名自动发现 0063 migration、private read check、synthetic fixture 和
+`verify_authorized_management_interest_report_snapshot_read_concurrency.sh`。它还运行 checksum、dump／restore，并在没有源
+cluster roles 的恢复库重跑 migration、check 和 fixture。恢复库不重跑并发脚本，因为并发脚本会提交 synthetic 行；这样不会把
+同一批并发写入重复导入恢复库。
+
+### 专用测试库命令
+
+如果本机已有专用 PostgreSQL 测试库，先确认 `DATABASE_URL` 不是 production。并发脚本会提交固定 `6d*` synthetic 行；每次运行请
+使用新建的空测试库，重复运行前先重建该测试库，否则固定主键会按预期冲突。
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_authorized_management_interest_report_snapshot_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0063_authorized_management_interest_report_snapshot_read.sql
+./tool/verify_authorized_management_interest_report_snapshot_read_concurrency.sh
+```
+
+check、fixture 和并发脚本不能互相替代。fixture 证明合法读取、三类失败状态、授权失效、value-free audit 和不可改删；并发脚本
+证明 read-first 与 revoke-first 的锁线性化。完整 Docker 还要证明旧 channel、current-city、6AV 和 6AW 回归、checksum 和恢复库
+ACL。通过只证明当前 PostgreSQL 的 DB-only 合同，不证明 runtime、HTTP、Flutter、导出、生产发布、真实账号、六平台运行或形式化
+不可重识别保证。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和

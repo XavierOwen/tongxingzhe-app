@@ -65,6 +65,7 @@
 | [0140](./0140-authorized-current-city-snapshot-directory-uses-independent-provenance.md) | 已接受，2026-08-20 | Slice 6AS；`ANALYTICS-028`、`PRIVACY-020`、`TEST-022` | current-city 目录使用独立 0060 provenance／runtime bridge；固定 route 只返回至多 20 项 metadata，并在认证后检查显式 project |
 | [0141](./0141-management-interest-distribution-uses-period-closed-suppression.md) | 已接受，2026-08-21 | Slice 6AV；`ANALYTICS-031`、`PRIVACY-023`、`TEST-025` | 管理兴趣五档分布按期间整体隐藏；固定十格 count-only 合同，另一期间独立判断，不依赖渠道或 current-city 总数 |
 | [0142](./0142-management-interest-snapshots-use-independent-release-lineage.md) | 已接受，2026-08-21 | Slice 6AW；Issue #179；`ANALYTICS-032`、`PRIVACY-024`、`TEST-026`、`MANUAL-016` | 管理兴趣十格快照复用通用不可变存储但使用独立 claim／release provenance；baseline、幂等、滚动和 value-free blocked attempt 失败关闭 |
+| [0143](./0143-authorized-interest-snapshot-reads-use-independent-provenance.md) | 已接受，2026-08-21 | Slice 6AX；Issue #181；`ANALYTICS-033`、`PRIVACY-025`、`TEST-027`、`MANUAL-017` | 管理兴趣快照读取重新验证 `view_anonymous_analytics`，只接受 0062 interest provenance；unknown／cross-project 为 `not_found`，同项目 foreign provenance 为 `untrusted_provenance`，并追加 value-free 读取审计 |
 
 ## 按主题查找
 

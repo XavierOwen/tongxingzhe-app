@@ -878,6 +878,7 @@ warehouse、retention、报告更正／取代、生产调度或任何 Apple／An
 | `ANALYTICS-030` | Flutter current-city consumer 只在用户明确选择当前城市视图后，使用已重新授权的 `ManagementAnalysisContext` 项目读取目录；它不使用个人 workspace 项目、不自动打开第一项，切换项目或视图时清除旧状态并隔离迟到响应。 |
 | `ANALYTICS-031` | `contact_sessions_by_interest_level_two_periods@1` 使用可信项目 IANA 时区、`data_cutoff_utc` 和两个相邻完整 ISO 周，按 `previous/current × interest_level 0..4` 返回 count-only 完整网格；统计单位是 Backend 已接受的有效接触场次，贡献者是可信 `app_user_id`，metric identity 固定为 `interest_distribution@1`，不返回中位数、比例或总计格。 |
 | `ANALYTICS-032` | 6AW 只接受符合 6AV 完整受保护文档合同的十格文档，使用独立 request claim／release provenance 和通用不可变 snapshot storage；私有 release 在固定事务内调用 6AV executor 生成候选，validator 固定 6AV 定义、两个期间、十格顺序、count-only 状态和值。首个成功发布建立唯一 baseline，后续发布只能推进 cutoff、保持定义／period definition／boundary／网格／query fingerprint／privacy／source scope／时区 revision 一致并链接前一 snapshot；相同 request 与固定上下文精确幂等。same／earlier cutoff、无共享期间、共享期间内的兴趣格值或隐私状态变化及任一固定上下文漂移返回稳定 blocked reason；失败尝试不得保存候选报告值。 |
+| `ANALYTICS-033` | 6AX 只按显式 project／snapshot ID 读取一份兴趣快照；数据库重新验证 `view_anonymous_analytics`，只接受 0062 interest release family 的 approved／approved_baseline attempt、空 reason 和完整匹配的 project／report／version／fingerprint／lineage／时区／cutoff／`source_change_sequence`／previous pointer，并在返回前再次运行 6AV 文档 validator。`completed` 才返回原始十格 protected report；unknown／cross-project 返回 `not_found`，同项目但 foreign 或不可信 provenance 返回 `untrusted_provenance`，两者都不返回正文。6AX 是 private DB-only 合同，不增加 runtime、HTTP、目录、Flutter 或导出。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -907,6 +908,7 @@ warehouse、retention、报告更正／取代、生产调度或任何 Apple／An
 | `PRIVACY-022` | current-city panel 只渲染 6AT 受保护类型中的固定元数据、城市 ID、`displayed` 计数和 `suppressed` 状态；它不收到隐藏前值、不把隐藏值当零、不猜测城市名称，也不把 Widget 显示门控冒充 Backend 授权。 |
 | `PRIVACY-023` | 6AV 对每个期间×兴趣档分别执行 `N >= 10`、至少三位可信 `app_user_id` 和 `2 × M <= N`；任一档不安全时，该期间五档整体 `suppressed` 且 count 为 `null`，另一期间独立判断，不依赖渠道或 current-city 总数隐藏，不允许跨报告相减恢复值。 |
 | `PRIVACY-024` | 6AW 的兴趣快照只接受 6AV 保护后的十格；`suppressed` 永远为 JSON `null`，不把隐藏前值带入 snapshot、attempt、claim、audit 或错误。兴趣 request claim／provenance 与 channel／current-city family 互斥；blocked attempt 只保存最小 value-free lineage 和稳定 reason。snapshot、attempt、claim 追加不可变且不可 UPDATE／DELETE；通用 snapshot storage 对专用 writer 实施 report-family 行级隔离，runtime、`PUBLIC`、普通 app role 和区域维护角色不能执行兴趣发布、读取兴趣 provenance 或直接写表。 |
+| `PRIVACY-025` | 6AX 只有在 `view_anonymous_analytics`、项目／组织成员关系和 interest release provenance 全部有效时才返回十格；unknown／cross-project 与 same-project foreign／untrusted provenance 均不返回正文。每次已授权尝试追加不含 `protected_report`、cells、`value_count`、贡献者、contact、来源或 PII 的不可变 value-free audit；未授权、撤权、过期、release-only 和无项目成员调用失败关闭且不写 audit。读取和撤权共享授权锁；runtime、`PUBLIC`、普通 app role、interest reader、current-city writer 和区域角色不能执行读取或读取审计。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
 
@@ -930,6 +932,7 @@ warehouse、retention、报告更正／取代、生产调度或任何 Apple／An
 | `MANUAL-014` | 学习文档必须说明 6AN 的固定 current 城市范围、完整网格、三项 primary 阈值、互补隐藏、source watermark、6AO 的 validator／pair 字段、前一 snapshot 链接、精确幂等、稳定 blocked 条件、value-free attempt、snapshot／attempt 不可改删、发布能力与可信时区 revision、6AP 的显式授权读取、current-city claim、时区／截止点／前一 snapshot 对齐、再次 validator、value-free read audit、角色读写边界、漂移失败关闭、warehouse／retention 非范围、私有非生产边界、与旧渠道发布链的隔离，以及 Docker 和已有测试库中的验证步骤。 |
 | `MANUAL-015` | 学习文档必须用零基础读者可以复制的步骤说明 6AV 的 Dart 与 PostgreSQL 测试、Docker 首次启动、预期输出、常见失败排查、专用测试库边界和证据限制；必须明确自动测试和 Docker 不证明真人平台运行时。 |
 | `MANUAL-016` | 学习文档必须用零基础读者可以复制的步骤说明 6AW 的 0062 migration、validator／fixture／并发检查、Docker 首次启动和专用测试库命令；必须解释十格 count-only、独立 request claim／provenance、baseline、精确幂等、稳定滚动、blocked 与 value-free attempt、不可变和最小 ACL，并明确这些 DB-only synthetic 证据不证明 HTTP、Flutter、生产发布、真实账号、真人平台或形式化不可重识别保证。 |
+| `MANUAL-017` | 学习文档必须用零基础读者可以复制的步骤说明 6AX 的 0063 migration、private read check、synthetic fixture、read/revoke 并发检查、Docker 首次启动和专用测试库命令；必须解释 0062 interest attempt／claim lineage、`completed`／`not_found`／`untrusted_provenance`、value-free immutable audit、撤权锁、完整 Docker 自动发现以及 restore 只重跑 migration／check／fixture 而不重跑会提交测试行的并发脚本，并明确这些 DB-only synthetic 证据不证明 runtime、HTTP、Flutter、导出、生产发布、真实账号或真人平台。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -1133,6 +1136,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-024` | 6AU ViewModel、Widget 和 composition 测试覆盖显式管理项目、视图选择、空目录、不自动选第一项、详情返回与焦点恢复、项目／视图切换、逐阶段重试、迟到响应、dispose、稳定错误、displayed／suppressed 语义、320×568 和 200% 字号；build smoke 不冒充真实平台 runtime 证据。 |
 | `TEST-025` | 6AV Dart 与 PostgreSQL 对同一无 PII synthetic fixture 对账 `previous/current × 0..4` 十格、完整顺序、count-only、边界 `10`／三人／`50%`、`9`／两人／`6/10`、期间整体闭包、跨期间独立判断、跨报告相减反例、截止点／半开周边界、草稿／尝试／作废／其他项目排除、畸形输入、最小权限、checksum 和 dump／restore；通过不声称 HTTP、Flutter、真人平台或真机证据。 |
 | `TEST-026` | 6AW fixture 覆盖符合 6AV 完整受保护文档合同的十格、unavailable、额外字段、错误 report／metric／dimension／统计单位／fingerprint／privacy／source scope、缺失／重复／乱序网格、`displayed`／`suppressed` 值语义、唯一 baseline、相同 request 精确幂等、稳定滚动、same／earlier cutoff、无共享期间、共享期间内的兴趣格值／隐私变化、定义／period definition／boundary／网格／query／privacy／source／时区 revision 漂移、期间整体隐藏和跨报告相减反例；并发覆盖同 request、不同 request、baseline、previous pointer 和跨 family claim 冲突。另检查 value-free blocked attempt、snapshot／attempt／claim 不可 UPDATE／DELETE、owner／`SECURITY DEFINER`／固定 `search_path`、最小 ACL、release writer 之外角色拒绝、旧 channel／current-city／6AV 回归、checksum、dump／restore。通过不声称 HTTP、Flutter、生产发布、真人平台或真机证据。 |
+| `TEST-027` | 6AX fixture 覆盖合法与重复读取、完整十格 validator、approved／approved_baseline、0062 claim／attempt／snapshot 对齐、unknown／cross-project 的 `not_found`、same-project channel／current-city／legacy／blocked／缺失或漂移 provenance 的 `untrusted_provenance`、`suppressed = null`、额外敏感字段、active／撤权／过期／release-only／无项目成员和 value-free audit。检查必须拒绝 audit UPDATE／DELETE，固定 owner／`SECURITY DEFINER`／`search_path` 和最小 ACL；并发覆盖 read-first／revoke-first。完整 Docker 自动发现 0063 migration、check、fixture 和并发脚本，checksum／dump／restore 重跑 migration、check 和 fixture，但不重跑会提交测试行的并发脚本；旧 channel、current-city、6AV 和 6AW 回归继续通过。通过不声称 runtime、HTTP、Flutter、导出、真人平台或真机证据。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -1243,6 +1247,16 @@ Widget 只渲染已带来源、单位、版本、截止时间和抑制状态的 
 仍只证明 DB-only 合同；6AQ、6AR 与 6AS 增加 Backend runtime bridge、固定 HTTP 读取和 metadata-only 目录，但不交付
 Flutter UI 或生产调度；6AT 增加独立 typed gateway，6AU 再以已重新授权的管理项目接入 Flutter panel。两者都不增加
 Drift、离线、导出或真实平台证据。
+
+6AX（Issue #181）只在 private PostgreSQL 中读取一份明确指定的管理兴趣快照。它重新验证
+`view_anonymous_analytics`，只接受 0062 interest attempt、request claim 和 provenance 全部匹配的
+`approved`／`approved_baseline` 快照，并在交付前重新运行 6AV validator。未知或跨项目 snapshot 返回
+`not_found`；同项目但属于 channel、current-city、legacy、blocked 或其他不可信来源的 snapshot 返回
+`untrusted_provenance`，两者都不返回报告正文。每次已授权尝试追加 value-free、不可变读取审计，读取和撤权使用同一
+授权锁。6AX 不增加 runtime bridge、HTTP、目录、Flutter、Drift、缓存、离线、同步、导出、生产发布或真人平台证据。
+
+6AX 的 Docker 证据自动发现 0063 migration、check、fixture 和 read/revoke 并发脚本。恢复库重跑 migration、check 和
+fixture，不重跑会提交 synthetic 行的并发脚本。这样恢复测试不会把同一批并发写入重复导入恢复库。
 验收结论只能说明降低披露风险，不宣称形式化不可重识别。
 
 ### Slice 7：组织治理与数据可携带性
