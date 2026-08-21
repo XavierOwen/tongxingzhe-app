@@ -612,6 +612,14 @@ blocked 或其他不可信来源的 snapshot 返回 `untrusted_provenance`，两
 访问审计；撤权与读取使用同一授权锁。该操作不提供 runtime、HTTP、目录、Flutter、导出或客户端授权 token。
 _Avoid_: 发布即查看、跨项目探测、复用渠道 read、把管理项目选择当作再次授权、客户端重算十格
 
+**管理兴趣快照 runtime bridge**:
+6AY 通过 0064 `app_data` bridge 将 6AX private read 接到 Backend runtime。bridge 接收 Backend 已验证的 exact `issuer + subject`、显式
+project UUID 和 snapshot UUID，只映射现有且 active 的 identity，再调用 0063 private function。它不 trim、bootstrap、读取 `SessionContext` 或
+接受内部用户、capability、时区、截止点、期间、筛选和 SQL。runtime 只有 bridge `EXECUTE`，没有 `app_private` 使用权或 private 表读取权。
+Backend adapter 只执行一次固定 SQL，并严格解析 0063 envelope、6AX 十格和 `suppressed = null`。6AY 不增加 HTTP、目录、导出、Flutter、
+Drift、缓存、离线、同步或真人平台证据。
+_Avoid_: runtime 直接读 private schema、发布即读取、宽泛 SQL、客户端重算、用 HTTP 测试冒充 DB-only bridge 证据
+
 **更正版报告**:
 补录、修订、作废或分析定义修正后重新生成并明确取代某份报告快照的新快照；原报告保留但标记已被取代。
 _Avoid_: 静默改写、删除旧报告

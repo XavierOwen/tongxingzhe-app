@@ -1637,6 +1637,77 @@ check、fixture 和并发脚本不能互相替代。fixture 证明合法读取�
 ACL。通过只证明当前 PostgreSQL 的 DB-only 合同，不证明 runtime、HTTP、Flutter、导出、生产发布、真实账号、六平台运行或形式化
 不可重识别保证。
 
+## Slice 6AY：如何通过 Backend runtime 读取兴趣快照
+
+6AY 只把 0063 private read 接到 Backend runtime。它不增加 HTTP route，也不负责 Bearer token 验证。调用方必须先得到 Backend 验证的
+external `issuer + subject`，再提供显式 project UUID 和 snapshot UUID。
+
+### bridge 的身份和权限边界
+
+0064 bridge 使用 exact `issuer + subject` 匹配现有且 active 的 identity。它不 trim、bootstrap、创建账号、读取 `SessionContext` 或接受
+内部 `app_user_id`、capability、时区、截止点、期间、筛选和 SQL。bridge 只调用：
+
+```text
+app_private.read_authorized_management_interest_report_snapshot_v1(
+  requested_app_user_id,
+  requested_project_id,
+  requested_snapshot_id
+)
+```
+
+bridge 使用 `SECURITY DEFINER` 和固定 `search_path = pg_catalog`。runtime 只有 bridge `EXECUTE`，没有 `app_private` schema usage，不能执行
+0063 private function，也不能读取用户、identity、snapshot、provenance 或 audit 表。0063 继续负责 `view_anonymous_analytics`、0062
+interest lineage、6AV validator、撤权锁和 value-free audit。bridge 不复制这些检查，也不追加第二条 audit。
+
+### 一次固定 SQL 和 strict parser
+
+Backend adapter 接收 `VerifiedIdentity`，只执行一次参数化查询：
+
+```sql
+SELECT app_data.read_authorized_management_interest_report_snapshot_v1(
+  $1::text, $2::text, $3::uuid, $4::uuid
+) AS access_result
+```
+
+adapter 必须严格检查 0063 的 root keys、access contract、请求和解析出的 snapshot、状态和 reason code。`completed` 只接受 6AX 的
+`previous/current × interest_level 0..4` 十格、合法 count 和 `suppressed = null`。`not_found` 与 `untrusted_provenance` 不得含
+`protected_report`。额外字段、错误 project、错误 snapshot、PII、contact、contributor、来源和隐藏前值都失败关闭。
+
+adapter 只把 SQLSTATE `42501` 映射为 typed `forbidden`。未知 SQLSTATE、数据库消息、SQL、栈和 external subject 不进入 runtime 结果。
+HTTP wire mapping 留给后续切片。
+
+### Docker 证据
+
+没有用过 Docker 时，可以把它理解成一次性测试环境。Docker Desktop 提供 Docker Engine。runner 启动隔离的 PostgreSQL 和 Node 容器，使用
+synthetic 数据运行测试，最后删除容器。它不连接 production。
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 自动发现 0064 migration、check 和 fixture，并显式运行第八条 Backend integration。它还运行 0063 read/revoke 并发、checksum 和
+dump／restore。恢复库只重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。
+
+若只使用专用测试库，先确认 `DATABASE_URL` 不是 production，再运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_runtime_authorized_management_interest_report_snapshot_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0064_runtime_authorized_management_interest_report_snapshot_read.sql
+cd backend/server
+npm ci --ignore-scripts
+npm run build
+DATABASE_URL="$DATABASE_URL" \
+INTEREST_RUNTIME_FIXTURE=../../backend/database/fixtures/0064_runtime_authorized_management_interest_report_snapshot_read.sql \
+node dist/test/management-interest-report-snapshots.integration.js
+```
+
+fixture 证明数据库 identity、project／snapshot、0063 状态和 runtime ACL。integration 证明真实 Node adapter 的一次 bridge 调用和 strict JSON
+对账。通过只证明 DB-only bridge 和 parser 合同，不证明 HTTP、Flutter、目录、导出、生产身份提供方、真实账号或六平台运行时。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和

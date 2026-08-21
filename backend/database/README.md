@@ -19,8 +19,8 @@
 
 脚本建立隔离的 PostgreSQL 16 容器，运行 migration、check、fixture、Backend→PostgreSQL 对账、并发和 dump／restore，最后自动删除容器。Backend 对账阶段使用 Node 24 容器和仓库锁定的 npm 依赖；它不连接 production，也不使用真实用户资料。第一次使用 Docker、需要保留失败容器或理解输出时，阅读[本机、Docker 与 CI 测试指南](../../docs/manual/09-local-docker-and-ci-testing.md)。
 
-Node 阶段要求地点来源、当前关系阶段、同意占比开关、同意占比读取和个人阶段变更汇总五条
-Backend integration 入口存在。脚本先在 Node 24 中运行 `npm ci --ignore-scripts` 和 `npm run build`，再执行编译产物。
+Node 阶段要求八条 Backend integration 入口存在：地点来源、当前关系阶段、同意占比开关、同意占比读取、个人阶段变更汇总、current-city
+快照读取、current-city 快照目录和兴趣快照 runtime 读取。脚本先在 Node 24 中运行 `npm ci --ignore-scripts` 和 `npm run build`，再执行编译产物。
 开关测试覆盖未配置、启用、幂等重放、冲突和停用；比例测试再读取 `not_enabled` 和启用后的
 `ready 0 / 0`；阶段变更 integration 对账 `5 / 4 / 3 / 2` 和空期间。SQL fixture 另证实匿名化
 历史，独立并发脚本证实 current-project 锁。
@@ -703,6 +703,47 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 check、fixture 和并发脚本不能互相替代。通过只证明当前 PostgreSQL 的 private authorization、兴趣 provenance、失败关闭、
 value-free audit、并发和 ACL。它不证明 runtime、HTTP、Flutter、导出、生产发布、真实账号、六平台运行或形式化不可重识别。
+
+### 6AY：验证管理兴趣快照 runtime bridge
+
+0064 把 0063 private read 接到 Backend runtime。bridge 接收 exact external `issuer + subject`、显式 project UUID 和 snapshot UUID，
+只映射现有且 active 的 identity，再调用 0063 private function。它不 trim、bootstrap、读取 session context 或调用 channel、current-city、
+directory、export 和其他 report reader。
+
+bridge 使用 `SECURITY DEFINER` 和固定 `search_path = pg_catalog`。runtime 只拥有 bridge `EXECUTE`，没有 `app_private` schema usage、0063
+private function、用户、identity、snapshot、provenance 或 audit 表权限。bridge owner 必须与 0063 private function owner 相同。Backend adapter
+接收已有 `VerifiedIdentity`，只执行一次固定参数化 SQL，并严格解析 root keys、结果状态、reason code、project／snapshot 绑定和 6AX 十格
+protected report。它拒绝额外字段、PII、隐藏前值和其他 report family；只把 `42501` 映射为 typed `forbidden`。
+
+新手可以把 Docker runner 理解成一次性测试环境。它启动隔离的 PostgreSQL 和 Node 容器，使用 synthetic 数据完成测试，然后删除容器。
+它不连接 production，也不会修改 production 数据。从仓库根目录运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 自动发现 0064 migration、check 和 fixture，并显式运行第八条 Backend integration。它还运行 0063 read/revoke 并发、checksum 和
+dump／restore。恢复库只重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。
+
+如果只调试专用测试库，先确认 `DATABASE_URL` 不是 production，再运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_runtime_authorized_management_interest_report_snapshot_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0064_runtime_authorized_management_interest_report_snapshot_read.sql
+cd backend/server
+npm ci --ignore-scripts
+npm run build
+DATABASE_URL="$DATABASE_URL" \
+INTEREST_RUNTIME_FIXTURE=../../backend/database/fixtures/0064_runtime_authorized_management_interest_report_snapshot_read.sql \
+node dist/test/management-interest-report-snapshots.integration.js
+```
+
+fixture 证明 identity、project／snapshot、0063 状态和 runtime ACL；adapter integration 证明真实 Node adapter 的一次 bridge 调用和严格 JSON
+对账。通过只证明 DB-only runtime bridge 合同，不证明 HTTP、Flutter、目录、导出、真实身份提供方或六平台运行时。
 
 ### 如何验证 6AS PostgreSQL 合同
 

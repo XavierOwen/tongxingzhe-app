@@ -354,6 +354,52 @@ runner 创建隔离 PostgreSQL 容器，运行 0060 migration、check、fixture�
 本 Slice 不增加 Flutter、Drift、导航上下文、分页、搜索、筛选、导出、下载、缓存、离线、同步、快照创建／刷新／更正／删除、
 retention、warehouse、区域发布或六平台真机证据。
 
+## 管理兴趣快照 runtime bridge 合同
+
+6AY 只提供 Backend runtime 对 0063 private read 的受控调用。它不是 HTTP route，也不负责 Bearer token 验证。adapter 接收已有的
+`VerifiedIdentity`、显式 project UUID 和 snapshot UUID。
+
+production bridge 的固定调用形状是：
+
+```sql
+SELECT app_data.read_authorized_management_interest_report_snapshot_v1(
+  $1::text, $2::text, $3::uuid, $4::uuid
+) AS access_result
+```
+
+bridge 用 exact `issuer + subject` 映射现有且 active 的 identity。它不 trim、bootstrap、读取 `SessionContext` 或接受内部用户、capability、
+时区、截止点、期间、筛选和 SQL。bridge 使用 `SECURITY DEFINER` 与 `search_path = pg_catalog`，只调用
+`app_private.read_authorized_management_interest_report_snapshot_v1(uuid, uuid, uuid)`。
+
+runtime 只有 bridge `EXECUTE`。它没有 `app_private` schema usage，也不能执行 0063 private function 或读取用户、identity、snapshot、
+provenance 和 audit 表。bridge owner 与 0063 private function owner 相同。0063 继续负责授权、interest provenance、6AV validator、撤权锁
+和 value-free audit；bridge 不复制这些逻辑，也不追加第二条 audit。
+
+adapter 只执行一次固定参数化 SQL。strict parser 检查 root keys、contract ID、请求和解析出的 snapshot、状态、reason code，以及 6AX 的十格
+protected report。它只接受固定 cell 顺序、合法 count 和 `suppressed = null`，拒绝额外字段、PII、其他 report family 和错误 project。它只把
+`42501` 映射为 typed `forbidden`；其他数据库错误继续向上抛出，后续 HTTP slice 再定义 wire mapping。
+
+### 6AY 的本地测试
+
+先运行 Backend 的无数据库合同测试：
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+再从仓库根目录运行 PostgreSQL Docker 套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 会自动发现 0064 migration、check 和 fixture，并显式运行兴趣快照 runtime integration。它还运行 0063 read/revoke 并发、checksum 和
+dump／restore。恢复库只重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。通过只证明 DB-only bridge、adapter parser 和
+ACL，不证明 HTTP、Flutter、目录、导出、生产身份提供方或真实平台运行时。
+
 ## 管理报告快照目录合同
 
 `GET /v1/projects/:projectId/management-report-snapshots` 只接受一个显式项目 UUID。它不接受 body、query、筛选、分页、报告 ID、时区、capability 或内部用户 ID。6M 保存的管理分析选择只帮助导航，不是授权，也不会替代 path 中的项目。
@@ -416,8 +462,8 @@ npm run check
 
 接触对象关联见 [`0017_contact_target_links.sql`](../database/migrations/0017_contact_target_links.sql)。对应 fixture 验证零到多关联、阶段 0 确认、跨空间与未分配拒绝、机构代表约束、幂等重放、revision 历史、冲突比较和 warehouse PII 隔离。
 
-Node 24 Docker 阶段会在已迁移的 PostgreSQL 上运行地点来源、当前关系阶段、同意占比开关和
-同意占比读取、个人阶段变更汇总五条 integration。地点来源测试和 Flutter 读取同一份
+Node 24 Docker 阶段会在已迁移的 PostgreSQL 上运行八条 integration：地点来源、当前关系阶段、同意占比开关和
+同意占比读取、个人阶段变更汇总、current-city 快照读取、current-city 快照目录和兴趣快照 runtime 读取。地点来源测试和 Flutter 读取同一份
 `contact_location_source_v1.csv`；其余测试分别对账当前快照 bridge、开关的版本／幂等合同，以及
 比例的 `not_enabled`／`ready` union，以及阶段变更汇总的 `5 / 4 / 3 / 2` 和空期间。SQL fixture
 另证实匿名化历史，独立并发脚本证实项目锁边界。`npm test` 仍是无数据库的合同测试；它不能
@@ -451,6 +497,8 @@ Slice 6AE-1 不包含 Flutter、Drift、页面或历史同步；6AE-2 只增加 
 管理报告快照目录见 [`0035_management_report_snapshot_directory.sql`](../database/migrations/0035_management_report_snapshot_directory.sql)。对应 fixture 与独立会话脚本验证可信 v2 来源、20 项上限、稳定降序、空目录审计、最小 runtime 权限，以及目录访问与撤权的两种并发顺序。
 
 current 城市快照目录见 [`0060_authorized_management_current_city_report_snapshot_directory.sql`](../database/migrations/0060_authorized_management_current_city_report_snapshot_directory.sql)。对应 fixture、adapter、HTTP 和独立会话脚本验证 0057 current-city provenance、approved claim、20 项上限、稳定降序、空目录审计、strict metadata parser、最小 runtime 权限，以及目录访问与撤权的两种并发顺序。
+
+管理兴趣快照 runtime bridge 见 [`0064_runtime_authorized_management_interest_report_snapshot_read.sql`](../database/migrations/0064_runtime_authorized_management_interest_report_snapshot_read.sql)。对应 fixture、adapter 和 integration 验证 exact identity、0063 private call、strict parser、最小 runtime 权限及 DB-only 证据边界；它不增加 HTTP route。
 
 管理报告生产发布见 [`0036_runtime_trusted_management_report_release.sql`](../database/migrations/0036_runtime_trusted_management_report_release.sql)。对应 fixture 与独立会话脚本验证既有身份映射、固定报告定义、发布与查看能力分离、幂等重放、冲突失败关闭、最小返回值，以及发布与撤权／时区配置的事务顺序。
 
