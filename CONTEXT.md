@@ -704,6 +704,17 @@ blocked attempt 只保存固定 reason 和最小 value-free lineage metadata，�
 这是 PostgreSQL 私有 DB-only 合同，不是 authorized read、runtime、HTTP、目录、导出、删除、retention、任意历史 `as-of` 或真实平台证据。
 _Avoid_: 复用其他 report family provenance、静默改写旧 snapshot、把 baseline 当 latest、把 blocked attempt 当报告、用 Docker synthetic 证据代替生产或真人运行时证据
 
+**管理原始区域快照授权读取**:
+6BH 按可信内部用户、显式项目和 snapshot UUID 私有读取一份 6BG 原始区域快照。数据库在每次调用中重新确认
+`view_anonymous_analytics`，只接受 0068 original-region request claim、`approved`／`approved_baseline` attempt 和与 snapshot 完全对齐的
+project、report identity、lineage、时区 revision、cutoff、previous pointer、source watermark 与 source tree tuple。返回前再次运行 6BD
+original-region document validator，不重算、不重新归类、不改写，也不自动选择 latest。
+
+只有 `completed` 返回既有 protected report。未知或跨项目 snapshot 返回 `not_found`；同项目但属于 channel、current-city、interest、legacy、
+blocked、缺失或漂移 provenance 的 snapshot 返回 `untrusted_provenance`。两种失败都没有正文。每次已授权尝试追加原始区域专用、不可变、
+value-free 的访问审计；撤权与读取使用同一授权锁。该操作不提供 runtime、HTTP、目录、Flutter、导出、缓存、离线或生产身份。
+_Avoid_: 发布即查看、跨项目探测、复用其他 report family reader、客户端提交 source tuple、自动 latest、客户端重算城市网格
+
 **管理报告清除**:
 组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
 _Avoid_: 授权撤回、报告到期、tombstone、superseded

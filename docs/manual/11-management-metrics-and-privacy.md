@@ -2108,6 +2108,53 @@ check、fixture 和并发脚本不能互相替代。它们应覆盖原始 releas
 名称猜测排除、完整城市网格、`k=10`／三位／半数边界、期间独立判断、互补隐藏、无敏感输出和最小 private ACL。dump／restore 后的通过只说明
 迁移和固定检查可重复，不增加 runtime、HTTP、Flutter、导出、生产身份、任意 `as-of` 或真人平台证据。
 
+## Slice 6BH：只读取可信的原始区域快照
+
+6BH 不创建报告，也不决定哪份快照是最新。调用方必须给出内部用户、项目和 snapshot UUID。数据库先重新检查
+`view_anonymous_analytics`，然后把快照与 6BG 保存的 original-region request claim 和 approved attempt 对账。项目、报告 identity、lineage、
+报告时区 revision、cutoff、previous pointer、source watermark 或 `source_tree_version + source_content_fingerprint` 任一不一致，都不能返回报告正文。
+通过这些检查后，数据库还会再次运行 6BD document validator。
+
+读取结果只有三种：
+
+- `completed` 表示授权和 provenance 都可信，返回已经保护的报告；
+- `not_found` 表示该 ID 未知或属于其他项目，不泄露跨项目存在性；
+- `untrusted_provenance` 表示同项目快照存在，但它属于其他报告族、legacy、blocked，或证据缺失／漂移。
+
+每次已经通过授权门槛的尝试都会追加一条 original-region 专用 audit。它只保存访问合同、项目、snapshot、release request、固定报告元数据、
+时区、cutoff、source tree tuple、watermark、状态和 reason，不保存报告正文、cells、隐藏前值、来源记录、contact、contributor、区域名称、坐标或 PII。
+只有 `completed` audit 可以保存已经验证的 source tree tuple 和 watermark；`untrusted_provenance` 会把它们固定为 `NULL`。audit 不能更新或删除。
+撤权和读取使用同一授权锁，因此读取先提交可以完成，撤权先提交后读取必须失败关闭。
+
+### 从零开始验证 6BH 数据库合同
+
+先安装并启动 Docker Desktop。你不需要单独安装 PostgreSQL，也不需要真实账号。打开终端，进入仓库根目录并运行：
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 会建立临时容器和 synthetic 数据，自动发现 0069 migration、结构 check、rollback fixture 和并发脚本，随后验证历史 migration checksum，
+再把源库 dump 恢复到独立 PostgreSQL。恢复库会重跑 migration、check 和 fixture，但不会重跑会提交 synthetic 行的并发脚本。测试结束后容器自动清理，
+不会连接 production。成功只证明 private PostgreSQL 合同、权限、撤权顺序和恢复路径成立；它不证明 runtime bridge、HTTP、Flutter、目录、导出、
+production identity 或真人平台运行时。
+
+需要定位单项失败时，先准备新的本机测试库，并确认 `DATABASE_URL` 绝不指向 production：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_authorized_management_original_region_report_snapshot_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0069_authorized_management_original_region_report_snapshot_read.sql
+./tool/verify_authorized_management_original_region_report_snapshot_read_concurrency.sh
+```
+
+check 检查对象形状、owner、`SECURITY DEFINER`、固定 search path 和最小 ACL；fixture 检查正常、未知、不可信、再次验证、audit 和不可变性；
+并发脚本使用两个连接检查 read-first 和 revoke-first。并发脚本会提交 synthetic 行，重复运行前应重建空库。这三层证据不能互相替代。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和

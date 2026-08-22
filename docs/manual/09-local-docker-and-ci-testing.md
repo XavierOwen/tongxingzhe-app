@@ -891,6 +891,56 @@ check、fixture 和并发脚本不能互相替代。它们应分别检查固定 
 previous／compared snapshot、source tree tuple、source watermark、授权仍有效时的幂等、blocked value-free 结果、竞争 successor、撤权锁顺序和 direct mutation rejection。
 若只运行 check 和 fixture，没有并发证据；若只运行并发脚本，也没有完整的 restore 或结构证据。
 
+### 6BH：验证授权原始区域快照读取
+
+6BH 只在 private PostgreSQL 中读取一份明确指定的 6BG snapshot。调用方提供内部用户、project UUID 和 snapshot UUID；数据库重新检查
+`view_anonymous_analytics`，再核对 0068 original-region request claim、approved attempt、snapshot、报告时区 revision、cutoff、previous pointer、
+source watermark 和 source tree tuple。返回前再次运行 6BD validator。它不会重算区域归属，也不会自动选择 latest。
+
+结果分三类：
+
+- `completed`：provenance 完整可信，返回既有 protected report；
+- `not_found`：snapshot 未知或属于其他项目，不返回正文，也不暴露其他项目是否存在该 ID；
+- `untrusted_provenance`：snapshot 在同一项目存在，但属于其他 report family、legacy、blocked，或 provenance 缺失／漂移，不返回正文。
+
+每次已授权尝试都会写一条原始区域专用、不可变、value-free audit。audit 不保存 `protected_report`、cells、隐藏前值、来源记录、contact、
+contributor、区域名称、坐标或 PII。`untrusted_provenance` audit 的 source tree tuple 和 watermark 固定为 `NULL`。未授权、撤权、过期、
+只有发布能力、无项目成员或 inactive project 会在写 audit 前失败。
+
+#### 第一次用 Docker 运行 6BH
+
+先启动 Docker Desktop。你不需要手工安装 PostgreSQL、创建数据库或准备账号。runner 使用 synthetic 数据建立临时 PostgreSQL 和 Node 容器，
+完成后自动删除；它不连接 production，也不会修改真实项目。从仓库根目录运行：
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 会自动发现 0069 migration、structural check、rollback fixture 和 read／revoke concurrency script。之后它检查历史 migration checksum，
+把源库 dump 恢复到没有源 cluster state 的独立 PostgreSQL，再在恢复库重跑 migration、check 和 fixture。恢复库不重跑并发脚本，因为并发脚本
+会提交 synthetic 行；重复提交会混淆恢复证据。fixture 使用 `6bh*`；并发脚本的文本键使用 `6bhc*`，UUID 使用独立且符合十六进制格式的 `6fc*` namespace。
+
+成功输出只能说明：0069 已应用；结构、行为、撤权顺序和最小 ACL 在 synthetic PostgreSQL 中通过；历史 migration 未漂移；dump／restore 后合同仍成立。
+它不能证明 runtime bridge、HTTP、Flutter、目录、导出、production identity、删除、备份清除或真人平台运行时已经完成。
+
+#### 只调试 6BH 专用 PostgreSQL 测试库
+
+先确认 `DATABASE_URL` 指向新的专用测试库，绝不能指向 production。并发脚本会提交 synthetic 行，所以重复执行前应重建空库：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_authorized_management_original_region_report_snapshot_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0069_authorized_management_original_region_report_snapshot_read.sql
+./tool/verify_authorized_management_original_region_report_snapshot_read_concurrency.sh
+```
+
+check 证明对象形状、owner、`SECURITY DEFINER`、固定 search path 和 ACL。fixture 证明合法／不可信／未知结果、再次 validator、value-free audit 和不可变性。
+并发脚本用两个独立数据库会话证明 read-first 与 revoke-first 的锁顺序。三者不能互相替代，完整 Docker 还负责 checksum 与 restore。
+
 ### 5.5 验证同步提醒和逐设备通知开关
 
 提醒测试分四层。第一次接触项目时，可以按以下顺序运行：
