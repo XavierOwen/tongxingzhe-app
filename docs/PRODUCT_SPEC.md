@@ -1026,6 +1026,35 @@ Drift、缓存、离线、同步、导出、parent／overlap 处理、retention�
 最小 private ACL、checksum 和 dump／restore。Docker、SQL fixture 和并发脚本只证明 synthetic DB-only 合同，不证明 runtime、HTTP、Flutter、
 导出、生产身份、任意 as-of 或六平台真人运行时。
 
+#### Slice 6BE：登记渠道管理报告快照的更正与取代关系
+
+Slice 6BE 只在 private PostgreSQL 中登记已有 6J trusted-v2 渠道管理报告快照的 replacement lineage。它不生成新的报告快照，也不改变 6J 的发布函数、
+快照内容、目录、授权读取、HTTP、导出或 Flutter 行为。
+
+登记请求必须引用一份旧快照和一份新快照。数据库重新确认两份快照都属于同一项目、同一 report ID、version、query fingerprint、reporting time zone 和
+release lineage，并确认两份快照都有 6J trusted-v2 provenance。新快照的 `data_cutoff_utc` 和发布时间必须晚于旧快照。调用方不能提交报告 JSON、cells、
+时区、截止点、来源证据或 capability 来替代数据库检查。
+
+登记原因只允许 `late_accepted_data`、`contact_revision` 和 `contact_void`。分析定义修正和跨版本取代留给后续独立工作单元。
+
+每份旧快照最多有一个直接 replacement，每份新快照最多替代一份旧快照。合法关系可以继续向前形成严格有向链，但不能自链接、循环或分叉；已被取代的快照
+不能再次作为当前链头。登记只引用已有快照，不创建 snapshot、release attempt 或报告正文。相同 request UUID 和完全相同的 canonical payload 精确幂等；
+载荷漂移、跨项目、current-city、interest、legacy、blocked、未知 provenance、stale head、倒序时间或上下文漂移失败关闭。
+
+登记使用 `release_management_reports` 授权链。事务取得请求、项目和 replacement lineage 锁后，必须重新确认授权和两份 trusted-v2 provenance。
+撤权先提交时登记失败，登记先取得锁时撤权等待事务完成。生命周期查询对可信渠道快照只返回快照 ID、`active`／`superseded` 状态和直接 replacement snapshot ID，
+未知或不可信来源返回 value-free `not_found`。
+不返回报告正文、cells、隐藏前值、来源、贡献者、地点、授权关系或 PII。关系和最小审计证据追加不可变，不允许 UPDATE 或 DELETE；`PUBLIC`、
+`tongxingzhe_runtime`、普通 app role、reader 和其他 report-family writer 不能绕过 private function 直接读写关系。
+
+6BE 不决定或执行物理删除、tombstone、账号／组织删除、恢复期或 retention 期限。current-city、interest 和 original-region report family 不复用该合同，
+必须各自验证 provenance 和生命周期语义。Docker 和 SQL fixture 只证明 synthetic DB-only replacement ledger、授权、并发、不可变约束和 ACL，
+不证明报告生成、HTTP、Flutter、导出、生产身份、删除规则、retention 或六平台真人运行时。
+
+本 Slice 的数据库实现应新增 0067 migration、结构／权限 check、synthetic fixture 和独立并发脚本。完整测试覆盖合法链、生命周期查询、精确幂等、载荷漂移、
+跨项目／跨 report family／legacy／blocked／未知来源拒绝、stale head、自链接、分叉、循环、倒序时间、旧快照字节不变、value-free 结果、追加不可变、
+最小 ACL、两种撤权锁顺序、checksum 和 dump／restore。并发脚本提交 synthetic 行，恢复库只重跑 migration、check 和 fixture，不重跑该脚本。
+
 #### 5.8.2 时间、趋势、版本与因果边界
 
 | ID | 需求 |
@@ -1069,6 +1098,7 @@ Drift、缓存、离线、同步、导出、parent／overlap 处理、retention�
 | `ANALYTICS-037` | 6BB 通过独立的 Flutter `InterestReportGateway` 消费 6BA 有界目录和 6AZ 显式详情；目录 HTTP 根只含三项 wire 字段，不能暴露 DB envelope 的内部 `access_contract_id`，详情只按用户明确选择的 project／snapshot 读取固定十格 interest report。gateway 保持服务端最多 20 项及固定排序，不把第一项解释为 current／latest，不在客户端重算、聚合或推断报告。 |
 | `ANALYTICS-038` | 6BC 只在用户明确选择 interest report family 后，使用当前已重新授权的 `ManagementAnalysisContext.projectId` 读取目录；默认 channel 视图不调用 interest gateway。consumer 不使用个人项目，不自动打开首项，只读取用户明确选择的当前目录 summary，不重算总计、比例、平均等级或趋势；切换项目／family、返回目录、重试和 dispose 会隔离迟到响应。 |
 | `ANALYTICS-039` | 6BD 固定私有 `contact_sessions_by_original_region_two_periods@1`：`metric=contact_sessions@1`、`view_mode=original`、城市粒度、两个完整 ISO 周、项目报告时区、`data_cutoff_utc` 和一个精确来源树 tuple。每条记录只能凭保存的 original 证据进入同树的唯一城市；不读取 current target context，不猜测或做任意历史 `as-of`，混合来源树、缺失或漂移证据失败关闭。输出是来源树全部城市的稳定保护网格，不含城市名称、边界、坐标、来源、接触、revision、贡献者或 PII。 |
+| `ANALYTICS-040` | 6BE 只登记已有 6J trusted-v2 渠道快照之间的直接 replacement lineage。两份快照必须同项目、同 report／version、query fingerprint、reporting time zone 和 release lineage，且新快照的 cutoff 与发布时间晚于旧快照；旧快照和新快照均保持不变，不生成新 snapshot。登记原因只允许 `late_accepted_data`、`contact_revision` 和 `contact_void`，分析定义修正和跨版本取代留给后续合同。每个旧快照最多一个直接 replacement，每个新快照最多一个 predecessor；关系可形成严格向前链，但不能自链接、循环或分叉，只有当前链头可以继续被取代。登记在锁后重新验证 `release_management_reports` 和 trusted-v2 provenance；同 request 精确幂等，载荷漂移、跨项目、跨 report family、legacy、blocked、未知来源、stale head 或倒序时间失败关闭。生命周期查询对可信快照只返回快照 ID、`active`／`superseded` 和直接 replacement ID，对未知或不可信来源返回 value-free `not_found`；不返回报告正文或敏感字段，也不改变目录、读取、HTTP、导出或 Flutter。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -1105,6 +1135,7 @@ Drift、缓存、离线、同步、导出、parent／overlap 处理、retention�
 | `PRIVACY-029` | 6BB 的 Dart 类型只保存已通过 strict parser 的固定 interest 目录摘要和十格 count-only report；DB 内部 `access_contract_id` 不进入 HTTP 或 Dart，`suppressed` 只表示隐藏而不是零。gateway 不接收或暴露 source、contributor、contact、location、geometry、PII 或隐藏前值；结果只在内存存在，失败关闭，不写 Drift、缓存、离线存储、同步队列或导出。 |
 | `PRIVACY-030` | 6BC 只渲染 6BB typed metadata 和服务端已保护的十格计数；`suppressed` 只显示“已隐藏 / Hidden”，不显示为零、不读取隐藏前值，不引入 PII、个人绩效、排名或因果结论。panel 状态只留在内存，不写 Drift、缓存、离线存储、同步队列或导出。 |
 | `PRIVACY-031` | 6BD 只接受完整 original 来源证据和一个精确来源树 tuple，并把记录归入该树的唯一城市；缺失、歧义、漂移、混合来源树或不可用来源不得通过 current／mapping／名称猜测补齐。每个期间独立执行 `k=10`、三位贡献者和半数上限，再执行互补隐藏；响应只含安全整数或 `suppressed = null`，不含城市名称、边界、坐标、来源、接触、revision、贡献者或 PII。 |
+| `PRIVACY-032` | 6BE 的 replacement ledger 只接受两份同项目、同 report／version／query／时区／lineage 的 6J trusted-v2 渠道快照，并在锁后重新验证 `release_management_reports`。登记关系和 value-free 生命周期查询不得泄露报告正文、cells、隐藏前值、来源、贡献者、地点、授权关系或 PII。关系、最小审计和快照引用追加不可变，不允许 UPDATE／DELETE；`PUBLIC`、runtime、普通 app role、reader 和其他 report-family writer 没有直接关系表权限。该合同不执行删除、tombstone 或 retention，也不改变既有读取、目录、HTTP、导出或 UI。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
 
@@ -1135,6 +1166,7 @@ Drift、缓存、离线、同步、导出、parent／overlap 处理、retention�
 | `MANUAL-021` | 学习文档必须用零基础读者可以复制的步骤说明 6BB Flutter `InterestReportGateway` 的两个固定 path、DB 四字段与 HTTP 三字段边界、6AZ 三字段详情、`IdentitySession`、一次 `401` 刷新、strict parser、内存边界、typed failure、`no-store` 和测试命令；必须明确没有 UI、ViewModel、Widget、Drift、缓存、离线、同步、导出或六平台真机证据。 |
 | `MANUAL-022` | 学习文档必须用零基础读者可以复制的步骤说明 6BC 的三个互斥 report family、channel 默认、管理项目唯一来源、显式 summary 选择、十格 displayed／suppressed 语义、generation 隔离、焦点恢复、小屏／大字号测试和 composition 关闭；必须明确没有 Backend／DB 变更、Drift、缓存、离线、导出或真机证据。 |
 | `MANUAL-023` | 学习文档必须用零基础读者可以复制的步骤说明 6BD 的 original 城市、单一来源树、保存的 original 证据、完整城市网格、三项 primary 阈值、互补隐藏、`data_cutoff_utc` 不是任意 `as-of`、缺失／混合／漂移失败关闭，以及 0066 migration／check／fixture／并发／checksum／dump／restore 命令；必须明确这是 DB-only synthetic 证据，不证明 runtime、HTTP、Flutter、导出、生产身份、历史 as-of 或真人平台。 |
+| `MANUAL-024` | 学习文档必须用零基础读者可以复制的步骤说明 6BE 的两份已有 6J trusted-v2 渠道快照、同项目／report／version／query／时区／lineage 合同、直接 replacement 链、active／superseded 查询、锁后重授权、精确幂等、stale head／分叉／循环／跨 report family 失败关闭、value-free 结果、追加不可变、最小 ACL，以及 0067 migration／check／fixture／并发／checksum／dump／restore 命令；必须明确不生成新快照，不改变目录、读取、HTTP、导出或 Flutter，也不处理删除、tombstone、恢复期或 retention，并明确 Docker synthetic DB-only 证据不证明生产身份或六平台真人运行时。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -1345,6 +1377,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-031` | 6BB Flutter synthetic HTTP／fake `IdentitySession` 测试覆盖两个固定 path、显式 project／snapshot、无 query／GET body、Bearer、一次 `401` 刷新、严格目录与十格详情 parser、20 项和服务端排序、空目录、首项无 current／latest 语义、项目／快照绑定、PII／额外字段拒绝、稳定错误、`no-store`、timeout、网络失败和 `close`。通过只证明 Dart transport 与内存边界，不声称 DB／Backend 授权、UI、Drift、缓存、离线、导出、生产身份或六平台运行时。 |
 | `TEST-032` | 6BC ViewModel／Widget／browser／composition 测试覆盖三个互斥 report family、channel 默认、interest 明确启用、`ManagementAnalysisContext` project 来源、空目录、显式 summary、十格 displayed／suppressed、分阶段 retry、项目／family／返回／dispose 的迟到响应隔离、稳定错误、heading／live region、320×568、200% 字号、键盘／焦点恢复以及 gateway 构造／传递／关闭。通过只证明 Flutter consumer 与可访问性模拟路径，不声称 Backend／DB 授权、离线、导出或真机运行时。 |
 | `TEST-033` | 6BD SQL check／fixture／并发测试覆盖原始来源 release／指纹／节点／唯一城市父链、单一来源树、混合树失败关闭、missing／drift／`not_reportable`、current／mapping／名称猜测排除、两个完整期间、全部城市网格、`k=10`／三位／半数边界、期间独立判断、互补隐藏、`displayed`／`suppressed` 合同、无敏感输出、最小 ACL 和旧 6AN 回归；Docker 在 checksum 与 dump／restore 后重跑 migration、check 和 fixture，不重跑提交 synthetic 行的并发脚本。通过不声称 runtime、HTTP、Flutter、导出、任意 as-of、生产身份或真人平台证据。 |
+| `TEST-034` | 6BE 的 0067 structural check／fixture／并发测试覆盖两份同项目 6J trusted-v2 渠道快照、同 report／version／query／时区／lineage、后续 cutoff／发布时间、登记原因 allowlist（`late_accepted_data`、`contact_revision`、`contact_void`）、链式 replacement、active／superseded 生命周期查询、同 request 精确幂等、载荷漂移、跨项目／current-city／interest／legacy／blocked／未知来源、stale head、倒序、自链接、分叉、循环、旧快照字节不变、value-free 结果、追加不可变、最小 ACL、锁后授权撤回和竞争登记。Docker 在 checksum 与 dump／restore 后重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本；通过不声称新快照生成、定义修正或跨版本取代、既有目录／读取／HTTP／导出／Flutter、删除／retention 或生产／真人平台证据。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -1497,6 +1530,15 @@ snapshot ID 稳定降序排列；第一项不表示 current、latest 或未被�
 consumer 只用当前 `ManagementAnalysisContext.projectId` 读取目录，不回退到个人项目，不自动打开首项。独立 panel 只显示
 用户明确选择的两期十格结果；隐藏格不显示为零。项目／family／返回／重试／dispose 使旧 generation 失效。该切片只增加
 Flutter consumer、composition、中英文和小屏／大字号／键盘／语义模拟测试，不修改 Backend／DB，不增加持久化、导出或真机证据。
+
+6BD（#193）只在 private PostgreSQL 固定原始区域城市保护报告。它使用保存的 original 来源和单一来源树，不读取 current target context，不做跨版本 mapping、
+坐标重新解析、名称猜测或任意历史 `as-of`。来源缺失、漂移或混合时失败关闭，输出完整城市网格并执行三项阈值和互补隐藏。它不增加 snapshot、release、读取、
+runtime、HTTP、Flutter、导出、retention 或真人平台证据。
+
+6BE（#195）只登记已有 6J trusted-v2 渠道快照之间的直接 replacement lineage。数据库在锁后重新验证 `release_management_reports` 和两份快照的 provenance，
+要求同项目、同 report／version／query／时区／lineage，以及新快照的 cutoff 和发布时间更晚。关系严格追加且不分叉、不循环，生命周期查询只返回 value-free 的
+active／superseded 状态和直接 replacement ID。6BE 不生成快照，不改变既有目录、读取、HTTP、导出或 Flutter，也不执行删除、tombstone 或 retention。
+Docker、fixture 和并发测试只证明 synthetic DB-only 合同。
 
 ### Slice 7：组织治理与数据可携带性
 

@@ -741,6 +741,67 @@ Backend 测试检查认证优先、精确 JSON、稳定错误和单 statement st
 
 只读离线计划缓存复用现有 `db_app_settings`，没有修改 Drift schema，因此不需要生成新的 Drift snapshot。`drift_personal_planning_cache_test.dart` 在测试进程的内存 SQLite 中检查 scope 隔离、远端空值、损坏缓存、仅网络故障回退，以及 `401/403` 后清除。只修改这层缓存时不需要启动 Docker；改动 Backend 或 PostgreSQL 周期函数时仍必须运行 Docker 套件。
 
+### 6BE：验证渠道管理报告快照 replacement ledger
+
+6BE 只在 private PostgreSQL 中登记已有 6J trusted-v2 渠道快照之间的直接 replacement 关系。它不生成新快照，不修改快照内容，也不改变目录、授权读取、HTTP、导出或 Flutter。
+两份快照必须属于同一项目、report、version、query fingerprint、reporting time zone 和 release lineage。新快照的 cutoff 和发布时间必须晚于旧快照。
+登记原因只允许 `late_accepted_data`、`contact_revision` 和 `contact_void`。分析定义修正和跨版本取代留给后续独立合同。
+登记会在等待请求、项目和 lineage 锁后重新确认 `release_management_reports` 与 trusted-v2 provenance。
+
+生命周期查询对可信渠道快照只返回快照 ID、`active`／`superseded` 状态和直接 replacement ID；未知或不可信来源返回 value-free `not_found`。
+它不返回报告正文、cells、隐藏前值、来源、贡献者、地点、授权关系或 PII。
+每份旧快照最多一个直接 replacement，每份新快照最多一个 predecessor。关系可以向前形成链，但不能自链接、循环或分叉。关系和最小审计追加不可变，不能 UPDATE 或 DELETE。
+该切片不处理物理删除、tombstone、恢复期或 retention。current-city、interest 和 original-region 快照不复用本合同。
+
+#### 第一次用 Docker 运行 6BE
+
+Docker 是一次性测试环境。runner 会启动隔离的 PostgreSQL 和 Node 容器，使用 synthetic 数据，结束后清理容器。它不连接 production，也不会修改真实项目。
+
+1. 打开 Docker Desktop，等待 Docker Engine 完成启动。
+2. 在 Terminal 中进入仓库根目录：
+
+   ```bash
+   cd "$(git rev-parse --show-toplevel)"
+   ```
+
+3. 确认 Docker 同时有 Client 和 Server：
+
+   ```bash
+   docker version
+   ```
+
+   如果只显示 Client，没有 Server，先启动 Docker Desktop 或 Docker Engine。
+4. 运行完整套件：
+
+   ```bash
+   ./tool/run_postgres_tests_in_docker.sh
+   ```
+
+runner 会按 migration 顺序发现 0067 migration、structural check、fixture 和 replacement concurrency script。
+它还会运行 checksum、dump／restore，并在恢复库重跑 migration、check 和 fixture。恢复库不重跑并发脚本，因为并发脚本会提交 synthetic 行。
+
+成功输出应覆盖：两份合法同项目 channel trusted-v2 快照、三项登记原因 allowlist、链式 replacement、`active`／`superseded` 查询、同 request 精确幂等、载荷漂移、
+跨项目和跨 report family 拒绝、legacy／blocked／未知 provenance、stale head、自链接、分叉、循环、倒序时间、旧快照字节不变、value-free 结果、
+追加不可变、最小 ACL、竞争登记和撤权锁顺序。命令退出码必须为 `0`。
+
+#### 只调试专用 PostgreSQL 测试库
+
+先确认 `DATABASE_URL` 指向专用测试库，不要指向 production。并发脚本会写入 synthetic 行，因此每次运行使用新的空测试库。
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_report_snapshot_replacements.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0067_management_report_snapshot_replacements.sql
+./tool/verify_management_report_snapshot_replacements_concurrency.sh
+```
+
+check、fixture 和并发脚本不能互相替代。不要为了通过测试降低 provenance、授权、链或隐私条件。
+Docker 通过只证明当前 PostgreSQL 中的 replacement ledger、授权锁、value-free 结果、不可变约束和 ACL。
+它不证明新报告已经生成，不证明目录、读取、HTTP、导出、Flutter、生产身份、删除或 retention，也不证明 Android、iOS、macOS、Windows、Linux 或 Web 真人平台运行时。
+
 ### 5.5 验证同步提醒和逐设备通知开关
 
 提醒测试分四层。第一次接触项目时，可以按以下顺序运行：

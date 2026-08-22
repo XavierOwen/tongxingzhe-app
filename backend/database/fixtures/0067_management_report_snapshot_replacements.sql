@@ -709,7 +709,9 @@ BEGIN
   END LOOP;
 
   IF (
-    SELECT count(*) FROM app_private.management_report_snapshot_replacements
+    SELECT count(*)
+    FROM app_private.management_report_snapshot_replacements
+    WHERE project_id = '6be30000-0000-4000-8000-000000000001'::uuid
   ) <> 3 THEN
     RAISE EXCEPTION 'failed replacement requests wrote partial history';
   END IF;
