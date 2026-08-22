@@ -881,6 +881,47 @@ fixture 使用 `6bg*`，并发脚本使用独立的 `6bgc*` committed namespace�
 中的 snapshot／release、授权、claim、幂等、并发、不可变性、value-free blocked attempt、checksum、restore role 和 ACL 合同。
 它不证明 authorized read、runtime、HTTP、Flutter、导出、删除、生产备份或六平台真人运行时。
 
+### 6BH：授权读取单份原始区域管理报告快照
+
+`0069_authorized_management_original_region_report_snapshot_read.sql` 在 6BG lineage 之上增加 private DB-only 读取合同。读取函数只接受
+可信内部用户、显式 project 和 snapshot UUID，并在同一事务重新解析 `view_anonymous_analytics`。调用方不能提交报告 JSON、cells、
+source tree tuple、时区、cutoff、capability、筛选或 SQL。
+
+可信读取必须同时满足：0068 request claim 属于 original-region family；release attempt 是 `approved`／`approved_baseline` 且 reason 为空；
+attempt 与 snapshot 的 project、report／version、query fingerprint、lineage、时区 revision、cutoff、previous／compared pointer、source
+watermark 和 `source_tree_version + source_content_fingerprint` 全部对齐。函数在返回前再次运行 6BD validator，不重算或改写城市网格。
+
+`completed` 返回既有 protected report。unknown／cross-project 返回 `not_found`；同项目 channel、current-city、interest、legacy、blocked、
+缺失或漂移 provenance 返回 `untrusted_provenance`。后两种结果都不返回正文。每次已授权尝试追加原始区域专用、不可变、value-free audit；
+audit 不保存 `protected_report`、cells、隐藏前值、来源记录、contact、contributor、区域名称、坐标或 PII。撤权、过期、release-only、无成员和
+inactive project 请求失败关闭且不写 audit。`untrusted_provenance` 审计还会把未经验证的 source tree tuple 和 watermark 固定为 `NULL`。
+
+private function 与 audit 归共享 snapshot 的可信 owner。`PUBLIC`、runtime、普通 app role、0066 original report reader、0068 release writer 和
+其他 report-family 角色不能执行读取或直接访问审计。6BH 不增加 runtime bridge、HTTP、目录、Flutter、Drift、导出、缓存、离线、同步、删除、
+retention、warehouse 或生产身份。
+
+完整验证：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 自动发现 0069 migration、structural check、rollback fixture 和 read／revoke 并发脚本，并执行 checksum 与 dump／restore。恢复库只重跑
+migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。调试已有专用测试库时按顺序运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_authorized_management_original_region_report_snapshot_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0069_authorized_management_original_region_report_snapshot_read.sql
+./tool/verify_authorized_management_original_region_report_snapshot_read_concurrency.sh
+```
+
+fixture 使用 `6bh*`；并发脚本的文本键使用 `6bhc*`，UUID 使用独立且符合十六进制格式的 `6fc*` committed namespace。完整通过只证明 synthetic PostgreSQL 的授权、provenance、validator、
+value-free audit、撤权锁、checksum、restore 和 ACL 合同，不证明 runtime、HTTP、Flutter、目录、导出、生产身份或真人平台运行时。
+
 ### 如何验证 6AS PostgreSQL 合同
 
 第一次使用 Docker 时，先启动 Docker Desktop。Docker 是一次性测试环境：runner 创建隔离的 PostgreSQL 容器，运行

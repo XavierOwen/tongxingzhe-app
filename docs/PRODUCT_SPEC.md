@@ -1104,6 +1104,29 @@ checksum 与 dump／restore 后重跑 migration、check 和 fixture，不重跑�
 PostgreSQL 中已观察到的 snapshot／release、授权、幂等、并发、不可变性、value-free 失败关闭和 ACL；不证明 authorized read、
 runtime、HTTP、Flutter、生产身份、删除、备份清除或六平台真人运行时。
 
+#### Slice 6BH：授权读取单份原始区域管理报告快照
+
+Slice 6BH 只在 private PostgreSQL 中读取一份显式指定的 6BG 原始区域快照。调用方只提交可信内部用户、项目和 snapshot UUID；
+不能提交报告 JSON、cells、来源树 tuple、时区、cutoff、capability、筛选或 SQL。数据库在同一事务内重新确认 active user、组织成员、
+项目成员、项目状态和 `view_anonymous_analytics`。
+
+读取只信任 0068 `original_region_management_report_snapshot_release` request claim family 中的 `approved_baseline`／`approved` attempt。
+attempt、claim 和 snapshot 的 project、report／version、query fingerprint、release lineage、报告时区 revision、cutoff、previous／compared
+pointer、source change watermark 和 `source_tree_version + source_content_fingerprint` 必须完全对齐。返回前再次运行 6BD original-region
+document validator；不重算、不重新归类、不改写，也不自动选择 latest。
+
+`completed` 才返回既有 protected report。unknown 或 cross-project snapshot 统一返回 value-free `not_found`；同项目的 channel、current-city、
+interest、legacy、blocked、缺失或漂移 provenance 返回 `untrusted_provenance`。后两种结果都不返回报告正文，不能用来探测其他项目。
+
+每次已授权尝试在同一事务追加原始区域专用、不可变、value-free 的访问审计。审计只保存最小授权和 lineage metadata，不保存
+`protected_report`、cells、隐藏前值、来源记录、contact、contributor、区域名称、坐标或 PII。未授权、撤权、过期、release-only、
+无有效项目成员或 inactive project 调用失败关闭且不写审计。`untrusted_provenance` 审计中的 source tree tuple 和 watermark 固定为 `NULL`，
+不能把未经验证的字段写成可信 provenance。读取与撤权复用同一授权锁顺序。
+
+本 Slice 增加 0069 migration、structural check、rollback fixture 和 read／revoke 并发脚本。Docker runner 自动运行 checksum 与
+dump／restore；恢复库重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。它不增加 runtime bridge、HTTP、
+目录／latest、Flutter、Drift、导出、缓存、离线、同步、replacement、删除、retention、warehouse、生产身份或真实平台验收。
+
 #### 5.8.2 时间、趋势、版本与因果边界
 
 | ID | 需求 |
@@ -1150,6 +1173,7 @@ runtime、HTTP、Flutter、生产身份、删除、备份清除或六平台真�
 | `ANALYTICS-040` | 6BE 只登记已有 6J trusted-v2 渠道快照之间的直接 replacement lineage。两份快照必须同项目、同 report／version、query fingerprint、reporting time zone 和 release lineage，且新快照的 cutoff 与发布时间晚于旧快照；旧快照和新快照均保持不变，不生成新 snapshot。登记原因只允许 `late_accepted_data`、`contact_revision` 和 `contact_void`，分析定义修正和跨版本取代留给后续合同。每个旧快照最多一个直接 replacement，每个新快照最多一个 predecessor；关系可形成严格向前链，但不能自链接、循环或分叉，只有当前链头可以继续被取代。登记在锁后重新验证 `release_management_reports` 和 trusted-v2 provenance；同 request 精确幂等，载荷漂移、跨项目、跨 report family、legacy、blocked、未知来源、stale head 或倒序时间失败关闭。生命周期查询对可信快照只返回快照 ID、`active`／`superseded` 和直接 replacement ID，对未知或不可信来源返回 value-free `not_found`；不返回报告正文或敏感字段，也不改变目录、读取、HTTP、导出或 Flutter。 |
 | `ANALYTICS-041` | 管理报告没有独立年龄 TTL。授权撤回只停止该成员访问，更正版取代只登记 lineage，账号删除保留组织报告并去除可反查作者身份。组织删除恢复期内只允许已有授权者读取既有报告；禁止新发布、replacement 和导出。期满后由 Slice 7 清除全部 report family 及含业务内容的依赖，只保留最小组织删除审计。清除未完成时组织保持不可访问。 |
 | `ANALYTICS-042` | 6BG 为 6BD 原始区域报告增加独立 DB-only snapshot／release lineage。它复用不可变 snapshot storage，但使用独立 writer role、RLS 范围、release attempt、provenance 和 request-claim family。发布在锁后重新确认 `release_management_reports`、成员授权、可信时区 revision 和 6BD original candidate；首个 `completed` 候选建立唯一 baseline，后续只能在同一 report／version／query／privacy／source scope／期间／时区 revision 和精确 source tree tuple 下推进 cutoff、保持 source change sequence 不回退并链接当前 lineage head。授权仍有效时，相同 request 精确幂等；身份漂移、跨项目／跨 report family、来源树变化或不可用、same／earlier cutoff、无共享期间、共享 displayed／privacy 变化，以及已发布 lineage 与候选的上下文漂移失败关闭。executor 内部定义不一致必须抛出。它不增加 authorized read、runtime、HTTP、Flutter、目录、导出、replacement、删除或 retention。 |
+| `ANALYTICS-043` | 6BH 只按显式 project／snapshot ID 读取一份 6BG 原始区域快照。数据库重新验证 `view_anonymous_analytics`，只接受 0068 original-region claim family 的 approved／approved_baseline attempt，以及完全匹配的 project／report／version／query／lineage／时区 revision／cutoff／previous pointer／source watermark／source tree tuple，并在返回前再次运行 6BD validator。`completed` 才返回既有 protected report；unknown／cross-project 返回 `not_found`，同项目 foreign／legacy／blocked／漂移 provenance 返回 `untrusted_provenance`，两者都不返回正文。它是 private DB-only 合同，不增加 runtime、HTTP、目录、Flutter 或导出。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -1189,6 +1213,7 @@ runtime、HTTP、Flutter、生产身份、删除、备份清除或六平台真�
 | `PRIVACY-032` | 6BE 的 replacement ledger 只接受两份同项目、同 report／version／query／时区／lineage 的 6J trusted-v2 渠道快照，并在锁后重新验证 `release_management_reports`。登记关系和 value-free 生命周期查询不得泄露报告正文、cells、隐藏前值、来源、贡献者、地点、授权关系或 PII。关系、最小审计和快照引用追加不可变，不允许 UPDATE／DELETE；`PUBLIC`、runtime、普通 app role、reader 和其他 report-family writer 没有直接关系表权限。该合同不执行删除、tombstone 或 retention，也不改变既有读取、目录、HTTP、导出或 UI。 |
 | `PRIVACY-033` | 组织删除期满后的管理报告清除必须覆盖快照正文、provenance、replacement lineage 和含业务内容的读取／目录／导出审计。最小删除审计不得含报告 ID、快照 ID、报告内容、成员身份或其他业务内容。清除失败、遗漏 report family 或恢复副本尚未重放删除事实时，组织及其报告保持不可访问；logical tombstone、清除资格和 Docker dump／restore 不构成物理清除或生产备份清除证据。 |
 | `PRIVACY-034` | 6BG 的 original-region snapshot 只能由独立 release family 产生，并且 snapshot、attempt、claim 和 blocked result 必须保持追加不可变。成功 snapshot 必须通过 6BD original document validator，固定完整城市保护网格、单一 source tree tuple、report identity、期间、时区 revision、cutoff 和 source watermark；blocked attempt 只能保存固定 reason 与 value-free lineage metadata，不得保存候选 cells、隐藏前值、来源、contact、contributor、区域名称、坐标或 PII。channel、current-city、interest、legacy、`PUBLIC`、runtime、普通 reader 和其他 report-family writer 均不能绕过 family ACL。 |
+| `PRIVACY-035` | 6BH 只有在 `view_anonymous_analytics`、项目／组织成员关系和 0068 original-region release provenance 全部有效时才返回 protected report；unknown／cross-project 与 same-project foreign／untrusted provenance 均不返回正文。每次已授权尝试追加不含 `protected_report`、cells、隐藏前值、来源记录、contact、contributor、区域名称、坐标或 PII 的不可变 value-free audit；untrusted audit 的 source tuple／watermark 固定为 `NULL`。未授权、撤权、过期、release-only、无项目成员和 inactive project 调用失败关闭且不写 audit。读取和撤权共享授权锁；runtime、`PUBLIC`、普通 app role、各报告 reader／writer 和区域维护角色不能执行读取或访问审计。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
 
@@ -1222,6 +1247,7 @@ runtime、HTTP、Flutter、生产身份、删除、备份清除或六平台真�
 | `MANUAL-024` | 学习文档必须用零基础读者可以复制的步骤说明 6BE 的两份已有 6J trusted-v2 渠道快照、同项目／report／version／query／时区／lineage 合同、直接 replacement 链、active／superseded 查询、锁后重授权、精确幂等、stale head／分叉／循环／跨 report family 失败关闭、value-free 结果、追加不可变、最小 ACL，以及 0067 migration／check／fixture／并发／checksum／dump／restore 命令；必须明确不生成新快照，不改变目录、读取、HTTP、导出或 Flutter，也不处理删除、tombstone、恢复期或 retention，并明确 Docker synthetic DB-only 证据不证明生产身份或六平台真人运行时。 |
 | `MANUAL-025` | 学习文档必须向零基础读者区分授权撤回、账号删除、组织删除、更正版取代和管理报告清除；说明三十天恢复期、无独立报告 TTL、全部 report family、最小删除审计、失败关闭和恢复副本边界。文档必须明确 6BF 没有新增数据库或运行时行为，现有 Docker 通过不能证明逻辑门禁、物理清除、生产备份清除或真实平台行为。 |
 | `MANUAL-026` | 学习文档必须用零基础读者可以复制的步骤说明 6BG 的 0068 migration、original-region 专用 release role／claim／attempt、snapshot validator、baseline／滚动 cutoff、source tree tuple 不变、source watermark、精确幂等、blocked value-free 结果、并发、checksum、dump／restore 和 restore role 准备。必须说明恢复库不重跑会提交 synthetic 行的并发脚本，并明确这些 PostgreSQL synthetic 证据不证明 authorized read、runtime、HTTP、Flutter、导出、删除、生产身份或六平台真人运行时。 |
+| `MANUAL-027` | 学习文档必须用零基础读者可以复制的步骤说明 6BH 的 0069 private read、0068 original attempt／claim／snapshot provenance、`completed`／`not_found`／`untrusted_provenance`、source tree tuple／watermark／previous pointer 复核、再次 6BD validator、value-free immutable audit、撤权锁、Docker 自动发现和专用测试库命令。必须说明 restore 只重跑 migration／check／fixture，不重跑会提交 synthetic 行的并发脚本，并明确这些 DB-only 证据不证明 runtime、HTTP、Flutter、目录、导出、生产身份或真人平台。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -1435,6 +1461,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-034` | 6BE 的 0067 structural check／fixture／并发测试覆盖两份同项目 6J trusted-v2 渠道快照、同 report／version／query／时区／lineage、后续 cutoff／发布时间、登记原因 allowlist（`late_accepted_data`、`contact_revision`、`contact_void`）、链式 replacement、active／superseded 生命周期查询、同 request 精确幂等、载荷漂移、跨项目／current-city／interest／legacy／blocked／未知来源、stale head、倒序、自链接、分叉、循环、旧快照字节不变、value-free 结果、追加不可变、最小 ACL、锁后授权撤回和竞争登记。Docker 在 checksum 与 dump／restore 后重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本；通过不声称新快照生成、定义修正或跨版本取代、既有目录／读取／HTTP／导出／Flutter、删除／retention 或生产／真人平台证据。 |
 | `TEST-035` | 6BF 只运行文档格式、链接和一致性检查，不新增数据库行为测试。未来 Slice 7 的删除实现必须覆盖恢复期前后、期限内恢复、重复请求、授权撤回、账号删除保留组织历史、全部 report family、replacement 链、清除失败、最小删除审计和恢复副本。测试报告必须区分访问门禁、清除资格、在线物理清除和生产备份清除，不用低层级证据替代高层级结论。 |
 | `TEST-036` | 6BG 的 0068 structural check／fixture／并发测试覆盖 original 6BD document validator、独立 writer role／RLS、request claim family、授权与时区 revision、唯一 baseline、后续 cutoff、previous／compared pointer、source tree tuple 不变、source watermark 不回退、same／earlier cutoff、无共享期间、共享 displayed／privacy 变化、来源不可用、跨项目／跨 family claim、授权有效时的同 request 精确幂等、身份漂移、旧 snapshot 字节不变、value-free blocked attempt、追加不可变、并发 successor、撤权锁顺序、checksum 和 dump／restore。Docker 恢复库重跑 migration、check 和 fixture，不重跑提交 synthetic 行的并发脚本；通过不声称 authorized read、runtime、HTTP、Flutter、导出、删除、生产备份或真人平台证据。 |
+| `TEST-037` | 6BH 的 0069 structural check／fixture／并发测试覆盖合法 baseline／successor 与重复读取、完整 original city grid、`suppressed = null`、0068 approved claim／attempt／snapshot／时区 revision／cutoff／previous pointer／source watermark／source tree tuple 对齐、unknown／cross-project 的 `not_found`、same-project channel／current-city／interest／legacy／blocked／missing／drift provenance 的 `untrusted_provenance`、active／撤权／过期／release-only／无成员／inactive project 和 value-free audit。检查必须拒绝 audit UPDATE／DELETE，固定 owner／`SECURITY DEFINER`／`search_path` 和最小 ACL；并发覆盖 read-first／revoke-first。完整 Docker 自动发现 0069 migration、check、fixture 和并发脚本，checksum／dump／restore 重跑 migration、check 和 fixture，不重跑提交 synthetic 行的并发脚本；通过不声称 runtime、HTTP、Flutter、目录、导出、删除、生产身份或真人平台证据。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -1606,6 +1633,12 @@ provenance 和 request-claim family；首个有效候选建立 baseline，后续
 保持 source watermark 不回退并链接当前 lineage head。来源树变化、来源不可用、固定上下文漂移、same／earlier cutoff、无共享期间或共享 protected 值／隐私状态变化时
 失败关闭；blocked attempt 不保存候选报告值。6BG 不增加 authorized read、runtime、HTTP、Flutter、目录、导出、删除、retention、warehouse 或真实平台证据。
 只有 0068 migration、check、fixture、并发、checksum 和 dump／restore 在 synthetic PostgreSQL 中实际通过后，才能报告该层证据成立。
+
+6BH（#201）只在 private PostgreSQL 按显式 project／snapshot ID 读取一份 6BG 原始区域快照。数据库重新验证
+`view_anonymous_analytics`，只信任 0068 approved attempt、original-region request claim 和完全对齐的 snapshot provenance，并在返回前
+再次运行 6BD validator。unknown／cross-project 返回 `not_found`；同项目 foreign、legacy、blocked、缺失或漂移 provenance 返回
+`untrusted_provenance`，两者都没有报告正文。每次已授权尝试追加 value-free、不可变访问审计，读取与撤权使用同一授权锁。
+6BH 不增加 runtime bridge、HTTP、Flutter、目录、导出、缓存、离线、同步、删除、retention、生产身份或真人平台证据。
 
 ### Slice 7：组织治理与数据可携带性
 
