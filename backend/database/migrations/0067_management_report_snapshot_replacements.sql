@@ -733,6 +733,28 @@ REVOKE
   tongxingzhe_management_report_snapshot_lifecycle_writer
   FROM CURRENT_USER;
 
+DO $lifecycle_membership$
+DECLARE
+  member_name text;
+BEGIN
+  FOR member_name IN
+    SELECT member_role.rolname
+    FROM pg_catalog.pg_auth_members AS membership
+    JOIN pg_catalog.pg_roles AS lifecycle_role
+      ON lifecycle_role.oid = membership.roleid
+    JOIN pg_catalog.pg_roles AS member_role
+      ON member_role.oid = membership.member
+    WHERE lifecycle_role.rolname =
+      'tongxingzhe_management_report_snapshot_lifecycle_writer'
+  LOOP
+    EXECUTE format(
+      'REVOKE tongxingzhe_management_report_snapshot_lifecycle_writer FROM %I',
+      member_name
+    );
+  END LOOP;
+END
+$lifecycle_membership$;
+
 COMMENT ON TABLE app_private.management_report_snapshot_replacements
 IS 'Immutable value-free correction links between existing trusted-v2 channel report snapshots.';
 

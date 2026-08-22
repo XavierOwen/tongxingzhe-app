@@ -71,7 +71,7 @@ wait_for_lock_holder() {
       END
       FROM lock_probe;
     " | tr -d '[:space:]')"
-    if [[ "${probe}" == 'f' ]]; then
+    if [[ "${probe}" == 't' ]]; then
       return
     fi
     sleep 0.1
