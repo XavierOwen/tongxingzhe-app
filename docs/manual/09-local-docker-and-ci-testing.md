@@ -996,6 +996,63 @@ npm test
 这些命令使用 synthetic identity 和 snapshot，不需要真实账号。check、fixture、Backend test 和 Docker suite 不能互相替代。0070 没有新的提交型并发脚本，
 因为 0069 已覆盖 read／revoke 锁顺序。通过只证明 DB-only bridge、adapter parser 和最小 ACL。
 
+### 6BJ：验证原始区域快照 HTTP 读取
+
+6BJ 把 6BI 的专用 store 接到一个固定的 HTTP GET：
+
+```text
+GET /v1/projects/:projectId/management-original-region-report-snapshots/:snapshotId
+```
+
+这里的“先认证”是一个安全顺序要求。handler 先解析并验证 Bearer identity；只有认证成功后，才检查两个 UUID、query、GET body 的
+`Content-Length`／`Transfer-Encoding` 声明和专用 store。没有 token 或 token 无效时，即使 path、query、body 或 store 不合法，也先返回
+`401 unauthenticated`。认证通过后，handler 只把 verified identity、显式 project UUID 和 snapshot UUID 传给 6BI
+`ManagementOriginalRegionReportSnapshotStore`，并等待 store Promise 完成后再写响应。
+
+成功响应固定只有三个字段：
+
+```json
+{
+  "access_event_id": "…",
+  "snapshot_id": "…",
+  "report": {}
+}
+```
+
+错误 code 固定为：`400 invalid_management_original_region_report_snapshot_request`、`403 management_original_region_report_snapshot_forbidden`、
+`404 management_original_region_report_snapshot_not_found`、`409 management_original_region_report_snapshot_untrusted` 和
+`503 management_original_region_report_snapshot_unavailable`。认证错误使用 `401 unauthenticated`；`404`／`409` 可以带 value-free
+`access_event_id`。所有成功和错误响应都使用 JSON 与 `Cache-Control: no-store`，不返回数据库消息、SQL、栈、external subject、授权关系、报告格、来源、贡献者、区域名称、坐标或 PII。
+
+HTTP 层不调用 generic、current-city 或 interest store，不使用 `SessionContext`、`app_private` 或客户端 SQL。production composition 只注入
+6BI 的 Postgres store。6BJ 没有新的 migration、database check、fixture、PostgreSQL integration 或并发脚本。
+
+#### 第一次用 Docker 的读者要知道什么
+
+本节的 HTTP 测试不需要 Docker。Docker 是另一个隔离的测试环境：它启动临时 PostgreSQL 和 Node 容器，使用 synthetic 数据，完成后删除容器；它不会连接 production。若电脑上没有 Docker，请先安装并打开 Docker Desktop，等待 Docker Engine 显示运行。
+
+只验证 6BJ HTTP 时，从仓库根目录运行：
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+这些命令使用 synthetic identity 和 fake store，检查固定 method／path、认证先于 malformed UUID／query／GET body／store、所有状态映射、错误脱敏、
+Promise gate、production composition 和 `no-store`。不需要真实账号、真实 JWT provider 或数据库。
+
+若要连同既有数据库合同一起检查，回到仓库根目录运行：
+
+```bash
+cd ../..
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 会自动运行既有 0069／0070 migration、check、fixture、integration、checksum 和 dump／restore。6BJ 不新增 Docker 数据库步骤，也不让 Docker
+结果替代 HTTP 测试。完整通过只能证明 synthetic PostgreSQL 的 private read、runtime bridge、parser 和 ACL；它不证明 6BJ HTTP、Flutter、导出、缓存、离线、production identity 或六平台真人运行时。
+
 ### 5.5 验证同步提醒和逐设备通知开关
 
 提醒测试分四层。第一次接触项目时，可以按以下顺序运行：

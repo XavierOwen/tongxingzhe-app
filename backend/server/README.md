@@ -576,6 +576,66 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 通过只证明 DB-only bridge、Backend adapter parser 和最小 ACL。它不证明 HTTP、Flutter、目录、导出、生产身份或六平台真人运行时。
 
+## 原始区域快照 HTTP 读取合同
+
+6BJ 增加固定的 HTTP 详情入口：
+
+```text
+GET /v1/projects/:projectId/management-original-region-report-snapshots/:snapshotId
+```
+
+handler 先解析并验证 Bearer identity，再检查两个 UUID、query、GET body 的 `Content-Length`／`Transfer-Encoding` 声明和专用 store。缺少或无效
+token 时，即使 path、query、body 或 store 不合法，也先返回 `401 unauthenticated`。认证通过后，handler 只向 6BI 的
+`ManagementOriginalRegionReportSnapshotStore` 传递 verified identity、显式 project UUID 和 snapshot UUID，并等待它的 Promise 完成后才写响应。
+它不使用 `SessionContext`、generic／current-city／interest store、`app_private` 或客户端 SQL。
+
+成功响应固定为：
+
+```json
+{
+  "access_event_id": "…",
+  "snapshot_id": "…",
+  "report": {}
+}
+```
+
+错误状态和 code 固定为：
+
+| 状态 | code |
+| --- | --- |
+| `400` | `invalid_management_original_region_report_snapshot_request` |
+| `403` | `management_original_region_report_snapshot_forbidden` |
+| `404` | `management_original_region_report_snapshot_not_found` |
+| `409` | `management_original_region_report_snapshot_untrusted` |
+| `503` | `management_original_region_report_snapshot_unavailable` |
+
+`401` 使用 `unauthenticated`。`404`／`409` 可以带 value-free `access_event_id`。所有成功和错误响应使用
+`Content-Type: application/json; charset=utf-8` 与 `Cache-Control: no-store`；不返回数据库消息、SQL、栈、external subject、授权关系、报告格、来源、贡献者、区域名称、坐标或 PII。
+
+production composition 只注入 `PostgresManagementOriginalRegionReportSnapshotStore`，复用 6BI 的一次固定 bridge SQL。HTTP 层不复制 6BH／6BI 的授权、provenance、validator、撤权锁或 audit，也不增加 migration、database check、fixture、PostgreSQL integration 或并发脚本。HTTP 证据由 handler、route 和 composition 自动测试提供；既有 0069／0070 Docker 套件继续验证数据库合同，不替代这些 HTTP 测试。
+
+### 6BJ 的本地测试
+
+从仓库根目录进入 Backend 目录，安装依赖并运行检查：
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+这些测试使用 synthetic identity 和 fake store，覆盖固定 method／path、认证先于 malformed UUID／query／GET body／store、六类状态映射、错误脱敏、Promise gate 和 `no-store`。不需要真实账号或 JWT provider。
+
+如需同时确认既有数据库合同，再从仓库根目录运行：
+
+```bash
+cd ../..
+./tool/run_postgres_tests_in_docker.sh
+```
+
+Docker 结果只证明 synthetic 0069／0070 PostgreSQL bridge、parser、授权和 ACL；它不证明 6BJ HTTP、Flutter、目录、导出、缓存、离线、生产身份或六平台真人运行时。
+
 ## 管理报告快照目录合同
 
 `GET /v1/projects/:projectId/management-report-snapshots` 只接受一个显式项目 UUID。它不接受 body、query、筛选、分页、报告 ID、时区、capability 或内部用户 ID。6M 保存的管理分析选择只帮助导航，不是授权，也不会替代 path 中的项目。

@@ -2230,6 +2230,67 @@ npm test
 重复运行前重建空测试库，因为 fixture 会使用固定 synthetic identity 和 snapshot。0070 不新增提交型并发脚本，0069 已覆盖 private read 与撤权的锁顺序。
 check、fixture、Backend test 和 Docker suite 不能互相替代。通过只证明 DB-only bridge、adapter parser 和 ACL。
 
+## Slice 6BJ：通过 HTTP 读取原始区域快照
+
+6BJ 把 6BI 的 `ManagementOriginalRegionReportSnapshotStore` 接到固定的 HTTP 详情路径：
+
+```text
+GET /v1/projects/:projectId/management-original-region-report-snapshots/:snapshotId
+```
+
+### 请求顺序
+
+handler 必须先处理 Bearer identity。它先解析 token，再验证 external `issuer + subject`；只有这一步成功后，才验证 `projectId` 和 `snapshotId` 的 UUID、query、GET body 的 `Content-Length`／`Transfer-Encoding` 声明以及专用 store。没有 token 或 token 无效时，即使 path、query、body 或 store 有问题，也先返回 `401 unauthenticated`。这能避免攻击者用 malformed 请求探测资源或后端组合状态。
+
+认证通过后，handler 只向 6BI 的专用 store 传递 verified identity、显式 project UUID 和 snapshot UUID。它不从 `SessionContext`、客户端参数或其他 report family 推断项目，也不调用 generic、current-city 或 interest store。store Promise 完成前不能写 HTTP 响应；这就是 Promise gate。
+
+### 固定响应
+
+`completed` 的 JSON 根对象只有三个字段：
+
+```json
+{
+  "access_event_id": "…",
+  "snapshot_id": "…",
+  "report": {}
+}
+```
+
+固定状态如下：
+
+| HTTP 状态 | code |
+| --- | --- |
+| `401` | `unauthenticated` |
+| `400` | `invalid_management_original_region_report_snapshot_request` |
+| `403` | `management_original_region_report_snapshot_forbidden` |
+| `404` | `management_original_region_report_snapshot_not_found` |
+| `409` | `management_original_region_report_snapshot_untrusted` |
+| `503` | `management_original_region_report_snapshot_unavailable` |
+
+`404` 和 `409` 可以带 value-free `access_event_id`，但不能带报告正文或内部字段。成功和错误响应都使用 JSON 与 `Cache-Control: no-store`。响应不能包含数据库消息、SQL、栈、external subject、授权关系、报告格、来源、贡献者、区域名称、坐标或 PII。production composition 只注入 `PostgresManagementOriginalRegionReportSnapshotStore`；HTTP 层不访问 `app_private`，不复制 6BH／6BI 的授权、provenance、validator、撤权锁或 audit。
+
+### 如何测试以及测试证明什么
+
+6BJ 不增加 migration、database check、fixture、PostgreSQL integration 或并发脚本。先从仓库根目录运行 Backend 的 synthetic HTTP 测试：
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+这些测试覆盖固定 GET path、wrong method、两种 GET body 声明、认证先于请求验证、所有状态映射、错误脱敏、三字段成功 wire、JSON、`no-store`、Promise gate 和 production wiring。它们使用 fake store 与 synthetic identity，不需要真实账号或生产 JWT provider。
+
+需要检查既有 0069／0070 数据库合同时，再回到仓库根目录运行：
+
+```bash
+cd ../..
+./tool/run_postgres_tests_in_docker.sh
+```
+
+Docker runner 的结果只证明 synthetic PostgreSQL 的 private read、runtime bridge、strict parser、授权和 ACL。它不证明 6BJ HTTP 已在 production 身份提供方、Flutter、目录、导出、缓存、离线或六个平台真人环境中运行。HTTP 自动测试与 Docker 数据库测试是两层证据，不能互相替代。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和

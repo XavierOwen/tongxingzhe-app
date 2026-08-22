@@ -727,6 +727,22 @@ parser 拒绝额外字段、其他 report family、城市名称、坐标、来�
 HTTP、目录、导出、Flutter、Drift、缓存、离线、同步或真人平台证据。
 _Avoid_: runtime 直读 private schema、复用其他 report family bridge、宽泛 SQL、客户端重算、把 synthetic integration 当作生产身份或平台运行时证据
 
+**管理原始区域快照 HTTP 读取**:
+6BJ 通过固定的 `GET /v1/projects/:projectId/management-original-region-report-snapshots/:snapshotId` 调用 6BI
+`ManagementOriginalRegionReportSnapshotStore`。handler 先解析并验证 Bearer identity，再验证两个 UUID、query、GET body 的
+`Content-Length`／`Transfer-Encoding` 声明以及专用 store；认证失败先返回 `401`，不会用 malformed path、query、body 或缺失 store 探测资源状态。
+认证通过后只把 verified identity、显式 project 和 snapshot 传给 6BI，并等待 store Promise 完成后写响应。
+
+成功响应只含 `access_event_id`、`snapshot_id` 和 `report`。`400`、`403`、`404`、`409`、`503` 分别使用固定 request、forbidden、not_found、
+untrusted 和 unavailable code；`404`／`409` 只能附带 value-free `access_event_id`。成功和错误响应都使用 JSON 与 `Cache-Control: no-store`。
+
+响应不暴露数据库消息、SQL、栈、external subject、授权关系、报告格、来源、贡献者、区域名称、坐标或 PII。HTTP 层不使用 `SessionContext`，不调用
+generic、current-city 或 interest store，也不访问 `app_private` 或复制 6BI／6BH 的授权、provenance、validator、撤权锁和 audit。
+6BJ 不增加 migration、database check、fixture、PostgreSQL integration、并发、目录、latest、分页、搜索、筛选、导出、缓存、离线、Flutter、Drift、
+UI、报告生成／发布／更正、删除、retention、warehouse、production JWT 或真人平台证据；Backend route、handler 和 production composition 测试是
+本切片的 synthetic HTTP 证据。
+_Avoid_: 认证前验证路径、复用其他 report family store、自动选择 latest、缓存 protected report、把 DB-only Docker 结果当作 HTTP 或生产身份证据
+
 **管理报告清除**:
 组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
 _Avoid_: 授权撤回、报告到期、tombstone、superseded
