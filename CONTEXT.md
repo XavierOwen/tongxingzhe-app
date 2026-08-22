@@ -689,6 +689,21 @@ _Avoid_: 个人项目回退、多个布尔开关表示 report family、自动打
 它只属于 PostgreSQL 私有合同；6BD 不增加 snapshot、release、runtime、HTTP、Flutter、Drift、缓存、离线、同步、导出、父级／重叠处理、retention、warehouse 或真机验收。
 _Avoid_: current 归类、跨树聚合、as-of 重建、自动选择 latest、隐藏值、城市名称／边界／坐标、客户端报告
 
+**管理原始区域快照发布 lineage**:
+6BG 围绕 6BD 已保护的 original-region 报告保存一条原始区域专属的追加式 snapshot／release provenance，复用不可变的通用
+`management_report_snapshots` 存储，但使用独立的 release attempt、writer role、RLS 范围和 request-claim family；它不复用 channel、
+current-city 或 interest lineage，也不把 6BD executor 的即时结果自动解释为已发布快照。
+
+发布在请求、项目和 lineage 锁后重新确认 `release_management_reports`、组织／项目成员关系、可信报告时区 revision 和 6BD candidate。
+首个 `completed` candidate 建立 baseline；后续 snapshot 必须保持相同 report identity、期间定义、query／privacy／source scope、时区 revision
+和精确 `source_tree_version + source_content_fingerprint`，只能推进 cutoff、保持 source change sequence 不回退并链接当前 lineage head。
+来源树变化或不可用、已发布 lineage 与候选的固定上下文漂移、same／earlier cutoff、无共享期间或共享 protected 值／隐私状态变化时失败关闭，不生成 snapshot。
+executor 内部定义不一致属于实现错误，必须抛出，不能伪装成业务 blocked attempt。
+
+blocked attempt 只保存固定 reason 和最小 value-free lineage metadata，不保存候选报告、cells、隐藏前值、来源、contact、contributor、区域名称、坐标或 PII。
+这是 PostgreSQL 私有 DB-only 合同，不是 authorized read、runtime、HTTP、目录、导出、删除、retention、任意历史 `as-of` 或真实平台证据。
+_Avoid_: 复用其他 report family provenance、静默改写旧 snapshot、把 baseline 当 latest、把 blocked attempt 当报告、用 Docker synthetic 证据代替生产或真人运行时证据
+
 **管理报告清除**:
 组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
 _Avoid_: 授权撤回、报告到期、tombstone、superseded

@@ -28,7 +28,7 @@ Node 阶段要求九条 Backend integration 入口存在：地点来源、当前
 入口缺失、编译失败或断言失败都会使整套测试失败；不能把此前 SQL fixture 的通过单独写成
 Backend adapter 集成通过。
 
-schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer`、`tongxingzhe_region_mapping_writer`、`tongxingzhe_region_attribution_reader`、`tongxingzhe_management_region_report_reader`、`tongxingzhe_management_original_region_report_reader`、`tongxingzhe_management_interest_report_reader`、`tongxingzhe_management_current_city_snapshot_release_writer`、`tongxingzhe_management_interest_snapshot_release_writer` 和 `tongxingzhe_management_report_snapshot_lifecycle_writer`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
+schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer`、`tongxingzhe_region_mapping_writer`、`tongxingzhe_region_attribution_reader`、`tongxingzhe_management_region_report_reader`、`tongxingzhe_management_original_region_report_reader`、`tongxingzhe_management_interest_report_reader`、`tongxingzhe_management_current_city_snapshot_release_writer`、`tongxingzhe_management_interest_snapshot_release_writer`、`tongxingzhe_management_original_region_snapshot_release_writer` 和 `tongxingzhe_management_report_snapshot_lifecycle_writer`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
 
 ## 使用已有 PostgreSQL 测试库
 
@@ -841,6 +841,45 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 check、fixture 和并发脚本分别验证原始来源证据、单一来源树、唯一城市父级、`not_reportable`、混合树失败关闭、完整网格、阈值、互补隐藏、无敏感输出和 ACL。
 这些数据库证据不代表真实区域树内容、任意 `as-of`、Backend、HTTP、Flutter、生产身份、导出或六平台真人运行时。
+
+### 6BG：原始区域报告 snapshot/release lineage
+
+6BG 在 6BD 的 original-region 候选之上建立独立的私有 snapshot／release lineage。它复用不可变的
+`app_private.management_report_snapshots`，但使用独立的 `management_original_region_report_release_attempts`、
+`tongxingzhe_management_original_region_snapshot_release_writer`、RLS row scope 和 request-claim family。它不复用 channel、
+current-city 或 interest provenance，也不把一次 executor 返回值自动当作已发布快照。
+
+首次成功的 `completed` 候选建立 baseline。后续发布必须保持相同 report identity、query／privacy／source scope、期间、可信时区 revision
+和精确 `source_tree_version + source_content_fingerprint`，只能推进 cutoff、保持 source change sequence 不回退，并链接当前 lineage head。
+same／earlier cutoff、来源树改变或不可用、无共享期间、共享 protected 值／隐私状态变化，以及已发布 lineage 与候选的固定上下文漂移都失败关闭，不生成 snapshot。
+executor 内部定义不一致会抛出实现错误，不会伪装成业务 blocked attempt。
+授权仍有效时，同 request 精确重试不能新增 attempt 或 snapshot；身份漂移、跨 project 和跨 report family request claim 复用必须失败关闭。
+
+blocked attempt 只保存固定 reason 和最小 value-free lineage metadata，不保存 candidate report、cells、隐藏前值、source、contact、contributor、区域名称、坐标或 PII。
+snapshot、attempt 和 request claim 追加不可变；`PUBLIC`、runtime、普通 reader、其他 report-family writer 和区域维护角色不能直接读取或写入原始区域范围。
+
+从仓库根目录运行完整套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 会自动发现 0068 migration、structural check、fixture 和并发脚本。restore 阶段先运行 `tool/postgres_prepare_restore_roles.sh`，再恢复 dump，
+随后重跑 migration、check 和 fixture；不会重跑会提交 synthetic 行的并发脚本。专用测试库的调试顺序是：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_original_region_report_snapshot_lineage.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0068_management_original_region_report_snapshot_lineage.sql
+./tool/verify_management_original_region_report_snapshot_lineage_concurrency.sh
+```
+
+fixture 使用 `6bg*`，并发脚本使用独立的 `6bgc*` committed namespace；断言按 workspace、project 和 lineage 过滤。完整通过只证明 synthetic PostgreSQL
+中的 snapshot／release、授权、claim、幂等、并发、不可变性、value-free blocked attempt、checksum、restore role 和 ACL 合同。
+它不证明 authorized read、runtime、HTTP、Flutter、导出、删除、生产备份或六平台真人运行时。
 
 ### 如何验证 6AS PostgreSQL 合同
 
