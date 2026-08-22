@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/features/management_reports/management_report_browser.dart';
 import 'package:tongxingzhe_app/l10n/app_strings.dart';
 import 'package:tongxingzhe_app/management_reports/current_city_report_gateway.dart';
+import 'package:tongxingzhe_app/management_reports/interest_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_export_delivery.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
 
@@ -55,6 +56,232 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.widget<ChoiceChip>(channelView).selected, isTrue);
     expect(currentCityGateway.readRequests, isEmpty);
+  });
+
+  testWidgets('兴趣视图必须明确选择，且与渠道和 current-city 互斥', (tester) async {
+    final currentCityGateway = _CurrentCityGateway();
+    final interestGateway = _InterestGateway();
+    await tester.pumpWidget(
+      _app(
+        _Gateway(
+          context: _contextSnapshot(current: _projectA),
+          summaries: [_summary],
+        ),
+        currentCityGateway: currentCityGateway,
+        interestGateway: interestGateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final channelView = find.byKey(
+      const ValueKey('management-channel-report-view'),
+    );
+    final currentCityView = find.byKey(
+      const ValueKey('management-current-city-report-view'),
+    );
+    final interestView = find.byKey(
+      const ValueKey('management-interest-report-view'),
+    );
+    expect(tester.widget<ChoiceChip>(channelView).selected, isTrue);
+    expect(tester.widget<ChoiceChip>(currentCityView).selected, isFalse);
+    expect(tester.widget<ChoiceChip>(interestView).selected, isFalse);
+    expect(interestGateway.listedProjectIds, isEmpty);
+
+    await _tabTo(tester, interestView);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<ChoiceChip>(channelView).selected, isFalse);
+    expect(tester.widget<ChoiceChip>(currentCityView).selected, isFalse);
+    expect(tester.widget<ChoiceChip>(interestView).selected, isTrue);
+    expect(interestGateway.listedProjectIds, [_projectA.projectId]);
+    expect(currentCityGateway.listedProjectIds, isEmpty);
+    expect(
+      find.byKey(ValueKey('interest-report/${_projectA.projectId}')),
+      findsOneWidget,
+    );
+
+    await tester.tap(currentCityView);
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<ChoiceChip>(currentCityView).selected, isTrue);
+    expect(tester.widget<ChoiceChip>(interestView).selected, isFalse);
+    expect(interestGateway.listedProjectIds, [_projectA.projectId]);
+    expect(currentCityGateway.listedProjectIds, [_projectA.projectId]);
+    expect(
+      find.byKey(ValueKey('interest-report/${_projectA.projectId}')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('兴趣目录的项目来自 ManagementAnalysisContext 并随项目切换', (tester) async {
+    final gateway = _Gateway(
+      context: _contextSnapshot(current: _projectA),
+      summaries: [_summary],
+      selectResult: ManagementReportSuccess(
+        _contextSnapshot(current: _projectB),
+      ),
+    );
+    final interestGateway = _InterestGateway();
+    await tester.pumpWidget(_app(gateway, interestGateway: interestGateway));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('management-interest-report-view')),
+    );
+    await tester.pumpAndSettle();
+    expect(interestGateway.listedProjectIds, [_projectA.projectId]);
+
+    await tester.tap(find.byKey(const ValueKey('management-project-picker')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('第二组织 · 第二项目').last);
+    await tester.pumpAndSettle();
+
+    expect(gateway.selectProjectIds, [_projectB.projectId]);
+    expect(interestGateway.listedProjectIds, [
+      _projectA.projectId,
+      _projectB.projectId,
+    ]);
+    expect(
+      find.byKey(ValueKey('interest-report/${_projectB.projectId}')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('interest 目录迟到响应不覆盖已切回的渠道视图', (tester) async {
+    final interestGateway = _DeferredInterestGateway();
+    await tester.pumpWidget(
+      _app(
+        _Gateway(
+          context: _contextSnapshot(current: _projectA),
+          summaries: [_summary],
+        ),
+        interestGateway: interestGateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('management-interest-report-view')),
+    );
+    await tester.pump();
+    expect(interestGateway.listedProjectIds, [_projectA.projectId]);
+    expect(
+      find.byKey(ValueKey('interest-report/${_projectA.projectId}')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('management-channel-report-view')),
+    );
+    await tester.pumpAndSettle();
+
+    interestGateway
+        .directoryFor(_projectA.projectId)
+        .complete(
+          InterestReportSuccess(
+            InterestReportSnapshotDirectory(
+              accessEventId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+              projectId: _projectA.projectId,
+              snapshots: [_interestSummary],
+            ),
+          ),
+        );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<ChoiceChip>(
+            find.byKey(const ValueKey('management-channel-report-view')),
+          )
+          .selected,
+      isTrue,
+    );
+    expect(
+      find.byKey(ValueKey('interest-report/${_projectA.projectId}')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(ValueKey('management-report-${_summary.snapshotId}')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('interest 项目切换后忽略旧项目迟到的目录响应', (tester) async {
+    final gateway = _Gateway(
+      context: _contextSnapshot(current: _projectA),
+      summaries: [_summary],
+      selectResult: ManagementReportSuccess(
+        _contextSnapshot(current: _projectB),
+      ),
+    );
+    final interestGateway = _DeferredInterestGateway();
+    await tester.pumpWidget(_app(gateway, interestGateway: interestGateway));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('management-interest-report-view')),
+    );
+    await tester.pump();
+    expect(interestGateway.listedProjectIds, [_projectA.projectId]);
+
+    await tester.tap(find.byKey(const ValueKey('management-project-picker')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('第二组织 · 第二项目').last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(interestGateway.listedProjectIds, [
+      _projectA.projectId,
+      _projectB.projectId,
+    ]);
+
+    interestGateway
+        .directoryFor(_projectB.projectId)
+        .complete(
+          InterestReportSuccess(
+            InterestReportSnapshotDirectory(
+              accessEventId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+              projectId: _projectB.projectId,
+              snapshots: [_interestSummary],
+            ),
+          ),
+        );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(ValueKey('interest-report/${_projectB.projectId}')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(ValueKey('interest-report-${_interestSummary.snapshotId}')),
+      findsOneWidget,
+    );
+
+    interestGateway
+        .directoryFor(_projectA.projectId)
+        .complete(
+          InterestReportSuccess(
+            InterestReportSnapshotDirectory(
+              accessEventId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+              projectId: _projectA.projectId,
+              snapshots: const [],
+            ),
+          ),
+        );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(ValueKey('interest-report/${_projectA.projectId}')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(ValueKey('interest-report/${_projectB.projectId}')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(ValueKey('interest-report-${_interestSummary.snapshotId}')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('320 宽和 200% 文字下目录与项目选择不溢出', (tester) async {
@@ -235,8 +462,12 @@ void main() {
   });
 
   testWidgets('没有保存项目时明确要求选择，空授权列表不自动选择', (tester) async {
+    final interestGateway = _InterestGateway();
     await tester.pumpWidget(
-      _app(_Gateway(context: _contextSnapshot(current: null, available: []))),
+      _app(
+        _Gateway(context: _contextSnapshot(current: null, available: [])),
+        interestGateway: interestGateway,
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -246,6 +477,7 @@ void main() {
       find.byKey(const ValueKey('management-project-picker')),
       findsNothing,
     );
+    expect(interestGateway.listedProjectIds, isEmpty);
   });
 
   testWidgets('网络失败显示 live region 和可重试动作', (tester) async {
@@ -628,6 +860,7 @@ Widget _app(
   TextScaler textScaler = TextScaler.noScaling,
   ManagementReportExportDelivery? delivery,
   CurrentCityReportGateway? currentCityGateway,
+  InterestReportGateway? interestGateway,
 }) => MaterialApp(
   builder: (context, child) => MediaQuery(
     data: MediaQuery.of(context).copyWith(textScaler: textScaler),
@@ -639,6 +872,7 @@ Widget _app(
       gateway: gateway,
       currentCityGateway:
           currentCityGateway ?? const DeferredCurrentCityReportGateway(),
+      interestGateway: interestGateway ?? const DeferredInterestReportGateway(),
       exportDelivery: delivery ?? _Delivery(isAvailable: false),
     ),
   ),
@@ -814,6 +1048,67 @@ final class _CurrentCityGateway implements CurrentCityReportGateway {
   }
 }
 
+final class _InterestGateway implements InterestReportGateway {
+  final listedProjectIds = <String>[];
+  final readRequests = <(String, InterestReportSnapshotSummary)>[];
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  Future<InterestReportResult<InterestReportSnapshotDirectory>> listSnapshots(
+    String projectId,
+  ) async {
+    listedProjectIds.add(projectId);
+    return InterestReportSuccess(
+      InterestReportSnapshotDirectory(
+        accessEventId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        projectId: projectId,
+        snapshots: [_interestSummary],
+      ),
+    );
+  }
+
+  @override
+  Future<InterestReportResult<InterestReportSnapshot>> readSnapshot({
+    required String projectId,
+    required InterestReportSnapshotSummary summary,
+  }) async {
+    readRequests.add((projectId, summary));
+    return const InterestReportRejected(InterestReportFailureCode.notFound);
+  }
+}
+
+final class _DeferredInterestGateway implements InterestReportGateway {
+  final _directories =
+      <
+        String,
+        Completer<InterestReportResult<InterestReportSnapshotDirectory>>
+      >{};
+  final listedProjectIds = <String>[];
+
+  Completer<InterestReportResult<InterestReportSnapshotDirectory>> directoryFor(
+    String projectId,
+  ) => _directories.putIfAbsent(projectId, Completer.new);
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  Future<InterestReportResult<InterestReportSnapshotDirectory>> listSnapshots(
+    String projectId,
+  ) {
+    listedProjectIds.add(projectId);
+    return directoryFor(projectId).future;
+  }
+
+  @override
+  Future<InterestReportResult<InterestReportSnapshot>> readSnapshot({
+    required String projectId,
+    required InterestReportSnapshotSummary summary,
+  }) async => const InterestReportRejected(InterestReportFailureCode.notFound);
+}
+
 final class _DeferredCurrentCityGateway implements CurrentCityReportGateway {
   final directory =
       Completer<CurrentCityReportResult<CurrentCityReportSnapshotDirectory>>();
@@ -878,6 +1173,15 @@ const _projectB = ManagementAnalysisContext(
 final _currentCitySummary = CurrentCityReportSnapshotSummary(
   snapshotId: '66666666-6666-4666-8666-666666666666',
   reportId: 'contact_sessions_by_current_city_two_periods',
+  reportVersion: 1,
+  reportingTimeZone: 'America/Chicago',
+  dataCutoffUtc: DateTime.utc(2030, 1, 22),
+  releasedAtUtc: DateTime.utc(2030, 1, 22, 0, 1),
+);
+
+final _interestSummary = InterestReportSnapshotSummary(
+  snapshotId: '77777777-7777-4777-8777-777777777777',
+  reportId: 'contact_sessions_by_interest_level_two_periods',
   reportVersion: 1,
   reportingTimeZone: 'America/Chicago',
   dataCutoffUtc: DateTime.utc(2030, 1, 22),

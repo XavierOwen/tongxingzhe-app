@@ -651,6 +651,17 @@ parser 检查固定根键、字段、类型、顺序、项目／快照绑定、`
 _Avoid_: 暴露 `access_contract_id`、自动选择首项、客户端重算或隐藏、复用 channel／current-city gateway、重复刷新、持久化受保护报告、
 把 synthetic HTTP／Dart 测试当作 Backend 授权或平台运行时证据
 
+**管理兴趣报告 Flutter consumer**:
+6BC 把 6BB 的独立 interest gateway 接入管理报告浏览器。浏览器保留渠道、当前城市和兴趣三个互斥视图，
+默认仍是渠道；只有用户明确选择兴趣视图后，才用当前已重新授权的 `ManagementAnalysisContext.projectId`
+读取目录。它不使用个人 `TrustedSessionContext`，也不自动打开目录首项或推断 current／latest。
+独立 panel 和 ViewModel 只接受当前目录中用户明确选择的 interest summary，显示两个期间的固定十格。
+`displayed` 显示服务端已保护的计数，`suppressed` 只显示“已隐藏 / Hidden”，不显示为零。切换项目、视图、
+返回目录、重试或 dispose 会使旧 generation 失效，迟到响应不能恢复旧项目或旧快照。结果只留在内存，支持中英文、
+小屏、200% 字号、键盘、焦点恢复、heading 和 live region。
+_Avoid_: 个人项目回退、多个布尔开关表示 report family、自动打开首项、客户端总计／比例／趋势、隐藏值当零、旧响应写回、
+复用 current-city DTO／Widget、Drift、缓存、离线、导出或真机证据
+
 **更正版报告**:
 补录、修订、作废或分析定义修正后重新生成并明确取代某份报告快照的新快照；原报告保留但标记已被取代。
 _Avoid_: 静默改写、删除旧报告

@@ -4,12 +4,16 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_strings.dart';
 import '../../management_reports/current_city_report_gateway.dart';
+import '../../management_reports/interest_report_gateway.dart';
 import '../../management_reports/management_report_export_delivery.dart';
 import '../../management_reports/management_report_gateway.dart';
 import '../contact_entry/contact_channel_label.dart';
 import '../contact_journal/contact_models.dart';
 import 'current_city_report_panel.dart';
+import 'interest_report_panel.dart';
 import 'management_report_browser_view_model.dart';
+
+enum _ManagementReportFamily { channel, currentCity, interest }
 
 final class ManagementReportBrowser extends StatefulWidget {
   const ManagementReportBrowser({
@@ -17,12 +21,14 @@ final class ManagementReportBrowser extends StatefulWidget {
     required this.text,
     required this.gateway,
     required this.currentCityGateway,
+    required this.interestGateway,
     required this.exportDelivery,
   });
 
   final AppStrings text;
   final ManagementReportGateway gateway;
   final CurrentCityReportGateway currentCityGateway;
+  final InterestReportGateway interestGateway;
   final ManagementReportExportDelivery exportDelivery;
 
   @override
@@ -42,7 +48,7 @@ final class _ManagementReportBrowserState
   ManagementReportBrowserStage? _previousStage;
   ManagementReportExportStage? _previousExportStage;
   String? _returnFocusSnapshotId;
-  var _showCurrentCity = false;
+  var _reportFamily = _ManagementReportFamily.channel;
 
   @override
   void initState() {
@@ -56,6 +62,7 @@ final class _ManagementReportBrowserState
     super.didUpdateWidget(oldWidget);
     if (oldWidget.gateway == widget.gateway &&
         oldWidget.currentCityGateway == widget.currentCityGateway &&
+        oldWidget.interestGateway == widget.interestGateway &&
         oldWidget.exportDelivery == widget.exportDelivery) {
       return;
     }
@@ -64,7 +71,7 @@ final class _ManagementReportBrowserState
       ..dispose();
     _clearSnapshotFocusNodes();
     _returnFocusSnapshotId = null;
-    _showCurrentCity = false;
+    _reportFamily = _ManagementReportFamily.channel;
     _viewModel = _createViewModel();
     unawaited(_viewModel.initialize());
   }
@@ -96,7 +103,12 @@ final class _ManagementReportBrowserState
     final state = _viewModel.state;
     final text = widget.text;
     final showCurrentCityPanel =
-        _showCurrentCity && state.currentContext != null;
+        _reportFamily == _ManagementReportFamily.currentCity &&
+        state.currentContext != null;
+    final showInterestPanel =
+        _reportFamily == _ManagementReportFamily.interest &&
+        state.currentContext != null;
+    final showAlternatePanel = showCurrentCityPanel || showInterestPanel;
     return ListView(
       key: const ValueKey('management-report-browser'),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
@@ -114,16 +126,14 @@ final class _ManagementReportBrowserState
         if (state.currentContext != null) ...[
           _ReportTypePicker(
             text: text,
-            showCurrentCity: _showCurrentCity,
+            family: _reportFamily,
             enabled:
                 state.stage != ManagementReportBrowserStage.selectingContext,
-            onSelected: (showCurrentCity) {
-              setState(() => _showCurrentCity = showCurrentCity);
-            },
+            onSelected: _selectReportFamily,
           ),
           const SizedBox(height: 12),
         ],
-        if (!showCurrentCityPanel && _showsBackAction(state)) ...[
+        if (!showAlternatePanel && _showsBackAction(state)) ...[
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
@@ -137,7 +147,7 @@ final class _ManagementReportBrowserState
           const SizedBox(height: 8),
         ] else if (state.stage != ManagementReportBrowserStage.loadingContext &&
             state.availableContexts.isNotEmpty &&
-            (_showCurrentCity || !_showsBackAction(state)))
+            (showAlternatePanel || !_showsBackAction(state)))
           _ProjectPicker(
             text: text,
             focusNode: _projectFocusNode,
@@ -157,7 +167,7 @@ final class _ManagementReportBrowserState
             Text(text.t('managementReportNoProjects')),
           ],
         ],
-        if (!showCurrentCityPanel)
+        if (!showAlternatePanel)
           if (_loadingLabel(state) case final label?) ...[
             const SizedBox(height: 20),
             LinearProgressIndicator(semanticsLabel: label),
@@ -173,15 +183,21 @@ final class _ManagementReportBrowserState
             gateway: widget.currentCityGateway,
             projectId: state.currentContext!.projectId,
           )
-        else if (!showCurrentCityPanel &&
-            state.stage == ManagementReportBrowserStage.directory)
+        else if (showInterestPanel)
+          InterestReportPanel(
+            key: ValueKey('interest-report/${state.currentContext!.projectId}'),
+            text: text,
+            gateway: widget.interestGateway,
+            projectId: state.currentContext!.projectId,
+          )
+        else if (state.stage == ManagementReportBrowserStage.directory)
           _Directory(
             text: text,
             snapshots: state.snapshots,
             focusNodeFor: _snapshotFocusNode,
             onOpen: _openSnapshot,
           ),
-        if (!showCurrentCityPanel &&
+        if (!showAlternatePanel &&
             state.stage == ManagementReportBrowserStage.report &&
             state.snapshot != null)
           _ReportDetail(
@@ -194,7 +210,7 @@ final class _ManagementReportBrowserState
             onPrepareExport: () => unawaited(_viewModel.prepareExport()),
             onRequestDownload: () => unawaited(_viewModel.requestDownload()),
           ),
-        if (!showCurrentCityPanel &&
+        if (!showAlternatePanel &&
             state.stage == ManagementReportBrowserStage.failure)
           _FailurePanel(
             text: text,
@@ -203,6 +219,15 @@ final class _ManagementReportBrowserState
           ),
       ],
     );
+  }
+
+  void _selectReportFamily(_ManagementReportFamily family) {
+    if (_reportFamily == family) return;
+    if (_viewModel.state.currentContext != null) {
+      _viewModel.showDirectory();
+    }
+    _returnFocusSnapshotId = null;
+    setState(() => _reportFamily = family);
   }
 
   bool _showsBackAction(ManagementReportBrowserState state) =>
@@ -284,15 +309,15 @@ final class _ManagementReportBrowserState
 final class _ReportTypePicker extends StatelessWidget {
   const _ReportTypePicker({
     required this.text,
-    required this.showCurrentCity,
+    required this.family,
     required this.enabled,
     required this.onSelected,
   });
 
   final AppStrings text;
-  final bool showCurrentCity;
+  final _ManagementReportFamily family;
   final bool enabled;
-  final ValueChanged<bool> onSelected;
+  final ValueChanged<_ManagementReportFamily> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -306,14 +331,26 @@ final class _ReportTypePicker extends StatelessWidget {
           ChoiceChip(
             key: const ValueKey('management-channel-report-view'),
             label: Text(text.t('managementReportChannelView')),
-            selected: !showCurrentCity,
-            onSelected: enabled ? (_) => onSelected(false) : null,
+            selected: family == _ManagementReportFamily.channel,
+            onSelected: enabled
+                ? (_) => onSelected(_ManagementReportFamily.channel)
+                : null,
           ),
           ChoiceChip(
             key: const ValueKey('management-current-city-report-view'),
             label: Text(text.t('managementReportCurrentCityView')),
-            selected: showCurrentCity,
-            onSelected: enabled ? (_) => onSelected(true) : null,
+            selected: family == _ManagementReportFamily.currentCity,
+            onSelected: enabled
+                ? (_) => onSelected(_ManagementReportFamily.currentCity)
+                : null,
+          ),
+          ChoiceChip(
+            key: const ValueKey('management-interest-report-view'),
+            label: Text(text.t('managementReportInterestView')),
+            selected: family == _ManagementReportFamily.interest,
+            onSelected: enabled
+                ? (_) => onSelected(_ManagementReportFamily.interest)
+                : null,
           ),
         ],
       ),

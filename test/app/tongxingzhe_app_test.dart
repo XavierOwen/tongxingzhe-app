@@ -19,6 +19,7 @@ import 'package:tongxingzhe_app/features/contact_metrics/relationship_stage_chan
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/management_reports/current_city_report_gateway.dart';
+import 'package:tongxingzhe_app/management_reports/interest_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
 import 'package:tongxingzhe_app/project_settings/personal_follow_up_consent_opt_in.dart';
 import 'package:tongxingzhe_app/questionnaires/questionnaire_contract.dart';
@@ -49,6 +50,7 @@ void main() {
     final ratioGateway = _ReadyConsentRatioGateway();
     final stageChangeGateway = _ReadyRelationshipStageChangeSummaryGateway();
     final currentCityGateway = _TrackingCurrentCityReportGateway();
+    final interestGateway = _TrackingInterestReportGateway();
     final dependencies = AppDependencies(
       databaseFactory: _SingleDatabaseFactory(database),
       clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
@@ -61,6 +63,7 @@ void main() {
       managementReportGatewayBuilder: (_) =>
           const _EmptyManagementReportGateway(),
       currentCityReportGatewayBuilder: (_) => currentCityGateway,
+      interestReportGatewayBuilder: (_) => interestGateway,
       currentRelationshipStageGatewayBuilder: (_) =>
           const _OneRelationshipStageGateway(),
       personalFollowUpConsentRatioGatewayBuilder: (_) => ratioGateway,
@@ -123,6 +126,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pumpAndSettle();
     expect(currentCityGateway.closeCount, 1);
+    expect(interestGateway.closeCount, 1);
   });
 
   testWidgets('占比服务失败时最近七日本地事实仍可读', (tester) async {
@@ -1988,6 +1992,26 @@ final class _TrackingCurrentCityReportGateway
   }) async => const CurrentCityReportRejected(
     CurrentCityReportFailureCode.notConfigured,
   );
+}
+
+final class _TrackingInterestReportGateway implements InterestReportGateway {
+  var closeCount = 0;
+
+  @override
+  Future<void> close() async => closeCount++;
+
+  @override
+  Future<InterestReportResult<InterestReportSnapshotDirectory>> listSnapshots(
+    String projectId,
+  ) async =>
+      const InterestReportRejected(InterestReportFailureCode.notConfigured);
+
+  @override
+  Future<InterestReportResult<InterestReportSnapshot>> readSnapshot({
+    required String projectId,
+    required InterestReportSnapshotSummary summary,
+  }) async =>
+      const InterestReportRejected(InterestReportFailureCode.notConfigured);
 }
 
 final class _OneRelationshipStageGateway
