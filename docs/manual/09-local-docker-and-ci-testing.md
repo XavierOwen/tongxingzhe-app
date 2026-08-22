@@ -941,6 +941,61 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 check 证明对象形状、owner、`SECURITY DEFINER`、固定 search path 和 ACL。fixture 证明合法／不可信／未知结果、再次 validator、value-free audit 和不可变性。
 并发脚本用两个独立数据库会话证明 read-first 与 revoke-first 的锁顺序。三者不能互相替代，完整 Docker 还负责 checksum 与 restore。
 
+### 6BI：验证原始区域快照 runtime bridge
+
+6BI 把 6BH 的 0069 private read 接到 Backend runtime。它只接受 Backend 已验证的 exact external `issuer + subject`、显式 project UUID 和 snapshot UUID。
+它不接受内部用户 ID、capability、`SessionContext`、时区、截止点、source tree tuple、筛选或 SQL。0070 bridge 只调用 0069 private function，runtime
+只有 bridge `EXECUTE`。
+
+Backend adapter 只执行一次固定参数化 SQL。strict parser 检查固定 envelope、请求和解析出的 snapshot、状态、reason code、项目绑定，以及
+original-region report 的 17 个固定 keys。`completed` 还必须有 selected source tree tuple、两个完整期间、连续 `cell_order`、安全整数和
+`suppressed = null`。parser 拒绝额外字段、其他 report family、城市名称、坐标、来源记录、贡献者、contact 和 PII。它只把 SQLSTATE `42501` 映射为
+typed `forbidden`。`not_found` 和 `untrusted_provenance` 不含报告正文。
+
+#### 第一次用 Docker 运行 6BI
+
+Docker 是一次性测试环境。Docker Desktop 提供 Docker Engine。runner 启动隔离的 PostgreSQL 和 Node 容器，使用 synthetic 数据运行测试，完成后删除容器。
+它不连接 production，也不会修改真实项目。
+
+1. 打开 Docker Desktop，等待 Engine 完成启动。
+2. 在仓库根目录运行：
+
+   ```bash
+   cd "$(git rev-parse --show-toplevel)"
+   ./tool/run_postgres_tests_in_docker.sh
+   ```
+
+runner 自动发现 0070 migration、structural check 和 rollback fixture，并显式运行原始区域 runtime integration。它还运行 0069 read／revoke 并发、checksum
+和 dump／restore。恢复库先准备 restore roles，再重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。
+
+成功输出只能说明 0070 bridge、Backend adapter、strict parser 和 ACL 在 synthetic PostgreSQL 中通过。0069 的 read／revoke 并发仍是 private read 的证据。
+这些结果不证明 HTTP、Flutter、目录、导出、生产 identity provider、真实账号或六平台真人运行时。
+
+#### 只调试 6BI 专用 PostgreSQL 测试库
+
+只有 Docker runner 已能工作，或需要定位单项失败时，才使用专用测试库。先确认 `DATABASE_URL` 指向新的空测试库，绝不能指向 production：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_runtime_authorized_management_original_region_report_snapshot_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0070_runtime_authorized_management_original_region_report_snapshot_read.sql
+```
+
+然后运行 Backend 的静态检查和测试：
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+这些命令使用 synthetic identity 和 snapshot，不需要真实账号。check、fixture、Backend test 和 Docker suite 不能互相替代。0070 没有新的提交型并发脚本，
+因为 0069 已覆盖 read／revoke 锁顺序。通过只证明 DB-only bridge、adapter parser 和最小 ACL。
+
 ### 5.5 验证同步提醒和逐设备通知开关
 
 提醒测试分四层。第一次接触项目时，可以按以下顺序运行：

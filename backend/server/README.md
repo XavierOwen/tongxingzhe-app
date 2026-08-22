@@ -515,6 +515,67 @@ runner 自动发现 0065 migration、check 和 fixture，并运行 interest dire
 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。integration 必须读取自己的 interest directory fixture，不得使用
 `CURRENT_CITY_RUNTIME_FIXTURE`。上述证据只证明 DB、Backend 和 HTTP 合同，不证明 Flutter、导出、缓存、离线、生产身份或真实平台运行时。
 
+## 原始区域快照 runtime bridge 合同
+
+6BI 把 6BH 的 0069 private read 接到 Backend runtime。调用方必须先得到 Backend 验证的 `VerifiedIdentity`，并提供显式 project UUID 和 snapshot UUID。
+它不是 HTTP route，也不负责 Bearer／JWT 验证。它不使用 `SessionContext`、通用 reader、current-city reader、interest reader 或客户端 SQL。
+
+固定 bridge 调用形状为：
+
+```sql
+SELECT app_data.read_authorized_management_original_region_report_snapshot_v1(
+  $1::text, $2::text, $3::uuid, $4::uuid
+) AS access_result
+```
+
+bridge 用 exact `issuer + subject` 匹配现有且 active 的 identity。它不 trim、bootstrap、创建账号或个人上下文，也不接受内部用户 ID、capability、时区、
+截止点、期间、source tree tuple、筛选和 SQL。bridge 使用 `SECURITY DEFINER` 与固定 `search_path = pg_catalog`，只调用
+`app_private.read_authorized_management_original_region_report_snapshot_v1(uuid, uuid, uuid)`。runtime 只有 bridge `EXECUTE`，没有
+`app_private` schema usage，不能读取用户、identity、snapshot、release attempt、request claim 或 audit 表。
+
+adapter 只执行一次固定参数化 SQL。strict parser 检查 0069 的固定 root keys、请求和解析出的 snapshot、状态、reason code、project／snapshot 绑定，
+以及 original-region report 的 17 个固定 keys。`completed` 还必须通过 selected source tree tuple、两个完整期间、连续 `cell_order`、安全整数和
+`suppressed = null` 检查。parser 拒绝额外字段、其他 report family、城市名称、坐标、来源记录、贡献者、contact 和 PII；`not_found` 与
+`untrusted_provenance` 不含 `protected_report`。它只把 SQLSTATE `42501` 映射为 typed `forbidden`，其他数据库错误继续作为内部错误向上抛出。
+
+6BI 不增加 HTTP route、目录、latest、导出、Flutter、Drift、缓存、离线、同步、删除或 retention。0070 bridge 不复制 0069 的授权、6BD validator、
+0068 provenance、撤权锁或 audit，也不追加第二条 audit。0069 已覆盖 private read 与 revoke 并发，本 Slice 不增加新的提交型并发脚本。
+
+### 6BI 的本地测试
+
+先运行 Backend 的静态检查和无数据库合同测试：
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+再从仓库根目录运行 PostgreSQL Docker 套件：
+
+```bash
+cd ../..
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 自动发现 0070 migration、structural check 和 rollback fixture，并显式运行原始区域 runtime integration。它还运行 0069 read／revoke 并发、
+checksum 和 dump／restore。恢复库只重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。
+
+如果只调试专用测试库，先确认 `DATABASE_URL` 不是 production，再运行 migration、0070 check 和 fixture。fixture 使用 synthetic identity 和快照，
+不会连接真实 identity provider：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_runtime_authorized_management_original_region_report_snapshot_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0070_runtime_authorized_management_original_region_report_snapshot_read.sql
+```
+
+通过只证明 DB-only bridge、Backend adapter parser 和最小 ACL。它不证明 HTTP、Flutter、目录、导出、生产身份或六平台真人运行时。
+
 ## 管理报告快照目录合同
 
 `GET /v1/projects/:projectId/management-report-snapshots` 只接受一个显式项目 UUID。它不接受 body、query、筛选、分页、报告 ID、时区、capability 或内部用户 ID。6M 保存的管理分析选择只帮助导航，不是授权，也不会替代 path 中的项目。

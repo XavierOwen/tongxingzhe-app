@@ -2155,6 +2155,81 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 check 检查对象形状、owner、`SECURITY DEFINER`、固定 search path 和最小 ACL；fixture 检查正常、未知、不可信、再次验证、audit 和不可变性；
 并发脚本使用两个连接检查 read-first 和 revoke-first。并发脚本会提交 synthetic 行，重复运行前应重建空库。这三层证据不能互相替代。
 
+## Slice 6BI：通过 Backend runtime 读取原始区域快照
+
+6BI 把 6BH 的 0069 private read 接到 Backend runtime。Backend 先验证 external `issuer + subject`，再把 verified identity、显式 project UUID 和
+snapshot UUID 交给 0070 bridge。bridge 只映射现有且 active 的 identity，不 trim、bootstrap、读取 `SessionContext`，也不接受内部用户 ID、capability、
+时区、截止点、source tree tuple、筛选或 SQL。runtime 只有 bridge `EXECUTE`，不能使用 `app_private` schema。
+
+### bridge 的一次固定调用
+
+Backend adapter 只执行一次固定参数化 SQL：
+
+```sql
+SELECT app_data.read_authorized_management_original_region_report_snapshot_v1(
+  $1::text, $2::text, $3::uuid, $4::uuid
+) AS access_result
+```
+
+0070 bridge 使用 `SECURITY DEFINER` 和固定 `search_path = pg_catalog`，只调用
+`app_private.read_authorized_management_original_region_report_snapshot_v1(uuid, uuid, uuid)`。它不复制 0069 的授权、0068 provenance、6BD
+validator、撤权锁或 audit。`PUBLIC`、普通 app role、0066 reader、0068 writer 和其他 report-family 角色不能执行 bridge 或 private reader。
+
+### strict parser 保护什么
+
+parser 只接受 0069 的固定 envelope。`completed` 必须包含 original-region report 的 17 个固定 keys：报告 identity、metric、维度、视图、粒度、
+query fingerprint、privacy policy、source scope、project、periods、data cutoff、source change sequence、source tree context、状态和 cells。
+它还必须确认请求与返回的 project／snapshot 绑定，selected source tree tuple 与报告一致，两个期间完整，cells 的 `cell_order` 连续，显示值是安全整数，
+隐藏格的 `value_count` 是 `null`。parser 拒绝额外字段、其他 report family、城市名称、坐标、来源记录、贡献者、contact 和 PII。
+
+`not_found` 和 `untrusted_provenance` 没有 `protected_report`。adapter 只把 SQLSTATE `42501` 映射为 typed `forbidden`，未知 SQLSTATE 仍按内部错误处理。
+bridge 和 adapter 不追加第二条 audit，也不把报告值写入日志。
+
+### 第一次验证 6BI
+
+没有用过 Docker 时，可以把它看成一次性测试环境。Docker Desktop 启动隔离的 PostgreSQL 和 Node 容器，runner 使用 synthetic 数据运行测试，结束后删除容器。
+它不连接 production，也不会修改真实项目。
+
+1. 打开 Docker Desktop，等待 Docker Engine 显示已运行。
+2. 打开终端，进入仓库根目录。
+3. 运行完整测试：
+
+   ```bash
+   cd "$(git rev-parse --show-toplevel)"
+   ./tool/run_postgres_tests_in_docker.sh
+   ```
+
+runner 自动发现 0070 migration、structural check 和 rollback fixture，并运行原始区域 runtime integration。它还运行 0069 read／revoke 并发、checksum 和
+dump／restore。恢复库先准备 cluster roles，再重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。
+
+完整通过只证明 synthetic PostgreSQL 的 0070 bridge、Backend adapter、strict parser 和最小 ACL。它不证明 HTTP、Flutter、目录、导出、生产 identity provider、
+真实账号或六平台真人运行时。
+
+### 只调试专用测试库
+
+只有需要定位单项 SQL 失败时，才使用专用测试库。先确认 `DATABASE_URL` 指向新的空库，绝不能指向 production。以下命令会写入 synthetic 数据：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_runtime_authorized_management_original_region_report_snapshot_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0070_runtime_authorized_management_original_region_report_snapshot_read.sql
+```
+
+然后运行 Backend 检查和测试：
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+重复运行前重建空测试库，因为 fixture 会使用固定 synthetic identity 和 snapshot。0070 不新增提交型并发脚本，0069 已覆盖 private read 与撤权的锁顺序。
+check、fixture、Backend test 和 Docker suite 不能互相替代。通过只证明 DB-only bridge、adapter parser 和 ACL。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和
