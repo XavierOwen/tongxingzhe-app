@@ -316,6 +316,17 @@ _Avoid_: original 区域视图、最小区域下钻、任意区域筛选、生�
 这是 DB-only 报告候选，不是 snapshot、授权读取、runtime、HTTP、Flutter、缓存、离线、导出或生产平台证据。
 _Avoid_: 混合来源树、current 区域归类、as-of 查询、跨树相减、隐藏值、城市名称猜测、生产报告
 
+**渠道管理报告快照取代登记**:
+6BE 在 private PostgreSQL 中登记两份已经具有 6J trusted-v2 provenance 的渠道管理报告快照之间的直接 replacement 关系。两份快照必须属于同一项目、report ID、version、query fingerprint、
+reporting time zone 和 release lineage；新快照的 `data_cutoff_utc` 与发布时间必须晚于旧快照。登记只引用已存在的快照，不生成 snapshot、release attempt 或报告正文。
+登记原因只允许 `late_accepted_data`、`contact_revision` 和 `contact_void`。分析定义修正和跨版本取代留给后续独立合同。
+每份旧快照最多有一个直接替代者，每份新快照最多替代一份旧快照；关系可以形成严格向前的链，但不能自链接、分叉或循环，只有当前链头可以继续被取代。
+登记在取得会等待的锁后重新确认 `release_management_reports` 和 trusted-v2 provenance。相同 request UUID 与 canonical payload 精确幂等，载荷漂移、跨项目、current-city、interest、legacy、blocked 或未知来源失败关闭。
+生命周期查询对可信渠道快照只返回快照 ID、`active`／`superseded` 状态和直接 replacement snapshot ID；未知或不可信来源返回 value-free `not_found`。
+它不返回报告正文、cells、隐藏前值、来源、贡献者、地点、授权关系或 PII。
+关系和最小审计证据追加不可变，不允许 UPDATE 或 DELETE。
+_Avoid_: 生成新快照、静默改写旧快照、自动选择 latest、跨 report family 复用 lineage、把取代登记当作删除、tombstone 或 retention 策略
+
 **current 城市报告受保护快照**:
 由 6AN 固定定义、两个完整 ISO 周、完整城市网格、目标树 tuple、可信报告时区 revision、数据截止时间和
 source change watermark 组成的不可变私有报告文档；它只能在 `release_management_reports` 能力和可信时区上下文重新确认后建立，
