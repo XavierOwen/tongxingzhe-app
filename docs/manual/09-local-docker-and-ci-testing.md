@@ -840,6 +840,57 @@ dart run tool/check_markdown_links.dart
 看到 Docker 成功只能记录“既有 PostgreSQL 合同仍通过”。不能记录 logical gate、物理清除、production 备份清除或真人平台删除已经通过。
 未来 Slice 7 的实现必须分别验证恢复期、按时恢复、重复请求、账号删除、全部 report family、replacement 链、失败重试、最小删除审计和恢复副本。
 
+### 6BG：验证原始区域报告 snapshot/release lineage
+
+6BG 在 6BD 的 original-region 报告候选之上增加不可变 snapshot 和独立发布 lineage。它不是读取功能，也不是删除功能。
+6BD executor 负责生成一次受保护候选；6BG 负责在数据库内确认发布能力、固定报告时区 revision、source tree tuple、cutoff 和 source watermark，
+再保存 baseline 或后续 successor。channel、current-city 和 interest 使用自己的 release family，不能把它们的 snapshot 或 request UUID 当作 6BG 的来源。
+
+6BG 的 blocked attempt 只保存固定原因和最小 lineage metadata。它不能保存候选报告、cells、隐藏前值、来源、contact、contributor、区域名称、坐标或 PII。
+因此，查询 attempt 表时看不到“被拒绝候选的报告值”是预期行为。这个 slice 也不增加 authorized read、runtime bridge、HTTP、Flutter、目录、导出、
+缓存、离线、同步、parent／overlap 下钻、任意历史 `as-of`、replacement、删除或 retention。
+
+#### 第一次用 Docker 运行 6BG
+
+Docker 是一次性测试环境。runner 会建立隔离的 PostgreSQL 和 Node 容器，使用 synthetic 数据，完成后删除容器。它不连接 production，也不会修改真实项目。
+
+从仓库根目录运行完整套件：
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 会自动发现 0068 migration、structural check、fixture 和 original-region snapshot lineage concurrency script。它会先从空库运行 migration，
+然后运行 check、可回滚 fixture、并发脚本、checksum drift 检查和 dump／restore。restore 流程先运行
+`tool/postgres_prepare_restore_roles.sh`，因为 PostgreSQL schema dump 不包含 cluster roles；新的 original-region snapshot release writer
+必须在恢复 cluster 中重新建立，并保持 `NOLOGIN`、无成员和最小 ACL。
+
+恢复库会重跑 migration、check 和 fixture，但不重跑并发脚本。并发脚本会提交 synthetic 行，若在恢复库再次运行，会把源库已经保存的测试行与新 fixture 混在一起。
+fixture 和并发脚本必须使用互不重复的 `6bg*` 与 `6bgc*` 命名空间，断言按 workspace、project 和 release lineage 过滤。
+
+成功输出只能记录以下层级：0068 migration 已应用；structural check、rollback fixture 和 concurrency 已通过；checksum 未漂移；dump／restore 后 restore role、check 和 fixture 通过。
+这些结果证明 synthetic PostgreSQL 的 snapshot/release、授权、request claim、lineage、幂等、并发、不可变性、value-free blocked attempt 和 ACL 合同。
+它们不证明报告已可读取，不证明 runtime、HTTP、Flutter、导出、生产身份、组织删除、物理清除、生产备份或六平台真人运行时已经完成。
+
+#### 只调试 6BG 专用 PostgreSQL 测试库
+
+先确认 `DATABASE_URL` 指向新的专用测试库，不要指向 production。并发脚本会提交 synthetic 行，所以每次从空库开始：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_original_region_report_snapshot_lineage.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0068_management_original_region_report_snapshot_lineage.sql
+./tool/verify_management_original_region_report_snapshot_lineage_concurrency.sh
+```
+
+check、fixture 和并发脚本不能互相替代。它们应分别检查固定 original document validator、专用 writer role／RLS、request claim family、baseline、后续 cutoff、
+previous／compared snapshot、source tree tuple、source watermark、授权仍有效时的幂等、blocked value-free 结果、竞争 successor、撤权锁顺序和 direct mutation rejection。
+若只运行 check 和 fixture，没有并发证据；若只运行并发脚本，也没有完整的 restore 或结构证据。
+
 ### 5.5 验证同步提醒和逐设备通知开关
 
 提醒测试分四层。第一次接触项目时，可以按以下顺序运行：
