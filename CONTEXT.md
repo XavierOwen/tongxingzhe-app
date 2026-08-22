@@ -689,6 +689,10 @@ _Avoid_: 个人项目回退、多个布尔开关表示 report family、自动打
 它只属于 PostgreSQL 私有合同；6BD 不增加 snapshot、release、runtime、HTTP、Flutter、Drift、缓存、离线、同步、导出、父级／重叠处理、retention、warehouse 或真机验收。
 _Avoid_: current 归类、跨树聚合、as-of 重建、自动选择 latest、隐藏值、城市名称／边界／坐标、客户端报告
 
+**管理报告清除**:
+组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
+_Avoid_: 授权撤回、报告到期、tombstone、superseded
+
 **更正版报告**:
 补录、修订、作废或分析定义修正后重新生成并明确取代某份报告快照的新快照；原报告保留但标记已被取代。
 _Avoid_: 静默改写、删除旧报告

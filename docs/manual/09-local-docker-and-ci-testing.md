@@ -802,6 +802,44 @@ check、fixture 和并发脚本不能互相替代。不要为了通过测试降�
 Docker 通过只证明当前 PostgreSQL 中的 replacement ledger、授权锁、value-free 结果、不可变约束和 ACL。
 它不证明新报告已经生成，不证明目录、读取、HTTP、导出、Flutter、生产身份、删除或 retention，也不证明 Android、iOS、macOS、Windows、Linux 或 Web 真人平台运行时。
 
+### 6BF：理解管理报告删除与保留边界
+
+6BF 是产品和测试合同，不是数据库清理功能。没有用过 Docker 的读者先记住：Docker runner 会在一次性容器中验证当前仓库已有的 PostgreSQL 行为。
+本切片没有新增 migration、check、fixture 或并发脚本，所以重新运行 Docker 不能证明管理报告已经删除。
+
+五个容易混淆的动作有不同结果：
+
+- 授权撤回立即阻止该成员读取、发布和导出，但不删除报告。
+- 账号删除期满后，组织报告继续保留；自然人归属改为不可反查的“已删除成员”。
+- 更正版取代只登记新旧快照的 lineage，旧快照仍存在。
+- 组织删除申请后的三十天是只读恢复期。仍获授权的成员可以读取已有报告，但不能发布、登记 replacement 或导出。
+- 组织删除期满后，未来 Slice 7 删除全部 report family 和含业务内容的依赖，只保留最小组织删除审计。
+
+管理报告没有按创建时间计算的独立 TTL。三十天是组织或账号删除的恢复期，不是报告年龄。组织在期限内恢复时，既有报告保持原状，
+系统不写 tombstone 或清除资格。
+
+清除失败时必须失败关闭。组织和报告保持不可访问，不能因为一部分表已处理就返回成功。logical tombstone 只能证明读取门禁，
+purge eligibility 只能证明可以开始清理；两者都不能证明报告正文或 PII 已从底层存储清除。
+
+备份也有独立边界。Docker 的 dump／restore 检查验证 schema、角色和 synthetic fixture 可以恢复。它不验证 production 备份期限或灾备副本清除。
+真实恢复副本必须先重放已完成的组织删除事实，再对外提供服务，防止已删除组织的数据复活。
+
+本切片的本地检查只需要文档命令：
+
+```bash
+git diff --check
+dart run tool/check_markdown_links.dart
+```
+
+如果同时修改了数据库行为，仍要另外运行完整套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+看到 Docker 成功只能记录“既有 PostgreSQL 合同仍通过”。不能记录 logical gate、物理清除、production 备份清除或真人平台删除已经通过。
+未来 Slice 7 的实现必须分别验证恢复期、按时恢复、重复请求、账号删除、全部 report family、replacement 链、失败重试、最小删除审计和恢复副本。
+
 ### 5.5 验证同步提醒和逐设备通知开关
 
 提醒测试分四层。第一次接触项目时，可以按以下顺序运行：
