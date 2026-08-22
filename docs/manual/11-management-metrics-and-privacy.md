@@ -2039,6 +2039,75 @@ composition、状态隔离和可访问性模拟路径。它不证明生产身份
 
 6BC 的非范围还包括共享 report-family DTO／泛型 panel 重构、报告创建／刷新／更正／删除、retention、warehouse、分页、搜索、筛选、as-of／latest 查询、下载和分享。
 
+## Slice 6BD：验证原始区域城市固定报告
+
+6BD 是 6AN current 城市报告的另一份数据库合同。它回答的是“按接触保存的原始区域解析结果，两个完整期间的有效接触场次如何分布到原始来源树中的城市”，
+而不是“按现在选中的区域树重新归类”。它固定报告 `contact_sessions_by_original_region_two_periods@1`、
+`metric=contact_sessions@1`、`view_mode=original`、`dimension=original_region` 和城市粒度。
+
+### 单一来源树和原始城市
+
+一份报告只能绑定一个精确的：
+
+```text
+source_tree_version + source_content_fingerprint
+```
+
+每条可报告接触都必须使用保存的 original release、指纹和区域节点，并沿同一来源树找到唯一城市父级。6BD 不读取 6AM current target context，
+不使用 current selection，不做跨版本 mapping，不重新解析坐标，也不按名称或父链猜测。缺失 release、错误指纹、找不到节点、没有唯一城市父级、
+`pending_resolution`、`not_applicable` 或其他不完整来源会由 original attribution 标记为 `not_reportable`；6BD executor 随即以 `55000` 失败关闭，
+不会把该记录补成另一个城市，也不会返回部分报告。
+
+如果候选数据混有多个来源树 tuple，或没有可用的单一来源树，报告返回稳定 unavailable／失败关闭。系统不能挑选最新树、丢掉冲突项后继续跨树相加，
+也不能用不同来源树的城市格做相减。报告网格包含选定来源树的全部城市，使用稳定的城市区域 ID；不返回城市名称、边界、坐标或来源明细。
+
+### 期间、截止点和隐私
+
+报告使用项目报告 IANA 时区和两个相邻完整 ISO 周。`data_cutoff_utc` 只限定本次纳入的已接受事实，是报告的证据边界，不是任意历史 `as-of` 查询，
+不重建截止时刻的区域树，也不自动选择 current 或 latest release。每个期间和城市格独立执行：至少 10 个有效接触、至少 3 位可信贡献者、任一贡献者不超过该格的一半。
+通过后再按稳定城市顺序执行互补隐藏。`displayed` 只显示安全整数；`suppressed` 永远显示为隐藏状态，底层值为 JSON `null`。
+
+响应只携带固定报告 identity、项目、时区、两个期间、cutoff、单一来源树 tuple 和已保护的完整城市网格。它不得包含接触、revision、贡献者、来源、
+坐标、边界、城市名称或其他 PII。6BD 只提供 private PostgreSQL 合同，不包含 snapshot、release lineage、authorized read、审计、runtime、HTTP、
+Flutter、Drift、缓存、离线、同步、导出、parent／overlap、retention、warehouse、自动调度或六平台真机验收。
+
+### 从零开始运行 Docker 数据库测试
+
+没有用过 Docker 时，可以按下面步骤操作：
+
+1. 安装并启动 Docker Desktop。看到 Docker Desktop 正常运行后，再打开终端。
+2. 在仓库根目录执行命令。runner 会创建临时 PostgreSQL 和 Node 容器，使用 synthetic 测试数据，完成后清理容器；它不会连接 production。
+3. 运行完整套件：
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 会自动发现 0066 migration、结构／权限 check、fixture 和独立并发检查，并运行 migration checksum 与 dump／restore。恢复库会再次运行 migration、
+check 和 fixture，但不会重跑会提交 synthetic 行的并发脚本。成功时应看到仓库约定的 `PostgreSQL Docker 测试全部通过。`。
+
+Docker 通过只证明 synthetic PostgreSQL 合同成立。它不证明真实区域树内容、生产数据、任意历史 `as-of`、Backend runtime、HTTP、Flutter、导出或六平台真人运行时。
+
+### 只调试专用测试库
+
+只有在 Docker runner 已能工作或需要定位单项 SQL 失败时，才使用专用测试库。先确认 `DATABASE_URL` 指向空的本机测试库，不要指向 production；
+并发脚本会提交 synthetic 行，所以重复运行前应重建测试库或使用新的空库：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_original_region_report.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0066_management_original_region_report.sql
+./tool/verify_management_original_region_report_concurrency.sh
+```
+
+check、fixture 和并发脚本不能互相替代。它们应覆盖原始 release／指纹／节点／唯一城市父链、`not_reportable`、混合来源树失败关闭、current／mapping／
+名称猜测排除、完整城市网格、`k=10`／三位／半数边界、期间独立判断、互补隐藏、无敏感输出和最小 private ACL。dump／restore 后的通过只说明
+迁移和固定检查可重复，不增加 runtime、HTTP、Flutter、导出、生产身份、任意 `as-of` 或真人平台证据。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和

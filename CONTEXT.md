@@ -309,6 +309,13 @@ _Avoid_: `is_current`、最新 release、客户端时钟、区域名称猜测
 它保存 source change watermark，但读取的是 current contact projection，不是历史 `as-of`，也尚未接入生产发布链。
 _Avoid_: original 区域视图、最小区域下钻、任意区域筛选、生产区域报告、历史重放
 
+**原始区域接触场次报告候选**:
+只在私有数据库边界组合已保存的原始区域来源、单一 `source_tree_version + source_content_fingerprint`、两个完整 ISO 周和城市完整网格，形成固定的
+`contact_sessions_by_original_region_two_periods@1` 文档。它只使用每条接触来源的 `original` 证据，不读取 current 选择、目标上下文、跨版本 mapping、坐标重新解析或名称／父链猜测；来源树 tuple 混杂、来源缺失或证据不完整时失败关闭，不跨树聚合。
+`data_cutoff_utc` 只限定本次报告纳入的已接受事实，不提供任意历史 `as-of` 重建，也不把 cutoff 解释为树版本选择。每个期间先执行 `k=10`、至少三位贡献者和不超过一半的贡献者保护，再按稳定城市顺序执行互补隐藏；返回只含已保护的安全整数或 `suppressed = null`。
+这是 DB-only 报告候选，不是 snapshot、授权读取、runtime、HTTP、Flutter、缓存、离线、导出或生产平台证据。
+_Avoid_: 混合来源树、current 区域归类、as-of 查询、跨树相减、隐藏值、城市名称猜测、生产报告
+
 **current 城市报告受保护快照**:
 由 6AN 固定定义、两个完整 ISO 周、完整城市网格、目标树 tuple、可信报告时区 revision、数据截止时间和
 source change watermark 组成的不可变私有报告文档；它只能在 `release_management_reports` 能力和可信时区上下文重新确认后建立，
@@ -661,6 +668,15 @@ _Avoid_: 暴露 `access_contract_id`、自动选择首项、客户端重算或�
 小屏、200% 字号、键盘、焦点恢复、heading 和 live region。
 _Avoid_: 个人项目回退、多个布尔开关表示 report family、自动打开首项、客户端总计／比例／趋势、隐藏值当零、旧响应写回、
 复用 current-city DTO／Widget、Drift、缓存、离线、导出或真机证据
+
+**管理原始区域固定报告**:
+6BD 定义私有的 `contact_sessions_by_original_region_two_periods@1` DB-only 保护报告。它固定 `metric=contact_sessions@1`、
+`view_mode=original`、`dimension=original_region`、城市粒度、项目报告时区和两个完整 ISO 周；所有可报告接触必须来自同一个精确的
+`source_tree_version + source_content_fingerprint`。报告使用保存的 original 来源把每条记录归入该来源树中的唯一城市，不读取 current
+选择或 6AM target context，也不重新解析坐标、使用跨版本 mapping 或猜测名称／父链。它输出来源树全部城市的稳定完整网格，并在返回前完成 `k=10`、
+三位贡献者、半数上限和互补隐藏。`data_cutoff_utc` 只是本次纳入事实的边界，不支持任意历史 `as-of`。来源树混杂、没有可用来源树或证据不完整时不生成跨树结果。
+它只属于 PostgreSQL 私有合同；6BD 不增加 snapshot、release、runtime、HTTP、Flutter、Drift、缓存、离线、同步、导出、父级／重叠处理、retention、warehouse 或真机验收。
+_Avoid_: current 归类、跨树聚合、as-of 重建、自动选择 latest、隐藏值、城市名称／边界／坐标、客户端报告
 
 **更正版报告**:
 补录、修订、作废或分析定义修正后重新生成并明确取代某份报告快照的新快照；原报告保留但标记已被取代。

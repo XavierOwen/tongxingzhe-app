@@ -999,6 +999,33 @@ ViewModel 使用 generation 隔离目录、详情、项目切换、返回目录�
 6BC 不修改 6BB parser、Backend、PostgreSQL、channel／current-city 合同，不建立共享 report-family DTO 或泛型 panel，也不增加
 Drift、缓存、离线、同步、导出、下载、分享、报告生成／更正／删除、生产身份或真机证据。
 
+#### Slice 6BD：固定原始区域城市保护报告的 PostgreSQL 合同
+
+Slice 6BD 只定义一份私有、DB-only 的原始区域城市报告候选：
+`contact_sessions_by_original_region_two_periods@1`。它固定 `metric=contact_sessions@1`、
+`view_mode=original`、`dimension=original_region`、`region_granularity=city`、项目报告 IANA 时区和两个相邻完整 ISO 周。
+它的来源树上下文是一个精确的 `source_tree_version + source_content_fingerprint` tuple；报告不得混合两个来源树，
+也不得为了得到单一结果自动选择 current、latest 或名称相似的树。
+
+每条统计记录必须通过 6AL 的 `original` 证据解析，并使用保存的原始版本、指纹和区域节点沿同一棵树找到唯一城市祖先。
+6BD 不读取 6AM current target context，不做 current selection、跨版本 mapping、坐标重新解析或名称／父链猜测。来源 release、
+指纹、节点、城市父链或其他必要证据缺失时，该记录不进入可报告集合；如果候选集合出现多个来源树 tuple、没有可用来源树或证据漂移，
+executor 返回稳定 unavailable／失败关闭，而不是筛掉冲突项后跨树聚合。
+
+报告的 `data_cutoff_utc` 只定义本次纳入已接受事实的边界；它不是用户可选择的历史 `as-of`，不重建某一时刻的区域树，
+也不把 cutoff 当作 current 或 latest release 选择。输出包括固定报告 identity、项目、时区、两个期间、cutoff、单一来源树 tuple 和该来源树的全部城市
+稳定完整网格。每个期间和城市格先执行 `k=10`、至少三位贡献者和任一贡献者不超过一半的保护，再按稳定城市顺序执行互补隐藏；
+`displayed` 只保存安全整数，`suppressed` 固定为 JSON `null`。输出不得包含城市名称、边界、坐标、来源、接触、revision、贡献者或其他 PII。
+
+这是一份 private PostgreSQL 合同，不是 snapshot、release lineage、authorized read、runtime bridge、HTTP route、Flutter consumer、
+Drift、缓存、离线、同步、导出、parent／overlap 处理、retention、warehouse、自动调度或真实平台验收。它不修改 6AN current-city 合同，
+也不把 current projection 解释为 original 历史重建。
+
+本 Slice 的数据库实现应新增 0066 migration、结构／权限 check、synthetic fixture 和独立并发检查。检查必须覆盖 original 精确来源、单一来源树、
+唯一城市祖先、missing／drift／`not_reportable`、混合来源树失败关闭、两个完整期间、全城市网格、三项 primary 阈值、互补隐藏、无敏感输出、
+最小 private ACL、checksum 和 dump／restore。Docker、SQL fixture 和并发脚本只证明 synthetic DB-only 合同，不证明 runtime、HTTP、Flutter、
+导出、生产身份、任意 as-of 或六平台真人运行时。
+
 #### 5.8.2 时间、趋势、版本与因果边界
 
 | ID | 需求 |
@@ -1041,6 +1068,7 @@ Drift、缓存、离线、同步、导出、下载、分享、报告生成／更
 | `ANALYTICS-036` | 6BA 只通过 interest 专用 DB／runtime bridge 和固定 HTTP collection route 返回至多 20 项 metadata-only snapshot；数据库重新授权并复核 6AW interest provenance 的 project、report、version、fingerprint、lineage、时区、cutoff、previous pointer 和 source watermark 对齐。结果固定排序，第一项不表示 current、latest 或未被取代。 |
 | `ANALYTICS-037` | 6BB 通过独立的 Flutter `InterestReportGateway` 消费 6BA 有界目录和 6AZ 显式详情；目录 HTTP 根只含三项 wire 字段，不能暴露 DB envelope 的内部 `access_contract_id`，详情只按用户明确选择的 project／snapshot 读取固定十格 interest report。gateway 保持服务端最多 20 项及固定排序，不把第一项解释为 current／latest，不在客户端重算、聚合或推断报告。 |
 | `ANALYTICS-038` | 6BC 只在用户明确选择 interest report family 后，使用当前已重新授权的 `ManagementAnalysisContext.projectId` 读取目录；默认 channel 视图不调用 interest gateway。consumer 不使用个人项目，不自动打开首项，只读取用户明确选择的当前目录 summary，不重算总计、比例、平均等级或趋势；切换项目／family、返回目录、重试和 dispose 会隔离迟到响应。 |
+| `ANALYTICS-039` | 6BD 固定私有 `contact_sessions_by_original_region_two_periods@1`：`metric=contact_sessions@1`、`view_mode=original`、城市粒度、两个完整 ISO 周、项目报告时区、`data_cutoff_utc` 和一个精确来源树 tuple。每条记录只能凭保存的 original 证据进入同树的唯一城市；不读取 current target context，不猜测或做任意历史 `as-of`，混合来源树、缺失或漂移证据失败关闭。输出是来源树全部城市的稳定保护网格，不含城市名称、边界、坐标、来源、接触、revision、贡献者或 PII。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -1076,6 +1104,7 @@ Drift、缓存、离线、同步、导出、下载、分享、报告生成／更
 | `PRIVACY-028` | 6BA 目录使用独立 interest release family provenance、value-free immutable directory audit 和最小 runtime ACL。响应只含固定 snapshot metadata，最多 20 项，不能含 protected report、cells、suppressed 前值、来源、贡献者、PII 或 generic/current-city provenance；第一项不获得 current、latest 或取代语义。 |
 | `PRIVACY-029` | 6BB 的 Dart 类型只保存已通过 strict parser 的固定 interest 目录摘要和十格 count-only report；DB 内部 `access_contract_id` 不进入 HTTP 或 Dart，`suppressed` 只表示隐藏而不是零。gateway 不接收或暴露 source、contributor、contact、location、geometry、PII 或隐藏前值；结果只在内存存在，失败关闭，不写 Drift、缓存、离线存储、同步队列或导出。 |
 | `PRIVACY-030` | 6BC 只渲染 6BB typed metadata 和服务端已保护的十格计数；`suppressed` 只显示“已隐藏 / Hidden”，不显示为零、不读取隐藏前值，不引入 PII、个人绩效、排名或因果结论。panel 状态只留在内存，不写 Drift、缓存、离线存储、同步队列或导出。 |
+| `PRIVACY-031` | 6BD 只接受完整 original 来源证据和一个精确来源树 tuple，并把记录归入该树的唯一城市；缺失、歧义、漂移、混合来源树或不可用来源不得通过 current／mapping／名称猜测补齐。每个期间独立执行 `k=10`、三位贡献者和半数上限，再执行互补隐藏；响应只含安全整数或 `suppressed = null`，不含城市名称、边界、坐标、来源、接触、revision、贡献者或 PII。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
 
@@ -1105,6 +1134,7 @@ Drift、缓存、离线、同步、导出、下载、分享、报告生成／更
 | `MANUAL-020` | 学习文档必须用零基础读者可以复制的步骤说明 6BA 的 interest 专用 directory provenance、metadata-only 根／item 合同、20 项稳定排序、第一项没有 current/latest 语义、授权与撤权、value-free audit、runtime ACL、strict parser、HTTP collection route、Docker migration／check／fixture／并发／restore 步骤和证据边界；必须明确不证明 Flutter、导出、缓存、离线、生产身份或真人平台。 |
 | `MANUAL-021` | 学习文档必须用零基础读者可以复制的步骤说明 6BB Flutter `InterestReportGateway` 的两个固定 path、DB 四字段与 HTTP 三字段边界、6AZ 三字段详情、`IdentitySession`、一次 `401` 刷新、strict parser、内存边界、typed failure、`no-store` 和测试命令；必须明确没有 UI、ViewModel、Widget、Drift、缓存、离线、同步、导出或六平台真机证据。 |
 | `MANUAL-022` | 学习文档必须用零基础读者可以复制的步骤说明 6BC 的三个互斥 report family、channel 默认、管理项目唯一来源、显式 summary 选择、十格 displayed／suppressed 语义、generation 隔离、焦点恢复、小屏／大字号测试和 composition 关闭；必须明确没有 Backend／DB 变更、Drift、缓存、离线、导出或真机证据。 |
+| `MANUAL-023` | 学习文档必须用零基础读者可以复制的步骤说明 6BD 的 original 城市、单一来源树、保存的 original 证据、完整城市网格、三项 primary 阈值、互补隐藏、`data_cutoff_utc` 不是任意 `as-of`、缺失／混合／漂移失败关闭，以及 0066 migration／check／fixture／并发／checksum／dump／restore 命令；必须明确这是 DB-only synthetic 证据，不证明 runtime、HTTP、Flutter、导出、生产身份、历史 as-of 或真人平台。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -1314,6 +1344,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-030` | 6BA SQL check／fixture／并发／adapter integration／HTTP route／composition 测试覆盖 exact identity、授权撤权、approved interest provenance、channel/current-city/legacy/blocked/跨项目/drift 排除、空目录、20 项上限、固定降序、strict metadata parser、value-free audit、不可改删、runtime ACL、认证顺序、GET body、Promise gate、错误脱敏和 `no-store`。Docker 在 checksum 与 dump／restore 后重跑 migration、check 和 fixture，不重跑提交 synthetic 行的并发脚本；通过不声称 Flutter、导出、缓存、离线、生产身份或真人平台证据。 |
 | `TEST-031` | 6BB Flutter synthetic HTTP／fake `IdentitySession` 测试覆盖两个固定 path、显式 project／snapshot、无 query／GET body、Bearer、一次 `401` 刷新、严格目录与十格详情 parser、20 项和服务端排序、空目录、首项无 current／latest 语义、项目／快照绑定、PII／额外字段拒绝、稳定错误、`no-store`、timeout、网络失败和 `close`。通过只证明 Dart transport 与内存边界，不声称 DB／Backend 授权、UI、Drift、缓存、离线、导出、生产身份或六平台运行时。 |
 | `TEST-032` | 6BC ViewModel／Widget／browser／composition 测试覆盖三个互斥 report family、channel 默认、interest 明确启用、`ManagementAnalysisContext` project 来源、空目录、显式 summary、十格 displayed／suppressed、分阶段 retry、项目／family／返回／dispose 的迟到响应隔离、稳定错误、heading／live region、320×568、200% 字号、键盘／焦点恢复以及 gateway 构造／传递／关闭。通过只证明 Flutter consumer 与可访问性模拟路径，不声称 Backend／DB 授权、离线、导出或真机运行时。 |
+| `TEST-033` | 6BD SQL check／fixture／并发测试覆盖原始来源 release／指纹／节点／唯一城市父链、单一来源树、混合树失败关闭、missing／drift／`not_reportable`、current／mapping／名称猜测排除、两个完整期间、全部城市网格、`k=10`／三位／半数边界、期间独立判断、互补隐藏、`displayed`／`suppressed` 合同、无敏感输出、最小 ACL 和旧 6AN 回归；Docker 在 checksum 与 dump／restore 后重跑 migration、check 和 fixture，不重跑提交 synthetic 行的并发脚本。通过不声称 runtime、HTTP、Flutter、导出、任意 as-of、生产身份或真人平台证据。 |
 
 ## 9. UI、视觉与可访问性
 
