@@ -922,6 +922,55 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 fixture 使用 `6bh*`；并发脚本的文本键使用 `6bhc*`，UUID 使用独立且符合十六进制格式的 `6fc*` committed namespace。完整通过只证明 synthetic PostgreSQL 的授权、provenance、validator、
 value-free audit、撤权锁、checksum、restore 和 ACL 合同，不证明 runtime、HTTP、Flutter、目录、导出、生产身份或真人平台运行时。
 
+### 6BI：验证原始区域快照 runtime bridge
+
+6BI 在 6BH 的 0069 private read 之上增加 0070 `app_data` bridge。bridge 接收 Backend 已验证的 exact external `issuer + subject`、显式 project UUID
+和 snapshot UUID。它只映射现有且 active 的 identity，再调用 0069 private function。它不 trim、bootstrap、读取 `SessionContext`，也不接收内部用户 ID、
+capability、时区、截止点、source tuple、筛选或 SQL。
+
+0070 使用 `SECURITY DEFINER` 和固定 `search_path = pg_catalog`。runtime 只拥有 bridge `EXECUTE`，没有 `app_private` schema usage，也不能读取
+用户、identity、snapshot、release attempt、request claim 或 audit 表。bridge owner 与 0069 private reader owner 相同。`PUBLIC`、普通 app role、
+0066 original-region report reader、0068 release writer 和其他 report-family 角色均不能调用 bridge 或 private reader。
+
+Backend adapter 只执行一次固定参数化 SQL。它的 strict parser 只接受 0069 的固定 envelope：`completed` 必须包含固定的 17 个 original-region report
+keys、同项目和 snapshot 绑定、selected source tree tuple、两个完整期间、连续 `cell_order`、安全整数和 `suppressed = null`。它拒绝额外字段、其他
+report family、城市名称、坐标、来源记录、贡献者、contact 和 PII。`not_found` 与 `untrusted_provenance` 不返回 protected report。adapter 只将
+SQLSTATE `42501` 映射为 typed `forbidden`，其他 SQLSTATE 保持为内部错误。
+
+6BI 不新增 private read 的并发脚本。0069 已覆盖 read／revoke 锁线性化，0070 只验证 bridge 的 exact identity、最小 ACL、一次 SQL、strict parser
+和对 0069 结果的无损对账。它不增加 HTTP、Bearer／JWT、目录、latest、导出、Flutter、Drift、缓存、离线、同步、删除、retention 或生产身份。
+
+从仓库根目录运行完整套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 自动发现 0070 migration、structural check 和 rollback fixture，并显式运行原始区域 runtime integration。它继续运行 0069 read／revoke 并发、
+checksum 和 dump／restore。恢复库只重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。
+
+如果只调试专用测试库，先确认 `DATABASE_URL` 不是 production，再按以下顺序运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_runtime_authorized_management_original_region_report_snapshot_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0070_runtime_authorized_management_original_region_report_snapshot_read.sql
+```
+
+再运行 Backend 合同测试：
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+这些命令只证明 synthetic PostgreSQL、Backend adapter 和 ACL 合同。它们不证明 HTTP、Flutter、导出、生产 identity provider、真实账号或六平台真人运行时。
+
 ### 如何验证 6AS PostgreSQL 合同
 
 第一次使用 Docker 时，先启动 Docker Desktop。Docker 是一次性测试环境：runner 创建隔离的 PostgreSQL 容器，运行

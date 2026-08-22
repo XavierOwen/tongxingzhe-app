@@ -540,6 +540,7 @@ docker run \
   --env DATABASE_URL="${database_url}" \
   --env CURRENT_CITY_RUNTIME_FIXTURE=/source/backend/database/fixtures/0059_runtime_authorized_management_current_city_report_snapshot_read.sql \
   --env INTEREST_RUNTIME_FIXTURE=/source/backend/database/fixtures/0064_runtime_authorized_management_interest_report_snapshot_read.sql \
+  --env ORIGINAL_REGION_RUNTIME_FIXTURE=/source/backend/database/fixtures/0070_runtime_authorized_management_original_region_report_snapshot_read.sql \
   --env INTEREST_DIRECTORY_FIXTURE=/source/backend/database/fixtures/0065_authorized_management_interest_report_snapshot_directory.sql \
   "${backend_image}" \
   bash -lc \
@@ -564,7 +565,8 @@ docker run \
        dist/test/management-current-city-report-snapshots.integration.js \
        dist/test/management-current-city-report-snapshot-directory.integration.js \
        dist/test/management-interest-report-snapshots.integration.js \
-       dist/test/management-interest-report-snapshot-directory.integration.js'
+       dist/test/management-interest-report-snapshot-directory.integration.js \
+       dist/test/management-original-region-report-snapshots.integration.js'
 
 echo '用独立数据库会话验证并发不变量。'
 # Concurrency scripts commit their synthetic rows, and the later pg_dump keeps

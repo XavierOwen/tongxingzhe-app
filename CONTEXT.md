@@ -715,6 +715,18 @@ blocked、缺失或漂移 provenance 的 snapshot 返回 `untrusted_provenance`�
 value-free 的访问审计；撤权与读取使用同一授权锁。该操作不提供 runtime、HTTP、目录、Flutter、导出、缓存、离线或生产身份。
 _Avoid_: 发布即查看、跨项目探测、复用其他 report family reader、客户端提交 source tuple、自动 latest、客户端重算城市网格
 
+**管理原始区域快照 runtime bridge**:
+6BI 通过 0070 `app_data` bridge 把 6BH private read 接到 Backend runtime。bridge 接收 Backend 已验证的 exact external `issuer + subject`、显式
+project UUID 和 snapshot UUID，只映射现有且 active 的 identity，再调用 0069 private function。它不 trim、bootstrap、读取 `SessionContext`，也不
+接受内部用户 ID、capability、时区、截止点、期间、source tuple、筛选或 SQL。runtime 只有 bridge `EXECUTE`，没有 `app_private` schema usage 或
+private 表读取权。
+
+Backend adapter 只执行一次固定参数化 SQL，并严格解析 0069 envelope。`completed` 必须包含固定 17 个 original-region report keys、同项目 ID、
+selected source tree tuple、两个完整期间、连续 `cell_order`、安全整数和 `suppressed = null`；`not_found` 与 `untrusted_provenance` 不含正文。
+parser 拒绝额外字段、其他 report family、城市名称、坐标、来源记录、贡献者和 PII，只把 SQLSTATE `42501` 映射为 typed `forbidden`。6BI 不增加
+HTTP、目录、导出、Flutter、Drift、缓存、离线、同步或真人平台证据。
+_Avoid_: runtime 直读 private schema、复用其他 report family bridge、宽泛 SQL、客户端重算、把 synthetic integration 当作生产身份或平台运行时证据
+
 **管理报告清除**:
 组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
 _Avoid_: 授权撤回、报告到期、tombstone、superseded
