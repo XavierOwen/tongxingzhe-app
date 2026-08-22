@@ -32,6 +32,9 @@ import {
   PostgresManagementInterestReportSnapshotStore,
 } from "./management-interest-report-snapshots.js";
 import {
+  PostgresManagementOriginalRegionReportSnapshotStore,
+} from "./management-original-region-report-snapshots.js";
+import {
   PostgresManagementReportSnapshotExportStore,
 } from "./management-report-snapshot-exports.js";
 import { PostgresManagementReportSnapshotDirectoryStore } from "./management-report-snapshot-directory.js";
@@ -120,6 +123,10 @@ const managementInterestReportSnapshotStore =
   new PostgresManagementInterestReportSnapshotStore(
     async (text, values) => pool.query(text, [...values]),
   );
+const managementOriginalRegionReportSnapshotStore =
+  new PostgresManagementOriginalRegionReportSnapshotStore(
+    async (text, values) => pool.query(text, [...values]),
+  );
 // The export bridge records its immutable audit in the same statement. The
 // response file is serialized only after PostgreSQL confirms that commit.
 const managementReportSnapshotExportStore =
@@ -167,6 +174,7 @@ const server = createBackendServer({
   managementReportSnapshotStore,
   managementCurrentCityReportSnapshotStore,
   managementInterestReportSnapshotStore,
+  managementOriginalRegionReportSnapshotStore,
   managementReportSnapshotExportStore,
   managementReportSnapshotDirectoryStore,
   managementCurrentCityReportSnapshotDirectoryStore,
