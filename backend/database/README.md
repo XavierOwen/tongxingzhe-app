@@ -28,7 +28,7 @@ Node 阶段要求九条 Backend integration 入口存在：地点来源、当前
 入口缺失、编译失败或断言失败都会使整套测试失败；不能把此前 SQL fixture 的通过单独写成
 Backend adapter 集成通过。
 
-schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer`、`tongxingzhe_region_mapping_writer`、`tongxingzhe_region_attribution_reader`、`tongxingzhe_management_region_report_reader`、`tongxingzhe_management_interest_report_reader`、`tongxingzhe_management_current_city_snapshot_release_writer` 和 `tongxingzhe_management_interest_snapshot_release_writer`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
+schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer`、`tongxingzhe_region_mapping_writer`、`tongxingzhe_region_attribution_reader`、`tongxingzhe_management_region_report_reader`、`tongxingzhe_management_original_region_report_reader`、`tongxingzhe_management_interest_report_reader`、`tongxingzhe_management_current_city_snapshot_release_writer` 和 `tongxingzhe_management_interest_snapshot_release_writer`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
 
 ## 使用已有 PostgreSQL 测试库
 
@@ -801,6 +801,46 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 fixture 和 check 必须覆盖 exact identity、撤权、跨项目、approved interest provenance、legacy／blocked 排除、空目录、20 项上限、
 固定排序、strict metadata、value-free audit、UPDATE／DELETE 拒绝和 runtime 最小 ACL。通过只证明 DB-only synthetic 合同，不证明 HTTP、
 Flutter、导出、缓存、离线、生产身份或真人平台运行时。
+
+### 6BD：原始区域城市固定报告
+
+6BD 定义私有 PostgreSQL 报告 `contact_sessions_by_original_region_two_periods@1`。它固定 `metric=contact_sessions@1`、
+`view_mode=original`、`dimension=original_region`、城市粒度、项目报告时区和两个完整 ISO 周。每份报告只能绑定一个精确的
+`source_tree_version + source_content_fingerprint`；每条记录必须使用保存的 original 来源，并沿同一来源树找到唯一城市父级。
+
+它不读取 6AM current target context，不做 current selection、跨版本 mapping、坐标重新解析或名称／父链猜测。release、指纹、节点、城市父链或其他证据缺失时，
+记录不是可报告数据；候选中出现多个来源树 tuple 或没有可用来源树时，报告返回 unavailable／失败关闭，不跨树聚合。`data_cutoff_utc` 只限定本次纳入的
+已接受事实，不是任意历史 `as-of`，也不选择 current 或 latest release。
+
+输出是单一来源树的全部城市完整网格。每个期间和城市执行 `k=10`、至少三位贡献者、贡献者不超过一半和互补隐藏；只返回安全整数或
+`suppressed = null`，不返回城市名称、边界、坐标、来源、contact、revision、贡献者或 PII。它只覆盖 DB-only private function、migration、check、fixture 和
+并发合同，不提供 snapshot、authorized read、runtime、HTTP、Flutter、Drift、缓存、离线、同步、导出、retention、warehouse 或真机证据。
+
+首次使用 Docker 时，先启动 Docker Desktop。runner 会启动隔离的 PostgreSQL 和 Node 容器，使用 synthetic 数据，结束后清理容器；它不会连接 production。
+从仓库根目录运行：
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 会自动发现 0066 migration、check、fixture 和并发脚本，并在 checksum 与 dump／restore 阶段重跑 migration、check 和 fixture；恢复库不会重跑会提交
+synthetic 行的并发脚本。预期成功消息是 `PostgreSQL Docker 测试全部通过。`。这只证明 synthetic PostgreSQL 合同成立。
+
+只调试专用测试库时，确认 `DATABASE_URL` 不是 production，并使用新的空库，因为并发脚本会提交 synthetic 行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_original_region_report.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0066_management_original_region_report.sql
+./tool/verify_management_original_region_report_concurrency.sh
+```
+
+check、fixture 和并发脚本分别验证原始来源证据、单一来源树、唯一城市父级、`not_reportable`、混合树失败关闭、完整网格、阈值、互补隐藏、无敏感输出和 ACL。
+这些数据库证据不代表真实区域树内容、任意 `as-of`、Backend、HTTP、Flutter、生产身份、导出或六平台真人运行时。
 
 ### 如何验证 6AS PostgreSQL 合同
 
