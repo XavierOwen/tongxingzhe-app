@@ -790,6 +790,14 @@ _Avoid_: 个人项目回退、多个布尔开关表示 report family、自动打
 生命周期查询只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID，不返回报告格、来源、贡献者、地点或 PII。这是 DB-only、value-free 合同，不生成 snapshot，不增加 runtime、HTTP、Flutter、目录、导出、缓存、离线或分享，也不执行删除、tombstone、retention、备份清除、parent／overlap 查询、warehouse 或真人平台验收。
 _Avoid_: 复用 0067 渠道关系、按目录排序猜测 latest、静默改写快照、跨 report family 取代、分析定义或跨版本更正、把 Docker synthetic 通过写成生产证据
 
+**组织项目后续联系同意占比 opt-in 配置**:
+6BO 为组织项目保存 `follow_up_consent_ratio@1` 的当前 opt-in。配置使用独立的 `app_private` 表和 private configure/read 合同，不复用个人 0048 配置。
+调用方只提供可信内部 `app_user_id`，数据库重新确认活动账号、组织／项目 membership、项目状态和 `release_management_reports` capability。`view_anonymous_analytics`
+只允许读取受保护管理分析，不允许修改配置。版本追加不可变，记录 request UUID、授权 provenance 和数据库时间；未配置与停用返回 `not_enabled`，启用返回 `enabled`。
+配置时间不裁切统计期间。项目 status 变更触发器与 configure 共享 project lock，归档与写入因此线性化；锁后必须重新授权，0030 resolver 不替代归档锁。结果不含比例、报告格、contact、推广对象、贡献者、地点或 PII。
+这是 DB-only 配置合同，不是比例候选、报告、runtime、HTTP、Flutter、统计或披露安全证据。
+_Avoid_: 复用个人 opt-in 表、用查看 capability 写配置、用配置时间截断数据、读取 contact-target link、把配置通过 UI 隐藏当成授权
+
 **管理报告清除**:
 组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
 _Avoid_: 授权撤回、报告到期、tombstone、superseded

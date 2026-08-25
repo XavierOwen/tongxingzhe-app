@@ -82,6 +82,7 @@
 | [0157](./0157-original-region-typed-gateway-keeps-db-http-and-flutter-contracts-separate.md) | 已接受，2026-08-25 | Slice 6BL；Issue #209；`ANALYTICS-047`、`PRIVACY-039`、`TEST-041`、`MANUAL-031` | Flutter 使用独立 original-region typed gateway；DB、HTTP 和 Dart 合同分离，显式 summary、source tree、城市网格和内存边界保持固定 |
 | [0158](./0158-original-region-report-consumer-uses-explicit-management-context-and-selection.md) | 已接受，2026-08-25 | Slice 6BM；Issue #211；`ANALYTICS-048`、`PRIVACY-040`、`TEST-042`、`MANUAL-032` | Flutter original-region consumer 只使用显式管理上下文和快照选择；四个互斥 report family、generation 隔离和隐藏语义保持独立 |
 | [0159](./0159-original-region-report-snapshot-replacements-are-append-only.md) | 已接受，2026-08-25 | Slice 6BN；Issue #213；`ANALYTICS-049`、`PRIVACY-041`、`TEST-043`、`MANUAL-033` | original-region approved snapshot 只通过独立 provenance 登记追加式直接 replacement；同 source-tree tuple、value-free 生命周期、锁后授权和最小 ACL 保持固定 |
+| [0160](./0160-management-follow-up-consent-opt-in-is-organization-scoped.md) | 已接受，2026-08-25 | Slice 6BO；Issue #215；`ANALYTICS-050`、`PRIVACY-042`、`TEST-044`、`MANUAL-034` | 组织项目的后续联系同意占比使用独立 opt-in 配置；固定 `release_management_reports`、追加式版本、锁后授权和 value-free DB-only 边界 |
 
 ## 按主题查找
 
