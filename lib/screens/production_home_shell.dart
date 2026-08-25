@@ -33,6 +33,7 @@ import '../management_reports/current_city_report_gateway.dart';
 import '../management_reports/interest_report_gateway.dart';
 import '../management_reports/management_report_gateway.dart';
 import '../management_reports/management_report_export_delivery.dart';
+import '../management_reports/original_region_report_gateway.dart';
 import '../plans/personal_action_plan.dart';
 import '../project_settings/personal_follow_up_consent_opt_in.dart';
 import '../reminders/personal_action_reminder.dart';
@@ -70,6 +71,7 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.managementReportGateway,
     required this.currentCityReportGateway,
     required this.interestReportGateway,
+    required this.originalRegionReportGateway,
     required this.managementReportExportDelivery,
     required this.currentRelationshipStageRepository,
     required this.deviceReminderPreferenceStore,
@@ -103,6 +105,7 @@ final class ProductionHomeShell extends StatefulWidget {
   final ManagementReportGateway managementReportGateway;
   final CurrentCityReportGateway currentCityReportGateway;
   final InterestReportGateway interestReportGateway;
+  final OriginalRegionReportGateway originalRegionReportGateway;
   final ManagementReportExportDelivery managementReportExportDelivery;
   final CurrentRelationshipStageRepository currentRelationshipStageRepository;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
@@ -353,6 +356,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
           gateway: widget.managementReportGateway,
           currentCityGateway: widget.currentCityReportGateway,
           interestGateway: widget.interestReportGateway,
+          originalRegionGateway: widget.originalRegionReportGateway,
           exportDelivery: widget.managementReportExportDelivery,
         ),
       ),

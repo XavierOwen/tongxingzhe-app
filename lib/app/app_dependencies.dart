@@ -20,9 +20,11 @@ import '../management_reports/current_city_report_gateway.dart';
 import '../management_reports/http_current_city_report_gateway.dart';
 import '../management_reports/http_interest_report_gateway.dart';
 import '../management_reports/http_management_report_gateway.dart';
+import '../management_reports/http_original_region_report_gateway.dart';
 import '../management_reports/interest_report_gateway.dart';
 import '../management_reports/management_report_export_delivery.dart';
 import '../management_reports/management_report_gateway.dart';
+import '../management_reports/original_region_report_gateway.dart';
 import '../platform/platform_capabilities.dart';
 import '../plans/http_personal_action_plan_gateway.dart';
 import '../plans/personal_action_plan.dart';
@@ -81,6 +83,7 @@ final class AppDependencies {
     this.managementReportGatewayBuilder,
     this.currentCityReportGatewayBuilder,
     this.interestReportGatewayBuilder,
+    this.originalRegionReportGatewayBuilder,
     this.managementReportExportDelivery,
     this.currentRelationshipStageGatewayBuilder,
     this.reminderSchedulerBuilder = productionReminderNotificationScheduler,
@@ -119,6 +122,7 @@ final class AppDependencies {
       managementReportGatewayBuilder: productionManagementReportGateway,
       currentCityReportGatewayBuilder: productionCurrentCityReportGateway,
       interestReportGatewayBuilder: productionInterestReportGateway,
+      originalRegionReportGatewayBuilder: productionOriginalRegionReportGateway,
       currentRelationshipStageGatewayBuilder:
           productionCurrentRelationshipStageGateway,
       offlinePiiSecureStore: secureStore,
@@ -161,6 +165,8 @@ final class AppDependencies {
   currentCityReportGatewayBuilder;
   final InterestReportGateway Function(IdentitySession)?
   interestReportGatewayBuilder;
+  final OriginalRegionReportGateway Function(IdentitySession)?
+  originalRegionReportGatewayBuilder;
   final ManagementReportExportDelivery? managementReportExportDelivery;
   final CurrentRelationshipStageGateway Function(IdentitySession)?
   currentRelationshipStageGatewayBuilder;
@@ -192,6 +198,7 @@ final class AppDependencies {
     ManagementReportGateway? managementReportGateway;
     CurrentCityReportGateway? currentCityReportGateway;
     InterestReportGateway? interestReportGateway;
+    OriginalRegionReportGateway? originalRegionReportGateway;
     CurrentRelationshipStageGateway? currentRelationshipStageGateway;
     ReminderNotificationScheduler? reminderNotificationScheduler;
     PrivateSessionDataGuard? privateSessionDataGuard;
@@ -292,6 +299,9 @@ final class AppDependencies {
       interestReportGateway =
           interestReportGatewayBuilder?.call(identitySession) ??
           const DeferredInterestReportGateway();
+      originalRegionReportGateway =
+          originalRegionReportGatewayBuilder?.call(identitySession) ??
+          const DeferredOriginalRegionReportGateway();
       currentRelationshipStageGateway =
           currentRelationshipStageGatewayBuilder?.call(identitySession) ??
           const DeferredCurrentRelationshipStageGateway();
@@ -422,6 +432,7 @@ final class AppDependencies {
         managementReportGateway: managementReportGateway,
         currentCityReportGateway: currentCityReportGateway,
         interestReportGateway: interestReportGateway,
+        originalRegionReportGateway: originalRegionReportGateway,
         managementReportExportDelivery: exportDelivery,
         currentRelationshipStageGateway: currentRelationshipStageGateway,
         currentRelationshipStageRepository: currentRelationshipStageRepository,
@@ -447,6 +458,7 @@ final class AppDependencies {
       await managementReportGateway?.close();
       await currentCityReportGateway?.close();
       await interestReportGateway?.close();
+      await originalRegionReportGateway?.close();
       await currentRelationshipStageGateway?.close();
       await privateSessionDataGuard?.close();
       await reminderNotificationScheduler?.close();
@@ -495,6 +507,7 @@ final class AppStartupReady extends AppStartupResult {
     required this.managementReportGateway,
     required this.currentCityReportGateway,
     required this.interestReportGateway,
+    required this.originalRegionReportGateway,
     required this.managementReportExportDelivery,
     required this.currentRelationshipStageGateway,
     required this.currentRelationshipStageRepository,
@@ -528,6 +541,7 @@ final class AppStartupReady extends AppStartupResult {
   final ManagementReportGateway managementReportGateway;
   final CurrentCityReportGateway currentCityReportGateway;
   final InterestReportGateway interestReportGateway;
+  final OriginalRegionReportGateway originalRegionReportGateway;
   final ManagementReportExportDelivery managementReportExportDelivery;
   final CurrentRelationshipStageGateway currentRelationshipStageGateway;
   final CurrentRelationshipStageRepository currentRelationshipStageRepository;

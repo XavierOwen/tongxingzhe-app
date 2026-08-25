@@ -768,6 +768,19 @@ project／snapshot 绑定、两个相邻期间、单一 source tree tuple、prev
 存在；6BL 不交付 UI、ViewModel、composition、Drift、缓存、离线、同步、导出或真人平台验收。
 _Avoid_: 暴露 `access_contract_id`、自动读取首项、客户端重算或重新归类、复用其他 report family gateway、重复刷新、持久化受保护报告
 
+**管理原始区域报告 Flutter consumer**:
+6BM 把 6BL 的独立 original-region gateway 接入管理报告浏览器。浏览器保留渠道、当前城市、兴趣和原始区域四个互斥视图，默认仍是渠道；只有用户
+明确选择原始区域视图后，才用当前已重新授权的 `ManagementAnalysisContext.projectId` 读取目录。它不使用个人项目，不自动打开首项，也不推断
+current、latest 或 replacement。
+
+独立 panel 和 ViewModel 只接受当前目录中用户明确选择的 original-region summary。详情显示固定元数据、两个期间、source-tree context、城市 ID 和
+服务端已保护的完整城市格；不显示城市名称、坐标、边界、来源记录、贡献者、contact 或 PII。`displayed` 显示安全整数，`suppressed` 只显示
+“已隐藏 / Hidden”。客户端不排序、聚合、重算、重新归类或推导总计、比例、差值、趋势和隐私状态。
+
+切换项目、report family、返回目录、重试或 dispose 会使旧 generation 失效。状态只留在内存，并支持中英文、小屏、200% 字号、键盘、焦点恢复、
+heading 和 live region。6BM 不增加 Backend、PostgreSQL、Drift、缓存、离线、同步、导出、搜索、分页、筛选或真人平台证据。
+_Avoid_: 个人项目回退、多个布尔开关表示 report family、自动打开首项、客户端重算或归类、隐藏值当零、旧响应写回、复用其他 report family DTO、持久化受保护报告
+
 **管理报告清除**:
 组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
 _Avoid_: 授权撤回、报告到期、tombstone、superseded

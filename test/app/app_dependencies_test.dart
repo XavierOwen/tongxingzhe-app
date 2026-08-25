@@ -18,6 +18,7 @@ import 'package:tongxingzhe_app/management_reports/current_city_report_gateway.d
 import 'package:tongxingzhe_app/management_reports/interest_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_export_delivery.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
+import 'package:tongxingzhe_app/management_reports/original_region_report_gateway.dart';
 import 'package:tongxingzhe_app/privacy/drift_offline_pii_lock_store.dart';
 import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
 import 'package:tongxingzhe_app/project_settings/http_personal_follow_up_consent_opt_in_gateway.dart';
@@ -67,6 +68,10 @@ void main() {
       isA<UnsupportedManagementReportExportDelivery>(),
     );
     expect(ready.interestReportGateway, isA<DeferredInterestReportGateway>());
+    expect(
+      ready.originalRegionReportGateway,
+      isA<DeferredOriginalRegionReportGateway>(),
+    );
 
     final login = await controller.login('admin1', 'admin1');
     expect(login.success, isFalse);
@@ -243,6 +248,39 @@ void main() {
     await database.close();
   });
 
+  test('composition root 装配并释放独立 original-region gateway', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession();
+    final gateway = _TrackingOriginalRegionReportGateway();
+    IdentitySession? receivedIdentity;
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      originalRegionReportGatewayBuilder: (identitySession) {
+        receivedIdentity = identitySession;
+        return gateway;
+      },
+    );
+
+    final startup = await dependencies.start();
+
+    expect(startup, isA<AppStartupReady>());
+    final ready = startup as AppStartupReady;
+    expect(identical(receivedIdentity, identity), isTrue);
+    expect(identical(receivedIdentity, ready.identitySession), isTrue);
+    expect(identical(ready.originalRegionReportGateway, gateway), isTrue);
+    await ready.originalRegionReportGateway.close();
+    expect(gateway.closeCount, 1);
+    await ready.appSession.close();
+    await ready.identitySession.close();
+    ready.controller.dispose();
+    await database.close();
+  });
+
   test('配置 Backend 时 composition root 把当前项目绑定到 HTTP gateway', () async {
     final database = LocalDatabase(NativeDatabase.memory());
     final identity = FakeIdentitySession(
@@ -344,6 +382,7 @@ void main() {
     final gateway = _TrackingManagementReportGateway();
     final currentCityGateway = _TrackingCurrentCityReportGateway();
     final interestGateway = _TrackingInterestReportGateway();
+    final originalRegionGateway = _TrackingOriginalRegionReportGateway();
     final relationshipGateway = _TrackingCurrentRelationshipStageGateway();
     final dependencies = AppDependencies(
       databaseFactory: _SingleDatabaseFactory(database),
@@ -355,6 +394,7 @@ void main() {
       managementReportGatewayBuilder: (_) => gateway,
       currentCityReportGatewayBuilder: (_) => currentCityGateway,
       interestReportGatewayBuilder: (_) => interestGateway,
+      originalRegionReportGatewayBuilder: (_) => originalRegionGateway,
       currentRelationshipStageGatewayBuilder: (_) => relationshipGateway,
       reminderSchedulerBuilder: (_) => throw StateError('synthetic failure'),
     );
@@ -365,6 +405,7 @@ void main() {
     expect(gateway.closeCount, 1);
     expect(currentCityGateway.closeCount, 1);
     expect(interestGateway.closeCount, 1);
+    expect(originalRegionGateway.closeCount, 1);
     expect(relationshipGateway.closeCount, 1);
   });
 
@@ -582,6 +623,29 @@ final class _TrackingInterestReportGateway implements InterestReportGateway {
     required InterestReportSnapshotSummary summary,
   }) async =>
       const InterestReportRejected(InterestReportFailureCode.notConfigured);
+}
+
+final class _TrackingOriginalRegionReportGateway
+    implements OriginalRegionReportGateway {
+  var closeCount = 0;
+
+  @override
+  Future<void> close() async => closeCount++;
+
+  @override
+  Future<OriginalRegionReportResult<OriginalRegionReportSnapshotDirectory>>
+  listSnapshots(String projectId) async => const OriginalRegionReportRejected(
+    OriginalRegionReportFailureCode.notConfigured,
+  );
+
+  @override
+  Future<OriginalRegionReportResult<OriginalRegionReportSnapshot>>
+  readSnapshot({
+    required String projectId,
+    required OriginalRegionReportSnapshotSummary summary,
+  }) async => const OriginalRegionReportRejected(
+    OriginalRegionReportFailureCode.notConfigured,
+  );
 }
 
 final class _TrackingManagementReportExportDelivery
