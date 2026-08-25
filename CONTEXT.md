@@ -756,6 +756,18 @@ snapshot ID、固定报告 ID／版本、报告时区、截止时间和发布时
 再次授权、读取审计或详情读取。6BK 不增加 Flutter、导出、缓存、离线、Drift、分页、搜索、自动 latest、发布、更正、删除、retention 或真人平台证据。
 _Avoid_: 复用其他目录 provenance、自动选择首项、跨项目探测、返回报告正文、用 synthetic Docker 或 HTTP 测试冒充生产或真人证据
 
+**管理原始区域快照 Flutter typed gateway**:
+6BL 使用独立的 `OriginalRegionReportGateway` 消费 6BK metadata-only 目录和 6BJ 显式详情。目录 HTTP 根对象只有
+`access_event_id`、`project_id` 和 `snapshots` 三项；数据库内部的 `access_contract_id` 不进入 HTTP 或 Dart。详情根对象只有
+`access_event_id`、`snapshot_id` 和 `report` 三项。目录最多 20 项，保持服务端的 cutoff、release time 和 snapshot ID 降序；第一项
+不具有 current、latest 或未被取代语义，详情只读取调用方明确选择的同项目 summary。
+
+gateway 从 `IdentitySession` 取得 Bearer token，一次 `401` 最多刷新并重试一次。strict parser 核对固定 original report identity、
+project／snapshot 绑定、两个相邻期间、单一 source tree tuple、previous／current 完整城市网格、连续 `cell_order`、安全整数和
+`suppressed = null`。额外字段、错误顺序、其他 report family、来源记录、贡献者、contact、区域名称、坐标或 PII 失败关闭。结果只在内存中
+存在；6BL 不交付 UI、ViewModel、composition、Drift、缓存、离线、同步、导出或真人平台验收。
+_Avoid_: 暴露 `access_contract_id`、自动读取首项、客户端重算或重新归类、复用其他 report family gateway、重复刷新、持久化受保护报告
+
 **管理报告清除**:
 组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
 _Avoid_: 授权撤回、报告到期、tombstone、superseded
