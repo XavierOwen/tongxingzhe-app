@@ -9,6 +9,7 @@ import 'package:tongxingzhe_app/management_reports/current_city_report_gateway.d
 import 'package:tongxingzhe_app/management_reports/interest_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_export_delivery.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
+import 'package:tongxingzhe_app/management_reports/original_region_report_gateway.dart';
 
 void main() {
   testWidgets('渠道视图默认，明确选择 current-city 后才读取管理项目目录', (tester) async {
@@ -111,6 +112,136 @@ void main() {
     expect(
       find.byKey(ValueKey('interest-report/${_projectA.projectId}')),
       findsNothing,
+    );
+  });
+
+  testWidgets('原始区域视图必须明确选择，且只读取当前管理项目', (tester) async {
+    final originalRegionGateway = _OriginalRegionGateway();
+    await tester.pumpWidget(
+      _app(
+        _Gateway(
+          context: _contextSnapshot(current: _projectA),
+          summaries: [_summary],
+        ),
+        originalRegionGateway: originalRegionGateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final channelView = find.byKey(
+      const ValueKey('management-channel-report-view'),
+    );
+    final originalRegionView = find.byKey(
+      const ValueKey('management-original-region-report-view'),
+    );
+    expect(tester.widget<ChoiceChip>(channelView).selected, isTrue);
+    expect(tester.widget<ChoiceChip>(originalRegionView).selected, isFalse);
+    expect(originalRegionGateway.listedProjectIds, isEmpty);
+
+    await tester.tap(originalRegionView);
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<ChoiceChip>(channelView).selected, isFalse);
+    expect(tester.widget<ChoiceChip>(originalRegionView).selected, isTrue);
+    expect(originalRegionGateway.listedProjectIds, [_projectA.projectId]);
+    expect(originalRegionGateway.readRequests, isEmpty);
+    expect(
+      find.byKey(ValueKey('original-region-report/${_projectA.projectId}')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('原始区域目录随 ManagementAnalysisContext 项目切换', (tester) async {
+    final gateway = _Gateway(
+      context: _contextSnapshot(current: _projectA),
+      summaries: [_summary],
+      selectResult: ManagementReportSuccess(
+        _contextSnapshot(current: _projectB),
+      ),
+    );
+    final originalRegionGateway = _OriginalRegionGateway();
+    await tester.pumpWidget(
+      _app(gateway, originalRegionGateway: originalRegionGateway),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('management-original-region-report-view')),
+    );
+    await tester.pumpAndSettle();
+    expect(originalRegionGateway.listedProjectIds, [_projectA.projectId]);
+
+    await tester.tap(find.byKey(const ValueKey('management-project-picker')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('第二组织 · 第二项目').last);
+    await tester.pumpAndSettle();
+
+    expect(gateway.selectProjectIds, [_projectB.projectId]);
+    expect(originalRegionGateway.listedProjectIds, [
+      _projectA.projectId,
+      _projectB.projectId,
+    ]);
+    expect(
+      find.byKey(ValueKey('original-region-report/${_projectB.projectId}')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        ValueKey('original-region-report-${_originalRegionSummary.snapshotId}'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('原始区域目录迟到响应不覆盖已切回的渠道视图', (tester) async {
+    final originalRegionGateway = _DeferredOriginalRegionGateway();
+    await tester.pumpWidget(
+      _app(
+        _Gateway(
+          context: _contextSnapshot(current: _projectA),
+          summaries: [_summary],
+        ),
+        originalRegionGateway: originalRegionGateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('management-original-region-report-view')),
+    );
+    await tester.pump();
+    expect(originalRegionGateway.listedProjectIds, [_projectA.projectId]);
+
+    await tester.tap(
+      find.byKey(const ValueKey('management-channel-report-view')),
+    );
+    await tester.pumpAndSettle();
+    originalRegionGateway.directory.complete(
+      OriginalRegionReportSuccess(
+        OriginalRegionReportSnapshotDirectory(
+          accessEventId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+          projectId: _projectA.projectId,
+          snapshots: [_originalRegionSummary],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<ChoiceChip>(
+            find.byKey(const ValueKey('management-channel-report-view')),
+          )
+          .selected,
+      isTrue,
+    );
+    expect(
+      find.byKey(ValueKey('original-region-report/${_projectA.projectId}')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(ValueKey('management-report-${_summary.snapshotId}')),
+      findsOneWidget,
     );
   });
 
@@ -861,6 +992,7 @@ Widget _app(
   ManagementReportExportDelivery? delivery,
   CurrentCityReportGateway? currentCityGateway,
   InterestReportGateway? interestGateway,
+  OriginalRegionReportGateway? originalRegionGateway,
 }) => MaterialApp(
   builder: (context, child) => MediaQuery(
     data: MediaQuery.of(context).copyWith(textScaler: textScaler),
@@ -873,6 +1005,8 @@ Widget _app(
       currentCityGateway:
           currentCityGateway ?? const DeferredCurrentCityReportGateway(),
       interestGateway: interestGateway ?? const DeferredInterestReportGateway(),
+      originalRegionGateway:
+          originalRegionGateway ?? const DeferredOriginalRegionReportGateway(),
       exportDelivery: delivery ?? _Delivery(isAvailable: false),
     ),
   ),
@@ -1109,6 +1243,67 @@ final class _DeferredInterestGateway implements InterestReportGateway {
   }) async => const InterestReportRejected(InterestReportFailureCode.notFound);
 }
 
+final class _OriginalRegionGateway implements OriginalRegionReportGateway {
+  final listedProjectIds = <String>[];
+  final readRequests = <(String, OriginalRegionReportSnapshotSummary)>[];
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  Future<OriginalRegionReportResult<OriginalRegionReportSnapshotDirectory>>
+  listSnapshots(String projectId) async {
+    listedProjectIds.add(projectId);
+    return OriginalRegionReportSuccess(
+      OriginalRegionReportSnapshotDirectory(
+        accessEventId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+        projectId: projectId,
+        snapshots: [_originalRegionSummary],
+      ),
+    );
+  }
+
+  @override
+  Future<OriginalRegionReportResult<OriginalRegionReportSnapshot>>
+  readSnapshot({
+    required String projectId,
+    required OriginalRegionReportSnapshotSummary summary,
+  }) async {
+    readRequests.add((projectId, summary));
+    return const OriginalRegionReportRejected(
+      OriginalRegionReportFailureCode.notFound,
+    );
+  }
+}
+
+final class _DeferredOriginalRegionGateway
+    implements OriginalRegionReportGateway {
+  final directory =
+      Completer<
+        OriginalRegionReportResult<OriginalRegionReportSnapshotDirectory>
+      >();
+  final listedProjectIds = <String>[];
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  Future<OriginalRegionReportResult<OriginalRegionReportSnapshotDirectory>>
+  listSnapshots(String projectId) {
+    listedProjectIds.add(projectId);
+    return directory.future;
+  }
+
+  @override
+  Future<OriginalRegionReportResult<OriginalRegionReportSnapshot>>
+  readSnapshot({
+    required String projectId,
+    required OriginalRegionReportSnapshotSummary summary,
+  }) async => const OriginalRegionReportRejected(
+    OriginalRegionReportFailureCode.notFound,
+  );
+}
+
 final class _DeferredCurrentCityGateway implements CurrentCityReportGateway {
   final directory =
       Completer<CurrentCityReportResult<CurrentCityReportSnapshotDirectory>>();
@@ -1182,6 +1377,15 @@ final _currentCitySummary = CurrentCityReportSnapshotSummary(
 final _interestSummary = InterestReportSnapshotSummary(
   snapshotId: '77777777-7777-4777-8777-777777777777',
   reportId: 'contact_sessions_by_interest_level_two_periods',
+  reportVersion: 1,
+  reportingTimeZone: 'America/Chicago',
+  dataCutoffUtc: DateTime.utc(2030, 1, 22),
+  releasedAtUtc: DateTime.utc(2030, 1, 22, 0, 1),
+);
+
+final _originalRegionSummary = OriginalRegionReportSnapshotSummary(
+  snapshotId: '88888888-8888-4888-8888-888888888888',
+  reportId: 'contact_sessions_by_original_region_two_periods',
   reportVersion: 1,
   reportingTimeZone: 'America/Chicago',
   dataCutoffUtc: DateTime.utc(2030, 1, 22),

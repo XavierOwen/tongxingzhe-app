@@ -7,13 +7,15 @@ import '../../management_reports/current_city_report_gateway.dart';
 import '../../management_reports/interest_report_gateway.dart';
 import '../../management_reports/management_report_export_delivery.dart';
 import '../../management_reports/management_report_gateway.dart';
+import '../../management_reports/original_region_report_gateway.dart';
 import '../contact_entry/contact_channel_label.dart';
 import '../contact_journal/contact_models.dart';
 import 'current_city_report_panel.dart';
 import 'interest_report_panel.dart';
 import 'management_report_browser_view_model.dart';
+import 'original_region_report_panel.dart';
 
-enum _ManagementReportFamily { channel, currentCity, interest }
+enum _ManagementReportFamily { channel, currentCity, interest, originalRegion }
 
 final class ManagementReportBrowser extends StatefulWidget {
   const ManagementReportBrowser({
@@ -22,6 +24,7 @@ final class ManagementReportBrowser extends StatefulWidget {
     required this.gateway,
     required this.currentCityGateway,
     required this.interestGateway,
+    required this.originalRegionGateway,
     required this.exportDelivery,
   });
 
@@ -29,6 +32,7 @@ final class ManagementReportBrowser extends StatefulWidget {
   final ManagementReportGateway gateway;
   final CurrentCityReportGateway currentCityGateway;
   final InterestReportGateway interestGateway;
+  final OriginalRegionReportGateway originalRegionGateway;
   final ManagementReportExportDelivery exportDelivery;
 
   @override
@@ -63,6 +67,7 @@ final class _ManagementReportBrowserState
     if (oldWidget.gateway == widget.gateway &&
         oldWidget.currentCityGateway == widget.currentCityGateway &&
         oldWidget.interestGateway == widget.interestGateway &&
+        oldWidget.originalRegionGateway == widget.originalRegionGateway &&
         oldWidget.exportDelivery == widget.exportDelivery) {
       return;
     }
@@ -108,7 +113,11 @@ final class _ManagementReportBrowserState
     final showInterestPanel =
         _reportFamily == _ManagementReportFamily.interest &&
         state.currentContext != null;
-    final showAlternatePanel = showCurrentCityPanel || showInterestPanel;
+    final showOriginalRegionPanel =
+        _reportFamily == _ManagementReportFamily.originalRegion &&
+        state.currentContext != null;
+    final showAlternatePanel =
+        showCurrentCityPanel || showInterestPanel || showOriginalRegionPanel;
     return ListView(
       key: const ValueKey('management-report-browser'),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
@@ -188,6 +197,15 @@ final class _ManagementReportBrowserState
             key: ValueKey('interest-report/${state.currentContext!.projectId}'),
             text: text,
             gateway: widget.interestGateway,
+            projectId: state.currentContext!.projectId,
+          )
+        else if (showOriginalRegionPanel)
+          OriginalRegionReportPanel(
+            key: ValueKey(
+              'original-region-report/${state.currentContext!.projectId}',
+            ),
+            text: text,
+            gateway: widget.originalRegionGateway,
             projectId: state.currentContext!.projectId,
           )
         else if (state.stage == ManagementReportBrowserStage.directory)
@@ -350,6 +368,14 @@ final class _ReportTypePicker extends StatelessWidget {
             selected: family == _ManagementReportFamily.interest,
             onSelected: enabled
                 ? (_) => onSelected(_ManagementReportFamily.interest)
+                : null,
+          ),
+          ChoiceChip(
+            key: const ValueKey('management-original-region-report-view'),
+            label: Text(text.t('managementReportOriginalRegionView')),
+            selected: family == _ManagementReportFamily.originalRegion,
+            onSelected: enabled
+                ? (_) => onSelected(_ManagementReportFamily.originalRegion)
                 : null,
           ),
         ],

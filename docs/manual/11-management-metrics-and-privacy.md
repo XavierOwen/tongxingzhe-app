@@ -2398,6 +2398,50 @@ flutter test --no-pub
 这些测试使用 fake identity 和 synthetic HTTP，只证明 Dart transport、strict parser、typed failure 和内存边界。6BJ／6BK 的 Backend、数据库授权、
 provenance、audit、ACL 和 restore 仍由各自自动测试证明。Dart 测试不证明 UI、缓存、离线、导出、production identity 或真人平台运行时。
 
+## Slice 6BM：在 Flutter 中查看原始区域报告
+
+6BM 把 6BL 的 typed gateway 接入管理报告浏览器。进入页面时仍先显示渠道报告。只有使用者明确选择“原始区域”，应用才读取当前管理项目的目录。
+项目来自已经重新授权的 `ManagementAnalysisContext`，不是个人项目，也不是 Widget 自由输入。
+
+页面有六种主要状态：未启用、目录加载、目录、详情加载、详情和失败。空目录属于成功状态。目录保留服务端顺序，但不会自动打开第一项，也不会把第一项称为
+current、latest 或未被取代。使用者必须明确选择一个 summary，应用才读取该快照详情。
+
+详情显示报告定义、时区、截止时间、发布时间、两个完整期间和 source-tree context。城市行只显示稳定 city ID。它不显示城市名称、边界或坐标。
+`displayed` 格显示服务端给出的安全整数；`suppressed` 格只显示“已隐藏 / Hidden”，不显示零。Flutter 不重新排序、聚合、归类或计算总计、比例、差值和趋势。
+
+项目、报告类型或目录状态改变时，ViewModel 会递增 generation。旧请求随后完成也不能恢复旧项目或旧快照。返回目录后，键盘焦点回到刚才选择的 summary；
+详情和错误状态分别把焦点放到返回与重试控件。标题使用 heading 语义，状态区域使用 live region。
+
+### 不使用 Docker 的 focused 验证
+
+第一次运行 Flutter 测试时，先在仓库根目录下载依赖：
+
+```bash
+flutter pub get
+```
+
+然后运行 6BM 的三个直接测试入口：
+
+```bash
+flutter test --no-pub test/features/management_reports/original_region_report_panel_view_model_test.dart
+flutter test --no-pub test/features/management_reports/original_region_report_panel_test.dart
+flutter test --no-pub test/features/management_reports/management_report_browser_test.dart
+flutter test --no-pub test/app/app_dependencies_test.dart test/app/tongxingzhe_app_test.dart
+```
+
+第一条检查目录、详情、重试和迟到响应状态。第二条检查双语文案、保护后城市格、320×568、200% 字号、键盘焦点和语义树。第三条检查四个互斥报告类型、
+渠道默认值和管理项目来源。最后一条检查 gateway 的构造、传递和关闭。
+
+6BM 没有 migration、数据库函数或 Backend route，因此 focused UI 验证不需要 Docker、Android Studio、模拟器或手机。完整回归仍运行：
+
+```bash
+dart analyze
+flutter test --no-pub
+```
+
+CI 还会运行既有 Backend、PostgreSQL 和六平台构建。它们可以发现集成回归，但不会把 Flutter 模拟测试变成生产授权或真人平台证据。6BM 不证明真实账号、
+Backend／数据库授权、真实屏幕阅读器、缓存、离线、导出或文件保存。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和

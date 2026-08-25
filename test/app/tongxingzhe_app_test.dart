@@ -21,6 +21,7 @@ import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/management_reports/current_city_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/interest_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
+import 'package:tongxingzhe_app/management_reports/original_region_report_gateway.dart';
 import 'package:tongxingzhe_app/project_settings/personal_follow_up_consent_opt_in.dart';
 import 'package:tongxingzhe_app/questionnaires/questionnaire_contract.dart';
 import 'package:tongxingzhe_app/regions/contact_region_resolver.dart';
@@ -51,6 +52,7 @@ void main() {
     final stageChangeGateway = _ReadyRelationshipStageChangeSummaryGateway();
     final currentCityGateway = _TrackingCurrentCityReportGateway();
     final interestGateway = _TrackingInterestReportGateway();
+    final originalRegionGateway = _TrackingOriginalRegionReportGateway();
     final dependencies = AppDependencies(
       databaseFactory: _SingleDatabaseFactory(database),
       clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
@@ -64,6 +66,7 @@ void main() {
           const _EmptyManagementReportGateway(),
       currentCityReportGatewayBuilder: (_) => currentCityGateway,
       interestReportGatewayBuilder: (_) => interestGateway,
+      originalRegionReportGatewayBuilder: (_) => originalRegionGateway,
       currentRelationshipStageGatewayBuilder: (_) =>
           const _OneRelationshipStageGateway(),
       personalFollowUpConsentRatioGatewayBuilder: (_) => ratioGateway,
@@ -127,6 +130,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(currentCityGateway.closeCount, 1);
     expect(interestGateway.closeCount, 1);
+    expect(originalRegionGateway.closeCount, 1);
   });
 
   testWidgets('占比服务失败时最近七日本地事实仍可读', (tester) async {
@@ -2012,6 +2016,29 @@ final class _TrackingInterestReportGateway implements InterestReportGateway {
     required InterestReportSnapshotSummary summary,
   }) async =>
       const InterestReportRejected(InterestReportFailureCode.notConfigured);
+}
+
+final class _TrackingOriginalRegionReportGateway
+    implements OriginalRegionReportGateway {
+  var closeCount = 0;
+
+  @override
+  Future<void> close() async => closeCount++;
+
+  @override
+  Future<OriginalRegionReportResult<OriginalRegionReportSnapshotDirectory>>
+  listSnapshots(String projectId) async => const OriginalRegionReportRejected(
+    OriginalRegionReportFailureCode.notConfigured,
+  );
+
+  @override
+  Future<OriginalRegionReportResult<OriginalRegionReportSnapshot>>
+  readSnapshot({
+    required String projectId,
+    required OriginalRegionReportSnapshotSummary summary,
+  }) async => const OriginalRegionReportRejected(
+    OriginalRegionReportFailureCode.notConfigured,
+  );
 }
 
 final class _OneRelationshipStageGateway

@@ -80,6 +80,7 @@
 | [0155](./0155-original-region-snapshot-http-reads-authenticate-before-route-validation.md) | 已接受，2026-08-22 | Slice 6BJ；Issue #205；`ANALYTICS-045`、`PRIVACY-037`、`TEST-039`、`MANUAL-029` | 原始区域快照固定 HTTP GET 先认证再验证请求，只调用 6BI store；固定 wire／status／no-store、Promise gate 和无数据库变更边界 |
 | [0156](./0156-original-region-snapshot-directory-uses-independent-provenance.md) | 已接受，2026-08-25 | Slice 6BK；Issue #207；`ANALYTICS-046`、`PRIVACY-038`、`TEST-040`、`MANUAL-030` | 原始区域快照使用专用 provenance、runtime bridge 和 value-free 目录审计；固定最多 20 项 metadata-only 结果，第一项不表示 current 或 latest |
 | [0157](./0157-original-region-typed-gateway-keeps-db-http-and-flutter-contracts-separate.md) | 已接受，2026-08-25 | Slice 6BL；Issue #209；`ANALYTICS-047`、`PRIVACY-039`、`TEST-041`、`MANUAL-031` | Flutter 使用独立 original-region typed gateway；DB、HTTP 和 Dart 合同分离，显式 summary、source tree、城市网格和内存边界保持固定 |
+| [0158](./0158-original-region-report-consumer-uses-explicit-management-context-and-selection.md) | 已接受，2026-08-25 | Slice 6BM；Issue #211；`ANALYTICS-048`、`PRIVACY-040`、`TEST-042`、`MANUAL-032` | Flutter original-region consumer 只使用显式管理上下文和快照选择；四个互斥 report family、generation 隔离和隐藏语义保持独立 |
 
 ## 按主题查找
 
@@ -91,7 +92,7 @@
 | 组织、保留、导入导出与合并 | [0030](./0030-allow-verified-users-to-create-organizations.md)–[0043](./0043-promotion-target-merges-are-reversible.md) | Slice 4、7；`ORG`、`TARGET`、`AUTHZ` |
 | 私人计划、通知与周期 | [0044](./0044-personal-action-plans-are-private-and-user-controlled.md)–[0052](./0052-late-entered-contacts-count-in-their-occurrence-period.md) | Slice 5；`PLAN`、`PLATFORM` |
 | 说明书与发布检查 | [0053](./0053-production-code-and-learning-materials-evolve-together.md)–[0059](./0059-documentation-and-statistics-checks-block-releases.md) | 全部 Slice；`MANUAL`、Definition of Done |
-| 指标、报告与隐私 | [0060](./0060-ordinal-scale-distributions-are-primary.md)–[0077](./0077-core-metrics-ship-with-code-and-project-metrics-use-safe-configuration.md)，另见 [0099](./0099-management-analytics-use-bounded-query-surfaces.md)、[0101](./0101-management-weekly-reports-use-two-complete-iso-weeks.md)–[0157](./0157-original-region-typed-gateway-keeps-db-http-and-flutter-contracts-separate.md) | Slice 6；`ANALYTICS`、`PRIVACY`、`AUTHZ`、`REGION`、`ARCH`、`TEST-005`、`TEST-014`–`TEST-041` |
+| 指标、报告与隐私 | [0060](./0060-ordinal-scale-distributions-are-primary.md)–[0077](./0077-core-metrics-ship-with-code-and-project-metrics-use-safe-configuration.md)，另见 [0099](./0099-management-analytics-use-bounded-query-surfaces.md)、[0101](./0101-management-weekly-reports-use-two-complete-iso-weeks.md)–[0158](./0158-original-region-report-consumer-uses-explicit-management-context-and-selection.md) | Slice 6；`ANALYTICS`、`PRIVACY`、`AUTHZ`、`REGION`、`ARCH`、`TEST-005`、`TEST-014`–`TEST-042` |
 | 当前上下文、问卷、草稿与导航 | [0078](./0078-a-visible-project-context-scopes-default-work.md)–[0090](./0090-contact-entry-prioritizes-core-facts-with-progressive-disclosure.md) | Slice 1、3、5；`CTX`、`QUESTION`、`DRAFT`、`UI` |
 | 尝试、渠道、触达和机构关系 | [0091](./0091-unsuccessful-direct-outreach-is-a-contact-attempt.md)–[0095](./0095-person-to-institution-relationships-use-six-stable-kinds.md) | Slice 1、2、4；`CONTACT`、`TARGET` |
 | 基础设施 | [0097](./0097-use-supabase-postgresql-for-the-initial-stage.md) | Slice 0／发布门槛；`ARCH-003`–`ARCH-010` |
