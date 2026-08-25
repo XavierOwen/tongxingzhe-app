@@ -636,6 +636,48 @@ cd ../..
 
 Docker 结果只证明 synthetic 0069／0070 PostgreSQL bridge、parser、授权和 ACL；它不证明 6BJ HTTP、Flutter、目录、导出、缓存、离线、生产身份或六平台真人运行时。
 
+## 原始区域快照 metadata-only 目录合同
+
+6BK 增加固定 collection route：
+
+```text
+GET /v1/projects/:projectId/management-original-region-report-snapshots
+```
+
+handler 先验证 Bearer identity，再检查 project UUID、query、GET body 的 `Content-Length`／`Transfer-Encoding` 声明和专用 directory store。认证失败先返回
+`401 unauthenticated`。认证通过后只把 verified identity 和显式 project UUID 传给 original-region directory adapter，并等待 Promise 完成后写响应。
+它不调用 6BJ detail store、generic、current-city、interest store、`SessionContext` 或 `app_private`。
+
+成功 HTTP 根对象只有 `access_event_id`、`project_id` 和 `snapshots`。每项只有 `snapshot_id`、`report_id`、`report_version`、
+`reporting_time_zone`、`data_cutoff_utc` 和 `released_at_utc`。最多 20 项，按 cutoff、release time 和 snapshot ID 固定降序；第一项不表示 current、
+latest 或未被取代。空目录返回 `200` 和空数组。数据库内部 envelope 的 `access_contract_id` 不进入 HTTP。
+
+错误固定为 `400 invalid_management_original_region_report_snapshot_directory_request`、`403 management_original_region_report_snapshot_directory_forbidden`
+和 `503 management_original_region_report_snapshot_directory_unavailable`。所有结果使用 JSON 与 `Cache-Control: no-store`，不返回 protected report、cells、
+source tuple、来源、贡献者、区域名称、坐标、PII、数据库消息、SQL 或栈。
+
+### 6BK 的本地测试
+
+从仓库根目录运行 Backend 检查：
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+这些测试覆盖 strict parser、20 项上限、稳定排序、认证先于请求验证、Promise gate、固定 wire、错误脱敏、`no-store` 和 production composition。
+要同时验证 0071 PostgreSQL 合同，再回到仓库根目录运行：
+
+```bash
+cd ../..
+./tool/run_postgres_tests_in_docker.sh
+```
+
+Docker runner 自动发现 0071 migration、check 和 fixture，并运行专用 integration、并发、checksum 和 dump／restore。通过只证明 synthetic PostgreSQL、
+runtime bridge 和 Backend HTTP 合同；它不证明 Flutter、导出、缓存、离线、生产身份或六平台真人运行时。
+
 ## 管理报告快照目录合同
 
 `GET /v1/projects/:projectId/management-report-snapshots` 只接受一个显式项目 UUID。它不接受 body、query、筛选、分页、报告 ID、时区、capability 或内部用户 ID。6M 保存的管理分析选择只帮助导航，不是授权，也不会替代 path 中的项目。

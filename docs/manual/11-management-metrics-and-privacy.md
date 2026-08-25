@@ -2291,6 +2291,70 @@ cd ../..
 
 Docker runner 的结果只证明 synthetic PostgreSQL 的 private read、runtime bridge、strict parser、授权和 ACL。它不证明 6BJ HTTP 已在 production 身份提供方、Flutter、目录、导出、缓存、离线或六个平台真人环境中运行。HTTP 自动测试与 Docker 数据库测试是两层证据，不能互相替代。
 
+## Slice 6BK：发现原始区域快照目录
+
+6BJ 详情路径需要一个明确的 snapshot ID。6BK 提供取得这个 ID 的专用 collection route：
+
+```text
+GET /v1/projects/:projectId/management-original-region-report-snapshots
+```
+
+这不是 latest API。目录最多返回 20 项，固定按 `data_cutoff_utc`、`released_at_utc` 和 `snapshot_id` 降序。第一项只是在这次排序中靠前，调用方不能把它标成
+current、latest、最新有效或未被取代。用户应明确选择一个目录项，再把该 project 和 snapshot ID 交给 6BJ。
+
+数据库每次调用重新确认 active identity、组织／项目成员、项目状态和 `view_anonymous_analytics`。它只接受 6BG original-region release family 中
+provenance 完整的 approved snapshot，并复核 report identity、query、lineage、报告时区 revision、cutoff、previous pointer、source watermark 和
+source tree tuple。generic、channel、current-city、interest、legacy、blocked、跨项目或漂移快照不进入目录。
+
+### 返回内容与隐私边界
+
+成功 HTTP 根对象只有三个字段：
+
+```json
+{
+  "access_event_id": "…",
+  "project_id": "…",
+  "snapshots": []
+}
+```
+
+每项只有 snapshot ID、固定 report ID／version、报告时区、cutoff 和 release time。目录不返回 protected report、cells、隐藏前值、source tuple、来源、
+贡献者、contact、区域名称、坐标或 PII。数据库内部 envelope 另有 `access_contract_id`；该内部字段不能进入 HTTP 或未来客户端类型。
+
+空目录返回 `200` 和空数组，并追加一条返回数量为 0 的成功 audit。audit 只保存授权 lineage、project、访问时间、完成状态和返回数量。它不保存 snapshot ID、
+报告 metadata、source tuple 或报告内容。未认证或未授权请求不伪造成功 audit。
+
+### 请求顺序与失败
+
+handler 先验证 Bearer identity，再检查 project UUID、query、GET body 的 `Content-Length`／`Transfer-Encoding` 声明和专用 store。缺少或无效 token 时，
+即使请求形状或 store 有问题，也先返回 `401 unauthenticated`。认证通过后只调用 original-region directory store，并等待 Promise 完成后写响应。
+
+输入无效返回 `400 invalid_management_original_region_report_snapshot_directory_request`；授权失败返回
+`403 management_original_region_report_snapshot_directory_forbidden`；数据库、parser 或未知错误返回
+`503 management_original_region_report_snapshot_directory_unavailable`。所有结果使用 JSON 与 `Cache-Control: no-store`。
+
+### 如何验证
+
+只检查 Backend 时，从仓库根目录运行：
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+检查数据库、并发和恢复时，回到仓库根目录运行：
+
+```bash
+cd ../..
+./tool/run_postgres_tests_in_docker.sh
+```
+
+Docker runner 自动发现 0071 migration、check、fixture 和 concurrency，并显式运行专用 PostgreSQL integration。恢复库重跑 migration、check 和 rollback
+fixture，不重跑会提交 synthetic 行的并发脚本。完整通过只证明 synthetic provenance、授权撤回、20 项排序、value-free audit、runtime ACL、strict parser 和
+HTTP 合同。它不证明 Flutter、导出、缓存、离线、production identity 或六平台真人运行时。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和

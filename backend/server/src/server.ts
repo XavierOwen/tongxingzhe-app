@@ -93,6 +93,10 @@ import {
   type ManagementOriginalRegionReportSnapshotStore,
 } from "./management-original-region-report-snapshots.js";
 import {
+  listManagementOriginalRegionReportSnapshotDirectory,
+  type ManagementOriginalRegionReportSnapshotDirectoryStore,
+} from "./management-original-region-report-snapshot-directory.js";
+import {
   exportManagementReportSnapshot,
   type ManagementReportSnapshotExportStore,
 } from "./management-report-snapshot-exports.js";
@@ -148,6 +152,8 @@ export interface BackendServerDependencies
     ManagementInterestReportSnapshotStore;
   readonly managementOriginalRegionReportSnapshotStore?:
     ManagementOriginalRegionReportSnapshotStore;
+  readonly managementOriginalRegionReportSnapshotDirectoryStore?:
+    ManagementOriginalRegionReportSnapshotDirectoryStore;
   readonly managementReportSnapshotExportStore?:
     ManagementReportSnapshotExportStore;
   readonly managementReportSnapshotDirectoryStore?:
@@ -436,6 +442,37 @@ export function createBackendServer(
             : {
               snapshotStore:
                 dependencies.managementInterestReportSnapshotStore,
+            }),
+        },
+      );
+      response.statusCode = result.status;
+      response.end(JSON.stringify(result.body));
+      return;
+    }
+
+    const managementOriginalRegionReportSnapshotDirectoryMatch =
+      requestUrl.pathname.match(
+        /^\/v1\/projects\/([^/]+)\/management-original-region-report-snapshots$/,
+      );
+    if (
+      request.method === "GET" &&
+      managementOriginalRegionReportSnapshotDirectoryMatch !== null
+    ) {
+      const result = await listManagementOriginalRegionReportSnapshotDirectory(
+        {
+          authorization: request.headers.authorization,
+          projectId:
+            managementOriginalRegionReportSnapshotDirectoryMatch[1] ?? "",
+          hasQuery: requestUrl.search.length > 0,
+          hasBody: requestDeclaresBody(request.headers),
+        },
+        {
+          identityVerifier: dependencies.identityVerifier,
+          ...(dependencies.managementOriginalRegionReportSnapshotDirectoryStore === undefined
+            ? {}
+            : {
+              directoryStore:
+                dependencies.managementOriginalRegionReportSnapshotDirectoryStore,
             }),
         },
       );
