@@ -418,7 +418,7 @@ GET /v1/projects/:projectId/management-report-snapshots
 
 每项只有快照 ID、固定报告 ID 与版本、项目报告时区、数据截止时间和发布时间。目录成功时在同一事务中追加访问审计。审计保存精确授权证据、项目、数据库访问时间、完成状态和返回数量，不保存快照 ID、报告元数据、报告格或隐藏值。空目录也返回 `200` 和空数组，并写一条返回数量为 0 的审计。
 
-固定排序不代表第一项是“当前”或“最新有效”报告。当前模型还没有更正版取代关系。客户端选择一项后，仍须调用单份快照端点；该端点会再次授权并追加自己的访问审计。
+固定排序不代表第一项是“当前”或“最新有效”报告。该目录和读取路径不提供更正版取代关系。客户端选择一项后，仍须调用单份快照端点；该端点会再次授权并追加自己的访问审计。
 
 ## Backend 如何在提交审计后交付报告
 
@@ -507,7 +507,7 @@ artifact 重试，不会再次调用服务端导出端点。切换管理项目�
 
 [`HttpManagementReportGateway`](../../lib/management_reports/http_management_report_gateway.dart) 每次请求前取得身份 access token。遇到 `401` 时，它只强制刷新并重试一次。`403`、`404`、`409`、网络失败和无效合同分别进入稳定页面状态。响应只存在于当前 Widget 内存；当前实现没有 Drift 表、文件缓存、通知内容或报告值日志。
 
-目录保留服务端顺序，但界面不把第一项称为“最新”“当前”或“有效”。当前数据模型没有更正版取代关系。用户离开详情后，键盘焦点回到刚才选择的目录项；选择另一项目后，旧项目的迟到响应会被 generation 检查丢弃。
+目录保留服务端顺序，但界面不把第一项称为“最新”“当前”或“有效”。6BM consumer 不读取 6BN 的 replacement relation，也不从目录顺序推断取代状态。用户离开详情后，键盘焦点回到刚才选择的目录项；选择另一项目后，旧项目的迟到响应会被 generation 检查丢弃。
 
 紧凑宽度和大字号使用逐期间列表，每格有独立的期间、渠道和值／隐藏状态语义。宽屏和正常字号使用三列表格。两种布局显示相同的服务端结果，不在客户端重排或聚合报告值。
 
@@ -2442,6 +2442,50 @@ flutter test --no-pub
 CI 还会运行既有 Backend、PostgreSQL 和六平台构建。它们可以发现集成回归，但不会把 Flutter 模拟测试变成生产授权或真人平台证据。6BM 不证明真实账号、
 Backend／数据库授权、真实屏幕阅读器、缓存、离线、导出或文件保存。
 
+## Slice 6BN：登记原始区域快照更正版取代
+
+6BN 只登记两份已经通过 6BG 的 original-region approved snapshot 之间的直接 replacement。它不生成 snapshot，也不把 6BE 的渠道 replacement
+ledger 复用到 original-region。两份快照必须属于同一 project、report／version、query fingerprint、privacy、source scope、报告时区 revision、期间、
+release lineage 和精确的 `source_tree_version + source_content_fingerprint`。新快照的 `data_cutoff_utc` 和发布时间都必须晚于旧快照。
+
+数据库在管理报告共享的 value-free request UUID ledger 中使用独立 replacement family claim，并使用 original-region 专用 provenance 和最小 ACL。release
+与 replacement 使用同一个 request lock；同一 UUID 无论先由哪一个合同占用，另一个合同都会失败关闭。登记原因只允许 `late_accepted_data`、`contact_revision` 和 `contact_void`。
+关系和最小 audit 追加且不可变；每份旧快照最多一个直接 replacement，每份新快照最多一个 predecessor。自链接、循环、分叉、stale head、跨项目、
+跨 report family、source-tree 漂移和时间倒序都失败关闭。请求与 lineage 锁取得后，数据库会再次确认发布记录和批准 provenance；相同 request UUID 与
+canonical payload 精确幂等，载荷漂移失败关闭。
+
+replacement 生命周期查询是 value-free 的，只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID。它不返回报告格、来源、贡献者、地点、
+隐藏前值或 PII。该关系不改变旧快照和新快照，不改变目录排序，也不能用于推断 current 或 latest。
+
+### 6BN 的范围
+
+这是 DB-only 合同。它不处理 channel、current-city、interest 或其他 report family，不做分析定义／跨版本更正，不生成 snapshot，也不增加 runtime、
+HTTP、Flutter、目录、导出、缓存、离线、分享、删除、tombstone、retention、备份清除、parent／overlap、warehouse 或真人平台验收。Docker synthetic
+通过只能证明 PostgreSQL 中的 replacement relation、授权锁、不可变性、value-free 结果和 ACL。
+
+### 6BN 的验证命令
+
+从仓库根目录运行完整 PostgreSQL 合同：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 会发现 0072 migration、structural check、rollback fixture 和 replacement concurrency script，并在 checksum、dump／restore 后重跑 migration、check
+和 fixture。恢复库不重跑会提交 synthetic 行的并发脚本。若只调试 6BN，先确认 `DATABASE_URL` 是专用测试库，再运行：
+
+```bash
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_original_region_report_snapshot_replacements.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0072_management_original_region_report_snapshot_replacements.sql
+./tool/verify_management_original_region_report_snapshot_replacements_concurrency.sh
+```
+
+这些命令覆盖 synthetic DB-only 证据，不证明 snapshot 生成、其他 report family、分析定义／跨版本更正、runtime、HTTP、Flutter、目录、导出、删除、
+retention、生产身份或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和
@@ -2501,7 +2545,7 @@ Backend 生产写入、区域 current 映射或区域报告不可重识别。
 - 组织邀请、项目分配、角色组合，以及生产成员和能力授予／撤销入口；
 - 权限变更审计和一般组织业务上下文；
 - 跨时区 revision 后重新建立基线或更正版的隐私判定；
-- 可按历史 revision 水位重新执行的 `as-of` 投影、更正版取代关系和删除流程；
+- 可按历史 revision 水位重新执行的 `as-of` 投影、其他 report family 的更正版取代关系和删除流程；
 - 把显式映射或来源坐标重解析安全接入指定报告截止点的 current 视图，并把 6AO 的 DB-only lineage 继续接入生产区域报告的授权、HTTP、UI、读取、导出和调度边界；
 - 快照目录与单份读取以外的动态 API、缓存、图表，以及除 6AH 固定 canonical JSON v1 外的其他导出。
 

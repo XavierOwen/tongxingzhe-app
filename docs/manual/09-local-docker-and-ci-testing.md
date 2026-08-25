@@ -802,6 +802,68 @@ check、fixture 和并发脚本不能互相替代。不要为了通过测试降�
 Docker 通过只证明当前 PostgreSQL 中的 replacement ledger、授权锁、value-free 结果、不可变约束和 ACL。
 它不证明新报告已经生成，不证明目录、读取、HTTP、导出、Flutter、生产身份、删除或 retention，也不证明 Android、iOS、macOS、Windows、Linux 或 Web 真人平台运行时。
 
+### 6BN：验证原始区域快照更正版取代 lineage
+
+6BN 与 6BE 使用不同的 replacement 合同。6BN 只登记两份已经通过 6BG 的 original-region approved snapshot 之间的直接 replacement，不生成新
+snapshot，也不复用 6BE 的渠道 replacement ledger。两份快照必须属于同一 project、report／version、query fingerprint、privacy、source scope、
+报告时区 revision、期间、release lineage 和精确的 `source_tree_version + source_content_fingerprint`。新快照的 cutoff 和发布时间都必须更晚。replacement
+在管理报告共享的 value-free request UUID ledger 中使用独立 family claim；它与 release 共用 request lock，因此同一 UUID 无论先用于哪一方都不能被另一方复用。
+
+登记原因只允许 `late_accepted_data`、`contact_revision` 和 `contact_void`。关系和最小 audit 追加且不可变；每份旧快照最多有一个直接 replacement，
+每份新快照最多有一个 predecessor。请求与 lineage 锁取得后，数据库会再次确认发布记录和 provenance。相同 request UUID 与 canonical payload 精确幂等，
+载荷漂移失败关闭。生命周期结果只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID，不返回报告格、source、贡献者、地点、隐藏前值或 PII。
+
+本切片只证明 DB-only、value-free 的关系合同。它不处理 current-city、interest 或其他 report family，不做分析定义／跨版本更正，不生成 snapshot，
+也不增加 runtime、HTTP、Flutter、目录、导出、缓存、离线、分享、删除、tombstone、retention、备份清除、parent／overlap、warehouse 或真人平台验收。
+
+#### 第一次运行 Docker
+
+没有用过 Docker 也可以按以下步骤操作。Docker Desktop 提供一个临时 PostgreSQL 测试环境；runner 使用 synthetic 数据，不连接 production，结束时清理容器。
+
+1. 打开 Docker Desktop，等待 Docker Engine 显示正在运行。
+2. 打开 Terminal，进入仓库根目录：
+
+   ```bash
+   cd "$(git rev-parse --show-toplevel)"
+   ```
+
+3. 确认 Docker 同时有 Client 和 Server：
+
+   ```bash
+   docker version
+   ```
+
+   如果只显示 Client，没有 Server，先启动 Docker Desktop，再重复此命令。
+4. 运行完整 PostgreSQL 测试：
+
+   ```bash
+   ./tool/run_postgres_tests_in_docker.sh
+   ```
+
+runner 会按 migration 顺序发现 0072 migration、structural check、rollback fixture 和 replacement concurrency script，然后运行 checksum 与 dump／restore。
+恢复库会重跑 migration、check 和 fixture；不会重跑会提交 synthetic 行的并发脚本。完整通过只表示 synthetic PostgreSQL 的 6BN 合同通过。
+
+成功输出应覆盖合法同项目 original-region 快照、独立 replacement family claim、release／replacement UUID 双向互斥、专用 provenance、同 source-tree tuple、后续 cutoff／发布时间、原因 allowlist、
+`active`／`superseded` 生命周期、精确幂等、载荷漂移、跨项目／跨 family／legacy／blocked／drift、时间倒序、自链接、分叉、循环、stale head、
+旧快照不变、value-free 结果、锁后授权、最小 ACL、并发、checksum 和 restore。命令退出码必须为 `0`。
+
+#### 只调试 6BN
+
+并发脚本会提交 synthetic 行。先确认 `DATABASE_URL` 指向专用测试库，不要指向 production；若要重复运行，请使用新的空测试库。
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_original_region_report_snapshot_replacements.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0072_management_original_region_report_snapshot_replacements.sql
+./tool/verify_management_original_region_report_snapshot_replacements_concurrency.sh
+```
+
+check、fixture 和并发脚本不能互相替代。Docker 通过不证明新 snapshot 已生成，不证明目录、runtime、HTTP、Flutter、导出、缓存、离线、删除、retention、
+生产身份或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。
+
 ### 6BF：理解管理报告删除与保留边界
 
 6BF 是产品和测试合同，不是数据库清理功能。没有用过 Docker 的读者先记住：Docker runner 会在一次性容器中验证当前仓库已有的 PostgreSQL 行为。
