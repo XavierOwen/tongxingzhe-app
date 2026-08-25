@@ -1053,6 +1053,62 @@ cd ../..
 runner 会自动运行既有 0069／0070 migration、check、fixture、integration、checksum 和 dump／restore。6BJ 不新增 Docker 数据库步骤，也不让 Docker
 结果替代 HTTP 测试。完整通过只能证明 synthetic PostgreSQL 的 private read、runtime bridge、parser 和 ACL；它不证明 6BJ HTTP、Flutter、导出、缓存、离线、production identity 或六平台真人运行时。
 
+### 6BK：验证原始区域快照 metadata-only 目录
+
+6BK 为 6BG original-region snapshot 增加专用目录。目录只返回选择 6BJ 详情所需的最小 metadata，最多 20 项，并按 cutoff、release time 和 snapshot ID
+固定降序。第一项不表示 current、latest 或未被取代。数据库每次重新检查 identity、项目成员和 `view_anonymous_analytics`，再复核 original-region
+release provenance。其他报告族、legacy、blocked、跨项目或漂移快照不会进入目录。
+
+#### 第一次运行 Docker
+
+Docker 在这里是一台临时测试电脑。脚本会下载 PostgreSQL 16 镜像，启动隔离容器，从 `0001` 运行到 `0071`，执行 checks、fixtures、并发和 Backend
+integration，再导出并恢复数据库。脚本结束后会删除容器。它不连接 production，也不会修改 production 数据。
+
+1. 安装并打开 Docker Desktop。
+2. 等待 Docker Desktop 显示 Engine 正在运行。
+3. 打开终端，进入仓库根目录。
+4. 运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+第一次运行通常较慢，因为 Docker 要下载镜像。以后只要镜像仍在本机，启动会更快。脚本成功时会完成 migration checksum、并发、Backend integration 和
+dump／restore；失败时先读最后一个带 `check:`、`fixture:`、`concurrency:` 或 `Backend integration:` 的名称，这就是最小调试入口。
+
+runner 自动发现 0071 migration、structural check 和 rollback fixture。它显式运行 original-region directory integration，并自动发现独立并发脚本。
+fixture 使用 rollback 数据；并发脚本使用另一组已提交 synthetic ID。dump 会保留并发行，所以恢复库只重跑 migration、check 和 fixture，不重跑并发脚本。
+
+#### 只调试 6BK
+
+若已有专用本地 PostgreSQL 测试库，先确认它不是 production，再运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_authorized_management_original_region_report_snapshot_directory.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0071_authorized_management_original_region_report_snapshot_directory.sql
+./tool/verify_authorized_management_original_region_report_snapshot_directory_concurrency.sh
+```
+
+再运行 Backend 检查：
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+SQL fixture 覆盖可信 20／21 项、空目录、其他报告族、provenance 漂移、未知或停用 identity、撤权、value-free audit 和最小 ACL。并发脚本验证读取先取得
+授权锁和撤权先取得授权锁。Backend 测试覆盖 strict parser、固定 HTTP collection route、认证顺序、Promise gate、错误脱敏、JSON、`no-store` 和
+production wiring。
+
+这些结果只证明 synthetic PostgreSQL、runtime bridge 和 Backend HTTP 合同。它们不证明 Flutter 已消费目录，不证明导出、缓存、离线或 production
+identity，也不证明 Android、iOS、macOS、Windows、Linux 或 Web 真人环境已经运行。
+
 ### 5.5 验证同步提醒和逐设备通知开关
 
 提醒测试分四层。第一次接触项目时，可以按以下顺序运行：

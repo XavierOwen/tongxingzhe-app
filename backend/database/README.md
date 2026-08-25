@@ -971,6 +971,40 @@ npm test
 
 这些命令只证明 synthetic PostgreSQL、Backend adapter 和 ACL 合同。它们不证明 HTTP、Flutter、导出、生产 identity provider、真实账号或六平台真人运行时。
 
+### 6BK：验证原始区域快照 metadata-only 目录
+
+6BK 为 6BG original-region snapshot 增加独立 private directory、runtime bridge 和 value-free audit。目录重新验证 active identity、项目授权和
+`view_anonymous_analytics`，只接受 original-region release family 中 provenance 完整的 approved 快照。它不复用 generic、channel、current-city 或
+interest directory。结果最多 20 项，按 cutoff、release time 和 snapshot ID 固定降序；第一项不表示 current 或 latest。
+
+目录项只保存 snapshot ID、固定 report ID／version、报告时区、cutoff 和 release time。audit 只保存授权 lineage、project、访问时间和返回数量，
+不保存 snapshot ID、报告 metadata、source tuple、protected report、cells、来源、贡献者、区域名称、坐标或 PII。runtime 只能执行 0071 bridge，
+不能使用 `app_private` 或读取 private 表。
+
+从仓库根目录运行完整套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 自动发现 0071 migration、check 和 rollback fixture，并运行 original-region directory integration、独立 concurrency、checksum 和 dump／restore。
+恢复库重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。fixture 与并发脚本使用不同命名空间，避免已提交行与 rollback 数据冲突。
+
+只调试专用测试库时，先确认 `DATABASE_URL` 不是 production，再按顺序运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_authorized_management_original_region_report_snapshot_directory.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0071_authorized_management_original_region_report_snapshot_directory.sql
+./tool/verify_authorized_management_original_region_report_snapshot_directory_concurrency.sh
+```
+
+这些 synthetic 测试证明 provenance 过滤、撤权锁、20 项上限、稳定排序、value-free audit、strict parser 和最小 ACL。它们不证明 Flutter、导出、缓存、
+离线、production identity provider、真实账号或六平台真人运行时。
+
 ### 如何验证 6AS PostgreSQL 合同
 
 第一次使用 Docker 时，先启动 Docker Desktop。Docker 是一次性测试环境：runner 创建隔离的 PostgreSQL 容器，运行

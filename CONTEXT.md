@@ -743,6 +743,19 @@ UI、报告生成／发布／更正、删除、retention、warehouse、productio
 本切片的 synthetic HTTP 证据。
 _Avoid_: 认证前验证路径、复用其他 report family store、自动选择 latest、缓存 protected report、把 DB-only Docker 结果当作 HTTP 或生产身份证据
 
+**管理原始区域快照目录**:
+6BK 按显式 project 返回最多 20 份 6BG original-region snapshot 的 metadata-only 目录。数据库每次请求重新确认 active identity、完整项目成员授权链和
+`view_anonymous_analytics`，并只接受 original-region release family 中 `approved`／`approved_baseline`、空 reason、project／report／version／query
+fingerprint／lineage／报告时区 revision／cutoff／previous pointer／source watermark／source tree tuple 全部对齐的快照。
+
+目录使用独立的 original-region provenance、runtime bridge 和 value-free directory audit，不复用 generic、channel、current-city 或 interest directory。
+结果按 `data_cutoff_utc`、`released_at_utc` 和 `snapshot_id` 降序排列，最多 20 项；第一项不表示 current、latest、最新有效或未被取代。响应只含
+snapshot ID、固定报告 ID／版本、报告时区、截止时间和发布时间，不含 protected report、cells、隐藏前值、source tuple、来源、贡献者、区域名称、坐标或 PII。
+
+固定 HTTP collection route 先认证再检查 project UUID、query、GET body 和专用 store。它为 6BJ 提供可选择的显式 snapshot ID，但不替代 6BH 的
+再次授权、读取审计或详情读取。6BK 不增加 Flutter、导出、缓存、离线、Drift、分页、搜索、自动 latest、发布、更正、删除、retention 或真人平台证据。
+_Avoid_: 复用其他目录 provenance、自动选择首项、跨项目探测、返回报告正文、用 synthetic Docker 或 HTTP 测试冒充生产或真人证据
+
 **管理报告清除**:
 组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
 _Avoid_: 授权撤回、报告到期、tombstone、superseded
