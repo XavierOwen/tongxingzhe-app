@@ -1109,6 +1109,38 @@ production wiring。
 这些结果只证明 synthetic PostgreSQL、runtime bridge 和 Backend HTTP 合同。它们不证明 Flutter 已消费目录，不证明导出、缓存、离线或 production
 identity，也不证明 Android、iOS、macOS、Windows、Linux 或 Web 真人环境已经运行。
 
+### 6BL：验证 Flutter original-region typed gateway
+
+6BL 不增加数据库 migration 或 Backend route。它在 Dart 测试进程中用 fake `IdentitySession` 和内存 `MockClient` 模拟 6BK 目录与 6BJ 详情响应。
+运行这些测试不需要 Android Studio、模拟器、手机或 Docker。
+
+第一次运行时，在仓库根目录依次执行：
+
+```bash
+flutter pub get
+dart analyze
+flutter test --no-pub test/management_reports/http_original_region_report_gateway_test.dart
+```
+
+`flutter pub get` 下载 Dart 依赖。`dart analyze` 检查类型和静态错误。最后一条命令只运行 6BL 的 focused 测试。它会检查两个固定 GET path、Bearer、一次
+`401` 刷新、JSON／`no-store`、三字段目录和详情 root、六字段摘要、20 项上限、固定排序、17-key report、source tree tuple、两期城市网格、隐私状态和
+稳定失败。测试不会连接真实 Backend，也不会写 Drift、缓存或文件。
+
+focused 测试通过后，再运行完整 Flutter 回归：
+
+```bash
+flutter test --no-pub
+```
+
+若需要确认 6BJ／6BK 的既有数据库和 Backend 合同没有回归，再运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+Docker 在本切片中只重跑既有 0071 及以前的合同。它不会测试 6BL 的 Dart parser；focused Flutter 测试也不会证明数据库授权、provenance、audit 或 ACL。
+两组测试分别证明不同边界。任何通过结果都不证明 UI、离线、导出、production identity 或六平台真人运行时。
+
 ### 5.5 验证同步提醒和逐设备通知开关
 
 提醒测试分四层。第一次接触项目时，可以按以下顺序运行：

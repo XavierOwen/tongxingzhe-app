@@ -2355,6 +2355,49 @@ Docker runner 自动发现 0071 migration、check、fixture 和 concurrency，�
 fixture，不重跑会提交 synthetic 行的并发脚本。完整通过只证明 synthetic provenance、授权撤回、20 项排序、value-free audit、runtime ACL、strict parser 和
 HTTP 合同。它不证明 Flutter、导出、缓存、离线、production identity 或六平台真人运行时。
 
+## Slice 6BL：在 Flutter 中严格读取原始区域目录与详情
+
+6BL 增加独立的 `OriginalRegionReportGateway`。它只消费 6BK collection route 和 6BJ detail route：
+
+```text
+GET /v1/projects/:projectId/management-original-region-report-snapshots
+GET /v1/projects/:projectId/management-original-region-report-snapshots/:snapshotId
+```
+
+调用方先读取目录，再明确选择同一目录中的 summary，最后用相同 project 和 snapshot 读取详情。gateway 不自动读取第一项，也不把第一项解释为 current、latest、
+最新有效或未被取代。
+
+### 三层合同不能混用
+
+数据库目录 envelope 有 `access_contract_id`、`access_event_id`、`project_id` 和 `snapshots` 四项。HTTP 和 Dart 目录只有后三项。内部
+`access_contract_id` 若出现在客户端响应中，strict parser 会拒绝。每个目录 summary 只有 snapshot ID、report ID／version、报告时区、cutoff 和 release time。
+
+详情根对象只有 `access_event_id`、`snapshot_id` 和 `report`。report 固定 17 个 keys，包括 original view、city granularity、项目、两个期间、cutoff、
+source watermark、selected source tree context、完成状态和 cells。previous／current 必须拥有相同、稳定排序的城市集合，`cell_order` 从 0 连续递增。
+`displayed` 只能保存不小于 10 的安全整数；`suppressed` 的值只能是 `null`，不能解释为零。
+
+### 身份、失败和内存边界
+
+token 只来自 `IdentitySession`。每次请求先取得 token；第一次 `401` 只刷新并重试一次，第二次 `401` 停止。成功响应必须是 JSON 并带
+`Cache-Control: no-store`。请求、身份、授权、not-found、untrusted、服务不可用、网络、timeout 和响应合同错误使用稳定 typed failure，不返回部分结果。
+
+parser 会递归拒绝来源记录、贡献者、contact、location、geometry、区域名称、坐标、PII 和额外字段。解析结果只保存在内存，不写 Drift、缓存、离线存储、
+同步队列或导出。6BL 不包含 Widget、ViewModel、管理上下文接线或六平台真人验收。
+
+### 如何验证
+
+从仓库根目录运行：
+
+```bash
+flutter pub get
+dart analyze
+flutter test --no-pub test/management_reports/http_original_region_report_gateway_test.dart
+flutter test --no-pub
+```
+
+这些测试使用 fake identity 和 synthetic HTTP，只证明 Dart transport、strict parser、typed failure 和内存边界。6BJ／6BK 的 Backend、数据库授权、
+provenance、audit、ACL 和 restore 仍由各自自动测试证明。Dart 测试不证明 UI、缓存、离线、导出、production identity 或真人平台运行时。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和
