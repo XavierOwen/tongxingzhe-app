@@ -1227,6 +1227,22 @@ live region。composition root 构造、传递并关闭独立 gateway。
 本 Slice 不修改 6BL parser、Backend、PostgreSQL、授权、provenance 或审计，也不增加 Drift、缓存、离线、同步、导出、下载、分享、搜索、分页、筛选、
 地图、城市名称、父级／重叠区域、生产 identity 或六平台真人运行时证据。
 
+#### Slice 6BN：固定原始区域快照的更正版取代 lineage
+
+6BN 只在 private PostgreSQL 登记两份已经通过 6BG 的 original-region approved snapshot 之间的直接 replacement。两份快照必须属于同一
+project、report／version、query fingerprint、privacy、source scope、报告时区 revision、期间、release lineage 和精确的
+`source_tree_version + source_content_fingerprint`。新快照的 `data_cutoff_utc` 与发布时间必须晚于旧快照。该关系使用管理报告共享 request UUID ledger
+中的独立 original-region replacement family claim、original-region 专用 provenance 和最小权限，不复用 6BE 的渠道 replacement ledger。release 与
+replacement 使用同一个 request lock，同一 UUID 在两个合同中的先后顺序都失败关闭。
+
+登记原因只允许 `late_accepted_data`、`contact_revision` 和 `contact_void`。旧快照与新快照保持不变；关系和最小 audit 追加且不可变，不允许
+`UPDATE` 或 `DELETE`。每份旧快照最多有一个直接 replacement，每份新快照最多有一个 predecessor；自链接、循环、分叉和 stale head 失败关闭。
+事务取得 request 与 lineage 锁后必须再次确认 `release_management_reports`。相同 request UUID 与 canonical payload 精确幂等，载荷漂移失败关闭。
+
+生命周期查询只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID，不返回报告格、来源、贡献者、地点或 PII。该 Slice 是 DB-only、value-free
+合同，不生成 snapshot，不增加 runtime、HTTP、Flutter、目录、导出、缓存、离线或分享，也不执行删除、tombstone、retention、备份清除、
+parent／overlap 查询、warehouse 或真人平台验收。跨版本或分析定义更正留给后续独立合同。
+
 #### 5.8.2 时间、趋势、版本与因果边界
 
 | ID | 需求 |
@@ -1279,6 +1295,7 @@ live region。composition root 构造、传递并关闭独立 gateway。
 | `ANALYTICS-046` | 6BK 通过 original-region 专用 DB function、exact-identity runtime bridge 和固定 HTTP collection route 返回最多 20 项 metadata-only snapshot。数据库重新授权并复核 6BG provenance 的 project、report identity、query、lineage、时区 revision、cutoff、previous pointer、source watermark 和 source tree tuple。结果固定降序，第一项不表示 current、latest 或未被取代。 |
 | `ANALYTICS-047` | 6BL 通过独立 Flutter `OriginalRegionReportGateway` 消费 6BK 目录和 6BJ 详情。目录只保留 HTTP 三字段根、六字段摘要、20 项上限和服务端固定排序；详情只读取调用方明确选择的同项目 summary，并严格解析固定 original-region 城市报告。gateway 不自动选择首项，不推断 current／latest，不重算、聚合或重新归类报告。 |
 | `ANALYTICS-048` | 6BM 只在用户明确选择 original-region report family 后，使用当前已重新授权的 `ManagementAnalysisContext.projectId` 读取目录；默认 channel 视图不调用 original gateway。consumer 不使用个人项目，不自动打开首项，只读取用户明确选择的当前目录 summary，不排序、聚合、重新归类或计算总计、比例、差值和趋势；项目／family 切换、返回目录、重试和 dispose 会隔离迟到响应。 |
+| `ANALYTICS-049` | 6BN 只登记两份已经通过 6BG 的 original-region approved snapshot 之间的直接 replacement。两份快照必须同 project、report／version、query fingerprint、privacy、source scope、报告时区 revision、期间、release lineage 和精确 source-tree tuple；新快照的 `data_cutoff_utc` 与发布时间必须更晚。关系在共享 value-free request UUID ledger 中使用独立 replacement family claim，并使用 original-region 专用 provenance；release 与 replacement 共享 request lock，同一 UUID 双向互斥。关系追加不可变，支持 value-free `active`／`superseded` 生命周期查询、精确幂等和锁后授权复核；不生成 snapshot，不复用 6BE 渠道关系。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -1324,6 +1341,7 @@ live region。composition root 构造、传递并关闭独立 gateway。
 | `PRIVACY-038` | 6BK 使用独立 original-region provenance、value-free immutable directory audit 和最小 runtime ACL。响应只含固定 snapshot metadata，最多 20 项，不含 protected report、cells、隐藏前值、source tuple、来源、贡献者、contact、区域名称、坐标或 PII。空目录写入返回数量 0 的成功 audit；失败授权不写成功 audit。 |
 | `PRIVACY-039` | 6BL 的 Dart 类型只保存 strict parser 已接受的目录摘要、selected source tree tuple 和服务端已保护的完整城市网格。DB-only `access_contract_id`、来源记录、贡献者、contact、location、geometry、区域名称、坐标、PII 和隐藏前值不得进入类型；`suppressed` 只保留 `null`。结果只留在内存，不写 Drift、缓存、离线存储、同步队列或导出。 |
 | `PRIVACY-040` | 6BM 只渲染 6BL typed 元数据、source-tree context、城市 ID 和服务端已保护的完整城市格。`displayed` 显示安全整数，`suppressed` 只显示“已隐藏 / Hidden”，不得显示为零或读取隐藏前值。UI 不显示城市名称、边界、坐标、来源记录、贡献者、contact 或 PII；panel 状态只留在内存，不写 Drift、缓存、离线存储、同步队列或导出。 |
+| `PRIVACY-041` | 6BN 的 original-region replacement 只接受同一 project、report／version、query／privacy／source scope、报告时区 revision、期间、lineage 和 source-tree tuple 的已批准快照。旧新快照和关系均不可改删；失败尝试不写关系或报告值。生命周期结果只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID；allowlisted reason 只留在私有关系／audit 合同，不返回 protected report、cells、隐藏前值、来源、贡献者、地点或 PII。`PUBLIC`、runtime、普通 app role、reader 和其他 report-family writer 不能访问该私有合同。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
 
@@ -1363,6 +1381,7 @@ live region。composition root 构造、传递并关闭独立 gateway。
 | `MANUAL-030` | 学习文档必须用零基础读者可以复制的步骤说明 6BK 的 0071 private directory、独立 original-region provenance、exact-identity runtime bridge、20 项稳定排序、第一项无 current／latest 语义、value-free audit、strict parser、固定 HTTP collection route、认证顺序、Docker migration／check／fixture／并发／integration／restore 步骤和证据边界。必须明确不证明 Flutter、导出、缓存、离线、生产身份或真人平台。 |
 | `MANUAL-031` | 学习文档必须用零基础读者可以复制的步骤说明 6BL 的两个固定 GET path、DB 四字段与 HTTP／Dart 三字段边界、六字段目录摘要、17-key original-region report、source tree tuple、完整城市网格、`IdentitySession`、一次 `401`、strict parser、typed failure、`no-store`、内存边界和测试命令。必须说明本切片不增加 UI、Drift、缓存、离线、导出、Backend／DB 行为或真人平台证据。 |
 | `MANUAL-032` | 学习文档必须用零基础读者可以复制的步骤说明 6BM 的四个互斥 report family、显式 original-region 选择、`ManagementAnalysisContext` 项目来源、目录／详情状态、source-tree context、displayed／suppressed 语义、迟到响应隔离、composition 生命周期，以及 focused Widget／ViewModel／browser／app 测试命令。必须说明 Flutter 模拟测试不证明 Backend／DB 授权、真实身份、离线、导出或真人平台。 |
+| `MANUAL-033` | 学习文档必须用零基础读者可以复制的步骤说明 6BN 的独立 original-region provenance、同一 source-tree tuple、replacement 原因 allowlist、active／superseded 生命周期、value-free 输出、锁后授权、幂等、并发、不可变 ACL、Docker migration／check／fixture／concurrency／dump／restore 命令和证据边界。必须明确 6BN 不生成 snapshot，不扩展到其他 report family，不处理分析定义／跨版本更正、删除、retention、runtime、HTTP、Flutter、导出、缓存、离线或真人平台。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -1582,6 +1601,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-040` | 6BK 的 0071 check／fixture／并发／runtime integration 和 Backend unit／route／composition 测试覆盖 exact identity、授权撤回、可信 original-region provenance、foreign family／legacy／blocked／跨项目／drift 排除、空目录、20 项上限、固定降序、strict metadata parser、value-free audit、不可改删、最小 runtime ACL、认证顺序、GET body、Promise gate、错误脱敏和 `no-store`。Docker 在 checksum 与 dump／restore 后重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。通过不声称 Flutter、导出、缓存、离线、生产身份或真人平台证据。 |
 | `TEST-041` | 6BL Flutter synthetic HTTP／fake `IdentitySession` 测试覆盖两个固定 path、canonical project／snapshot、无 query／GET body、Bearer、一次 `401`、严格三字段目录／详情 root、六字段摘要、20 项上限、无重复、固定排序、空目录、显式 summary、17-key original report、source tree tuple、两期完整城市网格、连续 cell order、安全整数、`suppressed = null`、额外字段／PII 拒绝、JSON／`no-store`、稳定 HTTP／identity／timeout／network failure、不可变集合和 `close`。通过只证明 Dart transport 与内存边界，不声称 Backend／DB 授权、UI、缓存、离线、导出、生产身份或六平台真人运行时。 |
 | `TEST-042` | 6BM ViewModel／Widget／browser／composition 测试覆盖四个互斥 report family、channel 默认、original-region 明确启用、`ManagementAnalysisContext` project 来源、空目录、显式 summary、source-tree context、完整城市格、displayed／suppressed、分阶段 retry、项目／family／返回／dispose 的迟到响应隔离、稳定错误、heading／live region、320×568、200% 字号、键盘／焦点恢复以及 gateway 构造／传递／关闭。通过只证明 Flutter consumer 与可访问性模拟路径，不声称 Backend／DB 授权、离线、导出或真人运行时。 |
+| `TEST-043` | 6BN 的 0072 structural check／rollback fixture／并发测试覆盖合法同项目 original-region 快照、共享 request UUID ledger 中的独立 replacement family claim、release／replacement UUID 双向互斥、专用 provenance、同 source-tree tuple、后续 cutoff／发布时间、原因 allowlist、active／superseded 查询、同 request 精确幂等、载荷漂移、跨项目／跨 family／legacy／blocked／drift、same／earlier cutoff、倒序、自链接、分叉、循环、stale head、旧快照字节不变、value-free 结果、锁后授权撤回、最小 ACL、checksum 和 dump／restore。通过只证明 synthetic DB-only replacement ledger，不声称新快照生成、其他 report family、分析定义／跨版本更正、runtime、HTTP、Flutter、目录、导出、删除、retention、生产身份或真人平台证据。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -1782,6 +1802,13 @@ Backend 测试和 Docker restore 只提供 synthetic 合同证据；本 Slice �
 三字段详情，保留最多 20 项服务端排序，并只读取调用方明确选择的 project／summary。详情 parser 固定 original view、source tree tuple、两期完整城市网格、
 连续 cell order 和隐藏语义。gateway 使用 `IdentitySession`、一次 `401` 刷新、JSON／`no-store` 和稳定 typed failure；结果只留在内存。本 Slice 不增加 UI、
 composition、Backend／DB 行为、Drift、缓存、离线、导出、生产身份或真人平台证据。
+
+6BN（#213）只登记两份已经通过 6BG 的 original-region approved snapshot 之间的直接 replacement。它要求同 project、report／version、query／privacy／source scope、
+报告时区 revision、期间、release lineage 和精确 source tree tuple，并要求新 snapshot 的 cutoff 与发布时间更晚。该关系在共享 value-free request UUID ledger
+中使用独立 replacement family claim，并使用 original-region 专用 provenance 和最小 ACL；release 与 replacement 共享 request lock，同一 UUID 双向互斥，且不复用 6BE 渠道 replacement ledger。关系追加不可变，生命周期查询只返回 value-free 的 active／superseded 状态和直接 replacement ID；
+相同 request 精确幂等，载荷漂移、跨项目／跨 family、来源漂移、stale head 和并发冲突失败关闭。6BN 不生成 snapshot，不增加 runtime、HTTP、Flutter、目录、导出、缓存、
+离线、删除、retention、parent／overlap、warehouse 或真人平台证据。只有 0072 migration、check、fixture、并发、checksum 和 dump／restore 在 synthetic PostgreSQL
+中通过后，才能报告该 DB-only 合同成立。
 
 ### Slice 7：组织治理与数据可携带性
 

@@ -781,6 +781,15 @@ current、latest 或 replacement。
 heading 和 live region。6BM 不增加 Backend、PostgreSQL、Drift、缓存、离线、同步、导出、搜索、分页、筛选或真人平台证据。
 _Avoid_: 个人项目回退、多个布尔开关表示 report family、自动打开首项、客户端重算或归类、隐藏值当零、旧响应写回、复用其他 report family DTO、持久化受保护报告
 
+**原始区域快照更正版取代**:
+6BN 只登记两份已经通过 6BG 的 original-region approved snapshot 之间的直接 replacement。两份快照必须属于同一 project、report／version、query fingerprint、privacy、source scope、报告时区 revision、期间、release lineage 和精确的
+`source_tree_version + source_content_fingerprint`。新快照的 `data_cutoff_utc` 与发布时间必须晚于旧快照。该关系在管理报告共享的 value-free request UUID ledger 中使用独立 replacement family claim，并使用 original-region 专用 provenance 和最小权限；它不复用渠道 replacement ledger。release 与 replacement 共享 request lock，因此同一 UUID 在两个合同中的先后顺序都失败关闭。
+
+登记原因只允许 `late_accepted_data`、`contact_revision` 和 `contact_void`。旧快照与新快照保持不变；关系和最小 audit 追加且不可变，不允许 UPDATE 或 DELETE。每份旧快照最多有一个直接 replacement，每份新快照最多有一个 predecessor；自链接、循环、分叉和 stale head 失败关闭。请求与 lineage 锁取得后必须再次确认 `release_management_reports`。相同 request UUID 与 canonical payload 精确幂等，载荷漂移失败关闭。
+
+生命周期查询只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID，不返回报告格、来源、贡献者、地点或 PII。这是 DB-only、value-free 合同，不生成 snapshot，不增加 runtime、HTTP、Flutter、目录、导出、缓存、离线或分享，也不执行删除、tombstone、retention、备份清除、parent／overlap 查询、warehouse 或真人平台验收。
+_Avoid_: 复用 0067 渠道关系、按目录排序猜测 latest、静默改写快照、跨 report family 取代、分析定义或跨版本更正、把 Docker synthetic 通过写成生产证据
+
 **管理报告清除**:
 组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
 _Avoid_: 授权撤回、报告到期、tombstone、superseded
