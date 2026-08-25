@@ -864,6 +864,50 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 check、fixture 和并发脚本不能互相替代。Docker 通过不证明新 snapshot 已生成，不证明目录、runtime、HTTP、Flutter、导出、缓存、离线、删除、retention、
 生产身份或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。
 
+### 6BO：验证组织项目后续联系同意占比 opt-in 配置
+
+6BO 只验证组织项目的配置生命周期。它不执行后续联系同意比例候选。个人项目的 0048 配置表与组织配置表必须分开。
+
+配置 caller 是可信内部 `app_user_id`。数据库必须重新确认活动账号、组织／项目 membership、项目状态和 `release_management_reports` capability。
+`view_anonymous_analytics` 不能修改配置。每次等待 request、项目配置或授权锁后，数据库都必须再次授权。项目 status 变更触发器与 configure 共享 project lock，
+因此 archive↔configure 线性化；0030 resolver 不替代归档锁。
+
+版本记录 `enabled`、预期版本、版本号、request UUID、授权 provenance 和数据库时间。历史不可 UPDATE／DELETE。相同 request UUID 的相同 payload 精确幂等。
+载荷漂移、过期版本、撤权和并发双写失败关闭。未配置和停用返回 `not_enabled`，不返回 `0 / 0` 或覆盖数。
+
+#### 第一次运行 Docker
+
+1. 打开 Docker Desktop，等待 Docker Engine 显示正在运行。
+2. 从仓库根目录确认 Docker：
+   ```bash
+   docker version
+   ```
+3. 运行完整 PostgreSQL 套件：
+   ```bash
+   ./tool/run_postgres_tests_in_docker.sh
+   ```
+4. 确认输出包含 0073 migration、6BO check、6BO fixture、6BO concurrency、checksum、restore check 和 restore fixture，并确认退出码为 `0`。
+
+#### 只调试 6BO
+
+并发脚本会提交 synthetic 行。先确认 `DATABASE_URL` 指向专用测试库，不要指向 production。实现 6BO 后运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_follow_up_consent_opt_in.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0073_management_follow_up_consent_opt_in.sql
+./tool/verify_management_follow_up_consent_opt_in_concurrency.sh
+```
+
+check 观察 migration、函数和 ACL 结构。fixture 调用正式函数并验证组织／个人隔离、授权、版本、幂等、停用和 value-free 结果。并发脚本用两个 PostgreSQL
+会话验证配置双写与撤权锁。dump／restore 会重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。
+
+这组证据只证明 synthetic PostgreSQL 的 opt-in 配置合同。它不证明后续联系同意比例已经计算，不证明报告隐私抑制、runtime、HTTP、Flutter、缓存、离线、
+删除、retention、生产身份或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。
+
 ### 6BF：理解管理报告删除与保留边界
 
 6BF 是产品和测试合同，不是数据库清理功能。没有用过 Docker 的读者先记住：Docker runner 会在一次性容器中验证当前仓库已有的 PostgreSQL 行为。

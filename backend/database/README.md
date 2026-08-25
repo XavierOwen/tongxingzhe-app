@@ -28,7 +28,20 @@ Node 阶段要求九条 Backend integration 入口存在：地点来源、当前
 入口缺失、编译失败或断言失败都会使整套测试失败；不能把此前 SQL fixture 的通过单独写成
 Backend adapter 集成通过。
 
-schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer`、`tongxingzhe_region_mapping_writer`、`tongxingzhe_region_attribution_reader`、`tongxingzhe_management_region_report_reader`、`tongxingzhe_management_original_region_report_reader`、`tongxingzhe_management_interest_report_reader`、`tongxingzhe_management_current_city_snapshot_release_writer`、`tongxingzhe_management_interest_snapshot_release_writer`、`tongxingzhe_management_original_region_snapshot_release_writer` 和 `tongxingzhe_management_report_snapshot_lifecycle_writer`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
+## 6BO：组织项目 opt-in 配置边界
+
+6BO 的组织项目 `follow_up_consent_ratio@1` opt-in 与个人 0048 配置分开。实现后的 `0073` migration 只应增加 private 配置表、private configure/read
+合同、结构检查、可回滚 fixture 和独立并发脚本。函数使用可信内部 `app_user_id`，并在组织／项目 membership 与 `release_management_reports` capability
+的授权锁后重新检查权限。项目 status 变更触发器与配置共享 project lock，归档与 configure 因此线性化；0030 resolver 不替代归档锁。`view_anonymous_analytics`
+不能写配置。
+
+该配置使用追加式版本、预期版本和 request UUID。相同 payload 精确幂等，载荷漂移、过期版本、撤权和并发冲突失败关闭。结果只包含 value-free 配置 metadata，
+不包含比例、报告格、contact、推广对象、贡献者或 PII。`not_enabled` 不表示 `0 / 0`，配置时间也不改变统计期间。
+
+6BO 不增加 runtime bridge、HTTP、Backend integration、Flutter 或统计候选。实现后，完整 Docker runner 会自动发现 0073 migration、check、fixture 和并发脚本，
+并在 dump／restore 中重跑 migration、check 和 fixture。通过只能证明 synthetic PostgreSQL 配置合同，不能证明比例数学或披露风险控制。
+
+schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer`、`tongxingzhe_region_mapping_writer`、`tongxingzhe_region_attribution_reader`、`tongxingzhe_management_region_report_reader`、`tongxingzhe_management_original_region_report_reader`、`tongxingzhe_management_interest_report_reader`、`tongxingzhe_management_current_city_snapshot_release_writer`、`tongxingzhe_management_interest_snapshot_release_writer`、`tongxingzhe_management_original_region_snapshot_release_writer`、`tongxingzhe_management_report_snapshot_lifecycle_writer` 和 `tongxingzhe_management_follow_up_consent_config_writer`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
 
 ## 使用已有 PostgreSQL 测试库
 
