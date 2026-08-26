@@ -2523,6 +2523,53 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 这些命令只证明 synthetic DB-only current-city replacement，不证明新 snapshot 生成、其他 report family、分析定义／跨版本更正、runtime、HTTP、Flutter、目录、导出、删除、retention、生产身份或六平台真人运行时。
 
+## Slice 6CC：读取项目范围的去身份化地点异常
+
+6CC 解决的是数据质量入口，不是管理者读取单条 contact 的入口。它只接受 active contact 当前 accepted revision 上的两个精确来源 tuple：
+`pending_resolution + pending_coordinates` 与 `unknown + legacy_incomplete`。revision 必须是 `submitted` 或 `corrected`。resolved、not-applicable、
+draft、attempt、voided、旧 revision 和其他项目的事实先被排除。
+
+### 权限与身份边界
+
+caller 必须在目标项目拥有独立 `view_deidentified_anomalies` capability。数据库在每次目录或详情读取时，按统一锁顺序重新确认 active user、组织／项目
+membership、active project 和 capability。组织 owner、项目管理员、`view_anonymous_analytics`、区域维护角色或 UI 可见性都不能替代该检查。
+
+private mapping 为合格 provenance 分配随机 `anomaly_id`，不把 contact、revision、source 或 project ID 编码进 ID。目录固定最多 20 项，按发生时间和 opaque
+ID 降序，只显示 reason、open status、发生时间、location／evidence kind 与是否存在可用坐标。它不返回坐标。详情只读取用户明确提交的 anomaly ID：pending
+异常返回 latitude、longitude 和可空 accuracy；legacy 异常返回 `coordinates: null`。unknown、cross-project 与已经 stale 的 ID 都返回相同 `not_found`，
+避免用错误差异探测其他项目或历史记录。
+
+### 审计与隐私边界
+
+目录和详情共享不可变 access audit。它只保存 access event、授权 lineage、project、operation、result、数量和数据库时间；不保存 anomaly ID、坐标、发生时间、
+location evidence、contact、revision、source 或 PII。closed reader role 只有 contacts、revisions 与 provenance 的必要列权限。`PUBLIC`、runtime、普通 app role、
+管理报告 reader／writer 和 provenance writer 均不能直接访问 private mapping、audit 或读取函数。
+
+6CC 不修改 contact 或 provenance。真正的修正流程必须另用独立 mutation capability，追加新的 contact revision，并处理原 revision 已变化的 stale conflict。
+本切片也不增加 runtime bridge、Backend、HTTP、Flutter、地图、geocode、搜索、分页、导出、缓存、离线或组织清除。
+
+### 验证命令
+
+完整回归：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+只调试 6CC 时，先确认 `DATABASE_URL` 是新建的专用测试库：
+
+```bash
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_authorized_management_deidentified_anomaly_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0081_authorized_management_deidentified_location_anomaly_read.sql
+./tool/verify_authorized_management_deidentified_anomaly_read_concurrency.sh
+```
+
+完整 runner 自动覆盖 migration、structural check、rollback fixture、concurrency、checksum 和独立 dump／restore。通过只证明 synthetic PostgreSQL 合同；
+它不证明 production identity、真实异常、真实坐标或 PII 已清除，也不构成 Android、iOS、macOS、Windows、Linux、Web 真人平台证据。
+
 ## Slice 6BP：验证组织项目后续联系同意占比候选
 
 6BP 在 6BO 当前 opt-in 为 enabled 时生成 private release-candidate。它不是 snapshot，也不是已经发布的报告。

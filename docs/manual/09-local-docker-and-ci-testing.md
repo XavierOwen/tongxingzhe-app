@@ -907,6 +907,59 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 check、fixture 和 concurrency 不能互相替代。Docker 通过只证明 synthetic PostgreSQL 中的 replacement relation、provenance、授权锁、不可变性和 ACL；不证明新 snapshot 已生成，也不证明跨版本更正、runtime、HTTP、Flutter、目录、导出、删除、retention、生产身份或真人平台。
 
+### 6CC：验证项目范围的去身份化地点异常读取
+
+6CC 是 PostgreSQL 内部只读合同。它只把 active contact 当前 accepted revision 的两类地点来源列为异常：
+
+- `pending_resolution + pending_coordinates`：有坐标，但还没有可信区域；
+- `unknown + legacy_incomplete`：历史证据不足，坐标未知。
+
+读取者必须具有独立 `view_deidentified_anomalies` capability。目录只显示 opaque ID 和最小 metadata，不显示坐标；用户明确选择一项后，详情才可显示
+pending 异常的最小坐标。legacy 异常的 coordinates 始终为 `null`。组织 owner、项目管理员、分析查看或区域维护身份都不会自动获得该能力。
+
+#### 第一次使用 Docker
+
+Docker Desktop 会在本机启动一个隔离的 Linux 容器。这里的 PostgreSQL 只装 synthetic 测试数据，不连接 production，也不会修改真实账号或联系人。
+
+1. 打开 Docker Desktop，等待 Docker Engine 显示正在运行。
+2. 在仓库根目录确认 Client 和 Server 都可用：
+
+   ```bash
+   docker version
+   ```
+
+3. 运行完整 PostgreSQL 套件：
+
+   ```bash
+   ./tool/run_postgres_tests_in_docker.sh
+   ```
+
+runner 会依次应用 migration，运行所有 structural checks、rollback fixtures、Backend integration 和 concurrency scripts，再检查 migration checksum。
+最后，它把数据库 dump 到新的 PostgreSQL cluster，重新运行 migration、check 和 rollback fixture，证明 restore 后的角色、函数、RLS 与 ACL 仍成立。
+恢复库不重跑会提交 synthetic 行的并发脚本。
+
+6CC 的成功证据应包括：两种精确异常 tuple、submitted／corrected current revision、20 项上限、稳定排序、目录无坐标、pending 最小坐标详情、legacy null
+coordinates、unknown／cross-project／stale 等价 `not_found`、其他角色拒绝、目录／详情和撤权的双向锁顺序、value-free audit、mapping 不可改删、最小列 ACL、
+checksum 和 dump／restore。完整命令退出码必须为 `0`。
+
+#### 只调试 6CC
+
+以下并发脚本会提交 synthetic 行。请先新建专用测试库，并再次确认 `DATABASE_URL` 不指向 production：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_authorized_management_deidentified_anomaly_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0081_authorized_management_deidentified_location_anomaly_read.sql
+./tool/verify_authorized_management_deidentified_anomaly_read_concurrency.sh
+```
+
+structural check 证明数据库对象、owner、函数属性与 ACL；rollback fixture 证明正负例、最小输出和审计；concurrency 证明读取与撤权按照同一锁顺序线性化。
+三者不能互相替代。Docker 通过不证明真实异常已存在，也不证明 correction、runtime、Backend、HTTP、Flutter、地图、导出、组织清除、生产身份、真实 PII
+清除或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。
+
 ### 6BO：验证组织项目后续联系同意占比 opt-in 配置
 
 6BO 只验证组织项目的配置生命周期。它不执行后续联系同意比例候选。个人项目的 0048 配置表与组织配置表必须分开。

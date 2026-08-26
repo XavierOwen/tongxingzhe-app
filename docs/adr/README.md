@@ -6,7 +6,7 @@
 
 - ADR-0001 至 ADR-0095 作为 `TXZ-SPEC-001` 的首批决策集，于 2026-07-31 一并接受；文件另有状态时以文件为准。
 - ADR-0096、ADR-0097 于 2026-07-31 接受；ADR-0098、ADR-0099 于 2026-08-03 接受；ADR-0100 于 2026-08-05 接受；ADR-0101、ADR-0102 于 2026-08-10 接受；ADR-0103 至 ADR-0108 于 2026-08-11 接受；ADR-0109 至 ADR-0119 于 2026-08-12 接受；ADR-0120 至 ADR-0129 于 2026-08-13 接受；ADR-0130 于 2026-08-13 接受。
-- ADR-0131 至 ADR-0135 于 2026-08-14 接受；ADR-0136 于 2026-08-19 接受；ADR-0137 至 ADR-0140 于 2026-08-20 接受；ADR-0141 至 ADR-0151 于 2026-08-21 接受；ADR-0152 至 ADR-0155 于 2026-08-22 接受；ADR-0156 至 ADR-0164 于 2026-08-25 接受；ADR-0165 至 ADR-0168 于 2026-08-26 接受。
+- ADR-0131 至 ADR-0135 于 2026-08-14 接受；ADR-0136 于 2026-08-19 接受；ADR-0137 至 ADR-0140 于 2026-08-20 接受；ADR-0141 至 ADR-0151 于 2026-08-21 接受；ADR-0152 至 ADR-0155 于 2026-08-22 接受；ADR-0156 至 ADR-0164 于 2026-08-25 接受；ADR-0165 至 ADR-0171 于 2026-08-26 接受。
 - 被取代的 ADR 保留原文和指向新 ADR 的状态，不再作为当前实现合同。
 - 新 ADR 默认只需一个清楚的决定段落。只有背景、备选和后果能帮助未来维护者避免误读时，才增加这些章节。
 - 可逆的 UI 细节、库选择和票内实现步骤留在 Spec 或 Issue，不为增加编号而创建 ADR。
@@ -93,6 +93,7 @@
 | [0168](./0168-follow-up-consent-ratio-snapshot-directory-http-collection.md) | 已接受，2026-08-26 | Slice 6BW；Issue #231；`ANALYTICS-058`、`PRIVACY-049`、`TEST-052`、`MANUAL-042` | 后续联系同意占比快照目录使用固定 HTTP GET collection route；认证先于请求验证，专用 store 返回三字段 wire，空目录为 200，第一项不表示 current／latest，错误只映射 401／400／403／503 并统一 no-store |
 | [0169](./0169-follow-up-consent-ratio-typed-gateway-keeps-db-http-and-flutter-contracts-separate.md) | 已接受，2026-08-26 | Slice 6BX；Issue #233；`ANALYTICS-059`、`PRIVACY-050`、`TEST-053`、`MANUAL-043` | Flutter 使用独立 follow-up consent-ratio typed gateway 消费 6BW 目录和 6BT 显式详情；DB、HTTP 与 Dart 合同分离，strict parser、一次 401、不可修改内存结果和 close 保持固定，不增加 UI、Backend、数据库或真人平台证据 |
 | [0170](./0170-current-city-report-snapshot-replacements-are-append-only.md) | 已接受，2026-08-26 | Slice 6CB；Issue #242；`ANALYTICS-013`、`ANALYTICS-063`、`PRIVACY-054`、`TEST-057`、`MANUAL-047` | current-city approved snapshot 使用独立追加式 replacement relation；精确 target context、value-free 生命周期、锁后授权和最小 ACL 保持固定 |
+| [0171](./0171-deidentified-location-anomalies-use-opaque-project-scoped-reads.md) | 已接受，2026-08-26 | Slice 6CC；Issue #243；`AUTHZ-008`、`ANALYTICS-064`、`PRIVACY-055`、`TEST-058`、`MANUAL-048` | 当前 accepted revision 的 pending／legacy 地点异常使用独立 capability、opaque ID、目录无坐标、详情最小坐标和 value-free audit |
 
 ## 按主题查找
 
@@ -104,7 +105,7 @@
 | 组织、保留、导入导出与合并 | [0030](./0030-allow-verified-users-to-create-organizations.md)–[0043](./0043-promotion-target-merges-are-reversible.md) | Slice 4、7；`ORG`、`TARGET`、`AUTHZ` |
 | 私人计划、通知与周期 | [0044](./0044-personal-action-plans-are-private-and-user-controlled.md)–[0052](./0052-late-entered-contacts-count-in-their-occurrence-period.md) | Slice 5；`PLAN`、`PLATFORM` |
 | 说明书与发布检查 | [0053](./0053-production-code-and-learning-materials-evolve-together.md)–[0059](./0059-documentation-and-statistics-checks-block-releases.md) | 全部 Slice；`MANUAL`、Definition of Done |
-| 指标、报告与隐私 | [0060](./0060-ordinal-scale-distributions-are-primary.md)–[0077](./0077-core-metrics-ship-with-code-and-project-metrics-use-safe-configuration.md)，另见 [0099](./0099-management-analytics-use-bounded-query-surfaces.md)、[0101](./0101-management-weekly-reports-use-two-complete-iso-weeks.md)–[0170](./0170-current-city-report-snapshot-replacements-are-append-only.md) | Slice 6；`ANALYTICS`、`PRIVACY`、`AUTHZ`、`REGION`、`ARCH`、`TEST-005`、`TEST-014`–`TEST-057` |
+| 指标、报告与隐私 | [0060](./0060-ordinal-scale-distributions-are-primary.md)–[0077](./0077-core-metrics-ship-with-code-and-project-metrics-use-safe-configuration.md)，另见 [0099](./0099-management-analytics-use-bounded-query-surfaces.md)、[0101](./0101-management-weekly-reports-use-two-complete-iso-weeks.md)–[0171](./0171-deidentified-location-anomalies-use-opaque-project-scoped-reads.md) | Slice 6；`ANALYTICS`、`PRIVACY`、`AUTHZ`、`REGION`、`ARCH`、`TEST-005`、`TEST-014`–`TEST-058` |
 | 当前上下文、问卷、草稿与导航 | [0078](./0078-a-visible-project-context-scopes-default-work.md)–[0090](./0090-contact-entry-prioritizes-core-facts-with-progressive-disclosure.md) | Slice 1、3、5；`CTX`、`QUESTION`、`DRAFT`、`UI` |
 | 尝试、渠道、触达和机构关系 | [0091](./0091-unsuccessful-direct-outreach-is-a-contact-attempt.md)–[0095](./0095-person-to-institution-relationships-use-six-stable-kinds.md) | Slice 1、2、4；`CONTACT`、`TARGET` |
 | 基础设施 | [0097](./0097-use-supabase-postgresql-for-the-initial-stage.md) | Slice 0／发布门槛；`ARCH-003`–`ARCH-010` |

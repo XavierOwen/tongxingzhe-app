@@ -36,7 +36,8 @@ BEGIN
     'tongxingzhe_management_report_snapshot_lifecycle_writer',
     'tongxingzhe_management_follow_up_consent_config_writer',
     'tongxingzhe_management_follow_up_consent_ratio_reader',
-    'tongxingzhe_management_consent_ratio_snapshot_release_writer'
+    'tongxingzhe_management_consent_ratio_snapshot_release_writer',
+    'tongxingzhe_management_deidentified_anomaly_reader'
   ]
   LOOP
     IF NOT EXISTS (
@@ -362,6 +363,28 @@ BEGIN
   END LOOP;
 END
 $management_consent_ratio_snapshot_release_writer_membership$;
+
+DO $management_deidentified_anomaly_reader_membership$
+DECLARE
+  member_name text;
+BEGIN
+  FOR member_name IN
+    SELECT member_role.rolname
+    FROM pg_catalog.pg_auth_members AS membership
+    JOIN pg_catalog.pg_roles AS reader_role
+      ON reader_role.oid = membership.roleid
+    JOIN pg_catalog.pg_roles AS member_role
+      ON member_role.oid = membership.member
+    WHERE reader_role.rolname =
+      'tongxingzhe_management_deidentified_anomaly_reader'
+  LOOP
+    EXECUTE format(
+      'REVOKE tongxingzhe_management_deidentified_anomaly_reader FROM %I',
+      member_name
+    );
+  END LOOP;
+END
+$management_deidentified_anomaly_reader_membership$;
 SQL
 
 echo 'PostgreSQL restore 所需 cluster roles 已准备。'
