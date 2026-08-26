@@ -3023,6 +3023,51 @@ deferred fallback 没有网络请求，并在后续启动失败和 `TongxingzheA
 这些测试只证明 composition、deferred fallback 和资源生命周期。它们不证明 HTTP 请求、strict parser、Backend authorization、PostgreSQL、UI 消费、缓存、离线、
 导出、部署端点、production identity 或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。6BY 不新增数据库步骤；如需回归前序数据库合同，按[第 9 章](09-local-docker-and-ci-testing.md)运行 Docker runner。
 
+## Slice 6BZ：在 Flutter 中显示后续联系同意占比独立面板
+
+6BZ 在 6BY 已装配的 `FollowUpConsentRatioReportGateway` 上增加一个独立 panel。panel 接收 `AppStrings`、typed gateway 和可空的已授权 `projectId`。
+当 `projectId` 为空时，panel 显示 inactive，不调用 gateway。项目存在时，panel 只为这个项目读取一次目录，并先显示 loading。
+
+### 目录和详情
+
+目录只显示 gateway 返回的 snapshot summary，并保持服务端顺序。空目录显示本地化的 empty 状态。panel 不自动打开第一项，也不选择 current、latest 或 replacement。
+用户明确选择一个 summary 后，panel 才读取该 summary 的详情。详情显示固定 report／metric identity、项目、source scope、privacy policy、报告时区、data cutoff、
+发布时间、previous 和 current 两个相邻完整期间、ratio 以及 unanswered／refused／not_applicable coverage。
+
+panel 只显示 typed gateway 已接受的值。percentage basis points 只转换为文字格式，不重新计算 ratio。panel 不计算总数、趋势、百分点差或互补值，不排序或补值。
+每个 ratio 和 coverage cell 都独立处理 privacy status。`displayed` ratio 显示服务端提供的 yes、no、numerator、denominator 和 basis points。
+`suppressed` ratio 只显示本地化的 hidden 文本，不显示数值、零或隐藏前值。`suppressed` coverage 也只显示 hidden 文本。
+
+### 状态、键盘和大字号
+
+panel 有 inactive、loading directory、directory、loading detail 和可恢复 failure 状态。project change、返回目录、retry 和 dispose 会使旧 generation 失效。
+迟到的 directory 或 detail 响应不能修改当前项目或当前视图。
+
+目录、详情、返回和 retry 操作必须支持 Tab traversal、Escape、focus return、heading、label 和 live-region announcement。所有状态必须在 `320×568` viewport 和
+`200%` text scale 下可读且不溢出。failure 只显示本地化错误和 retry，不显示 response body、数据库消息、授权详情、内部 ID 或 PII。
+
+### 如何验证 6BZ
+
+在仓库根目录运行：
+
+```bash
+flutter pub get
+dart analyze
+flutter test --no-pub \
+  test/features/management_reports/follow_up_consent_ratio_report_panel_view_model_test.dart \
+  test/features/management_reports/follow_up_consent_ratio_report_panel_test.dart
+flutter test --no-pub
+```
+
+focused tests 使用 fake `FollowUpConsentRatioReportGateway`。ViewModel tests 检查 inactive、目录与详情 loading、空目录、exact summary、retry、failure、project change、
+late response、return 和 dispose。Widget tests 检查两个期间、三项 coverage、displayed／suppressed 混合 cell、suppressed 不显示零或隐藏前值、键盘、focus return、
+heading、label、live region、English localization、`320×568` 和 `200%` text scale。
+
+这些 Flutter tests 只证明 panel 状态、typed rendering、可访问性、响应式布局和内存内 failure handling。它们不证明 gateway parser、HTTP transport、Backend authorization、
+PostgreSQL、部署服务、production identity、持久化、offline 或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。6BZ 不把第五个 report-family choice 加入
+`ManagementReportBrowser`，不修改 `_ReadyApp`、`ProductionHomeShell`、`AppDependencies`、导航或 gateway passing route，也不新增数据库步骤。需要回归前序数据库合同
+时，按[第 9 章](09-local-docker-and-ci-testing.md)运行 Docker runner。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和
