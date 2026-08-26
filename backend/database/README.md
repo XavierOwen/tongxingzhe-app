@@ -41,7 +41,7 @@ Backend adapter 集成通过。
 6BO 不增加 runtime bridge、HTTP、Backend integration、Flutter 或统计候选。实现后，完整 Docker runner 会自动发现 0073 migration、check、fixture 和并发脚本，
 并在 dump／restore 中重跑 migration、check 和 fixture。通过只能证明 synthetic PostgreSQL 配置合同，不能证明比例数学或披露风险控制。
 
-schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer`、`tongxingzhe_region_mapping_writer`、`tongxingzhe_region_attribution_reader`、`tongxingzhe_management_region_report_reader`、`tongxingzhe_management_original_region_report_reader`、`tongxingzhe_management_interest_report_reader`、`tongxingzhe_management_current_city_snapshot_release_writer`、`tongxingzhe_management_interest_snapshot_release_writer`、`tongxingzhe_management_original_region_snapshot_release_writer`、`tongxingzhe_management_report_snapshot_lifecycle_writer`、`tongxingzhe_management_follow_up_consent_config_writer`、`tongxingzhe_management_follow_up_consent_ratio_reader` 和 `tongxingzhe_management_consent_ratio_snapshot_release_writer`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
+schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer`、`tongxingzhe_region_mapping_writer`、`tongxingzhe_region_attribution_reader`、`tongxingzhe_management_region_report_reader`、`tongxingzhe_management_original_region_report_reader`、`tongxingzhe_management_interest_report_reader`、`tongxingzhe_management_current_city_snapshot_release_writer`、`tongxingzhe_management_interest_snapshot_release_writer`、`tongxingzhe_management_original_region_snapshot_release_writer`、`tongxingzhe_management_report_snapshot_lifecycle_writer`、`tongxingzhe_management_follow_up_consent_config_writer`、`tongxingzhe_management_follow_up_consent_ratio_reader`、`tongxingzhe_management_consent_ratio_snapshot_release_writer` 和 `tongxingzhe_management_deidentified_anomaly_reader`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
 
 ## 6BP：组织项目后续联系同意占比候选边界
 
@@ -1254,6 +1254,39 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 ```
 
 这些测试只证明 synthetic DB-only current-city replacement、授权锁、claim、provenance、不可变性和 ACL。它们不证明 snapshot 生成、跨版本更正、runtime、HTTP、Flutter、目录、导出、删除、retention、production identity 或六平台真人运行时。
+
+### 6CC：验证项目范围的去身份化地点异常读取
+
+0081 增加 private、DB-only 的异常目录与详情合同。候选只包含 active contact 当前 accepted revision 的
+`pending_resolution + pending_coordinates` 与 `unknown + legacy_incomplete` provenance；revision kind 必须是 `submitted` 或 `corrected`。
+resolved、not-applicable、draft、attempt、voided、旧 revision 和跨项目记录都被排除。
+
+调用者必须具有独立 `view_deidentified_anomalies` capability。目录最多返回 20 个 opaque ID 和最小 metadata，不返回坐标；详情只对显式 ID 返回
+pending 异常的 latitude、longitude 与可空 accuracy，legacy 异常的 coordinates 为 `null`。unknown、cross-project 和 stale ID 都返回同一
+`not_found`。`tongxingzhe_management_deidentified_anomaly_reader` 是关闭的 NOLOGIN／NOINHERIT／NOBYPASSRLS role，只获得必要列和 private
+resolver 的最小权限。mapping 和 access audit 追加不可变；audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revision、source 或 PII。
+
+从仓库根目录运行完整套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 自动发现 0081 migration、structural check、rollback fixture 和 authorization concurrency script，并继续执行 migration checksum 与独立
+dump／restore。若只调试专用测试库，先确认 `DATABASE_URL` 绝不是 production，再运行：
+
+```bash
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_authorized_management_deidentified_anomaly_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0081_authorized_management_deidentified_location_anomaly_read.sql
+./tool/verify_authorized_management_deidentified_anomaly_read_concurrency.sh
+```
+
+check、fixture 和 concurrency 证明的内容不同，不能互相替代。并发脚本会提交 synthetic 行，只能在新建测试库运行。Docker 通过只证明
+synthetic PostgreSQL 中的资格、授权锁、最小输出、不可变审计、ACL、checksum 和 restore；不证明 correction、runtime、Backend、HTTP、Flutter、
+地图、搜索、分页、导出、组织清除、production identity、真实 PII 清除或六平台真人运行时。
 
 ### 如何验证 6AS PostgreSQL 合同
 

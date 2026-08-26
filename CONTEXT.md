@@ -980,6 +980,14 @@ _Avoid_: 默认读取第五个 family、个人项目回退、多个布尔开关�
 关系和最小 audit 追加不可变。每份旧快照最多一个直接 replacement，每份新快照最多一个 predecessor；自链接、循环、分叉、stale head、跨项目／family、context 漂移、倒序和撤权失败关闭。生命周期只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID，不返回报告格、区域来源、贡献者、接触、坐标或 PII。6CB 不生成 snapshot，不改变目录／读取／HTTP／导出／Flutter，也不处理跨版本更正、删除或 retention。
 _Avoid_: 复用渠道或 original-region replacement 表、按目录排序猜测 latest、静默改写 snapshot、直接读取 0057 attempt、返回 target context 或报告值、把 Docker synthetic 通过写成生产证据
 
+**项目去身份化地点异常只读合同**:
+6CC 只把 active contact 当前 accepted revision 中的 `pending_resolution + pending_coordinates` 和 `unknown + legacy_incomplete` 暴露为项目范围的去身份化异常。revision 必须为 `submitted` 或 `corrected`；resolved、not-applicable、draft、attempt、voided、旧 revision 和跨项目事实不进入候选。
+
+读取需要独立 `view_deidentified_anomalies` capability，并在每次目录或详情调用中重新确认 active user、组织／项目 membership 和 active project。组织 owner、项目管理员、`view_anonymous_analytics`、区域维护或其他 capability 不能推导该权限。追加式 private mapping 为 provenance 分配随机 opaque ID；目录最多 20 项且不返回坐标，详情只对显式 ID 返回 pending 的最小坐标，legacy 返回 null。unknown、cross-project 与 stale ID 都返回相同 `not_found`。
+
+不可变 audit 只保存 access event、授权 lineage、project、operation、result、数量和数据库时间，不保存 anomaly ID、坐标、发生时间、contact、revision、source 或 PII。6CC 是 DB-only read contract；它不修改 provenance，不提供 correction mutation、runtime、Backend、HTTP、Flutter、地图、geocode、搜索、分页、导出、组织清除或真人平台证据。
+_Avoid_: 从 owner／admin／分析查看能力推导访问权、在目录返回坐标、暴露 contact／revision／source identity、把 stale 与 cross-project 区分给 caller、客户端补造异常、直接修改 provenance、把 synthetic Docker 写成生产隐私证据
+
 **管理报告清除**:
 组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
 _Avoid_: 授权撤回、报告到期、tombstone、superseded
