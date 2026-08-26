@@ -513,6 +513,62 @@ const Map<String, Map<String, String>> _strings = {
     'originalRegionReportPeriodSemantics': '{period}：{from} 至 {until}，不含结束时刻',
     'originalRegionReportOpenSemantics':
         '打开原始区域报告：版本 {version}，数据截止 {dataCutoff}，发布时间 {releasedAt}，时区 {timeZone}',
+    'followUpConsentRatioReportTitle': '后续联系同意占比报告',
+    'followUpConsentRatioReportIntro': '选择已发布的两期后续联系同意占比报告。只显示服务端已保护的结果。',
+    'followUpConsentRatioReportDirectoryTitle': '后续联系同意占比报告快照目录',
+    'followUpConsentRatioReportDirectoryEmpty': '当前项目没有可读取的后续联系同意占比报告快照。',
+    'followUpConsentRatioReportDirectoryLoading': '正在载入后续联系同意占比报告目录',
+    'followUpConsentRatioReportLoading': '正在载入后续联系同意占比报告',
+    'followUpConsentRatioReportInactive': '当前没有可读取的管理项目。',
+    'followUpConsentRatioReportRetry': '重试',
+    'followUpConsentRatioReportBackToDirectory': '返回后续联系同意占比报告目录',
+    'followUpConsentRatioReportUnauthorized': '当前账号没有读取后续联系同意占比报告的权限。',
+    'followUpConsentRatioReportForbidden': '当前账号不能读取这个管理项目的后续联系同意占比报告。',
+    'followUpConsentRatioReportNotFound': '这个后续联系同意占比报告快照已不存在。',
+    'followUpConsentRatioReportInvalidRequest': '后续联系同意占比报告请求未被服务接受。请重新打开后再试。',
+    'followUpConsentRatioReportNetworkUnavailable':
+        '无法连接后续联系同意占比报告服务，请检查网络后重试。',
+    'followUpConsentRatioReportUntrusted': '后续联系同意占比报告来源无法验证。',
+    'followUpConsentRatioReportServiceUnavailable': '后续联系同意占比报告服务暂时不可用，请稍后重试。',
+    'followUpConsentRatioReportInvalidResponse': '后续联系同意占比报告服务返回了无效结果。',
+    'followUpConsentRatioReportNotConfigured': '后续联系同意占比报告服务尚未配置。',
+    'followUpConsentRatioReportFailed': '后续联系同意占比报告暂时无法载入，请重试。',
+    'followUpConsentRatioReportVersion': '报告版本',
+    'followUpConsentRatioReportQueryFingerprint': '查询指纹',
+    'followUpConsentRatioReportDefinition': '报告定义',
+    'followUpConsentRatioReportMetric': '统计指标',
+    'followUpConsentRatioReportStatisticalUnit': '统计单位',
+    'followUpConsentRatioReportDimension': '维度',
+    'followUpConsentRatioReportPeriodGrain': '期间粒度',
+    'followUpConsentRatioReportComparisonPeriodCount': '比较期间数',
+    'followUpConsentRatioReportProject': '管理项目',
+    'followUpConsentRatioReportSourceScope': '数据来源',
+    'followUpConsentRatioReportPrivacyRule': '隐私规则',
+    'followUpConsentRatioReportStatus': '报告状态',
+    'followUpConsentRatioReportTimeZone': '报告时区',
+    'followUpConsentRatioReportDataCutoff': '数据截止',
+    'followUpConsentRatioReportReleasedAt': '发布时间',
+    'followUpConsentRatioReportPeriodBoundary': '期间边界',
+    'followUpConsentRatioReportPreviousPeriod': '较早期间',
+    'followUpConsentRatioReportCurrentPeriod': '较晚期间',
+    'followUpConsentRatioReportRatioTitle': '同意占比',
+    'followUpConsentRatioReportCoverageTitle': '覆盖情况',
+    'followUpConsentRatioReportSuppressed': '已隐藏',
+    'followUpConsentRatioReportRatioDisplayed':
+        '明确同意：{yesCount}；明确拒绝：{noCount}；分子/分母：{numerator} / {denominator}；占比：{percentage}',
+    'followUpConsentRatioReportRatioSemantics': '{period}：{value}',
+    'followUpConsentRatioReportCoverageDisplayed': '{value} 条',
+    'followUpConsentRatioReportCoverageSemantics': '{period}，{state}：{value}',
+    'followUpConsentRatioReportUnanswered': '未回答',
+    'followUpConsentRatioReportRefused': '拒答',
+    'followUpConsentRatioReportNotApplicable': '不适用',
+    'followUpConsentRatioReportPeriodSemantics':
+        '{period}：{from} 至 {until}，不含结束时刻',
+    'followUpConsentRatioReportOpenSemantics':
+        '打开后续联系同意占比报告：版本 {version}，数据截止 {dataCutoff}，发布时间 {releasedAt}，时区 {timeZone}',
+    'followUpConsentRatioReportDirectoryMetadata':
+        '报告版本 {version}\n数据截止 {dataCutoff}\n发布时间 {releasedAt}\n报告时区 {timeZone}',
+    'followUpConsentRatioReportMetadataSemantics': '{label}：{value}',
     'managementReportExportTitle': '管理报告文件',
     'managementReportExportIntro': '先准备并验证固定 JSON 文件。文件只保留在当前页面内存中。',
     'managementReportExportIdle': '尚未准备文件。',
@@ -1644,6 +1700,78 @@ const Map<String, Map<String, String>> _strings = {
         '{period}: {from} to {until}, excluding the end time',
     'originalRegionReportOpenSemantics':
         'Open original-region report: version {version}, data cutoff {dataCutoff}, published {releasedAt}, time zone {timeZone}',
+    'followUpConsentRatioReportTitle': 'Follow-up consent ratio reports',
+    'followUpConsentRatioReportIntro':
+        'Choose a published follow-up consent ratio report with two periods. The service protects the values shown here.',
+    'followUpConsentRatioReportDirectoryTitle':
+        'Follow-up consent ratio report snapshot directory',
+    'followUpConsentRatioReportDirectoryEmpty':
+        'This project has no follow-up consent ratio report snapshots to read.',
+    'followUpConsentRatioReportDirectoryLoading':
+        'Loading the follow-up consent ratio report directory',
+    'followUpConsentRatioReportLoading':
+        'Loading the follow-up consent ratio report',
+    'followUpConsentRatioReportInactive':
+        'No management project is selected for this report.',
+    'followUpConsentRatioReportRetry': 'Retry',
+    'followUpConsentRatioReportBackToDirectory':
+        'Back to the follow-up consent ratio report directory',
+    'followUpConsentRatioReportUnauthorized':
+        'This account cannot read follow-up consent ratio reports.',
+    'followUpConsentRatioReportForbidden':
+        'This account cannot read follow-up consent ratio reports for this management project.',
+    'followUpConsentRatioReportNotFound':
+        'This follow-up consent ratio report snapshot no longer exists.',
+    'followUpConsentRatioReportInvalidRequest':
+        'The follow-up consent ratio report request was not accepted. Open the report again and retry.',
+    'followUpConsentRatioReportNetworkUnavailable':
+        'The follow-up consent ratio report service is unreachable. Check the network and retry.',
+    'followUpConsentRatioReportUntrusted':
+        'The follow-up consent ratio report source could not be verified.',
+    'followUpConsentRatioReportServiceUnavailable':
+        'The follow-up consent ratio report service is temporarily unavailable. Retry later.',
+    'followUpConsentRatioReportInvalidResponse':
+        'The follow-up consent ratio report service returned an invalid response.',
+    'followUpConsentRatioReportNotConfigured':
+        'The follow-up consent ratio report service is not configured.',
+    'followUpConsentRatioReportFailed':
+        'The follow-up consent ratio report could not load. Retry the request.',
+    'followUpConsentRatioReportVersion': 'Report version',
+    'followUpConsentRatioReportQueryFingerprint': 'Query fingerprint',
+    'followUpConsentRatioReportDefinition': 'Report definition',
+    'followUpConsentRatioReportMetric': 'Metric',
+    'followUpConsentRatioReportStatisticalUnit': 'Statistical unit',
+    'followUpConsentRatioReportDimension': 'Dimension',
+    'followUpConsentRatioReportPeriodGrain': 'Period grain',
+    'followUpConsentRatioReportComparisonPeriodCount': 'Comparison periods',
+    'followUpConsentRatioReportProject': 'Management project',
+    'followUpConsentRatioReportSourceScope': 'Data source',
+    'followUpConsentRatioReportPrivacyRule': 'Privacy rule',
+    'followUpConsentRatioReportStatus': 'Report status',
+    'followUpConsentRatioReportTimeZone': 'Report time zone',
+    'followUpConsentRatioReportDataCutoff': 'Data cutoff',
+    'followUpConsentRatioReportReleasedAt': 'Published at',
+    'followUpConsentRatioReportPeriodBoundary': 'Period boundary',
+    'followUpConsentRatioReportPreviousPeriod': 'Earlier period',
+    'followUpConsentRatioReportCurrentPeriod': 'Later period',
+    'followUpConsentRatioReportRatioTitle': 'Consent ratio',
+    'followUpConsentRatioReportCoverageTitle': 'Coverage',
+    'followUpConsentRatioReportSuppressed': 'Hidden',
+    'followUpConsentRatioReportRatioDisplayed':
+        'Explicitly agreed: {yesCount}; refused: {noCount}; numerator / denominator: {numerator} / {denominator}; ratio: {percentage}',
+    'followUpConsentRatioReportRatioSemantics': '{period}: {value}',
+    'followUpConsentRatioReportCoverageDisplayed': '{value} entries',
+    'followUpConsentRatioReportCoverageSemantics': '{period}, {state}: {value}',
+    'followUpConsentRatioReportUnanswered': 'Unanswered',
+    'followUpConsentRatioReportRefused': 'Refused',
+    'followUpConsentRatioReportNotApplicable': 'Not applicable',
+    'followUpConsentRatioReportPeriodSemantics':
+        '{period}: {from} to {until}, excluding the end time',
+    'followUpConsentRatioReportOpenSemantics':
+        'Open follow-up consent ratio report: version {version}, data cutoff {dataCutoff}, published {releasedAt}, time zone {timeZone}',
+    'followUpConsentRatioReportDirectoryMetadata':
+        'Report version {version}\nData cutoff {dataCutoff}\nPublished at {releasedAt}\nReport time zone {timeZone}',
+    'followUpConsentRatioReportMetadataSemantics': '{label}: {value}',
     'recentSevenDays': 'Recent seven days',
     'currentRelationshipStageTitle': 'Current relationship stages',
     'currentRelationshipStageHelp':

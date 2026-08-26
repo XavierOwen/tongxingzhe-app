@@ -935,6 +935,27 @@ _Avoid_: 复用其他 report family gateway、把 DB envelope 的 `access_contra
 _Avoid_: 打开第二个 IdentitySession、把 token 传给 builder、让 deferred fallback 发网络请求、把 gateway 交给 UI、启动失败时泄漏资源、重复关闭已有 gateway、
 把 composition 测试写成 HTTP 或生产证据
 
+**组织项目后续联系同意占比 Flutter 独立面板**:
+6BZ 在 6BY 已装配的 `FollowUpConsentRatioReportGateway` 上增加独立
+`FollowUpConsentRatioReportPanel` 和对应 ViewModel。面板接收 `AppStrings`、该 gateway 和可空的已授权
+`projectId`；`projectId` 为空时保持 inactive。非空项目只请求一次当前项目的目录，先显示 loading，不自动选择第一项或请求详情。
+
+用户从当前目录明确选择一个 snapshot 后，面板只用该条 summary 请求详情。详情显示固定 report metadata、previous 和 current 两个完整期间、服务端提供的
+ratio 与 unanswered／refused／not_applicable coverage。面板保持 gateway 的顺序和每个 cell 的 privacy status；显示值原样呈现，basis points 只做文字格式化，
+不在客户端计算 ratio、总数、趋势、互补值、排序、latest 或 current。`suppressed` ratio 或 coverage 只显示本地化的 hidden 状态，不显示零、任何隐藏前值或推断值；
+每个 coverage cell 独立判断隐私状态。
+
+面板状态包括 inactive、loading directory、directory、loading detail 和可恢复 failure。项目切换、返回目录、重试和 dispose 都使旧 generation 失效，迟到响应不能
+改写当前状态。目录、详情、返回和重试必须保留键盘路径、heading、label、live region 和焦点返回，并在 `320×568` 与 `200%` 字号下可读。failure 只显示本地化
+消息和 retry，不显示响应正文、数据库消息、授权详情、内部 ID 或 PII。
+
+6BZ 只交付这个独立 panel、ViewModel、localized strings 和 focused Flutter tests；不把第五个 report-family choice 加入
+`ManagementReportBrowser`，也不修改 `_ReadyApp`、`ProductionHomeShell`、`AppDependencies`、导航或 gateway passing route。它不改变 typed gateway、HTTP、Backend、
+PostgreSQL、runtime、identity、authorization、Drift、缓存、离线、同步、导出、搜索、分页、latest／current 选择或报告生成合同。
+测试使用 fake typed gateway，证明状态转换、严格 typed rendering、privacy suppression、focus／semantics、迟到响应隔离和响应式布局；不证明 gateway parser、HTTP、
+Backend 授权、数据库、部署服务、生产身份或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。该切片沿用现有 panel／ViewModel 模式，不需要新增 ADR。
+_Avoid_: 复用个人 follow-up consent opt-in 或 ratio panel、自动打开首项、在客户端重算或补回隐藏值、用 UI 门控冒充授权、把 fake Flutter 测试写成生产证据
+
 **管理报告清除**:
 组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
 _Avoid_: 授权撤回、报告到期、tombstone、superseded
