@@ -1127,6 +1127,62 @@ cd ../..
 Docker runner 仍验证 0077 bridge、0076 reader、授权、provenance、strict parser、audit、并发、checksum 和 restore；它不替代 6BT HTTP 测试。
 这些 synthetic HTTP 和 Docker 结果不证明 production identity、已部署端点、Flutter、真实账号或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。
 
+### 6BU：验证后续联系同意占比快照目录
+
+6BU 是 SQL-only 合同。0078 migration 为一个显式 project 增加 private directory 函数：
+
+```text
+app_private.list_authorized_management_follow_up_consent_snapshots_v1(uuid, uuid)
+```
+
+函数每次调用重新确认 active user、组织／项目 membership、active project 和 `view_anonymous_analytics`。目录读取与授权撤回沿既有 lock order，避免撤权竞态绕过授权。
+它只接受 0075 consent-ratio family 的 `approved_baseline`／`approved` exact provenance；foreign project、foreign family、legacy、blocked、missing 或 drifted provenance
+必须失败关闭或被排除。
+
+成功结果的 root envelope 固定为 `access_contract_id`、`access_event_id`、`project_id` 和 `snapshots` 四项。
+`snapshots` 最多 20 项，每项只有 `snapshot_id`、`report_id`、`report_version`、`reporting_time_zone`、`data_cutoff_utc` 和 `released_at_utc`。
+数据库按 `data_cutoff_utc DESC`、`released_at_utc DESC`、`snapshot_id DESC` 排序。第一项只是排序结果，不表示 current、latest 或未被取代。没有合格快照的已授权
+project 返回空数组，并写数量为 0 的成功 audit。
+
+目录 audit 使用专用追加式、不可变、value-free 结构，只记录授权和访问 metadata。它不记录 snapshot ID、报告内容、period、ratio、coverage、source、contributor、
+target、contact 或 PII。`PUBLIC`、runtime、普通 app role 和其他 report reader／writer 不能执行 private function 或读取 audit。
+
+#### 从零开始运行 6BU
+
+1. 打开 Docker Desktop，等待 Docker Engine 显示运行。
+2. 在仓库根目录运行 `docker version`。Client 和 Server 都有输出后再继续。
+3. 运行完整 PostgreSQL 套件：
+
+   ```bash
+   ./tool/run_postgres_tests_in_docker.sh
+   ```
+
+4. 确认输出包含 0078 migration、structural check、rollback fixture、directory／revoke concurrency、checksum、restore check 和 restore fixture，且退出码为 `0`。
+
+runner 自动建立一次性 PostgreSQL 16 容器。源库执行 0078 migration、check、fixture 和并发脚本；fixture 在 transaction 结束时回滚，并发脚本使用独立 committed namespace。
+恢复阶段先准备缺失的 PostgreSQL roles，再使用 dump 重建独立恢复库。恢复库重跑 check 和 fixture，不重跑会提交 synthetic 行的并发脚本。
+
+这些测试只使用 synthetic 数据。通过结果只证明 PostgreSQL 的 provenance、授权、目录上限与排序、value-free audit、锁顺序、ACL、checksum 和恢复合同。
+它不证明 runtime identity、Backend、HTTP、Flutter、部署服务、production data、缓存、离线或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。
+前序 6BS／6BT 已定义 runtime、Backend 和 HTTP；6BU 不修改这些边界。
+
+#### 只调试 6BU
+
+以下命令会修改指定数据库。先确认它是可丢弃的测试库，不是 production：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_authorized_management_follow_up_consent_ratio_snapshot_directory.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0078_authorized_management_follow_up_consent_ratio_snapshot_directory.sql
+./tool/verify_authorized_management_follow_up_consent_ratio_snapshot_directory_concurrency.sh
+```
+
+check 验证 canonical function、owner、固定 search path、`SECURITY DEFINER`、最小 ACL 和无 `PUBLIC` execute。fixture 验证 20 项上限、固定排序、baseline／successor、
+空目录、重复读取、exact provenance、负例、zero-count audit、value-free audit 和不可变性。并发脚本验证 directory-first 与 revoke-first 的线性化。
+
 ### 6BF：理解管理报告删除与保留边界
 
 6BF 是产品和测试合同，不是数据库清理功能。没有用过 Docker 的读者先记住：Docker runner 会在一次性容器中验证当前仓库已有的 PostgreSQL 行为。

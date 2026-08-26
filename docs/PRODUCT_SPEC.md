@@ -1350,6 +1350,29 @@ ratio、不恢复 `suppressed` 值，也不改写 6BQ snapshot。
 directory、latest／current 选择、分页、筛选、Flutter、Drift、导出、缓存、离线、同步、replacement、删除、retention、warehouse、生产身份提供方或真人平台证据。
 synthetic handler、route 和 composition 测试只证明 Backend HTTP transport contract，不证明已部署端点、production identity、真实账号或客户端消费。
 
+#### Slice 6BU：列出后续联系同意占比快照目录
+
+6BU 只在 private PostgreSQL 中为一个显式 project 列出后续联系同意占比 snapshot。canonical 函数名是
+`app_private.list_authorized_management_follow_up_consent_snapshots_v1(uuid, uuid)`。名称保持在 PostgreSQL 63 字节标识符限制内，避免长名称被截断。
+函数每次调用都重新确认 active user、组织／项目 membership、active project 和 `view_anonymous_analytics`，并沿既有 authorization／revoke lock order。
+
+目录只接受 0075 consent-ratio family 的 `approved_baseline`／`approved` exact provenance。project、report／version、query fingerprint、privacy、source scope、
+报告时区 revision、期间、release lineage、cutoff、previous pointer 或 source watermark 不一致的 provenance 不进入目录；unknown、cross-project、cross-family、
+legacy、blocked、missing 和 drifted provenance 失败关闭。
+
+成功 envelope 的 exact root keys 是 `access_contract_id`、`access_event_id`、`project_id` 和 `snapshots`。`snapshots` 最多 20 项，每项 exact metadata keys 是
+`snapshot_id`、`report_id`、`report_version`、`reporting_time_zone`、`data_cutoff_utc` 和 `released_at_utc`。固定排序为
+`data_cutoff_utc DESC`、`released_at_utc DESC`、`snapshot_id DESC`。第一项只是固定排序的第一项，不表示 current、latest 或未被取代；合同不提供 latest、current、
+分页或筛选语义。已授权 project 没有合格 snapshot 时返回空数组，并写入数量为 0 的成功 audit。
+
+目录 audit 使用专用、追加式、不可变、value-free 合同，只记录授权和访问 metadata，不记录 snapshot ID、report、period、ratio、coverage、source、contributor、
+target、contact 或 PII。授权撤回、过期、无成员、inactive project、unknown ID、跨 project 和权限不足都失败关闭，且不写成功 audit。`PUBLIC`、runtime、普通
+app role、其他 report reader／writer 不能执行 private function 或读取 audit。
+
+6BU 是 SQL-only。它不修改前序 6BS／6BT 已定义的 `app_data` identity bridge、runtime、Backend adapter 和 HTTP route，也不增加 Flutter、Drift、导出、缓存、离线或同步。
+structural check、rollback fixture、directory／revoke concurrency、checksum 和 dump／restore 只提供 synthetic PostgreSQL 证据，不能替代
+production identity、部署服务或 Android、iOS、macOS、Windows、Linux、Web 真人平台验收。
+
 #### 5.8.2 时间、趋势、版本与因果边界
 
 | ID | 需求 |
@@ -1409,6 +1432,7 @@ synthetic handler、route 和 composition 测试只证明 Backend HTTP transport
 | `ANALYTICS-053` | 6BR 只按显式 project／snapshot ID 读取一份 6BQ 后续联系同意占比快照。数据库重新验证 `view_anonymous_analytics`，只接受 0075 consent-ratio claim family 的 approved／approved_baseline attempt，以及完全匹配的 actor／project／report／version／query／lineage／时区 revision／cutoff／previous pointer／source watermark，并在返回前再次运行 6BQ validator。`completed` 才返回既有 protected report；unknown／cross-project 返回 `not_found`，同项目 foreign／legacy／blocked／漂移 provenance 返回 `untrusted_provenance`，两者都不返回正文。它是 private DB-only 合同，不增加 runtime、HTTP、目录、Flutter 或导出。 |
 | `ANALYTICS-054` | 6BS 通过 0077 `app_data` bridge 将 6BR private read 接到 Backend runtime。bridge 只接受 Backend 已验证的 exact external `issuer + subject`、显式 project／snapshot UUID，映射现有 active identity 后调用 0076 private reader；不 trim、bootstrap、读取 `SessionContext` 或接受内部用户、capability、时区、截止点、筛选和 SQL。adapter 只执行一次固定 SQL，并严格解析 0076 envelope 与固定 consent-ratio protected report；runtime 只有 bridge `EXECUTE`，不获得 `app_private`、identity、snapshot、provenance 或 audit 访问权。 |
 | `ANALYTICS-055` | 6BT 只通过固定 HTTP GET `/v1/projects/:projectId/management-follow-up-consent-ratio-report-snapshots/:snapshotId` 调用 6BS 专用 snapshot store。handler 在固定 path 命中后先验证 Bearer identity，再检查显式 project／snapshot UUID、query、GET body（含 `Content-Length`／`Transfer-Encoding`）和 store；认证通过后只传 verified `issuer + subject` 与显式资源 ID，并等待 store Promise。成功 wire 只有 `access_event_id`、`snapshot_id`、`report`；错误固定映射 `401`／`400`／`403`／`404`／`409`／`503`、错误脱敏和 `Cache-Control: no-store`。不使用 `SessionContext`、generic 或其他 report-family store，不增加数据库状态、目录、latest、Flutter、Drift、导出、缓存、离线、同步或真人平台证据。 |
+| `ANALYTICS-056` | 6BU 只在 private PostgreSQL 中为显式 project 列出 0075 consent-ratio family 的 `approved_baseline`／`approved` snapshot。canonical 函数 `app_private.list_authorized_management_follow_up_consent_snapshots_v1(uuid, uuid)` 每次重新确认 active user、组织／项目 membership、active project 和 `view_anonymous_analytics`，并沿 authorization／revoke lock order。返回 envelope 固定为 `access_contract_id`、`access_event_id`、`project_id`、`snapshots`；列表最多 20 项，每项固定六项 metadata，按 cutoff／release time／snapshot ID 降序。第一项不表示 current、latest 或未被取代；空目录仍写成功 zero-count audit。6BU 不增加 runtime、Backend、HTTP 或客户端合同。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -1460,6 +1484,7 @@ synthetic handler、route 和 composition 测试只证明 Backend HTTP transport
 | `PRIVACY-044` | 6BQ 的 strict validator 只接受 6BP completed exact-key protected document；suppressed ratio／coverage 必须保持 JSON `null`。blocked attempt 不保存 `protected_report`、period、ratio、coverage、contact、target、contributor、原始回答、隐藏前值或 PII。专用 closed writer 只能访问固定 report／lineage；runtime、`PUBLIC`、普通 app role 和其他 report-family writer 无执行或表访问权。snapshot、attempt 和 claim 追加不可变；这些 synthetic 证据不构成形式化不可重识别保证。 |
 | `PRIVACY-045` | 6BR 只有在 `view_anonymous_analytics`、项目／组织成员关系和 0075 consent-ratio release provenance 全部有效时才返回 protected report；unknown／cross-project 与 same-project foreign／untrusted provenance 均不返回正文。每次已授权调用追加不含 `protected_report`、period results、ratio、coverage、contact、target、contributor、原始回答、隐藏前值或 PII 的不可变 value-free audit。未授权、撤权、过期、release-only、无项目成员和 inactive project 调用失败关闭且不写 audit。读取和撤权共享授权锁；runtime、`PUBLIC`、普通 app role、reader／writer 和区域维护角色不能执行读取或访问审计。 |
 | `PRIVACY-046` | 6BS bridge 使用 `SECURITY DEFINER`、固定 `search_path = pg_catalog` 和 exact active identity 映射。runtime 只有 bridge `EXECUTE`，不能使用 `app_private`、执行 0076 private read 或读取用户、identity、snapshot、attempt、claim 和 audit 表。adapter 只接受固定 root envelope、project／snapshot 绑定、17-key consent-ratio report、两个 period result、ratio／coverage 安全整数和 `suppressed = null`；它拒绝额外字段、其他 report family、PII、contact、target、contributor、source 和隐藏前值。synthetic 结果不构成生产身份或真人平台证据。 |
+| `PRIVACY-047` | 6BU 目录只返回固定四项 root envelope 和最多 20 项六字段 snapshot metadata；固定排序的第一项不表示 current、latest 或未被取代。目录只接受 0075 consent-ratio `approved_baseline`／`approved` exact provenance，并在 authorization／revoke lock order 内重新确认 active user、membership、active project 和 `view_anonymous_analytics`。专用 audit 追加、不可变且 value-free，只记录授权／访问 metadata，不记录 snapshot ID、report、period、ratio、coverage、source、contributor、target、contact 或 PII。未授权、撤权、过期、无成员、inactive、unknown、跨 project 或 drift 失败关闭；`PUBLIC`、runtime、普通 app role 和其他 reader／writer 无执行或 audit 读取权。synthetic DB-only 结果不构成 runtime、Backend、HTTP、生产身份或真人平台证据。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
 
@@ -1506,6 +1531,7 @@ synthetic handler、route 和 composition 测试只证明 Backend HTTP transport
 | `MANUAL-037` | 学习文档必须用零基础读者可以复制的步骤说明 6BR 的 0076 private read、0075 consent-ratio attempt／claim／snapshot provenance、`completed`／`not_found`／`untrusted_provenance`、时区 revision／cutoff／previous pointer／source watermark 复核、再次 6BQ validator、value-free immutable audit、撤权锁、Docker 自动发现和专用测试库命令。必须说明 restore 只重跑 check／fixture，不重跑会提交 synthetic 行的并发脚本，并明确这些 DB-only 证据不证明 runtime、HTTP、Backend、目录、Flutter、导出、生产身份或真人平台。 |
 | `MANUAL-038` | 学习文档必须用零基础读者可以复制的步骤说明 6BS 的 0077 exact-identity bridge、runtime 最小 ACL、0076 private reader 复用、Backend 单次参数化 SQL、strict consent-ratio parser、typed `42501`、rollback fixture、真实 PostgreSQL integration、Docker 自动发现、checksum 和 dump／restore。必须说明 0076 并发测试仍是撤权锁证据，restore 不重跑提交型并发脚本，并明确这些 synthetic 证据不证明 HTTP、Flutter、生产身份或真人平台。 |
 | `MANUAL-039` | 学习文档必须用零基础读者可以复制的步骤说明 6BT 的固定 HTTP GET `/v1/projects/:projectId/management-follow-up-consent-ratio-report-snapshots/:snapshotId`、认证先于 UUID／query／GET body／store、`Content-Length`／`Transfer-Encoding` body 拒绝、6BS 专用 store、三字段成功 wire、`401`／`400`／`403`／`404`／`409`／`503`、Promise gate、错误脱敏和 `Cache-Control: no-store`。必须说明 6BT 不增加 PostgreSQL migration 或数据合同，Docker 只作既有 6BS 回归；HTTP／route／composition 测试使用 synthetic identity，不证明部署端点、production identity 或真人平台。 |
+| `MANUAL-040` | 学习文档必须用零基础读者可以复制的步骤说明 6BU 的 0078 SQL-only private directory、canonical 函数名、0075 consent-ratio exact provenance、active user／membership／project／`view_anonymous_analytics` 重新授权、authorization／revoke lock order、最多 20 项六字段 metadata、固定 cutoff／release time／snapshot ID 降序、第一项无 current／latest 语义、空目录 zero-count audit、value-free immutable audit、权限与 provenance 负例、rollback fixture、directory／revoke concurrency、checksum、restore role、dump／restore 和专用测试库命令。必须明确 6BU 不增加 runtime、Backend、HTTP 或客户端合同；synthetic PostgreSQL 证据不证明 production identity、部署服务或六平台真人平台。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -1732,6 +1758,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-047` | 6BR 的 0076 structural check、rollback fixture 和并发测试必须覆盖合法 baseline／successor、重复读取、完整 protected document、`suppressed = null`、0075 approved claim／attempt／snapshot／时区 revision／cutoff／previous pointer／source watermark 对齐、unknown／cross-project 的 `not_found`、same-project channel／current-city／interest／original-region／legacy／blocked／missing／drift provenance 的 `untrusted_provenance`、active／撤权／过期／release-only／无成员／inactive project 和 value-free audit。检查必须拒绝 audit UPDATE／DELETE，固定 owner／`SECURITY DEFINER`／`search_path` 和最小 ACL；并发覆盖 read-first／revoke-first。完整 Docker 自动发现 0076 migration、check、fixture 和并发脚本，checksum／dump／restore 重跑 check 和 fixture，不重跑提交 synthetic 行的并发脚本；通过不声称 runtime、HTTP、Backend、目录、Flutter、导出、删除、生产身份或真人平台证据。 |
 | `TEST-048` | 6BS 的 0077 structural check、rollback fixture、Backend unit 和 PostgreSQL integration 必须覆盖 exact active identity、空白变体、unknown／inactive／release-only、参数边界、单一 0076 private-reader 调用、重复 value-free audit、`completed`／`not_found`／`untrusted_provenance`、固定 envelope、17-key consent-ratio report、两个 period result、ratio／coverage、连续顺序、安全整数、`suppressed = null`、额外字段／其他 family／PII 拒绝、只映射 SQLSTATE `42501`、owner／`SECURITY DEFINER`／`VOLATILE`／固定 search path 和最小 runtime ACL。Docker 自动发现 0077 migration／check／fixture，显式运行 integration，并继续运行 0076 read／revoke 并发、checksum 和 dump／restore；通过不声称 HTTP、Flutter、生产身份或真人平台证据。 |
 | `TEST-049` | 6BT 的 handler、real HTTP route 和 production composition 测试必须覆盖固定 method／path、认证先于 UUID／query／GET body／store、缺失或无效 Bearer 的 `401`、malformed UUID／query／GET body（包括 `Content-Length`／`Transfer-Encoding`）的 `400`、6BS `forbidden`／`not_found`／`untrusted`／`unavailable` 的 `403`／`404`／`409`／`503`、verified identity 与显式资源 ID 传播、单次专用 store 调用、Promise gate、三字段 success wire、`404`／`409` 的 value-free `access_event_id`、错误脱敏和所有响应 `no-store`。composition 必须拒绝 `SessionContext`、generic／其他 report-family store、`app_private` 和客户端 SQL；通过只证明 synthetic Backend HTTP transport contract，不声称 production identity、部署端点、Flutter 或真人平台证据。 |
+| `TEST-050` | 6BU 的 0078 structural check、rollback fixture 和 directory／revoke concurrency 必须覆盖 canonical private function、owner／`SECURITY DEFINER`／固定 search path、无 `PUBLIC` execute、最小 ACL、0075 consent-ratio `approved_baseline`／`approved` exact provenance、最多 20 项、cutoff／release time／snapshot ID 固定降序、第一项不表示 current／latest、四项 root envelope、六字段 metadata、空目录 zero-count audit、value-free immutable audit、直接 UPDATE／DELETE 拒绝、unknown／inactive／cross-project／cross-family／legacy／blocked／missing／drift provenance、撤权／过期／无成员／inactive project 失败关闭、directory-first／revoke-first 锁顺序、checksum、restore role、dump／restore 和 committed namespace 隔离。通过只证明 synthetic PostgreSQL SQL-only directory contract，不声称 runtime、Backend、HTTP、Flutter、导出、缓存、离线、生产身份或真人平台证据。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -1970,6 +1997,14 @@ Backend adapter 只执行一次固定 SQL，并 strict parse 固定 consent-rati
 6BT（#225）只把 6BS 专用 store 接到固定的
 `GET /v1/projects/:projectId/management-follow-up-consent-ratio-report-snapshots/:snapshotId`。handler 在固定 path 命中后先验证 Bearer identity，再验证 UUID、query、GET body 和 store；认证失败始终先返回 `401`。认证通过后只传 verified identity 与显式 project／snapshot UUID，成功 wire 固定为 `access_event_id`、`snapshot_id`、`report` 三项，错误固定映射 `400`／`403`／`404`／`409`／`503` 并统一脱敏。所有响应使用 JSON 与 `Cache-Control: no-store`，handler 等待 store Promise 后才写响应。
 6BT 不增加 PostgreSQL migration、reader、目录、latest／current 选择、分页、筛选、Flutter、Drift、导出、缓存、离线、同步、replacement、删除、retention、warehouse 或真人平台证据。只有 Backend handler、route 和 production composition 的 synthetic 测试可以证明 HTTP transport contract；不证明 production identity、部署端点、真实账号或客户端消费。
+
+6BU（#227）在 0075 consent-ratio lineage 上增加 SQL-only private snapshot directory。canonical 函数
+`app_private.list_authorized_management_follow_up_consent_snapshots_v1(uuid, uuid)` 每次重新确认 active user、组织／项目 membership、active project 和
+`view_anonymous_analytics`，并沿 authorization／revoke lock order。它只纳入 `approved_baseline`／`approved` exact provenance，返回四项 root envelope，最多 20 项六字段 metadata，按 data cutoff、release time 和 snapshot ID 固定降序。第一项不表示 current、latest 或未被取代；空目录仍写 zero-count value-free audit。
+6BU 的专用 audit 追加且不可变，不含 snapshot ID、报告内容、period、ratio、coverage、source、contributor、target、contact 或 PII。
+structural check、rollback fixture、directory／revoke concurrency、checksum 和独立 dump／restore 只证明 synthetic PostgreSQL 授权、provenance、目录与 audit 合同。
+这些证据不证明 runtime、Backend、HTTP、Flutter、部署服务、production identity 或 Android、iOS、macOS、Windows、Linux、Web 真人平台。
+前序 6BS／6BT 已定义 runtime、Backend 和 HTTP；6BU 不修改这些边界。
 
 ### Slice 7：组织治理与数据可携带性
 
