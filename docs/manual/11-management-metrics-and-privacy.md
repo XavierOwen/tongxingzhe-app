@@ -2486,6 +2486,57 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 这些命令覆盖 synthetic DB-only 证据，不证明 snapshot 生成、其他 report family、分析定义／跨版本更正、runtime、HTTP、Flutter、目录、导出、删除、
 retention、生产身份或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。
 
+## Slice 6BP：验证组织项目后续联系同意占比候选
+
+6BP 在 6BO 当前 opt-in 为 enabled 时生成 private release-candidate。它不是 snapshot，也不是已经发布的报告。
+固定报告定义是 `contact_target_follow_up_consent_ratio_two_periods@1`，指标是 `follow_up_consent_ratio@1`，统计单位是 `contact_target_link`。
+候选只使用两个相邻且已经结束的完整 ISO 周、项目报告时区和数据库拥有的 cutoff。配置记录时间不裁切统计期间。
+
+调用方只提交可信内部 actor、显式项目、可信项目报告时区和数据库 cutoff。数据库在授权锁和项目锁后重新确认活动账号、组织／项目 membership、项目状态、
+`release_management_reports` capability 和 6BO 当前 opt-in。`view_anonymous_analytics` 不能执行候选。专用 closed role 只能用于未来 release workflow。
+
+候选只读取目标组织项目中当前有效 contact revision 的 contact-target link。同一 contact 的多个 link 分别计数，contributor 是 contact 的可信 `app_user_id`。
+草稿、接触尝试、作废接触、旧 revision、其他项目和 cutoff 之外的事实在候选集之前排除。问卷答案、reach count 和推广对象资料不能形成统计单位。
+
+`yes` 是分子，`yes + no` 是分母。`unknown` 计入 unanswered，`refused` 与 `not_applicable` 作为独立 coverage cell，`unknown_count` 与 `excluded_count` 固定为零。
+每个期间的 yes、no 和每个 coverage cell 都独立执行 `N >= 10`、至少三位 contributor、贡献者不超过该 cell 总数一半。
+只有 yes/no 都通过保护时，候选才返回 numerator、denominator 和 half-up basis points。任一类不安全时，ratio 为 `suppressed`，所有 ratio 数值为 `null`。
+两个期间独立保护，不返回趋势或差值。未配置或停用时，在读取 link 前返回 `not_enabled`，不返回 report、ratio 或 coverage。
+`not_enabled` 表示没有当前 opt-in；`suppressed` 表示已启用但该值没有通过保护。两者都不表示零。
+
+### 从零开始运行 Docker
+
+没有用过 Docker 时，先安装并打开 Docker Desktop。等待 Docker Engine 运行，再从仓库根目录执行：
+
+```bash
+docker version
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 会在源库建立专用 closed role，自动发现 0074 migration、structural check、rollback fixture 和并发脚本，并运行 checksum 检查。
+dump／restore 阶段通过 `pg_restore` 重建独立恢复库，再重跑 check 和 fixture；恢复库不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。
+
+### 只调试 6BP
+
+并发脚本会提交 synthetic 行。先确认 `DATABASE_URL` 指向专用测试库，再运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_follow_up_consent_ratio.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0074_management_follow_up_consent_ratio.sql
+./tool/verify_management_follow_up_consent_ratio_concurrency.sh
+```
+
+check 验证 private function、`SECURITY DEFINER`、固定 search path、专用 role、列级 ACL 和无 `PUBLIC` execute。
+fixture 验证统计单位、排除边界、yes/no 成对保护、coverage 独立保护、`not_enabled`／`suppressed` 和 value-free 输出。
+并发脚本验证 candidate 与 disable、capability revoke、membership revoke、project archive 的锁线性化。
+
+这些检查只证明 synthetic PostgreSQL 的 private candidate、隐私门槛、并发、ACL 和 restore 合同。它们不证明 snapshot、release、authorized read、runtime、HTTP、Backend、Flutter、
+Drift、UI、目录、导出、缓存、离线、生产身份或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时，也不构成形式化不可重识别保证。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和

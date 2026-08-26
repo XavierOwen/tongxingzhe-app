@@ -908,6 +908,53 @@ check 观察 migration、函数和 ACL 结构。fixture 调用正式函数并验
 这组证据只证明 synthetic PostgreSQL 的 opt-in 配置合同。它不证明后续联系同意比例已经计算，不证明报告隐私抑制、runtime、HTTP、Flutter、缓存、离线、
 删除、retention、生产身份或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。
 
+### 6BP：验证组织项目后续联系同意占比候选
+
+6BP 的 0074 migration 生成 private release-candidate。它只供未来 release workflow 使用，不生成 snapshot 或正式报告。
+候选固定 `contact_target_follow_up_consent_ratio_two_periods@1`、`follow_up_consent_ratio@1` 和 `contact_target_link`。
+候选使用两个相邻且已经结束的完整 ISO 周。数据库在读取 link 前重新确认组织／项目 membership、项目状态、`release_management_reports` capability 和 6BO opt-in。
+
+`yes` 是分子，`yes + no` 是分母。`unknown` 计入 unanswered，`refused` 与 `not_applicable` 是独立 coverage cell。
+yes、no 和每个 coverage cell 都必须满足 `N >= 10`、至少三位 contributor、贡献者不超过该 cell 总数一半。
+只有 yes/no 都通过保护时才返回比例数值。任何未通过保护的值都返回 `suppressed` 和 `null`。未配置或停用时，executor 在读取 link 前返回 `not_enabled`，不返回 report、ratio 或 coverage。
+`not_enabled` 表示没有当前 opt-in；`suppressed` 表示已启用但该值没有通过保护。两者都不表示零。
+
+#### 第一次运行 Docker
+
+1. 打开 Docker Desktop，等待 Docker Engine 显示正在运行。
+2. 从仓库根目录确认 Docker：
+   ```bash
+   docker version
+   ```
+3. 运行完整 PostgreSQL 套件：
+   ```bash
+   ./tool/run_postgres_tests_in_docker.sh
+   ```
+4. 确认输出包含 0074 migration、6BP check、6BP fixture、6BP concurrency、checksum、restore check 和 restore fixture，并确认退出码为 `0`。
+
+runner 会在源库建立专用 closed role，再运行 migration、structural check、rollback fixture、并发脚本和 checksum 检查。dump／restore 阶段先准备独立 cluster roles，
+再用 `pg_restore` 重建恢复库，并只重跑 check 和 fixture。恢复库不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本；同一 PostgreSQL cluster 的已有角色不能替代这项恢复验证。
+
+#### 只调试 6BP
+
+并发脚本会提交 synthetic 行。先确认 `DATABASE_URL` 指向专用测试库，不要指向 production。运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_follow_up_consent_ratio.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0074_management_follow_up_consent_ratio.sql
+./tool/verify_management_follow_up_consent_ratio_concurrency.sh
+```
+
+check 验证 contract、`SECURITY DEFINER`、固定 search path、专用 role 和最小 ACL。fixture 验证统计单位、候选集排除、yes/no 成对保护、coverage 独立保护、`not_enabled`／`suppressed` 和 value-free 输出。
+并发脚本验证 candidate 与 disable、capability revoke、membership revoke、project archive 的锁线性化。
+
+这些命令只证明 synthetic PostgreSQL 的 private candidate 合同。它们不证明 snapshot、release、authorized read、runtime、HTTP、Backend、Flutter、Drift、UI、导出、缓存、离线、生产身份或
+Android、iOS、macOS、Windows、Linux、Web 真人平台运行时，也不构成形式化不可重识别保证。
+
 ### 6BF：理解管理报告删除与保留边界
 
 6BF 是产品和测试合同，不是数据库清理功能。没有用过 Docker 的读者先记住：Docker runner 会在一次性容器中验证当前仓库已有的 PostgreSQL 行为。

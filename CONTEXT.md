@@ -798,6 +798,17 @@ _Avoid_: 复用 0067 渠道关系、按目录排序猜测 latest、静默改写�
 这是 DB-only 配置合同，不是比例候选、报告、runtime、HTTP、Flutter、统计或披露安全证据。
 _Avoid_: 复用个人 opt-in 表、用查看 capability 写配置、用配置时间截断数据、读取 contact-target link、把配置通过 UI 隐藏当成授权
 
+**组织项目后续联系同意占比候选**:
+6BP 在组织项目明确启用后，按固定的 `contact_target_follow_up_consent_ratio_two_periods@1`
+生成一份 private release-candidate。它只使用两个相邻且已经结束的完整 ISO 周、项目报告时区和数据库截止时间，
+统计单位是当前有效 contact revision 的 contact-target link；同一 contact 的多个 link 分别计数，贡献者是 contact 的可信 `app_user_id`。
+`yes` 是分子，`yes + no` 是分母；`unknown` 作为 unanswered，`refused` 与 `not_applicable` 作为独立 coverage cell。
+候选在 `release_management_reports` capability、membership、项目状态和 6BO opt-in 重新确认后运行。
+`yes` 与 `no` 必须分别满足 `N >= 10`、至少三位贡献者和贡献者不超过总数一半，二者都通过才返回比例数值；
+coverage cell 也独立执行同一保护。未启用返回 `not_enabled`，已启用但不满足披露条件返回 `suppressed`，两者都不表示零。
+这是 private PostgreSQL DB-only 候选，不是 snapshot、发布报告、授权读取、runtime、HTTP、客户端结果或生产证据。
+_Avoid_: 把候选当成正式报告、把 suppressed 当成零、用总数相减恢复隐藏值、把 Docker synthetic 通过写成生产或真人平台证据
+
 **管理报告清除**:
 组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
 _Avoid_: 授权撤回、报告到期、tombstone、superseded

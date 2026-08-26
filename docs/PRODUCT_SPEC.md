@@ -1258,6 +1258,27 @@ parent／overlap 查询、warehouse 或真人平台验收。跨版本或分析�
 contact-target link，不生成比例候选，不增加 runtime bridge、HTTP、Flutter、报告、目录、导出、缓存、离线或 UI。它只提供 synthetic PostgreSQL DB-only
 合同，不能证明比例数学或披露风险控制已经完成。
 
+#### Slice 6BP：固定组织项目后续联系同意占比 private release-candidate
+
+6BP 在组织项目当前 opt-in 为 enabled 时生成固定的
+`contact_target_follow_up_consent_ratio_two_periods@1` private release-candidate。它使用
+`follow_up_consent_ratio@1`、`contact_target_link` 统计单位、两个相邻且已经结束的完整 ISO 周、项目报告时区和数据库拥有的 cutoff。
+配置记录时间不裁切统计期间。调用方只能提供可信内部 actor、显式项目、可信报告时区和数据库 cutoff；数据库在授权锁和项目锁后重新确认活动账号、
+组织／项目 membership、项目状态、`release_management_reports` capability 和 6BO 当前 opt-in。`view_anonymous_analytics` 不能执行候选或修改配置。
+
+候选只读取目标组织项目中当前有效 contact revision 的 contact-target link。同一 contact 的多个 link 分别计数，contributor 固定为 contact 的可信
+`app_user_id`。草稿、接触尝试、作废接触、旧 revision、其他项目和 cutoff 之外的事实在候选集之前排除；问卷答案、reach count 和推广对象资料不能形成统计单位。
+`yes` 是分子，`yes + no` 是分母；`unknown` 映射为 unanswered，`refused` 与 `not_applicable` 分别作为 coverage cell，`unknown_count` 与 `excluded_count` 固定为零。
+
+每个期间的 `yes` 与 `no` 各自执行 `N >= 10`、至少三位不同 contributor 和 `2 * M <= N`。只有两类都通过保护时才返回 numerator、denominator 和
+half-up basis points；任一类不安全时，ratio 为 `suppressed`，所有 ratio 数值为 `null`。unanswered、refused 和 not_applicable 各自执行同样的三项保护，
+隐藏值为 `null`，不返回可从 ratio、coverage 或总数相减恢复的 contact-target-link 总量。两个期间独立保护，不返回趋势或差值。
+
+未配置或停用时，executor 在读取 contact-target link 前返回 `not_enabled`，不返回 report、ratio 或 coverage。`not_enabled` 不表示零、空样本、样本不足或授权错误。
+已启用但不满足保护时返回 `suppressed`，不把隐藏值解释为零。候选输出只含固定定义、项目、期间、状态和已经保护的数值，不含 contact、target、contributor、
+membership、capability provenance、地点、原始回答、隐藏前值或 PII。6BP 是 PostgreSQL DB-only 合同，不增加 snapshot、release lineage、authorized read、
+runtime、HTTP、Backend、Flutter、Drift、UI、目录、导出、缓存、离线、同步、删除、retention、warehouse 或真人平台证据；它不修改个人 0048／0049 合同。
+
 #### 5.8.2 时间、趋势、版本与因果边界
 
 | ID | 需求 |
@@ -1312,6 +1333,7 @@ contact-target link，不生成比例候选，不增加 runtime bridge、HTTP、
 | `ANALYTICS-048` | 6BM 只在用户明确选择 original-region report family 后，使用当前已重新授权的 `ManagementAnalysisContext.projectId` 读取目录；默认 channel 视图不调用 original gateway。consumer 不使用个人项目，不自动打开首项，只读取用户明确选择的当前目录 summary，不排序、聚合、重新归类或计算总计、比例、差值和趋势；项目／family 切换、返回目录、重试和 dispose 会隔离迟到响应。 |
 | `ANALYTICS-049` | 6BN 只登记两份已经通过 6BG 的 original-region approved snapshot 之间的直接 replacement。两份快照必须同 project、report／version、query fingerprint、privacy、source scope、报告时区 revision、期间、release lineage 和精确 source-tree tuple；新快照的 `data_cutoff_utc` 与发布时间必须更晚。关系在共享 value-free request UUID ledger 中使用独立 replacement family claim，并使用 original-region 专用 provenance；release 与 replacement 共享 request lock，同一 UUID 双向互斥。关系追加不可变，支持 value-free `active`／`superseded` 生命周期查询、精确幂等和锁后授权复核；不生成 snapshot，不复用 6BE 渠道关系。 |
 | `ANALYTICS-050` | 6BO 只为组织项目保存 `follow_up_consent_ratio@1` 的当前 opt-in。配置必须独立于个人 0048 表，使用组织／项目 membership 和 `release_management_reports` capability 重新授权，并采用追加式版本、预期版本、request UUID、锁后复核和 current-switch 语义；配置时间不裁切统计期间。6BO 不实现比例候选或报告读取。 |
+| `ANALYTICS-051` | 6BP 只生成组织项目 `contact_target_follow_up_consent_ratio_two_periods@1` private release-candidate。它固定 `follow_up_consent_ratio@1`、`contact_target_link`、两个相邻已结束完整 ISO 周、项目报告时区、数据库 cutoff、当前有效 contact revision 和组织项目 opt-in；`yes`／`no` 是比例二元类别，`unknown`／`refused`／`not_applicable` 作为 coverage。候选在锁后重新确认 `release_management_reports`、membership、项目状态和 6BO；两个期间独立保护，不返回趋势或差值。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -1359,6 +1381,7 @@ contact-target link，不生成比例候选，不增加 runtime bridge、HTTP、
 | `PRIVACY-040` | 6BM 只渲染 6BL typed 元数据、source-tree context、城市 ID 和服务端已保护的完整城市格。`displayed` 显示安全整数，`suppressed` 只显示“已隐藏 / Hidden”，不得显示为零或读取隐藏前值。UI 不显示城市名称、边界、坐标、来源记录、贡献者、contact 或 PII；panel 状态只留在内存，不写 Drift、缓存、离线存储、同步队列或导出。 |
 | `PRIVACY-041` | 6BN 的 original-region replacement 只接受同一 project、report／version、query／privacy／source scope、报告时区 revision、期间、lineage 和 source-tree tuple 的已批准快照。旧新快照和关系均不可改删；失败尝试不写关系或报告值。生命周期结果只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID；allowlisted reason 只留在私有关系／audit 合同，不返回 protected report、cells、隐藏前值、来源、贡献者、地点或 PII。`PUBLIC`、runtime、普通 app role、reader 和其他 report-family writer 不能访问该私有合同。 |
 | `PRIVACY-042` | 6BO 的组织 opt-in 只保存配置和授权 provenance。private contract 及其 value-free 结果不得读取或返回比例、报告格、contact、推广对象、贡献者、地点或 PII；`PUBLIC`、runtime、普通 app role、个人 opt-in 合同和 report reader 不能直接访问组织配置表。该配置不构成统计或披露安全证据。 |
+| `PRIVACY-043` | 6BP 的 `yes` 与 `no` cell 必须分别满足 `N >= 10`、至少三位 contributor 和 `2 * M <= N`；只有两类都安全才返回 ratio 数值，否则 ratio 状态为 `suppressed` 且所有 ratio 数值为 `null`。unanswered、refused、not_applicable coverage 各自独立执行同一保护，隐藏值为 `null`，不返回可用于相减的总 contact-target-link 数。未启用或停用在读取 source link 前返回 `not_enabled`，不返回 report、ratio 或 coverage；`not_enabled` 与 `suppressed` 都不能解释为零。private contract 使用专用 closed role 和最小 ACL，不返回 contact、target、contributor、授权 provenance、原始回答、隐藏前值或 PII。该 synthetic DB-only 证据不构成形式化不可重识别保证。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
 
@@ -1400,6 +1423,7 @@ contact-target link，不生成比例候选，不增加 runtime bridge、HTTP、
 | `MANUAL-032` | 学习文档必须用零基础读者可以复制的步骤说明 6BM 的四个互斥 report family、显式 original-region 选择、`ManagementAnalysisContext` 项目来源、目录／详情状态、source-tree context、displayed／suppressed 语义、迟到响应隔离、composition 生命周期，以及 focused Widget／ViewModel／browser／app 测试命令。必须说明 Flutter 模拟测试不证明 Backend／DB 授权、真实身份、离线、导出或真人平台。 |
 | `MANUAL-033` | 学习文档必须用零基础读者可以复制的步骤说明 6BN 的独立 original-region provenance、同一 source-tree tuple、replacement 原因 allowlist、active／superseded 生命周期、value-free 输出、锁后授权、幂等、并发、不可变 ACL、Docker migration／check／fixture／concurrency／dump／restore 命令和证据边界。必须明确 6BN 不生成 snapshot，不扩展到其他 report family，不处理分析定义／跨版本更正、删除、retention、runtime、HTTP、Flutter、导出、缓存、离线或真人平台。 |
 | `MANUAL-034` | 学习文档必须用零基础读者可以复制的步骤说明 6BO 的组织项目范围、个人 0048 配置隔离、`release_management_reports` caller、membership／capability 重新授权、锁后复核、追加式版本、精确幂等、value-free 结果、Docker migration／check／fixture／concurrency／dump／restore 命令和证据边界。必须明确 6BO 不实现比例候选、报告、runtime、HTTP、Flutter、统计或披露安全证据。 |
+| `MANUAL-035` | 学习文档必须用零基础读者可以复制的步骤说明 6BP 的 0074 private release-candidate、专用 closed role、`release_management_reports` 重新授权、两个相邻完整 ISO 周、contact-target-link 统计单位、yes/no 成对保护、coverage 独立保护、`not_enabled`／`suppressed` 分离、无敏感输出、structural check、rollback fixture、disable／archive／revoke 并发、restore role、checksum、dump／restore 和专用测试库命令。文档必须说明完整 Docker runner 通过 `pg_restore` 重建恢复库，再重跑 check／fixture；恢复库不重新执行 migration，也不重跑提交 synthetic 行的并发脚本。文档必须明确这些 DB-only synthetic 证据不证明 snapshot、release、authorized read、runtime、HTTP、Backend、Flutter、生产身份或真人平台。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -1621,6 +1645,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-042` | 6BM ViewModel／Widget／browser／composition 测试覆盖四个互斥 report family、channel 默认、original-region 明确启用、`ManagementAnalysisContext` project 来源、空目录、显式 summary、source-tree context、完整城市格、displayed／suppressed、分阶段 retry、项目／family／返回／dispose 的迟到响应隔离、稳定错误、heading／live region、320×568、200% 字号、键盘／焦点恢复以及 gateway 构造／传递／关闭。通过只证明 Flutter consumer 与可访问性模拟路径，不声称 Backend／DB 授权、离线、导出或真人运行时。 |
 | `TEST-043` | 6BN 的 0072 structural check／rollback fixture／并发测试覆盖合法同项目 original-region 快照、共享 request UUID ledger 中的独立 replacement family claim、release／replacement UUID 双向互斥、专用 provenance、同 source-tree tuple、后续 cutoff／发布时间、原因 allowlist、active／superseded 查询、同 request 精确幂等、载荷漂移、跨项目／跨 family／legacy／blocked／drift、same／earlier cutoff、倒序、自链接、分叉、循环、stale head、旧快照字节不变、value-free 结果、锁后授权撤回、最小 ACL、checksum 和 dump／restore。通过只证明 synthetic DB-only replacement ledger，不声称新快照生成、其他 report family、分析定义／跨版本更正、runtime、HTTP、Flutter、目录、导出、删除、retention、生产身份或真人平台证据。 |
 | `TEST-044` | 6BO 的 0073 structural check／rollback fixture／并发测试覆盖组织项目与个人项目隔离、`release_management_reports` caller、membership／capability 重新授权、启用／停用、追加式版本、精确幂等、payload 漂移、过期版本、撤权锁顺序、并发双写、直接 UPDATE／DELETE、value-free 输出、无 contact／report 读取、最小 ACL、checksum 和 dump／restore。通过只证明 synthetic DB-only 配置合同，不声称比例候选、报告、runtime、HTTP、Flutter、统计或披露安全证据。 |
+| `TEST-045` | 6BP 的 0074 structural check、rollback fixture 和并发测试必须覆盖 contract／allowlist、专用 closed role、owner、`SECURITY DEFINER`、固定 search path、列级 ACL、无 `PUBLIC` execute、yes/no 边界 `N=10`／三位／`M=5/10` 与 `N=9`／两位／`M=6/10`、单类不安全、分母为零、coverage 独立保护、两个期间独立隐藏、not_enabled／suppressed、候选集排除、value-free 输出、personal／unknown／cross-project／archive／revoke／disable 负例、左右半开边界、checksum、dump／restore 和 restore role。并发必须覆盖 candidate-first 与 disable／capability revoke／membership revoke／project archive-first；通过只证明 synthetic PostgreSQL DB-only candidate contract。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -1834,6 +1859,14 @@ composition、Backend／DB 行为、Drift、缓存、离线、导出、生产身
 数据库测试固定。项目归档与 configure 共享 project lock，保证 archive↔configure 线性化；0030 resolver 不替代该归档锁。6BO 不读取 contact-target link，
 不生成比例候选，不增加报告、runtime、HTTP、Flutter、目录、导出、缓存、离线或 UI。只有 0073 migration、check、fixture、并发、checksum 和 dump／restore 在
 synthetic PostgreSQL 中通过后，才能报告该配置 DB-only 合同成立；这些证据不代表比例数学或披露风险控制完成。
+
+6BP（#217）在 6BO enabled 后生成组织项目 `contact_target_follow_up_consent_ratio_two_periods@1` private release-candidate。
+它固定 `follow_up_consent_ratio@1`、`contact_target_link`、两个相邻已结束完整 ISO 周、项目报告时区和数据库 cutoff；当前有效 contact revision 是唯一事实范围，
+同一 contact 的多个 link 分别计数，`yes`／`no` 组成比例，`unknown`／`refused`／`not_applicable` 是独立 coverage。`yes` 和 `no` 分别执行 `N >= 10`、三位 contributor、
+半数上限，二者都安全才返回比例数值；coverage 独立保护，两个期间独立，不返回趋势或差值。未启用或停用在读 source link 前返回 `not_enabled`，启用但不安全返回
+`suppressed`，两者均不表示零。候选由 `release_management_reports` 和专用 closed role 保护，只提供 value-free／protected private 结果。
+只有 0074 migration、check、fixture、并发、checksum 和 dump／restore 在 synthetic PostgreSQL 中通过后，才能报告该 DB-only 合同成立；这些证据不代表
+snapshot、release、authorized read、runtime、HTTP、Backend、Flutter、生产身份或真人平台证据。
 
 ### Slice 7：组织治理与数据可携带性
 
