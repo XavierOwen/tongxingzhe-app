@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_strings.dart';
 import '../../management_reports/current_city_report_gateway.dart';
+import '../../management_reports/follow_up_consent_ratio_report_gateway.dart';
 import '../../management_reports/interest_report_gateway.dart';
 import '../../management_reports/management_report_export_delivery.dart';
 import '../../management_reports/management_report_gateway.dart';
@@ -11,11 +12,18 @@ import '../../management_reports/original_region_report_gateway.dart';
 import '../contact_entry/contact_channel_label.dart';
 import '../contact_journal/contact_models.dart';
 import 'current_city_report_panel.dart';
+import 'follow_up_consent_ratio_report_panel.dart';
 import 'interest_report_panel.dart';
 import 'management_report_browser_view_model.dart';
 import 'original_region_report_panel.dart';
 
-enum _ManagementReportFamily { channel, currentCity, interest, originalRegion }
+enum _ManagementReportFamily {
+  channel,
+  currentCity,
+  interest,
+  originalRegion,
+  followUpConsentRatio,
+}
 
 final class ManagementReportBrowser extends StatefulWidget {
   const ManagementReportBrowser({
@@ -23,6 +31,7 @@ final class ManagementReportBrowser extends StatefulWidget {
     required this.text,
     required this.gateway,
     required this.currentCityGateway,
+    required this.followUpConsentRatioGateway,
     required this.interestGateway,
     required this.originalRegionGateway,
     required this.exportDelivery,
@@ -31,6 +40,7 @@ final class ManagementReportBrowser extends StatefulWidget {
   final AppStrings text;
   final ManagementReportGateway gateway;
   final CurrentCityReportGateway currentCityGateway;
+  final FollowUpConsentRatioReportGateway followUpConsentRatioGateway;
   final InterestReportGateway interestGateway;
   final OriginalRegionReportGateway originalRegionGateway;
   final ManagementReportExportDelivery exportDelivery;
@@ -66,6 +76,8 @@ final class _ManagementReportBrowserState
     super.didUpdateWidget(oldWidget);
     if (oldWidget.gateway == widget.gateway &&
         oldWidget.currentCityGateway == widget.currentCityGateway &&
+        oldWidget.followUpConsentRatioGateway ==
+            widget.followUpConsentRatioGateway &&
         oldWidget.interestGateway == widget.interestGateway &&
         oldWidget.originalRegionGateway == widget.originalRegionGateway &&
         oldWidget.exportDelivery == widget.exportDelivery) {
@@ -116,8 +128,14 @@ final class _ManagementReportBrowserState
     final showOriginalRegionPanel =
         _reportFamily == _ManagementReportFamily.originalRegion &&
         state.currentContext != null;
+    final showFollowUpConsentRatioPanel =
+        _reportFamily == _ManagementReportFamily.followUpConsentRatio &&
+        state.currentContext != null;
     final showAlternatePanel =
-        showCurrentCityPanel || showInterestPanel || showOriginalRegionPanel;
+        showCurrentCityPanel ||
+        showInterestPanel ||
+        showOriginalRegionPanel ||
+        showFollowUpConsentRatioPanel;
     return ListView(
       key: const ValueKey('management-report-browser'),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
@@ -206,6 +224,15 @@ final class _ManagementReportBrowserState
             ),
             text: text,
             gateway: widget.originalRegionGateway,
+            projectId: state.currentContext!.projectId,
+          )
+        else if (showFollowUpConsentRatioPanel)
+          FollowUpConsentRatioReportPanel(
+            key: ValueKey(
+              'follow-up-consent-ratio-report/${state.currentContext!.projectId}',
+            ),
+            text: text,
+            gateway: widget.followUpConsentRatioGateway,
             projectId: state.currentContext!.projectId,
           )
         else if (state.stage == ManagementReportBrowserStage.directory)
@@ -376,6 +403,23 @@ final class _ReportTypePicker extends StatelessWidget {
             selected: family == _ManagementReportFamily.originalRegion,
             onSelected: enabled
                 ? (_) => onSelected(_ManagementReportFamily.originalRegion)
+                : null,
+          ),
+          ChoiceChip(
+            key: const ValueKey(
+              'management-follow-up-consent-ratio-report-view',
+            ),
+            label: Text(
+              text.t('managementReportFollowUpConsentRatioView'),
+              softWrap: true,
+              maxLines: 2,
+              overflow: TextOverflow.visible,
+              textAlign: TextAlign.center,
+            ),
+            selected: family == _ManagementReportFamily.followUpConsentRatio,
+            onSelected: enabled
+                ? (_) =>
+                      onSelected(_ManagementReportFamily.followUpConsentRatio)
                 : null,
           ),
         ],

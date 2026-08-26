@@ -369,6 +369,7 @@ const Map<String, Map<String, String>> _strings = {
     'managementReportCurrentCityView': '当前城市',
     'managementReportInterestView': '兴趣分布',
     'managementReportOriginalRegionView': '原始区域',
+    'managementReportFollowUpConsentRatioView': '后续联系同意占比',
     'interestReportTitle': '兴趣分布报告',
     'interestReportIntro': '选择已发布的两期兴趣分布报告。只显示服务端已保护的结果。',
     'interestReportDirectoryTitle': '兴趣报告快照目录',
@@ -1519,6 +1520,7 @@ const Map<String, Map<String, String>> _strings = {
     'managementReportCurrentCityView': 'Current city',
     'managementReportInterestView': 'Interest distribution',
     'managementReportOriginalRegionView': 'Original region',
+    'managementReportFollowUpConsentRatioView': 'Follow-up consent ratio',
     'interestReportTitle': 'Interest distribution reports',
     'interestReportIntro':
         'Choose a published interest distribution report with two periods. The service protects the values shown here.',
