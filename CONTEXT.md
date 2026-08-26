@@ -871,6 +871,16 @@ consent-ratio family 的 `approved_baseline`／`approved` exact provenance，跨
 本地 Docker、结构检查、可回滚 fixture、授权／撤权并发、checksum 和 dump／restore 只提供 synthetic PostgreSQL 证据，不能替代前序 transport 证据、生产或真人平台证据。
 _Avoid_: 用超长函数名造成 identifier 截断、把目录第一项当 latest、复用其他 report family provenance、把审计写入 snapshot ID、让 runtime 直接执行 private function、把 synthetic 通过写成运行时证据
 
+**组织项目后续联系同意占比快照目录 runtime bridge**:
+6BV 在 6BU 的 private directory 之上增加 0079 `app_data` exact-identity bridge。Backend 先验证 external identity，再把原始 `issuer + subject`、显式 project UUID 交给 bridge；bridge 只映射已有且 active 的 identity，不 trim、不 bootstrap、不创建 identity，也不接受内部用户、capability、筛选或 SQL。
+
+0079 只调用 0078 的 `app_private.list_authorized_management_follow_up_consent_snapshots_v1(uuid, uuid)`。`tongxingzhe_runtime` 只有 bridge `EXECUTE`，不能使用 `app_private` schema 或直接读取 identity、snapshot、attempt、claim、directory 或 audit 表。bridge 使用 `SECURITY DEFINER`、`VOLATILE` 和固定 `search_path = pg_catalog`，owner 与 0078 private function 对齐。
+
+Backend 使用独立的 consent-ratio directory store，只执行一条固定参数化 SQL。strict parser 只接受 0078 的四项 root envelope 和六项 metadata item，检查 exact keys、project 绑定、UUID、UTC 时间、最多 20 项、无重复和固定排序；额外字段、错误 contract、非 consent-ratio report、无效 UUID 或时间均失败关闭。只有 SQLSTATE `42501` 映射为 typed `forbidden`，其他数据库或解析错误保持 unavailable。
+
+6BV 不增加 HTTP route、认证顺序、wire error mapping、Flutter、Drift、UI、缓存、离线、导出、分页、筛选、current／latest 选择或生产身份／真人平台验收。0078 继续负责目录授权、provenance、撤权锁和 value-free audit；6BV 的 synthetic PostgreSQL 与 Backend integration 证据只证明 bridge、adapter、parser 和 ACL 合同。
+_Avoid_: 让 runtime 直接调用 0078 private function、trim external identity、复用 6BS snapshot reader、在 Backend 重算或筛选目录、把 DB／Backend synthetic 通过写成 HTTP 或生产身份证据
+
 **管理报告清除**:
 组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
 _Avoid_: 授权撤回、报告到期、tombstone、superseded

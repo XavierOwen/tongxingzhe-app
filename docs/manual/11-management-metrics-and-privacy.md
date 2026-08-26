@@ -2791,6 +2791,63 @@ fixture 使用 rollback transaction；并发脚本使用独立 committed namespa
 目录、固定排序、锁、ACL、value-free audit、checksum 和 restore 合同。它不证明 runtime identity、Backend、HTTP、Flutter、部署服务、production data、缓存、离线或
 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。前序 6BS／6BT 已定义 runtime、Backend 和 HTTP；6BU 不修改这些边界。
 
+## Slice 6BV：通过 exact identity bridge 读取后续联系同意占比快照目录
+
+6BV 在 6BU 的 SQL-only directory 之上增加 0079 `app_data` bridge。Backend 先验证 external identity，再把 exact `issuer + subject` 和显式 project UUID 交给 bridge。
+bridge 只映射已有且 active 的 identity，不 trim、不 bootstrap、不创建 identity，也不接受内部用户 ID、capability、时区、截止点、筛选或 SQL。它只调用：
+
+```text
+app_private.list_authorized_management_follow_up_consent_snapshots_v1(uuid, uuid)
+```
+
+bridge 使用 `SECURITY DEFINER`、`VOLATILE` 和固定 `search_path = pg_catalog`。`tongxingzhe_runtime` 只有 bridge `EXECUTE`，不能使用 `app_private` schema，也不能直接
+读取 identity、snapshot、attempt、claim、directory 或 audit 表。0078 继续负责 active user、组织／项目 membership、active project、`view_anonymous_analytics`、
+0075 exact provenance、撤权锁、固定排序和 value-free audit。
+
+Backend 为目录使用独立 store。store 只执行一次固定参数化 SQL：
+
+```sql
+SELECT app_data.list_authorized_management_follow_up_consent_snapshots_v1(
+  $1::text, $2::text, $3::uuid
+) AS directory_result
+```
+
+strict parser 只接受四项 root envelope：`access_contract_id`、`access_event_id`、`project_id` 和 `snapshots`。每个 item 只接受六项 metadata：`snapshot_id`、
+`report_id`、`report_version`、`reporting_time_zone`、`data_cutoff_utc` 和 `released_at_utc`。parser 检查 exact keys、consent-ratio report ID、project 绑定、合法
+UUID、规范 UTC 时间、最多 20 项、无重复和 `data_cutoff_utc`／`released_at_utc`／`snapshot_id` 固定降序。额外字段、缺失字段、错误 contract、非 consent-ratio report、
+无效值和乱序结果失败关闭。只有 SQLSTATE `42501` 映射为 typed `forbidden`，其他 SQLSTATE、数据库错误和 parser 错误保持 unavailable。
+
+### 如何验证 6BV
+
+第一次使用 Docker 时，先启动 Docker Desktop，再从仓库根目录运行：
+
+```bash
+docker version
+./tool/run_postgres_tests_in_docker.sh
+```
+
+完整 runner 自动发现 0079 migration、structural check 和 rollback fixture，运行 6BV Backend integration，继续运行 0078 directory／revoke concurrency，并执行
+checksum 和独立 dump／restore。恢复阶段先准备缺失的 PostgreSQL roles，再重跑 check 和 fixture；不重跑会提交 synthetic 行的并发脚本。
+
+如果只调试 6BV，先确认 `DATABASE_URL` 指向可丢弃测试库：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_runtime_authorized_management_follow_up_consent_ratio_snapshot_directory.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0079_runtime_authorized_management_follow_up_consent_ratio_snapshot_directory.sql
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+cd ../..
+```
+
+这些测试证明 exact identity、0078 delegation、固定目录 envelope、strict parser、最小 ACL 和 `42501` 映射。它们不证明 HTTP、Flutter、Drift、导出、缓存、离线、生产
+身份、部署服务或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。6BV 不增加 HTTP route、客户端消费、分页、筛选或 current／latest 语义。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和
