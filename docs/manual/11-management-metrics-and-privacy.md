@@ -2610,6 +2610,48 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 fixture 会回滚；并发脚本使用独立 namespace 并提交 synthetic 行。恢复库只重跑 check 和 fixture，不重新执行 migration，也不重跑并发脚本。通过这些测试只证明 synthetic PostgreSQL 的授权、provenance、validator、audit、撤权锁和 restore 合同，不证明 runtime、HTTP、Backend、目录、Flutter、导出、生产身份或真人平台已经验收。
 
+## Slice 6BS：用 exact identity 接入同意占比快照读取
+
+6BS 不改变 6BR 的授权或报告合同。它只把 Backend 已验证的 external identity 映射为现有 active 用户，再用显式 project 和 snapshot UUID 调用 0076 private reader。`issuer + subject` 必须精确匹配；trim 不能把不同身份变成相同身份，unknown 或 inactive identity 失败关闭，bridge 不创建账号或个人上下文。
+
+runtime 只拥有 0077 bridge 的 `EXECUTE`。它不能使用 `app_private`、执行 0076 reader，或读取用户、identity、snapshot、attempt、claim 和 audit 表。0076 仍负责 `view_anonymous_analytics`、0075 provenance、6BQ validator、撤权锁和每次已授权调用的 value-free audit。
+
+Backend store 只执行一次固定四参数 SQL。strict parser 必须核对 access envelope、project／snapshot、固定 17-key report、相邻完整期间、两个 period result、ratio、三项 coverage、连续顺序和安全整数。`suppressed` 的 ratio／coverage 数值必须保持 JSON `null`。其他 report family、额外字段、contact、target、contributor、source、PII 或隐藏前值会使解析失败。
+
+### 从零开始验证 6BS
+
+先打开 Docker Desktop。在仓库根目录确认 Docker 可用：
+
+```bash
+docker version
+```
+
+再运行 Backend 合同测试和完整数据库套件：
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+cd ../..
+./tool/run_postgres_tests_in_docker.sh
+```
+
+Backend 测试验证固定 SQL、strict parser 和 typed `42501`。Docker runner 自动发现 0077 migration、check 和 fixture，显式运行真实 PostgreSQL integration，并继续执行 0076 read／revoke 并发、checksum 和 dump／restore。
+
+只调试可丢弃测试库时运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_runtime_authorized_management_follow_up_consent_ratio_snapshot_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0077_runtime_authorized_management_follow_up_consent_ratio_snapshot_read.sql
+```
+
+0077 fixture 使用 rollback namespace。0076 并发脚本使用另一组 committed namespace。恢复库只重跑 check 和 fixture，不重新执行 migration，也不重跑并发脚本。通过这些测试只证明 synthetic exact-identity bridge 和 Backend adapter；它不证明 HTTP、Flutter、生产身份、真实账号或真人平台已经验收。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和

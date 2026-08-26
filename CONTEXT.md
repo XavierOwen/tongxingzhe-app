@@ -826,6 +826,15 @@ _Avoid_: 把 candidate 当 snapshot、跨 report family 借用 provenance、保�
 这是 private PostgreSQL DB-only 读取合同，不是 runtime identity bridge、HTTP、Backend、客户端、目录、导出、replacement、删除、retention 或生产证据。
 _Avoid_: 用发布能力代替查看能力、跨 report family 借用 provenance、把 `not_found` 与未授权混为一谈、返回 untrusted 正文、把 private function 直接开放给 runtime
 
+**组织项目后续联系同意占比快照 runtime bridge**:
+6BS 用 Backend 已验证的 exact external `issuer + subject`、显式 project 和 snapshot UUID 调用 6BR private reader。
+bridge 只映射既有 active identity，不 trim、不 bootstrap，也不接受内部用户、capability、时区、截止点、筛选或 SQL。
+runtime 只有 bridge `EXECUTE`，不能使用 `app_private` 或读取 identity、用户、snapshot、provenance 和 audit 表。
+Backend adapter 只执行一次固定 SQL，并严格解析 6BR envelope、同意占比报告、两个期间、ratio、coverage 和 `suppressed = null`。
+授权、0075 provenance、6BQ validator、撤权锁和 value-free audit 仍由 6BR 负责。
+这是 synthetic PostgreSQL 与 Backend adapter 合同，不是 HTTP、目录、Flutter、导出、生产身份或真人平台证据。
+_Avoid_: trim identity、runtime 直接进入 private schema、复用其他报告 parser、在 adapter 重算比例、把 Docker integration 当生产身份或 HTTP 证据
+
 **管理报告清除**:
 组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
 _Avoid_: 授权撤回、报告到期、tombstone、superseded

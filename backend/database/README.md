@@ -127,6 +127,25 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 fixture 使用 `6b76*` rollback namespace；并发脚本使用独立 `6b76c*` committed namespace。完整通过只证明 synthetic PostgreSQL 的授权、provenance、validator、value-free audit、撤权锁、checksum、restore 和 ACL 合同，不证明 runtime、HTTP、Backend、目录、Flutter、导出、生产身份或真人平台运行时。
 
+## 6BS：后续联系同意占比快照 runtime bridge 边界
+
+0077 在 0076 private reader 之上增加一个窄 `app_data` bridge。函数只接受 Backend 已验证的 exact external `issuer + subject`、显式 project 和 snapshot UUID。它只映射既有 active identity；输入长度检查不能改变匹配，未知或 inactive identity 失败关闭，函数不 bootstrap 或创建账号。
+
+bridge 使用 `SECURITY DEFINER`、`VOLATILE` 和固定 `search_path = pg_catalog`，owner 与 0076 private reader 一致。它只调用 0076，不复制授权、0075 provenance、6BQ validator、撤权锁或 audit。`tongxingzhe_runtime` 只有 bridge `EXECUTE`，不能使用 `app_private` 或读取 identity、用户、snapshot、attempt、claim 和 audit 表。
+
+完整 Docker runner 自动发现 0077 migration、check 和 rollback fixture，并显式运行 Backend PostgreSQL integration。它继续运行 0076 read／revoke 并发、checksum 与 dump／restore。只调试可丢弃测试库时运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_runtime_authorized_management_follow_up_consent_ratio_snapshot_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0077_runtime_authorized_management_follow_up_consent_ratio_snapshot_read.sql
+```
+
+fixture 使用独立 `6bs*` rollback namespace。恢复库只重跑 check 和 fixture，不重跑会提交 synthetic 行的并发脚本。通过只证明 synthetic exact-identity bridge、runtime ACL 和 0076 委托合同，不证明 HTTP、Flutter、生产身份或真人平台运行时。
+
 ## 使用已有 PostgreSQL 测试库
 
 先创建一个专用 PostgreSQL 测试库，再显式传入连接地址：

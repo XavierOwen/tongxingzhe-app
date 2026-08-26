@@ -1025,6 +1025,51 @@ check 观察函数、owner、固定 search path 和 ACL。fixture 验证合法 b
 
 这些 synthetic DB-only 证据只证明本地 PostgreSQL 合同。它们不证明 runtime identity bridge、HTTP、Backend、目录、Flutter、导出、生产身份或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时，也不构成形式化不可重识别保证。
 
+### 6BS：验证后续联系同意占比快照 runtime bridge
+
+6BS 把 0076 private read 接到 Backend runtime。调用方必须先由 Backend 验证 external identity，再把 exact `issuer + subject`、显式 project UUID 和 snapshot UUID 交给 0077 bridge。bridge 不 trim identity、不创建账号，也不自动选择 snapshot。
+
+runtime 只有 bridge `EXECUTE`。授权、0075 provenance、6BQ validator、撤权锁和 value-free audit 仍由 0076 负责。Backend adapter 只执行一次固定参数化 SQL，并 strict parse 固定 consent-ratio report；它不能重算 ratio 或恢复 suppressed 值。
+
+#### 从零开始运行 6BS
+
+1. 打开 Docker Desktop，等待 Docker Engine 运行。
+2. 在仓库根目录运行 `docker version`。client 和 server 都有输出后再继续。
+3. 运行 Backend 合同测试：
+   ```bash
+   cd backend/server
+   npm ci --ignore-scripts
+   npm run check
+   npm test
+   cd ../..
+   ```
+4. 运行完整 PostgreSQL 套件：
+   ```bash
+   ./tool/run_postgres_tests_in_docker.sh
+   ```
+5. 确认输出包含 0077 migration、6BS check、6BS fixture、新 Backend integration、0076 read／revoke concurrency、checksum、restore check 和 restore fixture，且退出码为 `0`。
+
+runner 自动建立一次性 PostgreSQL 16 容器。0077 fixture 在 transaction 结束时回滚。0076 并发脚本使用独立 namespace 并提交，用于验证 private read 与撤权的真实锁顺序。dump／restore 阶段先准备既有 roles，再通过 `pg_restore` 重建恢复库；恢复库只重跑 check 和 fixture，不重新执行 migration，也不重跑并发脚本。
+
+#### 只调试 6BS
+
+以下命令会修改指定数据库。先确认它是可丢弃的测试库：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_runtime_authorized_management_follow_up_consent_ratio_snapshot_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0077_runtime_authorized_management_follow_up_consent_ratio_snapshot_read.sql
+```
+
+check 验证函数签名、owner、固定 search path、exact identity body 和最小 ACL。
+fixture 验证 active／unknown／inactive／release-only identity、空白变体、`completed`／`not_found`／`untrusted_provenance`、重复 value-free audit 和 runtime 直接访问拒绝。
+Backend unit 验证一次 SQL、strict parser、PII 拒绝和只映射 SQLSTATE `42501`。PostgreSQL integration 以真实 runtime role 调用 bridge。
+
+这些 synthetic 证据不证明 HTTP、Flutter、生产 identity provider、真实账号或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时，也不构成形式化不可重识别保证。
+
 ### 6BF：理解管理报告删除与保留边界
 
 6BF 是产品和测试合同，不是数据库清理功能。没有用过 Docker 的读者先记住：Docker runner 会在一次性容器中验证当前仓库已有的 PostgreSQL 行为。
