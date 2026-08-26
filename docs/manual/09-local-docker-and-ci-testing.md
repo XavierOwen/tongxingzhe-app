@@ -1183,6 +1183,69 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 check 验证 canonical function、owner、固定 search path、`SECURITY DEFINER`、最小 ACL 和无 `PUBLIC` execute。fixture 验证 20 项上限、固定排序、baseline／successor、
 空目录、重复读取、exact provenance、负例、zero-count audit、value-free audit 和不可变性。并发脚本验证 directory-first 与 revoke-first 的线性化。
 
+### 6BV：验证后续联系同意占比快照目录 runtime bridge
+
+6BV 在 6BU 的 0078 private directory 之上增加 0079 `app_data` exact-identity bridge 和独立 Backend directory store。bridge 接收 Backend 已验证的 exact external
+`issuer + subject` 与显式 project UUID，只映射已有且 active 的 identity，再调用：
+
+```text
+app_private.list_authorized_management_follow_up_consent_snapshots_v1(uuid, uuid)
+```
+
+bridge 不 trim、不 bootstrap、不创建 identity，也不接受内部用户 ID、capability、时区、截止点、筛选或 SQL。它使用 `SECURITY DEFINER`、`VOLATILE` 和固定
+`search_path = pg_catalog`。`tongxingzhe_runtime` 只有 bridge `EXECUTE`，没有 `app_private` schema usage，也不能直接读取 identity、snapshot、attempt、claim、directory
+或 audit 表。0078 仍负责 active user、membership、project、`view_anonymous_analytics`、0075 provenance、撤权锁、排序和 value-free audit。
+
+Backend store 只执行一条固定参数化 SQL：
+
+```sql
+SELECT app_data.list_authorized_management_follow_up_consent_snapshots_v1(
+  $1::text, $2::text, $3::uuid
+) AS directory_result
+```
+
+strict parser 只接受四项 root envelope：`access_contract_id`、`access_event_id`、`project_id` 和 `snapshots`。每项只接受六项 metadata：`snapshot_id`、
+`report_id`、`report_version`、`reporting_time_zone`、`data_cutoff_utc` 和 `released_at_utc`。它检查 project 绑定、合法 UUID、规范 UTC 时间、最多 20 项、无重复和
+固定 `data_cutoff_utc`／`released_at_utc`／`snapshot_id` 降序。额外或缺失字段、错误 contract、非 consent-ratio report、无效值和乱序结果失败关闭。只有 SQLSTATE
+`42501` 映射为 typed `forbidden`，其他数据库或 parser 错误保持 unavailable。
+
+#### 从零开始运行 6BV
+
+1. 启动 Docker Desktop，等待 Docker Engine 显示运行。
+2. 在仓库根目录运行 `docker version`。Client 和 Server 都有输出后再继续。
+3. 运行完整套件：
+
+   ```bash
+   ./tool/run_postgres_tests_in_docker.sh
+   ```
+
+4. 确认输出包含 0079 migration、structural check、rollback fixture、6BV Backend integration、checksum、restore check 和 restore fixture，且退出码为 `0`。
+
+runner 自动发现 0079 migration、check 和 fixture。它在 Node 24 容器中运行 6BV integration，并继续执行 0078 directory／revoke concurrency。恢复阶段先准备缺失的
+PostgreSQL roles，再重跑 check 和 fixture；不重跑会提交 synthetic 行的并发脚本。
+
+#### 只调试 6BV
+
+以下命令会修改指定数据库。先确认它是可丢弃的测试库，不是 production：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_runtime_authorized_management_follow_up_consent_ratio_snapshot_directory.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0079_runtime_authorized_management_follow_up_consent_ratio_snapshot_directory.sql
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+cd ../..
+```
+
+Backend 测试覆盖固定 query、参数传递、空目录、重复读取、严格 parser、重复／超限／乱序、错误 contract、project 绑定和只映射 `42501`。这些命令只证明 synthetic
+0079 bridge、0078 delegation、Backend adapter、parser 和 ACL。它们不证明 HTTP、Flutter、Drift、导出、缓存、离线、部署服务、production identity 或 Android、iOS、
+macOS、Windows、Linux、Web 真人平台运行时。
+
 ### 6BF：理解管理报告删除与保留边界
 
 6BF 是产品和测试合同，不是数据库清理功能。没有用过 Docker 的读者先记住：Docker runner 会在一次性容器中验证当前仓库已有的 PostgreSQL 行为。

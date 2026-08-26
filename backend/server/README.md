@@ -775,6 +775,40 @@ cd ../..
 
 Docker runner 仍验证 0077 bridge、0076 reader、授权、provenance、parser、audit、并发、checksum 和 restore；它不替代 6BT HTTP 测试。
 
+## 后续联系同意占比快照目录 runtime bridge 合同
+
+6BV 增加 `PostgresManagementFollowUpConsentRatioSnapshotDirectoryStore`。store 接收 Backend 已验证的 `VerifiedIdentity` 和显式 project UUID，只执行一次固定 SQL：
+
+```sql
+SELECT app_data.list_authorized_management_follow_up_consent_snapshots_v1(
+  $1::text, $2::text, $3::uuid
+) AS directory_result
+```
+
+0079 bridge 精确匹配已有 active external `issuer + subject`，再调用 0078 private directory。它不 trim、不 bootstrap、不创建 identity，也不接受内部用户 ID、
+capability、时区、截止点、筛选或 SQL。runtime 只有 bridge `EXECUTE`，不能使用 `app_private` schema 或直接读取 identity、snapshot、attempt、claim、directory
+和 audit 表。0078 继续负责组织／项目授权、0075 provenance、撤权锁、目录排序和 value-free audit。
+
+strict parser 只接受四项 root envelope：`access_contract_id`、`access_event_id`、`project_id` 和 `snapshots`。每项只接受六个 metadata key：
+`snapshot_id`、`report_id`、`report_version`、`reporting_time_zone`、`data_cutoff_utc` 和 `released_at_utc`。parser 检查 exact keys、consent-ratio report ID、
+project 绑定、合法 UUID、规范 UTC 时间、最多 20 项、无重复和固定降序。额外字段、缺失字段、错误 contract、非 consent-ratio report、无效值和乱序结果失败关闭。
+只有 SQLSTATE `42501` 映射为 typed `forbidden`；未知 SQLSTATE、数据库错误和 parser 错误不伪装成无权。
+
+### 6BV 的本地测试
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+cd ../..
+./tool/run_postgres_tests_in_docker.sh
+```
+
+Backend 单元测试覆盖一次固定 SQL、参数传递、空目录、重复读取、严格 envelope／item parser、重复／超限／乱序和错误映射。Docker runner 自动发现
+0079 migration、structural check 和 rollback fixture，运行 6BV PostgreSQL integration，并继续执行 0078 directory／revoke concurrency、checksum 和 dump／restore。
+这些测试使用 synthetic identity 和 synthetic 数据，只证明 bridge、0078 delegation、adapter、parser 和 ACL。它们不证明 HTTP、Flutter、导出、缓存、离线、生产身份或六平台真人运行时。
+
 ## 管理报告快照目录合同
 
 `GET /v1/projects/:projectId/management-report-snapshots` 只接受一个显式项目 UUID。它不接受 body、query、筛选、分页、报告 ID、时区、capability 或内部用户 ID。6M 保存的管理分析选择只帮助导航，不是授权，也不会替代 path 中的项目。
@@ -837,7 +871,7 @@ npm run check
 
 接触对象关联见 [`0017_contact_target_links.sql`](../database/migrations/0017_contact_target_links.sql)。对应 fixture 验证零到多关联、阶段 0 确认、跨空间与未分配拒绝、机构代表约束、幂等重放、revision 历史、冲突比较和 warehouse PII 隔离。
 
-Node 24 Docker 阶段会在已迁移的 PostgreSQL 上运行十二条 integration。它们覆盖地点来源、当前关系阶段、个人同意占比开关／读取、个人阶段变更汇总、current-city 快照读取／目录、兴趣快照读取／目录、original-region 快照读取／目录，以及后续联系同意占比快照 runtime 读取。
+Node 24 Docker 阶段会在已迁移的 PostgreSQL 上运行十三条 integration。它们覆盖地点来源、当前关系阶段、个人同意占比开关／读取、个人阶段变更汇总、current-city 快照读取／目录、兴趣快照读取／目录、original-region 快照读取／目录，以及后续联系同意占比快照 runtime 读取／目录读取。
 
 地点来源测试和 Flutter 读取同一份 `contact_location_source_v1.csv`。其余测试分别对账窄 bridge、严格 parser、开关的版本／幂等合同、比例的 `not_enabled`／`ready` union，以及阶段变更汇总的 `5 / 4 / 3 / 2` 和空期间。SQL fixture 另证实匿名化历史，独立并发脚本证实项目锁边界。`npm test` 仍是无数据库的合同测试；它不能替代该阶段，也不能证明真机或生产环境。
 
@@ -873,6 +907,8 @@ current 城市快照目录见 [`0060_authorized_management_current_city_report_s
 管理兴趣快照 runtime bridge 见 [`0064_runtime_authorized_management_interest_report_snapshot_read.sql`](../database/migrations/0064_runtime_authorized_management_interest_report_snapshot_read.sql)。对应 fixture、adapter 和 integration 验证 exact identity、0063 private call、strict parser、最小 runtime 权限及 DB-only 证据边界；它不增加 HTTP route。
 
 后续联系同意占比快照 runtime bridge 见 [`0077_runtime_authorized_management_follow_up_consent_ratio_snapshot_read.sql`](../database/migrations/0077_runtime_authorized_management_follow_up_consent_ratio_snapshot_read.sql)。对应 fixture、adapter 和 integration 验证 exact identity、0076 private call、strict consent-ratio parser、最小 runtime 权限及 synthetic 证据边界；6BS 当时不增加 HTTP route，当前 HTTP 详情由 6BT 的独立 handler 定义。
+
+后续联系同意占比快照目录 runtime bridge 见 [`0079_runtime_authorized_management_follow_up_consent_ratio_snapshot_directory.sql`](../database/migrations/0079_runtime_authorized_management_follow_up_consent_ratio_snapshot_directory.sql)。对应 fixture、adapter 和 integration 验证 exact identity、0078 private directory delegation、四项 root envelope、六项 metadata、strict parser、最小 runtime 权限及 synthetic 证据边界；6BV 不增加 HTTP route，目录详情仍由后续独立 HTTP 合同定义。
 
 管理报告生产发布见 [`0036_runtime_trusted_management_report_release.sql`](../database/migrations/0036_runtime_trusted_management_report_release.sql)。对应 fixture 与独立会话脚本验证既有身份映射、固定报告定义、发布与查看能力分离、幂等重放、冲突失败关闭、最小返回值，以及发布与撤权／时区配置的事务顺序。
 
