@@ -101,6 +101,32 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 fixture 会回滚；并发脚本会提交独立 synthetic namespace。dump／restore 使用 `pg_restore` 重建恢复库，只重跑 check 与 fixture，不重新执行 migration，也不重跑并发脚本。这些检查不证明 authorized read、runtime、HTTP、Backend、Flutter、生产身份或真人平台运行时。
 
+## 6BR：组织项目后续联系同意占比快照授权读取边界
+
+6BR 的 0076 migration 在 6BQ lineage 之上增加 private DB-only 读取。函数只接受可信内部用户、显式 project 和 snapshot UUID，并在同一事务重新解析 `view_anonymous_analytics`。调用方不能提交报告 JSON、ratio、coverage、时区、cutoff、watermark、capability、筛选或 SQL。
+
+可信读取必须同时满足：0075 request claim 属于 consent-ratio family；release attempt 是 `approved`／`approved_baseline` 且 reason 为空。
+attempt 与 snapshot 的 actor、project、report／version、query fingerprint 和 lineage 必须对齐；时区 revision、cutoff、previous／compared pointer 和 source watermark 也必须对齐。
+函数返回前再次运行 6BQ validator，不重算或改写报告。
+
+`completed` 返回既有 protected report，suppressed ratio／coverage 继续是 JSON `null`。unknown／cross-project 返回 `not_found`；同项目 foreign、legacy、blocked、缺失或漂移 provenance 返回 `untrusted_provenance`。后两种结果不返回正文。每次已授权调用追加 consent-ratio 专用、不可变、value-free audit；未授权、撤权、过期、release-only、无成员和 inactive project 请求失败关闭且不写 audit。
+
+private function 与 audit 归共享 snapshot 的可信 owner。`PUBLIC`、runtime、普通 app role、6BP reader、6BQ release writer 和其他 report-family 角色不能执行读取或直接访问审计。6BR 不增加 runtime bridge、HTTP、Backend、目录、Flutter、Drift、导出、缓存、离线、同步、删除、retention、warehouse 或生产身份。
+
+完整 Docker runner 自动发现 0076 migration、structural check、rollback fixture 和 read／revoke 并发脚本，并执行 checksum 与 dump／restore。恢复库只重跑 check 和 fixture，不重跑会提交 synthetic 行的并发脚本。只调试可丢弃测试库时运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_authorized_management_follow_up_consent_ratio_snapshot_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0076_authorized_management_follow_up_consent_ratio_snapshot_read.sql
+./tool/verify_authorized_management_follow_up_consent_ratio_snapshot_read_concurrency.sh
+```
+
+fixture 使用 `6b76*` rollback namespace；并发脚本使用独立 `6b76c*` committed namespace。完整通过只证明 synthetic PostgreSQL 的授权、provenance、validator、value-free audit、撤权锁、checksum、restore 和 ACL 合同，不证明 runtime、HTTP、Backend、目录、Flutter、导出、生产身份或真人平台运行时。
+
 ## 使用已有 PostgreSQL 测试库
 
 先创建一个专用 PostgreSQL 测试库，再显式传入连接地址：

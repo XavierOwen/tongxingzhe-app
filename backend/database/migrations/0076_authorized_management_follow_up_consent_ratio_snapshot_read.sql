@@ -1,0 +1,684 @@
+-- 0076_authorized_management_follow_up_consent_ratio_snapshot_read.sql
+--
+-- Slice 6BR adds a private, authorized read for one 6BQ follow-up consent-ratio snapshot.
+-- It deliberately does not reuse any other report-family reader or the
+-- runtime surface: the protected document, release attempt and shared
+-- claim family must all belong to the fixed 6BQ consent-ratio contract.
+
+CREATE TABLE app_private.management_follow_up_consent_report_snapshot_access_events (
+  access_event_id uuid PRIMARY KEY,
+  requested_by_app_user_id uuid NOT NULL
+    REFERENCES app_data.app_users (app_user_id),
+  organization_workspace_id uuid NOT NULL
+    REFERENCES app_data.workspaces (workspace_id),
+  organization_membership_id uuid NOT NULL
+    REFERENCES app_data.organization_memberships (
+      organization_membership_id
+    ),
+  project_membership_id uuid NOT NULL
+    REFERENCES app_data.project_memberships (project_membership_id),
+  capability_grant_id uuid NOT NULL
+    REFERENCES app_data.management_report_capability_grants (
+      capability_grant_id
+    ),
+  capability_id text NOT NULL CHECK (
+    capability_id = 'view_anonymous_analytics'
+  ),
+  authorization_reference_at_utc timestamp with time zone NOT NULL,
+  project_id uuid NOT NULL REFERENCES app_data.projects (project_id),
+  requested_snapshot_id uuid NOT NULL,
+  resolved_snapshot_id uuid NULL
+    REFERENCES app_private.management_report_snapshots (snapshot_id),
+  follow_up_consent_release_request_id uuid NULL
+    REFERENCES app_private.management_follow_up_consent_report_release_attempts (
+      release_request_id
+    ),
+  report_id text NULL,
+  report_version integer NULL CHECK (
+    report_version IS NULL OR report_version > 0
+  ),
+  query_fingerprint text NULL,
+  release_lineage_id text NULL,
+  reporting_time_zone text NULL,
+  reporting_time_zone_version_number integer NULL CHECK (
+    reporting_time_zone_version_number IS NULL
+    OR reporting_time_zone_version_number > 0
+  ),
+  reporting_time_zone_effective_from_utc timestamp with time zone NULL,
+  data_cutoff_utc timestamp with time zone NULL,
+  previous_snapshot_id uuid NULL
+    REFERENCES app_private.management_report_snapshots (snapshot_id),
+  source_change_sequence bigint NULL CHECK (
+    source_change_sequence IS NULL OR source_change_sequence >= 0
+  ),
+  accessed_at_utc timestamp with time zone NOT NULL,
+  result_status text NOT NULL CHECK (
+    result_status IN ('completed', 'not_found', 'untrusted_provenance')
+  ),
+  reason_code text NULL CHECK (
+    reason_code IS NULL
+    OR reason_code IN (
+      'snapshot_not_available',
+      'snapshot_provenance_untrusted'
+    )
+  ),
+  CHECK (isfinite(authorization_reference_at_utc)),
+  CHECK (isfinite(accessed_at_utc)),
+  CHECK (
+    data_cutoff_utc IS NULL OR isfinite(data_cutoff_utc)
+  ),
+  CHECK (
+    reporting_time_zone_effective_from_utc IS NULL
+    OR isfinite(reporting_time_zone_effective_from_utc)
+  ),
+  CHECK (
+    (reporting_time_zone_version_number IS NULL)
+      = (reporting_time_zone_effective_from_utc IS NULL)
+  ),
+  CHECK (authorization_reference_at_utc = accessed_at_utc),
+  CHECK (
+    (
+      result_status = 'completed'
+      AND reason_code IS NULL
+      AND resolved_snapshot_id = requested_snapshot_id
+      AND follow_up_consent_release_request_id IS NOT NULL
+      AND report_id =
+        'contact_target_follow_up_consent_ratio_two_periods'
+      AND report_version = 1
+      AND query_fingerprint =
+        'management-report:contact_target_follow_up_consent_ratio_two_periods:v1'
+      AND release_lineage_id =
+        'management-follow-up-consent-ratio-report:contact_target_follow_up_consent_ratio_two_periods'
+      AND reporting_time_zone IS NOT NULL
+      AND reporting_time_zone_version_number IS NOT NULL
+      AND reporting_time_zone_effective_from_utc IS NOT NULL
+      AND data_cutoff_utc IS NOT NULL
+      AND source_change_sequence IS NOT NULL
+    )
+    OR (
+      result_status = 'not_found'
+      AND reason_code = 'snapshot_not_available'
+      AND resolved_snapshot_id IS NULL
+      AND follow_up_consent_release_request_id IS NULL
+      AND report_id IS NULL
+      AND report_version IS NULL
+      AND query_fingerprint IS NULL
+      AND release_lineage_id IS NULL
+      AND reporting_time_zone IS NULL
+      AND reporting_time_zone_version_number IS NULL
+      AND reporting_time_zone_effective_from_utc IS NULL
+      AND data_cutoff_utc IS NULL
+      AND previous_snapshot_id IS NULL
+      AND source_change_sequence IS NULL
+    )
+    OR (
+      result_status = 'untrusted_provenance'
+      AND reason_code = 'snapshot_provenance_untrusted'
+      AND resolved_snapshot_id = requested_snapshot_id
+      AND follow_up_consent_release_request_id IS NULL
+      AND report_id IS NOT NULL
+      AND report_version IS NOT NULL
+      AND query_fingerprint IS NOT NULL
+      AND release_lineage_id IS NOT NULL
+      AND reporting_time_zone IS NOT NULL
+      AND reporting_time_zone_version_number IS NULL
+      AND reporting_time_zone_effective_from_utc IS NULL
+      AND data_cutoff_utc IS NOT NULL
+      AND source_change_sequence IS NULL
+    )
+  )
+);
+
+CREATE INDEX management_consent_ratio_snapshot_access_events_project_idx
+ON app_private.management_follow_up_consent_report_snapshot_access_events (
+  project_id,
+  accessed_at_utc DESC,
+  access_event_id DESC
+);
+
+REVOKE ALL PRIVILEGES ON TABLE
+  app_private.management_follow_up_consent_report_snapshot_access_events
+  FROM PUBLIC,
+    tongxingzhe_runtime,
+    tongxingzhe_region_publisher,
+    tongxingzhe_region_mapping_writer,
+    tongxingzhe_contact_provenance_writer,
+    tongxingzhe_region_attribution_reader,
+    tongxingzhe_management_region_report_reader,
+    tongxingzhe_management_interest_report_reader,
+    tongxingzhe_management_current_city_snapshot_release_writer,
+    tongxingzhe_management_interest_snapshot_release_writer,
+    tongxingzhe_management_original_region_report_reader,
+    tongxingzhe_management_original_region_snapshot_release_writer,
+    tongxingzhe_management_report_snapshot_lifecycle_writer,
+    tongxingzhe_management_follow_up_consent_config_writer,
+    tongxingzhe_management_follow_up_consent_ratio_reader,
+    tongxingzhe_management_consent_ratio_snapshot_release_writer;
+
+CREATE FUNCTION
+  app_private.validate_management_follow_up_consent_snapshot_access_insert_v1()
+RETURNS trigger
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = pg_catalog, app_private, app_data
+AS $function$
+DECLARE
+  stored_snapshot app_private.management_report_snapshots%ROWTYPE;
+  has_consent_provenance boolean := false;
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM app_data.app_users AS app_user
+    JOIN app_data.organization_memberships AS organization_membership
+      ON organization_membership.app_user_id = app_user.app_user_id
+    JOIN app_data.workspaces AS workspace_row
+      ON workspace_row.workspace_id =
+        organization_membership.organization_workspace_id
+    JOIN app_data.project_memberships AS project_membership
+      ON project_membership.organization_membership_id =
+        organization_membership.organization_membership_id
+    JOIN app_data.projects AS project_row
+      ON project_row.project_id = project_membership.project_id
+    JOIN app_data.management_report_capability_grants AS capability_grant
+      ON capability_grant.project_membership_id =
+        project_membership.project_membership_id
+    WHERE app_user.app_user_id = NEW.requested_by_app_user_id
+      AND app_user.status = 'active'
+      AND organization_membership.organization_membership_id =
+        NEW.organization_membership_id
+      AND organization_membership.organization_workspace_id =
+        NEW.organization_workspace_id
+      AND workspace_row.workspace_kind = 'organization'
+      AND workspace_row.deleted_at IS NULL
+      AND project_membership.project_membership_id =
+        NEW.project_membership_id
+      AND project_membership.project_id = NEW.project_id
+      AND project_row.status = 'active'
+      AND capability_grant.capability_grant_id = NEW.capability_grant_id
+      AND capability_grant.capability_id = NEW.capability_id
+      AND tstzrange(
+        organization_membership.active_from_utc,
+        organization_membership.inactive_from_utc,
+        '[)'
+      ) @> NEW.authorization_reference_at_utc
+      AND tstzrange(
+        project_membership.active_from_utc,
+        project_membership.inactive_from_utc,
+        '[)'
+      ) @> NEW.authorization_reference_at_utc
+      AND tstzrange(
+        capability_grant.active_from_utc,
+        capability_grant.inactive_from_utc,
+        '[)'
+      ) @> NEW.authorization_reference_at_utc
+  ) THEN
+    RAISE EXCEPTION USING
+      ERRCODE = '22023',
+      MESSAGE = 'invalid follow-up consent-ratio snapshot access authorization';
+  END IF;
+
+  IF NEW.capability_id IS DISTINCT FROM 'view_anonymous_analytics' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = '22023',
+      MESSAGE = 'invalid follow-up consent-ratio snapshot access capability';
+  END IF;
+
+  IF NEW.result_status = 'not_found' THEN
+    IF EXISTS (
+      SELECT 1
+      FROM app_private.management_report_snapshots AS snapshot
+      WHERE snapshot.snapshot_id = NEW.requested_snapshot_id
+        AND snapshot.project_id = NEW.project_id
+    ) THEN
+      RAISE EXCEPTION USING
+        ERRCODE = '22023',
+        MESSAGE = 'invalid missing follow-up consent-ratio snapshot access';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  SELECT snapshot.*
+  INTO stored_snapshot
+  FROM app_private.management_report_snapshots AS snapshot
+  WHERE snapshot.snapshot_id = NEW.resolved_snapshot_id
+    AND snapshot.snapshot_id = NEW.requested_snapshot_id
+    AND snapshot.project_id = NEW.project_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING
+      ERRCODE = '22023',
+      MESSAGE = 'invalid follow-up consent-ratio snapshot access snapshot identity';
+  END IF;
+
+  IF NEW.report_id IS DISTINCT FROM stored_snapshot.report_id
+    OR NEW.report_version IS DISTINCT FROM stored_snapshot.report_version
+    OR NEW.query_fingerprint IS DISTINCT FROM stored_snapshot.query_fingerprint
+    OR NEW.release_lineage_id IS DISTINCT FROM
+      stored_snapshot.release_lineage_id
+    OR NEW.reporting_time_zone IS DISTINCT FROM
+      stored_snapshot.reporting_time_zone
+    OR NEW.previous_snapshot_id IS DISTINCT FROM
+      stored_snapshot.previous_snapshot_id
+    OR NEW.data_cutoff_utc IS DISTINCT FROM stored_snapshot.data_cutoff_utc
+    OR (
+      NEW.result_status = 'completed'
+      AND NEW.source_change_sequence IS DISTINCT FROM
+        stored_snapshot.source_change_sequence
+    )
+  THEN
+    RAISE EXCEPTION USING
+      ERRCODE = '22023',
+      MESSAGE = 'invalid follow-up consent-ratio snapshot access metadata';
+  END IF;
+
+  IF NEW.result_status = 'untrusted_provenance' THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1
+    FROM app_private.management_follow_up_consent_report_release_attempts AS attempt
+    JOIN app_private.management_report_release_request_claims AS claim
+      ON claim.release_request_id = attempt.release_request_id
+     AND claim.release_family_id =
+       'follow_up_consent_ratio_management_report_snapshot_release'
+    WHERE attempt.release_request_id = NEW.follow_up_consent_release_request_id
+      AND attempt.released_snapshot_id = NEW.resolved_snapshot_id
+      AND attempt.release_request_id = stored_snapshot.release_request_id
+      AND attempt.requested_by_app_user_id = stored_snapshot.created_by_app_user_id
+      AND attempt.project_id = NEW.project_id
+      AND attempt.capability_id = 'release_management_reports'
+      AND attempt.report_id =
+        'contact_target_follow_up_consent_ratio_two_periods'
+      AND attempt.report_version = 1
+      AND attempt.query_fingerprint =
+        'management-report:contact_target_follow_up_consent_ratio_two_periods:v1'
+      AND attempt.release_lineage_id =
+        'management-follow-up-consent-ratio-report:contact_target_follow_up_consent_ratio_two_periods'
+      AND attempt.result_status IN ('approved_baseline', 'approved')
+      AND attempt.reason_codes = '[]'::jsonb
+      AND attempt.reporting_time_zone = stored_snapshot.reporting_time_zone
+      AND NEW.reporting_time_zone_version_number =
+        attempt.reporting_time_zone_version_number
+      AND NEW.reporting_time_zone_effective_from_utc =
+        attempt.reporting_time_zone_effective_from_utc
+      AND attempt.data_cutoff_utc = stored_snapshot.data_cutoff_utc
+      AND attempt.source_change_sequence = stored_snapshot.source_change_sequence
+      AND attempt.compared_snapshot_id IS NOT DISTINCT FROM
+        stored_snapshot.previous_snapshot_id
+      AND EXISTS (
+        SELECT 1
+        FROM app_private.project_reporting_time_zone_versions AS version_row
+        WHERE version_row.project_id = attempt.project_id
+          AND version_row.version_number =
+            attempt.reporting_time_zone_version_number
+          AND version_row.reporting_time_zone = attempt.reporting_time_zone
+          AND version_row.effective_from_utc =
+            attempt.reporting_time_zone_effective_from_utc
+          AND NOT EXISTS (
+            SELECT 1
+            FROM app_private.project_reporting_time_zone_versions AS later_version
+            WHERE later_version.project_id = attempt.project_id
+              AND later_version.effective_from_utc <= attempt.data_cutoff_utc
+              AND (
+                later_version.effective_from_utc >
+                  version_row.effective_from_utc
+                OR (
+                  later_version.effective_from_utc =
+                    version_row.effective_from_utc
+                  AND later_version.version_number >
+                    version_row.version_number
+                )
+              )
+          )
+      )
+  ) INTO has_consent_provenance;
+
+  IF NOT has_consent_provenance THEN
+    RAISE EXCEPTION USING
+      ERRCODE = '22023',
+      MESSAGE = 'invalid trusted follow-up consent-ratio snapshot access provenance';
+  END IF;
+
+  PERFORM app_private.validate_management_follow_up_consent_ratio_report_document_v1(
+    stored_snapshot.protected_report
+  );
+
+  RETURN NEW;
+END
+$function$;
+
+CREATE FUNCTION app_private.read_authorized_management_follow_up_consent_report_snapshot_v1(
+  requested_app_user_id uuid,
+  requested_project_id uuid,
+  requested_snapshot_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = pg_catalog, app_private
+AS $function$
+DECLARE
+  stored_snapshot app_private.management_report_snapshots%ROWTYPE;
+  consent_attempt
+    app_private.management_follow_up_consent_report_release_attempts%ROWTYPE;
+  authorization_evidence jsonb;
+  access_event_id_value uuid;
+  authorization_reference_at_utc_value timestamp with time zone;
+  result_status_value text;
+  reason_code_value text;
+  access_result jsonb;
+BEGIN
+  IF requested_app_user_id IS NULL
+    OR requested_project_id IS NULL
+    OR requested_snapshot_id IS NULL
+  THEN
+    RAISE EXCEPTION USING
+      ERRCODE = '22023',
+      MESSAGE = 'invalid authorized follow-up consent-ratio snapshot request';
+  END IF;
+
+  authorization_evidence =
+    app_private.resolve_management_report_authorization_v1(
+      requested_app_user_id,
+      requested_project_id,
+      'view_anonymous_analytics'
+    );
+  authorization_reference_at_utc_value =
+    (authorization_evidence->>'reference_at_utc')::timestamptz;
+
+  SELECT snapshot.*
+  INTO stored_snapshot
+  FROM app_private.management_report_snapshots AS snapshot
+  WHERE snapshot.snapshot_id = requested_snapshot_id
+    AND snapshot.project_id = requested_project_id;
+
+  IF NOT FOUND THEN
+    result_status_value = 'not_found';
+    reason_code_value = 'snapshot_not_available';
+  ELSE
+    SELECT attempt.*
+    INTO consent_attempt
+    FROM app_private.management_follow_up_consent_report_release_attempts AS attempt
+    JOIN app_private.management_report_release_request_claims AS claim
+      ON claim.release_request_id = attempt.release_request_id
+     AND claim.release_family_id =
+       'follow_up_consent_ratio_management_report_snapshot_release'
+    WHERE attempt.released_snapshot_id = stored_snapshot.snapshot_id
+      AND attempt.project_id = stored_snapshot.project_id
+      AND attempt.requested_by_app_user_id = stored_snapshot.created_by_app_user_id
+      AND attempt.capability_id = 'release_management_reports'
+      AND attempt.report_id =
+        'contact_target_follow_up_consent_ratio_two_periods'
+      AND attempt.report_version = 1
+      AND attempt.query_fingerprint =
+        'management-report:contact_target_follow_up_consent_ratio_two_periods:v1'
+      AND attempt.release_lineage_id =
+        'management-follow-up-consent-ratio-report:contact_target_follow_up_consent_ratio_two_periods'
+      AND attempt.result_status IN ('approved_baseline', 'approved')
+      AND attempt.reason_codes = '[]'::jsonb
+      AND attempt.reporting_time_zone = stored_snapshot.reporting_time_zone
+      AND attempt.data_cutoff_utc = stored_snapshot.data_cutoff_utc
+      AND attempt.source_change_sequence = stored_snapshot.source_change_sequence
+      AND attempt.compared_snapshot_id IS NOT DISTINCT FROM
+        stored_snapshot.previous_snapshot_id
+      AND EXISTS (
+        SELECT 1
+        FROM app_private.project_reporting_time_zone_versions AS version_row
+        WHERE version_row.project_id = attempt.project_id
+          AND version_row.version_number =
+            attempt.reporting_time_zone_version_number
+          AND version_row.reporting_time_zone = attempt.reporting_time_zone
+          AND version_row.effective_from_utc =
+            attempt.reporting_time_zone_effective_from_utc
+          AND NOT EXISTS (
+            SELECT 1
+            FROM app_private.project_reporting_time_zone_versions AS later_version
+            WHERE later_version.project_id = attempt.project_id
+              AND later_version.effective_from_utc <= attempt.data_cutoff_utc
+              AND (
+                later_version.effective_from_utc >
+                  version_row.effective_from_utc
+                OR (
+                  later_version.effective_from_utc =
+                    version_row.effective_from_utc
+                  AND later_version.version_number >
+                    version_row.version_number
+                )
+              )
+          )
+      )
+    LIMIT 1;
+
+    IF FOUND
+      AND stored_snapshot.release_request_id =
+        consent_attempt.release_request_id
+      AND stored_snapshot.report_id = consent_attempt.report_id
+      AND stored_snapshot.report_version = consent_attempt.report_version
+      AND stored_snapshot.query_fingerprint =
+        consent_attempt.query_fingerprint
+      AND stored_snapshot.release_lineage_id =
+        consent_attempt.release_lineage_id
+      AND stored_snapshot.data_cutoff_utc = consent_attempt.data_cutoff_utc
+      AND stored_snapshot.source_change_sequence =
+        consent_attempt.source_change_sequence
+      AND stored_snapshot.previous_snapshot_id IS NOT DISTINCT FROM
+        consent_attempt.compared_snapshot_id
+    THEN
+      BEGIN
+        PERFORM app_private.validate_management_follow_up_consent_ratio_report_document_v1(
+          stored_snapshot.protected_report
+        );
+        result_status_value = 'completed';
+      EXCEPTION WHEN SQLSTATE '22023' THEN
+        result_status_value = 'untrusted_provenance';
+        reason_code_value = 'snapshot_provenance_untrusted';
+      END;
+    ELSE
+      result_status_value = 'untrusted_provenance';
+      reason_code_value = 'snapshot_provenance_untrusted';
+    END IF;
+  END IF;
+
+  access_event_id_value = gen_random_uuid();
+
+  INSERT INTO app_private.management_follow_up_consent_report_snapshot_access_events (
+    access_event_id,
+    requested_by_app_user_id,
+    organization_workspace_id,
+    organization_membership_id,
+    project_membership_id,
+    capability_grant_id,
+    capability_id,
+    authorization_reference_at_utc,
+    project_id,
+    requested_snapshot_id,
+    resolved_snapshot_id,
+    follow_up_consent_release_request_id,
+    report_id,
+    report_version,
+    query_fingerprint,
+    release_lineage_id,
+    reporting_time_zone,
+    reporting_time_zone_version_number,
+    reporting_time_zone_effective_from_utc,
+    data_cutoff_utc,
+    previous_snapshot_id,
+    source_change_sequence,
+    accessed_at_utc,
+    result_status,
+    reason_code
+  ) VALUES (
+    access_event_id_value,
+    requested_app_user_id,
+    (authorization_evidence->>'organization_workspace_id')::uuid,
+    (authorization_evidence->>'organization_membership_id')::uuid,
+    (authorization_evidence->>'project_membership_id')::uuid,
+    (authorization_evidence->>'capability_grant_id')::uuid,
+    authorization_evidence->>'capability_id',
+    authorization_reference_at_utc_value,
+    requested_project_id,
+    requested_snapshot_id,
+    CASE
+      WHEN result_status_value = 'not_found' THEN NULL
+      ELSE stored_snapshot.snapshot_id
+    END,
+    CASE
+      WHEN result_status_value = 'completed'
+        THEN consent_attempt.release_request_id
+      ELSE NULL
+    END,
+    CASE
+      WHEN result_status_value = 'not_found' THEN NULL
+      ELSE stored_snapshot.report_id
+    END,
+    CASE
+      WHEN result_status_value = 'not_found' THEN NULL
+      ELSE stored_snapshot.report_version
+    END,
+    CASE
+      WHEN result_status_value = 'not_found' THEN NULL
+      ELSE stored_snapshot.query_fingerprint
+    END,
+    CASE
+      WHEN result_status_value = 'not_found' THEN NULL
+      ELSE stored_snapshot.release_lineage_id
+    END,
+    CASE
+      WHEN result_status_value = 'not_found' THEN NULL
+      ELSE stored_snapshot.reporting_time_zone
+    END,
+    CASE
+      WHEN result_status_value = 'completed'
+        THEN consent_attempt.reporting_time_zone_version_number
+      ELSE NULL
+    END,
+    CASE
+      WHEN result_status_value = 'completed'
+        THEN consent_attempt.reporting_time_zone_effective_from_utc
+      ELSE NULL
+    END,
+    CASE
+      WHEN result_status_value = 'not_found' THEN NULL
+      ELSE stored_snapshot.data_cutoff_utc
+    END,
+    CASE
+      WHEN result_status_value = 'not_found' THEN NULL
+      ELSE stored_snapshot.previous_snapshot_id
+    END,
+    CASE
+      WHEN result_status_value = 'completed'
+        THEN stored_snapshot.source_change_sequence
+      ELSE NULL
+    END,
+    authorization_reference_at_utc_value,
+    result_status_value,
+    reason_code_value
+  );
+
+  access_result = jsonb_build_object(
+    'access_contract_id',
+      'authorized_follow_up_consent_ratio_management_report_snapshot_read_v1',
+    'access_event_id', access_event_id_value,
+    'requested_snapshot_id', requested_snapshot_id,
+    'resolved_snapshot_id', CASE
+      WHEN result_status_value = 'not_found' THEN NULL
+      ELSE stored_snapshot.snapshot_id
+    END,
+    'result_status', result_status_value,
+    'reason_code', reason_code_value
+  );
+
+  IF result_status_value = 'completed' THEN
+    access_result = access_result || jsonb_build_object(
+      'protected_report', stored_snapshot.protected_report
+    );
+  END IF;
+
+  RETURN access_result;
+END
+$function$;
+
+DO $owner$
+DECLARE
+  trusted_owner text;
+BEGIN
+  SELECT pg_catalog.pg_get_userbyid(class_row.relowner)
+  INTO STRICT trusted_owner
+  FROM pg_catalog.pg_class AS class_row
+  WHERE class_row.oid =
+    'app_private.management_report_snapshots'::regclass;
+
+  EXECUTE format(
+    'ALTER TABLE app_private.management_follow_up_consent_report_snapshot_access_events OWNER TO %I',
+    trusted_owner
+  );
+  EXECUTE format(
+    'ALTER FUNCTION app_private.validate_management_follow_up_consent_snapshot_access_insert_v1() OWNER TO %I',
+    trusted_owner
+  );
+  EXECUTE format(
+    'ALTER FUNCTION app_private.read_authorized_management_follow_up_consent_report_snapshot_v1(uuid,uuid,uuid) OWNER TO %I',
+    trusted_owner
+  );
+END
+$owner$;
+
+CREATE TRIGGER management_follow_up_consent_snapshot_access_events_immutable
+BEFORE UPDATE OR DELETE
+ON app_private.management_follow_up_consent_report_snapshot_access_events
+FOR EACH ROW
+EXECUTE FUNCTION app_private.reject_management_report_history_mutation();
+
+CREATE TRIGGER management_follow_up_consent_snapshot_access_events_validate
+BEFORE INSERT
+ON app_private.management_follow_up_consent_report_snapshot_access_events
+FOR EACH ROW
+EXECUTE FUNCTION
+  app_private.validate_management_follow_up_consent_snapshot_access_insert_v1();
+
+REVOKE ALL PRIVILEGES ON FUNCTION
+  app_private.validate_management_follow_up_consent_snapshot_access_insert_v1(),
+  app_private.read_authorized_management_follow_up_consent_report_snapshot_v1(
+    uuid,
+    uuid,
+    uuid
+  )
+  FROM PUBLIC,
+    tongxingzhe_runtime,
+    tongxingzhe_region_publisher,
+    tongxingzhe_region_mapping_writer,
+    tongxingzhe_contact_provenance_writer,
+    tongxingzhe_region_attribution_reader,
+    tongxingzhe_management_region_report_reader,
+    tongxingzhe_management_interest_report_reader,
+    tongxingzhe_management_current_city_snapshot_release_writer,
+    tongxingzhe_management_interest_snapshot_release_writer,
+    tongxingzhe_management_original_region_report_reader,
+    tongxingzhe_management_original_region_snapshot_release_writer,
+    tongxingzhe_management_report_snapshot_lifecycle_writer,
+    tongxingzhe_management_follow_up_consent_config_writer,
+    tongxingzhe_management_follow_up_consent_ratio_reader,
+    tongxingzhe_management_consent_ratio_snapshot_release_writer;
+
+GRANT EXECUTE ON FUNCTION
+  app_private.read_authorized_management_follow_up_consent_report_snapshot_v1(
+    uuid,
+    uuid,
+    uuid
+  )
+  TO CURRENT_USER;
+
+COMMENT ON TABLE
+  app_private.management_follow_up_consent_report_snapshot_access_events
+IS 'Immutable private audit for authorized follow-up consent-ratio snapshot reads; it stores no report cells, contributors, contact identities or PII.';
+
+COMMENT ON FUNCTION
+  app_private.read_authorized_management_follow_up_consent_report_snapshot_v1(
+    uuid,
+    uuid,
+    uuid
+  )
+IS 'Reauthorizes one fixed follow-up consent-ratio snapshot read, accepts only 6BQ consent-ratio provenance, validates the strict protected document, and records a value-free audit.';

@@ -817,6 +817,15 @@ _Avoid_: 把候选当成正式报告、把 suppressed 当成零、用总数相�
 这是 private PostgreSQL DB-only 发布合同，不是授权读取、runtime、HTTP、客户端、目录、导出、replacement、删除、retention 或生产证据。
 _Avoid_: 把 candidate 当 snapshot、跨 report family 借用 provenance、保存 blocked candidate 值、把 suppressed 当零、由调用方提交 watermark、把 Docker synthetic 通过写成生产证据
 
+**组织项目后续联系同意占比快照授权读取**:
+6BR 只按可信内部用户、显式 project 和 snapshot UUID 私有读取一份 6BQ snapshot。
+数据库在授权锁内重新确认 active user、组织／项目 membership、active project 和 `view_anonymous_analytics`。
+它还复核 0075 consent-ratio claim／attempt／snapshot 的固定 report identity、时区 revision、cutoff、previous pointer 和 source watermark。
+返回前再次执行 6BQ validator；不重算、不恢复隐藏值、不修改 snapshot，也不选择 latest。
+合法 provenance 返回既有 protected report；unknown／cross-project 返回 value-free `not_found`；同项目 foreign／legacy／blocked／missing／drift provenance 返回 value-free `untrusted_provenance`。每次已授权调用追加不可变、value-free audit；未授权、撤权、过期、release-only、无有效成员或 inactive project 失败关闭且不写 audit。
+这是 private PostgreSQL DB-only 读取合同，不是 runtime identity bridge、HTTP、Backend、客户端、目录、导出、replacement、删除、retention 或生产证据。
+_Avoid_: 用发布能力代替查看能力、跨 report family 借用 provenance、把 `not_found` 与未授权混为一谈、返回 untrusted 正文、把 private function 直接开放给 runtime
+
 **管理报告清除**:
 组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
 _Avoid_: 授权撤回、报告到期、tombstone、superseded

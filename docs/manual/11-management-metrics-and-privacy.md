@@ -2568,6 +2568,48 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 fixture 会回滚，独立并发脚本会提交另一组 synthetic 行。恢复库通过 `pg_restore` 重建，只重跑 check 和 fixture。通过这些测试只说明当前 private PostgreSQL 合同成立，不说明读取、HTTP、客户端、生产身份或真人平台已经验收。
 
+## Slice 6BR：只读取可信的后续联系同意占比快照
+
+6BR 不生成报告，也不决定哪份快照是最新。调用方必须给出内部用户、project UUID 和 snapshot UUID。数据库先重新检查 active user、组织／项目 membership、active project 和 `view_anonymous_analytics`，然后只查找请求项目中的精确 snapshot。
+
+可信读取必须同时对齐 0075 consent-ratio request claim、approved／approved_baseline attempt 和 snapshot。
+固定 report identity、query fingerprint 或 release lineage 不一致时，不能返回正文。
+时区 revision、cutoff、previous pointer 或 source watermark 不一致时，也不能返回正文。
+函数返回前再次运行 6BQ strict validator；suppressed ratio／coverage 仍为 JSON `null`，读取不能补算隐藏值。
+
+已授权调用有三种稳定结果：
+
+- `completed`：返回原有 protected report；
+- `not_found`：用于 unknown 或 cross-project UUID，不暴露其他项目是否存在该 snapshot；
+- `untrusted_provenance`：用于同项目的 foreign family、legacy、blocked、缺失或漂移 provenance。
+
+每次已授权调用写入一条新的 value-free audit。audit 记录最小授权链、snapshot identity、固定 report metadata 和结果状态，不保存 `protected_report`、period results、ratio、coverage、contact、target、contributor、原始回答、隐藏前值或 PII。撤权、过期、release-only、无有效成员或 inactive project 的调用在授权阶段失败，且不写 audit。
+
+### 从零开始验证 6BR 数据库合同
+
+先打开 Docker Desktop。在仓库根目录运行：
+
+```bash
+docker version
+./tool/run_postgres_tests_in_docker.sh
+```
+
+`docker version` 的 client 和 server 都有输出后，完整 runner 才能启动一次性 PostgreSQL 16 容器。runner 自动执行 0076 migration、structural check、rollback fixture、read／revoke 并发脚本、checksum 和 dump／restore。
+
+只调试可丢弃测试库时运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_authorized_management_follow_up_consent_ratio_snapshot_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0076_authorized_management_follow_up_consent_ratio_snapshot_read.sql
+./tool/verify_authorized_management_follow_up_consent_ratio_snapshot_read_concurrency.sh
+```
+
+fixture 会回滚；并发脚本使用独立 namespace 并提交 synthetic 行。恢复库只重跑 check 和 fixture，不重新执行 migration，也不重跑并发脚本。通过这些测试只证明 synthetic PostgreSQL 的授权、provenance、validator、audit、撤权锁和 restore 合同，不证明 runtime、HTTP、Backend、目录、Flutter、导出、生产身份或真人平台已经验收。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和
