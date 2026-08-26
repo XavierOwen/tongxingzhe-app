@@ -85,6 +85,7 @@
 | [0160](./0160-management-follow-up-consent-opt-in-is-organization-scoped.md) | 已接受，2026-08-25 | Slice 6BO；Issue #215；`ANALYTICS-050`、`PRIVACY-042`、`TEST-044`、`MANUAL-034` | 组织项目的后续联系同意占比使用独立 opt-in 配置；固定 `release_management_reports`、追加式版本、锁后授权和 value-free DB-only 边界 |
 | [0161](./0161-management-follow-up-consent-ratio-candidate-is-private-and-protected.md) | 已接受，2026-08-25 | Slice 6BP；Issue #217；`ANALYTICS-051`、`PRIVACY-043`、`TEST-045`、`MANUAL-035` | 组织项目的后续联系同意占比候选使用两个完整 ISO 周和逐单元披露保护；未启用与隐藏分离，DB-only |
 | [0162](./0162-management-follow-up-consent-ratio-snapshots-use-independent-release-lineage.md) | 已接受，2026-08-25 | Slice 6BQ；Issue #219；`ANALYTICS-052`、`PRIVACY-044`、`TEST-046`、`MANUAL-036` | 后续联系同意占比快照使用独立 claim／release provenance；baseline、滚动、value-free blocked 和最小 ACL 失败关闭 |
+| [0163](./0163-authorized-follow-up-consent-ratio-snapshot-reads-use-independent-provenance.md) | 已接受，2026-08-25 | Slice 6BR；Issue #221；`ANALYTICS-053`、`PRIVACY-045`、`TEST-047`、`MANUAL-037` | 只按显式项目与快照读取可信 6BQ provenance；重新授权、再次验证、value-free 审计，DB-only，无 runtime、HTTP、目录、Flutter 或导出 |
 
 ## 按主题查找
 
@@ -96,7 +97,7 @@
 | 组织、保留、导入导出与合并 | [0030](./0030-allow-verified-users-to-create-organizations.md)–[0043](./0043-promotion-target-merges-are-reversible.md) | Slice 4、7；`ORG`、`TARGET`、`AUTHZ` |
 | 私人计划、通知与周期 | [0044](./0044-personal-action-plans-are-private-and-user-controlled.md)–[0052](./0052-late-entered-contacts-count-in-their-occurrence-period.md) | Slice 5；`PLAN`、`PLATFORM` |
 | 说明书与发布检查 | [0053](./0053-production-code-and-learning-materials-evolve-together.md)–[0059](./0059-documentation-and-statistics-checks-block-releases.md) | 全部 Slice；`MANUAL`、Definition of Done |
-| 指标、报告与隐私 | [0060](./0060-ordinal-scale-distributions-are-primary.md)–[0077](./0077-core-metrics-ship-with-code-and-project-metrics-use-safe-configuration.md)，另见 [0099](./0099-management-analytics-use-bounded-query-surfaces.md)、[0101](./0101-management-weekly-reports-use-two-complete-iso-weeks.md)–[0159](./0159-original-region-report-snapshot-replacements-are-append-only.md) | Slice 6；`ANALYTICS`、`PRIVACY`、`AUTHZ`、`REGION`、`ARCH`、`TEST-005`、`TEST-014`–`TEST-043` |
+| 指标、报告与隐私 | [0060](./0060-ordinal-scale-distributions-are-primary.md)–[0077](./0077-core-metrics-ship-with-code-and-project-metrics-use-safe-configuration.md)，另见 [0099](./0099-management-analytics-use-bounded-query-surfaces.md)、[0101](./0101-management-weekly-reports-use-two-complete-iso-weeks.md)–[0163](./0163-authorized-follow-up-consent-ratio-snapshot-reads-use-independent-provenance.md) | Slice 6；`ANALYTICS`、`PRIVACY`、`AUTHZ`、`REGION`、`ARCH`、`TEST-005`、`TEST-014`–`TEST-047` |
 | 当前上下文、问卷、草稿与导航 | [0078](./0078-a-visible-project-context-scopes-default-work.md)–[0090](./0090-contact-entry-prioritizes-core-facts-with-progressive-disclosure.md) | Slice 1、3、5；`CTX`、`QUESTION`、`DRAFT`、`UI` |
 | 尝试、渠道、触达和机构关系 | [0091](./0091-unsuccessful-direct-outreach-is-a-contact-attempt.md)–[0095](./0095-person-to-institution-relationships-use-six-stable-kinds.md) | Slice 1、2、4；`CONTACT`、`TARGET` |
 | 基础设施 | [0097](./0097-use-supabase-postgresql-for-the-initial-stage.md) | Slice 0／发布门槛；`ARCH-003`–`ARCH-010` |

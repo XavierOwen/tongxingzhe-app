@@ -989,6 +989,42 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 check 观察函数、owner、RLS 和 ACL。fixture 验证 validator、baseline、successor、幂等、blocked 和不可变性。并发脚本验证同 request、同 lineage，以及 release 与停用、撤权、归档的锁顺序。这些 synthetic DB-only 证据不证明 authorized read、runtime、HTTP、Backend、Flutter、生产身份或六平台真人运行时。
 
+### 6BR：验证后续联系同意占比快照授权读取
+
+6BR 的 0076 migration 只读取一份明确指定的 6BQ snapshot。调用方提供内部用户、project UUID 和 snapshot UUID；数据库重新检查 `view_anonymous_analytics`，再复核 0075 claim、approved attempt、snapshot、时区 revision、cutoff、previous pointer 和 source watermark。它不会重新计算 ratio，也不会恢复 suppressed 值。
+
+读取成功返回既有 protected report。unknown 或 cross-project UUID 返回 `not_found`；同项目但 provenance 不可信的 snapshot 返回 `untrusted_provenance`。两种失败均不返回正文。每次已授权调用写入不含 report、ratio、coverage、contact、target、contributor、原始回答或 PII 的 value-free audit。
+
+#### 从零开始运行 Docker
+
+1. 打开 Docker Desktop，等待 Docker Engine 运行。
+2. 在仓库根目录运行 `docker version`。client 和 server 都有输出才表示 Docker 可以执行容器。
+3. 运行完整套件：
+   ```bash
+   ./tool/run_postgres_tests_in_docker.sh
+   ```
+4. 确认输出包含 0076 migration、6BR check、6BR fixture、6BR concurrency、checksum、restore check 和 restore fixture，且退出码是 `0`。
+
+runner 自动建立一次性 PostgreSQL 16 容器。fixture 在 transaction 结束时回滚；并发脚本使用独立 synthetic UUID 并提交，以观察真实的 read／revoke 竞争。dump／restore 阶段先准备既有 closed roles，再通过 `pg_restore` 重建恢复库。恢复库只重跑 check 和 fixture，不重新执行 migration，也不重跑会提交行的并发脚本。
+
+#### 只调试 6BR
+
+以下命令会修改指定数据库。先确认它是可丢弃的测试库，不是 production：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_authorized_management_follow_up_consent_ratio_snapshot_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0076_authorized_management_follow_up_consent_ratio_snapshot_read.sql
+./tool/verify_authorized_management_follow_up_consent_ratio_snapshot_read_concurrency.sh
+```
+
+check 观察函数、owner、固定 search path 和 ACL。fixture 验证合法 baseline／successor、重复读取、`not_found`、`untrusted_provenance`、再次 validator、授权负例、value-free audit 和不可变性。并发脚本验证 read-first 与 revoke-first 的锁线性化。
+
+这些 synthetic DB-only 证据只证明本地 PostgreSQL 合同。它们不证明 runtime identity bridge、HTTP、Backend、目录、Flutter、导出、生产身份或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时，也不构成形式化不可重识别保证。
+
 ### 6BF：理解管理报告删除与保留边界
 
 6BF 是产品和测试合同，不是数据库清理功能。没有用过 Docker 的读者先记住：Docker runner 会在一次性容器中验证当前仓库已有的 PostgreSQL 行为。
