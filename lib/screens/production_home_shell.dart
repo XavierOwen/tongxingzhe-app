@@ -30,6 +30,7 @@ import '../features/targets/promotion_target_directory_page.dart';
 import '../features/management_reports/management_report_browser.dart';
 import '../l10n/app_strings.dart';
 import '../management_reports/current_city_report_gateway.dart';
+import '../management_reports/follow_up_consent_ratio_report_gateway.dart';
 import '../management_reports/interest_report_gateway.dart';
 import '../management_reports/management_report_gateway.dart';
 import '../management_reports/management_report_export_delivery.dart';
@@ -70,6 +71,7 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.personalRelationshipStageChangeSummaryGateway,
     required this.managementReportGateway,
     required this.currentCityReportGateway,
+    required this.followUpConsentRatioReportGateway,
     required this.interestReportGateway,
     required this.originalRegionReportGateway,
     required this.managementReportExportDelivery,
@@ -104,6 +106,7 @@ final class ProductionHomeShell extends StatefulWidget {
   personalRelationshipStageChangeSummaryGateway;
   final ManagementReportGateway managementReportGateway;
   final CurrentCityReportGateway currentCityReportGateway;
+  final FollowUpConsentRatioReportGateway followUpConsentRatioReportGateway;
   final InterestReportGateway interestReportGateway;
   final OriginalRegionReportGateway originalRegionReportGateway;
   final ManagementReportExportDelivery managementReportExportDelivery;
@@ -355,6 +358,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
           text: strings,
           gateway: widget.managementReportGateway,
           currentCityGateway: widget.currentCityReportGateway,
+          followUpConsentRatioGateway: widget.followUpConsentRatioReportGateway,
           interestGateway: widget.interestReportGateway,
           originalRegionGateway: widget.originalRegionReportGateway,
           exportDelivery: widget.managementReportExportDelivery,

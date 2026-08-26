@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/features/management_reports/management_report_browser.dart';
 import 'package:tongxingzhe_app/l10n/app_strings.dart';
 import 'package:tongxingzhe_app/management_reports/current_city_report_gateway.dart';
+import 'package:tongxingzhe_app/management_reports/follow_up_consent_ratio_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/interest_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_export_delivery.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
@@ -57,6 +58,355 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.widget<ChoiceChip>(channelView).selected, isTrue);
     expect(currentCityGateway.readRequests, isEmpty);
+  });
+
+  testWidgets('后续联系同意占比视图默认不读取，明确选择后只读当前项目目录', (tester) async {
+    final followUpGateway = _FollowUpConsentRatioGateway();
+    await tester.pumpWidget(
+      _app(
+        _Gateway(
+          context: _contextSnapshot(current: _projectA),
+          summaries: [_summary],
+        ),
+        followUpGateway: followUpGateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final channelView = find.byKey(
+      const ValueKey('management-channel-report-view'),
+    );
+    final followUpView = find.byKey(
+      const ValueKey('management-follow-up-consent-ratio-report-view'),
+      skipOffstage: false,
+    );
+    expect(tester.widget<ChoiceChip>(channelView).selected, isTrue);
+    expect(tester.widget<ChoiceChip>(followUpView).selected, isFalse);
+    expect(find.text('后续联系同意占比'), findsOneWidget);
+    expect(followUpGateway.listedProjectIds, isEmpty);
+    expect(followUpGateway.readRequests, isEmpty);
+
+    await tester.tap(followUpView);
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<ChoiceChip>(followUpView).selected, isTrue);
+    expect(tester.widget<ChoiceChip>(channelView).selected, isFalse);
+    expect(followUpGateway.listedProjectIds, [_projectA.projectId]);
+    expect(followUpGateway.readRequests, isEmpty);
+    expect(
+      find.byKey(
+        ValueKey('follow-up-consent-ratio-report/${_projectA.projectId}'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        ValueKey(
+          'follow-up-consent-ratio-report-${_followUpSummaryA.snapshotId}',
+        ),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('后续联系同意占比视图支持 Space 选择并保持 family 互斥', (tester) async {
+    final followUpGateway = _FollowUpConsentRatioGateway();
+    await tester.pumpWidget(
+      _app(
+        _Gateway(
+          context: _contextSnapshot(current: _projectA),
+          summaries: [_summary],
+        ),
+        followUpGateway: followUpGateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final followUpView = find.byKey(
+      const ValueKey('management-follow-up-consent-ratio-report-view'),
+    );
+    await _tabTo(tester, followUpView);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pumpAndSettle();
+
+    expect(_containsPrimaryFocus(tester, followUpView), isTrue);
+    expect(tester.widget<ChoiceChip>(followUpView).selected, isTrue);
+    expect(followUpGateway.listedProjectIds, [_projectA.projectId]);
+  });
+
+  testWidgets('后续联系同意占比视图支持 Enter 选择且不自动读取详情', (tester) async {
+    final followUpGateway = _FollowUpConsentRatioGateway();
+    await tester.pumpWidget(
+      _app(
+        _Gateway(
+          context: _contextSnapshot(current: _projectA),
+          summaries: [_summary],
+        ),
+        followUpGateway: followUpGateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final followUpView = find.byKey(
+      const ValueKey('management-follow-up-consent-ratio-report-view'),
+    );
+    await _tabTo(tester, followUpView);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    expect(_containsPrimaryFocus(tester, followUpView), isTrue);
+    expect(tester.widget<ChoiceChip>(followUpView).selected, isTrue);
+    expect(followUpGateway.listedProjectIds, [_projectA.projectId]);
+    expect(followUpGateway.readRequests, isEmpty);
+    expect(
+      find.byKey(
+        ValueKey('follow-up-consent-ratio-report/${_projectA.projectId}'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('后续联系同意占比目录随项目切换并忽略旧项目迟到响应', (tester) async {
+    final gateway = _Gateway(
+      context: _contextSnapshot(current: _projectA),
+      summaries: [_summary],
+      selectResult: ManagementReportSuccess(
+        _contextSnapshot(current: _projectB),
+      ),
+    );
+    final followUpGateway = _DeferredFollowUpConsentRatioGateway();
+    await tester.pumpWidget(_app(gateway, followUpGateway: followUpGateway));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('management-follow-up-consent-ratio-report-view'),
+      ),
+    );
+    await tester.pump();
+    expect(followUpGateway.listedProjectIds, [_projectA.projectId]);
+
+    await tester.tap(find.byKey(const ValueKey('management-project-picker')));
+    await tester.pump();
+    await tester.tap(find.text('第二组织 · 第二项目').last);
+    await tester.pump();
+    expect(followUpGateway.listedProjectIds, [
+      _projectA.projectId,
+      _projectB.projectId,
+    ]);
+
+    followUpGateway
+        .directoryFor(_projectB.projectId)
+        .complete(
+          FollowUpConsentRatioReportSuccess(
+            _followUpDirectory(_projectB.projectId, _followUpSummaryB),
+          ),
+        );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(
+        ValueKey('follow-up-consent-ratio-report/${_projectB.projectId}'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        ValueKey(
+          'follow-up-consent-ratio-report-${_followUpSummaryB.snapshotId}',
+        ),
+      ),
+      findsOneWidget,
+    );
+
+    followUpGateway
+        .directoryFor(_projectA.projectId)
+        .complete(
+          FollowUpConsentRatioReportSuccess(
+            _followUpDirectory(_projectA.projectId, _followUpSummaryA),
+          ),
+        );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(
+        ValueKey('follow-up-consent-ratio-report/${_projectA.projectId}'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.byKey(
+        ValueKey('follow-up-consent-ratio-report/${_projectB.projectId}'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        ValueKey(
+          'follow-up-consent-ratio-report-${_followUpSummaryA.snapshotId}',
+        ),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('后续联系同意占比目录迟到响应不会恢复已切回的渠道视图', (tester) async {
+    final followUpGateway = _DeferredFollowUpConsentRatioGateway();
+    await tester.pumpWidget(
+      _app(
+        _Gateway(
+          context: _contextSnapshot(current: _projectA),
+          summaries: [_summary],
+        ),
+        followUpGateway: followUpGateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('management-follow-up-consent-ratio-report-view'),
+      ),
+    );
+    await tester.pump();
+    expect(followUpGateway.listedProjectIds, [_projectA.projectId]);
+
+    await tester.tap(
+      find.byKey(const ValueKey('management-channel-report-view')),
+    );
+    await tester.pumpAndSettle();
+    followUpGateway
+        .directoryFor(_projectA.projectId)
+        .complete(
+          FollowUpConsentRatioReportSuccess(
+            _followUpDirectory(_projectA.projectId, _followUpSummaryA),
+          ),
+        );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<ChoiceChip>(
+            find.byKey(const ValueKey('management-channel-report-view')),
+          )
+          .selected,
+      isTrue,
+    );
+    expect(
+      find.byKey(
+        ValueKey('follow-up-consent-ratio-report/${_projectA.projectId}'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.byKey(ValueKey('management-report-${_summary.snapshotId}')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('替换后续联系同意占比 gateway 会重置 family，旧响应不会穿透', (tester) async {
+    final oldGateway = _DeferredFollowUpConsentRatioGateway();
+    final newGateway = _FollowUpConsentRatioGateway();
+    final managementGateway = _Gateway(
+      context: _contextSnapshot(current: _projectA),
+      summaries: [_summary],
+    );
+    await tester.pumpWidget(
+      _app(managementGateway, followUpGateway: oldGateway),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(
+        const ValueKey('management-follow-up-consent-ratio-report-view'),
+      ),
+    );
+    await tester.pump();
+    expect(oldGateway.listedProjectIds, [_projectA.projectId]);
+
+    await tester.pumpWidget(
+      _app(managementGateway, followUpGateway: newGateway),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<ChoiceChip>(
+            find.byKey(const ValueKey('management-channel-report-view')),
+          )
+          .selected,
+      isTrue,
+    );
+    expect(
+      find.byKey(
+        ValueKey('follow-up-consent-ratio-report/${_projectA.projectId}'),
+      ),
+      findsNothing,
+    );
+
+    oldGateway
+        .directoryFor(_projectA.projectId)
+        .complete(
+          FollowUpConsentRatioReportSuccess(
+            _followUpDirectory(_projectA.projectId, _followUpSummaryA),
+          ),
+        );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(
+        ValueKey('follow-up-consent-ratio-report/${_projectA.projectId}'),
+      ),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('management-follow-up-consent-ratio-report-view'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(newGateway.listedProjectIds, [_projectA.projectId]);
+  });
+
+  testWidgets('后续联系同意占比 family 在中文英文、320 宽和 200% 文字下不溢出', (tester) async {
+    _compactView(tester);
+    final followUpGateway = _FollowUpConsentRatioGateway();
+    await tester.pumpWidget(
+      _app(
+        _Gateway(
+          context: _contextSnapshot(current: _projectA),
+          summaries: [_summary],
+        ),
+        text: const AppStrings('en'),
+        textScaler: TextScaler.linear(2),
+        followUpGateway: followUpGateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final followUpView = find.byKey(
+      const ValueKey('management-follow-up-consent-ratio-report-view'),
+      skipOffstage: false,
+    );
+    final followUpChip = tester.widget<ChoiceChip>(followUpView);
+    final followUpLabel = followUpChip.label as Text;
+    expect(followUpLabel.softWrap, isTrue);
+    expect(followUpLabel.maxLines, 2);
+    expect(followUpLabel.overflow, TextOverflow.visible);
+    expect(followUpLabel.data, 'Follow-up consent ratio');
+    await tester.ensureVisible(followUpView);
+    await tester.pump();
+    final chipRect = tester.getRect(followUpView);
+    expect(chipRect.top, greaterThanOrEqualTo(0));
+    expect(chipRect.bottom, lessThanOrEqualTo(tester.view.physicalSize.height));
+    expect(chipRect.height, greaterThan(64));
+    await tester.tap(followUpView);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Follow-up consent ratio reports'), findsOneWidget);
+    expect(
+      find.byKey(
+        ValueKey('follow-up-consent-ratio-report/${_projectA.projectId}'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('兴趣视图必须明确选择，且与渠道和 current-city 互斥', (tester) async {
@@ -239,10 +589,13 @@ void main() {
       find.byKey(ValueKey('original-region-report/${_projectA.projectId}')),
       findsNothing,
     );
-    expect(
-      find.byKey(ValueKey('management-report-${_summary.snapshotId}')),
-      findsOneWidget,
+    final item = find.byKey(
+      ValueKey('management-report-${_summary.snapshotId}'),
+      skipOffstage: false,
     );
+    await tester.ensureVisible(item);
+    await tester.pump();
+    expect(item, findsOneWidget);
   });
 
   testWidgets('兴趣目录的项目来自 ManagementAnalysisContext 并随项目切换', (tester) async {
@@ -431,10 +784,13 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.byKey(const ValueKey('management-project-picker')), findsOne);
-    expect(
-      find.byKey(ValueKey('management-report-${_summary.snapshotId}')),
-      findsOne,
+    final item = find.byKey(
+      ValueKey('management-report-${_summary.snapshotId}'),
+      skipOffstage: false,
     );
+    await tester.ensureVisible(item);
+    await tester.pump();
+    expect(item, findsOne);
   });
 
   testWidgets('报告详情在窄屏大字号下显示中文固定元数据和隐私摘要', (tester) async {
@@ -991,6 +1347,7 @@ Widget _app(
   TextScaler textScaler = TextScaler.noScaling,
   ManagementReportExportDelivery? delivery,
   CurrentCityReportGateway? currentCityGateway,
+  FollowUpConsentRatioReportGateway? followUpGateway,
   InterestReportGateway? interestGateway,
   OriginalRegionReportGateway? originalRegionGateway,
 }) => MaterialApp(
@@ -1004,6 +1361,8 @@ Widget _app(
       gateway: gateway,
       currentCityGateway:
           currentCityGateway ?? const DeferredCurrentCityReportGateway(),
+      followUpConsentRatioGateway:
+          followUpGateway ?? const DeferredFollowUpConsentRatioReportGateway(),
       interestGateway: interestGateway ?? const DeferredInterestReportGateway(),
       originalRegionGateway:
           originalRegionGateway ?? const DeferredOriginalRegionReportGateway(),
@@ -1327,6 +1686,95 @@ final class _DeferredCurrentCityGateway implements CurrentCityReportGateway {
       const CurrentCityReportRejected(CurrentCityReportFailureCode.notFound);
 }
 
+final class _FollowUpConsentRatioGateway
+    implements FollowUpConsentRatioReportGateway {
+  final listedProjectIds = <String>[];
+  final readRequests = <(String, FollowUpConsentRatioReportSnapshotSummary)>[];
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  Future<
+    FollowUpConsentRatioReportResult<
+      FollowUpConsentRatioReportSnapshotDirectory
+    >
+  >
+  listSnapshots(String projectId) async {
+    listedProjectIds.add(projectId);
+    final summary = projectId == _projectB.projectId
+        ? _followUpSummaryB
+        : _followUpSummaryA;
+    return FollowUpConsentRatioReportSuccess(
+      _followUpDirectory(projectId, summary),
+    );
+  }
+
+  @override
+  Future<FollowUpConsentRatioReportResult<FollowUpConsentRatioReportSnapshot>>
+  readSnapshot({
+    required String projectId,
+    required FollowUpConsentRatioReportSnapshotSummary summary,
+  }) async {
+    readRequests.add((projectId, summary));
+    return const FollowUpConsentRatioReportRejected(
+      FollowUpConsentRatioReportFailureCode.notFound,
+    );
+  }
+}
+
+final class _DeferredFollowUpConsentRatioGateway
+    implements FollowUpConsentRatioReportGateway {
+  final _directories =
+      <
+        String,
+        Completer<
+          FollowUpConsentRatioReportResult<
+            FollowUpConsentRatioReportSnapshotDirectory
+          >
+        >
+      >{};
+  final listedProjectIds = <String>[];
+
+  Completer<
+    FollowUpConsentRatioReportResult<
+      FollowUpConsentRatioReportSnapshotDirectory
+    >
+  >
+  directoryFor(String projectId) => _directories.putIfAbsent(
+    projectId,
+    Completer<
+          FollowUpConsentRatioReportResult<
+            FollowUpConsentRatioReportSnapshotDirectory
+          >
+        >
+        .new,
+  );
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  Future<
+    FollowUpConsentRatioReportResult<
+      FollowUpConsentRatioReportSnapshotDirectory
+    >
+  >
+  listSnapshots(String projectId) {
+    listedProjectIds.add(projectId);
+    return directoryFor(projectId).future;
+  }
+
+  @override
+  Future<FollowUpConsentRatioReportResult<FollowUpConsentRatioReportSnapshot>>
+  readSnapshot({
+    required String projectId,
+    required FollowUpConsentRatioReportSnapshotSummary summary,
+  }) async => const FollowUpConsentRatioReportRejected(
+    FollowUpConsentRatioReportFailureCode.notFound,
+  );
+}
+
 final class _Delivery implements ManagementReportExportDelivery {
   _Delivery({
     this.isAvailable = true,
@@ -1390,6 +1838,33 @@ final _originalRegionSummary = OriginalRegionReportSnapshotSummary(
   reportingTimeZone: 'America/Chicago',
   dataCutoffUtc: DateTime.utc(2030, 1, 22),
   releasedAtUtc: DateTime.utc(2030, 1, 22, 0, 1),
+);
+
+final _followUpSummaryA = FollowUpConsentRatioReportSnapshotSummary(
+  snapshotId: '99999999-9999-4999-8999-999999999999',
+  reportId: 'follow_up_consent_ratio_two_periods',
+  reportVersion: 1,
+  reportingTimeZone: 'America/Chicago',
+  dataCutoffUtc: DateTime.utc(2030, 1, 22),
+  releasedAtUtc: DateTime.utc(2030, 1, 22, 0, 1),
+);
+
+final _followUpSummaryB = FollowUpConsentRatioReportSnapshotSummary(
+  snapshotId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  reportId: 'follow_up_consent_ratio_two_periods',
+  reportVersion: 1,
+  reportingTimeZone: 'America/Chicago',
+  dataCutoffUtc: DateTime.utc(2030, 1, 23),
+  releasedAtUtc: DateTime.utc(2030, 1, 23, 0, 1),
+);
+
+FollowUpConsentRatioReportSnapshotDirectory _followUpDirectory(
+  String projectId,
+  FollowUpConsentRatioReportSnapshotSummary summary,
+) => FollowUpConsentRatioReportSnapshotDirectory(
+  accessEventId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+  projectId: projectId,
+  snapshots: [summary],
 );
 
 final _summary = ManagementReportSnapshotSummary(

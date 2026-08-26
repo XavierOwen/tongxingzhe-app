@@ -3068,6 +3068,47 @@ PostgreSQL、部署服务、production identity、持久化、offline 或 Androi
 `ManagementReportBrowser`，不修改 `_ReadyApp`、`ProductionHomeShell`、`AppDependencies`、导航或 gateway passing route，也不新增数据库步骤。需要回归前序数据库合同
 时，按[第 9 章](09-local-docker-and-ci-testing.md)运行 Docker runner。
 
+## Slice 6CA：把后续联系同意占比接入管理报告浏览器
+
+6CA 把 6BZ 的 panel 接入 `ManagementReportBrowser`。浏览器保留 channel、current-city、interest、original-region 四个既有 family，新增第五个互斥的
+follow-up consent ratio family。channel 仍是默认选择。默认状态和其他四个 family 不请求这个 gateway。
+
+### 明确选择和当前项目
+
+用户明确选择第五个 family 后，浏览器才创建并显示 6BZ panel。鼠标、触摸、Enter 和 Space 都可以完成选择。第五个 family 使用本地化的中文和 English 标签，
+并与其他 family 保持单一选择。选择不会自动打开目录第一项，也不会自动请求详情。panel 只使用当前已重新授权的
+`ManagementAnalysisContext.projectId`。它不回退到个人项目、旧项目或 gateway 内置项目。
+
+6BY 已在 composition root 创建 `FollowUpConsentRatioReportGateway`。这个实例沿
+`AppStartupReady → _ReadyApp → ProductionHomeShell → ManagementReportBrowser` 原样传递。下游 browser 和 panel 只借用它，不替换、不拥有、不关闭它。
+gateway 的 ownership 和 close 仍由 6BY 的 composition root 负责。
+
+### 项目和 family 切换
+
+切换项目时，浏览器使用新的 `ManagementAnalysisContext.projectId` 重建 panel。旧项目的 directory 或 detail 响应不能写回新项目。
+切换到其他 family 时，6BZ panel 被移除；旧响应不能把它重新显示。既有四个 family 的行为保持不变。
+
+### 如何验证 6CA
+
+在仓库根目录运行：
+
+```bash
+flutter pub get
+dart analyze
+flutter test --no-pub \
+  test/features/management_reports/management_report_browser_test.dart \
+  test/app/app_dependencies_test.dart \
+  test/app/tongxingzhe_app_test.dart
+flutter test --no-pub
+```
+
+Browser 和 app composition tests 使用 fake gateway。它们检查 channel 默认且不发请求、明确选择第五个 family、当前项目传递、无自动 detail、键盘 focus、
+project／family 切换、迟到响应隔离、同一 gateway 实例和 close ownership。它们还检查中英文标签、既有 family 不回归、`320×568` viewport 和 `200%` text scale。
+
+6CA 不修改 `AppDependencies` 的 gateway 构造、identity、ownership 或 close 逻辑，也不修改 6BZ panel、typed gateway、HTTP、Backend、PostgreSQL、runtime、缓存、
+offline、同步、导出或导航。这个 slice 不新增 Docker 步骤。若要回归前序数据库合同，先启动 Docker Desktop，再按[第 9 章](09-local-docker-and-ci-testing.md)的命令运行
+Docker runner。Flutter fake tests 不证明 gateway parser、Backend authorization、数据库、部署端点、production identity 或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和

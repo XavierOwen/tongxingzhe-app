@@ -243,6 +243,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
             :final personalRelationshipStageChangeSummaryGateway,
             :final managementReportGateway,
             :final currentCityReportGateway,
+            :final followUpConsentRatioReportGateway,
             :final interestReportGateway,
             :final originalRegionReportGateway,
             :final managementReportExportDelivery,
@@ -275,6 +276,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
                   personalRelationshipStageChangeSummaryGateway,
               managementReportGateway: managementReportGateway,
               currentCityReportGateway: currentCityReportGateway,
+              followUpConsentRatioReportGateway:
+                  followUpConsentRatioReportGateway,
               interestReportGateway: interestReportGateway,
               originalRegionReportGateway: originalRegionReportGateway,
               managementReportExportDelivery: managementReportExportDelivery,
@@ -317,6 +320,7 @@ class _ReadyApp extends StatefulWidget {
     required this.personalRelationshipStageChangeSummaryGateway,
     required this.managementReportGateway,
     required this.currentCityReportGateway,
+    required this.followUpConsentRatioReportGateway,
     required this.interestReportGateway,
     required this.originalRegionReportGateway,
     required this.managementReportExportDelivery,
@@ -349,6 +353,7 @@ class _ReadyApp extends StatefulWidget {
   personalRelationshipStageChangeSummaryGateway;
   final ManagementReportGateway managementReportGateway;
   final CurrentCityReportGateway currentCityReportGateway;
+  final FollowUpConsentRatioReportGateway followUpConsentRatioReportGateway;
   final InterestReportGateway interestReportGateway;
   final OriginalRegionReportGateway originalRegionReportGateway;
   final ManagementReportExportDelivery managementReportExportDelivery;
@@ -450,6 +455,8 @@ final class _ReadyAppState extends State<_ReadyApp> {
             widget.personalRelationshipStageChangeSummaryGateway,
         managementReportGateway: widget.managementReportGateway,
         currentCityReportGateway: widget.currentCityReportGateway,
+        followUpConsentRatioReportGateway:
+            widget.followUpConsentRatioReportGateway,
         interestReportGateway: widget.interestReportGateway,
         originalRegionReportGateway: widget.originalRegionReportGateway,
         managementReportExportDelivery: widget.managementReportExportDelivery,

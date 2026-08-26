@@ -243,6 +243,57 @@ void main() {
     expect(originalRegionGateway.closeCount, 1);
   });
 
+  testWidgets('管理报告同意占比 family 沿 composition root 复用 gateway 并传递管理项目', (
+    tester,
+  ) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final managementGateway = _ReadyManagementReportGateway();
+    final followUpGateway = _TrackingFollowUpConsentRatioReportGateway();
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
+      managementReportGatewayBuilder: (_) => managementGateway,
+      followUpConsentRatioReportGatewayBuilder: (_) => followUpGateway,
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+    );
+    addTearDown(database.close);
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('分析'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('management-report-view')));
+    await tester.pumpAndSettle();
+
+    final followUpFamily = find.byKey(
+      const ValueKey('management-follow-up-consent-ratio-report-view'),
+    );
+    expect(followUpFamily, findsOneWidget);
+    expect(followUpGateway.listedProjectIds, isEmpty);
+
+    await tester.tap(followUpFamily);
+    await tester.pumpAndSettle();
+
+    expect(followUpGateway.listedProjectIds, [managementGateway.projectId]);
+    expect(followUpGateway.readRequests, isEmpty);
+  });
+
   testWidgets('占比服务失败时最近七日本地事实仍可读', (tester) async {
     final database = LocalDatabase(NativeDatabase.memory());
     final semantics = tester.ensureSemantics();
@@ -2086,9 +2137,55 @@ final class _EmptyManagementReportGateway implements ManagementReportGateway {
       const ManagementReportRejected(ManagementReportFailureCode.unauthorized);
 }
 
+final class _ReadyManagementReportGateway implements ManagementReportGateway {
+  final projectId = '77777777-7777-4777-8777-777777777777';
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  Future<ManagementReportResult<ManagementAnalysisContextSnapshot>>
+  loadContext() async => ManagementReportSuccess(
+    ManagementAnalysisContextSnapshot(
+      current: ManagementAnalysisContext(
+        organizationId: '88888888-8888-4888-8888-888888888888',
+        organizationName: '测试组织',
+        projectId: projectId,
+        projectName: '管理项目',
+      ),
+      available: const [],
+    ),
+  );
+
+  @override
+  Future<ManagementReportResult<List<ManagementReportSnapshotSummary>>>
+  listSnapshots(String projectId) async => const ManagementReportSuccess([]);
+
+  @override
+  Future<ManagementReportResult<ManagementReportSnapshot>> readSnapshot({
+    required String projectId,
+    required ManagementReportSnapshotSummary summary,
+  }) async =>
+      const ManagementReportRejected(ManagementReportFailureCode.notFound);
+
+  @override
+  Future<ManagementReportResult<ManagementReportExportArtifact>>
+  exportSnapshot({
+    required String projectId,
+    required ManagementReportSnapshotSummary summary,
+  }) async =>
+      const ManagementReportRejected(ManagementReportFailureCode.notFound);
+
+  @override
+  Future<ManagementReportResult<ManagementAnalysisContextSnapshot>>
+  selectContext(String projectId) async => loadContext();
+}
+
 final class _TrackingFollowUpConsentRatioReportGateway
     implements FollowUpConsentRatioReportGateway {
   var closeCount = 0;
+  final listedProjectIds = <String>[];
+  final readRequests = <String>[];
 
   @override
   Future<void> close() async => closeCount++;
@@ -2099,19 +2196,24 @@ final class _TrackingFollowUpConsentRatioReportGateway
       FollowUpConsentRatioReportSnapshotDirectory
     >
   >
-  listSnapshots(String projectId) async =>
-      const FollowUpConsentRatioReportRejected(
-        FollowUpConsentRatioReportFailureCode.notConfigured,
-      );
+  listSnapshots(String projectId) async {
+    listedProjectIds.add(projectId);
+    return const FollowUpConsentRatioReportRejected(
+      FollowUpConsentRatioReportFailureCode.notConfigured,
+    );
+  }
 
   @override
   Future<FollowUpConsentRatioReportResult<FollowUpConsentRatioReportSnapshot>>
   readSnapshot({
     required String projectId,
     required FollowUpConsentRatioReportSnapshotSummary summary,
-  }) async => const FollowUpConsentRatioReportRejected(
-    FollowUpConsentRatioReportFailureCode.notConfigured,
-  );
+  }) async {
+    readRequests.add(projectId);
+    return const FollowUpConsentRatioReportRejected(
+      FollowUpConsentRatioReportFailureCode.notConfigured,
+    );
+  }
 }
 
 final class _BlockingPlatformCapabilitiesProvider

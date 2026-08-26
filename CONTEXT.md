@@ -956,6 +956,22 @@ PostgreSQL、runtime、identity、authorization、Drift、缓存、离线、同�
 Backend 授权、数据库、部署服务、生产身份或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。该切片沿用现有 panel／ViewModel 模式，不需要新增 ADR。
 _Avoid_: 复用个人 follow-up consent opt-in 或 ratio panel、自动打开首项、在客户端重算或补回隐藏值、用 UI 门控冒充授权、把 fake Flutter 测试写成生产证据
 
+**组织项目后续联系同意占比管理报告浏览器**:
+6CA 在 `ManagementReportBrowser` 中增加第五个、互斥的后续联系同意占比 report family。渠道 family 仍默认选中；默认状态和其他
+family 不请求该 gateway。只有用户明确选择第五个 family 后，浏览器才创建并显示 6BZ panel，并把当前已重新授权的
+`ManagementAnalysisContext.projectId` 传给它。浏览器不回退到个人项目、旧项目或 gateway 内置项目，也不自动打开目录首项或详情。
+
+`FollowUpConsentRatioReportGateway` 由 6BY 的 composition root 创建和关闭。它沿
+`AppStartupReady → _ReadyApp → ProductionHomeShell → ManagementReportBrowser` 原样传递；浏览器和 panel 只借用同一实例，不拥有、替换或关闭它。
+第五个 family 使用本地化的中英文标签，并与渠道、current-city、interest、original-region 保持单一互斥选择。
+
+项目或 family 切换会使当前 panel 的 generation 失效。旧项目的目录或详情响应不能写回新项目，也不能在离开第五个 family 后重新显示 panel。
+既有 report family 的请求和显示行为保持不变。该切片只增加浏览器选择、panel 接线和对应测试，不改变 6BY 的 identity、gateway ownership 或 close 逻辑，
+也不改变 6BZ panel、typed gateway、HTTP、Backend、PostgreSQL、runtime、Drift、缓存、离线、同步、导出或导航合同。
+测试使用 fake gateway 证明默认不请求、明确选择、当前项目传递、键盘路径、切换隔离、同一实例传递和小屏布局；它们不证明 Backend 授权、部署服务、生产身份或
+Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。该切片沿用现有 browser 和 composition 模式，不需要新增 ADR。
+_Avoid_: 默认读取第五个 family、个人项目回退、多个布尔开关、自动选择首项、关闭借用的 gateway、旧响应写回、用 UI 选择代替服务端授权、把 fake 测试写成生产证据
+
 **管理报告清除**:
 组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
 _Avoid_: 授权撤回、报告到期、tombstone、superseded
