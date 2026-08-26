@@ -903,6 +903,23 @@ Promise gate、wire 和 no-store，不证明 production identity、部署端点�
 _Avoid_: 认证前验证请求、自动选择第一项、把集合读取当成 latest 查询、返回 404／409 详情错误、复用其他 report family store、缓存 metadata 或 protected report、
 把 synthetic HTTP 测试写成生产或真人平台证据
 
+**组织项目后续联系同意占比 Flutter typed gateway**:
+6BX 为 6BW collection 和 6BT detail 增加独立的 Flutter typed gateway。它把 DB-only 四字段 directory envelope 与 HTTP／Dart 三字段 root 分开，
+只读取显式 project 和用户明确选择的 snapshot，不自动选择第一项，也不推断 current、latest 或 replacement。
+
+目录请求固定使用 6BW collection path，详情请求固定使用 6BT detail path；两个请求都只发送 GET、显式 project UUID 和已选 snapshot UUID，不发送 query 或 body。
+gateway 从 `IdentitySession` 取得 Bearer token，第一次收到 `401` 时强制刷新并只重试一次。成功响应必须是 JSON 并带 `Cache-Control: no-store`；identity、HTTP、
+timeout、network、非成功状态、strict parser 和 closed 错误映射为稳定 typed failure。
+
+目录 parser 只接受三项 root、六项 metadata、最多 20 项、空数组、无重复和服务端固定降序。详情 parser 只接受三项 root，严格解析
+`contact_target_follow_up_consent_ratio_two_periods@1` 的两个完整期间、ratio、coverage 顺序、`suppressed = null` 和安全整数，并核对
+project／snapshot／summary 绑定。额外字段、PII 形状、错误 key、错误顺序、错误算术、不安全整数或隐藏值恢复失败关闭。
+
+解析结果只保存在内存，并通过不可修改集合暴露；`close` 释放 gateway 持有的 HTTP client。6BX 只增加 Dart 类型、HTTP adapter 和 synthetic Flutter 测试，不修改
+Backend、PostgreSQL、runtime、UI、ViewModel、composition、Drift、缓存、离线、同步、导出、分页或筛选。测试只证明 transport、parser 和内存边界，不证明
+6BW／6BT 的 Backend authorization、数据库 provenance、部署端点、production identity 或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。
+_Avoid_: 复用其他 report family gateway、把 DB envelope 的 `access_contract_id` 带入 Dart、自动选择首项、在客户端重算或补回隐藏值、把 synthetic Flutter 测试写成生产证据
+
 **管理报告清除**:
 组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
 _Avoid_: 授权撤回、报告到期、tombstone、superseded

@@ -1427,6 +1427,28 @@ integration、并发、runtime bridge、Flutter、Drift、UI、缓存、离线�
 测试只证明 HTTP transport contract、认证顺序、请求形状拒绝、dedicated store、Promise gate、状态映射、wire 和 no-store；不证明 production identity、
 部署端点、真实账号或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。
 
+#### Slice 6BX：通过 Flutter typed gateway 读取后续联系同意占比快照
+
+6BX 为 6BW collection 和 6BT detail 建立独立的 Flutter typed gateway。它把数据库四字段 directory envelope 与 HTTP／Dart 三字段 root 分开，
+不把 `access_contract_id` 带入客户端类型。gateway 提供目录读取、用户明确选择的单份快照读取和 `close`；它不自动选择第一项，不推断
+current、latest 或 replacement 状态。
+
+目录请求固定为 6BW 的 collection path，详情请求固定为 6BT 的 detail path。两个请求都只使用 GET、显式 project UUID 和已选 snapshot UUID，
+不发送 query 或 body。gateway 从 `IdentitySession` 取得 Bearer token；第一次收到 `401` 时强制刷新并只重试一次。它要求成功响应为 JSON 并带
+`Cache-Control: no-store`，把 identity、HTTP、timeout、network、非成功状态和 parser 错误映射为稳定 typed failure。
+
+固定 HTTP 状态映射为：`400 → invalidRequest`、`401 → unauthorized`、`403 → forbidden`、`404 → notFound`、`409 → untrusted`、`503 → serviceUnavailable`。
+其他非成功状态进入 `serverRejected`；身份获取、timeout、网络、响应头、JSON、strict parser 和已关闭 gateway 分别保持稳定失败分类。失败结果不携带
+响应正文、数据库消息、授权详情或 PII。
+
+目录 parser 只接受三项 root、六项 metadata、最多 20 项、空数组、无重复和服务端固定降序。详情 parser 只接受三项 root，并严格解析
+`contact_target_follow_up_consent_ratio_two_periods@1` 的两个完整期间、ratio、coverage 顺序、受保护的 `suppressed = null` 和安全整数。
+它核对 project／snapshot／summary 绑定、比例算术、期间边界和固定 key 集合；额外字段、PII 形状、错误绑定、错误顺序、非安全整数和隐藏值恢复均失败关闭。
+
+结果只保存在内存，并通过不可修改集合暴露。`close` 释放 gateway 持有的 HTTP client。6BX 只增加 Dart 类型、HTTP adapter 和 synthetic Flutter tests，
+不增加 Backend、PostgreSQL、runtime、UI、ViewModel、composition、Drift、缓存、离线、同步、导出、分页、筛选、生产身份或六平台真人平台验收。
+测试只证明 Flutter transport、strict parser 和内存边界，不证明 6BW／6BT 的 Backend authorization、数据库 provenance、部署端点或真实平台运行时。
+
 #### 5.8.2 时间、趋势、版本与因果边界
 
 | ID | 需求 |
@@ -1489,6 +1511,7 @@ integration、并发、runtime bridge、Flutter、Drift、UI、缓存、离线�
 | `ANALYTICS-056` | 6BU 只在 private PostgreSQL 中为显式 project 列出 0075 consent-ratio family 的 `approved_baseline`／`approved` snapshot。canonical 函数 `app_private.list_authorized_management_follow_up_consent_snapshots_v1(uuid, uuid)` 每次重新确认 active user、组织／项目 membership、active project 和 `view_anonymous_analytics`，并沿 authorization／revoke lock order。返回 envelope 固定为 `access_contract_id`、`access_event_id`、`project_id`、`snapshots`；列表最多 20 项，每项固定六项 metadata，按 cutoff／release time／snapshot ID 降序。第一项不表示 current、latest 或未被取代；空目录仍写成功 zero-count audit。6BU 不增加 runtime、Backend、HTTP 或客户端合同。 |
 | `ANALYTICS-057` | 6BV 通过 0079 `app_data` exact-identity bridge 和独立 Backend directory store 读取 6BU 目录。bridge 只映射现有 active external `issuer + subject`，只接受显式 project UUID，并只调用 0078 private directory；runtime 只有 bridge `EXECUTE`。Backend 只执行一次固定参数化 SQL，strict parser 只接受四项 root envelope、六项 metadata、project 绑定、UUID／UTC 时间、最多 20 项、无重复和固定排序；只将 SQLSTATE `42501` 映射为 typed `forbidden`。6BV 不增加 HTTP、Flutter、缓存、离线、导出、分页、筛选或 current／latest 选择。 |
 | `ANALYTICS-058` | 6BW 通过固定 `GET /v1/projects/:projectId/management-follow-up-consent-ratio-report-snapshots` 列出 6BV 提供的 consent-ratio snapshot metadata。handler 先验证 Bearer identity，再检查显式 project UUID、query、GET body 和 dedicated store；成功 `200` 的 root 只有 `access_event_id`、`project_id` 和 `snapshots`，每项只有六个 metadata 字段，空目录仍返回 `200` 空数组。认证失败为 `401`，请求无效为 `400`，授权拒绝为 `403`，其他 verifier／store／parser／数据库错误为 `503`；本 collection route 不产生 `404` 或 `409`。所有响应使用 JSON 与 `Cache-Control: no-store`，第一项不表示 current／latest。6BW 不增加数据库、Flutter、缓存、离线、分页、筛选或真人平台证据。 |
+| `ANALYTICS-059` | 6BX 通过独立 Flutter typed gateway 消费 6BW 的 metadata-only collection 和 6BT 的显式 detail。gateway 严格分离 DB 四字段 envelope 与 HTTP／Dart 三字段 root，目录最多 20 项并保持服务端排序，详情只接受用户明确选择的 project／snapshot。它使用 `IdentitySession`、一次 `401` 刷新、JSON／`no-store`、稳定 typed failure、不可修改的内存结果和 `close`；strict parser 校验两个完整期间、ratio、coverage、`suppressed = null`、安全整数、绑定、key 集合和 PII 边界。6BX 不增加 UI、Backend、数据库、Drift、缓存、离线、导出或真人平台证据。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -1543,6 +1566,7 @@ integration、并发、runtime bridge、Flutter、Drift、UI、缓存、离线�
 | `PRIVACY-047` | 6BU 目录只返回固定四项 root envelope 和最多 20 项六字段 snapshot metadata；固定排序的第一项不表示 current、latest 或未被取代。目录只接受 0075 consent-ratio `approved_baseline`／`approved` exact provenance，并在 authorization／revoke lock order 内重新确认 active user、membership、active project 和 `view_anonymous_analytics`。专用 audit 追加、不可变且 value-free，只记录授权／访问 metadata，不记录 snapshot ID、report、period、ratio、coverage、source、contributor、target、contact 或 PII。未授权、撤权、过期、无成员、inactive、unknown、跨 project 或 drift 失败关闭；`PUBLIC`、runtime、普通 app role 和其他 reader／writer 无执行或 audit 读取权。synthetic DB-only 结果不构成 runtime、Backend、HTTP、生产身份或真人平台证据。 |
 | `PRIVACY-048` | 6BV 的 0079 bridge 使用 `SECURITY DEFINER`、`VOLATILE`、固定 `search_path = pg_catalog` 和 exact active external identity 映射，只调用 0078 private directory。`tongxingzhe_runtime` 只有 bridge `EXECUTE`，无 `app_private` schema usage，也不能直接读取 identity、snapshot、attempt、claim、directory 或 audit 表。Backend parser 只接受四项 root envelope、六项 metadata、project 绑定、合法 UUID／UTC 时间、最多 20 项、无重复和固定排序；额外字段、错误 contract、非 consent-ratio report、PII 或错误时间失败关闭。只有 SQLSTATE `42501` 映射为 typed `forbidden`；synthetic bridge／Backend 证据不构成 HTTP、生产身份或真人平台证据。 |
 | `PRIVACY-049` | 6BW 的固定 HTTP collection route 先验证 Bearer identity，再验证 project UUID、query、GET body 和 dedicated store。成功 wire 只含 `access_event_id`、`project_id` 和 `snapshots`；snapshot 只含六项 metadata，不返回 protected report、授权 lineage、内部 identity 或 PII。空目录仍返回 `200`；授权失败返回 `403`，其他失败按 `401`、`400` 或 `503` 关闭，目录业务不产生 `404` 或 `409`。所有响应使用 JSON 和 `Cache-Control: no-store`；synthetic HTTP 证据不构成 production identity、部署端点或真人平台证据。 |
+| `PRIVACY-050` | 6BX 的 typed gateway 只保留 strict parser 已接受的 directory metadata、用户明确选择的 summary 和 6BT 已保护的 consent-ratio detail。DB-only `access_contract_id`、授权 lineage、来源、贡献者、contact、target、PII 和隐藏前值不得进入 Dart 类型或错误。gateway 不重算、补回或改写 ratio、coverage、`suppressed`，结果只留在内存，不写 Drift、缓存、离线存储、同步队列或导出；解析、身份、HTTP、timeout、网络和关闭错误均失败关闭。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
 
@@ -1592,6 +1616,7 @@ integration、并发、runtime bridge、Flutter、Drift、UI、缓存、离线�
 | `MANUAL-040` | 学习文档必须用零基础读者可以复制的步骤说明 6BU 的 0078 SQL-only private directory、canonical 函数名、0075 consent-ratio exact provenance、active user／membership／project／`view_anonymous_analytics` 重新授权、authorization／revoke lock order、最多 20 项六字段 metadata、固定 cutoff／release time／snapshot ID 降序、第一项无 current／latest 语义、空目录 zero-count audit、value-free immutable audit、权限与 provenance 负例、rollback fixture、directory／revoke concurrency、checksum、restore role、dump／restore 和专用测试库命令。必须明确 6BU 不增加 runtime、Backend、HTTP 或客户端合同；synthetic PostgreSQL 证据不证明 production identity、部署服务或六平台真人平台。 |
 | `MANUAL-041` | 学习文档必须用零基础读者可以复制的步骤说明 6BV 的 0079 exact-identity `app_data` bridge、0078 private directory delegation、exact active issuer／subject、显式 project、trim／bootstrap 拒绝、`SECURITY DEFINER`／`VOLATILE`／固定 search path、runtime 最小 ACL、独立 Backend directory store、一次固定 SQL、四项 root envelope、六项 metadata、UUID／UTC 时间／20 项／去重／排序 strict parser、仅映射 SQLSTATE `42501`、unknown／inactive／空白变体／release-only／跨项目失败、Backend unit／integration、Docker 自动发现、checksum、restore role、dump／restore 和证据边界。必须明确 6BV 不增加 HTTP、Flutter、Drift、缓存、离线、导出、分页、筛选、current／latest 选择或生产／真人平台证据。 |
 | `MANUAL-042` | 学习文档必须用零基础读者可以复制的步骤说明 6BW 的固定 HTTP GET collection path、认证先于 project UUID／query／GET body／dedicated store、非零 `Content-Length`／`Transfer-Encoding` body 拒绝、200 成功三字段 wire、空目录、第一项不表示 current／latest、401／400／403／503 映射、无 404／409、Promise gate、JSON／`Cache-Control: no-store`、unit／route／composition 测试和 production wiring。必须说明本切片不新增 PostgreSQL migration、数据库合同、Flutter、Drift、缓存、离线、导出、分页、筛选或真人平台证据；synthetic HTTP 测试不证明 production identity、部署端点或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。 |
+| `MANUAL-043` | 学习文档必须用零基础读者可以复制的步骤说明 6BX 的独立 Flutter typed gateway、6BW collection 与 6BT detail 两个固定 GET path、DB 四字段与 HTTP／Dart 三字段边界、显式 project／snapshot、六字段 metadata、两个完整期间、ratio、coverage、`suppressed = null`、安全整数、strict parser、`IdentitySession`、一次 `401` 刷新、JSON／`no-store`、typed failure、不可修改内存结果、`close` 和 focused／全量 Flutter 测试命令。必须说明 6BX 不增加 UI、ViewModel、composition、Backend、PostgreSQL、Drift、缓存、离线、导出或真人平台证据；Docker 只能回归前序数据库合同，synthetic Dart 测试不证明 production identity、部署端点或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -1821,6 +1846,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-050` | 6BU 的 0078 structural check、rollback fixture 和 directory／revoke concurrency 必须覆盖 canonical private function、owner／`SECURITY DEFINER`／固定 search path、无 `PUBLIC` execute、最小 ACL、0075 consent-ratio `approved_baseline`／`approved` exact provenance、最多 20 项、cutoff／release time／snapshot ID 固定降序、第一项不表示 current／latest、四项 root envelope、六字段 metadata、空目录 zero-count audit、value-free immutable audit、直接 UPDATE／DELETE 拒绝、unknown／inactive／cross-project／cross-family／legacy／blocked／missing／drift provenance、撤权／过期／无成员／inactive project 失败关闭、directory-first／revoke-first 锁顺序、checksum、restore role、dump／restore 和 committed namespace 隔离。通过只证明 synthetic PostgreSQL SQL-only directory contract，不声称 runtime、Backend、HTTP、Flutter、导出、缓存、离线、生产身份或真人平台证据。 |
 | `TEST-051` | 6BV 的 0079 structural check、rollback fixture、Backend unit 和 PostgreSQL integration 必须覆盖 exact active issuer／subject、unknown／inactive／release-only／空白变体、显式 project、0078 private delegation、单次固定参数化 SQL、`SECURITY DEFINER`／`VOLATILE`／固定 search path、owner、无 `PUBLIC` execute、runtime 最小 ACL 和 direct app_private／identity／snapshot／attempt／claim／directory／audit 拒绝。strict parser 必须拒绝额外或缺失字段、错误 contract、错误 project、非 consent-ratio report、无效 UUID／UTC 时间、重复 item、超过 20 项和错误排序，并接受固定四项 envelope、六项 metadata、空目录和重复授权读取的不同 access event。仅 SQLSTATE `42501` 映射 typed `forbidden`；未知 SQLSTATE、数据库错误和 parser 错误失败关闭。Docker 自动发现 0079 migration／check／fixture，运行专用 Backend integration，继续执行 0078 directory／revoke concurrency、checksum 和 dump／restore；通过只证明 synthetic runtime bridge、Backend adapter、parser 和 ACL 合同，不声称 HTTP、Flutter、生产身份或真人平台证据。 |
 | `TEST-052` | 6BW 的 handler、real HTTP route 和 production composition 测试必须覆盖固定 `GET /v1/projects/:projectId/management-follow-up-consent-ratio-report-snapshots`、认证先于 project UUID／query／GET body／store、缺失或无效 Bearer 的 `401`、malformed UUID／query／GET body（包括 `Content-Length`／`Transfer-Encoding`）的 `400`、dedicated store `forbidden` 的 `403` 和 verifier／store／parser／数据库／未知错误的 `503`。测试还必须覆盖空目录、固定三字段 success wire、第一项不表示 current／latest、业务结果不映射 `404`／`409`、wrong method 的通用 `404`、verified identity 与显式 project 传播、单次 store 调用、Promise gate、错误脱敏和所有响应 `no-store`。composition 必须拒绝 `SessionContext`、generic／其他 report-family store、detail reader、`app_private` 和客户端 SQL；通过只证明 synthetic Backend HTTP transport contract，不声称 PostgreSQL、Flutter、缓存、离线、production identity、部署端点或 Android、iOS、macOS、Windows、Linux、Web 真人平台证据。 |
+| `TEST-053` | 6BX 的 Dart tests 必须覆盖两个固定 GET path、显式 project／snapshot、无 query／GET body、Bearer、第一次 `401` 后只刷新并重试一次、JSON／`no-store`、目录三字段 root、详情三字段 root、六字段 metadata、空目录、20 项上限、无重复、固定降序、用户明确 summary、两个完整期间、ratio 算术、coverage 顺序、`suppressed = null`、安全整数、project／snapshot／summary 绑定、额外字段／错误 contract／PII／隐藏值拒绝，以及 400／401／403／404／409／503、identity、timeout、network、closed 和 invalid-response failure。测试还必须确认不可修改集合、`close` 和不保存持久化结果；通过只证明 Flutter transport、strict parser 与内存边界，不声称 Backend／PostgreSQL 授权、UI、缓存、离线、导出、生产身份或六平台真人运行时。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -2079,6 +2105,13 @@ query、GET body 和 dedicated store；认证失败返回 `401`，无效请求�
 成功 `200` 的 wire 只有 `access_event_id`、`project_id` 和 `snapshots`，空目录返回空数组，第一项不表示 current 或 latest；collection 业务结果不映射详情读取的 `404` 或 `409`。
 所有响应使用 JSON 与 `Cache-Control: no-store`，handler 等待 store Promise 完成后才写响应。
 6BW 只增加 Backend handler、route、production composition 和 synthetic HTTP 测试，不增加 PostgreSQL、Flutter、缓存、离线、分页、筛选或真人平台证据。
+
+6BX（#233）为 6BW collection 和 6BT detail 增加独立的 Flutter typed gateway。它分离 DB 四字段 directory envelope 与 HTTP／Dart 三字段 root，
+只读取显式 project 和用户明确选择的 snapshot。目录 strict parser 接受最多 20 项六字段 metadata、空数组、无重复和固定服务端排序；详情 parser
+接受固定 consent-ratio report 的两个完整期间、ratio、coverage、`suppressed = null` 和安全整数，并拒绝额外字段、错误绑定、PII、隐藏值和不安全整数。
+gateway 使用 `IdentitySession`、第一次 `401` 后只刷新并重试一次，要求 JSON／`no-store`，把 HTTP、identity、timeout、network、parser 和 closed 状态映射为稳定
+typed failure，结果只保存在不可修改的内存集合中。6BX 不增加 UI、ViewModel、composition、Backend、PostgreSQL、Drift、缓存、离线、导出或真人平台证据；
+Dart synthetic 测试只证明 transport、parser 和内存边界。
 
 ### Slice 7：组织治理与数据可携带性
 

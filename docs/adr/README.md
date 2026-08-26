@@ -91,6 +91,7 @@
 | [0166](./0166-authorized-follow-up-consent-ratio-snapshot-directory-uses-independent-provenance.md) | 已接受，2026-08-26 | Slice 6BU；Issue #227；`ANALYTICS-056`、`PRIVACY-047`、`TEST-050`、`MANUAL-040` | 组织项目后续联系同意占比快照目录使用独立 0075 provenance；private SQL 函数固定最多 20 项 metadata、排序和 value-free audit，重新授权与撤权锁保持一致；不修改前序 6BS／6BT 的 runtime、Backend 和 HTTP 边界 |
 | [0167](./0167-runtime-authorized-follow-up-consent-ratio-snapshot-directory-uses-exact-identity-bridge.md) | 已接受，2026-08-26 | Slice 6BV；Issue #229；`ANALYTICS-057`、`PRIVACY-048`、`TEST-051`、`MANUAL-041` | 组织项目后续联系同意占比目录通过 0079 exact external identity bridge 接入 0078 private directory；Backend 使用独立 store、一次固定 SQL 和 strict metadata parser，runtime 只有 bridge `EXECUTE`；不增加 HTTP、Flutter 或生产平台证据 |
 | [0168](./0168-follow-up-consent-ratio-snapshot-directory-http-collection.md) | 已接受，2026-08-26 | Slice 6BW；Issue #231；`ANALYTICS-058`、`PRIVACY-049`、`TEST-052`、`MANUAL-042` | 后续联系同意占比快照目录使用固定 HTTP GET collection route；认证先于请求验证，专用 store 返回三字段 wire，空目录为 200，第一项不表示 current／latest，错误只映射 401／400／403／503 并统一 no-store |
+| [0169](./0169-follow-up-consent-ratio-typed-gateway-keeps-db-http-and-flutter-contracts-separate.md) | 已接受，2026-08-26 | Slice 6BX；Issue #233；`ANALYTICS-059`、`PRIVACY-050`、`TEST-053`、`MANUAL-043` | Flutter 使用独立 follow-up consent-ratio typed gateway 消费 6BW 目录和 6BT 显式详情；DB、HTTP 与 Dart 合同分离，strict parser、一次 401、不可修改内存结果和 close 保持固定，不增加 UI、Backend、数据库或真人平台证据 |
 
 ## 按主题查找
 
