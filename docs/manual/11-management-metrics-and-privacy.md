@@ -2920,6 +2920,68 @@ cd ../..
 这些 synthetic HTTP 测试只证明 Backend transport contract 和 composition wiring。它们不证明 PostgreSQL 授权、Flutter、Drift、缓存、离线、导出、部署服务、
 production identity、真实账号或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。
 
+## Slice 6BX：Flutter typed gateway 的合同和隐私边界
+
+6BX 让 Flutter 读取 6BW 的 consent-ratio metadata 目录和 6BT 的一份明确快照。它只增加 Dart interface、HTTP adapter、strict parser 和内存结果。
+它不增加新的 Backend route、PostgreSQL 查询、runtime bridge、UI、ViewModel、Drift、缓存、离线、同步、导出或分页。
+
+### 两个入口和两个选择步骤
+
+目录入口是：
+
+```text
+GET /v1/projects/:projectId/management-follow-up-consent-ratio-report-snapshots
+```
+
+详情入口是：
+
+```text
+GET /v1/projects/:projectId/management-follow-up-consent-ratio-report-snapshots/:snapshotId
+```
+
+gateway 只发送 GET。它不发送 query 或 body。目录调用使用显式 project UUID。详情调用还使用用户从目录明确选择的 snapshot UUID。
+目录第一项只是服务端固定排序中的第一项，不能叫作 current、latest 或“推荐”。
+
+### Dart 解析和隐私边界
+
+数据库目录有四项 root，其中的 `access_contract_id` 是 private metadata。HTTP／Dart 目录只接受三项 root：`access_event_id`、`project_id` 和 `snapshots`。
+每项只接受六项 metadata，最多 20 项，可以是空数组。详情只接受三项 root：`access_event_id`、`snapshot_id` 和 `report`。
+
+详情 parser 只接受 `contact_target_follow_up_consent_ratio_two_periods@1`。它检查 project／snapshot／summary 绑定、两个完整期间、ratio 算术、coverage 顺序、
+非负安全整数和 `suppressed = null`。多余字段、错误 key、PII 形状、contact、target、contributor、source、隐藏前值、错误期间或不安全整数均失败关闭。
+gateway 不重算、不补回、不改写服务端的 ratio、coverage 或隐藏状态。
+
+gateway 通过 `IdentitySession` 取得 Bearer token。首次收到 `401` 时只强制刷新并重试一次。成功响应必须是 JSON，并带 `Cache-Control: no-store`。
+identity、HTTP、timeout、network、响应头、JSON、parser 和 closed 错误都映射为稳定 typed failure。结果只在内存中保存，并通过不可修改集合暴露。
+
+HTTP 状态在 Dart 中固定映射为：`400 → invalidRequest`、`401 → unauthorized`、`403 → forbidden`、`404 → notFound`、`409 → untrusted`、
+`503 → serviceUnavailable`。其他非成功状态进入 `serverRejected`。失败结果不携带响应正文、数据库消息、授权详情或 PII。
+
+### 如何验证 6BX
+
+在仓库根目录运行：
+
+```bash
+flutter pub get
+dart analyze
+flutter test --no-pub test/management_reports/http_follow_up_consent_ratio_report_gateway_test.dart
+flutter test --no-pub
+```
+
+focused 测试使用 fake `IdentitySession` 和内存 `MockClient`，检查两个固定 path、Bearer、一次 `401` 刷新、无 query／body、JSON／`no-store`、三字段 root、
+六字段 metadata、空目录、20 项边界、固定降序、显式 summary、两个期间、ratio、coverage、`suppressed = null`、安全整数、错误映射、不可修改集合和 `close`。
+这些测试证明 Flutter transport、strict parser 和内存边界，不证明 6BT／6BW 的 Backend authorization、数据库 provenance、生产身份或真实平台运行时。
+
+6BX 没有新的 Docker 数据库步骤。需要回归前序数据库合同时，先启动 Docker Desktop，再从仓库根目录运行：
+
+```bash
+docker version
+./tool/run_postgres_tests_in_docker.sh
+```
+
+Docker runner 只回归已有 PostgreSQL、runtime bridge 和 Backend 合同。它不运行 Dart gateway 测试，也不证明部署端点、UI、缓存、离线、导出或 Android、
+iOS、macOS、Windows、Linux、Web 真人平台行为。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和

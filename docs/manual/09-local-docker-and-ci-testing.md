@@ -1315,6 +1315,59 @@ Backend 测试覆盖固定 GET path、错误 method、认证先于 UUID／query�
 这些 synthetic HTTP 测试证明 Backend transport contract 和 production wiring。它们不证明 PostgreSQL 授权、Flutter、Drift、缓存、离线、导出、部署服务、production
 identity、真实账号或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。
 
+### 6BX：验证后续联系同意占比 Flutter typed gateway
+
+6BX 只增加 Flutter 的 typed gateway。它在 Dart 测试进程中用 fake `IdentitySession` 和内存 `MockClient` 模拟 6BW collection 与 6BT detail。
+运行这些测试不需要 Android Studio、模拟器、手机或 Docker。
+
+collection 使用：
+
+```text
+GET /v1/projects/:projectId/management-follow-up-consent-ratio-report-snapshots
+```
+
+detail 使用：
+
+```text
+GET /v1/projects/:projectId/management-follow-up-consent-ratio-report-snapshots/:snapshotId
+```
+
+两个请求都只发送 GET。它们不发送 query 或 body。调用方必须提供 canonical project UUID；detail 还必须提供目录中明确选择的 snapshot UUID。
+gateway 不自动选择第一项，也不把第一项称为 current 或 latest。
+
+Dart 类型不接收 DB-only directory 的 `access_contract_id`。目录 root 只有 `access_event_id`、`project_id` 和 `snapshots`，每项只有六个 metadata 字段，
+最多 20 项。详情 root 只有 `access_event_id`、`snapshot_id` 和 `report`。parser 会检查 project／snapshot／summary 绑定、两个完整期间、ratio、
+coverage 顺序、`suppressed = null`、安全整数、固定 key 集合、无重复和服务端排序。额外字段、PII 形状、隐藏值或错误算术会失败关闭。
+
+gateway 每次从 `IdentitySession` 取得 Bearer token。第一次收到 `401` 时强制刷新并只重试一次。成功响应必须是 JSON，并带 `Cache-Control: no-store`。
+identity、HTTP、timeout、network、响应头、parser 和 closed 错误都转换为稳定 typed failure。结果只在内存中保存；`close` 释放 HTTP client。
+
+固定 HTTP 状态映射为：`400 → invalidRequest`、`401 → unauthorized`、`403 → forbidden`、`404 → notFound`、`409 → untrusted`、`503 → serviceUnavailable`。
+其他非成功状态进入 `serverRejected`。失败结果不携带响应正文、数据库消息、授权详情或 PII。
+
+#### 从零开始运行 6BX
+
+在仓库根目录执行：
+
+```bash
+flutter pub get
+dart analyze
+flutter test --no-pub test/management_reports/http_follow_up_consent_ratio_report_gateway_test.dart
+flutter test --no-pub
+```
+
+focused 测试验证两个 path、Bearer、一次 `401` 刷新、JSON／`no-store`、strict directory／detail parser、空目录、20 项边界、固定排序、详情数学、
+coverage、`suppressed = null`、安全整数、错误映射、不可修改集合和 `close`。全量 Flutter 测试用于检查既有 Dart 行为是否回归。
+
+6BX 不新增 PostgreSQL migration、fixture、check 或 Docker 数据库步骤。若要回归 6BW、6BV 及更早的数据库合同，仍可在仓库根目录运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+该 Docker 命令不执行 6BX Dart 测试，也不证明 6BT／6BW 的 deployed HTTP、Backend authorization、生产身份、UI、离线、导出或 Android、iOS、macOS、
+Windows、Linux、Web 真人平台运行时。Flutter focused 测试同样不提供这些证据。
+
 ### 6BF：理解管理报告删除与保留边界
 
 6BF 是产品和测试合同，不是数据库清理功能。没有用过 Docker 的读者先记住：Docker runner 会在一次性容器中验证当前仓库已有的 PostgreSQL 行为。
