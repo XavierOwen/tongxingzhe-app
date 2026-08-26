@@ -19,9 +19,11 @@ import 'package:tongxingzhe_app/features/contact_metrics/relationship_stage_chan
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/management_reports/current_city_report_gateway.dart';
+import 'package:tongxingzhe_app/management_reports/follow_up_consent_ratio_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/interest_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/original_region_report_gateway.dart';
+import 'package:tongxingzhe_app/platform/platform_capabilities.dart';
 import 'package:tongxingzhe_app/project_settings/personal_follow_up_consent_opt_in.dart';
 import 'package:tongxingzhe_app/questionnaires/questionnaire_contract.dart';
 import 'package:tongxingzhe_app/regions/contact_region_resolver.dart';
@@ -36,6 +38,114 @@ import '../support/fake_platform_capabilities.dart';
 import '../support/fake_session_context_gateway.dart';
 
 void main() {
+  testWidgets('启动尚未完成时移除 App 仍关闭后来取得的报告 gateway', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final startupGate = _BlockingPlatformCapabilitiesProvider();
+    final gateway = _TrackingFollowUpConsentRatioReportGateway();
+    var builderCalls = 0;
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: startupGate,
+      followUpConsentRatioReportGatewayBuilder: (_) {
+        builderCalls++;
+        return gateway;
+      },
+    );
+    addTearDown(database.close);
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pump();
+    expect(startupGate.loadCalls, 1);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    startupGate.complete();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+
+    expect(builderCalls, 1);
+    expect(gateway.closeCount, 1);
+  });
+
+  test('deferred 后续联系同意占比 gateway 不触网且不冒充其他报告类型', () async {
+    const gateway = DeferredFollowUpConsentRatioReportGateway();
+
+    final directory = await gateway.listSnapshots(
+      '33333333-3333-4333-8333-333333333333',
+    );
+    final detail = await gateway.readSnapshot(
+      projectId: '33333333-3333-4333-8333-333333333333',
+      summary: FollowUpConsentRatioReportSnapshotSummary(
+        snapshotId: '55555555-5555-4555-8555-555555555555',
+        reportId: 'management_follow_up_consent_ratio',
+        reportVersion: 1,
+        reportingTimeZone: 'UTC',
+        dataCutoffUtc: DateTime.utc(2030, 1, 1),
+        releasedAtUtc: DateTime.utc(2030, 1, 2),
+      ),
+    );
+
+    expect(directory, isA<FollowUpConsentRatioReportRejected>());
+    expect(
+      (directory as FollowUpConsentRatioReportRejected).code,
+      FollowUpConsentRatioReportFailureCode.notConfigured,
+    );
+    expect(detail, isA<FollowUpConsentRatioReportRejected>());
+    expect(
+      (detail as FollowUpConsentRatioReportRejected).code,
+      FollowUpConsentRatioReportFailureCode.notConfigured,
+    );
+    expect(gateway, isA<FollowUpConsentRatioReportGateway>());
+    expect(gateway, isNot(isA<CurrentCityReportGateway>()));
+    expect(gateway, isNot(isA<InterestReportGateway>()));
+    expect(gateway, isNot(isA<ManagementReportGateway>()));
+    expect(gateway, isNot(isA<PersonalFollowUpConsentRatioGateway>()));
+  });
+
+  testWidgets('移除 TongxingzheApp 后关闭后续联系同意占比报告 gateway 恰好一次', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final gateway = _TrackingFollowUpConsentRatioReportGateway();
+    final dependencies = AppDependencies(
+      databaseFactory: _SingleDatabaseFactory(database),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: _SequenceIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      questionnaireRemoteSourceBuilder: (_) =>
+          const _EmptyPublishedQuestionnaireSource(),
+      followUpConsentRatioReportGatewayBuilder: (_) => gateway,
+      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+    );
+    addTearDown(database.close);
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    expect(find.text('个人空间 → 我的推广项目'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    expect(gateway.closeCount, 1);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    expect(gateway.closeCount, 1);
+  });
+
   testWidgets('可信上下文进入四项主框架并显示当前推广项目', (tester) async {
     final database = LocalDatabase(NativeDatabase.memory());
     final identity = FakeIdentitySession(
@@ -1974,6 +2084,48 @@ final class _EmptyManagementReportGateway implements ManagementReportGateway {
   Future<ManagementReportResult<ManagementAnalysisContextSnapshot>>
   selectContext(String projectId) async =>
       const ManagementReportRejected(ManagementReportFailureCode.unauthorized);
+}
+
+final class _TrackingFollowUpConsentRatioReportGateway
+    implements FollowUpConsentRatioReportGateway {
+  var closeCount = 0;
+
+  @override
+  Future<void> close() async => closeCount++;
+
+  @override
+  Future<
+    FollowUpConsentRatioReportResult<
+      FollowUpConsentRatioReportSnapshotDirectory
+    >
+  >
+  listSnapshots(String projectId) async =>
+      const FollowUpConsentRatioReportRejected(
+        FollowUpConsentRatioReportFailureCode.notConfigured,
+      );
+
+  @override
+  Future<FollowUpConsentRatioReportResult<FollowUpConsentRatioReportSnapshot>>
+  readSnapshot({
+    required String projectId,
+    required FollowUpConsentRatioReportSnapshotSummary summary,
+  }) async => const FollowUpConsentRatioReportRejected(
+    FollowUpConsentRatioReportFailureCode.notConfigured,
+  );
+}
+
+final class _BlockingPlatformCapabilitiesProvider
+    implements PlatformCapabilitiesProvider {
+  final Completer<PlatformCapabilities> _completion = Completer();
+  var loadCalls = 0;
+
+  @override
+  Future<PlatformCapabilities> load() {
+    loadCalls++;
+    return _completion.future;
+  }
+
+  void complete() => _completion.complete(fullyAvailableTestCapabilities);
 }
 
 final class _TrackingCurrentCityReportGateway

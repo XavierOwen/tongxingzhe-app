@@ -1368,6 +1368,51 @@ coverage、`suppressed = null`、安全整数、错误映射、不可修改集�
 该 Docker 命令不执行 6BX Dart 测试，也不证明 6BT／6BW 的 deployed HTTP、Backend authorization、生产身份、UI、离线、导出或 Android、iOS、macOS、
 Windows、Linux、Web 真人平台运行时。Flutter focused 测试同样不提供这些证据。
 
+### 6BY：验证 typed gateway 的 AppDependencies 装配和生命周期
+
+6BY 只检查 App 的 composition root 和资源所有权。它不增加 PostgreSQL migration、check、fixture、HTTP、Backend 或 Docker 测试步骤。
+没有用过 Flutter 测试的读者可以把 focused test 理解为只运行两个相关文件；它使用 fake identity、fake gateway 和 fake 数据库，不访问网络。
+
+`AppDependencies` 有一个可选的
+`followUpConsentRatioReportGatewayBuilder`。生产 factory 配置它，测试可以注入 fake builder。启动流程打开 `IdentitySession` 后，把同一个实例传给
+builder。builder 返回的 gateway 会出现在 `AppStartupReady.followUpConsentRatioReportGateway` 中。
+
+没有 builder 时，启动使用 `DeferredFollowUpConsentRatioReportGateway`。这个对象返回 `notConfigured`，不会建立网络请求。个人同意占比 gateway 和其他
+管理报告 gateway 仍使用各自的 builder，不能互相替代。
+
+如果 gateway 已建立而后续启动步骤失败，`AppDependencies.start()` 的清理路径必须关闭它一次。移除 `TongxingzheApp` 时，widget lifecycle 再关闭 ready
+gateway 一次；重复关闭必须安全。6BY 不把该 gateway 传给 `_ReadyApp`、`ProductionHomeShell`、ViewModel、widget、导航或 UI。后续 UI slice 才能决定如何消费它。
+
+#### 从零开始运行 6BY
+
+在仓库根目录执行：
+
+```bash
+flutter pub get
+dart format --output=none --set-exit-if-changed \
+  lib/app/app_dependencies.dart \
+  lib/app/tongxingzhe_app.dart \
+  test/app/app_dependencies_test.dart \
+  test/app/tongxingzhe_app_test.dart
+dart analyze
+flutter test --no-pub \
+  test/app/app_dependencies_test.dart \
+  test/app/tongxingzhe_app_test.dart
+flutter test --no-pub
+```
+
+focused tests 必须观察 `AppDependencies.start()` 和 `TongxingzheApp` 的生命周期。它们至少检查同一 `IdentitySession`、ready 实例、deferred 无网络、后续启动失败
+清理、widget dispose、既有 gateway 隔离和单次 close。全量测试用于检查其他 Dart 行为没有回归。
+
+这些测试只证明 Flutter composition 和本地资源所有权。它们不证明 gateway 的 HTTP 请求、strict parser、Backend authorization、PostgreSQL、部署端点、真实身份、
+UI 消费、缓存、离线、导出或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。需要回归前序数据库合同时，仍可运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+Docker runner 只回归既有 PostgreSQL、runtime bridge 和 Backend 合同，不会把 6BY 的 fake lifecycle 测试写成数据库或生产证据。
+
 ### 6BF：理解管理报告删除与保留边界
 
 6BF 是产品和测试合同，不是数据库清理功能。没有用过 Docker 的读者先记住：Docker runner 会在一次性容器中验证当前仓库已有的 PostgreSQL 行为。
