@@ -18,6 +18,7 @@ import '../foundation/runtime_values.dart';
 import '../identity/identity_session.dart';
 import '../l10n/app_strings.dart';
 import '../management_reports/current_city_report_gateway.dart';
+import '../management_reports/follow_up_consent_ratio_report_gateway.dart';
 import '../management_reports/interest_report_gateway.dart';
 import '../management_reports/management_report_gateway.dart';
 import '../management_reports/management_report_export_delivery.dart';
@@ -84,6 +85,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
   _personalRelationshipStageChangeSummaryGateway;
   ManagementReportGateway? _managementReportGateway;
   CurrentCityReportGateway? _currentCityReportGateway;
+  FollowUpConsentRatioReportGateway? _followUpConsentRatioReportGateway;
   InterestReportGateway? _interestReportGateway;
   OriginalRegionReportGateway? _originalRegionReportGateway;
   CurrentRelationshipStageGateway? _currentRelationshipStageGateway;
@@ -98,6 +100,12 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
 
   Future<AppStartupResult> _start() async {
     final result = await widget.dependencies.start();
+    if (!mounted) {
+      if (result case AppStartupReady()) {
+        await _closeStartupResources(result);
+      }
+      return result;
+    }
     if (result case AppStartupReady(
       :final controller,
       :final identitySession,
@@ -114,6 +122,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       :final personalRelationshipStageChangeSummaryGateway,
       :final managementReportGateway,
       :final currentCityReportGateway,
+      :final followUpConsentRatioReportGateway,
       :final interestReportGateway,
       :final originalRegionReportGateway,
       :final currentRelationshipStageGateway,
@@ -138,6 +147,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
           personalRelationshipStageChangeSummaryGateway;
       _managementReportGateway = managementReportGateway;
       _currentCityReportGateway = currentCityReportGateway;
+      _followUpConsentRatioReportGateway = followUpConsentRatioReportGateway;
       _interestReportGateway = interestReportGateway;
       _originalRegionReportGateway = originalRegionReportGateway;
       _currentRelationshipStageGateway = currentRelationshipStageGateway;
@@ -145,6 +155,32 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       _privateSessionDataGuard = privateSessionDataGuard;
     }
     return result;
+  }
+
+  Future<void> _closeStartupResources(AppStartupReady startup) async {
+    await Future.wait([
+      startup.appSession.close(),
+      startup.identitySession.close(),
+      startup.syncEngineFactory?.close() ?? Future<void>.value(),
+      startup.regionResolver.close(),
+      startup.questionnaireCatalog.close(),
+      startup.questionnaireAdministration.close(),
+      startup.promotionTargetGateway.close(),
+      startup.personalActionPlanGateway.close(),
+      startup.personalActionReminderGateway.close(),
+      startup.personalFollowUpConsentOptInGateway.close(),
+      startup.personalFollowUpConsentRatioGateway.close(),
+      startup.personalRelationshipStageChangeSummaryGateway.close(),
+      startup.managementReportGateway.close(),
+      startup.currentCityReportGateway.close(),
+      startup.followUpConsentRatioReportGateway.close(),
+      startup.interestReportGateway.close(),
+      startup.originalRegionReportGateway.close(),
+      startup.currentRelationshipStageGateway.close(),
+      startup.privateSessionDataGuard.close(),
+      startup.reminderNotificationScheduler.close(),
+    ]);
+    startup.controller.dispose();
   }
 
   @override
@@ -163,6 +199,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
     unawaited(_personalRelationshipStageChangeSummaryGateway?.close());
     unawaited(_managementReportGateway?.close());
     unawaited(_currentCityReportGateway?.close());
+    unawaited(_followUpConsentRatioReportGateway?.close());
     unawaited(_interestReportGateway?.close());
     unawaited(_originalRegionReportGateway?.close());
     unawaited(_currentRelationshipStageGateway?.close());

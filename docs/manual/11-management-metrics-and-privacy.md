@@ -2982,6 +2982,47 @@ docker version
 Docker runner 只回归已有 PostgreSQL、runtime bridge 和 Backend 合同。它不运行 Dart gateway 测试，也不证明部署端点、UI、缓存、离线、导出或 Android、
 iOS、macOS、Windows、Linux、Web 真人平台行为。
 
+## Slice 6BY：把 typed gateway 接入 AppDependencies 生命周期
+
+6BY 只处理 Flutter composition 和资源所有权。它把已经存在的
+`FollowUpConsentRatioReportGateway` 接到 `AppDependencies`，供后续 UI slice 使用；当前 slice 不把 gateway 传入 UI。
+
+### 同一个身份和一个 gateway 实例
+
+启动流程先打开一个 `IdentitySession`。如果配置了
+`followUpConsentRatioReportGatewayBuilder`，`AppDependencies` 把这个已经打开的对象原样传给 builder，不创建第二个身份会话。builder 返回的 gateway
+通过 `AppStartupReady.followUpConsentRatioReportGateway` 暴露给后续 composition。个人同意占比 gateway 和其他管理报告 gateway 仍由各自的 builder 创建，不能混用。
+
+没有配置 builder 时，composition 使用 `DeferredFollowUpConsentRatioReportGateway`。它的读取方法返回 `notConfigured`，不发网络请求。这个 fallback 让未配置
+Backend 的启动结果保持可处理，同时不把“未配置”伪装成空报告。
+
+### 启动失败和 app dispose
+
+gateway 建立后，启动还可能在其他步骤失败。此时 `AppDependencies.start()` 必须在失败清理中关闭已拥有的 gateway 一次。启动成功后，
+`TongxingzheApp` 拥有 ready result；widget 被移除时，它关闭 gateway 一次。gateway 的 `close` 必须幂等，避免清理路径重复释放 HTTP 资源。
+
+当前 slice 不把 gateway 传给 `_ReadyApp`、`ProductionHomeShell`、管理报告 browser、ViewModel、widget、导航或其他 UI。后续 UI slice 需要定义明确的消费、状态和
+错误边界后，才能使用 `AppStartupReady` 暴露的实例。
+
+### 如何验证 6BY
+
+在仓库根目录运行：
+
+```bash
+flutter pub get
+dart analyze
+flutter test --no-pub \
+  test/app/app_dependencies_test.dart \
+  test/app/tongxingzhe_app_test.dart
+flutter test --no-pub
+```
+
+focused 测试使用 fake identity、fake gateway 和 fake 数据库。它们通过 `AppDependencies.start()` 检查 builder 收到的 identity 与 ready result 相同，检查
+deferred fallback 没有网络请求，并在后续启动失败和 `TongxingzheApp` dispose 时检查只关闭一次。全量 Flutter 测试检查既有 Dart 行为没有回归。
+
+这些测试只证明 composition、deferred fallback 和资源生命周期。它们不证明 HTTP 请求、strict parser、Backend authorization、PostgreSQL、UI 消费、缓存、离线、
+导出、部署端点、production identity 或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。6BY 不新增数据库步骤；如需回归前序数据库合同，按[第 9 章](09-local-docker-and-ci-testing.md)运行 Docker runner。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和

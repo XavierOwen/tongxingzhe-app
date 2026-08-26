@@ -920,6 +920,21 @@ Backend、PostgreSQL、runtime、UI、ViewModel、composition、Drift、缓存�
 6BW／6BT 的 Backend authorization、数据库 provenance、部署端点、production identity 或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。
 _Avoid_: 复用其他 report family gateway、把 DB envelope 的 `access_contract_id` 带入 Dart、自动选择首项、在客户端重算或补回隐藏值、把 synthetic Flutter 测试写成生产证据
 
+**组织项目后续联系同意占比 typed gateway composition 与生命周期**:
+6BY 在现有 `AppDependencies` composition root 增加可选的
+`followUpConsentRatioReportGatewayBuilder`。生产配置使用既有 HTTP gateway factory；没有配置时建立
+`DeferredFollowUpConsentRatioReportGateway`，它返回 `notConfigured` 且不访问网络。builder 只接收启动流程已经打开的同一个
+`IdentitySession`，`AppStartupReady` 暴露同一个 gateway 实例；个人同意占比和其他管理报告 gateway 仍保持独立。
+
+如果 gateway 已建立而后续启动阶段失败，启动清理必须关闭它一次。`TongxingzheApp` 移除时也关闭 ready gateway 一次，重复关闭保持安全。
+本切片不把 gateway 传入 `_ReadyApp`、`ProductionHomeShell`、ViewModel、widget、导航或 UI；后续 UI 切片再决定消费边界。
+
+6BY 只处理已有 typed gateway 的装配和资源所有权，不改变 parser、HTTP、Backend、PostgreSQL、runtime、Drift、缓存、离线、同步、导出或
+生产身份合同。Flutter fake identity、fake gateway 和 widget lifecycle 测试只证明 composition、同一身份传递、deferred fallback 和关闭边界，
+不证明网络解析、Backend 授权、数据库行为、UI 消费或真人平台运行时。
+_Avoid_: 打开第二个 IdentitySession、把 token 传给 builder、让 deferred fallback 发网络请求、把 gateway 交给 UI、启动失败时泄漏资源、重复关闭已有 gateway、
+把 composition 测试写成 HTTP 或生产证据
+
 **管理报告清除**:
 组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
 _Avoid_: 授权撤回、报告到期、tombstone、superseded
