@@ -1246,6 +1246,75 @@ Backend 测试覆盖固定 query、参数传递、空目录、重复读取、严
 0079 bridge、0078 delegation、Backend adapter、parser 和 ACL。它们不证明 HTTP、Flutter、Drift、导出、缓存、离线、部署服务、production identity 或 Android、iOS、
 macOS、Windows、Linux、Web 真人平台运行时。
 
+### 6BW：验证后续联系同意占比快照目录 HTTP 集合入口
+
+6BW 在 6BV 的 runtime bridge 和 Backend directory store 之上增加一个固定的 HTTP collection route：
+
+```text
+GET /v1/projects/:projectId/management-follow-up-consent-ratio-report-snapshots
+```
+
+它不是详情 route。客户端先调用 collection route 得到 metadata，再明确选择 snapshot 交给 6BT 的详情 route。collection route 的第一项只是固定排序的第一项，
+不表示 current、latest 或未被取代。route 不接受 query 参数，也不接受 GET body。非零 `Content-Length` 或 `Transfer-Encoding` 声明都算 body。
+
+#### 请求和响应合同
+
+固定 path 命中后，Backend 先验证 Bearer identity，再检查 project UUID、query、GET body 和 `PostgresManagementFollowUpConsentRatioSnapshotDirectoryStore`。
+没有 token 或 token 无效时始终返回 `401 unauthenticated`，不会先检查 malformed UUID、query、body 或 store。认证成功后，handler 只传 verified identity 和显式
+project UUID 给 dedicated store，并等待 store Promise 完成后再写响应。
+
+成功 `200` 的根对象只有三个字段：`access_event_id`、`project_id` 和 `snapshots`。每个 item 只有六个字段：`snapshot_id`、`report_id`、`report_version`、
+`reporting_time_zone`、`data_cutoff_utc` 和 `released_at_utc`。授权项目没有可列出的快照时仍返回 `200` 和空数组。
+
+| 情况 | HTTP 结果 |
+| --- | --- |
+| token 缺失或验证失败 | `401 unauthenticated` |
+| project UUID、query 或 GET body 无效 | `400 invalid_management_follow_up_consent_ratio_snapshot_directory_request` |
+| 6BV directory authorization forbidden | `403 management_follow_up_consent_ratio_snapshot_directory_forbidden` |
+| verifier、store、parser、数据库或未知错误 | `503 management_follow_up_consent_ratio_snapshot_directory_unavailable` |
+
+collection 业务结果没有详情读取的 `404` 或 `409`。单份 snapshot 的 unknown、cross-project、filtered 或不可信状态不在 collection response 中产生详情错误；其他 method 或未匹配
+path 仍可由通用 server 返回 `404`。
+所有状态使用 `Content-Type: application/json; charset=utf-8` 和 `Cache-Control: no-store`。错误响应不包含数据库消息、SQL、stack、external subject、
+授权关系、report、period、ratio、coverage、source、contributor、target、contact 或 PII。
+
+#### 从零开始运行 6BW
+
+1. 第一次使用 Docker 时，启动 Docker Desktop。等待 Docker Engine 显示运行。
+2. 从仓库根目录确认 Docker Client 和 Server 都可用：
+
+   ```bash
+   docker version
+   ```
+
+3. 运行 Backend 的 unit、route 和 production composition 测试：
+
+   ```bash
+   cd backend/server
+   npm ci --ignore-scripts
+   npm run check
+   npm test
+   cd ../..
+   ```
+
+4. 运行完整 PostgreSQL Docker 套件作为前序合同回归：
+
+   ```bash
+   ./tool/run_postgres_tests_in_docker.sh
+   ```
+
+6BW 不新增 PostgreSQL migration、check、fixture、integration 或并发脚本。Docker runner 因此不会出现新的 6BW 数据库步骤；它仍会自动发现并验证 6BV 的
+0079 bridge、0078 directory、既有并发、checksum 和 dump／restore。恢复阶段不会为 6BW 重跑任何数据库文件。
+
+#### 测试证明什么
+
+Backend 测试覆盖固定 GET path、错误 method、认证先于 UUID／query／GET body／store、body 声明、空目录、三字段 success wire、专用 store、verified identity 和
+ project 传递、单次调用、Promise gate、`401`／`400`／`403`／`503`、无业务 `404`／`409`、wrong method 的通用 `404`、错误脱敏和所有状态的 `no-store`。production composition 测试还确认不调用
+`SessionContext`、generic 或 detail store，也不让 HTTP 层执行 `app_private` 或客户端 SQL。
+
+这些 synthetic HTTP 测试证明 Backend transport contract 和 production wiring。它们不证明 PostgreSQL 授权、Flutter、Drift、缓存、离线、导出、部署服务、production
+identity、真实账号或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。
+
 ### 6BF：理解管理报告删除与保留边界
 
 6BF 是产品和测试合同，不是数据库清理功能。没有用过 Docker 的读者先记住：Docker runner 会在一次性容器中验证当前仓库已有的 PostgreSQL 行为。

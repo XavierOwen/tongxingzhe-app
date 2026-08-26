@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import {IdentityVerificationError} from "../src/identity.js";
 import {
   ManagementFollowUpConsentRatioSnapshotDirectoryStoreError,
   PostgresManagementFollowUpConsentRatioSnapshotDirectoryStore,
+  listManagementFollowUpConsentRatioSnapshotDirectory,
 } from "../src/management-follow-up-consent-ratio-snapshot-directory.js";
 
 const identity = {
@@ -61,6 +63,334 @@ function storeFor(
     async () => ({rows: [{directory_result: directoryResult}]}),
   );
 }
+
+test("consent-ratio directory handler authenticates before request or store validation", async () => {
+  let verifyCalls = 0;
+  let storeCalls = 0;
+  const dependencies = {
+    identityVerifier: {
+      verify: async () => {
+        verifyCalls += 1;
+        return identity;
+      },
+    },
+    directoryStore: {
+      list: async () => {
+        storeCalls += 1;
+        throw new Error("store must not run");
+      },
+    },
+  };
+
+  assert.deepEqual(
+    await listManagementFollowUpConsentRatioSnapshotDirectory(
+      {
+        authorization: undefined,
+        projectId: "not-a-uuid",
+        hasQuery: true,
+        hasBody: true,
+      },
+      dependencies,
+    ),
+    {status: 401, body: {error: {code: "unauthenticated"}}},
+  );
+  assert.equal(verifyCalls, 0);
+
+  assert.deepEqual(
+    await listManagementFollowUpConsentRatioSnapshotDirectory(
+      {
+        authorization: "Bearer token",
+        projectId: "not-a-uuid",
+        hasQuery: true,
+        hasBody: true,
+      },
+      dependencies,
+    ),
+    {
+      status: 400,
+      body: {
+        error: {
+          code:
+            "invalid_management_follow_up_consent_ratio_snapshot_directory_request",
+        },
+      },
+    },
+  );
+  assert.equal(verifyCalls, 1);
+  assert.equal(storeCalls, 0);
+});
+
+test("consent-ratio directory handler awaits the dedicated store and emits the fixed wire", async () => {
+  let finishList: (() => void) | undefined;
+  let storeCalls = 0;
+  const listGate = new Promise<void>((resolve) => {finishList = resolve;});
+  const resultPromise = listManagementFollowUpConsentRatioSnapshotDirectory(
+    {
+      authorization: "Bearer token",
+      projectId,
+      hasQuery: false,
+      hasBody: false,
+    },
+    {
+      identityVerifier: {verify: async () => identity},
+      directoryStore: {
+        list: async (receivedIdentity, receivedProjectId) => {
+          storeCalls += 1;
+          assert.deepEqual(receivedIdentity, identity);
+          assert.equal(receivedProjectId, projectId);
+          await listGate;
+          return {
+            accessContractId:
+              "authorized_follow_up_consent_ratio_management_report_snapshot_directory_v1",
+            accessEventId,
+            projectId,
+            snapshots: [{
+              snapshotId: firstSnapshotId,
+              reportId: "contact_target_follow_up_consent_ratio_two_periods",
+              reportVersion: 1,
+              reportingTimeZone: "America/Chicago",
+              dataCutoffUtc: "2026-08-10T05:00:00.000Z",
+              releasedAtUtc: "2026-08-10T05:00:01.000Z",
+            }],
+          };
+        },
+      },
+    },
+  );
+  let settled = false;
+  void resultPromise.then(() => {settled = true;});
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(settled, false);
+  assert.equal(storeCalls, 1);
+  finishList?.();
+
+  assert.deepEqual(await resultPromise, {
+    status: 200,
+    body: {
+      access_event_id: accessEventId,
+      project_id: projectId,
+      snapshots: [{
+        snapshot_id: firstSnapshotId,
+        report_id: "contact_target_follow_up_consent_ratio_two_periods",
+        report_version: 1,
+        reporting_time_zone: "America/Chicago",
+        data_cutoff_utc: "2026-08-10T05:00:00.000Z",
+        released_at_utc: "2026-08-10T05:00:01.000Z",
+      }],
+    },
+  });
+  const wire = (await resultPromise).body;
+  assert.deepEqual(Object.keys(wire).sort(), [
+    "access_event_id",
+    "project_id",
+    "snapshots",
+  ]);
+  const snapshots = wire.snapshots as readonly Record<string, unknown>[];
+  assert.deepEqual(Object.keys(snapshots[0] ?? {}).sort(), [
+    "data_cutoff_utc",
+    "released_at_utc",
+    "report_id",
+    "report_version",
+    "reporting_time_zone",
+    "snapshot_id",
+  ]);
+});
+
+test("authenticated malformed consent-ratio directory requests do not call the store", async () => {
+  let storeCalls = 0;
+  const dependencies = {
+    identityVerifier: {verify: async () => identity},
+    directoryStore: {
+      list: async () => {
+        storeCalls += 1;
+        throw new Error("store must not run");
+      },
+    },
+  };
+  const invalidRequests = [
+    {projectId: "not-a-uuid", hasQuery: false, hasBody: false},
+    {projectId, hasQuery: true, hasBody: false},
+    {projectId, hasQuery: false, hasBody: true},
+  ];
+
+  for (const invalidRequest of invalidRequests) {
+    assert.deepEqual(
+      await listManagementFollowUpConsentRatioSnapshotDirectory(
+        {authorization: "Bearer token", ...invalidRequest},
+        dependencies,
+      ),
+      {
+        status: 400,
+        body: {
+          error: {
+            code:
+              "invalid_management_follow_up_consent_ratio_snapshot_directory_request",
+          },
+        },
+      },
+    );
+  }
+  assert.equal(storeCalls, 0);
+});
+
+test("invalid bearer and identity verification failures stay before malformed input", async () => {
+  let verifyCalls = 0;
+  let storeCalls = 0;
+  const store = {
+    list: async () => {
+      storeCalls += 1;
+      throw new Error("store must not run");
+    },
+  };
+
+  const invalidBearer = await listManagementFollowUpConsentRatioSnapshotDirectory(
+    {
+      authorization: "Basic secret",
+      projectId: "not-a-uuid",
+      hasQuery: true,
+      hasBody: true,
+    },
+    {
+      identityVerifier: {
+        verify: async () => {
+          verifyCalls += 1;
+          return identity;
+        },
+      },
+      directoryStore: store,
+    },
+  );
+  assert.deepEqual(invalidBearer, {
+    status: 401,
+    body: {error: {code: "unauthenticated"}},
+  });
+  assert.equal(verifyCalls, 0);
+
+  const rejectedIdentity = await listManagementFollowUpConsentRatioSnapshotDirectory(
+    {
+      authorization: "Bearer invalid-token",
+      projectId: "not-a-uuid",
+      hasQuery: true,
+      hasBody: true,
+    },
+    {
+      identityVerifier: {
+        verify: async () => {
+          verifyCalls += 1;
+          throw new IdentityVerificationError();
+        },
+      },
+      directoryStore: store,
+    },
+  );
+  assert.deepEqual(rejectedIdentity, {
+    status: 401,
+    body: {error: {code: "unauthenticated"}},
+  });
+  assert.equal(verifyCalls, 1);
+  assert.equal(storeCalls, 0);
+
+  const verifierUnavailable = await listManagementFollowUpConsentRatioSnapshotDirectory(
+    {
+      authorization: "Bearer unavailable",
+      projectId,
+      hasQuery: false,
+      hasBody: false,
+    },
+    {
+      identityVerifier: {
+        verify: async () => {throw new Error("jwks private detail");},
+      },
+      directoryStore: store,
+    },
+  );
+  assert.deepEqual(verifierUnavailable, {
+    status: 503,
+    body: {
+      error: {
+        code:
+          "management_follow_up_consent_ratio_snapshot_directory_unavailable",
+      },
+    },
+  });
+  assert.doesNotMatch(JSON.stringify(verifierUnavailable), /jwks|private/);
+  assert.equal(storeCalls, 0);
+});
+
+test("consent-ratio directory handler maps forbidden and unexpected store failures without details", async () => {
+  const baseRequest = {
+    authorization: "Bearer token",
+    projectId,
+    hasQuery: false,
+    hasBody: false,
+  };
+  const identityVerifier = {verify: async () => identity};
+
+  const forbidden = await listManagementFollowUpConsentRatioSnapshotDirectory(
+    baseRequest,
+    {
+      identityVerifier,
+      directoryStore: {
+        list: async () => {
+          throw new ManagementFollowUpConsentRatioSnapshotDirectoryStoreError(
+            "forbidden",
+          );
+        },
+      },
+    },
+  );
+  assert.deepEqual(forbidden, {
+    status: 403,
+    body: {
+      error: {
+        code:
+          "management_follow_up_consent_ratio_snapshot_directory_forbidden",
+      },
+    },
+  });
+
+  for (const error of [
+    new Error(
+      "secret SQLSTATE 22P02 protected_report period_results, subject active-reader",
+    ),
+    new Error(
+      "invalid follow-up consent-ratio management report snapshot directory result",
+    ),
+  ]) {
+    const unavailable =
+      await listManagementFollowUpConsentRatioSnapshotDirectory(
+        baseRequest,
+        {identityVerifier, directoryStore: {list: async () => {throw error;}}},
+      );
+    assert.deepEqual(unavailable, {
+      status: 503,
+      body: {
+        error: {
+          code:
+            "management_follow_up_consent_ratio_snapshot_directory_unavailable",
+        },
+      },
+    });
+    assert.doesNotMatch(
+      JSON.stringify(unavailable),
+      /secret|22P02|protected_report|period_results|active-reader|invalid follow-up/,
+    );
+  }
+
+  const absentStore = await listManagementFollowUpConsentRatioSnapshotDirectory(
+    baseRequest,
+    {identityVerifier},
+  );
+  assert.deepEqual(absentStore, {
+    status: 503,
+    body: {
+      error: {
+        code:
+          "management_follow_up_consent_ratio_snapshot_directory_unavailable",
+      },
+    },
+  });
+});
 
 test("adapter calls one fixed exact-identity directory bridge", async () => {
   const calls: Array<{text: string; values: readonly unknown[]}> = [];

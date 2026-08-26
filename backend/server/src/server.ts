@@ -97,6 +97,10 @@ import {
   type ManagementFollowUpConsentRatioReportSnapshotStore,
 } from "./management-follow-up-consent-ratio-report-snapshots.js";
 import {
+  listManagementFollowUpConsentRatioSnapshotDirectory,
+  type ManagementFollowUpConsentRatioSnapshotDirectoryStore,
+} from "./management-follow-up-consent-ratio-snapshot-directory.js";
+import {
   listManagementOriginalRegionReportSnapshotDirectory,
   type ManagementOriginalRegionReportSnapshotDirectoryStore,
 } from "./management-original-region-report-snapshot-directory.js";
@@ -158,6 +162,8 @@ export interface BackendServerDependencies
     ManagementOriginalRegionReportSnapshotStore;
   readonly managementFollowUpConsentRatioReportSnapshotStore?:
     ManagementFollowUpConsentRatioReportSnapshotStore;
+  readonly managementFollowUpConsentRatioSnapshotDirectoryStore?:
+    ManagementFollowUpConsentRatioSnapshotDirectoryStore;
   readonly managementOriginalRegionReportSnapshotDirectoryStore?:
     ManagementOriginalRegionReportSnapshotDirectoryStore;
   readonly managementReportSnapshotExportStore?:
@@ -510,6 +516,37 @@ export function createBackendServer(
             : {
               snapshotStore:
                 dependencies.managementOriginalRegionReportSnapshotStore,
+            }),
+        },
+      );
+      response.statusCode = result.status;
+      response.end(JSON.stringify(result.body));
+      return;
+    }
+
+    const managementFollowUpConsentRatioSnapshotDirectoryMatch =
+      requestUrl.pathname.match(
+        /^\/v1\/projects\/([^/]+)\/management-follow-up-consent-ratio-report-snapshots$/,
+      );
+    if (
+      request.method === "GET" &&
+      managementFollowUpConsentRatioSnapshotDirectoryMatch !== null
+    ) {
+      const result = await listManagementFollowUpConsentRatioSnapshotDirectory(
+        {
+          authorization: request.headers.authorization,
+          projectId:
+            managementFollowUpConsentRatioSnapshotDirectoryMatch[1] ?? "",
+          hasQuery: requestUrl.search.length > 0,
+          hasBody: requestDeclaresBody(request.headers),
+        },
+        {
+          identityVerifier: dependencies.identityVerifier,
+          ...(dependencies.managementFollowUpConsentRatioSnapshotDirectoryStore === undefined
+            ? {}
+            : {
+              directoryStore:
+                dependencies.managementFollowUpConsentRatioSnapshotDirectoryStore,
             }),
         },
       );

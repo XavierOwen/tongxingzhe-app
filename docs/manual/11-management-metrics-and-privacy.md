@@ -2848,6 +2848,78 @@ cd ../..
 这些测试证明 exact identity、0078 delegation、固定目录 envelope、strict parser、最小 ACL 和 `42501` 映射。它们不证明 HTTP、Flutter、Drift、导出、缓存、离线、生产
 身份、部署服务或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。6BV 不增加 HTTP route、客户端消费、分页、筛选或 current／latest 语义。
 
+## Slice 6BW：通过固定 HTTP GET 列出后续联系同意占比快照目录
+
+6BW 把 6BV 的 consent-ratio snapshot directory 接到固定的 HTTP collection route：
+
+```text
+GET /v1/projects/:projectId/management-follow-up-consent-ratio-report-snapshots
+```
+
+collection route 只发现可选 snapshot metadata。它不读取 protected report，也不自动选择 current、latest 或第一项。调用方必须明确选择 snapshot，
+再使用 6BT 的详情 route。
+
+### 请求顺序和固定 wire
+
+固定 path 命中后，handler 先验证 Bearer identity，再验证 project UUID、query、GET body 和 dedicated directory store。GET 不接受 query 或 body。
+非零 `Content-Length` 或 `Transfer-Encoding` 声明也视为 body。缺少或无效 token 时先返回 `401 unauthenticated`，即使 project UUID、query、body 或 store
+有问题也不先返回其他状态。
+
+认证成功后，handler 只把 verified identity 和显式 project UUID 传给 6BV 的专用 store，并等待 Promise 完成后才写响应。成功返回 `200`，根对象只有：
+
+```json
+{
+  "access_event_id": "…",
+  "project_id": "…",
+  "snapshots": []
+}
+```
+
+每个 item 只有 `snapshot_id`、`report_id`、`report_version`、`reporting_time_zone`、`data_cutoff_utc` 和 `released_at_utc`。空目录也返回 `200` 和空数组。
+第一项只是固定排序结果的第一项，不表示 current、latest 或未被取代。
+
+HTTP 错误固定为：
+
+| 情况 | HTTP 结果 |
+| --- | --- |
+| token 缺失或验证失败 | `401 unauthenticated` |
+| project UUID、query 或 GET body 无效 | `400 invalid_management_follow_up_consent_ratio_snapshot_directory_request` |
+| 6BV directory authorization forbidden | `403 management_follow_up_consent_ratio_snapshot_directory_forbidden` |
+| verifier、store、parser、数据库或未知错误 | `503 management_follow_up_consent_ratio_snapshot_directory_unavailable` |
+
+该 collection 的业务结果不返回详情读取的 `404` 或 `409`。unknown、cross-project、filtered 或不可信的单份 snapshot 不在目录响应中产生详情错误；其他 method 或未匹配 path
+仍可由通用 server 返回 `404`。所有状态使用
+`Content-Type: application/json; charset=utf-8` 和 `Cache-Control: no-store`。错误响应不返回数据库消息、SQL、stack、external subject、授权关系、
+protected report、period、ratio、coverage、source、contributor、target、contact 或 PII。
+
+### 如何验证 6BW
+
+6BW 没有新的 PostgreSQL migration、fixture、check 或 Docker 数据库步骤。第一次使用 Docker 时仍可启动 Docker Desktop，并在仓库根目录运行：
+
+```bash
+docker version
+./tool/run_postgres_tests_in_docker.sh
+```
+
+该 Docker 命令只回归前序 6BV、6BU 及其他数据库合同。它不能证明 6BW HTTP route。
+
+运行 6BW 的 Backend 测试：
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+cd ../..
+```
+
+测试覆盖固定 method／path、认证先于 UUID／query／GET body／store、body 声明、专用 store、空目录、三字段 success wire、Promise gate、`401`／`400`／`403`／`503`、
+无业务 `404`／`409`、wrong method 的通用 `404`、错误脱敏、production composition 和所有响应的 `no-store`。测试还确认 HTTP 层不调用 `SessionContext`、generic 或详情 store，不执行
+`app_private` 或客户端 SQL。
+
+这些 synthetic HTTP 测试只证明 Backend transport contract 和 composition wiring。它们不证明 PostgreSQL 授权、Flutter、Drift、缓存、离线、导出、部署服务、
+production identity、真实账号或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和
