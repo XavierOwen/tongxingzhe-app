@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../l10n/app_strings.dart';
 import '../../management_reports/current_city_report_gateway.dart';
 import 'current_city_report_panel_view_model.dart';
+import 'snapshot_focus_node_cache.dart';
 
 /// 管理项目内 current-city 报告面板。
 ///
@@ -33,7 +34,9 @@ final class _CurrentCityReportPanelState extends State<CurrentCityReportPanel>
   late CurrentCityReportPanelViewModel _viewModel;
   final _backFocusNode = FocusNode(debugLabel: 'current-city report back');
   final _retryFocusNode = FocusNode(debugLabel: 'current-city report retry');
-  final _snapshotFocusNodes = <String, FocusNode>{};
+  final _snapshotFocusNodes = SnapshotFocusNodeCache(
+    debugLabelPrefix: 'current-city report',
+  );
   CurrentCityReportPanelStage? _previousStage;
   String? _returnFocusSnapshotId;
 
@@ -51,7 +54,7 @@ final class _CurrentCityReportPanelState extends State<CurrentCityReportPanel>
       _viewModel
         ..removeListener(_stateChanged)
         ..dispose();
-      _clearSnapshotFocusNodes();
+      _snapshotFocusNodes.clear();
       _returnFocusSnapshotId = null;
       _viewModel = _createViewModel();
       unawaited(_viewModel.initialize());
@@ -79,7 +82,7 @@ final class _CurrentCityReportPanelState extends State<CurrentCityReportPanel>
       ..dispose();
     _backFocusNode.dispose();
     _retryFocusNode.dispose();
-    _clearSnapshotFocusNodes();
+    _snapshotFocusNodes.dispose();
     super.dispose();
   }
 
@@ -184,10 +187,7 @@ final class _CurrentCityReportPanelState extends State<CurrentCityReportPanel>
           state.stage == CurrentCityReportPanelStage.failure);
 
   FocusNode _snapshotFocusNode(String snapshotId) =>
-      _snapshotFocusNodes.putIfAbsent(
-        snapshotId,
-        () => FocusNode(debugLabel: 'current-city report $snapshotId'),
-      );
+      _snapshotFocusNodes.nodeFor(snapshotId);
 
   void _openSnapshot(CurrentCityReportSnapshotSummary summary) {
     _returnFocusSnapshotId = summary.snapshotId;
@@ -199,7 +199,9 @@ final class _CurrentCityReportPanelState extends State<CurrentCityReportPanel>
     _viewModel.returnToDirectory();
     if (snapshotId == null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _snapshotFocusNodes[snapshotId]?.requestFocus();
+      if (mounted && _snapshotFocusNodes.contains(snapshotId)) {
+        _snapshotFocusNodes.nodeFor(snapshotId).requestFocus();
+      }
     });
   }
 
@@ -217,7 +219,22 @@ final class _CurrentCityReportPanelState extends State<CurrentCityReportPanel>
 
   void _stateChanged() {
     if (!mounted) return;
-    final stage = _viewModel.state.stage;
+    final state = _viewModel.state;
+    final stage = state.stage;
+    switch (stage) {
+      case CurrentCityReportPanelStage.inactive:
+      case CurrentCityReportPanelStage.loadingDirectory:
+        _snapshotFocusNodes.clear();
+      case CurrentCityReportPanelStage.directory:
+        _snapshotFocusNodes.retain(
+          state.directory?.snapshots.map((summary) => summary.snapshotId) ??
+              const <String>[],
+        );
+      case CurrentCityReportPanelStage.loadingSnapshot:
+      case CurrentCityReportPanelStage.snapshot:
+      case CurrentCityReportPanelStage.failure:
+        break;
+    }
     final shouldFocusBack =
         _previousStage == CurrentCityReportPanelStage.loadingSnapshot &&
         stage == CurrentCityReportPanelStage.snapshot;
@@ -236,13 +253,6 @@ final class _CurrentCityReportPanelState extends State<CurrentCityReportPanel>
         if (mounted) _retryFocusNode.requestFocus();
       });
     }
-  }
-
-  void _clearSnapshotFocusNodes() {
-    for (final node in _snapshotFocusNodes.values) {
-      node.dispose();
-    }
-    _snapshotFocusNodes.clear();
   }
 
   @override

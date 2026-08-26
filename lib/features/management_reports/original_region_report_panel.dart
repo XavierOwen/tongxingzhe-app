@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../l10n/app_strings.dart';
 import '../../management_reports/original_region_report_gateway.dart';
 import 'original_region_report_panel_view_model.dart';
+import 'snapshot_focus_node_cache.dart';
 
 /// 管理项目内 original-region 报告面板。
 ///
@@ -35,7 +36,9 @@ final class _OriginalRegionReportPanelState
   late OriginalRegionReportPanelViewModel _viewModel;
   final _backFocusNode = FocusNode(debugLabel: 'original-region report back');
   final _retryFocusNode = FocusNode(debugLabel: 'original-region report retry');
-  final _snapshotFocusNodes = <String, FocusNode>{};
+  final _snapshotFocusNodes = SnapshotFocusNodeCache(
+    debugLabelPrefix: 'original-region report',
+  );
   OriginalRegionReportPanelStage? _previousStage;
   String? _returnFocusSnapshotId;
 
@@ -53,7 +56,7 @@ final class _OriginalRegionReportPanelState
       _viewModel
         ..removeListener(_stateChanged)
         ..dispose();
-      _clearSnapshotFocusNodes();
+      _snapshotFocusNodes.clear();
       _returnFocusSnapshotId = null;
       _viewModel = _createViewModel();
       unawaited(_viewModel.initialize());
@@ -81,7 +84,7 @@ final class _OriginalRegionReportPanelState
       ..dispose();
     _backFocusNode.dispose();
     _retryFocusNode.dispose();
-    _clearSnapshotFocusNodes();
+    _snapshotFocusNodes.dispose();
     super.dispose();
   }
 
@@ -186,10 +189,7 @@ final class _OriginalRegionReportPanelState
           state.stage == OriginalRegionReportPanelStage.failure);
 
   FocusNode _snapshotFocusNode(String snapshotId) =>
-      _snapshotFocusNodes.putIfAbsent(
-        snapshotId,
-        () => FocusNode(debugLabel: 'original-region report $snapshotId'),
-      );
+      _snapshotFocusNodes.nodeFor(snapshotId);
 
   void _openSnapshot(OriginalRegionReportSnapshotSummary summary) {
     _returnFocusSnapshotId = summary.snapshotId;
@@ -201,7 +201,9 @@ final class _OriginalRegionReportPanelState
     _viewModel.returnToDirectory();
     if (snapshotId == null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _snapshotFocusNodes[snapshotId]?.requestFocus();
+      if (mounted && _snapshotFocusNodes.contains(snapshotId)) {
+        _snapshotFocusNodes.nodeFor(snapshotId).requestFocus();
+      }
     });
   }
 
@@ -219,7 +221,22 @@ final class _OriginalRegionReportPanelState
 
   void _stateChanged() {
     if (!mounted) return;
-    final stage = _viewModel.state.stage;
+    final state = _viewModel.state;
+    final stage = state.stage;
+    switch (stage) {
+      case OriginalRegionReportPanelStage.inactive:
+      case OriginalRegionReportPanelStage.loadingDirectory:
+        _snapshotFocusNodes.clear();
+      case OriginalRegionReportPanelStage.directory:
+        _snapshotFocusNodes.retain(
+          state.directory?.snapshots.map((summary) => summary.snapshotId) ??
+              const <String>[],
+        );
+      case OriginalRegionReportPanelStage.loadingSnapshot:
+      case OriginalRegionReportPanelStage.snapshot:
+      case OriginalRegionReportPanelStage.failure:
+        break;
+    }
     final shouldFocusBack =
         _previousStage == OriginalRegionReportPanelStage.loadingSnapshot &&
         stage == OriginalRegionReportPanelStage.snapshot;
@@ -238,13 +255,6 @@ final class _OriginalRegionReportPanelState
         if (mounted) _retryFocusNode.requestFocus();
       });
     }
-  }
-
-  void _clearSnapshotFocusNodes() {
-    for (final node in _snapshotFocusNodes.values) {
-      node.dispose();
-    }
-    _snapshotFocusNodes.clear();
   }
 
   @override

@@ -906,6 +906,83 @@ void main() {
     expect(_containsPrimaryFocus(tester, item), isTrue);
   });
 
+  testWidgets('详情返回保留目录焦点，切换 report family 后释放旧焦点节点', (tester) async {
+    final gateway = _Gateway(
+      context: _contextSnapshot(current: _projectA),
+      summaries: [_summary, _focusSecondSummary],
+      snapshot: _snapshot,
+    );
+    final currentCityGateway = _CurrentCityGateway();
+    await tester.pumpWidget(
+      _app(gateway, currentCityGateway: currentCityGateway),
+    );
+    await tester.pumpAndSettle();
+
+    final item = find.byKey(
+      ValueKey('management-report-${_summary.snapshotId}'),
+    );
+    final tile = find.descendant(of: item, matching: find.byType(ListTile));
+    final directoryFocusNode = tester.widget<ListTile>(tile).focusNode!;
+    await _tabTo(tester, item);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    final back = find.byKey(const ValueKey('management-report-back'));
+    expect(_containsPrimaryFocus(tester, back), isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    expect(_containsPrimaryFocus(tester, item), isTrue);
+    final returnedTile = tester.widget<ListTile>(tile);
+    expect(returnedTile.focusNode, same(directoryFocusNode));
+
+    await tester.tap(
+      find.byKey(const ValueKey('management-current-city-report-view')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('management-channel-report-view')),
+    );
+    await tester.pumpAndSettle();
+
+    final rebuiltTile = tester.widget<ListTile>(tile);
+    expect(rebuiltTile.focusNode, isNot(same(directoryFocusNode)));
+    expect(
+      () => directoryFocusNode.addListener(() {}),
+      throwsA(isA<FlutterError>()),
+    );
+  });
+
+  testWidgets('切换管理项目后释放旧频道目录焦点节点', (tester) async {
+    final gateway = _Gateway(
+      context: _contextSnapshot(current: _projectA),
+      summaries: [_summary],
+      selectResult: ManagementReportSuccess(
+        _contextSnapshot(current: _projectB),
+      ),
+    );
+    await tester.pumpWidget(_app(gateway));
+    await tester.pumpAndSettle();
+
+    final item = find.byKey(
+      ValueKey('management-report-${_summary.snapshotId}'),
+    );
+    final tile = find.descendant(of: item, matching: find.byType(ListTile));
+    final oldProjectFocusNode = tester.widget<ListTile>(tile).focusNode!;
+
+    await tester.tap(find.byKey(const ValueKey('management-project-picker')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('第二组织 · 第二项目').last);
+    await tester.pumpAndSettle();
+
+    final newProjectFocusNode = tester.widget<ListTile>(tile).focusNode!;
+    expect(newProjectFocusNode, isNot(same(oldProjectFocusNode)));
+    expect(
+      () => oldProjectFocusNode.addListener(() {}),
+      throwsA(isA<FlutterError>()),
+    );
+  });
+
   testWidgets('报告逐格读出期间、渠道和隐私状态，隐藏格不显示零', (tester) async {
     final semantics = tester.ensureSemantics();
     _compactView(tester);
@@ -1874,6 +1951,15 @@ final _summary = ManagementReportSnapshotSummary(
   reportingTimeZone: 'America/Chicago',
   dataCutoffUtc: DateTime.utc(2030, 1, 22),
   releasedAtUtc: DateTime.utc(2030, 1, 22, 0, 1),
+);
+
+final _focusSecondSummary = ManagementReportSnapshotSummary(
+  snapshotId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+  reportId: 'contact_sessions_by_channel_two_periods',
+  reportVersion: 1,
+  reportingTimeZone: 'America/Chicago',
+  dataCutoffUtc: DateTime.utc(2030, 1, 21),
+  releasedAtUtc: DateTime.utc(2030, 1, 21, 0, 1),
 );
 
 final _snapshot = ManagementReportSnapshot(

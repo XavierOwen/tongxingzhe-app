@@ -16,6 +16,7 @@ import 'follow_up_consent_ratio_report_panel.dart';
 import 'interest_report_panel.dart';
 import 'management_report_browser_view_model.dart';
 import 'original_region_report_panel.dart';
+import 'snapshot_focus_node_cache.dart';
 
 enum _ManagementReportFamily {
   channel,
@@ -57,7 +58,9 @@ final class _ManagementReportBrowserState
   final _exportActionFocusNode = FocusNode(
     debugLabel: 'management report export action',
   );
-  final _snapshotFocusNodes = <String, FocusNode>{};
+  final _snapshotFocusNodeCache = SnapshotFocusNodeCache(
+    debugLabelPrefix: 'management report',
+  );
   late ManagementReportBrowserViewModel _viewModel;
   ManagementReportBrowserStage? _previousStage;
   ManagementReportExportStage? _previousExportStage;
@@ -86,7 +89,7 @@ final class _ManagementReportBrowserState
     _viewModel
       ..removeListener(_stateChanged)
       ..dispose();
-    _clearSnapshotFocusNodes();
+    _snapshotFocusNodeCache.clear();
     _returnFocusSnapshotId = null;
     _reportFamily = _ManagementReportFamily.channel;
     _viewModel = _createViewModel();
@@ -111,7 +114,7 @@ final class _ManagementReportBrowserState
     _projectFocusNode.dispose();
     _backFocusNode.dispose();
     _exportActionFocusNode.dispose();
-    _clearSnapshotFocusNodes();
+    _snapshotFocusNodeCache.dispose();
     super.dispose();
   }
 
@@ -268,6 +271,7 @@ final class _ManagementReportBrowserState
 
   void _selectReportFamily(_ManagementReportFamily family) {
     if (_reportFamily == family) return;
+    _snapshotFocusNodeCache.clear();
     if (_viewModel.state.currentContext != null) {
       _viewModel.showDirectory();
     }
@@ -299,10 +303,7 @@ final class _ManagementReportBrowserState
       };
 
   FocusNode _snapshotFocusNode(String snapshotId) =>
-      _snapshotFocusNodes.putIfAbsent(
-        snapshotId,
-        () => FocusNode(debugLabel: 'management report $snapshotId'),
-      );
+      _snapshotFocusNodeCache.nodeFor(snapshotId);
 
   void _openSnapshot(ManagementReportSnapshotSummary summary) {
     _returnFocusSnapshotId = summary.snapshotId;
@@ -314,17 +315,37 @@ final class _ManagementReportBrowserState
     _viewModel.showDirectory();
     if (snapshotId == null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _snapshotFocusNodes[snapshotId]?.requestFocus();
+      if (mounted && _snapshotFocusNodeCache.contains(snapshotId)) {
+        _snapshotFocusNodeCache.nodeFor(snapshotId).requestFocus();
+      }
     });
   }
 
   void _stateChanged() {
     if (!mounted) return;
-    final stage = _viewModel.state.stage;
+    final state = _viewModel.state;
+    final stage = state.stage;
+    switch (stage) {
+      case ManagementReportBrowserStage.directory:
+        _snapshotFocusNodeCache.retain(
+          state.snapshots.map((summary) => summary.snapshotId),
+        );
+      case ManagementReportBrowserStage.loadingContext:
+      case ManagementReportBrowserStage.contextSelection:
+      case ManagementReportBrowserStage.selectingContext:
+      case ManagementReportBrowserStage.loadingDirectory:
+        _snapshotFocusNodeCache.clear();
+      case ManagementReportBrowserStage.loadingReport:
+      case ManagementReportBrowserStage.report:
+      case ManagementReportBrowserStage.failure:
+        // Keep the current directory nodes while a detail request or its
+        // failure state is visible so Back can restore the triggering item.
+        break;
+    }
     final shouldFocusBack =
         _previousStage == ManagementReportBrowserStage.loadingReport &&
         stage == ManagementReportBrowserStage.report;
-    final exportStage = _viewModel.state.exportStage;
+    final exportStage = state.exportStage;
     final shouldFocusExportAction =
         _previousExportStage == ManagementReportExportStage.preparing &&
         exportStage == ManagementReportExportStage.ready;
@@ -341,13 +362,6 @@ final class _ManagementReportBrowserState
         if (mounted) _exportActionFocusNode.requestFocus();
       });
     }
-  }
-
-  void _clearSnapshotFocusNodes() {
-    for (final node in _snapshotFocusNodes.values) {
-      node.dispose();
-    }
-    _snapshotFocusNodes.clear();
   }
 }
 
