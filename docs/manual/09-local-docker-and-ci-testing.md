@@ -864,6 +864,49 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 check、fixture 和并发脚本不能互相替代。Docker 通过不证明新 snapshot 已生成，不证明目录、runtime、HTTP、Flutter、导出、缓存、离线、删除、retention、
 生产身份或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。
 
+### 6CB：验证 current-city 快照更正版取代 lineage
+
+6CB 只登记两份已经通过 0057 的 current-city approved snapshot。它不生成 snapshot，也不复用渠道或 original-region replacement 表。两份快照必须同 project、report／version、query／privacy／source scope、报告时区 revision、期间、release lineage 和完整 target context；新 snapshot 的 cutoff／发布时间更晚，source watermark 不回退。
+
+0080 在共享的 value-free request UUID ledger 中增加独立 current-city replacement family。release 与 replacement 共用 request lock，因此同一 UUID 无论先由哪一方使用，另一方都失败关闭。既有 lifecycle writer 通过专用 provenance seam 核对 0057 approved attempt，不直接读取 attempt ledger。
+
+原因只允许 `late_accepted_data`、`contact_revision` 和 `contact_void`。关系和最小 audit 追加不可变；每份旧快照最多一个直接 replacement，每份新快照最多一个 predecessor。锁后撤权、载荷漂移、跨项目／family、target context 漂移、倒序、自链接、分叉、循环和 stale head 都失败关闭。生命周期只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID。
+
+#### 第一次运行 Docker
+
+1. 打开 Docker Desktop，等待 Docker Engine 显示正在运行。
+2. 在仓库根目录确认 Docker Client 和 Server 都可用：
+
+   ```bash
+   docker version
+   ```
+
+3. 运行完整 PostgreSQL 测试：
+
+   ```bash
+   ./tool/run_postgres_tests_in_docker.sh
+   ```
+
+runner 自动发现 0080 migration、structural check、rollback fixture 和 current-city replacement concurrency script。它随后验证 migration checksum，并把数据库 dump 到独立 cluster 做 restore。恢复库重跑 migration、check 和 rollback fixture；不会重跑会提交 synthetic 行的并发脚本。
+
+成功输出应覆盖 approved provenance、完整 target context、release／replacement UUID 双向互斥、active／superseded、精确幂等、稳定负例、锁后撤权、竞争 replacement、最小 ACL、checksum 和 restore。命令退出码必须是 `0`。
+
+#### 只调试 6CB
+
+并发脚本会提交 synthetic 行。先确认 `DATABASE_URL` 指向新的专用测试库，不要指向 production：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_current_city_report_snapshot_replacements.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0080_management_current_city_report_snapshot_replacements.sql
+./tool/verify_management_current_city_report_snapshot_replacements_concurrency.sh
+```
+
+check、fixture 和 concurrency 不能互相替代。Docker 通过只证明 synthetic PostgreSQL 中的 replacement relation、provenance、授权锁、不可变性和 ACL；不证明新 snapshot 已生成，也不证明跨版本更正、runtime、HTTP、Flutter、目录、导出、删除、retention、生产身份或真人平台。
+
 ### 6BO：验证组织项目后续联系同意占比 opt-in 配置
 
 6BO 只验证组织项目的配置生命周期。它不执行后续联系同意比例候选。个人项目的 0048 配置表与组织配置表必须分开。

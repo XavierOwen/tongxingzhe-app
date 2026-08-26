@@ -2486,6 +2486,43 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 这些命令覆盖 synthetic DB-only 证据，不证明 snapshot 生成、其他 report family、分析定义／跨版本更正、runtime、HTTP、Flutter、目录、导出、删除、
 retention、生产身份或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。
 
+## Slice 6CB：登记 current-city 快照更正版取代
+
+6CB 只登记两份已经通过 0057 的 current-city approved snapshot 之间的直接 replacement。它不生成 snapshot，也不修改旧、新 snapshot。两份快照必须同 project、report／version、query fingerprint、privacy policy、source scope、报告时区 revision、期间、release lineage 和完整 target context；新快照的 cutoff 与发布时间必须更晚，source watermark 不得回退。
+
+数据库在管理报告共享的 value-free request UUID ledger 中使用独立 current-city replacement family。release 与 replacement 共用 request lock；同一 UUID 在两个合同中双向互斥。既有关闭的 lifecycle writer 只能通过 current-city 专用 provenance seam 核对 0057 approved attempt，不能直接读取 attempt ledger，也不能借此读取 protected report。
+
+原因只允许 `late_accepted_data`、`contact_revision` 和 `contact_void`。关系和最小 audit 追加不可变；每份旧快照最多一个直接 replacement，每份新快照最多一个 predecessor。自链接、循环、分叉、stale head、跨项目／family、target context 漂移和时间倒序都失败关闭。请求、lineage 和授权锁取得后再次确认 `release_management_reports`。相同 request 与 canonical payload 精确幂等；载荷漂移失败关闭。
+
+生命周期查询只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID，不返回报告格、区域来源、贡献者、接触、坐标、隐藏前值或 PII。关系不改变目录排序；客户端不能据此把第一项称为 current 或 latest。
+
+### 6CB 的范围
+
+这是 DB-only、value-free 合同。它不处理 channel、interest、original-region 或 follow-up-consent，不做分析定义／跨版本更正，不生成 snapshot，也不增加 runtime、HTTP、Flutter、目录、导出、缓存、离线、分享、删除、tombstone、retention、备份清除、parent／overlap、warehouse 或真人平台验收。
+
+### 6CB 的验证命令
+
+从仓库根目录运行完整 PostgreSQL 合同：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 会发现 0080 migration、structural check、rollback fixture 和 replacement concurrency script，并在 checksum、dump／restore 后重跑 migration、check 和 fixture。恢复库不重跑会提交 synthetic 行的并发脚本。
+
+只调试 6CB 时，先确认 `DATABASE_URL` 是专用测试库，再运行：
+
+```bash
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_current_city_report_snapshot_replacements.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0080_management_current_city_report_snapshot_replacements.sql
+./tool/verify_management_current_city_report_snapshot_replacements_concurrency.sh
+```
+
+这些命令只证明 synthetic DB-only current-city replacement，不证明新 snapshot 生成、其他 report family、分析定义／跨版本更正、runtime、HTTP、Flutter、目录、导出、删除、retention、生产身份或六平台真人运行时。
+
 ## Slice 6BP：验证组织项目后续联系同意占比候选
 
 6BP 在 6BO 当前 opt-in 为 enabled 时生成 private release-candidate。它不是 snapshot，也不是已经发布的报告。

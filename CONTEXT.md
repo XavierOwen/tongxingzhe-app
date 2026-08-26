@@ -972,6 +972,14 @@ family 不请求该 gateway。只有用户明确选择第五个 family 后，浏
 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。该切片沿用现有 browser 和 composition 模式，不需要新增 ADR。
 _Avoid_: 默认读取第五个 family、个人项目回退、多个布尔开关、自动选择首项、关闭借用的 gateway、旧响应写回、用 UI 选择代替服务端授权、把 fake 测试写成生产证据
 
+**current-city 快照更正版取代**:
+6CB 只登记两份已经通过 0057 的 current-city approved snapshot 之间的直接 replacement。两份快照必须同 project、report／version、query／privacy／source scope、报告时区 revision、期间、release lineage 和完整 target context；新快照 cutoff／发布时间更晚且 source watermark 不回退。旧、新 snapshot 保持不变。
+
+关系使用管理报告共享的 value-free request UUID ledger 和独立 current-city replacement family，并复用关闭的 lifecycle writer。lifecycle writer 只能通过 current-city 专用 provenance seam 核对 0057 approved attempt，不能直接读取 attempt ledger。release 与 replacement 共享 request lock；同一 UUID 双向互斥。原因只允许 `late_accepted_data`、`contact_revision` 和 `contact_void`。
+
+关系和最小 audit 追加不可变。每份旧快照最多一个直接 replacement，每份新快照最多一个 predecessor；自链接、循环、分叉、stale head、跨项目／family、context 漂移、倒序和撤权失败关闭。生命周期只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID，不返回报告格、区域来源、贡献者、接触、坐标或 PII。6CB 不生成 snapshot，不改变目录／读取／HTTP／导出／Flutter，也不处理跨版本更正、删除或 retention。
+_Avoid_: 复用渠道或 original-region replacement 表、按目录排序猜测 latest、静默改写 snapshot、直接读取 0057 attempt、返回 target context 或报告值、把 Docker synthetic 通过写成生产证据
+
 **管理报告清除**:
 组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
 _Avoid_: 授权撤回、报告到期、tombstone、superseded

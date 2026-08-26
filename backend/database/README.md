@@ -1230,6 +1230,31 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 这些测试只证明 synthetic DB-only replacement、授权锁、claim、provenance、不可变性和 ACL。它们不证明 snapshot 生成、runtime、HTTP、Flutter、目录、
 导出、删除、retention、production identity 或六平台真人运行时。
 
+### 6CB：验证 current-city 快照 replacement lineage
+
+0080 只在 private PostgreSQL 登记两份已通过 0057 的 current-city approved snapshot 之间的直接 replacement。它不生成或改写 snapshot。两份快照必须保持同一 project、报告定义、隐私与来源范围、报告时区 revision、期间、release lineage 和完整 target context；新快照的 cutoff 与发布时间必须更晚，source watermark 不得回退。
+
+replacement 在管理报告共享的 value-free request UUID ledger 中使用独立 current-city family claim，并与 release 共用 request lock。既有 lifecycle writer 只能通过专用 provenance seam 核对 0057 attempt，不能直接读取 attempt ledger。生命周期结果只含 snapshot ID、`active`／`superseded` 和直接 replacement ID。
+
+从仓库根目录运行完整测试：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 自动发现 0080 migration、structural check、rollback fixture 和并发脚本，并继续验证 checksum 与 dump／restore。只调试专用测试库时，先确认 `DATABASE_URL` 不是 production，再运行：
+
+```bash
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_current_city_report_snapshot_replacements.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0080_management_current_city_report_snapshot_replacements.sql
+./tool/verify_management_current_city_report_snapshot_replacements_concurrency.sh
+```
+
+这些测试只证明 synthetic DB-only current-city replacement、授权锁、claim、provenance、不可变性和 ACL。它们不证明 snapshot 生成、跨版本更正、runtime、HTTP、Flutter、目录、导出、删除、retention、production identity 或六平台真人运行时。
+
 ### 如何验证 6AS PostgreSQL 合同
 
 第一次使用 Docker 时，先启动 Docker Desktop。Docker 是一次性测试环境：runner 创建隔离的 PostgreSQL 容器，运行

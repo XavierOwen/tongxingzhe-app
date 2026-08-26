@@ -1506,6 +1506,18 @@ identity、authorization、Drift、缓存、离线、同步、导出或导航合
 既有 family 不回归以及 `320×568` 和 `200%` 字号布局。它们不证明 gateway parser、Backend authorization、PostgreSQL、部署端点、production identity、缓存、离线、
 导出或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。该切片沿用现有 browser 和 composition 模式，不需要新增 ADR。
 
+#### Slice 6CB：登记 current-city 快照更正版取代
+
+6CB 只登记两份已经通过 0057 的 current-city approved snapshot 之间的直接 replacement。它不生成 snapshot，也不修改 0057 发布函数。
+两份快照必须属于同一 project、report／version、query fingerprint、privacy policy 和 source scope。报告时区 revision、期间和 release lineage 也必须相同。
+它们还必须保持相同的 target tree version、content fingerprint 和 selection evidence。新快照的 `data_cutoff_utc` 与发布时间必须更晚，source change sequence 不得回退。
+
+replacement 在管理报告共享的 value-free request UUID ledger 中使用独立 current-city family claim，并与 release 共用 request lock。登记复用既有关闭的 lifecycle writer role，但该 role 只能通过 current-city 专用 provenance seam 核对 0057 approved attempt，不能直接读取 attempt ledger。登记原因只允许 `late_accepted_data`、`contact_revision` 和 `contact_void`。
+
+关系和最小 audit 追加不可变；每份旧快照最多一个直接 replacement，每份新快照最多一个 predecessor。请求、lineage 和授权锁取得后必须再次确认 `release_management_reports`、membership、项目状态与 provenance。精确重试幂等；载荷漂移、跨项目／family、target context 漂移、same／earlier cutoff、倒序、自链接、分叉、循环和 stale head 均失败关闭。
+
+生命周期查询只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID，不返回报告格、区域来源、贡献者、接触、坐标或 PII。6CB 不改变目录排序、既有读取、HTTP、导出或 Flutter，也不提供分析定义／跨版本更正、interest／follow-up-consent replacement、删除、retention、warehouse 或真人平台证据。
+
 #### 5.8.2 时间、趋势、版本与因果边界
 
 | ID | 需求 |
@@ -1572,6 +1584,7 @@ identity、authorization、Drift、缓存、离线、同步、导出或导航合
 | `ANALYTICS-060` | 6BY 在 `AppDependencies` composition root 中装配独立的后续联系同意占比 typed gateway。可选 builder 接收启动流程已经打开的同一个 `IdentitySession`，`AppStartupReady` 暴露返回的实例；缺少 builder 时使用不访问网络的 `DeferredFollowUpConsentRatioReportGateway`。后续启动失败和 `TongxingzheApp` dispose 都必须关闭已拥有的 gateway 一次。6BY 不把 gateway 传入 UI，不改变 parser、HTTP、Backend、数据库、缓存、离线或真人平台证据边界。 |
 | `ANALYTICS-061` | 6BZ 的独立 Flutter panel 只消费已授权 typed gateway 返回的一个项目目录和用户明确选择的详情。它按服务端顺序显示固定 metadata、两个完整期间、ratio 和 coverage，basis points 只做显示格式化；不自动选择 first／latest／current，不排序、重算 ratio／总数／趋势／互补值或补回隐藏值。`displayed` 与 `suppressed` 按每个 ratio／coverage cell 独立呈现；suppressed 只显示本地化 hidden 状态。panel 必须隔离 project／返回／retry／dispose 的迟到响应，并在 320×568、200% 字号、键盘、heading、label 和 live region 路径可读。 |
 | `ANALYTICS-062` | 6CA 在 `ManagementReportBrowser` 中增加第五个互斥的后续联系同意占比 family，保持 channel 默认选中；只有用户明确选择后才消费 6BZ panel。浏览器把当前已重新授权的 `ManagementAnalysisContext.projectId` 传给 panel，并沿 `AppStartupReady → _ReadyApp → ProductionHomeShell → ManagementReportBrowser` 借用同一个 gateway 实例；composition root 保持 ownership 和 close。family／project 切换隔离旧 generation 和迟到 directory／detail 响应，标签提供中英文，既有四个 family 行为不变。6CA 不自动选择首项、current／latest／replacement，不回退个人项目，不改变 AppDependencies 构造或 6BZ、gateway、HTTP、Backend、PostgreSQL 合同。 |
+| `ANALYTICS-063` | 6CB 只登记两份 0057 current-city approved snapshot 的直接 replacement。旧、新快照必须同 project、report／version、query／privacy／source scope、报告时区 revision、期间、release lineage 和完整 target context；新快照 cutoff／发布时间更晚且 source watermark 不回退。关系使用共享 value-free request ledger 中的独立 current-city replacement family、追加不可变直接链、锁后重授权、精确幂等和 value-free lifecycle；不生成 snapshot，不改变目录、读取、HTTP、导出或 Flutter。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -1630,6 +1643,7 @@ identity、authorization、Drift、缓存、离线、同步、导出或导航合
 | `PRIVACY-051` | 6BY 只装配已有 typed gateway，不新增身份、token、报告解析或持久化路径。builder 使用启动流程打开的同一个 `IdentitySession`；缺少 builder 的 deferred gateway 不访问网络并返回 `notConfigured`。`AppStartupReady` 和 App widget 只拥有该实例的生命周期，启动失败清理和 app dispose 关闭已拥有的 gateway 一次；本切片不把它传给 UI，也不新增 Drift、缓存、离线、同步或导出。composition 测试使用 fake identity／gateway，只证明资源所有权，不证明生产身份、HTTP、Backend、数据库或真人平台。 |
 | `PRIVACY-052` | 6BZ 的 panel 只显示 typed gateway 已接受的固定 metadata、report periods、ratio 和 coverage。每个 ratio／coverage cell 独立保留 `displayed` 或 `suppressed`；suppressed 只显示本地化 hidden 状态，不以零、相邻字段、总数、互补值或趋势推断。panel 不重算、排序、选择 latest／current 或恢复隐藏值。panel state、retry 和错误内容不得包含 response body、数据库消息、授权 lineage、source、contributor、contact、target、内部 ID 或 PII；结果只存在于当前 widget 内存。fake Flutter tests 只证明渲染和状态边界，不构成 Backend、数据库、生产身份或真人平台隐私证据。 |
 | `PRIVACY-053` | 6CA 只在用户明确选择第五个 report family 后显示 6BZ panel，并把当前 `ManagementAnalysisContext.projectId` 作为项目边界；它不以 UI 选择代替服务端授权，不回退个人项目或旧上下文。browser、`_ReadyApp`、`ProductionHomeShell` 和 panel 只借用 6BY 创建的同一 gateway，不能替换或关闭它。family／project 切换必须阻断旧响应写回；标签、状态和错误不得加入内部授权详情、response body、数据库消息、PII 或隐藏值。fake composition／widget tests 只证明本地传递和状态隔离，不构成 Backend、数据库、部署、生产身份或六平台真人平台隐私证据。 |
+| `PRIVACY-054` | 6CB 的 current-city replacement 只接受两份具有完整 0057 approved provenance、精确 target context、同一报告定义／时区／期间／lineage 和前进 cutoff 的 snapshot。关系、claim 和最小 audit 追加不可变；失败不写部分关系或报告值。生命周期结果只含 snapshot ID、`active`／`superseded` 和直接 replacement ID；不返回 protected report、cells、隐藏前值、区域来源、贡献者、接触、坐标、授权关系或 PII。`PUBLIC`、runtime、普通 app role、reader、release writer 和其他 report-family writer 不能访问该私有合同。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
 
@@ -1683,6 +1697,7 @@ identity、authorization、Drift、缓存、离线、同步、导出或导航合
 | `MANUAL-044` | 学习文档必须用零基础读者可以复制的步骤说明 6BY 的 `AppDependencies` builder、production factory、同一 `IdentitySession`、`AppStartupReady` 暴露、无 builder 时的 `DeferredFollowUpConsentRatioReportGateway`、无网络降级、后续启动失败清理、`TongxingzheApp` dispose 关闭、现有 gateway 隔离和不传入 UI。必须给出 focused composition／widget lifecycle 与全量 Flutter 测试命令，并明确 6BY 不增加 parser、HTTP、Backend、PostgreSQL、Drift、缓存、离线、同步、导出或真人平台证据；fake identity／gateway 测试只证明 composition 与资源所有权。 |
 | `MANUAL-045` | 学习文档必须用零基础读者可以复制的步骤说明 6BZ 独立 panel 的 `AppStrings`、typed gateway、可空授权 `projectId`、inactive／目录 loading／directory／detail loading／failure 状态、显式 summary、两个完整期间、ratio／coverage、`displayed`／`suppressed` 独立 cell、basis points 显示、禁止客户端重算／排序／latest 选择／隐藏值推断、generation／键盘／Escape／focus return／heading／label／live region、320×568 和 200% 字号。必须给出 focused panel 与全量 Flutter 测试命令，明确不接 `ManagementReportBrowser`、`_ReadyApp` 或 `ProductionHomeShell`，并说明 fake tests 不证明 gateway、Backend、数据库、生产身份或六平台真人运行时。 |
 | `MANUAL-046` | 学习文档必须用零基础读者可以复制的步骤说明 6CA 的第五个互斥 report family、channel 默认选择、明确选择后才显示 6BZ panel、当前 `ManagementAnalysisContext.projectId`、`AppStartupReady → _ReadyApp → ProductionHomeShell → ManagementReportBrowser` 的同一 gateway 传递、composition root ownership／close、family／project 切换与迟到响应隔离、中英文标签、键盘／触摸路径、`320×568` 和 `200%` 字号。必须给出 browser／app composition focused tests、全量 Flutter 命令和 Docker 回归边界；明确 6CA 不改变 AppDependencies 构造、6BZ、gateway、Backend、PostgreSQL、缓存、离线、导出或导航，也不证明部署、production identity 或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。 |
+| `MANUAL-047` | 学习文档必须用零基础读者可以复制的步骤说明 6CB 的 0080 current-city replacement、0057 approved provenance、完整 target context、共享 request UUID ledger 中的独立 family、release／replacement 双向互斥、active／superseded 生命周期、原因 allowlist、锁后授权、精确幂等、stale head／分叉／循环／跨 family／context drift 失败关闭、value-free 输出、最小 ACL，以及 migration／check／fixture／concurrency／checksum／dump／restore 命令。必须明确 6CB 不生成 snapshot，不改变目录、读取、HTTP、导出或 Flutter，不处理跨版本更正、删除或 retention；synthetic Docker 证据不证明生产身份或真人平台。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -1917,6 +1932,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-054` | 6BY 的 Flutter composition 与 widget lifecycle tests 必须通过 `AppDependencies.start()` 和 `TongxingzheApp` 生命周期观察行为：builder 收到与 `AppStartupReady` 相同的 `IdentitySession`，ready 结果暴露 builder 返回的同一 gateway，缺少 builder 使用 `DeferredFollowUpConsentRatioReportGateway` 且不访问网络；个人同意占比和其他管理报告 gateway 保持独立。测试还必须覆盖 gateway 建立后后续启动失败时只关闭一次，以及移除 `TongxingzheApp` 时只关闭 ready gateway 一次。focused 测试使用 fake identity／gateway，另运行全量 Flutter tests；通过只证明 composition、deferred fallback 和资源关闭，不声称 parser、HTTP、Backend、数据库、UI 消费或真人平台运行时。 |
 | `TEST-055` | 6BZ 的 ViewModel 与 Widget tests 必须覆盖 inactive／目录 loading／空目录／成功目录、exact summary、detail loading、retry、稳定 failure、project change、late response、return 和 dispose；Widget 必须覆盖两个期间的 ratio、unanswered／refused／not_applicable 三项 coverage、displayed／suppressed 混合 cell、suppressed 不显示零或隐藏前值、键盘／Escape／focus return、heading／label／live region、English localization、320×568 和 200% 字号。使用 fake typed gateway，不重复 HTTP parser 或 Backend tests；运行 focused panel tests 和全量 Flutter tests。通过只证明 panel state、typed rendering、accessibility、responsive layout 和内存内 failure handling，不声称 gateway parser、HTTP、Backend、PostgreSQL、部署、生产身份、持久化、offline 或真人平台运行时。 |
 | `TEST-056` | 6CA 的 browser、app 和 composition tests 必须覆盖 channel 默认且第五个 gateway 不请求、第五个 family 的 mouse／touch／Enter／Space 明确选择、当前 `ManagementAnalysisContext.projectId` 传递、无自动 directory／detail、第五个 chip 与既有四个 family 互斥且有中英文标签、project／family 切换的 generation 与迟到响应隔离，以及既有 family 不回归。测试还必须证明 `_ReadyApp`、`ProductionHomeShell`、browser 和 panel 借用同一 gateway，只有 6BY composition root 关闭它，并覆盖键盘 focus、`320×568` 和 `200%` 字号。使用 fake gateway；通过只证明本地 UI／composition 行为，不声称 gateway parser、Backend、PostgreSQL、部署、production identity 或六平台真人平台证据。 |
+| `TEST-057` | 6CB 的 0080 structural check／rollback fixture／并发测试必须覆盖合法同项目 current-city approved snapshot、独立 replacement family、release／replacement UUID 双向互斥、0057 专用 provenance、document 与 snapshot 行的 project／cutoff／watermark 绑定、同 report／version／query／privacy／source scope／时区 revision／期间／lineage／target context、后续 cutoff／发布时间、watermark 不回退、原因 allowlist、active／superseded、精确幂等、载荷漂移、跨项目／family、legacy／blocked／missing／drift、same／earlier cutoff、倒序、自链接、分叉、循环、stale head、旧新 snapshot 字节不变、value-free 结果、锁后撤权、竞争 replacement、最小 ACL、checksum 和 dump／restore。通过只证明 synthetic DB-only replacement，不声称 snapshot 生成、定义／跨版本更正、runtime、HTTP、Flutter、目录、导出、删除、retention、生产身份或真人平台。 |
 
 ## 9. UI、视觉与可访问性
 
