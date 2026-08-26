@@ -192,6 +192,45 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('项目切换淘汰旧目录焦点节点，新的摘要仍可返回聚焦', (tester) async {
+    final gateway = _QueueGateway(
+      directoryResults: [
+        OriginalRegionReportSuccess(_directory(snapshots: [_summary])),
+        OriginalRegionReportSuccess(
+          _directory(projectId: _otherProjectId, snapshots: [_secondSummary]),
+        ),
+      ],
+      snapshotResult: OriginalRegionReportSuccess(_snapshot()),
+    );
+    await tester.pumpWidget(_app(gateway));
+    await tester.pumpAndSettle();
+
+    final oldItem = find.byKey(
+      ValueKey('original-region-report-${_summary.snapshotId}'),
+    );
+    final oldNode = tester
+        .widget<ListTile>(
+          find.descendant(of: oldItem, matching: find.byType(ListTile)),
+        )
+        .focusNode!;
+
+    await tester.pumpWidget(_app(gateway, projectId: _otherProjectId));
+    await tester.pumpAndSettle();
+
+    expect(() => oldNode.addListener(() {}), throwsA(isA<FlutterError>()));
+    final newItem = find.byKey(
+      ValueKey('original-region-report-${_secondSummary.snapshotId}'),
+    );
+    expect(newItem, findsOneWidget);
+    await _tabTo(tester, newItem);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    expect(_containsPrimaryFocus(tester, newItem), isTrue);
+  });
+
   testWidgets('键盘遍历、Enter/Space 打开、Escape 返回并恢复快照焦点', (tester) async {
     final gateway = _QueueGateway(
       directory: _directory(snapshots: [_summary, _secondSummary]),
@@ -345,6 +384,7 @@ Widget _app(
   OriginalRegionReportGateway gateway, {
   AppStrings text = const AppStrings('zh'),
   TextScaler textScaler = TextScaler.noScaling,
+  String projectId = _projectId,
 }) => MaterialApp(
   builder: (context, child) => MediaQuery(
     data: MediaQuery.of(context).copyWith(textScaler: textScaler),
@@ -356,7 +396,7 @@ Widget _app(
       child: OriginalRegionReportPanel(
         text: text,
         gateway: gateway,
-        projectId: _projectId,
+        projectId: projectId,
       ),
     ),
   ),
@@ -405,9 +445,10 @@ final class _QueueGateway implements OriginalRegionReportGateway {
 
 OriginalRegionReportSnapshotDirectory _directory({
   required List<OriginalRegionReportSnapshotSummary> snapshots,
+  String projectId = _projectId,
 }) => OriginalRegionReportSnapshotDirectory(
   accessEventId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-  projectId: _projectId,
+  projectId: projectId,
   snapshots: snapshots,
 );
 
@@ -540,3 +581,4 @@ bool _containsPrimaryFocus(WidgetTester tester, Finder finder) {
 }
 
 const _projectId = '33333333-3333-4333-8333-333333333333';
+const _otherProjectId = '44444444-4444-4444-8444-444444444444';

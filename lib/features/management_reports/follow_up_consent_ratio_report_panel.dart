@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../l10n/app_strings.dart';
 import '../../management_reports/follow_up_consent_ratio_report_gateway.dart';
 import 'follow_up_consent_ratio_report_panel_view_model.dart';
+import 'snapshot_focus_node_cache.dart';
 
 /// 管理项目内后续联系同意占比报告面板。
 ///
@@ -39,7 +40,9 @@ final class _FollowUpConsentRatioReportPanelState
   final _retryFocusNode = FocusNode(
     debugLabel: 'follow-up consent ratio report retry',
   );
-  final _snapshotFocusNodes = <String, FocusNode>{};
+  final _snapshotFocusNodes = SnapshotFocusNodeCache(
+    debugLabelPrefix: 'follow-up consent ratio report',
+  );
   FollowUpConsentRatioReportPanelStage? _previousStage;
   String? _returnFocusSnapshotId;
 
@@ -57,7 +60,7 @@ final class _FollowUpConsentRatioReportPanelState
       _viewModel
         ..removeListener(_stateChanged)
         ..dispose();
-      _clearSnapshotFocusNodes();
+      _snapshotFocusNodes.clear();
       _returnFocusSnapshotId = null;
       _viewModel = _createViewModel();
       unawaited(_viewModel.initialize());
@@ -85,7 +88,7 @@ final class _FollowUpConsentRatioReportPanelState
       ..dispose();
     _backFocusNode.dispose();
     _retryFocusNode.dispose();
-    _clearSnapshotFocusNodes();
+    _snapshotFocusNodes.dispose();
     super.dispose();
   }
 
@@ -202,11 +205,7 @@ final class _FollowUpConsentRatioReportPanelState
           state.stage == FollowUpConsentRatioReportPanelStage.failure);
 
   FocusNode _snapshotFocusNode(String snapshotId) =>
-      _snapshotFocusNodes.putIfAbsent(
-        snapshotId,
-        () =>
-            FocusNode(debugLabel: 'follow-up consent ratio report $snapshotId'),
-      );
+      _snapshotFocusNodes.nodeFor(snapshotId);
 
   void _openSnapshot(FollowUpConsentRatioReportSnapshotSummary summary) {
     _returnFocusSnapshotId = summary.snapshotId;
@@ -218,7 +217,9 @@ final class _FollowUpConsentRatioReportPanelState
     _viewModel.returnToDirectory();
     if (snapshotId == null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _snapshotFocusNodes[snapshotId]?.requestFocus();
+      if (mounted && _snapshotFocusNodes.contains(snapshotId)) {
+        _snapshotFocusNodes.nodeFor(snapshotId).requestFocus();
+      }
     });
   }
 
@@ -237,7 +238,22 @@ final class _FollowUpConsentRatioReportPanelState
 
   void _stateChanged() {
     if (!mounted) return;
-    final stage = _viewModel.state.stage;
+    final state = _viewModel.state;
+    final stage = state.stage;
+    switch (stage) {
+      case FollowUpConsentRatioReportPanelStage.inactive:
+      case FollowUpConsentRatioReportPanelStage.loadingDirectory:
+        _snapshotFocusNodes.clear();
+      case FollowUpConsentRatioReportPanelStage.directory:
+        _snapshotFocusNodes.retain(
+          state.directory?.snapshots.map((summary) => summary.snapshotId) ??
+              const <String>[],
+        );
+      case FollowUpConsentRatioReportPanelStage.loadingSnapshot:
+      case FollowUpConsentRatioReportPanelStage.snapshot:
+      case FollowUpConsentRatioReportPanelStage.failure:
+        break;
+    }
     final shouldFocusBack =
         _previousStage ==
             FollowUpConsentRatioReportPanelStage.loadingSnapshot &&
@@ -257,13 +273,6 @@ final class _FollowUpConsentRatioReportPanelState
         if (mounted) _retryFocusNode.requestFocus();
       });
     }
-  }
-
-  void _clearSnapshotFocusNodes() {
-    for (final node in _snapshotFocusNodes.values) {
-      node.dispose();
-    }
-    _snapshotFocusNodes.clear();
   }
 
   @override

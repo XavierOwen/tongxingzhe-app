@@ -512,6 +512,45 @@ void main() {
     );
     semantics.dispose();
   });
+
+  testWidgets('项目切换淘汰旧目录焦点节点，新的摘要仍可返回聚焦', (tester) async {
+    final gateway = _QueueGateway(
+      directoryResults: [
+        FollowUpConsentRatioReportSuccess(_directory(snapshots: [_summary])),
+        FollowUpConsentRatioReportSuccess(
+          _directory(projectId: _otherProjectId, snapshots: [_secondSummary]),
+        ),
+      ],
+      snapshotResult: FollowUpConsentRatioReportSuccess(_snapshot()),
+    );
+    await tester.pumpWidget(_app(gateway));
+    await tester.pumpAndSettle();
+
+    final oldItem = find.byKey(
+      ValueKey('follow-up-consent-ratio-report-${_summary.snapshotId}'),
+    );
+    final oldNode = tester
+        .widget<ListTile>(
+          find.descendant(of: oldItem, matching: find.byType(ListTile)),
+        )
+        .focusNode!;
+
+    await tester.pumpWidget(_app(gateway, projectId: _otherProjectId));
+    await tester.pumpAndSettle();
+
+    expect(() => oldNode.addListener(() {}), throwsA(isA<FlutterError>()));
+    final newItem = find.byKey(
+      ValueKey('follow-up-consent-ratio-report-${_secondSummary.snapshotId}'),
+    );
+    expect(newItem, findsOneWidget);
+    await _tabTo(tester, newItem);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    expect(_containsPrimaryFocus(tester, newItem), isTrue);
+  });
 }
 
 Widget _app(
@@ -538,9 +577,10 @@ Widget _app(
 
 FollowUpConsentRatioReportSnapshotDirectory _directory({
   required List<FollowUpConsentRatioReportSnapshotSummary> snapshots,
+  String projectId = _projectId,
 }) => FollowUpConsentRatioReportSnapshotDirectory(
   accessEventId: 'access-directory-1',
-  projectId: _projectId,
+  projectId: projectId,
   snapshots: snapshots,
 );
 
@@ -773,6 +813,7 @@ bool _containsPrimaryFocus(WidgetTester tester, Finder finder) {
 }
 
 const _projectId = '33333333-3333-4333-8333-333333333333';
+const _otherProjectId = '44444444-4444-4444-8444-444444444444';
 const _reportId = 'contact_target_follow_up_consent_ratio_two_periods';
 const _queryFingerprint =
     'management-report:contact_target_follow_up_consent_ratio_two_periods:v1';

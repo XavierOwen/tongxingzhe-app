@@ -147,6 +147,45 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('项目切换淘汰旧目录焦点节点，新的摘要仍可返回聚焦', (tester) async {
+    final gateway = _QueueGateway(
+      directoryResults: [
+        CurrentCityReportSuccess(_directory(snapshots: [_summary])),
+        CurrentCityReportSuccess(
+          _directory(projectId: _otherProjectId, snapshots: [_secondSummary]),
+        ),
+      ],
+      snapshotResult: _snapshot(),
+    );
+    await tester.pumpWidget(_app(gateway));
+    await tester.pumpAndSettle();
+
+    final oldItem = find.byKey(
+      ValueKey('current-city-report-${_summary.snapshotId}'),
+    );
+    final oldNode = tester
+        .widget<ListTile>(
+          find.descendant(of: oldItem, matching: find.byType(ListTile)),
+        )
+        .focusNode!;
+
+    await tester.pumpWidget(_app(gateway, projectId: _otherProjectId));
+    await tester.pumpAndSettle();
+
+    expect(() => oldNode.addListener(() {}), throwsA(isA<FlutterError>()));
+    final newItem = find.byKey(
+      ValueKey('current-city-report-${_secondSummary.snapshotId}'),
+    );
+    expect(newItem, findsOneWidget);
+    await _tabTo(tester, newItem);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    expect(_containsPrimaryFocus(tester, newItem), isTrue);
+  });
+
   testWidgets('键盘正反向遍历、进入、Escape 返回并恢复原快照焦点', (tester) async {
     final gateway = _QueueGateway(
       directory: _directory(snapshots: [_summary, _secondSummary]),
@@ -255,6 +294,7 @@ Widget _app(
   CurrentCityReportGateway gateway, {
   AppStrings text = const AppStrings('zh'),
   TextScaler textScaler = TextScaler.noScaling,
+  String projectId = _projectId,
 }) => MediaQuery(
   data: MediaQueryData(textScaler: textScaler),
   child: MaterialApp(
@@ -264,7 +304,7 @@ Widget _app(
         child: CurrentCityReportPanel(
           text: text,
           gateway: gateway,
-          projectId: _projectId,
+          projectId: projectId,
         ),
       ),
     ),
@@ -273,9 +313,10 @@ Widget _app(
 
 CurrentCityReportSnapshotDirectory _directory({
   List<CurrentCityReportSnapshotSummary> snapshots = const [],
+  String projectId = _projectId,
 }) => CurrentCityReportSnapshotDirectory(
   accessEventId: 'access-directory-1',
-  projectId: _projectId,
+  projectId: projectId,
   snapshots: snapshots.isEmpty ? [_summary] : snapshots,
 );
 
@@ -452,3 +493,4 @@ bool _containsPrimaryFocus(WidgetTester tester, Finder finder) {
 }
 
 const _projectId = '33333333-3333-4333-8333-333333333333';
+const _otherProjectId = '44444444-4444-4444-8444-444444444444';
