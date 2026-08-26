@@ -43,7 +43,7 @@ adapter 只把 SQLSTATE `42501` 映射为 typed `forbidden`。其他数据库错
 
 0076 继续是唯一的授权、0075 provenance、6BQ validator、撤权锁和 audit 来源。0077 只提供 exact identity 映射和 runtime 调用边界，不增加第二套审计，也不重算或修改报告。
 
-本 Slice 增加 migration、structural check、rollback fixture、Backend typed store、strict parser 和真实 PostgreSQL integration。它不增加 HTTP route、Bearer／JWT 验证、目录、Flutter、Drift、导出、缓存、离线、同步、replacement、删除、retention、warehouse、生产身份或真人平台证据。
+本 Slice 当时增加 migration、structural check、rollback fixture、Backend typed store、strict parser 和真实 PostgreSQL integration；它不增加 HTTP route、Bearer／JWT 验证、目录、Flutter、Drift、导出、缓存、离线、同步、replacement、删除、retention、warehouse、生产身份或真人平台证据。HTTP 详情后来由 6BT 单独定义。
 
 0076 已覆盖 private read／revoke 并发，因此不增加重复的并发脚本。
 
@@ -60,4 +60,4 @@ cd ../..
 
 Docker runner 自动发现 0077 migration、check 和 fixture，并显式运行 Backend integration。它继续运行 0076 read／revoke 并发、checksum 和 dump／restore。恢复库只重跑 check 和 rollback fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。
 
-这些结果只证明 synthetic PostgreSQL bridge 和 Backend adapter 合同。它们不证明 HTTP、Flutter、生产 identity provider、真实账号或任何平台上的运行时行为。
+这些结果只证明 synthetic PostgreSQL bridge 和 Backend adapter 合同。由于 6BS 当时不包含 HTTP，它们不证明 6BS 的 HTTP 行为、Flutter、生产 identity provider、真实账号或任何平台上的运行时行为。

@@ -2650,7 +2650,84 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/fixtures/0077_runtime_authorized_management_follow_up_consent_ratio_snapshot_read.sql
 ```
 
-0077 fixture 使用 rollback namespace。0076 并发脚本使用另一组 committed namespace。恢复库只重跑 check 和 fixture，不重新执行 migration，也不重跑并发脚本。通过这些测试只证明 synthetic exact-identity bridge 和 Backend adapter；它不证明 HTTP、Flutter、生产身份、真实账号或真人平台已经验收。
+0077 fixture 使用 rollback namespace。0076 并发脚本使用另一组 committed namespace。恢复库只重跑 check 和 fixture，不重新执行 migration，也不重跑并发脚本。通过这些测试只证明 synthetic exact-identity bridge 和 Backend adapter；6BS 当时不包含 HTTP，HTTP 证据由后续 6BT 单独提供；它不证明 Flutter、生产身份、真实账号或真人平台已经验收。
+
+## Slice 6BT：通过 HTTP 读取后续联系同意占比快照
+
+6BT 把 6BS 的专用 snapshot store 接到一个固定的只读详情路径：
+
+```text
+GET /v1/projects/:projectId/management-follow-up-consent-ratio-report-snapshots/:snapshotId
+```
+
+### 请求顺序
+
+固定 path 命中后，handler 必须先处理 Bearer identity：先解析并验证 token，再检查 project／snapshot UUID、query、GET body 的
+非零 `Content-Length`／`Transfer-Encoding` 声明以及 6BS 专用 store。没有 token 或 token 无效时，即使 UUID、query、body 或 store 有问题，也先返回
+`401 unauthenticated`。认证通过后，handler 只向 `PostgresManagementFollowUpConsentRatioReportSnapshotStore` 传递 verified `issuer + subject`、
+显式 project UUID 和 snapshot UUID。它不调用 `SessionContext`、generic reader、其他 report-family store、`app_private` 或客户端 SQL。
+
+GET 不接受 query 参数或 body。非零 `Content-Length` 或 `Transfer-Encoding` 等 body 声明，就必须失败关闭；handler 不读取客户端查询来选择
+报告、时区、期间或 snapshot。store Promise 完成前不能写 HTTP 响应，这就是 Promise gate，也保证已授权读取的 value-free audit 在数据库提交后才进入
+响应流程。
+
+### 固定响应
+
+成功响应的 JSON 根对象只有三个字段：
+
+```json
+{
+  "access_event_id": "…",
+  "snapshot_id": "…",
+  "report": {}
+}
+```
+
+`report` 逐字保留 6BR／6BS 已保护的 `contact_target_follow_up_consent_ratio_two_periods@1` 报告；HTTP 层不重算 ratio、不恢复
+`suppressed` 值，也不修改 6BQ snapshot。
+
+固定状态和 code 如下：
+
+| HTTP 状态 | code |
+| --- | --- |
+| `401` | `unauthenticated` |
+| `400` | `invalid_management_follow_up_consent_ratio_report_snapshot_request` |
+| `403` | `management_follow_up_consent_ratio_report_snapshot_forbidden` |
+| `404` | `management_follow_up_consent_ratio_report_snapshot_not_found` |
+| `409` | `management_follow_up_consent_ratio_report_snapshot_untrusted` |
+| `503` | `management_follow_up_consent_ratio_report_snapshot_unavailable` |
+
+`404` 和 `409` 可以带 6BS store 返回的 value-free `access_event_id`，但错误不能带报告正文、报告格、授权关系、external subject、数据库消息、SQL、
+栈或 PII。成功和错误响应都使用 `Content-Type: application/json; charset=utf-8` 与 `Cache-Control: no-store`。
+
+### 如何测试以及测试证明什么
+
+6BT 不增加 PostgreSQL migration、reader、directory、latest／current 选择、分页、筛选、Flutter、Drift、导出、缓存、离线、同步、replacement、
+删除、retention、warehouse 或并发脚本。它的新增证据是 Backend handler、fixed route、real HTTP route 和 production composition 测试；这些
+测试使用 synthetic identity 与 fake store，因此不需要真实账号、JWT provider 或数据库。
+
+从仓库根目录运行：
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+这些测试覆盖固定 method／path、认证先于 UUID／query／GET body／store、缺失或无效 token 的 `401`、malformed request 的 `400`、6BS store 的
+`403`／`404`／`409`／`503` 映射、verified identity 与显式资源 ID 传播、单次专用 store 调用、Promise gate、三字段 success wire、错误脱敏和
+`no-store`。它们只证明 Backend HTTP transport contract。
+
+若要同时检查既有 6BS PostgreSQL 合同，回到仓库根目录运行：
+
+```bash
+cd ../..
+./tool/run_postgres_tests_in_docker.sh
+```
+
+Docker runner 仍验证 0077 bridge、0076 reader、授权、provenance、strict parser、audit、撤权并发、checksum 和 restore。Docker 结果不替代
+6BT HTTP 测试，也不证明已部署端点、production identity provider、客户端消费或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。
 
 ## Slice 6S 如何固定地点来源合同
 

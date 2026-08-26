@@ -1068,7 +1068,64 @@ check 验证函数签名、owner、固定 search path、exact identity body 和�
 fixture 验证 active／unknown／inactive／release-only identity、空白变体、`completed`／`not_found`／`untrusted_provenance`、重复 value-free audit 和 runtime 直接访问拒绝。
 Backend unit 验证一次 SQL、strict parser、PII 拒绝和只映射 SQLSTATE `42501`。PostgreSQL integration 以真实 runtime role 调用 bridge。
 
-这些 synthetic 证据不证明 HTTP、Flutter、生产 identity provider、真实账号或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时，也不构成形式化不可重识别保证。
+这些 synthetic 证据只证明 6BS runtime bridge 与 Backend adapter；6BS 当时不包含 HTTP，后续 6BT 单独提供 HTTP 证据。它们不证明 Flutter、生产 identity provider、
+真实账号或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时，也不构成形式化不可重识别保证。
+
+### 6BT：验证后续联系同意占比快照 HTTP 读取
+
+6BT 只把 6BS 的专用 store 接到固定的 HTTP 详情路径：
+
+```text
+GET /v1/projects/:projectId/management-follow-up-consent-ratio-report-snapshots/:snapshotId
+```
+
+这里的“先认证”是安全顺序要求。固定 path 命中后，handler 先解析并验证 Bearer identity；只有认证成功后，才检查两个 UUID、query、GET body 的
+非零 `Content-Length`／`Transfer-Encoding` 声明和 6BS 专用 store。没有 token 或 token 无效时，即使 UUID、query、body 或 store 有问题，也先返回
+`401 unauthenticated`。认证通过后，handler 只把 verified `issuer + subject`、显式 project UUID 和 snapshot UUID 传给
+`PostgresManagementFollowUpConsentRatioReportSnapshotStore`，并等待 store Promise 完成后再写响应。
+
+GET 不接受 query 参数或 body。成功响应固定只有 `access_event_id`、`snapshot_id` 和 `report` 三个字段；`report` 保留 6BR／6BS 已保护的
+consent-ratio report，HTTP 层不重算 ratio、不恢复 `suppressed` 值，也不修改 snapshot。
+
+错误 code 固定为：
+
+| HTTP 状态 | code |
+| --- | --- |
+| `401` | `unauthenticated` |
+| `400` | `invalid_management_follow_up_consent_ratio_report_snapshot_request` |
+| `403` | `management_follow_up_consent_ratio_report_snapshot_forbidden` |
+| `404` | `management_follow_up_consent_ratio_report_snapshot_not_found` |
+| `409` | `management_follow_up_consent_ratio_report_snapshot_untrusted` |
+| `503` | `management_follow_up_consent_ratio_report_snapshot_unavailable` |
+
+`404`／`409` 可以带 6BS store 返回的 value-free `access_event_id`，但错误不得包含报告格、授权关系、external subject、数据库消息、SQL、栈或
+PII。所有成功和错误响应都使用 `Content-Type: application/json; charset=utf-8` 与 `Cache-Control: no-store`。
+
+#### 第一次用 Docker 的读者要知道什么
+
+6BT 的 HTTP、route 和 composition 测试不需要 Docker。Docker 是另一个隔离的测试环境：它启动临时 PostgreSQL 和 Node 容器，使用 synthetic
+数据，完成后删除容器；它不会连接 production。若电脑上没有 Docker，请先安装并打开 Docker Desktop，等待 Docker Engine 显示运行。只验证
+HTTP 时，从仓库根目录运行：
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+这些测试使用 synthetic identity 和 fake store，覆盖固定 method／path、认证先于 malformed UUID／query／GET body／store、三字段 success wire、
+`401`／`400`／`403`／`404`／`409`／`503`、错误脱敏、Promise gate 和 `no-store`。不需要真实账号或 JWT provider。
+
+6BT 不增加 migration、database check、fixture、PostgreSQL integration 或并发脚本。若要连同既有 6BS 数据库合同一起检查，回到仓库根目录运行：
+
+```bash
+cd ../..
+./tool/run_postgres_tests_in_docker.sh
+```
+
+Docker runner 仍验证 0077 bridge、0076 reader、授权、provenance、strict parser、audit、并发、checksum 和 restore；它不替代 6BT HTTP 测试。
+这些 synthetic HTTP 和 Docker 结果不证明 production identity、已部署端点、Flutter、真实账号或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。
 
 ### 6BF：理解管理报告删除与保留边界
 
