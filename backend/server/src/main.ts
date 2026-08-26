@@ -35,6 +35,9 @@ import {
   PostgresManagementOriginalRegionReportSnapshotStore,
 } from "./management-original-region-report-snapshots.js";
 import {
+  PostgresManagementFollowUpConsentRatioReportSnapshotStore,
+} from "./management-follow-up-consent-ratio-report-snapshots.js";
+import {
   PostgresManagementOriginalRegionReportSnapshotDirectoryStore,
 } from "./management-original-region-report-snapshot-directory.js";
 import {
@@ -130,6 +133,10 @@ const managementOriginalRegionReportSnapshotStore =
   new PostgresManagementOriginalRegionReportSnapshotStore(
     async (text, values) => pool.query(text, [...values]),
   );
+const managementFollowUpConsentRatioReportSnapshotStore =
+  new PostgresManagementFollowUpConsentRatioReportSnapshotStore(
+    async (text, values) => pool.query(text, [...values]),
+  );
 const managementOriginalRegionReportSnapshotDirectoryStore =
   new PostgresManagementOriginalRegionReportSnapshotDirectoryStore(
     async (text, values) => pool.query(text, [...values]),
@@ -182,6 +189,7 @@ const server = createBackendServer({
   managementCurrentCityReportSnapshotStore,
   managementInterestReportSnapshotStore,
   managementOriginalRegionReportSnapshotStore,
+  managementFollowUpConsentRatioReportSnapshotStore,
   managementOriginalRegionReportSnapshotDirectoryStore,
   managementReportSnapshotExportStore,
   managementReportSnapshotDirectoryStore,

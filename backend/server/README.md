@@ -692,7 +692,8 @@ SELECT app_data.read_authorized_management_follow_up_consent_report_snapshot_v1(
 
 strict parser 只接受固定六字段 access envelope。`completed` 还必须包含 `contact_target_follow_up_consent_ratio_two_periods@1` 的 17 个顶层字段、相邻完整期间、两个 period result、ratio、三项 coverage、连续顺序、安全整数和 `suppressed = null`。额外字段、其他 report family、PII、contact、target、contributor、source 或隐藏前值都会使读取失败。`not_found` 和 `untrusted_provenance` 不得包含正文。
 
-adapter 只将 SQLSTATE `42501` 映射为 typed `forbidden`。未知数据库错误和 parser 错误保持内部失败，不泄露数据库消息。6BS 不增加 HTTP route；后续 HTTP 切片必须另行定义认证顺序、wire mapping 和 `Cache-Control`。
+adapter 只将 SQLSTATE `42501` 映射为 typed `forbidden`。未知数据库错误和 parser 错误保持内部失败，不泄露数据库消息。6BS 本身不定义 HTTP route；
+6BT 后续以独立的 HTTP handler 定义认证顺序、wire mapping 和 `Cache-Control`，不改变 6BS runtime／数据库边界。
 
 ### 6BS 的本地测试
 
@@ -707,7 +708,72 @@ cd ../..
 
 前三条 Backend 命令验证 typed store 和 strict parser。Docker runner 还执行 0077 migration、check、fixture 和真实 PostgreSQL integration。
 
-它也运行既有 0076 read／revoke 并发、checksum 和 dump／restore。通过只证明 synthetic runtime bridge 与 Backend adapter，不证明 HTTP、Flutter、生产 identity provider、真实账号或真人平台。
+它也运行既有 0076 read／revoke 并发、checksum 和 dump／restore。通过只证明 synthetic runtime bridge 与 Backend adapter；6BS 当时不包含 HTTP，
+后续 6BT 单独提供 HTTP 证据。上述结果不证明 Flutter、生产 identity provider、真实账号或真人平台。
+
+## 后续联系同意占比快照 HTTP 读取
+
+6BT 将 6BS 的专用 snapshot store 接到一个固定的只读详情入口：
+
+```text
+GET /v1/projects/:projectId/management-follow-up-consent-ratio-report-snapshots/:snapshotId
+```
+
+handler 在该固定 route 命中后先验证 Bearer identity，再检查 project／snapshot UUID、query、GET body 和专用 store。认证失败时，即使 UUID、
+query、body 或 store 不合法，也先返回 `401 unauthenticated`。认证通过后只向
+`PostgresManagementFollowUpConsentRatioReportSnapshotStore` 传递 verified `issuer + subject`、显式 project UUID 和 snapshot UUID；不调用
+`SessionContext`、generic reader、其他 report-family store、`app_private` 或客户端 SQL。
+
+GET 不接受 query 参数或 body。非零 `Content-Length` 或 `Transfer-Encoding` 等声明存在 body 时，同样返回 `400`。handler 等待 store 的 PostgreSQL
+Promise 完成后才写响应，因此已提交的 value-free audit 不会因过早发送 HTTP 响应而失去顺序保证。
+
+成功响应只有三个字段：
+
+```json
+{
+  "access_event_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "snapshot_id": "88888888-8888-4888-8888-888888888888",
+  "report": {}
+}
+```
+
+错误使用稳定 code：
+
+| 状态 | code |
+| --- | --- |
+| `401` | `unauthenticated` |
+| `400` | `invalid_management_follow_up_consent_ratio_report_snapshot_request` |
+| `403` | `management_follow_up_consent_ratio_report_snapshot_forbidden` |
+| `404` | `management_follow_up_consent_ratio_report_snapshot_not_found` |
+| `409` | `management_follow_up_consent_ratio_report_snapshot_untrusted` |
+| `503` | `management_follow_up_consent_ratio_report_snapshot_unavailable` |
+
+`404`／`409` 可以带 6BS store 返回的 value-free `access_event_id`，但错误不得包含报告、数据库消息、SQL、栈、external subject、授权关系或
+PII。所有成功和错误响应使用 `Content-Type: application/json; charset=utf-8` 与 `Cache-Control: no-store`。
+
+6BT 的 production composition 只注入 6BS 专用 store。HTTP 层不复制 6BR／6BS 的授权、provenance、validator、撤权锁或 audit，也不增加
+PostgreSQL migration、reader、directory、latest／current 选择、分页、筛选、Flutter、Drift、导出、缓存、离线、同步、replacement、删除、
+retention、warehouse 或真人平台证据。新增 handler、route、real HTTP 和 composition 测试使用 synthetic identity 与 fake store；它们只证明
+Backend HTTP transport contract，不证明 production identity provider、部署端点、真实账号或客户端消费。
+
+### 6BT 的本地测试
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+```
+
+这些测试覆盖固定 method／path、认证先于 UUID／query／GET body／store、Promise gate、三字段 success wire、`401`／`400`／`403`／`404`／`409`／`503`、
+错误脱敏和 `no-store`。若要同时执行既有 PostgreSQL 合同，从仓库根目录运行：
+
+```bash
+cd ../..
+./tool/run_postgres_tests_in_docker.sh
+```
+
+Docker runner 仍验证 0077 bridge、0076 reader、授权、provenance、parser、audit、并发、checksum 和 restore；它不替代 6BT HTTP 测试。
 
 ## 管理报告快照目录合同
 
@@ -806,7 +872,7 @@ current 城市快照目录见 [`0060_authorized_management_current_city_report_s
 
 管理兴趣快照 runtime bridge 见 [`0064_runtime_authorized_management_interest_report_snapshot_read.sql`](../database/migrations/0064_runtime_authorized_management_interest_report_snapshot_read.sql)。对应 fixture、adapter 和 integration 验证 exact identity、0063 private call、strict parser、最小 runtime 权限及 DB-only 证据边界；它不增加 HTTP route。
 
-后续联系同意占比快照 runtime bridge 见 [`0077_runtime_authorized_management_follow_up_consent_ratio_snapshot_read.sql`](../database/migrations/0077_runtime_authorized_management_follow_up_consent_ratio_snapshot_read.sql)。对应 fixture、adapter 和 integration 验证 exact identity、0076 private call、strict consent-ratio parser、最小 runtime 权限及 synthetic 证据边界；它不增加 HTTP route。
+后续联系同意占比快照 runtime bridge 见 [`0077_runtime_authorized_management_follow_up_consent_ratio_snapshot_read.sql`](../database/migrations/0077_runtime_authorized_management_follow_up_consent_ratio_snapshot_read.sql)。对应 fixture、adapter 和 integration 验证 exact identity、0076 private call、strict consent-ratio parser、最小 runtime 权限及 synthetic 证据边界；6BS 当时不增加 HTTP route，当前 HTTP 详情由 6BT 的独立 handler 定义。
 
 管理报告生产发布见 [`0036_runtime_trusted_management_report_release.sql`](../database/migrations/0036_runtime_trusted_management_report_release.sql)。对应 fixture 与独立会话脚本验证既有身份映射、固定报告定义、发布与查看能力分离、幂等重放、冲突失败关闭、最小返回值，以及发布与撤权／时区配置的事务顺序。
 

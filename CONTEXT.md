@@ -832,8 +832,25 @@ bridge 只映射既有 active identity，不 trim、不 bootstrap，也不接受
 runtime 只有 bridge `EXECUTE`，不能使用 `app_private` 或读取 identity、用户、snapshot、provenance 和 audit 表。
 Backend adapter 只执行一次固定 SQL，并严格解析 6BR envelope、同意占比报告、两个期间、ratio、coverage 和 `suppressed = null`。
 授权、0075 provenance、6BQ validator、撤权锁和 value-free audit 仍由 6BR 负责。
-这是 synthetic PostgreSQL 与 Backend adapter 合同，不是 HTTP、目录、Flutter、导出、生产身份或真人平台证据。
+这是 synthetic PostgreSQL 与 Backend adapter 合同。6BS 当时不包含 HTTP；HTTP 详情读取由后续 6BT 单独定义，不能把两层证据合并。
 _Avoid_: trim identity、runtime 直接进入 private schema、复用其他报告 parser、在 adapter 重算比例、把 Docker integration 当生产身份或 HTTP 证据
+
+**组织项目后续联系同意占比快照 HTTP 读取**:
+6BT 为已知的后续联系同意占比 snapshot 提供固定的只读 HTTP 详情入口：
+`GET /v1/projects/:projectId/management-follow-up-consent-ratio-report-snapshots/:snapshotId`。
+在固定 path 命中后，handler 必须先验证 Bearer identity，再检查 project／snapshot UUID、query、GET body 和 6BS 专用 store；认证失败时，
+即使这些输入无效，也先返回 `401 unauthenticated`。认证通过后只传递 verified `issuer + subject`、显式 project UUID 和 snapshot UUID，
+不调用 `SessionContext`、generic 或其他 report-family reader，也不接受客户端筛选、时区、截止点、SQL 或内部用户 ID。
+
+GET 不接受 query 参数或 body；非零 `Content-Length`、`Transfer-Encoding` 等声明的 body 也失败关闭。成功 wire 只含
+`access_event_id`、`snapshot_id` 和 `report`。`400`、`403`、`404`、`409` 和 `503` 使用固定、脱敏的错误 code；其中 `404`／`409` 最多携带
+6BS 返回的 value-free `access_event_id`，不携带报告格、授权关系、external subject、数据库消息或 PII。所有成功和错误响应都是 JSON，
+并设置 `Cache-Control: no-store`。
+
+6BT 只增加 Backend handler、固定 route、专用 production composition 和 synthetic HTTP 测试，不增加 PostgreSQL migration、reader、目录、
+latest／current 选择、分页、筛选、Flutter、Drift、导出、缓存、离线、同步、replacement、删除、retention、warehouse 或六平台真人证据。
+这些测试只证明 Backend HTTP transport contract，不证明 production identity provider、部署端点、真实账号或客户端消费。
+_Avoid_: 认证后才验证请求形状、复用 6BS 以外的 store、自动选择 snapshot、把报告正文放入错误、缓存 protected report、把 synthetic HTTP 测试写成生产证据
 
 **管理报告清除**:
 组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
