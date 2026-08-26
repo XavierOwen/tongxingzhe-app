@@ -852,6 +852,25 @@ latest／current 选择、分页、筛选、Flutter、Drift、导出、缓存、
 这些测试只证明 Backend HTTP transport contract，不证明 production identity provider、部署端点、真实账号或客户端消费。
 _Avoid_: 认证后才验证请求形状、复用 6BS 以外的 store、自动选择 snapshot、把报告正文放入错误、缓存 protected report、把 synthetic HTTP 测试写成生产证据
 
+**组织项目后续联系同意占比快照目录**:
+6BU 是 SQL-only 目录合同。private 函数的 canonical 名称是
+`app_private.list_authorized_management_follow_up_consent_snapshots_v1(uuid, uuid)`；名称保持在 PostgreSQL
+标识符限制内，避免长名称被截断。每次调用都重新确认 active user、组织／项目 membership、active project 和
+`view_anonymous_analytics`，并沿既有 authorization／revoke lock order。它只接受 0075
+consent-ratio family 的 `approved_baseline`／`approved` exact provenance，跨 project、跨 report family、legacy、blocked、缺失或漂移的 provenance 失败关闭。
+
+结果 envelope 只含 `access_contract_id`、`access_event_id`、`project_id` 和 `snapshots` 四项。
+`snapshots` 最多返回 20 项，每项只含 `snapshot_id`、`report_id`、`report_version`、`reporting_time_zone`、
+`data_cutoff_utc` 和 `released_at_utc`。数据库固定按 `data_cutoff_utc DESC`、`released_at_utc DESC`、
+`snapshot_id DESC` 排序；第一项只是该排序的第一项，不表示 current、latest 或未被取代，也不提供 latest、current、分页或筛选语义。
+授权项目没有合格快照时返回空数组，并追加数量为 0 的成功 audit。
+
+目录 audit 使用专用追加式、不可变、value-free 合同，只记录授权和访问 metadata，不记录 snapshot ID、report、period、ratio、coverage、source、contributor、target、contact 或 PII。
+授权撤回、过期、无成员、inactive project、未知 ID、跨项目和权限不足都失败关闭；失败授权不写成功 audit。
+6BU 不修改前序 6BS／6BT 已定义的 `app_data` identity bridge、runtime、Backend adapter 和 HTTP route，也不增加 Flutter、导出、缓存、离线、同步或生产平台验收。
+本地 Docker、结构检查、可回滚 fixture、授权／撤权并发、checksum 和 dump／restore 只提供 synthetic PostgreSQL 证据，不能替代前序 transport 证据、生产或真人平台证据。
+_Avoid_: 用超长函数名造成 identifier 截断、把目录第一项当 latest、复用其他 report family provenance、把审计写入 snapshot ID、让 runtime 直接执行 private function、把 synthetic 通过写成运行时证据
+
 **管理报告清除**:
 组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
 _Avoid_: 授权撤回、报告到期、tombstone、superseded

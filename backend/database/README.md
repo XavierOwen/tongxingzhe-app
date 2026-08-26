@@ -19,9 +19,9 @@
 
 脚本建立隔离的 PostgreSQL 16 容器，运行 migration、check、fixture、Backend→PostgreSQL 对账、并发和 dump／restore，最后自动删除容器。Backend 对账阶段使用 Node 24 容器和仓库锁定的 npm 依赖；它不连接 production，也不使用真实用户资料。第一次使用 Docker、需要保留失败容器或理解输出时，阅读[本机、Docker 与 CI 测试指南](../../docs/manual/09-local-docker-and-ci-testing.md)。
 
-Node 阶段要求九条 Backend integration 入口存在：地点来源、当前关系阶段、同意占比开关、同意占比读取、个人阶段变更汇总、current-city
-快照读取、current-city 快照目录、兴趣快照 runtime 读取和兴趣快照目录。脚本先在 Node 24 中运行 `npm ci --ignore-scripts` 和
-`npm run build`，再执行编译产物。
+Node 阶段要求十二条 Backend integration 入口存在：地点来源、当前关系阶段、个人阶段变更汇总、个人同意占比读取、个人同意占比开关、current-city
+快照读取、current-city 快照目录、兴趣快照 runtime 读取、兴趣快照目录、original-region 快照读取、original-region 快照目录和后续联系同意占比快照读取。
+脚本先在 Node 24 中运行 `npm ci --ignore-scripts` 和 `npm run build`，再执行编译产物。6BU 是 SQL-only，不增加 Backend integration。
 开关测试覆盖未配置、启用、幂等重放、冲突和停用；比例测试再读取 `not_enabled` 和启用后的
 `ready 0 / 0`；阶段变更 integration 对账 `5 / 4 / 3 / 2` 和空期间。SQL fixture 另证实匿名化
 历史，独立并发脚本证实 current-project 锁。
@@ -145,6 +145,39 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 ```
 
 fixture 使用独立 `6bs*` rollback namespace。恢复库只重跑 check 和 fixture，不重跑会提交 synthetic 行的并发脚本。通过只证明 synthetic exact-identity bridge、runtime ACL 和 0076 委托合同，不证明 HTTP、Flutter、生产身份或真人平台运行时。
+
+## 6BU：组织项目后续联系同意占比快照目录边界
+
+0078 migration 为一个显式 project 增加 private snapshot directory。canonical 函数名是
+`app_private.list_authorized_management_follow_up_consent_snapshots_v1(uuid, uuid)`。调用时重新确认 active user、组织／项目 membership、active project
+和 `view_anonymous_analytics`，并沿既有 authorization／revoke lock order。它只接受 0075 consent-ratio family 的
+`approved_baseline`／`approved` exact provenance。foreign project、foreign report family、legacy、blocked、missing 和 drifted provenance 都失败关闭。
+
+返回 envelope 固定为 `access_contract_id`、`access_event_id`、`project_id` 和 `snapshots` 四项。
+`snapshots` 最多 20 项，每项固定为 `snapshot_id`、`report_id`、`report_version`、`reporting_time_zone`、`data_cutoff_utc` 和 `released_at_utc`。
+数据库按 `data_cutoff_utc DESC`、`released_at_utc DESC`、`snapshot_id DESC` 固定排序。第一项只是排序结果，不表示 current、latest 或未被取代。
+没有合格快照的已授权 project 返回空数组，并记录数量为 0 的成功 audit。
+
+目录 audit 使用专用追加式、不可变、value-free 合同，只保留授权和访问 metadata。它不记录 snapshot ID、报告内容、period、ratio、coverage、source、contributor、target、contact 或 PII。
+撤权、过期、无成员、inactive project、unknown ID、跨 project 和权限不足都失败关闭。`PUBLIC`、runtime、普通 app role、其他 report reader 或 writer 不能执行 private function 或读取 audit。
+
+6BU 不修改前序 6BS／6BT 已定义的 `app_data` identity bridge、runtime、Backend adapter 和 HTTP route，也不增加 Flutter、导出、缓存、离线或同步。
+完整 Docker runner 自动发现 0078 migration、check、rollback fixture 和目录／撤权并发脚本，执行 checksum，并在独立恢复库中重跑 check 与 fixture；恢复库不重跑提交型并发脚本。
+这些 synthetic PostgreSQL 结果只证明数据库授权、provenance、目录、audit、并发和恢复合同，不证明 production identity、部署服务或六平台真人运行时。
+
+只调试 6BU 时，先确认 `DATABASE_URL` 指向可丢弃测试库，再运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_authorized_management_follow_up_consent_ratio_snapshot_directory.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0078_authorized_management_follow_up_consent_ratio_snapshot_directory.sql
+./tool/verify_authorized_management_follow_up_consent_ratio_snapshot_directory_concurrency.sh
+```
+
+fixture 在 transaction 结束时回滚；并发脚本使用独立 synthetic namespace 并提交，避免恢复测试中的既有行发生冲突。
 
 ## 使用已有 PostgreSQL 测试库
 
