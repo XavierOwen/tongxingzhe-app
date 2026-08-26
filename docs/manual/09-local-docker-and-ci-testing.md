@@ -955,6 +955,40 @@ check 验证 contract、`SECURITY DEFINER`、固定 search path、专用 role �
 这些命令只证明 synthetic PostgreSQL 的 private candidate 合同。它们不证明 snapshot、release、authorized read、runtime、HTTP、Backend、Flutter、Drift、UI、导出、缓存、离线、生产身份或
 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时，也不构成形式化不可重识别保证。
 
+### 6BQ：验证后续联系同意占比快照发布
+
+6BQ 的 0075 migration 把 6BP 已保护的 completed candidate 固定为不可变 snapshot。它不开放读取。专用 release writer、attempt、request claim family 和 RLS policy 把该 lineage 与渠道、区域和兴趣报告分开。
+
+发布事务重新确认 `release_management_reports`、membership、项目状态、报告时区 revision 和 6BO opt-in，再调用 0074 executor。数据库从 `change_feed` 取得 source watermark。调用方不能提交 candidate JSON、cutoff、时区或 watermark。首份 completed candidate 建立 baseline；后续成功发布链接 predecessor。`not_enabled` 不创建 snapshot；blocked attempt 不保存 ratio、coverage 或其他候选内容。
+
+#### 从零开始运行 Docker
+
+1. 打开 Docker Desktop，等待 Docker Engine 运行。
+2. 在仓库根目录运行 `docker version`，确认 client 和 server 都有输出。
+3. 运行完整套件：
+   ```bash
+   ./tool/run_postgres_tests_in_docker.sh
+   ```
+4. 确认输出包含 0075 migration、6BQ check、6BQ fixture、6BQ concurrency、checksum、restore check 和 restore fixture，且退出码是 `0`。
+
+runner 自动建立一次性 PostgreSQL 16 容器。fixture 在 transaction 结束时回滚；并发脚本使用另一组 synthetic UUID 并提交，以观察真实的会话竞争。dump／restore 阶段先准备 closed roles，再通过 `pg_restore` 重建独立恢复库。恢复库只重跑 check 和 fixture，不重新执行 migration，也不重跑并发脚本。
+
+#### 只调试 6BQ
+
+以下命令会修改指定数据库。先确认它是可以丢弃的测试库，不是 production：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_follow_up_consent_ratio_snapshot_lineage.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0075_management_follow_up_consent_ratio_snapshot_lineage.sql
+./tool/verify_management_follow_up_consent_ratio_snapshot_lineage_concurrency.sh
+```
+
+check 观察函数、owner、RLS 和 ACL。fixture 验证 validator、baseline、successor、幂等、blocked 和不可变性。并发脚本验证同 request、同 lineage，以及 release 与停用、撤权、归档的锁顺序。这些 synthetic DB-only 证据不证明 authorized read、runtime、HTTP、Backend、Flutter、生产身份或六平台真人运行时。
+
 ### 6BF：理解管理报告删除与保留边界
 
 6BF 是产品和测试合同，不是数据库清理功能。没有用过 Docker 的读者先记住：Docker runner 会在一次性容器中验证当前仓库已有的 PostgreSQL 行为。
