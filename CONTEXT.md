@@ -881,6 +881,28 @@ Backend 使用独立的 consent-ratio directory store，只执行一条固定参
 6BV 不增加 HTTP route、认证顺序、wire error mapping、Flutter、Drift、UI、缓存、离线、导出、分页、筛选、current／latest 选择或生产身份／真人平台验收。0078 继续负责目录授权、provenance、撤权锁和 value-free audit；6BV 的 synthetic PostgreSQL 与 Backend integration 证据只证明 bridge、adapter、parser 和 ACL 合同。
 _Avoid_: 让 runtime 直接调用 0078 private function、trim external identity、复用 6BS snapshot reader、在 Backend 重算或筛选目录、把 DB／Backend synthetic 通过写成 HTTP 或生产身份证据
 
+**组织项目后续联系同意占比快照目录 HTTP 集合读取**:
+6BW 在 6BV 的 runtime bridge 之上增加固定的只读集合入口：
+`GET /v1/projects/:projectId/management-follow-up-consent-ratio-report-snapshots`。它使用独立的 consent-ratio snapshot directory store，
+只把 Backend 已验证的 identity 和显式 project UUID 传给 6BV store；不调用 detail reader、generic directory、`SessionContext` 或 `app_private`。
+
+固定 path 命中后，handler 先验证 Bearer identity，再检查 project UUID、query、GET body 和 dedicated store。GET 不接受 query 或 body；非零
+`Content-Length`、`Transfer-Encoding` 等 body 声明也失败关闭。认证失败始终返回 `401 unauthenticated`，不会用 malformed request 或缺失 store 探测资源状态。
+认证通过后，malformed request 返回 `400 invalid_management_follow_up_consent_ratio_snapshot_directory_request`；store 的 typed forbidden 返回
+`403 management_follow_up_consent_ratio_snapshot_directory_forbidden`；其他 verifier、store、数据库、parser 或未知错误返回
+`503 management_follow_up_consent_ratio_snapshot_directory_unavailable`。
+
+成功 `200` 的 HTTP root 只含 `access_event_id`、`project_id` 和 `snapshots`。每项只含 6BV 已定义的六个 metadata 字段：`snapshot_id`、`report_id`、
+`report_version`、`reporting_time_zone`、`data_cutoff_utc` 和 `released_at_utc`。空目录也返回 `200` 和空数组。被过滤或不存在的快照不会从集合读取暴露为
+`404` 或 `409` 详情错误；其他 method 或未匹配 path 仍可由通用 server 返回 `404`。第一项只是服务端固定排序的第一项，
+不表示 current、latest 或未被取代。
+
+所有响应使用 JSON 和 `Cache-Control: no-store`。6BW 只增加 Backend handler、固定 route、production composition 和 synthetic HTTP 测试，不修改数据库、
+runtime bridge、Flutter、Drift、缓存、离线、导出、分页、筛选或部署。HTTP 测试只证明 transport contract、认证顺序、请求拒绝、专用 store、状态映射、
+Promise gate、wire 和 no-store，不证明 production identity、部署端点或 Android、iOS、macOS、Windows、Linux、Web 真人平台证据。
+_Avoid_: 认证前验证请求、自动选择第一项、把集合读取当成 latest 查询、返回 404／409 详情错误、复用其他 report family store、缓存 metadata 或 protected report、
+把 synthetic HTTP 测试写成生产或真人平台证据
+
 **管理报告清除**:
 组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
 _Avoid_: 授权撤回、报告到期、tombstone、superseded

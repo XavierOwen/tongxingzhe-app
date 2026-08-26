@@ -1,4 +1,9 @@
-import type {VerifiedIdentity} from "./identity.js";
+import {bearerToken} from "./authorization.js";
+import {
+  IdentityVerificationError,
+  type IdentityVerifier,
+  type VerifiedIdentity,
+} from "./identity.js";
 
 export interface ManagementFollowUpConsentRatioSnapshotDirectoryItem {
   readonly snapshotId: string;
@@ -23,6 +28,101 @@ export interface ManagementFollowUpConsentRatioSnapshotDirectoryStore {
     identity: VerifiedIdentity,
     projectId: string,
   ): Promise<ManagementFollowUpConsentRatioSnapshotDirectoryRead>;
+}
+
+export interface ManagementFollowUpConsentRatioSnapshotDirectoryRequest {
+  readonly authorization: string | undefined;
+  readonly projectId: string;
+  readonly hasQuery: boolean;
+  readonly hasBody: boolean;
+}
+
+export interface ManagementFollowUpConsentRatioSnapshotDirectoryDependencies {
+  readonly identityVerifier: IdentityVerifier;
+  readonly directoryStore?: ManagementFollowUpConsentRatioSnapshotDirectoryStore;
+}
+
+export interface ManagementFollowUpConsentRatioSnapshotDirectoryHttpResult {
+  readonly status: number;
+  readonly body: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * Authenticates and lists fixed consent-ratio snapshot metadata through the
+ * dedicated directory store. Request validation follows authentication so
+ * malformed project identifiers cannot reveal protected project state.
+ */
+export async function listManagementFollowUpConsentRatioSnapshotDirectory(
+  request: ManagementFollowUpConsentRatioSnapshotDirectoryRequest,
+  dependencies: ManagementFollowUpConsentRatioSnapshotDirectoryDependencies,
+): Promise<ManagementFollowUpConsentRatioSnapshotDirectoryHttpResult> {
+  const accessToken = bearerToken(request.authorization);
+  if (accessToken === null) return failure(401, "unauthenticated");
+
+  let identity: VerifiedIdentity;
+  try {
+    identity = await dependencies.identityVerifier.verify(accessToken);
+  } catch (error) {
+    return error instanceof IdentityVerificationError
+      ? failure(401, "unauthenticated")
+      : failure(
+        503,
+        "management_follow_up_consent_ratio_snapshot_directory_unavailable",
+      );
+  }
+
+  if (
+    !uuidPattern.test(request.projectId) ||
+    request.hasQuery ||
+    request.hasBody
+  ) {
+    return failure(
+      400,
+      "invalid_management_follow_up_consent_ratio_snapshot_directory_request",
+    );
+  }
+  if (dependencies.directoryStore === undefined) {
+    return failure(
+      503,
+      "management_follow_up_consent_ratio_snapshot_directory_unavailable",
+    );
+  }
+
+  try {
+    const result = await dependencies.directoryStore.list(
+      identity,
+      request.projectId,
+    );
+    return {
+      status: 200,
+      body: {
+        access_event_id: result.accessEventId,
+        project_id: result.projectId,
+        snapshots: result.snapshots.map((snapshot) => ({
+          snapshot_id: snapshot.snapshotId,
+          report_id: snapshot.reportId,
+          report_version: snapshot.reportVersion,
+          reporting_time_zone: snapshot.reportingTimeZone,
+          data_cutoff_utc: snapshot.dataCutoffUtc,
+          released_at_utc: snapshot.releasedAtUtc,
+        })),
+      },
+    };
+  } catch (error) {
+    if (
+      error instanceof ManagementFollowUpConsentRatioSnapshotDirectoryStoreError &&
+      error.code === "forbidden"
+    ) {
+      return failure(
+        403,
+        "management_follow_up_consent_ratio_snapshot_directory_forbidden",
+      );
+    }
+    return failure(
+      503,
+      "management_follow_up_consent_ratio_snapshot_directory_unavailable",
+    );
+  }
 }
 
 export type ManagementFollowUpConsentRatioSnapshotDirectoryQuery = (
@@ -70,6 +170,13 @@ extends Error {
     this.name =
       "ManagementFollowUpConsentRatioSnapshotDirectoryStoreError";
   }
+}
+
+function failure(
+  status: number,
+  code: string,
+): ManagementFollowUpConsentRatioSnapshotDirectoryHttpResult {
+  return {status, body: {error: {code}}};
 }
 
 function parseDirectoryResult(

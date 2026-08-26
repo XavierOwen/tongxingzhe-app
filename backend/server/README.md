@@ -809,6 +809,48 @@ Backend 单元测试覆盖一次固定 SQL、参数传递、空目录、重复�
 0079 migration、structural check 和 rollback fixture，运行 6BV PostgreSQL integration，并继续执行 0078 directory／revoke concurrency、checksum 和 dump／restore。
 这些测试使用 synthetic identity 和 synthetic 数据，只证明 bridge、0078 delegation、adapter、parser 和 ACL。它们不证明 HTTP、Flutter、导出、缓存、离线、生产身份或六平台真人运行时。
 
+## 后续联系同意占比快照目录 HTTP 合同
+
+6BW 把 6BV 的 `PostgresManagementFollowUpConsentRatioSnapshotDirectoryStore` 接到一个固定的只读 collection route：
+
+```text
+GET /v1/projects/:projectId/management-follow-up-consent-ratio-report-snapshots
+```
+
+固定 path 命中后，handler 先验证 Bearer identity，再检查 project UUID、query、GET body 和该 dedicated store。GET 不接受 query 或 body；非零
+`Content-Length`、`Transfer-Encoding` 等 body 声明返回 malformed request。认证失败始终先返回 `401 unauthenticated`，即使 path、query、body 或 store
+不合法也不先暴露其他状态。认证通过后，handler 只把 verified identity 和显式 project UUID 传给 6BV store，并等待 store Promise 完成后才写响应。
+
+成功 `200` 的 HTTP wire 只有 `access_event_id`、`project_id` 和 `snapshots`。每项只有六个 metadata 字段：`snapshot_id`、`report_id`、`report_version`、
+`reporting_time_zone`、`data_cutoff_utc` 和 `released_at_utc`。授权 project 没有可列出的快照时仍返回 `200` 和空数组。第一项只是固定排序的第一项，
+不表示 current、latest 或未被取代。
+
+| 结果 | HTTP 合同 |
+| --- | --- |
+| token 缺失或验证失败 | `401 unauthenticated` |
+| project UUID、query 或 GET body 无效 | `400 invalid_management_follow_up_consent_ratio_snapshot_directory_request` |
+| 6BV directory authorization forbidden | `403 management_follow_up_consent_ratio_snapshot_directory_forbidden` |
+| verifier、store、parser、数据库或未知错误 | `503 management_follow_up_consent_ratio_snapshot_directory_unavailable` |
+
+collection 业务结果不使用详情读取的 `404` 或 `409`。它不把 unknown、cross-project 或 filtered snapshot 变成详情错误；其他 method 或未匹配 path 仍可由通用 server 返回
+`404`。所有响应使用
+`Content-Type: application/json; charset=utf-8` 和 `Cache-Control: no-store`，也不返回 protected report、period、ratio、coverage、source、contributor、
+target、contact、external subject、数据库消息、SQL、栈或 PII。production composition 只注入该专用 store，不调用 `SessionContext`、generic 或 detail store。
+
+### 6BW 的本地测试
+
+```bash
+cd backend/server
+npm ci --ignore-scripts
+npm run check
+npm test
+cd ../..
+```
+
+测试覆盖固定 GET path、auth-before-validation、query／GET body 拒绝、缺失或无效 Bearer、空目录、三字段 success wire、Promise gate、`403`／`503` 映射、
+无业务 `404`／`409`、wrong method 的通用 `404` 和所有响应的 `no-store`。这些 synthetic HTTP 测试只证明 Backend transport contract 和 production wiring，不证明 PostgreSQL 授权、Flutter、
+缓存、离线、部署服务、production identity 或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。
+
 ## 管理报告快照目录合同
 
 `GET /v1/projects/:projectId/management-report-snapshots` 只接受一个显式项目 UUID。它不接受 body、query、筛选、分页、报告 ID、时区、capability 或内部用户 ID。6M 保存的管理分析选择只帮助导航，不是授权，也不会替代 path 中的项目。
