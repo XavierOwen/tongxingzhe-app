@@ -41,7 +41,7 @@ Backend adapter 集成通过。
 6BO 不增加 runtime bridge、HTTP、Backend integration、Flutter 或统计候选。实现后，完整 Docker runner 会自动发现 0073 migration、check、fixture 和并发脚本，
 并在 dump／restore 中重跑 migration、check 和 fixture。通过只能证明 synthetic PostgreSQL 配置合同，不能证明比例数学或披露风险控制。
 
-schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer`、`tongxingzhe_region_mapping_writer`、`tongxingzhe_region_attribution_reader`、`tongxingzhe_management_region_report_reader`、`tongxingzhe_management_original_region_report_reader`、`tongxingzhe_management_interest_report_reader`、`tongxingzhe_management_current_city_snapshot_release_writer`、`tongxingzhe_management_interest_snapshot_release_writer`、`tongxingzhe_management_original_region_snapshot_release_writer`、`tongxingzhe_management_report_snapshot_lifecycle_writer`、`tongxingzhe_management_follow_up_consent_config_writer` 和 `tongxingzhe_management_follow_up_consent_ratio_reader`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
+schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer`、`tongxingzhe_region_mapping_writer`、`tongxingzhe_region_attribution_reader`、`tongxingzhe_management_region_report_reader`、`tongxingzhe_management_original_region_report_reader`、`tongxingzhe_management_interest_report_reader`、`tongxingzhe_management_current_city_snapshot_release_writer`、`tongxingzhe_management_interest_snapshot_release_writer`、`tongxingzhe_management_original_region_snapshot_release_writer`、`tongxingzhe_management_report_snapshot_lifecycle_writer`、`tongxingzhe_management_follow_up_consent_config_writer`、`tongxingzhe_management_follow_up_consent_ratio_reader` 和 `tongxingzhe_management_consent_ratio_snapshot_release_writer`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
 
 ## 6BP：组织项目后续联系同意占比候选边界
 
@@ -80,6 +80,26 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 这些检查只证明 synthetic PostgreSQL 的 candidate、隐私门槛、并发、ACL 和 restore 合同。它们不证明 snapshot、release、authorized read、runtime、HTTP、Backend、Flutter、生产身份、
 真实数据或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时，也不构成形式化不可重识别保证。
+
+## 6BQ：组织项目后续联系同意占比快照发布边界
+
+6BQ 的 0075 migration 只把 6BP completed protected candidate 固定为不可变 snapshot。它使用独立 closed release writer、attempt、request claim family、RLS policy 和 consent-ratio lineage，不复用其他 report family 的 provenance。
+
+发布函数只接受 request UUID、可信内部 actor、显式 project 和固定 report identity。数据库在锁内重新授权，派生项目报告时区与 cutoff，从 `change_feed` 读取 source watermark，再调用 0074 executor。首份 completed candidate 建立 baseline；后续发布必须推进 cutoff，并链接当前 predecessor。`suppressed` 保持 JSON `null`。`not_enabled` 和所有发布阻断只写不含候选内容的 value-free attempt。
+
+完整 Docker runner 自动发现 0075 migration、check、fixture 和并发脚本，并继续执行 checksum 与 dump／restore。只调试专用测试库时运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_follow_up_consent_ratio_snapshot_lineage.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0075_management_follow_up_consent_ratio_snapshot_lineage.sql
+./tool/verify_management_follow_up_consent_ratio_snapshot_lineage_concurrency.sh
+```
+
+fixture 会回滚；并发脚本会提交独立 synthetic namespace。dump／restore 使用 `pg_restore` 重建恢复库，只重跑 check 与 fixture，不重新执行 migration，也不重跑并发脚本。这些检查不证明 authorized read、runtime、HTTP、Backend、Flutter、生产身份或真人平台运行时。
 
 ## 使用已有 PostgreSQL 测试库
 

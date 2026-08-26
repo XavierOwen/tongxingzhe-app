@@ -809,6 +809,14 @@ coverage cell 也独立执行同一保护。未启用返回 `not_enabled`，已�
 这是 private PostgreSQL DB-only 候选，不是 snapshot、发布报告、授权读取、runtime、HTTP、客户端结果或生产证据。
 _Avoid_: 把候选当成正式报告、把 suppressed 当成零、用总数相减恢复隐藏值、把 Docker synthetic 通过写成生产或真人平台证据
 
+**组织项目后续联系同意占比快照发布**:
+6BQ 把 6BP 的 completed protected candidate 固定为不可变 snapshot。它使用独立的 release writer、request claim family、attempt、RLS policy 和
+`management-follow-up-consent-ratio-report:<report_id>` lineage，不复用渠道、current-city、interest 或 original-region provenance。发布事务在锁内重新确认
+`release_management_reports`、组织／项目 membership、项目状态、报告时区 revision 和 6BO 当前 opt-in，并从 `change_feed` 取得 source watermark。调用方不能提交候选 JSON、统计值、cutoff、时区、watermark 或授权 provenance。
+首份 completed candidate 建立 `approved_baseline`；后续发布只允许 cutoff 前进并链接当前 predecessor。相同 request 精确幂等。`not_enabled` 不生成 snapshot；同期或更早 cutoff、无共享期间、共享 ratio／coverage 显示值或 privacy status 变化，以及固定定义、时区或 watermark 漂移，都只写 value-free blocked attempt。snapshot、attempt 和 claim 追加不可变。
+这是 private PostgreSQL DB-only 发布合同，不是授权读取、runtime、HTTP、客户端、目录、导出、replacement、删除、retention 或生产证据。
+_Avoid_: 把 candidate 当 snapshot、跨 report family 借用 provenance、保存 blocked candidate 值、把 suppressed 当零、由调用方提交 watermark、把 Docker synthetic 通过写成生产证据
+
 **管理报告清除**:
 组织删除恢复期届满后，移除该组织全部管理报告和含业务内容依赖的组织级处理；失败时组织保持不可访问。账号删除、授权撤回、更正版取代和报告年龄都不是管理报告清除。
 _Avoid_: 授权撤回、报告到期、tombstone、superseded

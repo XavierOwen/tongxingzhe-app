@@ -2537,6 +2537,37 @@ fixture 验证统计单位、排除边界、yes/no 成对保护、coverage 独�
 这些检查只证明 synthetic PostgreSQL 的 private candidate、隐私门槛、并发、ACL 和 restore 合同。它们不证明 snapshot、release、authorized read、runtime、HTTP、Backend、Flutter、
 Drift、UI、目录、导出、缓存、离线、生产身份或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时，也不构成形式化不可重识别保证。
 
+## Slice 6BQ：固定后续联系同意占比快照
+
+6BP candidate 是已保护的计算结果，但还不是发布历史。6BQ 为它增加独立 snapshot lineage。第一次成功发布得到 baseline；下一次只有在 cutoff 前进且固定定义、时区 revision 和 source watermark 合法时，才会得到链接 predecessor 的 successor。
+
+每个共享期间比较四个受保护单元：一个 yes/no ratio，以及 unanswered、refused、not-applicable 三个 coverage cell。`displayed` 数值已经通过服务端保护；`suppressed` 必须保持 `null`。不要在客户端、SQL 调试记录或 blocked attempt 中补算隐藏值。
+
+`not_enabled` 表示当前项目没有启用该指标。发布函数不把它保存为空 snapshot，而是返回 value-free blocked metadata。same／earlier cutoff、没有共享期间、共享显示值或 privacy status 变化、时区 revision 漂移和 source watermark 回退也不能生成 snapshot。
+
+### 运行数据库证据
+
+没有用过 Docker 时，先打开 Docker Desktop，然后在仓库根目录运行：
+
+```bash
+docker version
+./tool/run_postgres_tests_in_docker.sh
+```
+
+完整 runner 自动运行 0075 migration、structural check、rollback fixture、独立并发脚本、checksum 和 dump／restore。只调试可丢弃测试库时运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_follow_up_consent_ratio_snapshot_lineage.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0075_management_follow_up_consent_ratio_snapshot_lineage.sql
+./tool/verify_management_follow_up_consent_ratio_snapshot_lineage_concurrency.sh
+```
+
+fixture 会回滚，独立并发脚本会提交另一组 synthetic 行。恢复库通过 `pg_restore` 重建，只重跑 check 和 fixture。通过这些测试只说明当前 private PostgreSQL 合同成立，不说明读取、HTTP、客户端、生产身份或真人平台已经验收。
+
 ## Slice 6S 如何固定地点来源合同
 
 Issue #92 的 Slice 6S 只处理共享 PostgreSQL 的来源合同、历史回填和
