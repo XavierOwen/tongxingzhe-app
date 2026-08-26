@@ -41,7 +41,45 @@ Backend adapter 集成通过。
 6BO 不增加 runtime bridge、HTTP、Backend integration、Flutter 或统计候选。实现后，完整 Docker runner 会自动发现 0073 migration、check、fixture 和并发脚本，
 并在 dump／restore 中重跑 migration、check 和 fixture。通过只能证明 synthetic PostgreSQL 配置合同，不能证明比例数学或披露风险控制。
 
-schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer`、`tongxingzhe_region_mapping_writer`、`tongxingzhe_region_attribution_reader`、`tongxingzhe_management_region_report_reader`、`tongxingzhe_management_original_region_report_reader`、`tongxingzhe_management_interest_report_reader`、`tongxingzhe_management_current_city_snapshot_release_writer`、`tongxingzhe_management_interest_snapshot_release_writer`、`tongxingzhe_management_original_region_snapshot_release_writer`、`tongxingzhe_management_report_snapshot_lifecycle_writer` 和 `tongxingzhe_management_follow_up_consent_config_writer`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
+schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer`、`tongxingzhe_region_mapping_writer`、`tongxingzhe_region_attribution_reader`、`tongxingzhe_management_region_report_reader`、`tongxingzhe_management_original_region_report_reader`、`tongxingzhe_management_interest_report_reader`、`tongxingzhe_management_current_city_snapshot_release_writer`、`tongxingzhe_management_interest_snapshot_release_writer`、`tongxingzhe_management_original_region_snapshot_release_writer`、`tongxingzhe_management_report_snapshot_lifecycle_writer`、`tongxingzhe_management_follow_up_consent_config_writer` 和 `tongxingzhe_management_follow_up_consent_ratio_reader`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
+
+## 6BP：组织项目后续联系同意占比候选边界
+
+6BP 的 0074 migration 提供 `contact_target_follow_up_consent_ratio_two_periods@1` private release-candidate。它不复用个人 0048／0049 合同，也不把 6BO opt-in 当成比例结果。
+候选只供未来 release workflow 使用，调用方提供可信内部 actor、显式项目、项目报告时区和数据库 cutoff。数据库在授权锁和项目锁后重新确认活动账号、组织／项目 membership、
+项目状态、`release_management_reports` capability 和 6BO 当前 opt-in。`view_anonymous_analytics` 不能执行候选。
+
+统计单位是当前有效 contact revision 的 contact-target link。同一 contact 的多个 link 分别计数，contributor 固定为 contact 的可信 `app_user_id`。候选使用两个相邻且已经结束的完整 ISO 周。
+`yes` 是分子，`yes + no` 是分母；`unknown` 计入 unanswered，`refused` 与 `not_applicable` 是独立 coverage。`unknown_count` 与 `excluded_count` 固定为零。
+`yes`、`no` 和每个 coverage cell 都执行 `N >= 10`、
+至少三位 contributor、贡献者不超过该 cell 总数一半。只有 yes/no 都安全时才返回比例数值，否则返回 `suppressed` 和 `null` 数值。未启用或停用在读 link 前返回 `not_enabled`，
+不返回 report、ratio 或 coverage。
+
+实现应增加 `backend/database/migrations/0074_management_follow_up_consent_ratio.sql`、`backend/database/checks/verify_management_follow_up_consent_ratio.sql`、
+`backend/database/fixtures/0074_management_follow_up_consent_ratio.sql`、
+`verify_management_follow_up_consent_ratio_concurrency.sh`、专用 closed role、ACL check 和 restore role 准备。完整 runner 会在源库自动发现并运行 0074 migration、check、fixture 和并发脚本，
+再检查 checksum。dump／restore 阶段通过 `pg_restore` 重建独立恢复库，然后只重跑 check 和 fixture；它不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。
+
+从仓库根目录运行完整套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+只调试 6BP 时，先确认 `DATABASE_URL` 指向专用测试库，再运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_follow_up_consent_ratio.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0074_management_follow_up_consent_ratio.sql
+./tool/verify_management_follow_up_consent_ratio_concurrency.sh
+```
+
+这些检查只证明 synthetic PostgreSQL 的 candidate、隐私门槛、并发、ACL 和 restore 合同。它们不证明 snapshot、release、authorized read、runtime、HTTP、Backend、Flutter、生产身份、
+真实数据或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时，也不构成形式化不可重识别保证。
 
 ## 使用已有 PostgreSQL 测试库
 
