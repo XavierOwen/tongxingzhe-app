@@ -2251,6 +2251,37 @@ CI 的 PostgreSQL job 在 Linux runner 上执行同一个 Docker runner。默认
 
 先保存第一条稳定错误。后续清理错误常由第一条失败引起，不应同时修改多个层次。
 
+### 11.1 先区分项目失败与平台故障
+
+项目失败通常发生在 checkout 之后。日志会显示仓库命令、测试断言、编译器或数据库返回的具体错误。
+
+平台故障通常发生在仓库命令运行之前，或同时影响多个无关 job。常见信号包括：
+
+- job 停在 `Set up job`；
+- action 下载信息无法解析；
+- GitHub API 返回 `Service Unavailable`；
+- hosted runner 无法分配或意外离线；
+- [GitHub Status](https://www.githubstatus.com/) 正在报告 Actions 事故。
+
+单次 `5xx` 不能单独证明 GitHub 发生故障。先比较失败阶段、第一条稳定错误、其他 job 和官方状态页。平台故障不应通过修改产品代码来“修复”。
+
+### 11.2 GitHub Actions 基础设施故障的重试策略
+
+按以下顺序处理：
+
+1. 保存 workflow run、失败 job、第一条稳定错误和官方事故链接。
+2. 手动重试一次，以排除短暂抖动。
+3. 若连续两次出现同类基础设施错误，停止重试。
+4. 等待 GitHub Status 将 Actions 标为 `Operational`。
+5. 状态恢复后再等待 15 至 30 分钟，让积压任务和缓存逐步恢复。
+6. 先重跑一条有代表性的 workflow run。该次通过后，再处理其余失败项。
+
+自动重试只用于可重复执行的 build、静态检查和无副作用测试。它必须使用递增等待时间和明确的最大次数。部署、migration、发信、支付或删除操作不得仅靠 workflow 重试；这些操作必须先有幂等保护和恢复步骤。
+
+自建 runner 可以分担 hosted runner 容量或镜像问题，但不能消除所有 GitHub 依赖。Actions 控制面、action 下载和 GitHub API 故障仍可能阻断自建 runner。不要因为一次官方事故就引入长期的自建 runner 运维负担。
+
+本项目曾遇到 [GitHub Actions 官方事故 qcvjkzcs7j74](https://www.githubstatus.com/incidents/qcvjkzcs7j74)。多次 workflow run 最终取得真实通过结果，但只有实际完成的成功 run 才能记为 CI 通过。事故后的成功不能反向证明先前失败来自项目代码。
+
 ## 12. 提交前复制清单
 
 Flutter、Backend 和 PostgreSQL 都发生变化时，从仓库根目录依次执行：
