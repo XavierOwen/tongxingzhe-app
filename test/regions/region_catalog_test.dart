@@ -7,6 +7,8 @@ import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/regions/region_catalog.dart';
 import 'package:tongxingzhe_app/regions/region_models.dart';
 
+import '../support/fake_runtime_values.dart';
+
 void main() {
   test('规范区域快照形成唯一父级树并从最小区域推导全部上级', () async {
     final database = LocalDatabase(NativeDatabase.memory());
@@ -70,7 +72,7 @@ void main() {
     final journal = ContactJournal(
       database: database,
       clock: const _FixedClock(),
-      idGenerator: _SequenceIdGenerator([
+      idGenerator: SequenceIdGenerator([
         'contact-region',
         'revision-region',
         'command-region',
@@ -154,14 +156,4 @@ final class _FixedClock implements AppClock {
 
   @override
   DateTime now() => value;
-}
-
-final class _SequenceIdGenerator implements IdGenerator {
-  _SequenceIdGenerator(this.values);
-
-  final List<String> values;
-  var index = 0;
-
-  @override
-  String next() => values[index++];
 }

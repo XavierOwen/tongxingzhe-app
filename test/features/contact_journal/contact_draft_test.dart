@@ -7,9 +7,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_journal.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
-import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/questionnaires/questionnaire_contract.dart';
 import 'package:tongxingzhe_app/questionnaires/questionnaire_draft_upgrade.dart';
+
+import '../../support/fake_runtime_values.dart';
 
 void main() {
   test('空白接触页不创建草稿，首次有意义输入才创建', () async {
@@ -56,11 +57,11 @@ void main() {
   test('自动保存更新原草稿并保留创建时间', () async {
     final database = LocalDatabase(NativeDatabase.memory());
     addTearDown(database.close);
-    final clock = _MutableClock(DateTime.utc(2030, 1, 8, 18, 30));
+    final clock = MutableClock(DateTime.utc(2030, 1, 8, 18, 30));
     final journal = ContactJournal(
       database: database,
       clock: clock,
-      idGenerator: _SequenceIdGenerator(['draft-autosave']),
+      idGenerator: SequenceIdGenerator(['draft-autosave']),
     );
     final created = await journal.saveDraft(
       const ContactDraftInput(
@@ -96,11 +97,11 @@ void main() {
   test('本人私有草稿写入持久同步命令且连续自动保存只保留最新快照', () async {
     final database = LocalDatabase(NativeDatabase.memory());
     addTearDown(database.close);
-    final clock = _MutableClock(DateTime.utc(2030, 1, 8, 18, 30));
+    final clock = MutableClock(DateTime.utc(2030, 1, 8, 18, 30));
     final journal = ContactJournal(
       database: database,
       clock: clock,
-      idGenerator: _SequenceIdGenerator(['draft-private-sync']),
+      idGenerator: SequenceIdGenerator(['draft-private-sync']),
     );
     final created = await journal.saveDraft(
       const ContactDraftInput(
@@ -141,8 +142,8 @@ void main() {
     addTearDown(database.close);
     final journal = ContactJournal(
       database: database,
-      clock: _FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
-      idGenerator: _SequenceIdGenerator(['draft-device-only']),
+      clock: FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
+      idGenerator: SequenceIdGenerator(['draft-device-only']),
     );
 
     await journal.saveDraft(
@@ -165,8 +166,8 @@ void main() {
     addTearDown(database.close);
     final journal = ContactJournal(
       database: database,
-      clock: _FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
-      idGenerator: _SequenceIdGenerator(['draft-transition']),
+      clock: FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
+      idGenerator: SequenceIdGenerator(['draft-transition']),
     );
     final draft = await journal.saveDraft(
       const ContactDraftInput(
@@ -348,11 +349,11 @@ void main() {
     addTearDown(() => temporaryDirectory.delete(recursive: true));
     final databaseFile = File('${temporaryDirectory.path}/drafts.sqlite');
     final firstDatabase = LocalDatabase(NativeDatabase(databaseFile));
-    final clock = _MutableClock(DateTime.utc(2030, 1, 8, 18, 30));
+    final clock = MutableClock(DateTime.utc(2030, 1, 8, 18, 30));
     final firstJournal = ContactJournal(
       database: firstDatabase,
       clock: clock,
-      idGenerator: _SequenceIdGenerator([
+      idGenerator: SequenceIdGenerator([
         'draft-project-1',
         'draft-project-2',
         'draft-other-user',
@@ -396,7 +397,7 @@ void main() {
     final reopenedJournal = ContactJournal(
       database: reopenedDatabase,
       clock: clock,
-      idGenerator: _SequenceIdGenerator(const []),
+      idGenerator: SequenceIdGenerator(const []),
     );
     final restored = await reopenedJournal.listDrafts(appUserId: 'app-user-1');
 
@@ -563,11 +564,11 @@ void main() {
   test('本人明确放弃草稿后可在短暂期限内撤销恢复', () async {
     final database = LocalDatabase(NativeDatabase.memory());
     addTearDown(database.close);
-    final clock = _MutableClock(DateTime.utc(2030, 1, 8, 18, 30));
+    final clock = MutableClock(DateTime.utc(2030, 1, 8, 18, 30));
     final journal = ContactJournal(
       database: database,
       clock: clock,
-      idGenerator: _SequenceIdGenerator(['draft-to-abandon']),
+      idGenerator: SequenceIdGenerator(['draft-to-abandon']),
     );
     final draft = await journal.saveDraft(
       const ContactDraftInput(
@@ -604,11 +605,11 @@ void main() {
   test('草稿放弃撤销期限过后保持隐藏', () async {
     final database = LocalDatabase(NativeDatabase.memory());
     addTearDown(database.close);
-    final clock = _MutableClock(DateTime.utc(2030, 1, 8, 18, 30));
+    final clock = MutableClock(DateTime.utc(2030, 1, 8, 18, 30));
     final journal = ContactJournal(
       database: database,
       clock: clock,
-      idGenerator: _SequenceIdGenerator(['draft-expired-undo']),
+      idGenerator: SequenceIdGenerator(['draft-expired-undo']),
     );
     final draft = await journal.saveDraft(
       const ContactDraftInput(
@@ -649,8 +650,8 @@ void main() {
     addTearDown(database.close);
     final journal = ContactJournal(
       database: database,
-      clock: _FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
-      idGenerator: _SequenceIdGenerator(['source-draft']),
+      clock: FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
+      idGenerator: SequenceIdGenerator(['source-draft']),
     );
     final fixture = _draftUpgradeFixture();
     final catalog = QuestionnaireCatalog(database: database);
@@ -718,8 +719,8 @@ void main() {
     addTearDown(database.close);
     final journal = ContactJournal(
       database: database,
-      clock: _FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
-      idGenerator: _SequenceIdGenerator(['source-private']),
+      clock: FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
+      idGenerator: SequenceIdGenerator(['source-private']),
     );
     final fixture = _draftUpgradeFixture();
     final catalog = QuestionnaireCatalog(database: database);
@@ -870,8 +871,8 @@ ContactJournal _journal(List<String> ids, {DateTime? now}) {
   addTearDown(database.close);
   return ContactJournal(
     database: database,
-    clock: _FixedClock(now ?? DateTime.utc(2030, 1, 8, 18, 30)),
-    idGenerator: _SequenceIdGenerator(ids),
+    clock: FixedClock(now ?? DateTime.utc(2030, 1, 8, 18, 30)),
+    idGenerator: SequenceIdGenerator(ids),
   );
 }
 
@@ -905,32 +906,4 @@ AnonymousContactSubmission _submission({
     interestLevel: interestLevel,
     answers: answers,
   );
-}
-
-final class _FixedClock implements AppClock {
-  const _FixedClock(this.value);
-
-  final DateTime value;
-
-  @override
-  DateTime now() => value;
-}
-
-final class _MutableClock implements AppClock {
-  _MutableClock(this.value);
-
-  DateTime value;
-
-  @override
-  DateTime now() => value;
-}
-
-final class _SequenceIdGenerator implements IdGenerator {
-  _SequenceIdGenerator(this.values);
-
-  final List<String> values;
-  var _index = 0;
-
-  @override
-  String next() => values[_index++];
 }

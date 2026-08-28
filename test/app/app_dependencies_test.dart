@@ -12,7 +12,6 @@ import 'package:tongxingzhe_app/features/contact_metrics/http_personal_follow_up
 import 'package:tongxingzhe_app/features/contact_metrics/http_relationship_stage_change_summary_gateway.dart';
 import 'package:tongxingzhe_app/features/contact_metrics/personal_follow_up_consent_ratio.dart';
 import 'package:tongxingzhe_app/features/contact_metrics/relationship_stage_change_summary.dart';
-import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/management_reports/current_city_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/interest_report_gateway.dart';
@@ -28,15 +27,16 @@ import 'package:tongxingzhe_app/targets/promotion_target.dart';
 
 import '../support/fake_identity_session.dart';
 import '../support/fake_platform_capabilities.dart';
+import '../support/fake_runtime_values.dart';
 import '../support/fake_session_context_gateway.dart';
 
 void main() {
   test('正式启动直接提供显示设置且不读取 legacy 表', () async {
     final database = LocalDatabase(NativeDatabase.memory());
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
@@ -87,9 +87,9 @@ void main() {
     final database = LocalDatabase(NativeDatabase.memory());
     final gateway = _TrackingConsentOptInGateway();
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
@@ -115,9 +115,9 @@ void main() {
     final database = LocalDatabase(NativeDatabase.memory());
     final gateway = _TrackingConsentRatioGateway();
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
@@ -143,9 +143,9 @@ void main() {
     final database = LocalDatabase(NativeDatabase.memory());
     final gateway = _TrackingRelationshipStageChangeSummaryGateway();
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
@@ -173,9 +173,9 @@ void main() {
     final gateway = _TrackingFollowUpConsentRatioReportGateway();
     IdentitySession? receivedIdentity;
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
@@ -203,9 +203,9 @@ void main() {
     final database = LocalDatabase(NativeDatabase.memory());
     final delivery = _TrackingManagementReportExportDelivery();
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
@@ -226,9 +226,9 @@ void main() {
     final database = LocalDatabase(NativeDatabase.memory());
     final gateway = _TrackingCurrentCityReportGateway();
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
@@ -253,9 +253,9 @@ void main() {
     final gateway = _TrackingInterestReportGateway();
     IdentitySession? receivedIdentity;
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
@@ -285,9 +285,9 @@ void main() {
     final gateway = _TrackingOriginalRegionReportGateway();
     IdentitySession? receivedIdentity;
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
@@ -325,9 +325,9 @@ void main() {
     IdentitySession? receivedIdentity;
     String Function()? receivedProjectId;
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
@@ -367,8 +367,8 @@ void main() {
     final identity = FakeIdentitySession();
     final dependencies = AppDependencies(
       databaseFactory: const _ThrowingDatabaseFactory(),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
@@ -387,8 +387,8 @@ void main() {
     final identity = FakeIdentitySession();
     final dependencies = AppDependencies(
       databaseFactory: const _ThrowingDatabaseFactory(),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: FakePlatformCapabilitiesProvider(
@@ -415,9 +415,9 @@ void main() {
     final relationshipGateway = _TrackingCurrentRelationshipStageGateway();
     final followUpGateway = _TrackingFollowUpConsentRatioReportGateway();
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
@@ -443,8 +443,8 @@ void main() {
 
   test('能力通过时 composition root 装配离线对象 gateway', () async {
     final database = LocalDatabase(NativeDatabase.memory());
-    final clock = _FixedClock(DateTime.utc(2030, 1, 2, 13));
-    final ids = _SequenceIdGenerator();
+    final clock = FixedClock(DateTime.utc(2030, 1, 2, 13));
+    final ids = CountingIdGenerator();
     final installationId = await DeviceIdentityStore(
       database,
       ids,
@@ -473,7 +473,7 @@ void main() {
       ),
     );
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
+      databaseFactory: SingleDatabaseFactory(database),
       clock: clock,
       idGenerator: ids,
       identitySessionFactory: FakeIdentitySessionFactory(identity),
@@ -500,36 +500,11 @@ void main() {
   });
 }
 
-final class _SingleDatabaseFactory implements LocalDatabaseFactory {
-  _SingleDatabaseFactory(this.database);
-
-  final LocalDatabase database;
-
-  @override
-  LocalDatabase open() => database;
-}
-
-final class _FixedClock implements AppClock {
-  const _FixedClock(this.value);
-
-  final DateTime value;
-
-  @override
-  DateTime now() => value;
-}
-
 final class _ThrowingDatabaseFactory implements LocalDatabaseFactory {
   const _ThrowingDatabaseFactory();
 
   @override
   LocalDatabase open() => throw StateError('synthetic database failure');
-}
-
-final class _SequenceIdGenerator implements IdGenerator {
-  var _next = 0;
-
-  @override
-  String next() => 'test-${_next++}';
 }
 
 final _target = PromotionTargetProfile(

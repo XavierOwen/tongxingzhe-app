@@ -8,10 +8,11 @@ import 'package:tongxingzhe_app/features/contact_journal/contact_journal.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
 import 'package:tongxingzhe_app/features/contact_metrics/metric_contract.dart';
 import 'package:tongxingzhe_app/features/contact_metrics/personal_contact_overview.dart';
-import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/regions/region_catalog.dart';
 import 'package:tongxingzhe_app/regions/region_models.dart';
 import 'package:tongxingzhe_app/targets/promotion_target.dart';
+
+import '../../support/fake_runtime_values.dart';
 
 void main() {
   test('合法匿名接触提交后可立即读取并显示待同步', () async {
@@ -38,8 +39,8 @@ void main() {
     );
     final journal = ContactJournal(
       database: database,
-      clock: _FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
-      idGenerator: _SequenceIdGenerator([
+      clock: FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
+      idGenerator: SequenceIdGenerator([
         'contact-1',
         'revision-1',
         'command-1',
@@ -144,8 +145,8 @@ void main() {
     );
     final journal = ContactJournal(
       database: database,
-      clock: _FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
-      idGenerator: _SequenceIdGenerator(['draft-source']),
+      clock: FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
+      idGenerator: SequenceIdGenerator(['draft-source']),
     );
     const location = ResolvedContactLocation(
       placeName: 'Chicago',
@@ -166,8 +167,8 @@ void main() {
 
     final restarted = ContactJournal(
       database: database,
-      clock: _FixedClock(DateTime.utc(2030, 1, 8, 18, 31)),
-      idGenerator: _SequenceIdGenerator(const []),
+      clock: FixedClock(DateTime.utc(2030, 1, 8, 18, 31)),
+      idGenerator: SequenceIdGenerator(const []),
     );
     expect(
       (await restarted.listDrafts(appUserId: 'app-user-1')).single.location,
@@ -428,8 +429,8 @@ void main() {
     addTearDown(database.close);
     final firstJournal = ContactJournal(
       database: database,
-      clock: _FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
-      idGenerator: _SequenceIdGenerator([
+      clock: FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
+      idGenerator: SequenceIdGenerator([
         'contact-first',
         'revision-first',
         'duplicate-command',
@@ -473,8 +474,8 @@ void main() {
 
     final retryJournal = ContactJournal(
       database: database,
-      clock: _FixedClock(DateTime.utc(2030, 1, 8, 18, 31)),
-      idGenerator: _SequenceIdGenerator([
+      clock: FixedClock(DateTime.utc(2030, 1, 8, 18, 31)),
+      idGenerator: SequenceIdGenerator([
         'contact-rolled-back',
         'revision-retry',
         'command-retry',
@@ -1422,8 +1423,8 @@ ContactJournal _journal(List<String> ids, {DateTime? now}) {
   addTearDown(database.close);
   return ContactJournal(
     database: database,
-    clock: _FixedClock(now ?? DateTime.utc(2030, 1, 8, 18, 30)),
-    idGenerator: _SequenceIdGenerator(ids),
+    clock: FixedClock(now ?? DateTime.utc(2030, 1, 8, 18, 30)),
+    idGenerator: SequenceIdGenerator(ids),
   );
 }
 
@@ -1510,23 +1511,4 @@ AnonymousContactSubmission _submission({
     answers: answers,
     targetLinks: targetLinks,
   );
-}
-
-final class _FixedClock implements AppClock {
-  const _FixedClock(this.value);
-
-  final DateTime value;
-
-  @override
-  DateTime now() => value;
-}
-
-final class _SequenceIdGenerator implements IdGenerator {
-  _SequenceIdGenerator(this.values);
-
-  final List<String> values;
-  var _index = 0;
-
-  @override
-  String next() => values[_index++];
 }

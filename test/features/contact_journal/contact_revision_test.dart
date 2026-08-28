@@ -5,10 +5,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_journal.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
-import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/regions/region_catalog.dart';
 import 'package:tongxingzhe_app/regions/region_models.dart';
 import 'package:tongxingzhe_app/targets/promotion_target.dart';
+
+import '../../support/fake_runtime_values.dart';
 
 void main() {
   test('更正追加完整快照并按新发生时间重新归期', () async {
@@ -544,8 +545,8 @@ ContactJournal _journal(
 }) {
   return ContactJournal(
     database: database,
-    clock: _FixedClock(now),
-    idGenerator: _SequenceIdGenerator(ids),
+    clock: FixedClock(now),
+    idGenerator: SequenceIdGenerator(ids),
   );
 }
 
@@ -621,23 +622,4 @@ Future<PersonalContactSummary> _summary(
     fromUtc: fromUtc,
     untilUtc: untilUtc,
   );
-}
-
-final class _FixedClock implements AppClock {
-  const _FixedClock(this.value);
-
-  final DateTime value;
-
-  @override
-  DateTime now() => value;
-}
-
-final class _SequenceIdGenerator implements IdGenerator {
-  _SequenceIdGenerator(this.values);
-
-  final List<String> values;
-  var _index = 0;
-
-  @override
-  String next() => values[_index++];
 }

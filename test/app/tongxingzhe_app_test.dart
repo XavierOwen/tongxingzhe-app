@@ -9,14 +9,11 @@ import 'package:tongxingzhe_app/app/app_dependencies.dart';
 import 'package:tongxingzhe_app/app/tongxingzhe_app.dart';
 import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
 import 'package:tongxingzhe_app/data/local_database.dart';
-import 'package:tongxingzhe_app/data/local_database_factory.dart';
-import 'package:tongxingzhe_app/device/device_time_zone.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_journal.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
 import 'package:tongxingzhe_app/features/contact_metrics/current_relationship_stage.dart';
 import 'package:tongxingzhe_app/features/contact_metrics/personal_follow_up_consent_ratio.dart';
 import 'package:tongxingzhe_app/features/contact_metrics/relationship_stage_change_summary.dart';
-import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/management_reports/current_city_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/follow_up_consent_ratio_report_gateway.dart';
@@ -35,6 +32,7 @@ import 'package:tongxingzhe_app/sync/sync_transport.dart';
 
 import '../support/fake_identity_session.dart';
 import '../support/fake_platform_capabilities.dart';
+import '../support/fake_runtime_values.dart';
 import '../support/fake_session_context_gateway.dart';
 
 void main() {
@@ -44,9 +42,9 @@ void main() {
     final gateway = _TrackingFollowUpConsentRatioReportGateway();
     var builderCalls = 0;
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: startupGate,
@@ -120,16 +118,16 @@ void main() {
     );
     final gateway = _TrackingFollowUpConsentRatioReportGateway();
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
       followUpConsentRatioReportGatewayBuilder: (_) => gateway,
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
     addTearDown(database.close);
 
@@ -164,9 +162,9 @@ void main() {
     final interestGateway = _TrackingInterestReportGateway();
     final originalRegionGateway = _TrackingOriginalRegionReportGateway();
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
@@ -182,7 +180,7 @@ void main() {
       personalFollowUpConsentRatioGatewayBuilder: (_) => ratioGateway,
       personalRelationshipStageChangeSummaryGatewayBuilder: (_) =>
           stageChangeGateway,
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -260,9 +258,9 @@ void main() {
     final managementGateway = _ReadyManagementReportGateway();
     final followUpGateway = _TrackingFollowUpConsentRatioReportGateway();
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
@@ -270,7 +268,7 @@ void main() {
           const _EmptyPublishedQuestionnaireSource(),
       managementReportGatewayBuilder: (_) => managementGateway,
       followUpConsentRatioReportGatewayBuilder: (_) => followUpGateway,
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
     addTearDown(database.close);
 
@@ -308,9 +306,9 @@ void main() {
       ),
     );
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
@@ -322,7 +320,7 @@ void main() {
           const _RejectedConsentRatioGateway(),
       personalRelationshipStageChangeSummaryGatewayBuilder: (_) =>
           const _RejectedRelationshipStageChangeSummaryGateway(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -397,9 +395,9 @@ void main() {
     final transport = _BlockingPullSyncTransport();
     final stageChangeGateway = _ReadyRelationshipStageChangeSummaryGateway();
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
@@ -408,7 +406,7 @@ void main() {
       syncTransportBuilder: (_) => transport,
       personalRelationshipStageChangeSummaryGatewayBuilder: (_) =>
           stageChangeGateway,
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -462,11 +460,11 @@ void main() {
     );
     final transport = _CompletingSyncTransport();
     final stageChangeGateway = _ReadyRelationshipStageChangeSummaryGateway();
-    final clock = _FixedClock(DateTime.utc(2030, 1, 2, 3, 4));
+    final clock = FixedClock(DateTime.utc(2030, 1, 2, 3, 4));
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
+      databaseFactory: SingleDatabaseFactory(database),
       clock: clock,
-      idGenerator: _SequenceIdGenerator(),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
@@ -475,7 +473,7 @@ void main() {
       syncTransportBuilder: (_) => transport,
       personalRelationshipStageChangeSummaryGatewayBuilder: (_) =>
           stageChangeGateway,
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -494,7 +492,7 @@ void main() {
     await ContactJournal(
       database: database,
       clock: clock,
-      idGenerator: _FixedIds([
+      idGenerator: SequenceIdGenerator([
         'resume-contact',
         'resume-revision',
         'resume-command',
@@ -558,15 +556,15 @@ void main() {
       },
     );
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: contextGateway,
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -606,9 +604,9 @@ void main() {
     final ratioGateway = _ReadyConsentRatioGateway();
     final stageChangeGateway = _ReadyRelationshipStageChangeSummaryGateway();
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
@@ -616,7 +614,7 @@ void main() {
       personalFollowUpConsentRatioGatewayBuilder: (_) => ratioGateway,
       personalRelationshipStageChangeSummaryGatewayBuilder: (_) =>
           stageChangeGateway,
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -692,9 +690,9 @@ void main() {
     final ratioGateway = _ReadyConsentRatioGateway();
     final stageChangeGateway = _ReadyRelationshipStageChangeSummaryGateway();
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(
         context: _organizationSessionContext,
@@ -704,7 +702,7 @@ void main() {
       personalFollowUpConsentRatioGatewayBuilder: (_) => ratioGateway,
       personalRelationshipStageChangeSummaryGatewayBuilder: (_) =>
           stageChangeGateway,
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -751,15 +749,15 @@ void main() {
       createdContexts: const {'社区推广': syntheticSecondSessionContext},
     );
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: contextGateway,
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -800,15 +798,15 @@ void main() {
       ],
     );
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: contextGateway,
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -849,15 +847,15 @@ void main() {
       },
     );
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: contextGateway,
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -901,15 +899,15 @@ void main() {
       ),
     );
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _OneQuestionPublishedSource(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -946,15 +944,15 @@ void main() {
       initialRouteInformation: RouteInformation(uri: Uri.parse('/analysis')),
     );
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(
@@ -1070,15 +1068,15 @@ void main() {
       initialRouteInformation: RouteInformation(uri: Uri.parse('/analysis')),
     );
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(
@@ -1174,16 +1172,16 @@ void main() {
       initialRouteInformation: RouteInformation(uri: Uri.parse('/analysis')),
     );
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       localeCode: 'en',
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(
@@ -1283,15 +1281,15 @@ void main() {
       initialRouteInformation: RouteInformation(uri: Uri.parse('/analysis')),
     );
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(
@@ -1361,15 +1359,15 @@ void main() {
       ),
     );
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(
@@ -1393,15 +1391,15 @@ void main() {
     final database = LocalDatabase(NativeDatabase.memory());
     final identity = FakeIdentitySession();
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -1440,9 +1438,9 @@ void main() {
       ),
     );
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(
         rejectWith: SessionContextFailureCode.unauthorized,
@@ -1450,7 +1448,7 @@ void main() {
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -1479,15 +1477,15 @@ void main() {
       ),
     );
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -1538,15 +1536,15 @@ void main() {
       ),
     );
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -1590,15 +1588,15 @@ void main() {
       ),
     );
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -1629,15 +1627,15 @@ void main() {
       ),
     );
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -1668,15 +1666,15 @@ void main() {
       ),
     );
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -1768,15 +1766,15 @@ void main() {
     );
     final transport = _AcceptingSyncTransport();
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
       syncTransportBuilder: (_) => transport,
     );
 
@@ -1822,15 +1820,15 @@ void main() {
       const SyncPushPermanentFailure(failureCode: 'forbidden'),
     ]);
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
       syncTransportBuilder: (_) => transport,
     );
 
@@ -1908,15 +1906,15 @@ void main() {
       ],
     );
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
       syncTransportBuilder: (_) => transport,
     );
 
@@ -1944,15 +1942,15 @@ void main() {
     );
     final regionResolver = _ResolvedRegionResolver(database);
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
       locationCapture: const _FakeLocationCapture(
         LocationSnapshot(
           latitude: 41.7897,
@@ -2014,15 +2012,15 @@ void main() {
       ),
     );
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
 
     await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
@@ -2063,15 +2061,15 @@ void main() {
       ),
     );
     final dependencies = AppDependencies(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     );
     addTearDown(database.close);
 
@@ -2394,49 +2392,6 @@ Future<void> _seedTargetResponseFacts(LocalDatabase database) async {
           );
     }
   });
-}
-
-final class _SingleDatabaseFactory implements LocalDatabaseFactory {
-  _SingleDatabaseFactory(this.database);
-
-  final LocalDatabase database;
-
-  @override
-  LocalDatabase open() => database;
-}
-
-final class _FixedClock implements AppClock {
-  const _FixedClock(this.value);
-
-  final DateTime value;
-
-  @override
-  DateTime now() => value;
-}
-
-final class _SequenceIdGenerator implements IdGenerator {
-  var _next = 0;
-
-  @override
-  String next() => 'test-${_next++}';
-}
-
-final class _FixedIds implements IdGenerator {
-  _FixedIds(List<String> values) : _values = [...values];
-
-  final List<String> _values;
-
-  @override
-  String next() => _values.removeAt(0);
-}
-
-final class _FakeTimeZoneProvider implements DeviceTimeZoneProvider {
-  const _FakeTimeZoneProvider(this.value);
-
-  final String value;
-
-  @override
-  Future<String> currentIanaTimeZone() async => value;
 }
 
 /// 这些 App 级测试原本只验证空基础问卷下的导航和接触核心事实。

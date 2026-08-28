@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_journal.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
-import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/questionnaires/questionnaire_contract.dart';
 import 'package:tongxingzhe_app/regions/region_catalog.dart';
 import 'package:tongxingzhe_app/regions/region_models.dart';
@@ -14,6 +13,8 @@ import 'package:tongxingzhe_app/sync/sync_engine.dart';
 import 'package:tongxingzhe_app/sync/sync_models.dart';
 import 'package:tongxingzhe_app/sync/sync_transport.dart';
 import 'package:tongxingzhe_app/targets/promotion_target.dart';
+
+import '../support/fake_runtime_values.dart';
 
 void main() {
   test('accepted ACK 完成上传但不冒充已拉取 cursor', () async {
@@ -74,7 +75,7 @@ void main() {
     final journal = ContactJournal(
       database: fixture.database,
       clock: fixture.clock,
-      idGenerator: _SequenceIdGenerator(const []),
+      idGenerator: SequenceIdGenerator(const []),
     );
     final summary = await journal.summarizePersonalContacts(
       appUserId: _Fixture.scope.appUserId,
@@ -302,7 +303,7 @@ void main() {
     final correctionJournal = ContactJournal(
       database: fixture.database,
       clock: fixture.clock,
-      idGenerator: _SequenceIdGenerator([
+      idGenerator: SequenceIdGenerator([
         'revision-correction',
         'command-correction',
       ]),
@@ -342,7 +343,7 @@ void main() {
     final blockedJournal = ContactJournal(
       database: fixture.database,
       clock: fixture.clock,
-      idGenerator: _SequenceIdGenerator([
+      idGenerator: SequenceIdGenerator([
         'blocked-revision',
         'blocked-command',
         'blocked-void-revision',
@@ -379,7 +380,7 @@ void main() {
     final resolutionJournal = ContactJournal(
       database: fixture.database,
       clock: fixture.clock,
-      idGenerator: _SequenceIdGenerator([
+      idGenerator: SequenceIdGenerator([
         'revision-resolution',
         'command-resolution',
       ]),
@@ -463,7 +464,7 @@ void main() {
     await ContactJournal(
       database: fixture.database,
       clock: fixture.clock,
-      idGenerator: _SequenceIdGenerator([
+      idGenerator: SequenceIdGenerator([
         'revision-source-correction',
         'command-source-correction',
       ]),
@@ -490,7 +491,7 @@ void main() {
         await ContactJournal(
           database: fixture.database,
           clock: fixture.clock,
-          idGenerator: _SequenceIdGenerator(const []),
+          idGenerator: SequenceIdGenerator(const []),
         ).listContactRevisionConflicts(
           contactId: 'contact-source-1',
           appUserId: _Fixture.scope.appUserId,
@@ -566,7 +567,7 @@ void main() {
     final journal = ContactJournal(
       database: fixture.database,
       clock: fixture.clock,
-      idGenerator: _SequenceIdGenerator([
+      idGenerator: SequenceIdGenerator([
         'revision-correction',
         'command-correction',
       ]),
@@ -615,7 +616,7 @@ void main() {
     final journal = ContactJournal(
       database: fixture.database,
       clock: fixture.clock,
-      idGenerator: _SequenceIdGenerator([
+      idGenerator: SequenceIdGenerator([
         'revision-correction',
         'command-correction',
       ]),
@@ -800,7 +801,7 @@ void main() {
     final journal = ContactJournal(
       database: fixture.database,
       clock: fixture.clock,
-      idGenerator: _SequenceIdGenerator(const []),
+      idGenerator: SequenceIdGenerator(const []),
     );
     final summary = await journal.summarizePersonalContacts(
       appUserId: _Fixture.scope.appUserId,
@@ -875,7 +876,7 @@ void main() {
     final journal = ContactJournal(
       database: fixture.database,
       clock: fixture.clock,
-      idGenerator: _SequenceIdGenerator(const []),
+      idGenerator: SequenceIdGenerator(const []),
     );
 
     expect(await engine.pullOnce(), SyncPullApplyResult.applied);
@@ -955,7 +956,7 @@ void main() {
     final journal = ContactJournal(
       database: fixture.database,
       clock: fixture.clock,
-      idGenerator: _SequenceIdGenerator(const []),
+      idGenerator: SequenceIdGenerator(const []),
     );
 
     expect(await engine.pullOnce(), SyncPullApplyResult.applied);
@@ -1017,7 +1018,7 @@ void main() {
     final journal = ContactJournal(
       database: fixture.database,
       clock: fixture.clock,
-      idGenerator: _SequenceIdGenerator([
+      idGenerator: SequenceIdGenerator([
         'local-revision-2',
         'local-command-2',
         'local-revision-3',
@@ -1149,7 +1150,7 @@ void main() {
     final journal = ContactJournal(
       database: fixture.database,
       clock: fixture.clock,
-      idGenerator: _SequenceIdGenerator(const []),
+      idGenerator: SequenceIdGenerator(const []),
     );
     final attempts = await journal.listContactAttempts(
       appUserId: _Fixture.scope.appUserId,
@@ -1220,7 +1221,7 @@ void main() {
     final journal = ContactJournal(
       database: fixture.database,
       clock: fixture.clock,
-      idGenerator: _SequenceIdGenerator(const []),
+      idGenerator: SequenceIdGenerator(const []),
     );
     final summary = await journal.summarizePersonalContacts(
       appUserId: _Fixture.scope.appUserId,
@@ -1266,7 +1267,7 @@ void main() {
     final restartedJournal = ContactJournal(
       database: fixture.database,
       clock: fixture.clock,
-      idGenerator: _SequenceIdGenerator(const []),
+      idGenerator: SequenceIdGenerator(const []),
     );
     final contact = await restartedJournal.contactByIdForOwner(
       contactId: 'remote-source-contact',
@@ -1328,7 +1329,7 @@ void main() {
         await ContactJournal(
           database: fixture.database,
           clock: fixture.clock,
-          idGenerator: _SequenceIdGenerator(const []),
+          idGenerator: SequenceIdGenerator(const []),
         ).contactByIdForOwner(
           contactId: 'remote-source-conflict',
           appUserId: _Fixture.scope.appUserId,
@@ -1381,7 +1382,7 @@ void main() {
     final journal = ContactJournal(
       database: fixture.database,
       clock: fixture.clock,
-      idGenerator: _SequenceIdGenerator(const []),
+      idGenerator: SequenceIdGenerator(const []),
     );
     final contact = await journal.contactByIdForOwner(
       contactId: 'remote-source-revision',
@@ -1491,7 +1492,7 @@ void main() {
     final draft = (await ContactJournal(
       database: fixture.database,
       clock: fixture.clock,
-      idGenerator: _SequenceIdGenerator(const []),
+      idGenerator: SequenceIdGenerator(const []),
     ).listDrafts(appUserId: _Fixture.scope.appUserId)).single;
     expect(draft.serverRevision, 1);
   });
@@ -1528,7 +1529,7 @@ void main() {
     final journal = ContactJournal(
       database: fixture.database,
       clock: fixture.clock,
-      idGenerator: _SequenceIdGenerator(const []),
+      idGenerator: SequenceIdGenerator(const []),
     );
     final draft = (await journal.listDrafts(
       appUserId: _Fixture.scope.appUserId,
@@ -1592,7 +1593,7 @@ void main() {
     final journal = ContactJournal(
       database: fixture.database,
       clock: fixture.clock,
-      idGenerator: _SequenceIdGenerator(const []),
+      idGenerator: SequenceIdGenerator(const []),
     );
     final synced = (await journal.listDrafts(
       appUserId: _Fixture.scope.appUserId,
@@ -1654,7 +1655,7 @@ void main() {
     final drafts = await ContactJournal(
       database: fixture.database,
       clock: fixture.clock,
-      idGenerator: _SequenceIdGenerator(const []),
+      idGenerator: SequenceIdGenerator(const []),
     ).listDrafts(appUserId: _Fixture.scope.appUserId);
     expect(drafts, hasLength(1));
     expect(drafts.single.draftId, 'remote-draft-1');
@@ -1707,7 +1708,7 @@ void main() {
     final drafts = await ContactJournal(
       database: fixture.database,
       clock: fixture.clock,
-      idGenerator: _SequenceIdGenerator(const []),
+      idGenerator: SequenceIdGenerator(const []),
     ).listDrafts(appUserId: _Fixture.scope.appUserId);
     expect(drafts, hasLength(2));
     expect(
@@ -1753,7 +1754,7 @@ void main() {
     final drafts = await ContactJournal(
       database: fixture.database,
       clock: fixture.clock,
-      idGenerator: _SequenceIdGenerator(const []),
+      idGenerator: SequenceIdGenerator(const []),
     ).listDrafts(appUserId: _Fixture.scope.appUserId);
     expect(drafts, hasLength(2));
     expect(
@@ -1800,7 +1801,7 @@ void main() {
     final drafts = await ContactJournal(
       database: fixture.database,
       clock: fixture.clock,
-      idGenerator: _SequenceIdGenerator(const []),
+      idGenerator: SequenceIdGenerator(const []),
     ).listDrafts(appUserId: _Fixture.scope.appUserId);
     final conflict = drafts.singleWhere((draft) => draft.isConflictCopy);
     expect(conflict.location, _resolvedLocation(source: _sourceOne));
@@ -1814,10 +1815,10 @@ void main() {
 final class _Fixture {
   _Fixture()
     : database = LocalDatabase(NativeDatabase.memory()),
-      clock = _MutableClock(DateTime.utc(2030, 1, 8, 18, 30));
+      clock = MutableClock(DateTime.utc(2030, 1, 8, 18, 30));
 
   final LocalDatabase database;
-  final _MutableClock clock;
+  final MutableClock clock;
 
   static const scope = SyncScope(
     appUserId: 'app-user-1',
@@ -1831,7 +1832,7 @@ final class _Fixture {
     final journal = ContactJournal(
       database: database,
       clock: clock,
-      idGenerator: _SequenceIdGenerator([
+      idGenerator: SequenceIdGenerator([
         'contact-$suffix',
         'revision-$suffix',
         'command-$suffix',
@@ -1879,7 +1880,7 @@ final class _Fixture {
     final journal = ContactJournal(
       database: database,
       clock: clock,
-      idGenerator: _SequenceIdGenerator([
+      idGenerator: SequenceIdGenerator([
         'contact-source-1',
         'revision-source-1',
         'command-source-1',
@@ -1906,7 +1907,7 @@ final class _Fixture {
     final journal = ContactJournal(
       database: database,
       clock: clock,
-      idGenerator: _SequenceIdGenerator(['draft-1']),
+      idGenerator: SequenceIdGenerator(['draft-1']),
     );
     await journal.saveDraft(
       ContactDraftInput(
@@ -1924,7 +1925,7 @@ final class _Fixture {
     final journal = ContactJournal(
       database: database,
       clock: clock,
-      idGenerator: _SequenceIdGenerator(['draft-source-1']),
+      idGenerator: SequenceIdGenerator(['draft-source-1']),
     );
     await journal.saveDraft(
       ContactDraftInput(
@@ -2222,27 +2223,4 @@ final class _BatchSyncTransport implements SyncTransport, SyncBatchTransport {
     batches.add(commands);
     return _batchReplies.removeAt(0);
   }
-}
-
-final class _MutableClock implements AppClock {
-  _MutableClock(this.value);
-
-  DateTime value;
-
-  void advance(Duration duration) {
-    value = value.add(duration);
-  }
-
-  @override
-  DateTime now() => value;
-}
-
-final class _SequenceIdGenerator implements IdGenerator {
-  _SequenceIdGenerator(this.values);
-
-  final List<String> values;
-  var _index = 0;
-
-  @override
-  String next() => values[_index++];
 }

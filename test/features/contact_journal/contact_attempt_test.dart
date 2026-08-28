@@ -5,7 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_journal.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
-import 'package:tongxingzhe_app/foundation/runtime_values.dart';
+
+import '../../support/fake_runtime_values.dart';
 
 void main() {
   test('接触尝试独立保存且不进入接触指标', () async {
@@ -13,8 +14,8 @@ void main() {
     addTearDown(database.close);
     final journal = ContactJournal(
       database: database,
-      clock: _FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
-      idGenerator: _SequenceIdGenerator(['attempt-1', 'command-1']),
+      clock: FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
+      idGenerator: SequenceIdGenerator(['attempt-1', 'command-1']),
     );
 
     final receipt = await journal.recordContactAttempt(
@@ -64,8 +65,8 @@ void main() {
     addTearDown(database.close);
     final journal = ContactJournal(
       database: database,
-      clock: _FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
-      idGenerator: _SequenceIdGenerator(const []),
+      clock: FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
+      idGenerator: SequenceIdGenerator(const []),
     );
 
     await expectLater(
@@ -95,8 +96,8 @@ void main() {
     addTearDown(database.close);
     final journal = ContactJournal(
       database: database,
-      clock: _FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
-      idGenerator: _SequenceIdGenerator([
+      clock: FixedClock(DateTime.utc(2030, 1, 8, 18, 30)),
+      idGenerator: SequenceIdGenerator([
         'attempt-1',
         'attempt-command-1',
         'contact-1',
@@ -156,23 +157,4 @@ void main() {
         jsonDecode(contactCommand.payloadJson) as Map<String, Object?>;
     expect(payload['source_attempt_id'], 'attempt-1');
   });
-}
-
-final class _FixedClock implements AppClock {
-  const _FixedClock(this.value);
-
-  final DateTime value;
-
-  @override
-  DateTime now() => value;
-}
-
-final class _SequenceIdGenerator implements IdGenerator {
-  _SequenceIdGenerator(this.values);
-
-  final List<String> values;
-  var _index = 0;
-
-  @override
-  String next() => values[_index++];
 }
