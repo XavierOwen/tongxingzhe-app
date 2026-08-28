@@ -46,6 +46,28 @@ void main() {
     expect(policy.canScheduleSystemNotifications, isFalse);
   });
 
+  test('Web 持久化探针未通过时不保存草稿或敏感对象', () {
+    const capabilities = PlatformCapabilities(
+      platform: AppPlatform.web,
+      values: {
+        PlatformCapability.durableLocalDatabase:
+            CapabilityAvailability.runtimeProbeRequired,
+        PlatformCapability.secureSessionStorage:
+            CapabilityAvailability.available,
+        PlatformCapability.backgroundSync: CapabilityAvailability.unavailable,
+        PlatformCapability.systemNotifications:
+            CapabilityAvailability.unavailable,
+      },
+    );
+
+    final policy = PlatformPolicy.from(capabilities);
+
+    expect(policy.canPersistAnonymousDrafts, isFalse);
+    expect(policy.canPersistSensitiveTargets, isFalse);
+    expect(policy.syncOnlyWhileForeground, isTrue);
+    expect(policy.canScheduleSystemNotifications, isFalse);
+  });
+
   test('权限被拒绝时不缓存敏感对象且不安排系统通知', () {
     const capabilities = PlatformCapabilities(
       platform: AppPlatform.ios,
