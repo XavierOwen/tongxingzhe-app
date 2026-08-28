@@ -2604,6 +2604,22 @@ check 必须确认 release／replacement 使用不同 lineage lock namespace。
 通过只证明 synthetic DB-only consent-ratio replacement、0075 provenance、授权锁、不可变性和 ACL。
 它不证明 snapshot 生成、runtime、HTTP、Flutter、目录、导出、删除、retention、生产身份或真人平台运行时。
 
+## Slice 6CF Spec：固定分析定义变更与跨版本报告快照更正合同
+
+同版本数据更正继续使用各 report family 已有的 replacement 合同和三个稳定原因。只有分析定义或 report version 改变时，后续实现才可使用 `analysis_definition_change` 登记跨版本更正；旧原因不能代替定义兼容审查。
+
+跨版本关系只连接同 project、report family、stable metric 的两份既有 approved snapshot。两端的 report version、metric version 或 definition fingerprint 至少一项必须不同；全部相同时继续使用该 family 的同版本合同。定义管理员先以 `manage_analysis_definitions` 确认方向明确的直接兼容决定，另一名或同一名登记者以 `release_management_reports` 登记关系。决定中的 project、family、metric、方向和两端 definition tuple 必须与 snapshot trusted provenance 逐项一致。
+
+组织已启用第二人批准时继续沿用定义管理流程；平台不新增默认强制审批。确认、撤销和登记按 request、definition pair、cross-version lineage（仅登记）和既有授权／撤权的共同顺序取得锁。cross-version lineage 与 release／同版本 replacement lineage 分离；不同 request UUID 的普通操作不串行，只有同 UUID claim 互斥。
+
+各路径在锁后重核 active identity、membership、project、grant 和对应权限。登记还须重核 direct compatibility 和两端 provenance。相同 UUID 和 canonical payload 精确幂等；payload drift、缺失决定、未知／漂移的版本、fingerprint、shape 或 validator 失败关闭。版本号变大、目录排在第一或存在一串兼容 edge 都不能替代直接决定。
+
+每份旧 snapshot 最多一个 direct successor，每份新 snapshot 最多一个 predecessor。兼容决定撤销后，已经登记的 edge 保留为历史审计，跨版本投影只把它标为 `compatibility_revoked`。两端继续各自按本版本 replacement 图计算 version-scoped 的 `active`／`superseded`；reader、目录、导出和缓存不自动跳到 successor，也不能据此合并趋势。
+
+兼容决定／撤销、claim、edge、结果和最小 audit 只保存内部 ID、版本／指纹、固定状态、数据库时间、可去关联的 opaque actor 和枚举化 comparison／impact。它不保存 email、姓名、外部身份、自由文本、原始定义／选项、报告正文、cell、ratio、answer、contact、source value、隐藏前值、坐标、贡献者或其他 PII。组织删除恢复期禁止新决定、撤销和登记；期满清除 compatibility history 和 edge，并继续遵守既有组织生命周期。
+
+0015 的问卷题目兼容事件只是模式先例，不自动授权管理报告定义或 snapshot provenance。6CF 只有 Spec、ADR 和本节文档，没有 migration、SQL、fixture、concurrency、runtime、Backend、HTTP、Flutter、读取、目录或导出实现。Markdown 检查只能证明文档自洽；后续必须为一个明确 report family 另建 Issue 和数据库证据。它不依赖 Apple signing、provisioning 或真人平台运行时。
+
 ## Slice 6CC：读取项目范围的去身份化地点异常
 
 6CC 解决的是数据质量入口，不是管理者读取单条 contact 的入口。它只接受 active contact 当前 accepted revision 上的两个精确来源 tuple：

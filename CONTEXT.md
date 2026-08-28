@@ -419,6 +419,10 @@ _Avoid_: 页面内公式、未版本化统计、SQL 文件名
 一个正式指标不可变的某次解释定义；定义含义改变时创建新版本，报告快照始终引用生成时使用的版本。
 _Avoid_: 当前公式、静默覆盖、App 版本
 
+**管理报告定义兼容决定**:
+由具备 `manage_analysis_definitions` 能力的成员对同一 project、report family 和 stable metric 的两个明确版本作出的方向性判断；它保存两端定义 tuple 和枚举化语义比较，可通过追加事件显式撤销，不能按版本号、目录顺序或传递关系推断。
+_Avoid_: 自动兼容、最新版本、跨项目兼容、传递兼容
+
 **平台核心指标**:
 由全平台统一定义并随正式代码审查、测试和发布的指标，例如接触场次、触达人数、单次兴趣和关系阶段；项目不能改变其核心含义。
 _Avoid_: 项目自定义核心口径、问卷指标
@@ -1006,6 +1010,14 @@ _Avoid_: 复用渠道、current-city 或 original-region replacement 表、按�
 
 生命周期只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID，不返回 ratio、coverage、隐藏前值、来源、贡献者、接触或 PII。6CE 不生成或修改 snapshot，不改变 0074 candidate、0075 release、读取、runtime、HTTP、Flutter、目录、导出、缓存、删除或 retention。
 _Avoid_: 使用当前 opt-in 作更正门禁、复用其他 report family replacement、把两个 lineage lock 合并、让不同 request UUID 互相阻塞、返回 ratio／coverage、把 Docker synthetic 通过写成生产证据
+
+**跨版本报告快照更正版取代政策**:
+6CF 只固定后续 report-family 实现的共同政策。关系只连接同 project、report family 和 stable metric 的两份既有 approved snapshot，并引用当前有效、方向明确的直接管理报告定义兼容决定。定义确认／撤销使用 `manage_analysis_definitions`，关系登记另使用 `release_management_reports`；各路径在锁后重核自己的权限和状态。
+
+登记原因只允许 `analysis_definition_change`。每端只允许一个 direct edge；cross-version lineage 与 release／同版本 lineage 分离，只有同 UUID claim 互斥。兼容撤销后 edge 保留为历史证据并标为 `compatibility_revoked`；两端继续按各自版本内 replacement 图计算 version-scoped 生命周期。关系不生成或修改 snapshot，不授权趋势合并、读取或 latest／current 推断。兼容决定、claim、edge、结果和 audit 必须追加不可变且 PII-free，并服从组织删除生命周期。
+
+6CF 只交付 Spec、ADR 和手册，不选择首个 report family，也不实现 migration、SQL、并发、runtime、Backend、HTTP、Flutter、目录、读取或导出。
+_Avoid_: 用同版本原因伪装定义变更、传递兼容、静默改写 snapshot、自动 successor、把文档检查写成数据库或生产证据
 
 **项目去身份化地点异常只读合同**:
 6CC 只把 active contact 当前 accepted revision 中的 `pending_resolution + pending_coordinates` 和 `unknown + legacy_incomplete` 暴露为项目范围的去身份化异常。revision 必须为 `submitted` 或 `corrected`；resolved、not-applicable、draft、attempt、voided、旧 revision 和跨项目事实不进入候选。
