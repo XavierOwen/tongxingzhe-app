@@ -42,5 +42,3 @@
 - 离线对象资料安全边界：[威胁模型](../security/offline-pii-threat-model.md)
 - 对象资料保留与匿名化边界：[威胁模型](../security/promotion-target-anonymization-threat-model.md)
 - legacy v5 证据：[v5 盘点](../migrations/legacy-v5-inventory.md)
-
-`docs/PROJECT_DESIGN.md` 是旧 Demo 的历史资料，不是现代实现依据。
