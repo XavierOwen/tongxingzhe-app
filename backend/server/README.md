@@ -4,6 +4,28 @@
 
 客户端不能提交 `app_user_id`、role 或 capability。上传会把 payload 的 workspace 和 project 与可信上下文交叉核对。拉取也会核对 query 范围，并只接受属于同一范围的不透明 cursor。响应不返回外部 subject、email 或 token。所有受保护入口共用严格的 bearer header 解析器，防止端点之间出现不同的认证规则。
 
+## 组织创建专用的已验证邮箱资格
+
+组织创建流程使用独立的资格 verifier。它不改变全局 `VerifiedIdentity`，后者仍只包含受信的 `issuer` 和 `subject`。该 verifier 只接受 access token，不接受请求 body、邮箱、`email_verified`、`email_confirmed_at` 或 `is_anonymous` 作为资格输入。
+
+它先复用通用 JWT verifier 的签名、issuer、audience、期限、subject 和 `authenticated` role 校验。JWT 通过后，再由注入的 provider-neutral Auth user lookup 使用同一 token 读取可信 user endpoint。Supabase adapter 只向配置的 HTTPS endpoint 发送 `Authorization: Bearer <access-token>`、publishable key 和受控超时；它拒绝 JWT secret、service-role key 和其他 secret，不跟随重定向，并把响应限制在 16 KiB。
+
+user object 的 `id` 必须与 JWT `subject` 完全相等，`is_anonymous` 必须严格为 `false`，`email_confirmed_at` 必须是非空、有效且带时区的时间戳。JWT 中的 `email`、`email_verified`、可修改的 `user_metadata` 和请求 body 都不能提高资格。
+
+成功只返回短生命周期的组织创建资格类型。user adapter 在内部核对 subject、匿名状态和确认时间，只向 verifier 返回固定资格决定；两层都不返回或保存邮箱、确认时间、完整 user object、JWT claims 或 provider metadata。lookup 是只读操作，不创建或更新 `app_users`、session、audit 或 cache，也不把 token、邮箱、确认时间、完整 provider 响应或原始错误写入日志。
+
+失败必须关闭操作入口，并使用稳定类别：
+
+| 类别 | 条件 |
+| --- | --- |
+| `unauthenticated` | JWT 无效、Auth user endpoint 明确拒绝 token，或 user `id` 缺失、非法、为空或不匹配；JWT 无效时不调用 user lookup |
+| `forbidden` | JWT 有效且身份一致，但用户是匿名用户，或邮箱尚未确认 |
+| `unavailable` | 配置非法、endpoint 非 HTTPS、超时、网络失败、5xx、非 JSON、匿名状态类型错误、确认时间格式错误或其他未知响应结构 |
+
+错误只向上层提供稳定类别，不包含数据库或 provider 原文。这个切片只交付 verifier 和 adapter 合同，不增加组织创建 route、PostgreSQL 写入或 Flutter UI。
+
+本地测试使用临时 ES256 key、synthetic user object 和注入式 fake lookup／HTTP transport，不连接真实 Supabase。测试只证明 JWT、user object、请求 headers、严格解析和失败分类；它不证明生产 Supabase、部署端点、真实身份或六平台运行时。
+
 ## 个人当前关系阶段快照
 
 | 方法与路径 | 行为 |
@@ -890,7 +912,7 @@ Backend 需要以下环境变量：
 | `AUTH_JWKS_URL` | 可选 JWKS 地址；默认由 issuer 加 `/.well-known/jwks.json` 得到 |
 | `PORT` | HTTP 端口；默认 `8080` |
 
-正式环境只接受 JWKS 提供的 `ES256` 或 `RS256` 公钥。项目必须先启用 [Supabase asymmetric signing key](https://supabase.com/docs/guides/auth/signing-keys)。Backend 不需要 JWT secret、publishable key 或 service-role key。
+正式环境只接受 JWKS 提供的 `ES256` 或 `RS256` 公钥。项目必须先启用 [Supabase asymmetric signing key](https://supabase.com/docs/guides/auth/signing-keys)。通用 JWT verifier 不需要 JWT secret 或 service-role key；组织创建专用 user adapter 只使用 publishable key，并拒绝 secret 和 service-role key。
 
 ## 本地检查
 

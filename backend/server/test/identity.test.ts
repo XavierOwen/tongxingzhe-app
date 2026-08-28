@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   createLocalJWKSet,
+  errors,
   exportJWK,
   generateKeyPair,
   SignJWT,
@@ -58,8 +59,31 @@ test("token without authenticated role is rejected", async () => {
 
   await assert.rejects(
     verifier.verify(fixture.accessToken),
-    IdentityVerificationError,
+    (error: unknown) =>
+      error instanceof IdentityVerificationError &&
+      error.category === "unauthenticated",
   );
+});
+
+test("key resolver failures stay distinct from invalid credentials", async () => {
+  const fixture = await createTokenFixture();
+  for (const failure of [
+    new Error("synthetic JWKS outage"),
+    new errors.JOSEError("synthetic JWKS response failure"),
+  ]) {
+    const verifier = createSupabaseIdentityVerifier({
+      issuer,
+      audience: "authenticated",
+      keyResolver: async () => { throw failure; },
+    });
+
+    await assert.rejects(
+      verifier.verify(fixture.accessToken),
+      (error: unknown) =>
+        error instanceof IdentityVerificationError &&
+        error.category === "unavailable",
+    );
+  }
 });
 
 async function createTokenFixture(options?: {
