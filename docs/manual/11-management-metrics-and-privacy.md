@@ -941,8 +941,8 @@ snapshot 表。
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-Docker runner 会自动发现 0057 migration、check、synthetic fixture 和并发脚本，并在 checksum 和 dump／restore
-恢复库重跑。成功证据包括 validator／pair 字段、unavailable／额外字段／错误 identity、完整网格、唯一 baseline、
+Docker runner 会在源库自动发现 0057 migration、check、synthetic fixture 和并发脚本，并验证 checksum。dump／restore 后，
+恢复库只重跑 check 和 fixture。成功证据包括 validator／pair 字段、unavailable／额外字段／错误 identity、完整网格、唯一 baseline、
 前一 snapshot 链接、精确幂等、same／earlier cutoff、无共享期间、value-free blocked attempt、不可改删和角色读写
 边界。已有专用测试库可以按以下顺序检查；不要把 `DATABASE_URL` 指向 production：
 
@@ -1003,7 +1003,7 @@ synthetic fixture 和并发脚本，最后删除容器。它不会修改 product
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-runner 会自动发现 0058 的 migration、check、fixture 和并发脚本，并在 checksum、dump／restore 和恢复库中重跑它们。
+runner 会在源库自动发现 0058 的 migration、check、fixture 和并发脚本，并验证 checksum。dump／restore 后，恢复库只重跑 check 和 fixture。
 完整套件还会重跑既有授权读取、trusted release、directory 和 export 合同。通过表示合成 PostgreSQL 合同成立，
 不表示 HTTP、Flutter、UI、生产区域证据或真实平台验收完成。
 
@@ -1527,7 +1527,7 @@ docker version
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-runner 会发现 0062 migration、结构／权限 check、fixture、并发脚本、checksum 和 dump／restore，并在恢复库重跑。完整证据
+runner 会在源库发现 0062 migration、结构／权限 check、fixture 和并发脚本，并验证 checksum。dump／restore 后，恢复库只重跑 check 和 fixture。完整证据
 应包括合法与拒绝的十格文档、唯一 baseline、精确幂等、稳定 rolling、`previous_snapshot_id`、same／earlier cutoff、无共享
 期间、共享期间内格值／隐私变化、固定定义／period definition／boundary／网格／query／privacy／source／时区 revision 漂移、value-free blocked
 attempt、独立 claim／provenance、不可改删和最小 ACL。旧 channel、current-city 和 6AV 回归也必须继续通过。
@@ -1614,7 +1614,7 @@ Windows／Linux／Web 真人平台运行或真机证据，也不构成形式化�
 
 runner 按文件名自动发现 0063 migration、private read check、synthetic fixture 和
 `verify_authorized_management_interest_report_snapshot_read_concurrency.sh`。它还运行 checksum、dump／restore，并在没有源
-cluster roles 的恢复库重跑 migration、check 和 fixture。恢复库不重跑并发脚本，因为并发脚本会提交 synthetic 行；这样不会把
+cluster roles 的恢复库只重跑 check 和 fixture，不重新执行 migration。恢复库不重跑并发脚本，因为并发脚本会提交 synthetic 行；这样不会把
 同一批并发写入重复导入恢复库。
 
 ### 专用测试库命令
@@ -1686,7 +1686,7 @@ synthetic 数据运行测试，最后删除容器。它不连接 production。
 ```
 
 runner 自动发现 0064 migration、check 和 fixture，并显式运行第八条 Backend integration。它还运行 0063 read/revoke 并发、checksum 和
-dump／restore。恢复库只重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。
+dump／restore。恢复库只重跑 check 和 fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。
 
 若只使用专用测试库，先确认 `DATABASE_URL` 不是 production，再运行：
 
@@ -1843,7 +1843,7 @@ cd "$(git rev-parse --show-toplevel)"
 ```
 
 runner 自动发现 0065 migration、directory check 和 fixture，并运行 interest directory integration、独立并发、checksum 和 dump／restore。
-恢复库重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。6BA integration 必须读取自己的 interest directory fixture，
+恢复库只重跑 check 和 fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。6BA integration 必须读取自己的 interest directory fixture，
 不得读取 current-city integration 使用的 `CURRENT_CITY_RUNTIME_FIXTURE`。
 
 如果只修改或调试 Backend HTTP 文件，从 `backend/server` 运行：
@@ -1949,9 +1949,9 @@ production identity、UI、键盘或屏幕阅读器、Drift、缓存、离线、
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-Docker runner 继续自动发现并运行既有 6BA migration／check／fixture／并发／integration、6AZ Backend 测试以及 checksum 和
-dump／restore；6BB 不新增数据库 migration 或数据库 fixture。恢复库仍只重跑 migration、check 和 fixture，不重跑会提交
-synthetic 行的并发脚本。Docker 证据说明 DB／Backend 合同，Flutter 命令说明 Dart transport 合同，二者都不能互相替代，也不能
+Docker runner 继续在源库自动发现并运行既有 6BA migration／check／fixture／并发／integration、6AZ Backend 测试以及 checksum。
+dump／restore 后，恢复库仍只重跑 check 和 fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本；6BB 不新增数据库 migration 或数据库 fixture。
+Docker 证据说明 DB／Backend 合同，Flutter 命令说明 Dart transport 合同，二者都不能互相替代，也不能
 声称生产身份或六平台真机证据。
 
 6BB 的边界明确不包括 UI、ViewModel、Widget、composition／AppDependencies 接线、管理导航、Drift、缓存、离线、同步、导出／下载、
@@ -2084,8 +2084,8 @@ cd "$(git rev-parse --show-toplevel)"
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-runner 会自动发现 0066 migration、结构／权限 check、fixture 和独立并发检查，并运行 migration checksum 与 dump／restore。恢复库会再次运行 migration、
-check 和 fixture，但不会重跑会提交 synthetic 行的并发脚本。成功时应看到仓库约定的 `PostgreSQL Docker 测试全部通过。`。
+runner 会在源库自动发现 0066 migration、结构／权限 check、fixture 和独立并发检查，并验证 migration checksum。dump／restore 后，恢复库只重跑
+check 和 fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。成功时应看到仓库约定的 `PostgreSQL Docker 测试全部通过。`。
 
 Docker 通过只证明 synthetic PostgreSQL 合同成立。它不证明真实区域树内容、生产数据、任意历史 `as-of`、Backend runtime、HTTP、Flutter、导出或六平台真人运行时。
 
@@ -2136,7 +2136,7 @@ cd "$(git rev-parse --show-toplevel)"
 ```
 
 runner 会建立临时容器和 synthetic 数据，自动发现 0069 migration、结构 check、rollback fixture 和并发脚本，随后验证历史 migration checksum，
-再把源库 dump 恢复到独立 PostgreSQL。恢复库会重跑 migration、check 和 fixture，但不会重跑会提交 synthetic 行的并发脚本。测试结束后容器自动清理，
+再把源库 dump 恢复到独立 PostgreSQL。恢复库只重跑 check 和 fixture，不重新执行 migration，也不会重跑会提交 synthetic 行的并发脚本。测试结束后容器自动清理，
 不会连接 production。成功只证明 private PostgreSQL 合同、权限、撤权顺序和恢复路径成立；它不证明 runtime bridge、HTTP、Flutter、目录、导出、
 production identity 或真人平台运行时。
 
@@ -2199,8 +2199,8 @@ bridge 和 adapter 不追加第二条 audit，也不把报告值写入日志。
    ./tool/run_postgres_tests_in_docker.sh
    ```
 
-runner 自动发现 0070 migration、structural check 和 rollback fixture，并运行原始区域 runtime integration。它还运行 0069 read／revoke 并发、checksum 和
-dump／restore。恢复库先准备 cluster roles，再重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。
+runner 在源库自动发现 0070 migration、structural check 和 rollback fixture，并运行原始区域 runtime integration。它还运行 0069 read／revoke 并发并验证 checksum。
+dump／restore 前先准备 cluster roles；恢复后只重跑 check 和 fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。
 
 完整通过只证明 synthetic PostgreSQL 的 0070 bridge、Backend adapter、strict parser 和最小 ACL。它不证明 HTTP、Flutter、目录、导出、生产 identity provider、
 真实账号或六平台真人运行时。
@@ -2351,8 +2351,8 @@ cd ../..
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-Docker runner 自动发现 0071 migration、check、fixture 和 concurrency，并显式运行专用 PostgreSQL integration。恢复库重跑 migration、check 和 rollback
-fixture，不重跑会提交 synthetic 行的并发脚本。完整通过只证明 synthetic provenance、授权撤回、20 项排序、value-free audit、runtime ACL、strict parser 和
+Docker runner 在源库自动发现 0071 migration、check、fixture 和 concurrency，并显式运行专用 PostgreSQL integration。dump／restore 后，恢复库只重跑全部 check 和 numbered
+fixture（包括 rollback fixture），不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。完整通过只证明 synthetic provenance、授权撤回、20 项排序、value-free audit、runtime ACL、strict parser 和
 HTTP 合同。它不证明 Flutter、导出、缓存、离线、production identity 或六平台真人运行时。
 
 ## Slice 6BL：在 Flutter 中严格读取原始区域目录与详情
@@ -2471,8 +2471,8 @@ HTTP、Flutter、目录、导出、缓存、离线、分享、删除、tombstone
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-runner 会发现 0072 migration、structural check、rollback fixture 和 replacement concurrency script，并在 checksum、dump／restore 后重跑 migration、check
-和 fixture。恢复库不重跑会提交 synthetic 行的并发脚本。若只调试 6BN，先确认 `DATABASE_URL` 是专用测试库，再运行：
+runner 会在源库发现 0072 migration、structural check、rollback fixture 和 replacement concurrency script，并验证 checksum。dump／restore 后，恢复库只重跑 check
+和 fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。若只调试 6BN，先确认 `DATABASE_URL` 是专用测试库，再运行：
 
 ```bash
 ./tool/postgres_migrate.sh
@@ -2508,7 +2508,7 @@ retention、生产身份或 Android、iOS、macOS、Windows、Linux、Web 真人
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-runner 会发现 0080 migration、structural check、rollback fixture 和 replacement concurrency script，并在 checksum、dump／restore 后重跑 migration、check 和 fixture。恢复库不重跑会提交 synthetic 行的并发脚本。
+runner 会在源库发现 0080 migration、structural check、rollback fixture 和 replacement concurrency script，并验证 checksum。dump／restore 后，恢复库只重跑 check 和 fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。
 
 只调试 6CB 时，先确认 `DATABASE_URL` 是专用测试库，再运行：
 
@@ -2545,7 +2545,7 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-runner 会发现 0082 migration、structural check、rollback fixture 和 concurrency script，并在 checksum、dump／restore 后重跑 migration、check 和 fixture。恢复库不重跑会提交 synthetic 行的并发脚本。
+runner 会在源库发现 0082 migration、structural check、rollback fixture 和 concurrency script，并验证 checksum。dump／restore 后，恢复库只重跑 check 和 fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。
 
 只调试 6CD 时，先确认 `DATABASE_URL` 是专用测试库，再运行：
 
