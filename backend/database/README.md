@@ -1255,6 +1255,31 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 这些测试只证明 synthetic DB-only current-city replacement、授权锁、claim、provenance、不可变性和 ACL。它们不证明 snapshot 生成、跨版本更正、runtime、HTTP、Flutter、目录、导出、删除、retention、production identity 或六平台真人运行时。
 
+### 6CD：验证 interest 快照 replacement lineage
+
+0082 只在 private PostgreSQL 登记两份已通过 0062 的 interest approved snapshot 之间的直接 replacement。它不生成或改写 snapshot。两份快照必须保持同一 project、报告定义、隐私与来源范围、报告时区 revision、期间和 release lineage；新快照的 cutoff 与发布时间必须更晚，source watermark 不得回退。
+
+replacement 在共享的 value-free request UUID ledger 中使用独立 interest family claim，并与 release 共用 request lock。关闭的 lifecycle writer 只能通过 interest 专用 provenance seam 核对 0062 attempt。生命周期只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID。
+
+从仓库根目录运行完整测试：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 自动发现 0082 migration、structural check、rollback fixture 和并发脚本，并继续验证 checksum 与 dump／restore。只调试专用测试库时，先确认 `DATABASE_URL` 不是 production，再运行：
+
+```bash
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_interest_report_snapshot_replacements.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0082_management_interest_report_snapshot_replacements.sql
+./tool/verify_management_interest_report_snapshot_replacements_concurrency.sh
+```
+
+这些测试只证明 synthetic DB-only interest replacement、授权锁、claim、provenance、不可变性和 ACL。它们不证明 snapshot 生成、runtime、HTTP、Flutter、目录、导出、删除、retention、production identity 或真人平台运行时。
+
 ### 6CC：验证项目范围的去身份化地点异常读取
 
 0081 增加 private、DB-only 的异常目录与详情合同。候选只包含 active contact 当前 accepted revision 的

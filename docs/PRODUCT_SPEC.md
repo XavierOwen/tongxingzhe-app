@@ -1519,6 +1519,16 @@ replacement 在管理报告共享的 value-free request UUID ledger 中使用独
 
 生命周期查询只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID，不返回报告格、区域来源、贡献者、接触、坐标或 PII。6CB 不改变目录排序、既有读取、HTTP、导出或 Flutter，也不提供分析定义／跨版本更正、interest／follow-up-consent replacement、删除、retention、warehouse 或真人平台证据。
 
+#### Slice 6CD：登记 interest 快照更正版取代
+
+6CD 只登记两份已经通过 0062 的 interest approved snapshot 之间的直接 replacement。旧、新快照必须属于同一 project、report／version、query fingerprint、privacy policy、source scope、报告时区 revision、期间和 release lineage。新快照的 `data_cutoff_utc` 与发布时间必须更晚，source change sequence 不得回退。
+
+replacement 使用管理报告共享的 value-free request UUID ledger 和独立 interest family claim。release 与 replacement 共用 request lock。关闭的 lifecycle writer 只能通过 interest 专用 provenance seam 核对 0062 approved attempt，不能直接读取 attempt ledger。原因只允许 `late_accepted_data`、`contact_revision` 和 `contact_void`。
+
+关系和最小 audit 追加不可变。每份旧快照最多一个直接 replacement，每份新快照最多一个 predecessor。请求、lineage 和授权锁取得后必须再次确认 `release_management_reports`、membership、项目状态与 provenance。精确重试幂等；载荷漂移、跨项目／family、same／earlier cutoff、倒序、自链接、分叉、循环和 stale head 均失败关闭。
+
+生命周期只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID。6CD 不返回 interest cells、计数、贡献者、接触或 PII，不生成 snapshot，也不改变目录、读取、runtime、HTTP、Flutter 或导出。分析定义／跨版本更正、follow-up-consent replacement、删除和 retention 不属于本切片。
+
 #### Slice 6CC：读取项目范围的去身份化地点异常
 
 6CC 在 private PostgreSQL 中提供独立的去身份化地点异常目录与详情。候选只来自 active contact 的当前 accepted revision；来源必须精确为
@@ -1605,6 +1615,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `ANALYTICS-062` | 6CA 在 `ManagementReportBrowser` 中增加第五个互斥的后续联系同意占比 family，保持 channel 默认选中；只有用户明确选择后才消费 6BZ panel。浏览器把当前已重新授权的 `ManagementAnalysisContext.projectId` 传给 panel，并沿 `AppStartupReady → _ReadyApp → ProductionHomeShell → ManagementReportBrowser` 借用同一个 gateway 实例；composition root 保持 ownership 和 close。family／project 切换隔离旧 generation 和迟到 directory／detail 响应，标签提供中英文，既有四个 family 行为不变。6CA 不自动选择首项、current／latest／replacement，不回退个人项目，不改变 AppDependencies 构造或 6BZ、gateway、HTTP、Backend、PostgreSQL 合同。 |
 | `ANALYTICS-063` | 6CB 只登记两份 0057 current-city approved snapshot 的直接 replacement。旧、新快照必须同 project、report／version、query／privacy／source scope、报告时区 revision、期间、release lineage 和完整 target context；新快照 cutoff／发布时间更晚且 source watermark 不回退。关系使用共享 value-free request ledger 中的独立 current-city replacement family、追加不可变直接链、锁后重授权、精确幂等和 value-free lifecycle；不生成 snapshot，不改变目录、读取、HTTP、导出或 Flutter。 |
 | `ANALYTICS-064` | 6CC 只列出 active contact 当前 accepted revision 的 `pending_resolution + pending_coordinates` 与 `unknown + legacy_incomplete` 异常。每项使用追加式 opaque ID；目录固定最多 20 项并只含 reason、open status、发生时间、location／evidence kind 和坐标可用状态，详情只对显式 ID 返回相同 metadata 与必要坐标。resolved、not-applicable、draft、attempt、voided、旧 revision、跨项目和 stale ID 失败关闭。6CC 不修改 provenance，不提供 correction、runtime、Backend、HTTP、Flutter、地图、搜索、分页或导出。 |
+| `ANALYTICS-065` | 6CD 只登记两份 0062 interest approved snapshot 的直接 replacement。旧、新快照必须同 project、report／version、query／privacy／source scope、报告时区 revision、期间和 release lineage；新快照 cutoff／发布时间更晚且 source watermark 不回退。关系使用共享 request ledger 中的独立 interest replacement family、interest 专用 provenance、追加式直接链、锁后重授权和 value-free lifecycle；不生成 snapshot，也不改变目录、读取、runtime、HTTP、Flutter 或导出。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -1665,6 +1676,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `PRIVACY-053` | 6CA 只在用户明确选择第五个 report family 后显示 6BZ panel，并把当前 `ManagementAnalysisContext.projectId` 作为项目边界；它不以 UI 选择代替服务端授权，不回退个人项目或旧上下文。browser、`_ReadyApp`、`ProductionHomeShell` 和 panel 只借用 6BY 创建的同一 gateway，不能替换或关闭它。family／project 切换必须阻断旧响应写回；标签、状态和错误不得加入内部授权详情、response body、数据库消息、PII 或隐藏值。fake composition／widget tests 只证明本地传递和状态隔离，不构成 Backend、数据库、部署、生产身份或六平台真人平台隐私证据。 |
 | `PRIVACY-054` | 6CB 的 current-city replacement 只接受两份具有完整 0057 approved provenance、精确 target context、同一报告定义／时区／期间／lineage 和前进 cutoff 的 snapshot。关系、claim 和最小 audit 追加不可变；失败不写部分关系或报告值。生命周期结果只含 snapshot ID、`active`／`superseded` 和直接 replacement ID；不返回 protected report、cells、隐藏前值、区域来源、贡献者、接触、坐标、授权关系或 PII。`PUBLIC`、runtime、普通 app role、reader、release writer 和其他 report-family writer 不能访问该私有合同。 |
 | `PRIVACY-055` | 6CC 的目录不得返回坐标；详情只对用户明确选择的 opaque anomaly ID 返回 pending 异常的 latitude／longitude／可空 accuracy，legacy 异常固定返回 `coordinates: null`。两条路径都不得返回 contact、target、user、revision、source、区域树、授权内部 ID 或 PII。unknown、cross-project 和 stale ID 使用同一 value-free `not_found`。不可变 audit 不保存 anomaly ID、坐标、发生时间或 provenance 值；closed reader 只有必要列 ACL，`PUBLIC`、runtime、普通 app role、管理报告 reader／writer 和 provenance writer 均不能访问私有合同。synthetic DB 证据不构成形式化不可重识别保证。 |
+| `PRIVACY-056` | 6CD 只接受具有完整 0062 approved provenance、同一 interest 报告定义／时区 revision／期间／lineage 和前进 cutoff 的快照。关系、claim 和 audit 追加不可变；失败不写部分关系或报告值。生命周期结果不含 protected report、interest cells、计数、贡献者、接触、授权关系或 PII。`PUBLIC`、runtime、普通 app role、reader、release writer 和其他 report-family writer 不能访问该私有合同。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
 
@@ -1720,6 +1732,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-046` | 学习文档必须用零基础读者可以复制的步骤说明 6CA 的第五个互斥 report family、channel 默认选择、明确选择后才显示 6BZ panel、当前 `ManagementAnalysisContext.projectId`、`AppStartupReady → _ReadyApp → ProductionHomeShell → ManagementReportBrowser` 的同一 gateway 传递、composition root ownership／close、family／project 切换与迟到响应隔离、中英文标签、键盘／触摸路径、`320×568` 和 `200%` 字号。必须给出 browser／app composition focused tests、全量 Flutter 命令和 Docker 回归边界；明确 6CA 不改变 AppDependencies 构造、6BZ、gateway、Backend、PostgreSQL、缓存、离线、导出或导航，也不证明部署、production identity 或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。 |
 | `MANUAL-047` | 学习文档必须用零基础读者可以复制的步骤说明 6CB 的 0080 current-city replacement、0057 approved provenance、完整 target context、共享 request UUID ledger 中的独立 family、release／replacement 双向互斥、active／superseded 生命周期、原因 allowlist、锁后授权、精确幂等、stale head／分叉／循环／跨 family／context drift 失败关闭、value-free 输出、最小 ACL，以及 migration／check／fixture／concurrency／checksum／dump／restore 命令。必须明确 6CB 不生成 snapshot，不改变目录、读取、HTTP、导出或 Flutter，不处理跨版本更正、删除或 retention；synthetic Docker 证据不证明生产身份或真人平台。 |
 | `MANUAL-048` | 学习文档必须用零基础读者可以复制的步骤说明 6CC 的 0081 migration、独立 `view_deidentified_anomalies` capability、当前 accepted revision 的两种精确异常 tuple、opaque ID、无坐标目录、最小坐标详情、unknown／cross-project／stale 等价 `not_found`、value-free immutable audit、closed role 与最小 ACL，以及 migration／check／fixture／concurrency／checksum／dump／restore 命令。必须明确 Docker 是隔离 synthetic PostgreSQL，不连接 production；6CC 不修改 provenance，也不提供 correction、runtime、Backend、HTTP、Flutter、地图、搜索、分页、导出、组织清除、生产身份或真人平台证据。 |
+| `MANUAL-049` | 学习文档必须说明 6CD 的 0082 interest replacement、0062 approved provenance、共享 request ledger 中的独立 family、release／replacement 双向互斥、active／superseded、原因 allowlist、锁后授权、精确幂等、stale head／分叉／循环／跨 family 失败关闭、value-free 输出、最小 ACL，以及 migration／check／fixture／concurrency／checksum／dump／restore 命令。必须明确 6CD 不生成 snapshot，不改变目录、读取、runtime、HTTP、Flutter 或导出；synthetic Docker 证据不证明生产身份或真人平台。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -1956,6 +1969,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-056` | 6CA 的 browser、app 和 composition tests 必须覆盖 channel 默认且第五个 gateway 不请求、第五个 family 的 mouse／touch／Enter／Space 明确选择、当前 `ManagementAnalysisContext.projectId` 传递、无自动 directory／detail、第五个 chip 与既有四个 family 互斥且有中英文标签、project／family 切换的 generation 与迟到响应隔离，以及既有 family 不回归。测试还必须证明 `_ReadyApp`、`ProductionHomeShell`、browser 和 panel 借用同一 gateway，只有 6BY composition root 关闭它，并覆盖键盘 focus、`320×568` 和 `200%` 字号。使用 fake gateway；通过只证明本地 UI／composition 行为，不声称 gateway parser、Backend、PostgreSQL、部署、production identity 或六平台真人平台证据。 |
 | `TEST-057` | 6CB 的 0080 structural check／rollback fixture／并发测试必须覆盖合法同项目 current-city approved snapshot、独立 replacement family、release／replacement UUID 双向互斥、0057 专用 provenance、document 与 snapshot 行的 project／cutoff／watermark 绑定、同 report／version／query／privacy／source scope／时区 revision／期间／lineage／target context、后续 cutoff／发布时间、watermark 不回退、原因 allowlist、active／superseded、精确幂等、载荷漂移、跨项目／family、legacy／blocked／missing／drift、same／earlier cutoff、倒序、自链接、分叉、循环、stale head、旧新 snapshot 字节不变、value-free 结果、锁后撤权、竞争 replacement、最小 ACL、checksum 和 dump／restore。通过只证明 synthetic DB-only replacement，不声称 snapshot 生成、定义／跨版本更正、runtime、HTTP、Flutter、目录、导出、删除、retention、生产身份或真人平台。 |
 | `TEST-058` | 6CC 的 0081 structural check／rollback fixture／并发测试必须覆盖独立 capability、active current accepted revision、pending／legacy 精确 tuple、submitted／corrected revision、opaque ID 稳定映射、目录 20 项上限与稳定排序、目录无坐标、pending 最小坐标详情、legacy null coordinates、resolved／not-applicable／draft／attempt／voided／旧 revision 排除，以及 unknown／cross-project／stale 等价 `not_found`。还必须覆盖其他角色／capability 拒绝、每次重授权、目录／详情与撤权双向锁顺序、value-free immutable audit、mapping 不可改删、最小列 ACL、checksum 和 dump／restore。通过只证明 synthetic DB-only 读取，不声称 correction、runtime、Backend、HTTP、Flutter、地图、导出、生产身份、真实 PII 清除或真人平台。 |
+| `TEST-059` | 6CD 的 0082 structural check、rollback fixture 和并发测试必须覆盖合法 interest approved snapshot、独立 replacement family、release／replacement UUID 双向互斥、0062 专用 provenance、同 report／version／query／privacy／source scope／时区 revision／期间／lineage、后续 cutoff／发布时间、watermark 不回退、原因 allowlist、active／superseded、精确幂等、载荷漂移、跨项目／family、same／earlier cutoff、自链接、分叉、循环、stale head、旧新 snapshot 字节不变、value-free 结果、锁后撤权、竞争 replacement、最小 ACL、checksum 和 dump／restore。通过只证明 synthetic DB-only replacement，不声称 snapshot 生成、runtime、HTTP、Flutter、目录、导出、删除、retention、生产身份或真人平台。 |
 
 ## 9. UI、视觉与可访问性
 
