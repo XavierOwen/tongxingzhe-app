@@ -1,5 +1,6 @@
 import {
   createRemoteJWKSet,
+  errors,
   jwtVerify,
   type JWTVerifyGetKey,
 } from "jose";
@@ -14,9 +15,24 @@ export interface IdentityVerifier {
 }
 
 export class IdentityVerificationError extends Error {
-  constructor(options?: ErrorOptions) {
-    super("Access token verification failed", options);
+  readonly category: "unauthenticated" | "unavailable";
+
+  constructor(
+    categoryOrOptions:
+      | "unauthenticated"
+      | "unavailable"
+      | ErrorOptions = "unauthenticated",
+    options?: ErrorOptions,
+  ) {
+    const category = typeof categoryOrOptions === "string"
+      ? categoryOrOptions
+      : "unauthenticated";
+    super(
+      "Access token verification failed",
+      typeof categoryOrOptions === "string" ? options : categoryOrOptions,
+    );
     this.name = "IdentityVerificationError";
+    this.category = category;
   }
 }
 
@@ -35,8 +51,10 @@ export function createSupabaseIdentityVerifier(
   return {
     async verify(accessToken: string): Promise<VerifiedIdentity> {
       try {
+        const token = accessToken.trim();
+        if (token.length === 0) throw new InvalidIdentityTokenError();
         const { payload } = await jwtVerify(
-          requireNonEmpty(accessToken, "access token"),
+          token,
           options.keyResolver,
           {
             issuer,
@@ -51,16 +69,39 @@ export function createSupabaseIdentityVerifier(
           payload.sub.trim().length === 0 ||
           payload.role !== "authenticated"
         ) {
-          throw new Error("Required identity claims are missing");
+          throw new InvalidIdentityTokenError();
         }
 
         return { issuer: payload.iss, subject: payload.sub };
       } catch (cause) {
-        throw new IdentityVerificationError({ cause });
+        throw new IdentityVerificationError(identityFailureCategory(cause), {
+          cause,
+        });
       }
     },
   };
 }
+
+function identityFailureCategory(
+  cause: unknown,
+): "unauthenticated" | "unavailable" {
+  if (
+    cause instanceof InvalidIdentityTokenError ||
+    cause instanceof errors.JOSEAlgNotAllowed ||
+    cause instanceof errors.JWSInvalid ||
+    cause instanceof errors.JWSSignatureVerificationFailed ||
+    cause instanceof errors.JWTClaimValidationFailed ||
+    cause instanceof errors.JWTExpired ||
+    cause instanceof errors.JWTInvalid ||
+    cause instanceof errors.JWKSNoMatchingKey ||
+    cause instanceof errors.JWKSMultipleMatchingKeys
+  ) {
+    return "unauthenticated";
+  }
+  return "unavailable";
+}
+
+class InvalidIdentityTokenError extends Error {}
 
 export function createProductionIdentityVerifier(options: {
   readonly issuer: string;
