@@ -86,9 +86,32 @@ test("key resolver failures stay distinct from invalid credentials", async () =>
   }
 });
 
+test("expired and incorrectly signed tokens stay unauthenticated", async () => {
+  const trusted = await createTokenFixture();
+  const expired = await createTokenFixture({expirationTime: 1});
+  const incorrectlySigned = await createTokenFixture();
+  for (const [accessToken, keyResolver] of [
+    [expired.accessToken, expired.keyResolver],
+    [incorrectlySigned.accessToken, trusted.keyResolver],
+  ] as const) {
+    const verifier = createSupabaseIdentityVerifier({
+      issuer,
+      audience: "authenticated",
+      keyResolver,
+    });
+    await assert.rejects(
+      verifier.verify(accessToken),
+      (error: unknown) =>
+        error instanceof IdentityVerificationError &&
+        error.category === "unauthenticated",
+    );
+  }
+});
+
 async function createTokenFixture(options?: {
   readonly tokenIssuer?: string;
   readonly role?: string;
+  readonly expirationTime?: string | number;
 }): Promise<{
   readonly accessToken: string;
   readonly keyResolver: ReturnType<typeof createLocalJWKSet>;
@@ -107,7 +130,7 @@ async function createTokenFixture(options?: {
     .setAudience("authenticated")
     .setSubject("synthetic-subject")
     .setIssuedAt()
-    .setExpirationTime("5m")
+    .setExpirationTime(options?.expirationTime ?? "5m")
     .sign(privateKey);
 
   return { accessToken, keyResolver };
