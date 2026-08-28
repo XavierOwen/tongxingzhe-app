@@ -1834,8 +1834,8 @@ release provenance。其他报告族、legacy、blocked、跨项目或漂移快�
 
 #### 第一次运行 Docker
 
-Docker 在这里是一台临时测试电脑。脚本会下载 PostgreSQL 16 镜像，启动隔离容器，从 `0001` 运行到 `0071`，执行 checks、fixtures、并发和 Backend
-integration，再导出并恢复数据库。脚本结束后会删除容器。它不连接 production，也不会修改 production 数据。
+Docker 在这里是一台临时测试电脑。脚本会下载 PostgreSQL 16 镜像，启动隔离容器，从 `0001` 运行到当前 migration 目录的最高版本，执行当前仓库的
+checks、fixtures、并发和 Backend integration，再导出并恢复数据库。脚本结束后会删除容器。它不连接 production，也不会修改 production 数据。
 
 1. 安装并打开 Docker Desktop。
 2. 等待 Docker Desktop 显示 Engine 正在运行。
@@ -1911,8 +1911,9 @@ flutter test --no-pub
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-Docker 在本切片中只重跑既有 0071 及以前的合同。它不会测试 6BL 的 Dart parser；focused Flutter 测试也不会证明数据库授权、provenance、audit 或 ACL。
-两组测试分别证明不同边界。任何通过结果都不证明 UI、离线、导出、production identity 或六平台真人运行时。
+Docker 在本切片中仅用于重跑当前仓库全部已提交的数据库与 Backend integration 合同；6BL 本身不新增数据库步骤。它不会测试 6BL 的 Dart parser；
+focused Flutter 测试也不会证明数据库授权、provenance、audit 或 ACL。两组测试分别证明不同边界。任何通过结果都不证明 UI、离线、导出、production
+identity 或六平台真人运行时。
 
 ### 5.5 验证同步提醒和逐设备通知开关
 
