@@ -65,8 +65,8 @@ HTTP wire mapping 不属于 6AY。bridge 或 adapter 不追加第二条 audit，
 授权语义。Backend runtime 可以得到已授权的受保护报告，但不能读取 private schema 或任意报告。
 
 这项决策增加一个 DB migration、结构与 ACL check、synthetic fixture、Backend adapter 和真实 PostgreSQL integration。Docker runner
-自动发现 migration、check 和 fixture，并显式运行第八条 Backend integration。恢复库重跑 migration、check 和 fixture，不重跑会提交
-synthetic 行的并发脚本。现有 0063 read/revoke 并发、checksum、dump/restore 和旧 report-family 回归继续有效。
+在源库自动发现 migration、check 和 fixture，显式运行第八条 Backend integration、既有 0063 read/revoke 并发，并验证 checksum。
+dump/restore 后，恢复库只重跑全部 check 和 numbered fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。
 
 这些测试只提供 DB-only synthetic 证据。它们不证明 HTTP、Flutter、目录、导出、生产 identity provider、真实账号或六平台运行时。
 
@@ -92,4 +92,5 @@ cd ../..
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-成功必须同时包含 0064 migration、check、fixture、interest runtime integration、0063 并发、checksum 和 dump/restore 证据。
+成功必须同时包含源库中的 0064 migration、check、fixture、interest runtime integration、0063 并发和 checksum，以及 dump/restore 后
+恢复库中的全部 check 和 numbered fixture 证据。

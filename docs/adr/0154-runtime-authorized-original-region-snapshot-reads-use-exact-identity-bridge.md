@@ -76,5 +76,5 @@ cd ../..
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-Docker runner 自动发现 0070 migration、check 和 fixture，并运行原始区域 runtime integration。它继续运行 0069 read／revoke 并发、checksum 和
-dump／restore。恢复库只重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。
+Docker runner 在源库自动发现 0070 migration、check 和 fixture，并运行原始区域 runtime integration、0069 read／revoke 并发和 checksum。
+dump／restore 后，恢复库只重跑全部 check 和 numbered fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。

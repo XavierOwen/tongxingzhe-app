@@ -37,7 +37,7 @@
 
 ## 验证
 
-完整 runner 自动发现 0080 migration、structural check、rollback fixture 和 replacement concurrency script，并在 checksum 与 dump／restore 后重跑 migration、check 和 fixture。恢复库不重跑会提交行的并发脚本。
+完整 runner 在源库自动发现 0080 migration、structural check、rollback fixture 和 replacement concurrency script，并验证 checksum。dump／restore 后，恢复库只重跑全部 check 和 numbered fixture，不重新执行 migration，也不重跑会提交行的并发脚本。
 
 从仓库根目录运行：
 
