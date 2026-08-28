@@ -50,6 +50,6 @@ family 角色都不能执行读取或直接访问审计。
 - unknown／cross-project `not_found`，foreign／legacy／blocked／missing／drift provenance `untrusted_provenance`；
 - active、撤权、过期、release-only、无成员、inactive project、value-free audit 和 UPDATE／DELETE 拒绝；
 - 固定 owner、`SECURITY DEFINER`、search path、最小 ACL，以及 read-first／revoke-first 线性化；
-- migration checksum、源库 dump／restore 和恢复库的 migration／check／fixture 重跑。
+- 源库的 migration、check、fixture、并发和 checksum，以及 dump／restore 后恢复库的全部 check／numbered fixture 重跑。
 
 这些 synthetic PostgreSQL 结果只能证明已执行的 DB-only 合同；不能证明 runtime、HTTP、Flutter、目录、导出、生产身份、删除或真人平台运行时。

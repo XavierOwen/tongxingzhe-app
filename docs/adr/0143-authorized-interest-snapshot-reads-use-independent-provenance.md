@@ -70,9 +70,9 @@ runtime bridge、HTTP、目录、Flutter、Drift、缓存、离线、同步、�
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-runner 按文件名自动发现 0063 migration、结构／权限 check、synthetic fixture 和 read/revoke 并发脚本。它还运行 checksum、
-dump／restore，并在没有源 cluster roles 的恢复库重跑 migration、check 和 fixture。恢复库不重跑会提交 synthetic 行的并发脚本，
-避免将相同并发写入重复导入恢复库。
+runner 在源库按文件名自动发现 0063 migration、结构／权限 check、synthetic fixture 和 read/revoke 并发脚本，并验证 checksum。
+dump／restore 后，没有源 cluster roles 的恢复库只重跑全部 check 和 numbered fixture，不重新执行 migration，也不重跑会提交
+synthetic 行的并发脚本，避免将相同并发写入重复导入恢复库。
 
 专用测试库的顺序是：
 

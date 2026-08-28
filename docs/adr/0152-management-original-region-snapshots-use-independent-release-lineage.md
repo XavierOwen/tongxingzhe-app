@@ -43,8 +43,8 @@ request claim 复用失败关闭。snapshot、attempt 和 request claim 追加�
 
 独立 lineage 使原始区域报告可以记录自身的 source tree 证据和发布顺序，同时保留 6BD 的历史来源边界。共享 snapshot storage
 避免重复实现不可变基础设施，但要求 shared snapshot validator、request-claim family 和 writer RLS 明确扩展到 original-region，
-并在恢复 cluster 中准备新的无登录 role。并发 fixture 的 committed namespace 必须与 rollback fixture 分离；restore 只重跑 migration、
-structural check 和 fixture，不重跑会提交 synthetic 行的并发脚本。
+并在恢复 cluster 中准备新的无登录 role。并发 fixture 的 committed namespace 必须与 rollback fixture 分离；restore 只重跑全部
+check 和 numbered fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。
 
 本决定只交付 DB-only 的 snapshot、release、授权、lineage、幂等、并发和失败关闭合同。它不交付 authorized read、runtime bridge、
 HTTP、Flutter、目录／latest、导出、缓存、离线、同步、parent／overlap 下钻、任意历史 `as-of`、replacement、删除、tombstone、
@@ -60,7 +60,7 @@ retention、warehouse、调度、生产身份或六平台真人运行时证据�
 - 授权有效时的同 request 精确幂等、身份漂移、跨项目／跨 report family claim、source unavailable 和 direct mutation；
 - blocked result 不含 protected report、cells、隐藏前值、来源、contact、contributor、区域名称、坐标或 PII；
 - 相同 request、竞争 successor 以及 revoke-first／release-first 的锁线性化；
-- migration checksum、源库 dump／restore、restore role 准备和恢复库的 migration／check／fixture 重跑。
+- 源库的 migration、check、fixture、并发和 checksum，以及 dump／restore、restore role 准备和恢复库的全部 check／numbered fixture 重跑。
 
 这些 synthetic PostgreSQL 结果只能证明已执行的数据库合同和 ACL；不能证明授权读取、runtime、HTTP、Flutter、导出、组织删除、
 物理清除、生产备份或真实平台运行时已经完成。

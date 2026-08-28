@@ -81,8 +81,8 @@ HTTP 错误只使用稳定的 `400`、`403` 和 `503` code。被过滤的单个 
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-套件必须包含 6BA migration、结构与 ACL check、synthetic fixture、独立并发脚本、Backend directory integration、checksum 和 dump／restore。
-恢复库重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。
+套件必须在源库包含 6BA migration、结构与 ACL check、synthetic fixture、独立并发脚本、Backend directory integration 和 checksum。
+dump／restore 后，恢复库只重跑全部 check 和 numbered fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。
 
 fixture 必须覆盖 approved／approved_baseline、空目录、20 项上限、固定排序、exact／unknown／inactive identity、撤权、跨项目、channel/current-city/
 legacy、blocked、claim 或 metadata drift、value-free audit、审计不可变和直接 private access 拒绝。并发测试覆盖 directory-first 和

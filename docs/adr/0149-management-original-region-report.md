@@ -53,8 +53,9 @@ private function；授权读取、审计、快照或发布能力由后续 Slice 
 
 实现应新增 0066 migration、结构／权限 check、synthetic fixture 和独立并发脚本。fixture 至少覆盖：原始来源 release／指纹／节点／唯一城市父链、
 缺失或漂移证据、`not_reportable`、current／mapping／名称猜测被拒绝、单一来源树、混合来源树失败关闭、两完整期间、全部城市网格、
-`k=10`／三位／半数边界、期间独立判断、互补隐藏、无敏感字段、最小 ACL、旧 6AN 回归和不可改删约束。完整 Docker runner 应在 checksum 和
-dump／restore 后重跑 migration、check 和 fixture；restore 不重跑会提交 synthetic 行的并发脚本。
+`k=10`／三位／半数边界、期间独立判断、互补隐藏、无敏感字段、最小 ACL、旧 6AN 回归和不可改删约束。完整 Docker runner 应在源库
+验证 migration、check、fixture、并发脚本和 checksum；dump／restore 后，恢复库只重跑全部 check 和 numbered fixture，不重新执行
+migration，也不重跑会提交 synthetic 行的并发脚本。
 
 第一次使用 Docker 时，从仓库根目录运行：
 

@@ -69,5 +69,6 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 ./tool/verify_management_report_snapshot_replacements_concurrency.sh
 ```
 
-Docker runner 应在 migration checksum 和独立 dump／restore 后重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。
+Docker runner 应在源库运行 migration、check、fixture、并发脚本并验证 checksum。独立 dump／restore 后，恢复库只重跑全部 check 和
+numbered fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。
 通过只证明 DB-only synthetic replacement ledger、锁线性化、授权、不可变约束和 ACL；它不证明报告生成、HTTP、Flutter、导出、retention、删除规则、生产身份或六平台真人运行时。
