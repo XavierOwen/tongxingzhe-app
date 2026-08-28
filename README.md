@@ -33,8 +33,6 @@ Supabase 仍是有条件首选。SDK 接线完成不等于六平台认证通过�
 - [PostgreSQL migration 说明](backend/database/README.md)：空库重建、权限与 fixture。
 - [Backend 运行说明](backend/server/README.md)：身份验证、配置、测试和上下文端点。
 
-`docs/PROJECT_DESIGN.md` 和 `docs/BEGINNER_LEARNING_GUIDE.md` 是 legacy Demo 历史资料，不作为现代功能实现依据。
-
 ## 安全运行
 
 安装依赖并启动正式入口：

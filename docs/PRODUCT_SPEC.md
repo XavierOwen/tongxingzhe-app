@@ -18,7 +18,7 @@
 4. [`docs/research/`](./research/) 提供技术证据与备选比较；
 5. 当前代码只代表 legacy demo 现状，冲突时不得覆盖已确认需求。
 
-如本 Spec 与已接受 ADR 冲突，以最新 ADR 为准并同步修正 Spec。原 [项目设计文档](./PROJECT_DESIGN.md) 保留为 legacy demo 的历史资料，不再是现代化产品的规范来源。
+如本 Spec 与已接受 ADR 冲突，以最新 ADR 为准并同步修正 Spec。早期 legacy Demo 的项目设计只保留在 Git 历史中，不再属于现行规范。
 
 ## 1. 一句话产品定义
 
