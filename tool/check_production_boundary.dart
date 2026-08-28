@@ -2,9 +2,8 @@ import 'dart:io';
 
 /// 从正式入口沿本项目 import 图检查，证明 legacy Demo 实现不可达。
 ///
-/// 这不是通用 Dart parser；它只处理本仓库使用的 relative import 和
-/// `package:tongxingzhe_app/` import。若以后引入 code generation／conditional
-/// local import，应先扩展本检查再改生产入口。
+/// 这不是通用 Dart parser；它只处理本仓库使用的 import、export 和 part
+/// directive，以及其中的 relative URI 和 `package:tongxingzhe_app/` URI。
 void main() {
   final repositoryRoot = Directory.current.absolute;
   final report = inspectProductionBoundary(repositoryRoot);
@@ -85,14 +84,17 @@ ProductionBoundaryReport inspectProductionBoundary(Directory repositoryRoot) {
 
 Iterable<String> _localImports(String source) sync* {
   final directive = RegExp(
-    r'''^\s*(?:import|export)\s+['"]([^'"]+)['"]''',
+    r'''^[ \t]*(?:import|export|part(?!\s+of\b))\s+([^;]+);''',
     multiLine: true,
   );
+  final uriLiteral = RegExp(r'''['"]([^'"]+)['"]''');
   for (final match in directive.allMatches(source)) {
-    final uri = match.group(1)!;
-    if (uri.startsWith('package:tongxingzhe_app/') ||
-        (!uri.startsWith('dart:') && !uri.startsWith('package:'))) {
-      yield uri;
+    for (final uriMatch in uriLiteral.allMatches(match.group(1)!)) {
+      final uri = uriMatch.group(1)!;
+      if (uri.startsWith('package:tongxingzhe_app/') ||
+          (!uri.startsWith('dart:') && !uri.startsWith('package:'))) {
+        yield uri;
+      }
     }
   }
 }
