@@ -646,17 +646,7 @@ export function createBackendServer(
         response.statusCode = result.status;
         response.end(JSON.stringify(result.body));
       } catch (error) {
-        response.statusCode = error instanceof PayloadTooLargeError ? 413 : 400;
-        response.end(
-          JSON.stringify({
-            error: {
-              code:
-                error instanceof PayloadTooLargeError
-                  ? "payload_too_large"
-                  : "invalid_json",
-            },
-          }),
-        );
+        writeBodyError(response, error);
       }
       return;
     }
@@ -684,17 +674,7 @@ export function createBackendServer(
         response.statusCode = result.status;
         response.end(JSON.stringify(result.body));
       } catch (error) {
-        response.statusCode = error instanceof PayloadTooLargeError ? 413 : 400;
-        response.end(
-          JSON.stringify({
-            error: {
-              code:
-                error instanceof PayloadTooLargeError
-                  ? "payload_too_large"
-                  : "invalid_json",
-            },
-          }),
-        );
+        writeBodyError(response, error);
       }
       return;
     }
@@ -713,17 +693,7 @@ export function createBackendServer(
         response.statusCode = result.status;
         response.end(JSON.stringify(result.body));
       } catch (error) {
-        response.statusCode = error instanceof PayloadTooLargeError ? 413 : 400;
-        response.end(
-          JSON.stringify({
-            error: {
-              code:
-                error instanceof PayloadTooLargeError
-                  ? "payload_too_large"
-                  : "invalid_json",
-            },
-          }),
-        );
+        writeBodyError(response, error);
       }
       return;
     }
@@ -742,17 +712,7 @@ export function createBackendServer(
         response.statusCode = result.status;
         response.end(JSON.stringify(result.body));
       } catch (error) {
-        response.statusCode = error instanceof PayloadTooLargeError ? 413 : 400;
-        response.end(
-          JSON.stringify({
-            error: {
-              code:
-                error instanceof PayloadTooLargeError
-                  ? "payload_too_large"
-                  : "invalid_json",
-            },
-          }),
-        );
+        writeBodyError(response, error);
       }
       return;
     }
