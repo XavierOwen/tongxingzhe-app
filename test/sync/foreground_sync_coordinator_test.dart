@@ -14,16 +14,12 @@ void main() {
       ],
       pulls: [SyncPullApplyResult.applied, SyncPullApplyResult.idle],
     );
-    final coordinator = ForegroundSyncCoordinator(worker: worker);
-    var notifications = 0;
-    coordinator.addListener(() => notifications++);
+    final coordinator = ForegroundSyncCoordinator(worker);
 
     await coordinator.synchronize();
 
     expect(worker.drainCalls, 3);
     expect(worker.pullCalls, 2);
-    expect(notifications, greaterThanOrEqualTo(4));
-    expect(coordinator.isRunning, isFalse);
   });
 
   test('已有同步运行时把重复唤醒合并为一次串行补跑', () async {
@@ -33,7 +29,7 @@ void main() {
       pulls: [SyncPullApplyResult.idle, SyncPullApplyResult.idle],
       gate: gate,
     );
-    final coordinator = ForegroundSyncCoordinator(worker: worker);
+    final coordinator = ForegroundSyncCoordinator(worker);
 
     final first = coordinator.synchronize();
     final second = coordinator.synchronize();
@@ -45,20 +41,28 @@ void main() {
     expect(worker.maximumConcurrentDrains, 1);
   });
 
-  test('项目切换发生在同步中时补跑使用最新 worker', () async {
-    final gate = Completer<void>();
-    final firstWorker = _FakeSyncWorker(gate: gate);
-    final nextWorker = _FakeSyncWorker();
-    final coordinator = ForegroundSyncCoordinator(worker: firstWorker);
+  test('每轮发送与拉取分别限制为二十批', () async {
+    final worker = _FakeSyncWorker(
+      drains: List.filled(21, SyncBatchDrainResult.processed),
+      pulls: List.filled(21, SyncPullApplyResult.applied),
+    );
+    final coordinator = ForegroundSyncCoordinator(worker);
 
-    final synchronization = coordinator.synchronize();
-    coordinator.replaceWorker(nextWorker);
-    final repeated = coordinator.synchronize();
-    gate.complete();
-    await Future.wait([synchronization, repeated]);
+    await coordinator.synchronize();
 
-    expect(firstWorker.drainCalls, 1);
-    expect(nextWorker.drainCalls, 1);
+    expect(worker.drainCalls, 20);
+    expect(worker.pullCalls, 20);
+  });
+
+  test('同步失败后清除运行状态并允许重试', () async {
+    final worker = _FakeSyncWorker(failNextDrain: true);
+    final coordinator = ForegroundSyncCoordinator(worker);
+
+    await expectLater(coordinator.synchronize(), throwsStateError);
+    await coordinator.synchronize();
+
+    expect(worker.drainCalls, 2);
+    expect(worker.pullCalls, 1);
   });
 }
 
@@ -67,12 +71,14 @@ final class _FakeSyncWorker implements ForegroundSyncWorker {
     List<SyncBatchDrainResult> drains = const [SyncBatchDrainResult.idle],
     List<SyncPullApplyResult> pulls = const [SyncPullApplyResult.idle],
     this.gate,
+    this.failNextDrain = false,
   }) : _drains = [...drains],
        _pulls = [...pulls];
 
   final List<SyncBatchDrainResult> _drains;
   final List<SyncPullApplyResult> _pulls;
   final Completer<void>? gate;
+  bool failNextDrain;
   int drainCalls = 0;
   int pullCalls = 0;
   int concurrentDrains = 0;
@@ -87,6 +93,10 @@ final class _FakeSyncWorker implements ForegroundSyncWorker {
         : maximumConcurrentDrains;
     try {
       await gate?.future;
+      if (failNextDrain) {
+        failNextDrain = false;
+        throw StateError('synthetic_sync_failure');
+      }
       return _drains.removeAt(0);
     } finally {
       concurrentDrains--;

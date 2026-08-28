@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 import 'sync_engine.dart';
 import 'sync_models.dart';
 
@@ -32,33 +30,15 @@ final class SyncEngineForegroundWorker implements ForegroundSyncWorker {
 ///
 /// Widget 只在启动、恢复或提交后调用 [synchronize]。排空顺序、批次数上限和
 /// 重复唤醒合并都属于这里，避免页面直接编排 SyncEngine。
-final class ForegroundSyncCoordinator extends ChangeNotifier {
-  factory ForegroundSyncCoordinator({
-    required ForegroundSyncWorker? worker,
-    int maximumBatches = 20,
-  }) {
-    if (maximumBatches < 1) {
-      throw ArgumentError.value(maximumBatches, 'maximumBatches');
-    }
-    return ForegroundSyncCoordinator._(worker, maximumBatches);
-  }
+final class ForegroundSyncCoordinator {
+  ForegroundSyncCoordinator(this._worker);
 
-  ForegroundSyncCoordinator._(this._worker, this._maximumBatches);
+  static const _maximumBatches = 20;
 
-  ForegroundSyncWorker? _worker;
-  final int _maximumBatches;
+  final ForegroundSyncWorker? _worker;
   Future<void>? _activeSynchronization;
   bool _rerunRequested = false;
   bool _disposed = false;
-
-  bool get isRunning => _activeSynchronization != null;
-
-  void replaceWorker(ForegroundSyncWorker? worker) {
-    _worker = worker;
-    if (_activeSynchronization != null) {
-      _rerunRequested = true;
-    }
-  }
 
   Future<SyncHealth?> health() async => _worker?.health();
 
@@ -76,53 +56,38 @@ final class ForegroundSyncCoordinator extends ChangeNotifier {
     operation = _runUntilSettled(worker).whenComplete(() {
       if (identical(_activeSynchronization, operation)) {
         _activeSynchronization = null;
-        _notify();
       }
     });
     _activeSynchronization = operation;
-    _notify();
     return operation;
   }
 
-  Future<void> _runUntilSettled(ForegroundSyncWorker initialWorker) async {
-    var worker = initialWorker;
+  Future<void> _runUntilSettled(ForegroundSyncWorker worker) async {
     do {
       _rerunRequested = false;
       await _run(worker);
-      final replacement = _worker;
-      if (!_rerunRequested || replacement == null || _disposed) {
+      if (!_rerunRequested || _disposed) {
         return;
       }
-      worker = replacement;
     } while (true);
   }
 
   Future<void> _run(ForegroundSyncWorker worker) async {
     for (var sent = 0; sent < _maximumBatches; sent++) {
       final result = await worker.drainBatch();
-      _notify();
       if (result != SyncBatchDrainResult.processed) {
         break;
       }
     }
     for (var received = 0; received < _maximumBatches; received++) {
       final result = await worker.pullOnce();
-      _notify();
       if (result != SyncPullApplyResult.applied) {
         break;
       }
     }
   }
 
-  void _notify() {
-    if (!_disposed) {
-      notifyListeners();
-    }
-  }
-
-  @override
   void dispose() {
     _disposed = true;
-    super.dispose();
   }
 }

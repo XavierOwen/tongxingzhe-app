@@ -62,6 +62,8 @@ const authAudience = process.env.AUTH_AUDIENCE?.trim() || "authenticated";
 const port = parsePort(process.env.PORT);
 
 const pool = new Pool({ connectionString: databaseUrl });
+const query = (text: string, values: readonly unknown[]) =>
+  pool.query(text, [...values]);
 const identityVerifier = createProductionIdentityVerifier({
   issuer: authIssuer,
   audience: authAudience,
@@ -69,112 +71,60 @@ const identityVerifier = createProductionIdentityVerifier({
     ? {}
     : { jwksUrl: process.env.AUTH_JWKS_URL }),
 });
-const contextStore = new PostgresSessionContextStore(async (text, values) => {
-  return pool.query(text, [...values]);
-});
-const commandStore = new PostgresSyncCommandStore(async (text, values) => {
-  return pool.query(text, [...values]);
-});
-const regionResolutionStore = new PostgresRegionResolutionStore(
-  async (text, values) => pool.query(text, [...values]),
-);
-const questionnaireStore = new PostgresQuestionnaireStore(
-  async (text, values) => pool.query(text, [...values]),
-);
+const contextStore = new PostgresSessionContextStore(query);
+const commandStore = new PostgresSyncCommandStore(query);
+const regionResolutionStore = new PostgresRegionResolutionStore(query);
+const questionnaireStore = new PostgresQuestionnaireStore(query);
 const questionnaireAdministrationStore =
-  new PostgresQuestionnaireAdministrationStore(
-    async (text, values) => pool.query(text, [...values]),
-  );
+  new PostgresQuestionnaireAdministrationStore(query);
 const questionnaireMetricCompatibilityStore =
-  new PostgresQuestionnaireMetricCompatibilityStore(
-    async (text, values) => pool.query(text, [...values]),
-  );
-const promotionTargetStore = new PostgresPromotionTargetStore(
-  async (text, values) => pool.query(text, [...values]),
-);
+  new PostgresQuestionnaireMetricCompatibilityStore(query);
+const promotionTargetStore = new PostgresPromotionTargetStore(query);
 const targetInstitutionRelationshipStore =
-  new PostgresTargetInstitutionRelationshipStore(
-    async (text, values) => pool.query(text, [...values]),
-  );
-const personalActionPlanStore = new PostgresPersonalActionPlanStore(
-  async (text, values) => pool.query(text, [...values]),
-);
-const personalActionReminderStore = new PostgresPersonalActionReminderStore(
-  async (text, values) => pool.query(text, [...values]),
-);
+  new PostgresTargetInstitutionRelationshipStore(query);
+const personalActionPlanStore = new PostgresPersonalActionPlanStore(query);
+const personalActionReminderStore = new PostgresPersonalActionReminderStore(query);
 const personalCurrentRelationshipStageStore =
-  new PostgresPersonalCurrentRelationshipStageStore(
-    async (text, values) => pool.query(text, [...values]),
-  );
+  new PostgresPersonalCurrentRelationshipStageStore(query);
 const personalFollowUpConsentRatioStore =
-  new PostgresPersonalFollowUpConsentRatioStore(
-    async (text, values) => pool.query(text, [...values]),
-  );
+  new PostgresPersonalFollowUpConsentRatioStore(query);
 const personalRelationshipStageChangeSummaryStore =
-  new PostgresPersonalRelationshipStageChangeSummaryStore(
-    async (text, values) => pool.query(text, [...values]),
-  );
+  new PostgresPersonalRelationshipStageChangeSummaryStore(query);
 const personalFollowUpConsentOptInStore =
-  new PostgresPersonalFollowUpConsentOptInStore(
-    async (text, values) => pool.query(text, [...values]),
-  );
+  new PostgresPersonalFollowUpConsentOptInStore(query);
 // A direct pool query is intentional: PostgreSQL commits its implicit
 // transaction before this promise resolves and before the HTTP response starts.
 const managementReportSnapshotStore =
-  new PostgresManagementReportSnapshotStore(
-    async (text, values) => pool.query(text, [...values]),
-  );
+  new PostgresManagementReportSnapshotStore(query);
 const managementCurrentCityReportSnapshotStore =
-  new PostgresManagementCurrentCityReportSnapshotStore(
-    async (text, values) => pool.query(text, [...values]),
-  );
+  new PostgresManagementCurrentCityReportSnapshotStore(query);
 const managementInterestReportSnapshotStore =
-  new PostgresManagementInterestReportSnapshotStore(
-    async (text, values) => pool.query(text, [...values]),
-  );
+  new PostgresManagementInterestReportSnapshotStore(query);
 const managementOriginalRegionReportSnapshotStore =
-  new PostgresManagementOriginalRegionReportSnapshotStore(
-    async (text, values) => pool.query(text, [...values]),
-  );
+  new PostgresManagementOriginalRegionReportSnapshotStore(query);
 const managementFollowUpConsentRatioReportSnapshotStore =
-  new PostgresManagementFollowUpConsentRatioReportSnapshotStore(
-    async (text, values) => pool.query(text, [...values]),
-  );
+  new PostgresManagementFollowUpConsentRatioReportSnapshotStore(query);
 const managementFollowUpConsentRatioSnapshotDirectoryStore =
-  new PostgresManagementFollowUpConsentRatioSnapshotDirectoryStore(
-    async (text, values) => pool.query(text, [...values]),
-  );
+  new PostgresManagementFollowUpConsentRatioSnapshotDirectoryStore(query);
 const managementOriginalRegionReportSnapshotDirectoryStore =
-  new PostgresManagementOriginalRegionReportSnapshotDirectoryStore(
-    async (text, values) => pool.query(text, [...values]),
-  );
+  new PostgresManagementOriginalRegionReportSnapshotDirectoryStore(query);
 // The export bridge records its immutable audit in the same statement. The
 // response file is serialized only after PostgreSQL confirms that commit.
 const managementReportSnapshotExportStore =
-  new PostgresManagementReportSnapshotExportStore(
-    async (text, values) => pool.query(text, [...values]),
-  );
+  new PostgresManagementReportSnapshotExportStore(query);
 const managementReportSnapshotDirectoryStore =
-  new PostgresManagementReportSnapshotDirectoryStore(
-    async (text, values) => pool.query(text, [...values]),
-  );
+  new PostgresManagementReportSnapshotDirectoryStore(query);
 const managementCurrentCityReportSnapshotDirectoryStore =
-  new PostgresManagementCurrentCityReportSnapshotDirectoryStore(
-    async (text, values) => pool.query(text, [...values]),
-  );
+  new PostgresManagementCurrentCityReportSnapshotDirectoryStore(query);
 const managementInterestReportSnapshotDirectoryStore =
-  new PostgresManagementInterestReportSnapshotDirectoryStore(
-    async (text, values) => pool.query(text, [...values]),
-  );
+  new PostgresManagementInterestReportSnapshotDirectoryStore(query);
 // One pool query is also the transaction boundary for the trusted release.
 // Awaiting it keeps the HTTP response behind PostgreSQL commit acknowledgement.
 const managementReportReleaseStore = new PostgresManagementReportReleaseStore(
-  async (text, values) => pool.query(text, [...values]),
+  query,
 );
 const managementAnalysisContextStore =
-  new PostgresManagementAnalysisContextStore(
-    async (text, values) => pool.query(text, [...values]),
-  );
+  new PostgresManagementAnalysisContextStore(query);
 const server = createBackendServer({
   identityVerifier,
   contextStore,

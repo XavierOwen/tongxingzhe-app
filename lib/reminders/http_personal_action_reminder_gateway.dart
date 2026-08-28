@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../foundation/backend_base_uri.dart';
 import '../identity/identity_session.dart';
 import 'personal_action_reminder.dart';
 
@@ -52,7 +53,7 @@ final class HttpPersonalActionReminderGateway
     required http.Client client,
     Duration timeout = const Duration(seconds: 15),
   }) => HttpPersonalActionReminderGateway._(
-    baseUri: _validatedBaseUri(baseUri),
+    baseUri: validateAbsoluteBaseUri(baseUri),
     identitySession: identitySession,
     client: client,
     timeout: timeout,
@@ -239,11 +240,4 @@ DateTime _timestamp(Object? value) {
     );
   }
   return parsed;
-}
-
-Uri _validatedBaseUri(Uri value) {
-  if (!value.hasScheme || !value.hasAuthority) {
-    throw ArgumentError.value(value, 'baseUri', 'must be an absolute URI');
-  }
-  return value;
 }

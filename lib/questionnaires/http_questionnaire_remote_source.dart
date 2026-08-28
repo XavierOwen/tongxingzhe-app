@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../foundation/backend_base_uri.dart';
 import '../identity/identity_session.dart';
 import 'questionnaire_contract.dart';
 
@@ -29,7 +30,7 @@ final class HttpQuestionnaireRemoteSource implements QuestionnaireRemoteSource {
     required http.Client client,
     Duration timeout = const Duration(seconds: 10),
   }) => HttpQuestionnaireRemoteSource._(
-    _validatedBaseUri(baseUri),
+    validateBackendBaseUri(baseUri),
     identitySession,
     client,
     timeout,
@@ -101,19 +102,4 @@ final class HttpQuestionnaireRemoteSource implements QuestionnaireRemoteSource {
 
   @override
   Future<void> close() async => _client.close();
-}
-
-Uri _validatedBaseUri(Uri value) {
-  if (!value.hasScheme || value.host.isEmpty) {
-    throw const FormatException('BACKEND_BASE_URL must be an absolute URL');
-  }
-  final localHttp =
-      value.scheme == 'http' &&
-      const {'localhost', '127.0.0.1', '::1'}.contains(value.host);
-  if (value.scheme != 'https' && !localHttp) {
-    throw const FormatException(
-      'BACKEND_BASE_URL must use HTTPS except on localhost',
-    );
-  }
-  return value;
 }

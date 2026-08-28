@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:timezone/data/latest_all.dart' as time_zone_data;
 import 'package:timezone/timezone.dart' as time_zone;
 
+import '../foundation/backend_base_uri.dart';
 import '../identity/identity_session.dart';
 import 'management_report_gateway.dart';
 
@@ -36,7 +37,7 @@ final class HttpManagementReportGateway implements ManagementReportGateway {
     required http.Client client,
     Duration timeout = const Duration(seconds: 15),
   }) => HttpManagementReportGateway._(
-    baseUri: _validatedBaseUri(baseUri),
+    baseUri: validateBackendBaseUri(baseUri),
     identitySession: identitySession,
     client: client,
     timeout: timeout,
@@ -774,21 +775,6 @@ DateTime _canonicalUtcTimestamp(Object? value) {
     throw const FormatException('canonical UTC timestamp is invalid');
   }
   return parsed.toUtc();
-}
-
-Uri _validatedBaseUri(Uri value) {
-  if (!value.hasScheme || value.host.isEmpty) {
-    throw const FormatException('BACKEND_BASE_URL must be an absolute URL');
-  }
-  final localHttp =
-      value.scheme == 'http' &&
-      const {'localhost', '127.0.0.1', '::1'}.contains(value.host);
-  if (value.scheme != 'https' && !localHttp) {
-    throw const FormatException(
-      'BACKEND_BASE_URL must use HTTPS except on localhost',
-    );
-  }
-  return value;
 }
 
 final _uuidPattern = RegExp(

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../foundation/backend_base_uri.dart';
 import '../identity/identity_session.dart';
 import 'session_context_gateway.dart';
 
@@ -23,8 +24,11 @@ final class HttpSessionContextGateway implements SessionContextGateway {
     required Uri baseUri,
     required http.Client client,
     Duration timeout = const Duration(seconds: 15),
-  }) =>
-      HttpSessionContextGateway._(_validatedBaseUri(baseUri), client, timeout);
+  }) => HttpSessionContextGateway._(
+    validateBackendBaseUri(baseUri),
+    client,
+    timeout,
+  );
 
   HttpSessionContextGateway._(this._baseUri, this._client, this._timeout);
 
@@ -222,19 +226,4 @@ WorkspaceKind _workspaceKind(Object? value) {
     'organization' => WorkspaceKind.organization,
     _ => throw const FormatException('workspace kind is invalid'),
   };
-}
-
-Uri _validatedBaseUri(Uri value) {
-  if (!value.hasScheme || value.host.isEmpty) {
-    throw const FormatException('BACKEND_BASE_URL must be an absolute URL');
-  }
-  final localHttp =
-      value.scheme == 'http' &&
-      const {'localhost', '127.0.0.1', '::1'}.contains(value.host);
-  if (value.scheme != 'https' && !localHttp) {
-    throw const FormatException(
-      'BACKEND_BASE_URL must use HTTPS except on localhost',
-    );
-  }
-  return value;
 }
