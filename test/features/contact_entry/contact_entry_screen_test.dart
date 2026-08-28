@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tongxingzhe_app/app/app_controller.dart';
 import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
 import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/device/device_time_zone.dart';
@@ -377,11 +376,6 @@ Future<void> _pumpEntry(
   addTearDown(tester.view.resetDevicePixelRatio);
   final database = LocalDatabase(NativeDatabase.memory());
   addTearDown(database.close);
-  final controller = AppController(
-    database: database,
-    clock: const _FixedClock(),
-    idGenerator: _SequenceIdGenerator(),
-  );
   final journal = ContactJournal(
     database: database,
     clock: const _FixedClock(),
@@ -390,7 +384,7 @@ Future<void> _pumpEntry(
   await tester.pumpWidget(
     MaterialApp(
       home: ContactEntryScreen(
-        controller: controller,
+        localeCode: 'zh',
         clock: const _FixedClock(),
         context: context,
         contactJournal: journal,

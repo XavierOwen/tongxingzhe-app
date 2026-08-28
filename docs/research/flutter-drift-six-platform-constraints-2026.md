@@ -67,7 +67,7 @@ Flutter 的[应用架构指南](https://docs.flutter.dev/app-architecture/guide)
 
 ### 2.2 对本项目的推论
 
-当前 [`AppController`](../../lib/app/app_controller.dart) 与 [`HomeShell`](../../lib/screens/home_shell.dart) 分别承担了过多全局数据/业务职责和页面职责。官方指南并不要求机械地为每个方法新增一层，而是要求边界清楚、接口可测。因此适合本项目的目标不是“类越多越现代”，而是：
+研究时的 `lib/app/app_controller.dart` 与 `lib/screens/home_shell.dart` 分别承担了过多全局数据/业务职责和页面职责；这些 legacy 文件后来已删除，原始内容由 Git 历史保留。官方指南并不要求机械地为每个方法新增一层，而是要求边界清楚、接口可测。因此适合本项目的目标不是“类越多越现代”，而是：
 
 - 每个用户功能有自己的 View + ViewModel；
 - Drift、HTTP、位置、认证等外部能力进入 Service/adapter；
@@ -111,7 +111,7 @@ Flutter 的[自适应与响应式指南](https://docs.flutter.dev/ui/adaptive-re
 
 ### 3.2 对本项目的推论
 
-- 已确认的四个主入口“今日 / 接触 / 对象 / 分析”适合放在一个持久 shell 中；宽屏显示 NavigationRail、窄屏显示 NavigationBar。当前 [`HomeShell`](../../lib/screens/home_shell.dart)已经按宽度切换 rail/bar，这一原则应保留。
+- 已确认的四个主入口“今日 / 接触 / 对象 / 分析”适合放在一个持久 shell 中；宽屏显示 NavigationRail、窄屏显示 NavigationBar。研究时的 `lib/screens/home_shell.dart` 已按宽度切换 rail/bar；该原则已进入正式 shell，旧文件由 Git 历史保留。
 - 选择哪个页面不应继续只存一个内存 index。Web 刷新、分享说明书章节、打开某条接触记录、浏览器前进/后退都需要稳定 URL。
 - 认证、当前 workspace/project 和权限变化可通过 router redirect 控制；但授权判断仍应来自应用 SQL/后端，不把 Firebase 登录状态误当成业务权限。
 - `supportsReliableLocalPersistence`、`supportsProductionAuth`、`shouldUseNavigationRail`、`shouldWarnAboutMultipleTabs` 比 `isWeb`、`isWindows` 更能表达真实原因，也更容易测试。

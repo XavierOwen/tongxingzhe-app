@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../app_session/app_session.dart';
 import '../app_session/session_context_gateway.dart';
+import '../data/local_database.dart';
 import '../device/device_time_zone.dart';
 import '../features/contact_journal/contact_journal.dart';
 import '../features/contact_journal/contact_models.dart';
@@ -34,30 +35,21 @@ import '../regions/contact_region_resolver.dart';
 import '../routing/app_route.dart';
 import '../routing/app_router.dart';
 import '../screens/auth_screen.dart';
-import '../screens/home_shell.dart';
 import '../screens/production_home_shell.dart';
 import '../services/location_service.dart';
 import '../sync/sync_engine_factory.dart';
 import '../targets/promotion_target.dart';
-import 'app_controller.dart';
 import 'app_dependencies.dart';
 import 'private_session_data_guard.dart';
-
-typedef SignedOutScreenBuilder =
-    Widget Function(BuildContext context, AppController controller);
 
 class TongxingzheApp extends StatefulWidget {
   const TongxingzheApp({
     super.key,
     required this.dependencies,
-    this.signedOutScreenBuilder,
     this.routeInformationProvider,
   });
 
   final AppDependencies dependencies;
-
-  /// 只有 `main_demo.dart` 会注入 legacy 登录页；正式入口保持为 `null`。
-  final SignedOutScreenBuilder? signedOutScreenBuilder;
 
   /// 正式运行时由 Flutter 连接系统 URL。测试可注入可控 provider
   /// 验证 deep link 和地址更新，不伪造业务上下文。
@@ -69,7 +61,7 @@ class TongxingzheApp extends StatefulWidget {
 
 class _TongxingzheAppState extends State<TongxingzheApp> {
   late final Future<AppStartupResult> _startup;
-  AppController? _controller;
+  LocalDatabase? _database;
   IdentitySession? _identitySession;
   AppSession? _appSession;
   SyncEngineFactory? _syncEngineFactory;
@@ -107,7 +99,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       return result;
     }
     if (result case AppStartupReady(
-      :final controller,
+      :final database,
       :final identitySession,
       :final appSession,
       :final syncEngineFactory,
@@ -129,7 +121,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       :final reminderNotificationScheduler,
       :final privateSessionDataGuard,
     )) {
-      _controller = controller;
+      _database = database;
       _identitySession = identitySession;
       _appSession = appSession;
       _syncEngineFactory = syncEngineFactory;
@@ -179,8 +171,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       startup.currentRelationshipStageGateway.close(),
       startup.privateSessionDataGuard.close(),
       startup.reminderNotificationScheduler.close(),
+      startup.database.close(),
     ]);
-    startup.controller.dispose();
   }
 
   @override
@@ -205,7 +197,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
     unawaited(_currentRelationshipStageGateway?.close());
     unawaited(_privateSessionDataGuard?.close());
     unawaited(_reminderNotificationScheduler?.close());
-    _controller?.dispose();
+    unawaited(_database?.close());
     super.dispose();
   }
 
@@ -223,7 +215,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
 
         return switch (snapshot.requireData) {
           AppStartupReady(
-            :final controller,
+            :final localeCode,
+            :final themeMode,
             :final clock,
             :final contactJournal,
             :final deviceId,
@@ -253,7 +246,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
             :final idGenerator,
           ) =>
             _ReadyApp(
-              controller: controller,
+              localeCode: localeCode,
+              themeMode: themeMode,
               clock: clock,
               contactJournal: contactJournal,
               deviceId: deviceId,
@@ -286,7 +280,6 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
               deviceReminderPreferenceStore: deviceReminderPreferenceStore,
               reminderNotificationScheduler: reminderNotificationScheduler,
               idGenerator: idGenerator,
-              signedOutScreenBuilder: widget.signedOutScreenBuilder,
               routeInformationProvider: widget.routeInformationProvider,
             ),
           AppStartupFailed(:final failure) => _StartupFailureApp(
@@ -300,7 +293,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
 
 class _ReadyApp extends StatefulWidget {
   const _ReadyApp({
-    required this.controller,
+    required this.localeCode,
+    required this.themeMode,
     required this.clock,
     required this.contactJournal,
     required this.deviceId,
@@ -328,11 +322,11 @@ class _ReadyApp extends StatefulWidget {
     required this.deviceReminderPreferenceStore,
     required this.reminderNotificationScheduler,
     required this.idGenerator,
-    required this.signedOutScreenBuilder,
     required this.routeInformationProvider,
   });
 
-  final AppController controller;
+  final String localeCode;
+  final ThemeMode themeMode;
   final AppClock clock;
   final ContactJournal contactJournal;
   final String deviceId;
@@ -361,7 +355,6 @@ class _ReadyApp extends StatefulWidget {
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
   final ReminderNotificationScheduler reminderNotificationScheduler;
   final IdGenerator idGenerator;
-  final SignedOutScreenBuilder? signedOutScreenBuilder;
   final RouteInformationProvider? routeInformationProvider;
 
   @override
@@ -389,30 +382,24 @@ final class _ReadyAppState extends State<_ReadyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: widget.controller,
-      builder: (context, _) {
-        final locale = Locale(widget.controller.localeCode);
-        final text = AppStrings(locale.languageCode);
-
-        return MaterialApp.router(
-          debugShowCheckedModeBanner: false,
-          title: text.t('appTitle'),
-          locale: locale,
-          supportedLocales: const [Locale('zh'), Locale('en')],
-          localizationsDelegates: const [
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          themeMode: widget.controller.themeMode,
-          theme: _theme(Brightness.light),
-          darkTheme: _theme(Brightness.dark),
-          routeInformationProvider: widget.routeInformationProvider,
-          routeInformationParser: const AppRouteInformationParser(),
-          routerDelegate: _routerDelegate,
-        );
-      },
+    final locale = Locale(widget.localeCode);
+    final text = AppStrings(locale.languageCode);
+    return MaterialApp.router(
+      debugShowCheckedModeBanner: false,
+      title: text.t('appTitle'),
+      locale: locale,
+      supportedLocales: const [Locale('zh'), Locale('en')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      themeMode: widget.themeMode,
+      theme: _theme(Brightness.light),
+      darkTheme: _theme(Brightness.dark),
+      routeInformationProvider: widget.routeInformationProvider,
+      routeInformationParser: const AppRouteInformationParser(),
+      routerDelegate: _routerDelegate,
     );
   }
 
@@ -421,18 +408,12 @@ final class _ReadyAppState extends State<_ReadyApp> {
     AppRoute route,
     ValueListenable<ContactPageClosedEvent> contactPageClosedEvents,
   ) {
-    final legacyBuilder = widget.signedOutScreenBuilder;
-    if (legacyBuilder != null) {
-      return widget.controller.isLoggedIn
-          ? HomeShell(controller: widget.controller)
-          : legacyBuilder(context, widget.controller);
-    }
     return _SessionRoute(
-      controller: widget.controller,
+      localeCode: widget.localeCode,
       identitySession: widget.identitySession,
       appSession: widget.appSession,
       readyBuilder: (context, trustedContext) => ProductionHomeShell(
-        controller: widget.controller,
+        localeCode: widget.localeCode,
         appSession: widget.appSession,
         context: trustedContext,
         contactJournal: widget.contactJournal,
@@ -490,11 +471,11 @@ final class _ReadyAppState extends State<_ReadyApp> {
     String? sourceAttemptId,
   ) {
     return _SessionRoute(
-      controller: widget.controller,
+      localeCode: widget.localeCode,
       identitySession: widget.identitySession,
       appSession: widget.appSession,
       readyBuilder: (context, trustedContext) => _ContactEntryRoute(
-        controller: widget.controller,
+        localeCode: widget.localeCode,
         clock: widget.clock,
         appSession: widget.appSession,
         context: trustedContext,
@@ -514,11 +495,11 @@ final class _ReadyAppState extends State<_ReadyApp> {
 
   Widget _buildContactDetailRoute(BuildContext context, String contactId) {
     return _SessionRoute(
-      controller: widget.controller,
+      localeCode: widget.localeCode,
       identitySession: widget.identitySession,
       appSession: widget.appSession,
       readyBuilder: (context, trustedContext) => ContactRevisionScreen(
-        controller: widget.controller,
+        localeCode: widget.localeCode,
         context: trustedContext,
         contactId: contactId,
         contactJournal: widget.contactJournal,
@@ -538,13 +519,13 @@ typedef _TrustedSessionBuilder =
 /// 所有可导航页共用的身份与可信上下文门。
 final class _SessionRoute extends StatelessWidget {
   const _SessionRoute({
-    required this.controller,
+    required this.localeCode,
     required this.identitySession,
     required this.appSession,
     required this.readyBuilder,
   });
 
-  final AppController controller;
+  final String localeCode;
   final IdentitySession identitySession;
   final AppSession appSession;
   final _TrustedSessionBuilder readyBuilder;
@@ -562,13 +543,13 @@ final class _SessionRoute extends StatelessWidget {
             body: Center(child: CircularProgressIndicator()),
           ),
           AppSessionStage.failed => _SessionFailureScreen(
-            controller: controller,
+            localeCode: localeCode,
             identitySession: identitySession,
             session: session,
           ),
           AppSessionStage.unavailable ||
           AppSessionStage.signedOut => AuthScreen(
-            controller: controller,
+            localeCode: localeCode,
             identitySession: identitySession,
           ),
         };
@@ -580,7 +561,7 @@ final class _SessionRoute extends StatelessWidget {
 /// 从私有草稿库解析稳定草稿地址，不让 Widget 直接读 Drift。
 final class _ContactEntryRoute extends StatefulWidget {
   const _ContactEntryRoute({
-    required this.controller,
+    required this.localeCode,
     required this.clock,
     required this.appSession,
     required this.context,
@@ -596,7 +577,7 @@ final class _ContactEntryRoute extends StatefulWidget {
     required this.sourceAttemptId,
   });
 
-  final AppController controller;
+  final String localeCode;
   final AppClock clock;
   final AppSession appSession;
   final TrustedSessionContext context;
@@ -658,7 +639,7 @@ final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
           }
           final attempt = snapshot.data;
           if (attempt == null || attempt.linkedContactId != null) {
-            final text = AppStrings(widget.controller.localeCode);
+            final text = AppStrings(widget.localeCode);
             return Scaffold(
               appBar: AppBar(title: Text(text.t('recordContact'))),
               body: Center(child: Text(text.t('contactAttemptNotAvailable'))),
@@ -678,7 +659,7 @@ final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
         }
         final draft = snapshot.data;
         if (draft == null) {
-          final text = AppStrings(widget.controller.localeCode);
+          final text = AppStrings(widget.localeCode);
           return Scaffold(
             appBar: AppBar(title: Text(text.t('recordContact'))),
             body: Center(child: Text(text.t('draftNotFound'))),
@@ -753,7 +734,7 @@ final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
         final version = snapshot.data?.source;
         final currentVersion = snapshot.data?.current;
         if (snapshot.hasError || version == null) {
-          final text = AppStrings(widget.controller.localeCode);
+          final text = AppStrings(widget.localeCode);
           return Scaffold(
             appBar: AppBar(title: Text(text.t('recordContact'))),
             body: Center(
@@ -785,7 +766,7 @@ final class _ContactEntryRouteState extends State<_ContactEntryRoute> {
           );
         }
         return ContactEntryScreen(
-          controller: widget.controller,
+          localeCode: widget.localeCode,
           clock: widget.clock,
           context: widget.context,
           contactJournal: widget.contactJournal,
@@ -881,18 +862,18 @@ final class _EntryQuestionnaireBundle {
 
 final class _SessionFailureScreen extends StatelessWidget {
   const _SessionFailureScreen({
-    required this.controller,
+    required this.localeCode,
     required this.identitySession,
     required this.session,
   });
 
-  final AppController controller;
+  final String localeCode;
   final IdentitySession identitySession;
   final AppSessionSnapshot session;
 
   @override
   Widget build(BuildContext context) {
-    final text = AppStrings(controller.localeCode);
+    final text = AppStrings(localeCode);
     return Scaffold(
       appBar: AppBar(title: Text(text.t('appTitle'))),
       body: Center(

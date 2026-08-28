@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../app/app_controller.dart';
 import '../../app_session/session_context_gateway.dart';
 import '../../device/device_time_zone.dart';
 import '../../l10n/app_strings.dart';
@@ -18,7 +17,7 @@ import '../contact_journal/contact_models.dart';
 final class ContactRevisionScreen extends StatefulWidget {
   const ContactRevisionScreen({
     super.key,
-    required this.controller,
+    required this.localeCode,
     required this.context,
     required this.contactId,
     required this.contactJournal,
@@ -29,7 +28,7 @@ final class ContactRevisionScreen extends StatefulWidget {
     this.targetGateway,
   });
 
-  final AppController controller;
+  final String localeCode;
   final TrustedSessionContext context;
   final String contactId;
   final ContactJournal contactJournal;
@@ -98,7 +97,7 @@ final class _ContactRevisionScreenState extends State<ContactRevisionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final text = AppStrings(widget.controller.localeCode);
+    final text = AppStrings(widget.localeCode);
     return Scaffold(
       appBar: AppBar(title: Text(text.t('contactDetails'))),
       body: _body(text),
@@ -356,7 +355,7 @@ final class _ContactRevisionScreenState extends State<ContactRevisionScreen> {
     final values = await showDialog<_CorrectionValues>(
       context: context,
       builder: (dialogContext) => _CorrectionDialog(
-        text: AppStrings(widget.controller.localeCode),
+        text: AppStrings(widget.localeCode),
         contact: contact,
         locationCapture: widget.locationCapture,
         timeZoneProvider: widget.timeZoneProvider,
@@ -395,7 +394,7 @@ final class _ContactRevisionScreenState extends State<ContactRevisionScreen> {
     final values = await showDialog<_CorrectionValues>(
       context: context,
       builder: (dialogContext) => _CorrectionDialog(
-        text: AppStrings(widget.controller.localeCode),
+        text: AppStrings(widget.localeCode),
         contact: contact,
         locationCapture: widget.locationCapture,
         timeZoneProvider: widget.timeZoneProvider,
@@ -442,7 +441,7 @@ final class _ContactRevisionScreenState extends State<ContactRevisionScreen> {
   }
 
   Future<void> _void(ContactRecord contact) async {
-    final text = AppStrings(widget.controller.localeCode);
+    final text = AppStrings(widget.localeCode);
     final reason = await showDialog<String>(
       context: context,
       builder: (dialogContext) => _VoidContactDialog(text: text),
@@ -480,7 +479,7 @@ final class _ContactRevisionScreenState extends State<ContactRevisionScreen> {
     if (!mounted) {
       return;
     }
-    final text = AppStrings(widget.controller.localeCode);
+    final text = AppStrings(widget.localeCode);
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(text.t(key))));

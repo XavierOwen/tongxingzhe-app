@@ -2,17 +2,17 @@
 
 ## 1. 这一章解决什么
 
-旧 Demo 可以展示界面，但它把数据库创建、演示账号、MD5 密码、自动 seed 和大部分业务集中在启动流程与 `AppController`。如果直接在这上面继续堆功能，会出现三个问题：
+项目早期的 Demo 把数据库创建、演示账号、MD5 密码、自动 seed 和大部分业务集中在启动流程与 `AppController`。如果继续在这上面堆功能，会出现三个问题：
 
 1. 正式运行也可能写入演示资料；
 2. 测试无法稳定控制“现在几点”“下一个 ID 是什么”“数据库打开失败怎么办”；
 3. 将来从 Supabase 切换认证商，或从本地 SQLite 同步到 PostgreSQL 时，UI 和业务代码会一起被迫重写。
 
-Slice 0 先建立安全地基。它还没有实现现代“接触”业务，而是让每个后续切片有可验证的落点。
+Slice 0 先建立安全地基。后续切片已经把正式业务迁入各自模块，旧 Demo 运行时现已删除；v5 schema 和升级测试仍保留为兼容证据。
 
 ## 2. Composition root：全 App 的装配点
 
-`AppDependencies` 是正式 App 唯一的 composition root，也就是“把真正实现装配起来的地方”。它决定正式运行使用哪一个数据库、时钟、ID 生成器和外部身份实现。
+`AppDependencies` 是正式 App 唯一的 composition root，也就是“把真正实现装配起来的地方”。它决定正式运行使用哪一个数据库、显示设置、时钟、ID 生成器和外部身份实现。
 
 ```dart
 factory AppDependencies.production() {
@@ -24,13 +24,9 @@ factory AppDependencies.production() {
 }
 ```
 
-这段代码没有提供 `LegacyDemoAccess`，所以普通 `flutter run` 不会得到 MD5 比对、默认账号或自动 seed 的能力。旧原型必须显式运行另一个入口：
+旧 Demo 的入口、Adapter 和登录界面已经删除。普通 `flutter run` 只会启动正式 composition root，不会得到 MD5 比对、默认账号或自动 seed。`tool/check_production_boundary.dart` 还会阻止这些能力或旧 import 路径重新进入正式代码。
 
-```bash
-flutter run -t lib/main_demo.dart
-```
-
-关键不变量是：**正式入口不是靠一个容易漏设的布尔值关闭 Demo，而是根本没有装配 Demo Adapter。**
+关键不变量是：**正式入口不靠一个容易漏设的布尔值关闭 Demo，而是根本不存在 Demo 运行时依赖。**
 
 ## 3. “测试接缝”到底是什么
 
@@ -76,7 +72,7 @@ final class FixedClock implements AppClock {
 数据库初始化可能失败。如果 UI 直接读取第三方异常文字，换一个 SQLite 版本就可能破坏界面和测试。`AppDependencies.start()` 因此返回两种稳定结果：
 
 ```text
-AppStartupReady(controller)
+AppStartupReady(database, localeCode, themeMode, clock, ...)
 AppStartupFailed(failure.code)
 ```
 
@@ -160,12 +156,6 @@ Web 自动化还需要明确“谁拥有浏览器”。`flutter drive` 已经会
 flutter run
 ```
 
-显式 legacy Demo：
-
-```bash
-flutter run -t lib/main_demo.dart
-```
-
 格式、静态分析与测试：
 
 ```bash
@@ -195,4 +185,4 @@ iOS Keychain entitlement 与 Xcode 接线回归：
 flutter test test/platform/ios_entitlements_test.dart
 ```
 
-读完这一章，应能回答：正式入口为什么拿不到 MD5、测试为什么能固定时间、Drift 与 SQLite 各是什么，以及为什么 PostgreSQL migration 不能在 Dashboard 里手工代替。
+读完这一章，应能回答：正式入口为什么没有 MD5 运行时、测试为什么能固定时间、Drift 与 SQLite 各是什么，以及为什么 PostgreSQL migration 不能在 Dashboard 里手工代替。
