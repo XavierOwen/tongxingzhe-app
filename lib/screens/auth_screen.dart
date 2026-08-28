@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../app/app_controller.dart';
 import '../identity/identity_session.dart';
 import '../l10n/app_strings.dart';
 
@@ -11,11 +10,11 @@ import '../l10n/app_strings.dart';
 final class AuthScreen extends StatefulWidget {
   const AuthScreen({
     super.key,
-    required this.controller,
+    required this.localeCode,
     required this.identitySession,
   });
 
-  final AppController controller;
+  final String localeCode;
   final IdentitySession identitySession;
 
   @override
@@ -38,7 +37,7 @@ final class _AuthScreenState extends State<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final text = AppStrings(widget.controller.localeCode);
+    final text = AppStrings(widget.localeCode);
     if (widget.identitySession.current.stage == IdentityStage.unavailable) {
       return _UnavailableAuthScreen(text: text);
     }

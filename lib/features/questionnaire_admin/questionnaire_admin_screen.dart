@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../app/app_controller.dart';
 import '../../foundation/runtime_values.dart';
 import '../../l10n/app_strings.dart';
 import '../../questionnaires/questionnaire_administration.dart';
@@ -15,12 +14,12 @@ import 'questionnaire_metric_compatibility_panel.dart';
 final class QuestionnaireAdminScreen extends StatefulWidget {
   const QuestionnaireAdminScreen({
     super.key,
-    required this.controller,
+    required this.localeCode,
     required this.gateway,
     required this.idGenerator,
   });
 
-  final AppController controller;
+  final String localeCode;
   final QuestionnaireAdministrationGateway gateway;
   final IdGenerator idGenerator;
 
@@ -57,7 +56,7 @@ final class _QuestionnaireAdminScreenState
 
   @override
   Widget build(BuildContext context) {
-    final text = AppStrings(widget.controller.localeCode);
+    final text = AppStrings(widget.localeCode);
     final state = _viewModel.state;
     if (state.stage == QuestionnaireAdminStage.loading) {
       return Scaffold(
@@ -385,7 +384,7 @@ final class _QuestionnaireAdminScreenState
     final edited = await showDialog<QuestionnaireQuestion>(
       context: context,
       builder: (context) => _QuestionEditorDialog(
-        text: AppStrings(widget.controller.localeCode),
+        text: AppStrings(widget.localeCode),
         idGenerator: widget.idGenerator,
         existing: question,
         earlierQuestions: [
@@ -416,7 +415,7 @@ final class _QuestionnaireAdminScreenState
       _shownFailure = failure;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        final text = AppStrings(widget.controller.localeCode);
+        final text = AppStrings(widget.localeCode);
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(_failureLabel(text, failure))));

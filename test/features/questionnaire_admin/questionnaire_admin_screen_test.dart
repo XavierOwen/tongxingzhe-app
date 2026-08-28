@@ -1,8 +1,5 @@
-import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tongxingzhe_app/app/app_controller.dart';
-import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/features/questionnaire_admin/questionnaire_admin_screen.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/questionnaires/questionnaire_administration.dart';
@@ -14,13 +11,6 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final database = LocalDatabase(NativeDatabase.memory());
-    addTearDown(database.close);
-    final controller = AppController(
-      database: database,
-      clock: const _Clock(),
-      idGenerator: _Ids(),
-    );
     final gateway = _Gateway();
     final ids = _Ids();
 
@@ -28,7 +18,7 @@ void main() {
       MaterialApp(
         home: _Launcher(
           screen: QuestionnaireAdminScreen(
-            controller: controller,
+            localeCode: 'zh',
             gateway: gateway,
             idGenerator: ids,
           ),
@@ -77,20 +67,13 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final database = LocalDatabase(NativeDatabase.memory());
-    addTearDown(database.close);
-    final controller = AppController(
-      database: database,
-      clock: const _Clock(),
-      idGenerator: _Ids(),
-    );
     final gateway = _Gateway(current: _conditionalCurrent);
 
     await tester.pumpWidget(
       MaterialApp(
         home: _Launcher(
           screen: QuestionnaireAdminScreen(
-            controller: controller,
+            localeCode: 'zh',
             gateway: gateway,
             idGenerator: _Ids(),
           ),
@@ -362,11 +345,4 @@ final class _Ids implements IdGenerator {
     0 => 'question-1',
     _ => 'publication-request',
   };
-}
-
-final class _Clock implements AppClock {
-  const _Clock();
-
-  @override
-  DateTime now() => DateTime.utc(2026, 8, 6);
 }

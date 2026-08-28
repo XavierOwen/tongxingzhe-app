@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../app/app_controller.dart';
 import '../../app_session/session_context_gateway.dart';
 import '../../device/device_time_zone.dart';
 import '../../foundation/runtime_values.dart';
@@ -35,7 +34,7 @@ typedef ContactDraftUpgradeAction =
 final class ContactEntryScreen extends StatefulWidget {
   const ContactEntryScreen({
     super.key,
-    required this.controller,
+    required this.localeCode,
     required this.clock,
     required this.context,
     required this.contactJournal,
@@ -53,7 +52,7 @@ final class ContactEntryScreen extends StatefulWidget {
     this.targetGateway,
   });
 
-  final AppController controller;
+  final String localeCode;
   final AppClock clock;
   final TrustedSessionContext context;
   final ContactJournal contactJournal;
@@ -135,7 +134,7 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
 
   @override
   Widget build(BuildContext context) {
-    final text = AppStrings(widget.controller.localeCode);
+    final text = AppStrings(widget.localeCode);
     final entryState = _viewModel.state;
     if (!entryState.isReady) {
       return Scaffold(
@@ -433,27 +432,21 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
             context: context,
             builder: (context) => AlertDialog(
               title: Text(
-                AppStrings(
-                  widget.controller.localeCode,
-                ).t('confirmTargetProjectEntry'),
+                AppStrings(widget.localeCode).t('confirmTargetProjectEntry'),
               ),
               content: Text(
                 AppStrings(
-                  widget.controller.localeCode,
+                  widget.localeCode,
                 ).t('confirmTargetProjectEntryHelp'),
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context, false),
-                  child: Text(
-                    AppStrings(widget.controller.localeCode).t('cancel'),
-                  ),
+                  child: Text(AppStrings(widget.localeCode).t('cancel')),
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(context, true),
-                  child: Text(
-                    AppStrings(widget.controller.localeCode).t('confirm'),
-                  ),
+                  child: Text(AppStrings(widget.localeCode).t('confirm')),
                 ),
               ],
             ),
@@ -530,7 +523,7 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
       return;
     }
     if (failureCode != null) {
-      final text = AppStrings(widget.controller.localeCode);
+      final text = AppStrings(widget.localeCode);
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(text.t(failureCode))));
@@ -542,7 +535,7 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
       return;
     }
     _showingQuestionnaireClearDialog = true;
-    final text = AppStrings(widget.controller.localeCode);
+    final text = AppStrings(widget.localeCode);
     final pending = _viewModel.state.pendingQuestionnaireAnswersToClear;
     final questions = {
       for (final question
@@ -619,7 +612,7 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
     final sourceDraft = state.draft;
     final sourceVersion = state.questionnaireVersion;
     final targetVersion = widget.currentQuestionnaireVersion;
-    final text = AppStrings(widget.controller.localeCode);
+    final text = AppStrings(widget.localeCode);
     if (sourceDraft == null ||
         sourceVersion == null ||
         targetVersion == null ||
@@ -794,7 +787,7 @@ final class _ContactEntryScreenState extends State<ContactEntryScreen>
       Navigator.of(context).pop(true);
       return;
     }
-    final text = AppStrings(widget.controller.localeCode);
+    final text = AppStrings(widget.localeCode);
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(text.t('contactSubmissionFailed'))));

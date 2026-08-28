@@ -1160,9 +1160,6 @@ void main() {
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
 
     final database = LocalDatabase(NativeDatabase.memory());
-    await database
-        .into(database.dbAppSettings)
-        .insert(const DbAppSetting(key: 'localeCode', value: 'en'));
     final identity = FakeIdentitySession(
       initial: IdentitySnapshot(
         stage: IdentityStage.signedIn,
@@ -1183,6 +1180,7 @@ void main() {
       identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      localeCode: 'en',
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
       timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),

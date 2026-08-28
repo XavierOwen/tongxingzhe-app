@@ -1,4 +1,5 @@
 import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -13,7 +14,6 @@ import 'package:tongxingzhe_app/features/contact_metrics/personal_follow_up_cons
 import 'package:tongxingzhe_app/features/contact_metrics/relationship_stage_change_summary.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
-import 'package:tongxingzhe_app/legacy_demo/legacy_demo_dependencies.dart';
 import 'package:tongxingzhe_app/management_reports/current_city_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/interest_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_export_delivery.dart';
@@ -31,7 +31,7 @@ import '../support/fake_platform_capabilities.dart';
 import '../support/fake_session_context_gateway.dart';
 
 void main() {
-  test('正式启动不会创建 legacy 演示账号或记录', () async {
+  test('正式启动直接提供显示设置且不读取 legacy 表', () async {
     final database = LocalDatabase(NativeDatabase.memory());
     final dependencies = AppDependencies(
       databaseFactory: _SingleDatabaseFactory(database),
@@ -46,12 +46,16 @@ void main() {
 
     expect(startup, isA<AppStartupReady>());
     final ready = startup as AppStartupReady;
-    final controller = ready.controller;
     addTearDown(ready.identitySession.close);
     addTearDown(ready.appSession.close);
-    addTearDown(controller.dispose);
-    expect(controller.users, isEmpty);
-    expect(controller.records, isEmpty);
+    addTearDown(ready.database.close);
+    expect(ready.localeCode, 'zh');
+    expect(ready.themeMode, ThemeMode.system);
+    expect(await database.select(database.dbUsers).get(), isEmpty);
+    expect(
+      await database.select(database.dbConversationRecords).get(),
+      isEmpty,
+    );
     expect(
       ready.personalFollowUpConsentOptInGateway,
       isA<DeferredPersonalFollowUpConsentOptInGateway>(),
@@ -77,10 +81,6 @@ void main() {
       ready.originalRegionReportGateway,
       isA<DeferredOriginalRegionReportGateway>(),
     );
-
-    final login = await controller.login('admin1', 'admin1');
-    expect(login.success, isFalse);
-    expect(login.messageKey, 'authUnavailableInProduction');
   });
 
   test('composition root 装配并释放后续联系同意占比 gateway', () async {
@@ -108,7 +108,6 @@ void main() {
     expect(gateway.closeCount, 1);
     await ready.appSession.close();
     await ready.identitySession.close();
-    ready.controller.dispose();
     await database.close();
   });
 
@@ -137,7 +136,6 @@ void main() {
     expect(gateway.closeCount, 1);
     await ready.appSession.close();
     await ready.identitySession.close();
-    ready.controller.dispose();
     await database.close();
   });
 
@@ -166,7 +164,6 @@ void main() {
     expect(gateway.closeCount, 1);
     await ready.appSession.close();
     await ready.identitySession.close();
-    ready.controller.dispose();
     await database.close();
   });
 
@@ -199,7 +196,6 @@ void main() {
     expect(gateway.closeCount, 1);
     await ready.appSession.close();
     await ready.identitySession.close();
-    ready.controller.dispose();
     await database.close();
   });
 
@@ -223,7 +219,6 @@ void main() {
     expect(identical(ready.managementReportExportDelivery, delivery), isTrue);
     await ready.appSession.close();
     await ready.identitySession.close();
-    ready.controller.dispose();
     await database.close();
   });
 
@@ -249,7 +244,6 @@ void main() {
     expect(gateway.closeCount, 1);
     await ready.appSession.close();
     await ready.identitySession.close();
-    ready.controller.dispose();
     await database.close();
   });
 
@@ -282,7 +276,6 @@ void main() {
     expect(gateway.closeCount, 1);
     await ready.appSession.close();
     await ready.identitySession.close();
-    ready.controller.dispose();
     await database.close();
   });
 
@@ -315,7 +308,6 @@ void main() {
     expect(gateway.closeCount, 1);
     await ready.appSession.close();
     await ready.identitySession.close();
-    ready.controller.dispose();
     await database.close();
   });
 
@@ -359,8 +351,7 @@ void main() {
     addTearDown(gateway.close);
     addTearDown(ready.appSession.close);
     addTearDown(ready.identitySession.close);
-    addTearDown(ready.controller.dispose);
-    addTearDown(database.close);
+    addTearDown(ready.database.close);
 
     expect(identical(receivedIdentity, identity), isTrue);
     expect(receivedProjectId, isNotNull);
@@ -497,7 +488,7 @@ void main() {
     addTearDown(ready.promotionTargetGateway.close);
     addTearDown(ready.identitySession.close);
     addTearDown(ready.appSession.close);
-    addTearDown(ready.controller.dispose);
+    addTearDown(ready.database.close);
 
     final result = await ready.promotionTargetGateway.loadAssigned();
 
@@ -506,29 +497,6 @@ void main() {
         result as PromotionTargetSuccess<List<PromotionTargetProfile>>;
     expect(success.fromOfflineCache, isTrue);
     expect(success.value.single.displayName, '王小明');
-  });
-
-  test('legacy demo 只能通过独立 composition root 显式启用', () async {
-    final database = LocalDatabase(NativeDatabase.memory());
-    final dependencies = LegacyDemoDependencies.create(
-      databaseFactory: _SingleDatabaseFactory(database),
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      idGenerator: _SequenceIdGenerator(),
-    );
-
-    final startup = await dependencies.start();
-
-    expect(startup, isA<AppStartupReady>());
-    final ready = startup as AppStartupReady;
-    final controller = ready.controller;
-    addTearDown(ready.identitySession.close);
-    addTearDown(ready.appSession.close);
-    addTearDown(controller.dispose);
-    expect(controller.users, hasLength(5));
-    expect(controller.records, hasLength(30));
-
-    final login = await controller.loginDemoAccount('admin1');
-    expect(login.success, isTrue);
   });
 }
 

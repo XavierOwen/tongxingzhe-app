@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 import '../app_session/app_session.dart';
 import '../app_session/http_session_context_gateway.dart';
 import '../app_session/session_context_gateway.dart';
@@ -54,13 +56,11 @@ import '../sync/sync_transport.dart';
 import '../targets/http_promotion_target_gateway.dart';
 import '../targets/offline_promotion_target_gateway.dart';
 import '../targets/promotion_target.dart';
-import 'app_controller.dart';
-import 'legacy_demo_access.dart';
 import 'private_session_data_guard.dart';
 
 /// App 唯一的 composition root。
 ///
-/// 它集中决定正式数据库、时钟和 ID 实现，并把数据库打开／Controller 加载
+/// 它集中决定正式数据库、显示设置、时钟和 ID 实现，并把资源初始化
 /// 转成调用者可处理的结果，避免启动异常被 FutureBuilder 当成成功。
 final class AppDependencies {
   const AppDependencies({
@@ -70,6 +70,8 @@ final class AppDependencies {
     required this.identitySessionFactory,
     required this.sessionContextGateway,
     required this.platformCapabilitiesProvider,
+    this.localeCode = 'zh',
+    this.themeMode = ThemeMode.system,
     this.timeZoneProvider = const FlutterDeviceTimeZoneProvider(),
     this.locationCapture = const LocationService(),
     this.syncTransportBuilder,
@@ -91,7 +93,6 @@ final class AppDependencies {
     this.currentRelationshipStageGatewayBuilder,
     this.reminderSchedulerBuilder = productionReminderNotificationScheduler,
     this.offlinePiiSecureStore,
-    this.legacyDemoAccess,
   });
 
   factory AppDependencies.production() {
@@ -140,6 +141,8 @@ final class AppDependencies {
   final IdentitySessionFactory identitySessionFactory;
   final SessionContextGateway sessionContextGateway;
   final PlatformCapabilitiesProvider platformCapabilitiesProvider;
+  final String localeCode;
+  final ThemeMode themeMode;
   final DeviceTimeZoneProvider timeZoneProvider;
   final ContactLocationCapture locationCapture;
   final SyncTransport? Function(IdentitySession)? syncTransportBuilder;
@@ -180,9 +183,6 @@ final class AppDependencies {
   final ReminderNotificationScheduler Function(AppPlatform)
   reminderSchedulerBuilder;
   final SecureValueStore? offlinePiiSecureStore;
-
-  /// 临时兼容 legacy demo；正式 composition root 永远不提供此 Adapter。
-  final LegacyDemoAccess? legacyDemoAccess;
 
   Future<AppStartupResult> start() async {
     final exportDelivery =
@@ -243,18 +243,11 @@ final class AppDependencies {
 
     try {
       database = databaseFactory.open();
-      final controller = AppController(
-        database: database,
-        clock: clock,
-        idGenerator: idGenerator,
-        legacyDemoAccess: legacyDemoAccess,
-      );
       final contactJournal = ContactJournal(
         database: database,
         clock: clock,
         idGenerator: idGenerator,
       );
-      await controller.load();
       final deviceId = await DeviceIdentityStore(
         database,
         idGenerator,
@@ -417,8 +410,10 @@ final class AppDependencies {
         planningCache: planningCache,
       );
       return AppStartupReady(
-        controller: controller,
+        database: database,
         clock: clock,
+        localeCode: localeCode,
+        themeMode: themeMode,
         contactJournal: contactJournal,
         deviceId: deviceId,
         syncEngineFactory: syncEngineFactory,
@@ -497,8 +492,10 @@ sealed class AppStartupResult {
 
 final class AppStartupReady extends AppStartupResult {
   const AppStartupReady({
-    required this.controller,
+    required this.database,
     required this.clock,
+    required this.localeCode,
+    required this.themeMode,
     required this.contactJournal,
     required this.deviceId,
     required this.syncEngineFactory,
@@ -531,8 +528,10 @@ final class AppStartupReady extends AppStartupResult {
     required this.idGenerator,
   });
 
-  final AppController controller;
+  final LocalDatabase database;
   final AppClock clock;
+  final String localeCode;
+  final ThemeMode themeMode;
   final ContactJournal contactJournal;
   final String deviceId;
   final SyncEngineFactory? syncEngineFactory;

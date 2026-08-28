@@ -4,7 +4,6 @@ import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tongxingzhe_app/app/app_controller.dart';
 import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
 import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/device/device_time_zone.dart';
@@ -53,17 +52,10 @@ void main() {
         interestLevel: 2,
       ),
     );
-    final controller = AppController(
-      database: database,
-      clock: clock,
-      idGenerator: _SequenceIdGenerator(const []),
-    );
-    addTearDown(controller.dispose);
-
     await tester.pumpWidget(
       MaterialApp(
         home: ContactRevisionScreen(
-          controller: controller,
+          localeCode: 'zh',
           context: _context,
           contactId: 'contact-private-location',
           contactJournal: journal,
@@ -129,17 +121,10 @@ void main() {
         ],
       ),
     );
-    final controller = AppController(
-      database: database,
-      clock: clock,
-      idGenerator: _SequenceIdGenerator(const []),
-    );
-    addTearDown(controller.dispose);
-
     await tester.pumpWidget(
       MaterialApp(
         home: ContactRevisionScreen(
-          controller: controller,
+          localeCode: 'zh',
           context: _context,
           contactId: 'contact-1',
           contactJournal: journal,
@@ -336,17 +321,10 @@ void main() {
             createdAtUtc: clock.now(),
           ),
         );
-    final controller = AppController(
-      database: database,
-      clock: clock,
-      idGenerator: _SequenceIdGenerator(const []),
-    );
-    addTearDown(controller.dispose);
-
     await tester.pumpWidget(
       MaterialApp(
         home: ContactRevisionScreen(
-          controller: controller,
+          localeCode: 'zh',
           context: _context,
           contactId: 'contact-1',
           contactJournal: journal,

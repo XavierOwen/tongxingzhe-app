@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../app/app_controller.dart';
 import '../../app_session/session_context_gateway.dart';
 import '../../device/device_time_zone.dart';
 import '../../foundation/runtime_values.dart';
@@ -18,7 +17,7 @@ import '../contact_journal/contact_models.dart';
 final class ContactAttemptEntryScreen extends StatefulWidget {
   const ContactAttemptEntryScreen({
     super.key,
-    required this.controller,
+    required this.localeCode,
     required this.clock,
     required this.timeZoneProvider,
     required this.context,
@@ -26,7 +25,7 @@ final class ContactAttemptEntryScreen extends StatefulWidget {
     required this.deviceId,
   });
 
-  final AppController controller;
+  final String localeCode;
   final AppClock clock;
   final DeviceTimeZoneProvider timeZoneProvider;
   final TrustedSessionContext context;
@@ -61,7 +60,7 @@ final class _ContactAttemptEntryScreenState
 
   @override
   Widget build(BuildContext context) {
-    final text = AppStrings(widget.controller.localeCode);
+    final text = AppStrings(widget.localeCode);
     final occurredAtUtc = _occurredAtUtc;
     final occurredTimeZone = _occurredTimeZone;
     return Scaffold(

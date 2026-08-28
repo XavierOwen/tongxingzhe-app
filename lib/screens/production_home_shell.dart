@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../app/app_controller.dart';
 import '../app_session/app_session.dart';
 import '../app_session/session_context_gateway.dart';
 import '../device/device_time_zone.dart';
@@ -51,7 +50,7 @@ import '../targets/promotion_target.dart';
 final class ProductionHomeShell extends StatefulWidget {
   const ProductionHomeShell({
     super.key,
-    required this.controller,
+    required this.localeCode,
     required this.appSession,
     required this.context,
     required this.contactJournal,
@@ -85,7 +84,7 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.onOpenContactDetail,
   });
 
-  final AppController controller;
+  final String localeCode;
   final AppSession appSession;
   final TrustedSessionContext context;
   final ContactJournal contactJournal;
@@ -175,7 +174,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
     }
     if (oldWidget.syncEngineFactory != widget.syncEngineFactory ||
         oldWidget.contactJournal != widget.contactJournal ||
-        oldWidget.controller != widget.controller ||
+        oldWidget.clock != widget.clock ||
         oldWidget.appSession != widget.appSession ||
         oldWidget.deviceId != widget.deviceId ||
         oldWidget.currentRelationshipStageRepository !=
@@ -197,11 +196,11 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
 
   @override
   Widget build(BuildContext context) {
-    final strings = AppStrings(widget.controller.localeCode);
+    final strings = AppStrings(widget.localeCode);
     final homeState = _viewModel.state;
     final recentSevenDaysPeriod = personalSummaryPeriodBounds(
       period: PersonalSummaryPeriod.recentSevenDays,
-      now: widget.controller.now(),
+      now: widget.clock.now(),
     );
     final destinations = [
       _Destination(Icons.today_outlined, strings.t('today')),
@@ -211,7 +210,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
     ];
     final pages = [
       _PersonalSummaryPage(
-        controller: widget.controller,
+        localeCode: widget.localeCode,
         period: PersonalSummaryPeriod.today,
         snapshot: homeState.today,
         isLoading: homeState.isLoading,
@@ -262,7 +261,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
         relationshipStageChangePanel: null,
       ),
       _ContactsPage(
-        controller: widget.controller,
+        localeCode: widget.localeCode,
         projectOptions: homeState.projectOptions,
         snapshot: homeState.contacts,
         isLoading: homeState.isLoading,
@@ -295,7 +294,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
       _AnalysisPage(
         text: strings,
         personalSummary: _PersonalSummaryPage(
-          controller: widget.controller,
+          localeCode: widget.localeCode,
           period: PersonalSummaryPeriod.recentSevenDays,
           snapshot: homeState.recentSevenDays,
           isLoading: homeState.isLoading,
@@ -515,7 +514,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
       context: context,
       builder: (dialogContext) => Dialog.fullscreen(
         child: ContactAttemptEntryScreen(
-          controller: widget.controller,
+          localeCode: widget.localeCode,
           clock: widget.clock,
           timeZoneProvider: widget.timeZoneProvider,
           context: widget.context,
@@ -549,7 +548,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (routeContext) => PersonalFollowUpConsentOptInScreen(
-          text: AppStrings(widget.controller.localeCode),
+          text: AppStrings(widget.localeCode),
           projectId: widget.context.project.id,
           gateway: widget.personalFollowUpConsentOptInGateway,
           requestIdGenerator: SecureConsentOptInRequestIdGenerator(),
@@ -566,7 +565,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
       context: context,
       builder: (dialogContext) => Dialog.fullscreen(
         child: QuestionnaireAdminScreen(
-          controller: widget.controller,
+          localeCode: widget.localeCode,
           gateway: widget.questionnaireAdministration,
           idGenerator: widget.idGenerator,
         ),
@@ -578,7 +577,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
   }
 
   Future<void> _createProject() async {
-    final text = AppStrings(widget.controller.localeCode);
+    final text = AppStrings(widget.localeCode);
     final name = await showDialog<String>(
       context: context,
       builder: (dialogContext) => _CreateProjectDialog(text: text),
@@ -609,7 +608,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
       deviceId: widget.deviceId,
       syncEngineFactory: widget.syncEngineFactory,
       relationshipStageRepository: widget.currentRelationshipStageRepository,
-      now: widget.controller.now,
+      now: widget.clock.now,
     );
   }
 
@@ -638,7 +637,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
     if (!mounted) {
       return;
     }
-    final text = AppStrings(widget.controller.localeCode);
+    final text = AppStrings(widget.localeCode);
     final messenger = ScaffoldMessenger.of(context);
     switch (notice.kind) {
       case ProductionHomeNoticeKind.contactSubmitted:
@@ -875,7 +874,7 @@ final class _CreateProjectDialogState extends State<_CreateProjectDialog> {
 /// 只把同一单位的结果显示出来。
 final class _PersonalSummaryPage extends StatelessWidget {
   const _PersonalSummaryPage({
-    required this.controller,
+    required this.localeCode,
     required this.period,
     required this.snapshot,
     required this.isLoading,
@@ -887,7 +886,7 @@ final class _PersonalSummaryPage extends StatelessWidget {
     required this.relationshipStageChangePanel,
   });
 
-  final AppController controller;
+  final String localeCode;
   final PersonalSummaryPeriod period;
   final PersonalSummarySnapshot? snapshot;
   final bool isLoading;
@@ -900,7 +899,7 @@ final class _PersonalSummaryPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text = AppStrings(controller.localeCode);
+    final text = AppStrings(localeCode);
     final result = snapshot;
     if (result == null) {
       final summaryStatus = isLoading && !loadFailed
@@ -1226,7 +1225,7 @@ final class _Destination {
 
 final class _ContactsPage extends StatelessWidget {
   const _ContactsPage({
-    required this.controller,
+    required this.localeCode,
     required this.projectOptions,
     required this.snapshot,
     required this.isLoading,
@@ -1240,7 +1239,7 @@ final class _ContactsPage extends StatelessWidget {
     required this.onOpenContact,
   });
 
-  final AppController controller;
+  final String localeCode;
   final List<ProductionHomeProjectOption> projectOptions;
   final ContactOverviewSnapshot? snapshot;
   final bool isLoading;
@@ -1255,7 +1254,7 @@ final class _ContactsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text = AppStrings(controller.localeCode);
+    final text = AppStrings(localeCode);
     final result = snapshot;
     if (result == null) {
       if (loadFailed) {
