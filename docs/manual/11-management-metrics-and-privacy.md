@@ -2560,6 +2560,50 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 这些命令只证明 synthetic DB-only interest replacement。它们不证明 snapshot 生成、生产身份、runtime、HTTP、Flutter、目录、导出或真人平台运行时。
 
+## Slice 6CE：登记后续联系同意占比快照更正版取代
+
+6CE 只登记两份已经通过 0075 的
+`contact_target_follow_up_consent_ratio_two_periods@1` approved snapshot（`approved_baseline` 或 `approved`）之间的直接 replacement。它不生成或修改 snapshot，也不改变 0074 candidate 或 0075 release。旧、新快照必须同 project、report／version、query fingerprint、privacy policy、source scope、报告时区 revision、期间和 release lineage；新快照的 cutoff 与发布时间必须更晚，source change sequence 不得回退。
+
+数据库只通过 0075 专用 provenance seam 核对已存在的 approved attempt。它不能直接读取 attempt ledger，也不读取当前 6BO opt-in。停用 opt-in 不会阻止既有 approved snapshot 的合格更正登记。数据库仍须在锁后重新确认 `release_management_reports`、membership、active project、项目状态、0075 provenance 和 protected-document validator。
+
+replacement 使用共享 value-free request UUID ledger 中的独立 consent-ratio replacement family。replacement lineage lock 与 release lineage lock 分开。不同 request UUID 的普通 release 和 replacement 不互相串行，只有同一 UUID 的共享 request claim 互斥。原因只允许 `late_accepted_data`、`contact_revision` 和 `contact_void`。
+
+关系和最小 audit 追加不可变。每份旧 snapshot 最多一个直接 successor，每份新 snapshot 最多一个 predecessor。payload drift、跨 project／family、same／earlier cutoff、自链接、分叉、循环和 stale head 失败关闭。相同 request UUID 与相同 canonical payload 精确幂等。
+
+生命周期只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID，不返回 ratio、coverage、隐藏前值、来源、贡献者、接触、授权关系或 PII。`PUBLIC`、runtime、普通 app role、reader、release writer 和其他 report-family writer 不能访问该私有合同。
+
+### 6CE 的范围
+
+这是 DB-only、value-free 合同。它不改变 0074 candidate、0075 release、authorized read、runtime、Backend、HTTP、Flutter、目录、导出或缓存，也不处理分析定义／跨版本更正、删除、retention、warehouse、production identity 或真人平台验收。6CE 不把当前 opt-in 状态当作历史 snapshot 的更正资格。
+
+### 6CE 的验证命令
+
+从仓库根目录运行完整 PostgreSQL 合同：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 会发现 0083 migration、structural check、rollback fixture 和 replacement concurrency script，并继续验证 checksum 与 dump／restore。恢复库只重跑 check 和 fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。
+
+只调试 6CE 时，先确认 `DATABASE_URL` 是专用测试库，再运行：
+
+```bash
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_follow_up_consent_ratio_snapshot_replacements.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0083_management_follow_up_consent_ratio_snapshot_replacements.sql
+./tool/verify_management_follow_up_consent_ratio_snapshot_replacements_concurrency.sh
+```
+
+check、fixture 和 concurrency 不能互相替代。
+check 必须确认 release／replacement 使用不同 lineage lock namespace。
+并发测试必须覆盖 replacement／revoke 两种锁顺序和竞争 replacement。它还必须覆盖 release／replacement 的同 UUID 互斥。
+通过只证明 synthetic DB-only consent-ratio replacement、0075 provenance、授权锁、不可变性和 ACL。
+它不证明 snapshot 生成、runtime、HTTP、Flutter、目录、导出、删除、retention、生产身份或真人平台运行时。
+
 ## Slice 6CC：读取项目范围的去身份化地点异常
 
 6CC 解决的是数据质量入口，不是管理者读取单条 contact 的入口。它只接受 active contact 当前 accepted revision 上的两个精确来源 tuple：
