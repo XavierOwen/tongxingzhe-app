@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../features/contact_journal/contact_models.dart';
+import '../foundation/backend_base_uri.dart';
 import '../identity/identity_session.dart';
 import '../questionnaires/questionnaire_answer_codec.dart';
 import '../targets/promotion_target.dart';
@@ -32,7 +33,7 @@ final class HttpSyncTransport implements SyncTransport, SyncBatchTransport {
     Duration timeout = const Duration(seconds: 15),
   }) {
     return HttpSyncTransport._(
-      _validatedBaseUri(baseUri),
+      validateBackendBaseUri(baseUri),
       identitySession,
       client,
       timeout,
@@ -833,19 +834,4 @@ final class _RequestIdentityFailure extends _AuthorizedRequestResult {
   const _RequestIdentityFailure(this.failureCode);
 
   final String failureCode;
-}
-
-Uri _validatedBaseUri(Uri value) {
-  if (!value.hasScheme || value.host.isEmpty) {
-    throw const FormatException('BACKEND_BASE_URL must be an absolute URL');
-  }
-  final localHttp =
-      value.scheme == 'http' &&
-      const {'localhost', '127.0.0.1', '::1'}.contains(value.host);
-  if (value.scheme != 'https' && !localHttp) {
-    throw const FormatException(
-      'BACKEND_BASE_URL must use HTTPS except on localhost',
-    );
-  }
-  return value;
 }

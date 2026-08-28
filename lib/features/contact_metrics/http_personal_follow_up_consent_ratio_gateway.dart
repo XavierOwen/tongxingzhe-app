@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../foundation/backend_base_uri.dart';
 import '../../identity/identity_session.dart';
 import 'personal_follow_up_consent_ratio.dart';
 
@@ -48,7 +49,7 @@ final class HttpPersonalFollowUpConsentRatioGateway
     Duration timeout = const Duration(seconds: 15),
     DateTime Function() now = _utcNow,
   }) => HttpPersonalFollowUpConsentRatioGateway._(
-    baseUri: _validatedBaseUri(baseUri),
+    baseUri: validatePathlessBackendBaseUri(baseUri),
     identitySession: identitySession,
     client: client,
     timeout: timeout,
@@ -330,18 +331,6 @@ DateTime _utcTimestamp(Object? value) {
 }
 
 String _canonicalUtc(DateTime value) => value.toIso8601String();
-
-Uri _validatedBaseUri(Uri value) {
-  final localHttp =
-      value.scheme == 'http' &&
-      const {'localhost', '127.0.0.1', '::1'}.contains(value.host);
-  if ((value.scheme != 'https' && !localHttp) ||
-      value.host.isEmpty ||
-      value.path.isNotEmpty && value.path != '/') {
-    throw ArgumentError('invalid backend base URI');
-  }
-  return value;
-}
 
 DateTime _utcNow() => DateTime.now().toUtc();
 
