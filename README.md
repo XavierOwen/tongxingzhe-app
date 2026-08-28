@@ -6,12 +6,16 @@
 
 ## 当前状态
 
-项目已完成 [Slice 0：安全地基与可测试接缝](https://github.com/XavierOwen/tongxingzhe-app/issues/2)、[Slice 1：匿名接触闭环](https://github.com/XavierOwen/tongxingzhe-app/issues/3) 和 [Slice 2：离线事实更正、重试与合并](https://github.com/XavierOwen/tongxingzhe-app/issues/4)，以及 Slice 3A 至 3E 的版本化问卷执行、动态显示、管理发布、旧草稿明确升级和跨版本指标兼容审计。Slice 4A 至 4E 已加入受分配的个人／机构对象目录、每个接触 revision 的零到多对象关联、对象在当前项目中的审计关系、workspace 内个人与机构的六类历史关系，以及当前分配对象的七十二小时加密只读快照。Backend 可验证 Supabase JWT，并原子映射内部用户、个人空间、多个个人项目和各项目当前问卷版本。Flutter `AppSession` 只接受这份可信上下文。正式 App 已接入邮箱密码登录、四个主导航、可选跨设备私有草稿、草稿冲突副本、七类匿名接触、已提交接触的追加式更正与作废、跨设备更正的不同字段自动合并与同字段显式解决、独立的未获回应接触尝试、IANA 发生时区、面对面坐标、版本化严格区域树、坐标自动解析、“今日”与最近七日个人统计、八题型离线问卷、受限显示条件与隐藏答案撤销，以及 SQLite 到自有 Backend／PostgreSQL 的持久双向同步。有管理能力的个人项目所有者还可以建立或复制问卷草稿、编辑受控定义、模拟预览、查看版本差异并发布新的不可变版本；稳定问卷指标只接收经过并排比较和明确审计的兼容问题版本，撤销后当前指标立即重新分开。旧接触草稿可继续按原版本编辑和提交，也可先预览保留、重新确认和不可复制的答案，再新建当前版本草稿；原草稿不会被覆盖。正式注册与恢复界面仍未完成。旧原型只作为显式 legacy Demo 保留。
+项目已完成 [Slice 0：安全地基与可测试接缝](https://github.com/XavierOwen/tongxingzhe-app/issues/2)、[Slice 1：匿名接触闭环](https://github.com/XavierOwen/tongxingzhe-app/issues/3) 和 [Slice 2：离线事实更正、重试与合并](https://github.com/XavierOwen/tongxingzhe-app/issues/4)。Slice 3A 至 3E 已交付版本化问卷执行、动态显示、管理发布、旧草稿明确升级和跨版本指标兼容审计。Slice 4A 至 4E 已加入对象目录、接触 revision 关联、项目内审计关系、历史关系和七十二小时加密只读快照。
+
+Backend 可验证 Supabase JWT，并原子映射内部用户、个人空间、项目和当前问卷版本。Flutter `AppSession` 只接受这份可信上下文。正式 App 已接入邮箱密码登录、四个主导航、跨设备私有草稿、追加式更正与作废、未获回应接触尝试、IANA 发生时区、面对面坐标、区域解析、个人统计、离线问卷和持久双向同步。
+
+有管理能力的个人项目所有者可以设计、比较和发布不可变问卷版本。稳定问卷指标只接收经过审计的兼容问题版本。旧接触草稿可按原版本继续提交，也可在预览答案后新建当前版本草稿；原草稿不会被覆盖。正式注册与恢复界面仍未完成。旧 Demo 运行时代码已删除；v5 schema 和升级测试继续保留兼容证据。
 
 已经建立的地基包括：
 
 - 正式 composition root，以及可控制的 Clock、ID、Database、Identity、错误结果和 Platform Capability 接缝；
-- 正式入口与 MD5、默认演示账号、自动 seed 和旧登录 UI 的 import 边界；
+- 正式入口不包含 MD5、默认演示账号、自动 seed 或旧登录 UI；生产边界检查防止这些能力重新进入；
 - Drift v5 基线、v6 至 v18 中间版本、当前 v19 schema 快照和 v5／v6／v8 至 v18→v19 升级测试；
 - `ContactJournal` 本地深模块，以及可读的 SQLite 个人汇总 SQL；
 - Supabase `IdentitySession` Adapter、安全 session／PKCE 存储和 test-only fake；
@@ -61,14 +65,6 @@ cp -n macos/Runner/Configs/LocalSigning.xcconfig.example \
 ```
 
 CI 的 macOS job 只做无签名编译，不能代替 Keychain 运行时探针；完整状态见六平台认证 Spike。
-
-需要回归旧原型时，必须显式选择 Demo 入口：
-
-```bash
-flutter run -t lib/main_demo.dart
-```
-
-这个入口才会装配 MD5 兼容 Adapter、旧登录页、默认演示账号和 synthetic records。它不是 production 入口。
 
 ## 本地检查
 
