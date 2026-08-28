@@ -2523,6 +2523,43 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 这些命令只证明 synthetic DB-only current-city replacement，不证明新 snapshot 生成、其他 report family、分析定义／跨版本更正、runtime、HTTP、Flutter、目录、导出、删除、retention、生产身份或六平台真人运行时。
 
+## Slice 6CD：登记 interest 快照更正版取代
+
+6CD 只登记两份已经通过 0062 的 interest approved snapshot 之间的直接 replacement。它不生成或修改 snapshot。两份快照必须同 project、report／version、query fingerprint、privacy policy、source scope、报告时区 revision、期间和 release lineage；新快照的 cutoff 与发布时间必须更晚，source watermark 不得回退。
+
+数据库使用共享的 value-free request UUID ledger 和独立 interest replacement family。release 与 replacement 共用 request lock。关闭的 lifecycle writer 只能通过 interest 专用 provenance seam 核对 0062 approved attempt，不能直接读取 attempt ledger。
+
+原因只允许 `late_accepted_data`、`contact_revision` 和 `contact_void`。关系和 audit 追加不可变。每份旧快照最多一个直接 replacement，每份新快照最多一个 predecessor。自链接、循环、分叉、stale head、跨项目／family、时间倒序和撤权失败关闭。相同 request 与 canonical payload 精确幂等；载荷漂移失败关闭。
+
+生命周期只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID，不返回 interest cells、计数、贡献者、接触或 PII。关系不改变目录排序。客户端不能把第一项称为 current 或 latest。
+
+### 6CD 的范围
+
+这是 DB-only、value-free 合同。它不处理其他 report family，不做分析定义或跨版本更正，不生成 snapshot，也不增加 runtime、HTTP、Flutter、目录、导出、删除、retention 或真人平台验收。
+
+### 6CD 的验证命令
+
+从仓库根目录运行完整 PostgreSQL 合同：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 会发现 0082 migration、structural check、rollback fixture 和 concurrency script，并在 checksum、dump／restore 后重跑 migration、check 和 fixture。恢复库不重跑会提交 synthetic 行的并发脚本。
+
+只调试 6CD 时，先确认 `DATABASE_URL` 是专用测试库，再运行：
+
+```bash
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_interest_report_snapshot_replacements.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0082_management_interest_report_snapshot_replacements.sql
+./tool/verify_management_interest_report_snapshot_replacements_concurrency.sh
+```
+
+这些命令只证明 synthetic DB-only interest replacement。它们不证明 snapshot 生成、生产身份、runtime、HTTP、Flutter、目录、导出或真人平台运行时。
+
 ## Slice 6CC：读取项目范围的去身份化地点异常
 
 6CC 解决的是数据质量入口，不是管理者读取单条 contact 的入口。它只接受 active contact 当前 accepted revision 上的两个精确来源 tuple：

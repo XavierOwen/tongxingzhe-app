@@ -980,6 +980,14 @@ _Avoid_: 默认读取第五个 family、个人项目回退、多个布尔开关�
 关系和最小 audit 追加不可变。每份旧快照最多一个直接 replacement，每份新快照最多一个 predecessor；自链接、循环、分叉、stale head、跨项目／family、context 漂移、倒序和撤权失败关闭。生命周期只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID，不返回报告格、区域来源、贡献者、接触、坐标或 PII。6CB 不生成 snapshot，不改变目录／读取／HTTP／导出／Flutter，也不处理跨版本更正、删除或 retention。
 _Avoid_: 复用渠道或 original-region replacement 表、按目录排序猜测 latest、静默改写 snapshot、直接读取 0057 attempt、返回 target context 或报告值、把 Docker synthetic 通过写成生产证据
 
+**interest 快照更正版取代**:
+6CD 只登记两份已经通过 0062 的 interest approved snapshot 之间的直接 replacement。两份快照必须同 project、report／version、query／privacy／source scope、报告时区 revision、期间和 release lineage；新快照 cutoff／发布时间更晚且 source watermark 不回退。旧、新 snapshot 保持不变。
+
+关系使用管理报告共享的 value-free request UUID ledger 和独立 interest replacement family。关闭的 lifecycle writer 只能通过 interest 专用 provenance seam 核对 0062 approved attempt，不能直接读取 attempt ledger。release 与 replacement 共享 request lock；同一 UUID 双向互斥。原因只允许 `late_accepted_data`、`contact_revision` 和 `contact_void`。
+
+关系和最小 audit 追加不可变。每份旧快照最多一个直接 replacement，每份新快照最多一个 predecessor；自链接、循环、分叉、stale head、跨项目／family、倒序和撤权失败关闭。生命周期只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID，不返回 interest cells、计数、贡献者、接触或 PII。6CD 不生成 snapshot，不改变目录／读取／runtime／HTTP／Flutter／导出，也不处理跨版本更正、删除或 retention。
+_Avoid_: 复用渠道、current-city 或 original-region replacement 表、按目录排序猜测 latest、静默改写 snapshot、直接读取 0062 attempt、返回报告值、把 Docker synthetic 通过写成生产证据
+
 **项目去身份化地点异常只读合同**:
 6CC 只把 active contact 当前 accepted revision 中的 `pending_resolution + pending_coordinates` 和 `unknown + legacy_incomplete` 暴露为项目范围的去身份化异常。revision 必须为 `submitted` 或 `corrected`；resolved、not-applicable、draft、attempt、voided、旧 revision 和跨项目事实不进入候选。
 

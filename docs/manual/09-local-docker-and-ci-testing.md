@@ -960,6 +960,30 @@ structural check 证明数据库对象、owner、函数属性与 ACL；rollback 
 三者不能互相替代。Docker 通过不证明真实异常已存在，也不证明 correction、runtime、Backend、HTTP、Flutter、地图、导出、组织清除、生产身份、真实 PII
 清除或 Android、iOS、macOS、Windows、Linux、Web 真人平台运行时。
 
+### 6CD：验证 interest 快照 replacement lineage
+
+0082 只登记两份 0062 interest approved snapshot 的直接 replacement。旧、新 snapshot 保持不变。共享 request ledger 使用独立 interest replacement family；release 与 replacement 共用 request lock。生命周期只返回 `active`／`superseded` 和直接 replacement ID。
+
+从仓库根目录运行完整套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+只调试 6CD 时，先新建专用测试库，并确认 `DATABASE_URL` 不指向 production：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_interest_report_snapshot_replacements.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0082_management_interest_report_snapshot_replacements.sql
+./tool/verify_management_interest_report_snapshot_replacements_concurrency.sh
+```
+
+check、fixture 和 concurrency 不能互相替代。完整 runner 还验证 migration checksum 和独立 dump／restore。通过只证明 synthetic DB-only interest replacement、provenance、授权锁、不可变性和 ACL；不证明 snapshot 生成、生产身份、runtime、HTTP、Flutter、目录、导出或真人平台。
+
 ### 6BO：验证组织项目后续联系同意占比 opt-in 配置
 
 6BO 只验证组织项目的配置生命周期。它不执行后续联系同意比例候选。个人项目的 0048 配置表与组织配置表必须分开。
