@@ -2,21 +2,21 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tongxingzhe_app/device/device_time_zone.dart';
 import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
 import 'package:tongxingzhe_app/features/contact_entry/contact_entry_view_model.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
-import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/regions/contact_region_resolver.dart';
 import 'package:tongxingzhe_app/questionnaires/questionnaire_contract.dart';
 import 'package:tongxingzhe_app/services/location_service.dart';
 import 'package:tongxingzhe_app/targets/promotion_target.dart';
 
+import '../../support/fake_runtime_values.dart';
+
 void main() {
   test('新接触使用当前 UTC 时刻和设备 IANA 时区', () async {
     final viewModel = ContactEntryViewModel(
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
       context: _context,
       deviceId: 'device-1',
       store: _FakeEntryStore(),
@@ -31,8 +31,8 @@ void main() {
 
   test('补录时间按设备当地时间转换为 UTC 并保留 IANA 时区', () async {
     final viewModel = ContactEntryViewModel(
-      clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-      timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
       context: _context,
       deviceId: 'device-1',
       store: _FakeEntryStore(),
@@ -355,8 +355,8 @@ ContactEntryViewModel _viewModel({
   Duration questionnaireUndoDuration = const Duration(seconds: 10),
 }) {
   return ContactEntryViewModel(
-    clock: _FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
-    timeZoneProvider: const _FakeTimeZoneProvider('America/Chicago'),
+    clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+    timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
     context: context,
     deviceId: 'device-1',
     store: store,
@@ -424,24 +424,6 @@ const _context = TrustedSessionContext(
   ),
   capabilities: {'record_contact'},
 );
-
-final class _FixedClock implements AppClock {
-  const _FixedClock(this.value);
-
-  final DateTime value;
-
-  @override
-  DateTime now() => value;
-}
-
-final class _FakeTimeZoneProvider implements DeviceTimeZoneProvider {
-  const _FakeTimeZoneProvider(this.value);
-
-  final String value;
-
-  @override
-  Future<String> currentIanaTimeZone() async => value;
-}
 
 final class _FakeLocationCapture implements ContactLocationCapture {
   const _FakeLocationCapture(this.results);

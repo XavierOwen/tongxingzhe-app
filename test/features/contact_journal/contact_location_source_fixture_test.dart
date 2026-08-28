@@ -10,6 +10,8 @@ import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/regions/region_catalog.dart';
 import 'package:tongxingzhe_app/regions/region_models.dart';
 
+import '../../support/fake_runtime_values.dart';
+
 void main() {
   test(
     'shared location source fixture preserves SQLite and Outbox facts',
@@ -52,7 +54,7 @@ void main() {
       final journal = ContactJournal(
         database: database,
         clock: const _FixedClock(),
-        idGenerator: _SequenceIdGenerator(ids),
+        idGenerator: SequenceIdGenerator(ids),
       );
 
       for (var index = 0; index < fixture.length; index += 1) {
@@ -333,14 +335,4 @@ final class _FixedClock implements AppClock {
 
   @override
   DateTime now() => DateTime.utc(2030, 1, 8, 18, 30);
-}
-
-final class _SequenceIdGenerator implements IdGenerator {
-  _SequenceIdGenerator(this.values);
-
-  final List<String> values;
-  var _index = 0;
-
-  @override
-  String next() => values[_index++];
 }

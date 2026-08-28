@@ -1,9 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
-import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
 import 'package:tongxingzhe_app/targets/offline_promotion_target_gateway.dart';
 import 'package:tongxingzhe_app/targets/promotion_target.dart';
+
+import '../support/fake_runtime_values.dart';
 
 void main() {
   test('在线验权后的网络失败只降级到同一上下文的未过期密文', () async {
@@ -11,7 +12,7 @@ void main() {
     final vault = OfflinePiiVault(
       secureStore: _MemorySecureValueStore(),
       lockStore: _MemoryOfflinePiiLockStore(),
-      clock: _FixedClock(DateTime.utc(2026, 8, 6, 13)),
+      clock: FixedClock(DateTime.utc(2026, 8, 6, 13)),
       installationId: 'installation-1',
     );
     final gateway = OfflinePromotionTargetGateway(
@@ -160,7 +161,7 @@ void main() {
 OfflinePiiVault _vault() => OfflinePiiVault(
   secureStore: _MemorySecureValueStore(),
   lockStore: _MemoryOfflinePiiLockStore(),
-  clock: _FixedClock(DateTime.utc(2026, 8, 6, 13)),
+  clock: FixedClock(DateTime.utc(2026, 8, 6, 13)),
   installationId: 'installation-1',
 );
 
@@ -284,15 +285,6 @@ final class _RemoteGateway
 
   @override
   Future<void> close() async {}
-}
-
-final class _FixedClock implements AppClock {
-  const _FixedClock(this.value);
-
-  final DateTime value;
-
-  @override
-  DateTime now() => value;
 }
 
 final class _MemorySecureValueStore implements SecureValueStore {

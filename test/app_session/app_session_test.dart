@@ -3,11 +3,11 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/app_session/app_session.dart';
 import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
-import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
 
 import '../support/fake_identity_session.dart';
+import '../support/fake_runtime_values.dart';
 import '../support/fake_session_context_gateway.dart';
 
 void main() {
@@ -75,7 +75,7 @@ void main() {
     final vault = OfflinePiiVault(
       secureStore: _MemorySecureValueStore(),
       lockStore: _MemoryOfflinePiiLockStore(),
-      clock: _FixedClock(DateTime.utc(2026, 8, 6, 13)),
+      clock: FixedClock(DateTime.utc(2026, 8, 6, 13)),
       installationId: 'installation-1',
     );
     await vault.replace(
@@ -110,7 +110,7 @@ void main() {
     final vault = OfflinePiiVault(
       secureStore: _MemorySecureValueStore(),
       lockStore: _MemoryOfflinePiiLockStore(),
-      clock: _FixedClock(DateTime.utc(2026, 8, 6, 13)),
+      clock: FixedClock(DateTime.utc(2026, 8, 6, 13)),
       installationId: 'installation-1',
     );
     await vault.replace(
@@ -147,7 +147,7 @@ void main() {
     final vault = OfflinePiiVault(
       secureStore: _MemorySecureValueStore(),
       lockStore: _MemoryOfflinePiiLockStore(),
-      clock: _FixedClock(DateTime.utc(2026, 8, 6, 13)),
+      clock: FixedClock(DateTime.utc(2026, 8, 6, 13)),
       installationId: 'installation-1',
     );
     await vault.replace(
@@ -178,7 +178,7 @@ void main() {
     final vault = OfflinePiiVault(
       secureStore: _MemorySecureValueStore(),
       lockStore: _MemoryOfflinePiiLockStore(),
-      clock: _FixedClock(DateTime.utc(2026, 8, 6, 13)),
+      clock: FixedClock(DateTime.utc(2026, 8, 6, 13)),
       installationId: 'installation-1',
     );
     await vault.replace(
@@ -256,7 +256,7 @@ void main() {
     final vault = OfflinePiiVault(
       secureStore: _MemorySecureValueStore(),
       lockStore: _MemoryOfflinePiiLockStore(),
-      clock: _FixedClock(DateTime.utc(2026, 8, 6, 13)),
+      clock: FixedClock(DateTime.utc(2026, 8, 6, 13)),
       installationId: 'installation-1',
     );
     await vault.replace(
@@ -288,7 +288,7 @@ void main() {
     final vault = OfflinePiiVault(
       secureStore: secureStore,
       lockStore: _MemoryOfflinePiiLockStore(),
-      clock: _FixedClock(DateTime.utc(2026, 8, 6, 13)),
+      clock: FixedClock(DateTime.utc(2026, 8, 6, 13)),
       installationId: 'installation-1',
     );
     await vault.replace(
@@ -331,7 +331,7 @@ void main() {
     final vault = OfflinePiiVault(
       secureStore: _MemorySecureValueStore(),
       lockStore: _MemoryOfflinePiiLockStore(),
-      clock: _FixedClock(DateTime.utc(2026, 8, 6, 13)),
+      clock: FixedClock(DateTime.utc(2026, 8, 6, 13)),
       installationId: 'installation-1',
     );
     await vault.replace(
@@ -413,7 +413,7 @@ void main() {
     final vault = OfflinePiiVault(
       secureStore: _MemorySecureValueStore(),
       lockStore: _MemoryOfflinePiiLockStore(),
-      clock: _FixedClock(DateTime.utc(2026, 8, 6, 13)),
+      clock: FixedClock(DateTime.utc(2026, 8, 6, 13)),
       installationId: 'installation-1',
     );
     await vault.replace(
@@ -500,7 +500,7 @@ Future<OfflinePiiVault> _vaultWithEmptySnapshot() async {
   final vault = OfflinePiiVault(
     secureStore: _MemorySecureValueStore(),
     lockStore: _MemoryOfflinePiiLockStore(),
-    clock: _FixedClock(DateTime.utc(2026, 8, 6, 13)),
+    clock: FixedClock(DateTime.utc(2026, 8, 6, 13)),
     installationId: 'installation-1',
   );
   await vault.replace(
@@ -540,15 +540,6 @@ final class _DelayedGateway implements SessionContextGateway {
     String displayName,
   ) async =>
       const SessionContextRejected(SessionContextFailureCode.serverRejected);
-}
-
-final class _FixedClock implements AppClock {
-  const _FixedClock(this.value);
-
-  final DateTime value;
-
-  @override
-  DateTime now() => value;
 }
 
 final class _MemorySecureValueStore implements SecureValueStore {

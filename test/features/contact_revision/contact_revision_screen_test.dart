@@ -6,14 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
 import 'package:tongxingzhe_app/data/local_database.dart';
-import 'package:tongxingzhe_app/device/device_time_zone.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_journal.dart';
 import 'package:tongxingzhe_app/features/contact_journal/contact_models.dart';
 import 'package:tongxingzhe_app/features/contact_revision/contact_revision_screen.dart';
-import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/regions/contact_region_resolver.dart';
 import 'package:tongxingzhe_app/services/location_service.dart';
 import 'package:tongxingzhe_app/targets/promotion_target.dart';
+
+import '../../support/fake_runtime_values.dart';
 
 void main() {
   testWidgets('待解析地点只显示状态，不显示精确坐标或精度', (tester) async {
@@ -23,11 +23,11 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final database = LocalDatabase(NativeDatabase.memory());
     addTearDown(database.close);
-    final clock = _FixedClock(DateTime.utc(2030, 1, 10, 18));
+    final clock = FixedClock(DateTime.utc(2030, 1, 10, 18));
     final journal = ContactJournal(
       database: database,
       clock: clock,
-      idGenerator: _SequenceIdGenerator([
+      idGenerator: SequenceIdGenerator([
         'contact-private-location',
         'revision-private-location',
         'command-private-location',
@@ -61,7 +61,7 @@ void main() {
           contactJournal: journal,
           deviceId: 'device-1',
           locationCapture: const _NoLocationCapture(),
-          timeZoneProvider: const _TimeZoneProvider(),
+          timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
           regionResolver: const _NoopRegionResolver(),
         ),
       ),
@@ -84,11 +84,11 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final database = LocalDatabase(NativeDatabase.memory());
-    final clock = _FixedClock(DateTime.utc(2030, 1, 10, 18));
+    final clock = FixedClock(DateTime.utc(2030, 1, 10, 18));
     final journal = ContactJournal(
       database: database,
       clock: clock,
-      idGenerator: _SequenceIdGenerator([
+      idGenerator: SequenceIdGenerator([
         'contact-1',
         'revision-1',
         'command-1',
@@ -130,7 +130,7 @@ void main() {
           contactJournal: journal,
           deviceId: 'device-1',
           locationCapture: const _NoLocationCapture(),
-          timeZoneProvider: const _TimeZoneProvider(),
+          timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
           regionResolver: const _NoopRegionResolver(),
         ),
       ),
@@ -199,11 +199,11 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final database = LocalDatabase(NativeDatabase.memory());
     addTearDown(database.close);
-    final clock = _FixedClock(DateTime.utc(2030, 1, 10, 18));
+    final clock = FixedClock(DateTime.utc(2030, 1, 10, 18));
     final journal = ContactJournal(
       database: database,
       clock: clock,
-      idGenerator: _SequenceIdGenerator([
+      idGenerator: SequenceIdGenerator([
         'contact-1',
         'revision-1',
         'command-1',
@@ -330,7 +330,7 @@ void main() {
           contactJournal: journal,
           deviceId: 'device-1',
           locationCapture: const _NoLocationCapture(),
-          timeZoneProvider: const _TimeZoneProvider(),
+          timeZoneProvider: const FixedTimeZoneProvider('America/Chicago'),
           regionResolver: const _NoopRegionResolver(),
         ),
       ),
@@ -495,38 +495,12 @@ const _context = TrustedSessionContext(
   capabilities: {'record_contact'},
 );
 
-final class _FixedClock implements AppClock {
-  const _FixedClock(this.value);
-
-  final DateTime value;
-
-  @override
-  DateTime now() => value;
-}
-
-final class _SequenceIdGenerator implements IdGenerator {
-  _SequenceIdGenerator(this.values);
-
-  final List<String> values;
-  var _index = 0;
-
-  @override
-  String next() => values[_index++];
-}
-
 final class _NoLocationCapture implements ContactLocationCapture {
   const _NoLocationCapture();
 
   @override
   Future<LocationSnapshot> captureCurrentPosition() async =>
       const LocationSnapshot(error: 'location_unavailable');
-}
-
-final class _TimeZoneProvider implements DeviceTimeZoneProvider {
-  const _TimeZoneProvider();
-
-  @override
-  Future<String> currentIanaTimeZone() async => 'America/Chicago';
 }
 
 final class _NoopRegionResolver implements ContactRegionResolver {

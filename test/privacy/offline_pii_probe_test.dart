@@ -1,10 +1,11 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/platform/platform_capabilities.dart';
 import 'package:tongxingzhe_app/privacy/offline_pii_probe.dart';
 import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
+
+import '../support/fake_runtime_values.dart';
 
 void main() {
   test('配置拒绝运行环境与签名类型不匹配', () {
@@ -66,7 +67,7 @@ void main() {
     final secureStore = _MemorySecureValueStore();
     final lockStore = _MemoryOfflinePiiLockStore();
     final stateStore = _MemoryOfflinePiiProbeStateStore();
-    final clock = _MutableClock(DateTime.utc(2026, 8, 20, 12));
+    final clock = MutableClock(DateTime.utc(2026, 8, 20, 12));
     final first = _runner(
       secureStore: secureStore,
       lockStore: lockStore,
@@ -112,7 +113,7 @@ void main() {
     final secureStore = _MemorySecureValueStore();
     final lockStore = _MemoryOfflinePiiLockStore();
     final stateStore = _MemoryOfflinePiiProbeStateStore();
-    final clock = _MutableClock(DateTime.utc(2026, 8, 20, 12));
+    final clock = MutableClock(DateTime.utc(2026, 8, 20, 12));
     final first = _runner(
       secureStore: secureStore,
       lockStore: lockStore,
@@ -154,7 +155,7 @@ void main() {
       secureStore: _MemorySecureValueStore(),
       lockStore: _MemoryOfflinePiiLockStore(),
       stateStore: _MemoryOfflinePiiProbeStateStore(),
-      clock: _MutableClock(DateTime.utc(2026, 8, 20, 12)),
+      clock: MutableClock(DateTime.utc(2026, 8, 20, 12)),
       launchId: 'launch-1',
     );
 
@@ -176,7 +177,7 @@ void main() {
     final secureStore = _MemorySecureValueStore();
     final lockStore = _MemoryOfflinePiiLockStore();
     final stateStore = _MemoryOfflinePiiProbeStateStore();
-    final clock = _MutableClock(DateTime.utc(2026, 8, 20, 12));
+    final clock = MutableClock(DateTime.utc(2026, 8, 20, 12));
     final first = _runner(
       secureStore: secureStore,
       lockStore: lockStore,
@@ -222,7 +223,7 @@ void main() {
     final secureStore = _MemorySecureValueStore();
     final lockStore = _MemoryOfflinePiiLockStore();
     final stateStore = _MemoryOfflinePiiProbeStateStore();
-    final clock = _MutableClock(DateTime.utc(2026, 8, 20, 12));
+    final clock = MutableClock(DateTime.utc(2026, 8, 20, 12));
     final first = _runner(
       secureStore: secureStore,
       lockStore: lockStore,
@@ -259,7 +260,7 @@ void main() {
     final secureStore = _MemorySecureValueStore();
     final lockStore = _MemoryOfflinePiiLockStore();
     final stateStore = _MemoryOfflinePiiProbeStateStore();
-    final clock = _MutableClock(DateTime.utc(2026, 8, 20, 12));
+    final clock = MutableClock(DateTime.utc(2026, 8, 20, 12));
     final first = _runner(
       secureStore: secureStore,
       lockStore: lockStore,
@@ -293,7 +294,7 @@ void main() {
       secureStore: secureStore,
       lockStore: _MemoryOfflinePiiLockStore(),
       stateStore: _MemoryOfflinePiiProbeStateStore(),
-      clock: _MutableClock(DateTime.utc(2026, 8, 20, 12)),
+      clock: MutableClock(DateTime.utc(2026, 8, 20, 12)),
       launchId: 'launch-1',
     );
     await session.runner.run(OfflinePiiProbeScenario.writeRead);
@@ -327,7 +328,7 @@ void main() {
       secureStore: secureStore,
       lockStore: _MemoryOfflinePiiLockStore(),
       stateStore: _MemoryOfflinePiiProbeStateStore(),
-      clock: _MutableClock(DateTime.utc(2026, 8, 20, 12)),
+      clock: MutableClock(DateTime.utc(2026, 8, 20, 12)),
       launchId: 'launch-1',
     );
     await session.runner.run(OfflinePiiProbeScenario.writeRead);
@@ -354,7 +355,7 @@ OfflinePiiProbeConfiguration _configuration([String runId = 'probe-run-001']) =>
   required _MemorySecureValueStore secureStore,
   required _MemoryOfflinePiiLockStore lockStore,
   required _MemoryOfflinePiiProbeStateStore stateStore,
-  required _MutableClock clock,
+  required MutableClock clock,
   required String launchId,
   String probeRunId = 'probe-run-001',
 }) {
@@ -379,15 +380,6 @@ OfflinePiiProbeConfiguration _configuration([String runId = 'probe-run-001']) =>
     ),
     recorder: recorder,
   );
-}
-
-final class _MutableClock implements AppClock {
-  _MutableClock(this.value);
-
-  DateTime value;
-
-  @override
-  DateTime now() => value;
 }
 
 final class _MemorySecureValueStore implements SecureValueStore {

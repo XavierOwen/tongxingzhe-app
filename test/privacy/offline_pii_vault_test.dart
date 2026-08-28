@@ -1,12 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
-import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
 import 'package:tongxingzhe_app/targets/promotion_target.dart';
 
+import '../support/fake_runtime_values.dart';
+
 void main() {
   test('联网验权后只开放本次明确分配的对象', () async {
-    final clock = _MutableClock(DateTime.utc(2026, 8, 6, 12));
+    final clock = MutableClock(DateTime.utc(2026, 8, 6, 12));
     final vault = OfflinePiiVault(
       secureStore: _MemorySecureValueStore(),
       lockStore: _MemoryOfflinePiiLockStore(),
@@ -34,7 +35,7 @@ void main() {
   });
 
   test('七十二小时整即锁定且不能靠再次读取恢复', () async {
-    final clock = _MutableClock(DateTime.utc(2026, 8, 6, 12));
+    final clock = MutableClock(DateTime.utc(2026, 8, 6, 12));
     final vault = OfflinePiiVault(
       secureStore: _MemorySecureValueStore(),
       lockStore: _MemoryOfflinePiiLockStore(),
@@ -63,7 +64,7 @@ void main() {
   });
 
   test('观察到超过容差的时间回拨后保持锁定', () async {
-    final clock = _MutableClock(DateTime.utc(2026, 8, 6, 12));
+    final clock = MutableClock(DateTime.utc(2026, 8, 6, 12));
     final vault = OfflinePiiVault(
       secureStore: _MemorySecureValueStore(),
       lockStore: _MemoryOfflinePiiLockStore(),
@@ -91,7 +92,7 @@ void main() {
 
   test('撤权先锁定，安全存储清除失败后可以重试但不能解锁', () async {
     final secureStore = _MemorySecureValueStore();
-    final clock = _MutableClock(DateTime.utc(2026, 8, 6, 12));
+    final clock = MutableClock(DateTime.utc(2026, 8, 6, 12));
     final vault = OfflinePiiVault(
       secureStore: secureStore,
       lockStore: _MemoryOfflinePiiLockStore(),
@@ -127,7 +128,7 @@ void main() {
     final vault = OfflinePiiVault(
       secureStore: _MemorySecureValueStore(),
       lockStore: _MemoryOfflinePiiLockStore(),
-      clock: _MutableClock(DateTime.utc(2026, 8, 6, 12)),
+      clock: MutableClock(DateTime.utc(2026, 8, 6, 12)),
       installationId: 'installation-1',
     );
     await vault.replace(
@@ -155,7 +156,7 @@ void main() {
     final vault = OfflinePiiVault(
       secureStore: secureStore,
       lockStore: _MemoryOfflinePiiLockStore(),
-      clock: _MutableClock(DateTime.utc(2026, 8, 6, 13)),
+      clock: MutableClock(DateTime.utc(2026, 8, 6, 13)),
       installationId: 'installation-1',
     );
     await vault.replace(
@@ -183,7 +184,7 @@ void main() {
     final vault = OfflinePiiVault(
       secureStore: secureStore,
       lockStore: _MemoryOfflinePiiLockStore(),
-      clock: _MutableClock(DateTime.utc(2026, 8, 6, 14)),
+      clock: MutableClock(DateTime.utc(2026, 8, 6, 14)),
       installationId: 'installation-1',
     );
 
@@ -215,7 +216,7 @@ void main() {
     final vault = OfflinePiiVault(
       secureStore: secureStore,
       lockStore: _MemoryOfflinePiiLockStore(),
-      clock: _MutableClock(DateTime.utc(2026, 8, 6, 14)),
+      clock: MutableClock(DateTime.utc(2026, 8, 6, 14)),
       installationId: 'installation-1',
     );
 
@@ -244,7 +245,7 @@ void main() {
   test('安全存储跨重装残留时由新的安装 ID 锁定', () async {
     final secureStore = _MemorySecureValueStore();
     final lockStore = _MemoryOfflinePiiLockStore();
-    final clock = _MutableClock(DateTime.utc(2026, 8, 6, 14));
+    final clock = MutableClock(DateTime.utc(2026, 8, 6, 14));
     final original = OfflinePiiVault(
       secureStore: secureStore,
       lockStore: lockStore,
@@ -274,7 +275,7 @@ void main() {
   });
 
   test('一台设备的在线验权不会给另一台设备建立离线资料', () async {
-    final clock = _MutableClock(DateTime.utc(2026, 8, 6, 14));
+    final clock = MutableClock(DateTime.utc(2026, 8, 6, 14));
     final firstDevice = OfflinePiiVault(
       secureStore: _MemorySecureValueStore(),
       lockStore: _MemoryOfflinePiiLockStore(),
@@ -304,7 +305,7 @@ void main() {
     final vault = OfflinePiiVault(
       secureStore: secureStore,
       lockStore: _MemoryOfflinePiiLockStore(),
-      clock: _MutableClock(DateTime.utc(2026, 8, 6, 14)),
+      clock: MutableClock(DateTime.utc(2026, 8, 6, 14)),
       installationId: 'installation-1',
     );
     await vault.replace(
@@ -326,7 +327,7 @@ void main() {
     final vault = OfflinePiiVault(
       secureStore: secureStore,
       lockStore: _MemoryOfflinePiiLockStore(),
-      clock: _MutableClock(DateTime.utc(2026, 8, 6, 14)),
+      clock: MutableClock(DateTime.utc(2026, 8, 6, 14)),
       installationId: 'installation-1',
     );
     await vault.replace(
@@ -359,7 +360,7 @@ void main() {
     final vault = OfflinePiiVault(
       secureStore: secureStore,
       lockStore: _MemoryOfflinePiiLockStore(),
-      clock: _MutableClock(DateTime.utc(2026, 8, 6, 14)),
+      clock: MutableClock(DateTime.utc(2026, 8, 6, 14)),
       installationId: 'installation-1',
     );
     await vault.replace(
@@ -449,15 +450,6 @@ PromotionTargetProfile _targetWithRelationship() => PromotionTargetProfile(
     ],
   ),
 );
-
-final class _MutableClock implements AppClock {
-  _MutableClock(this.value);
-
-  DateTime value;
-
-  @override
-  DateTime now() => value;
-}
 
 final class _MemorySecureValueStore implements SecureValueStore {
   final values = <String, String>{};
