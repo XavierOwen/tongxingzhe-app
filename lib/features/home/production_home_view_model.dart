@@ -238,7 +238,7 @@ final class ProductionHomeViewModel extends ChangeNotifier {
     required DateTime Function() now,
   }) {
     final syncCoordinator = ForegroundSyncCoordinator(
-      worker: _syncWorker(syncEngineFactory, context),
+      _syncWorker(syncEngineFactory, context),
     );
     return ProductionHomeViewModel(
       context: context,

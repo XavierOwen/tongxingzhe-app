@@ -304,7 +304,7 @@ final class _Fixture {
     CurrentRelationshipStageGatewayResult? relationshipResult,
   }) {
     worker = _FakeSyncWorker(gate: gate);
-    syncCoordinator = ForegroundSyncCoordinator(worker: worker);
+    syncCoordinator = ForegroundSyncCoordinator(worker);
     source = _FakeOverviewSource();
     draftStore = _FakeDraftStore();
     sessionActions = _FakeSessionActions();
