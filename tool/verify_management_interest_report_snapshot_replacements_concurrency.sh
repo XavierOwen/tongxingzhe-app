@@ -231,7 +231,10 @@ $release$;
 COMMIT;
 SQL
 
-mapfile -t snapshot_ids < <(
+snapshot_ids=()
+while IFS= read -r snapshot_id; do
+  snapshot_ids+=("${snapshot_id}")
+done < <(
   run_psql --tuples-only --no-align --command="
     SELECT released_snapshot_id
     FROM app_private.management_interest_report_release_attempts
