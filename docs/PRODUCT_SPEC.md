@@ -1544,6 +1544,24 @@ replacement lineage lock 与 release lineage lock 分开。不同 request UUID �
 
 它不处理分析定义／跨版本更正、删除、retention、warehouse 或 production identity。只有 0083 migration、structural check、rollback fixture、并发、checksum 和 dump／restore 在 synthetic PostgreSQL 中通过后，才能报告该 DB-only 合同成立。
 
+#### Slice 6CF Spec：固定分析定义变更与跨版本报告快照更正合同
+
+6CF 只固定后续 report-family 实现必须遵守的共同政策。跨版本更正只能连接同一 project、report family 和 stable metric 的两份既有 approved snapshot；两端的 report version、metric version 或 definition fingerprint 至少一项不同，全部相同时仍走该 family 的同版本合同。6CF 不生成、修改或重新发布 snapshot，也不改变任一版本内部的 replacement 图。
+
+旧、新端必须引用由 `manage_analysis_definitions` 成员确认、当前有效且方向明确的直接兼容决定。决定固定 project、report family、stable metric、两端 definition ID、report／metric version 和 definition fingerprint。
+它还审计单位、分子／分母、维度、排除项、期间、时区、privacy、source scope、两端 query、validator 和问卷语义。登记时，决定的 project／family／metric／方向／definition tuple 必须与两端 immutable trusted provenance 精确相等。
+期间、时区、privacy 和 source scope 也必须相同；缺失、未知、漂移、撤销或反向决定失败关闭。不得从版本顺序、目录顺序或传递关系推断兼容。
+
+跨版本登记另由当前具备 `release_management_reports` 的成员执行；若组织启用第二人批准则沿用定义管理流程，不新增强制审批。确认、撤销和登记统一按 request claim、project／family／metric definition pair、cross-version lineage（仅登记）和既有 authorization／revoke 顺序取得锁。各路径在锁后重核 active identity、membership、active project、grant validity 和对应 capability；登记还重核 direct compatibility 和两端 provenance。
+
+原因只允许 `analysis_definition_change`；同版本的三个原因不能伪装跨版本更正。每份旧 snapshot 最多一个 direct successor，每份新 snapshot 最多一个 predecessor。
+cross-version lineage lock 与 release／同版本 replacement lineage lock 分离；不同 request UUID 的普通操作不串行，只有同 UUID claim 互斥。相同 UUID 与 canonical payload 精确幂等。
+payload drift、未知 version／fingerprint 和 shape／validator 漂移以 value-free reason 失败关闭。自链接、环、分叉和 stale head 也失败关闭。
+
+兼容决定撤销后，edge 保留为不可变历史，但当前跨版本投影只将它标为 `compatibility_revoked`；两端各自按本版本 replacement 图计算 version-scoped lifecycle。目录、读取、导出和缓存不自动选择 latest、current 或 successor，也不把跨版本 edge 当作趋势合并授权。
+
+兼容决定、claim、edge、结果和最小 audit 必须追加不可变且 PII-free。组织删除恢复期禁止新兼容决定、撤销和登记；期满清除 compatibility history 和 edge，并继续遵守既有组织生命周期。6CF 不选择首个 report family，不增加 migration、SQL、fixture、concurrency、runtime、Backend、HTTP、Flutter、读取、目录、导出、删除入口或 Apple 平台证据。后续实现必须另建 review-sized Issue。
+
 #### Slice 6CC：读取项目范围的去身份化地点异常
 
 6CC 在 private PostgreSQL 中提供独立的去身份化地点异常目录与详情。候选只来自 active contact 的当前 accepted revision；来源必须精确为
@@ -1578,7 +1596,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `ANALYTICS-010` | 个人分析在本地事实写入后立即更新并标明同步状态；管理分析只统计后端已接受数据，目标在五分钟内更新。 |
 | `ANALYTICS-011` | 未来 warehouse 第一阶段允许最多二十四小时延迟；图表、缓存和报告显示数据截止时间和新鲜度层级。 |
 | `ANALYTICS-012` | 动态分析随补录、修订和作废重算；正式导出是固定截止、指标、问卷兼容、区域、时区和计算版本的报告快照。 |
-| `ANALYTICS-013` | 后续数据或定义变更以更正版报告取代原快照；不静默覆盖原报告，也不用报告绕过删除规则。 |
+| `ANALYTICS-013` | 同版本数据更正使用既有 report-family replacement 合同；任何跨 definition 或 report version 的关系都必须遵守 6CF 的双授权、直接兼容与撤销投影。不静默覆盖原报告，也不用报告绕过删除规则。 |
 | `ANALYTICS-014` | “后续联系同意占比”由项目选择是否启用，不是平台必显核心指标，也不得作为个人目标、排名或考核；管理展示继续经过匿名保护。 |
 | `ANALYTICS-015` | 阶段变更三个指标固定 ID／version、事件或对象×项目统计单位、UTC `changed_at` 半开期间、`upward`／`downward` 顺序、actor scope 和排除项；个人事件数与去重关系数必须同时可复算。 |
 | `ANALYTICS-016` | 个人阶段变更汇总只通过固定 GET 读取；认证优先、当前项目由数据库解析并加锁，响应使用单 statement 的授权／数据截止时刻，不提供历史 as-of 或逐事件明细。 |
@@ -1632,6 +1650,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `ANALYTICS-064` | 6CC 只列出 active contact 当前 accepted revision 的 `pending_resolution + pending_coordinates` 与 `unknown + legacy_incomplete` 异常。每项使用追加式 opaque ID；目录固定最多 20 项并只含 reason、open status、发生时间、location／evidence kind 和坐标可用状态，详情只对显式 ID 返回相同 metadata 与必要坐标。resolved、not-applicable、draft、attempt、voided、旧 revision、跨项目和 stale ID 失败关闭。6CC 不修改 provenance，不提供 correction、runtime、Backend、HTTP、Flutter、地图、搜索、分页或导出。 |
 | `ANALYTICS-065` | 6CD 只登记两份 0062 interest approved snapshot 的直接 replacement。旧、新快照必须同 project、report／version、query／privacy／source scope、报告时区 revision、期间和 release lineage；新快照 cutoff／发布时间更晚且 source watermark 不回退。关系使用共享 request ledger 中的独立 interest replacement family、interest 专用 provenance、追加式直接链、锁后重授权和 value-free lifecycle；不生成 snapshot，也不改变目录、读取、runtime、HTTP、Flutter 或导出。 |
 | `ANALYTICS-066` | 6CE 只登记两份 0075 `contact_target_follow_up_consent_ratio_two_periods@1` approved snapshot（`approved_baseline` 或 `approved`）的直接 replacement。旧、新快照必须同 project、report／version、query／privacy／source scope、报告时区 revision、期间和 release lineage；新快照 cutoff／发布时间更晚且 source change sequence 不回退。它只核对 0075 approved provenance，不读取当前 6BO opt-in；关系使用独立 consent-ratio replacement family，区分 replacement／release lineage lock，只让同一 request UUID claim 互斥，并保持 value-free lifecycle。 |
+| `ANALYTICS-067` | 6CF 规定跨版本更正只连接同 project、report family、stable metric 的既有 approved snapshot，并引用当前有效、方向明确、不可传递推断的直接定义兼容决定。决定的 project／family／metric／方向和两端 definition ID／version／fingerprint 必须与 snapshot immutable provenance 精确相等；缺失、未知、漂移、撤销、反向、跨边界或 stale 决定失败关闭。定义确认／撤销需要 `manage_analysis_definitions`，登记另需 `release_management_reports`；专用原因固定为 `analysis_definition_change`。撤销后 edge 只作历史证据，两端恢复各自版本内投影；关系不授权趋势合并、latest／current 推断或读取。 |
 
 ### 5.9 管理分析的匿名保护
 
@@ -1694,6 +1713,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `PRIVACY-055` | 6CC 的目录不得返回坐标；详情只对用户明确选择的 opaque anomaly ID 返回 pending 异常的 latitude／longitude／可空 accuracy，legacy 异常固定返回 `coordinates: null`。两条路径都不得返回 contact、target、user、revision、source、区域树、授权内部 ID 或 PII。unknown、cross-project 和 stale ID 使用同一 value-free `not_found`。不可变 audit 不保存 anomaly ID、坐标、发生时间或 provenance 值；closed reader 只有必要列 ACL，`PUBLIC`、runtime、普通 app role、管理报告 reader／writer 和 provenance writer 均不能访问私有合同。synthetic DB 证据不构成形式化不可重识别保证。 |
 | `PRIVACY-056` | 6CD 只接受具有完整 0062 approved provenance、同一 interest 报告定义／时区 revision／期间／lineage 和前进 cutoff 的快照。关系、claim 和 audit 追加不可变；失败不写部分关系或报告值。生命周期结果不含 protected report、interest cells、计数、贡献者、接触、授权关系或 PII。`PUBLIC`、runtime、普通 app role、reader、release writer 和其他 report-family writer 不能访问该私有合同。 |
 | `PRIVACY-057` | 6CE 只接受完整 0075 approved provenance、同一 consent-ratio 报告定义／时区 revision／期间／lineage 和前进 cutoff 的快照。replacement 不读取当前 6BO opt-in；停用 opt-in 不改变既有 approved snapshot 的更正资格。关系、claim 和最小 audit 追加不可变；replacement 与 release lineage lock 分开，不同 request UUID 不互相串行，只有同一 UUID claim 互斥。生命周期只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID，不返回 ratio、coverage、隐藏前值、来源、贡献者、接触、授权关系或 PII。`PUBLIC`、runtime、普通 app role、reader、release writer 和其他 report-family writer 不能访问该私有合同。 |
+| `PRIVACY-058` | 6CF 的兼容决定／撤销、request claim、cross-version edge、结果和最小 audit 必须追加不可变且 PII-free；撤销另写事件。允许字段只限内部 event／request、project／family／metric、两端 definition ID／version／fingerprint、固定 reason／decision／status、数据库时间、服从账号删除去关联规则的 opaque actor 和枚举化 comparison／impact。不得保存 email、姓名、外部身份、自由文本理由、原始问题／定义／选项文字、报告正文、cell、ratio、answer、contact、source value、隐藏前值、坐标或贡献者。调用方不能提交 capability、provenance、兼容结论或报告正文替代可信注册表和数据库核对。组织删除恢复期禁止新决定、撤销和登记；期满清除 compatibility history、edge 和其他报告业务记录，只保留既有最小组织删除审计。 |
 
 个人查看自己的数据不受匿名阈值限制，但页面必须标示“个人数据”，不将它表述为团队或总体结论。
 
@@ -1751,6 +1771,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-048` | 学习文档必须用零基础读者可以复制的步骤说明 6CC 的 0081 migration、独立 `view_deidentified_anomalies` capability、当前 accepted revision 的两种精确异常 tuple、opaque ID、无坐标目录、最小坐标详情、unknown／cross-project／stale 等价 `not_found`、value-free immutable audit、closed role 与最小 ACL，以及 migration／check／fixture／concurrency／checksum／dump／restore 命令。必须明确 Docker 是隔离 synthetic PostgreSQL，不连接 production；6CC 不修改 provenance，也不提供 correction、runtime、Backend、HTTP、Flutter、地图、搜索、分页、导出、组织清除、生产身份或真人平台证据。 |
 | `MANUAL-049` | 学习文档必须说明 6CD 的 0082 interest replacement、0062 approved provenance、共享 request ledger 中的独立 family、release／replacement 双向互斥、active／superseded、原因 allowlist、锁后授权、精确幂等、stale head／分叉／循环／跨 family 失败关闭、value-free 输出、最小 ACL，以及 migration／check／fixture／concurrency／checksum／dump／restore 命令。必须明确 6CD 不生成 snapshot，不改变目录、读取、runtime、HTTP、Flutter 或导出；synthetic Docker 证据不证明生产身份或真人平台。 |
 | `MANUAL-050` | 学习文档必须说明 6CE 的 0083 migration、0075 approved provenance、当前 6BO opt-in 不参与更正资格、停用后仍可登记既有 approved snapshot、更换原因 allowlist、独立 consent-ratio family、replacement／release lineage lock 分离、不同 request UUID 不互相串行、同 UUID claim 互斥、active／superseded、精确幂等、stale head／分叉／循环／跨 family 失败关闭、value-free 输出、最小 ACL，以及 migration／check／fixture／concurrency／checksum／dump／restore 命令。必须明确 6CE 不生成或修改 snapshot，不改变 0074／0075、读取、runtime、HTTP、Flutter、目录、导出、缓存、删除或 retention；synthetic Docker 证据不证明生产身份或真人平台。 |
+| `MANUAL-051` | 学习文档必须区分同版本数据更正与跨版本定义更正，说明 `manage_analysis_definitions` 与 `release_management_reports` 双授权、直接兼容证据、`analysis_definition_change`、锁后复核、撤销投影、各版本 replacement 图独立、PII-free 和组织删除边界。必须明确 6CF 只交付政策，不选择 report family、不实现数据库或客户端，也不把文档检查写成并发、生产或真人平台证据。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -1989,6 +2010,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-058` | 6CC 的 0081 structural check／rollback fixture／并发测试必须覆盖独立 capability、active current accepted revision、pending／legacy 精确 tuple、submitted／corrected revision、opaque ID 稳定映射、目录 20 项上限与稳定排序、目录无坐标、pending 最小坐标详情、legacy null coordinates、resolved／not-applicable／draft／attempt／voided／旧 revision 排除，以及 unknown／cross-project／stale 等价 `not_found`。还必须覆盖其他角色／capability 拒绝、每次重授权、目录／详情与撤权双向锁顺序、value-free immutable audit、mapping 不可改删、最小列 ACL、checksum 和 dump／restore。通过只证明 synthetic DB-only 读取，不声称 correction、runtime、Backend、HTTP、Flutter、地图、导出、生产身份、真实 PII 清除或真人平台。 |
 | `TEST-059` | 6CD 的 0082 structural check、rollback fixture 和并发测试必须覆盖合法 interest approved snapshot、独立 replacement family、release／replacement UUID 双向互斥、0062 专用 provenance、同 report／version／query／privacy／source scope／时区 revision／期间／lineage、后续 cutoff／发布时间、watermark 不回退、原因 allowlist、active／superseded、精确幂等、载荷漂移、跨项目／family、same／earlier cutoff、自链接、分叉、循环、stale head、旧新 snapshot 字节不变、value-free 结果、锁后撤权、竞争 replacement、最小 ACL、checksum 和 dump／restore。通过只证明 synthetic DB-only replacement，不声称 snapshot 生成、runtime、HTTP、Flutter、目录、导出、删除、retention、生产身份或真人平台。 |
 | `TEST-060` | 6CE 的 0083 structural check、rollback fixture 和并发测试必须覆盖合法 0075 consent-ratio approved snapshot、独立 replacement family、release／replacement lineage lock 分离、只有同 request UUID claim 互斥、0075 专用 provenance、protected-document／snapshot binding、同 report／version／query／privacy／source scope／时区 revision／期间／lineage、后续 cutoff／发布时间、watermark 不回退、当前 6BO opt-in 不参与更正资格、停用后既有 approved snapshot 仍可更正、原因 allowlist、active／superseded、精确幂等、载荷漂移、跨项目／family、same／earlier cutoff、自链接、分叉、循环、stale head、旧新 snapshot 字节不变、value-free 结果、锁后授权、竞争 replacement、最小 ACL、checksum 和 dump／restore。通过只证明 synthetic DB-only replacement，不声称 snapshot 生成、runtime、HTTP、Flutter、目录、导出、删除、retention、生产身份或真人平台。 |
+| `TEST-061` | 6CF 当前只验证 Spec、ADR、手册和 Markdown 链接一致，不证明数据库合同。后续单一 report-family 实现必须用 migration、structural check、rollback fixture、concurrency、reader／directory／export 回归覆盖 approved provenance、版本／definition fingerprint 至少一项变化、compatibility 与两端 project／family／metric／方向／definition tuple 精确绑定、定义管理与报告发布两条独立 capability 路径、组织可选第二人批准、共同锁顺序、独立 lineage lock、仅同 UUID claim 互斥、锁后 active identity／membership／project／grant 复核、撤销先后竞争、专用原因、canonical 幂等／payload drift、每端单一 direct edge、缺失／未知／漂移／撤销／反向决定、全同版本、shape／validator drift、self-link／cycle／branch／stale head、value-free `compatibility_revoked`、PII-free allowlist／拒绝字段、最小 ACL、组织删除 compatibility history、checksum 和 dump／restore；synthetic 通过不证明生产身份、部署或真人平台。 |
 
 ## 9. UI、视觉与可访问性
 
