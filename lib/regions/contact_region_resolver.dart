@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../data/local_database.dart';
 import '../features/contact_journal/contact_models.dart';
+import '../foundation/backend_base_uri.dart';
 import '../identity/identity_session.dart';
 import 'region_catalog.dart';
 import 'region_models.dart';
@@ -59,7 +60,7 @@ final class HttpContactRegionResolver implements ContactRegionResolver {
     required http.Client client,
     Duration timeout = const Duration(seconds: 10),
   }) => HttpContactRegionResolver._(
-    _validatedBaseUri(baseUri),
+    validateBackendBaseUri(baseUri),
     identitySession,
     regionCatalog,
     client,
@@ -247,19 +248,4 @@ String _sha256Fingerprint(Object? value, String name) {
     throw FormatException('$name must be lowercase SHA-256');
   }
   return fingerprint;
-}
-
-Uri _validatedBaseUri(Uri value) {
-  if (!value.hasScheme || value.host.isEmpty) {
-    throw const FormatException('BACKEND_BASE_URL must be an absolute URL');
-  }
-  final localHttp =
-      value.scheme == 'http' &&
-      const {'localhost', '127.0.0.1', '::1'}.contains(value.host);
-  if (value.scheme != 'https' && !localHttp) {
-    throw const FormatException(
-      'BACKEND_BASE_URL must use HTTPS except on localhost',
-    );
-  }
-  return value;
 }

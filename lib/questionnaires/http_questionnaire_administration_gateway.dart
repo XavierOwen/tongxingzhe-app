@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../foundation/backend_base_uri.dart';
 import '../identity/identity_session.dart';
 import 'questionnaire_administration.dart';
 import 'questionnaire_contract.dart';
@@ -115,7 +116,7 @@ final class HttpQuestionnaireAdministrationGateway
     required http.Client client,
     Duration timeout = const Duration(seconds: 10),
   }) => HttpQuestionnaireAdministrationGateway._(
-    _validatedBaseUri(baseUri),
+    validateBackendBaseUri(baseUri),
     identitySession,
     client,
     timeout,
@@ -584,20 +585,5 @@ int? _nullableInt(Object? value) {
 num? _nullableNum(Object? value) {
   if (value == null) return null;
   if (value is! num) throw const FormatException('expected number or null');
-  return value;
-}
-
-Uri _validatedBaseUri(Uri value) {
-  if (!value.hasScheme || value.host.isEmpty) {
-    throw const FormatException('BACKEND_BASE_URL must be an absolute URL');
-  }
-  final localHttp =
-      value.scheme == 'http' &&
-      const {'localhost', '127.0.0.1', '::1'}.contains(value.host);
-  if (value.scheme != 'https' && !localHttp) {
-    throw const FormatException(
-      'BACKEND_BASE_URL must use HTTPS except on localhost',
-    );
-  }
   return value;
 }

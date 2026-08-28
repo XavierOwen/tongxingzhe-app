@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../foundation/backend_base_uri.dart';
 import '../identity/identity_session.dart';
 import 'personal_follow_up_consent_opt_in.dart';
 
@@ -69,7 +70,7 @@ final class HttpPersonalFollowUpConsentOptInGateway
     Duration timeout = const Duration(seconds: 15),
   }) {
     return HttpPersonalFollowUpConsentOptInGateway._(
-      baseUri: _validatedBaseUri(baseUri),
+      baseUri: validatePathlessBackendBaseUri(baseUri),
       identitySession: identitySession,
       client: client,
       currentProjectId: currentProjectId,
@@ -410,16 +411,4 @@ DateTime _utcTimestamp(Object? value) {
     throw const FormatException('expected UTC timestamp');
   }
   return parsed;
-}
-
-Uri _validatedBaseUri(Uri value) {
-  final localHttp =
-      value.scheme == 'http' &&
-      const {'localhost', '127.0.0.1', '::1'}.contains(value.host);
-  if ((value.scheme != 'https' && !localHttp) ||
-      value.host.isEmpty ||
-      value.path.isNotEmpty && value.path != '/') {
-    throw ArgumentError('invalid backend base URI');
-  }
-  return value;
 }

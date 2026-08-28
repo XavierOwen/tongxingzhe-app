@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../foundation/backend_base_uri.dart';
 import '../identity/identity_session.dart';
 import 'promotion_target.dart';
 
@@ -105,7 +106,7 @@ final class HttpPromotionTargetGateway
     required http.Client client,
     Duration timeout = const Duration(seconds: 15),
   }) => HttpPromotionTargetGateway._(
-    baseUri: _validatedBaseUri(baseUri),
+    baseUri: validateBackendBaseUri(baseUri),
     identitySession: identitySession,
     client: client,
     timeout: timeout,
@@ -567,18 +568,3 @@ int? _nullableInteger(Object? value, {required int minimum, int? maximum}) =>
     value == null ? null : _integer(value, minimum: minimum, maximum: maximum);
 
 String? _nullableString(Object? value) => value == null ? null : _string(value);
-
-Uri _validatedBaseUri(Uri value) {
-  final localHttp =
-      value.scheme == 'http' &&
-      const {'localhost', '127.0.0.1', '::1'}.contains(value.host);
-  if (!value.hasScheme || value.host.isEmpty) {
-    throw const FormatException('BACKEND_BASE_URL must be an absolute URL');
-  }
-  if (value.scheme != 'https' && !localHttp) {
-    throw const FormatException(
-      'BACKEND_BASE_URL must use HTTPS except on localhost',
-    );
-  }
-  return value;
-}
