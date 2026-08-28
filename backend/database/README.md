@@ -38,8 +38,8 @@ Backend adapter 集成通过。
 该配置使用追加式版本、预期版本和 request UUID。相同 payload 精确幂等，载荷漂移、过期版本、撤权和并发冲突失败关闭。结果只包含 value-free 配置 metadata，
 不包含比例、报告格、contact、推广对象、贡献者或 PII。`not_enabled` 不表示 `0 / 0`，配置时间也不改变统计期间。
 
-6BO 不增加 runtime bridge、HTTP、Backend integration、Flutter 或统计候选。实现后，完整 Docker runner 会自动发现 0073 migration、check、fixture 和并发脚本，
-并在 dump／restore 中重跑 migration、check 和 fixture。通过只能证明 synthetic PostgreSQL 配置合同，不能证明比例数学或披露风险控制。
+6BO 不增加 runtime bridge、HTTP、Backend integration、Flutter 或统计候选。实现后，完整 Docker runner 会在源库自动发现 0073 migration、check、fixture 和并发脚本。
+dump／restore 后，恢复库只重跑 check 和 fixture，不重新执行 migration。通过只能证明 synthetic PostgreSQL 配置合同，不能证明比例数学或披露风险控制。
 
 schema dump 不包含 PostgreSQL cluster roles。恢复到新 cluster 前，部署身份必须先运行 `tool/postgres_prepare_restore_roles.sh`，幂等建立 `tongxingzhe_runtime`，以及无登录、无成员的 `tongxingzhe_region_publisher`、`tongxingzhe_contact_provenance_writer`、`tongxingzhe_region_mapping_writer`、`tongxingzhe_region_attribution_reader`、`tongxingzhe_management_region_report_reader`、`tongxingzhe_management_original_region_report_reader`、`tongxingzhe_management_interest_report_reader`、`tongxingzhe_management_current_city_snapshot_release_writer`、`tongxingzhe_management_interest_snapshot_release_writer`、`tongxingzhe_management_original_region_snapshot_release_writer`、`tongxingzhe_management_report_snapshot_lifecycle_writer`、`tongxingzhe_management_follow_up_consent_config_writer`、`tongxingzhe_management_follow_up_consent_ratio_reader`、`tongxingzhe_management_consent_ratio_snapshot_release_writer` 和 `tongxingzhe_management_deidentified_anomaly_reader`。Docker 套件会另启一个没有源角色的 PostgreSQL 容器，先准备角色再恢复，避免同 cluster 测试掩盖 owner／ACL 依赖。
 
@@ -698,8 +698,8 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 ./tool/verify_authorized_management_current_city_report_snapshot_read_concurrency.sh
 ```
 
-完整 Docker runner 会自动发现 0058 的 migration、check、fixture 和并发脚本，并在 checksum、dump／restore 和恢复库
-中重跑。通过只证明 synthetic DB-only 合同成立，不证明生产区域证据或 HTTP／客户端已经完成。
+完整 Docker runner 会在源库自动发现 0058 的 migration、check、fixture 和并发脚本，并验证 checksum。dump／restore 后，
+恢复库只重跑 check 和 fixture。通过只证明 synthetic DB-only 合同成立，不证明生产区域证据或 HTTP／客户端已经完成。
 
 `0059_runtime_authorized_management_current_city_report_snapshot_read.sql` 增加 Backend runtime 的窄读取桥。调用方
 提供 external identity 的 exact issuer／subject、project UUID 和 snapshot UUID。bridge 只映射现有 active identity，
@@ -713,8 +713,8 @@ target context、两个期间的 city grid、cell keys 和顺序。它拒绝 con
 geometry 和其他额外字段。
 
 真实 adapter integration 不依赖会回滚的 psql fixture。它在自己的 transaction 中建立 fixture 数据，读取 active identity，
-验证未知 identity 失败关闭，最后回滚。完整 Docker runner 会显式运行该 integration，并在 checksum、并发和 dump／restore
-恢复库中重跑 0059。
+验证未知 identity 失败关闭，最后回滚。完整 Docker runner 会在源库显式运行该 integration、并发脚本和 checksum。
+dump／restore 后，恢复库只重跑 check 和 fixture，不重跑 integration。
 
 在专用测试库中验证 6AQ：
 
@@ -834,7 +834,7 @@ check 应同时固定 owner、`SECURITY DEFINER`、`search_path`、函数执行�
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-runner 会按完整 migration 顺序自动发现 0062 migration、check、fixture、并发脚本、checksum 和 dump／restore，并在恢复库重跑。
+runner 会在源库按完整 migration 顺序自动发现 0062 migration、check、fixture 和并发脚本，并验证 checksum。dump／restore 后，恢复库只重跑 check 和 fixture。
 也可以在确认不是 production 的专用测试库中按顺序运行：
 
 ```bash
@@ -878,7 +878,7 @@ Flutter、Drift、缓存、离线、同步、导出、warehouse、retention 或�
 
 runner 按 migration 文件名自动发现 0063 migration、结构／权限 check、synthetic fixture 和
 `verify_authorized_management_interest_report_snapshot_read_concurrency.sh`。它还运行 checksum、dump／restore，并在
-没有源 cluster roles 的恢复库重跑 migration、check 和 fixture。恢复阶段不重跑会提交 synthetic 行的并发脚本，避免把相同
+没有源 cluster roles 的恢复库只重跑 check 和 fixture，不重新执行 migration。恢复阶段不重跑会提交 synthetic 行的并发脚本，避免把相同
 并发写入再次导入恢复库。成功必须同时证明合法读取、三类失败状态、授权撤权并发、value-free audit、不可改删、最小 ACL 和
 旧 channel、current-city、6AV、6AW 回归。
 
@@ -918,7 +918,7 @@ protected report。它拒绝额外字段、PII、隐藏前值和其他 report fa
 ```
 
 runner 自动发现 0064 migration、check 和 fixture，并显式运行第八条 Backend integration。它还运行 0063 read/revoke 并发、checksum 和
-dump／restore。恢复库只重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。
+dump／restore。恢复库只重跑 check 和 fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。
 
 如果只调试专用测试库，先确认 `DATABASE_URL` 不是 production，再运行：
 
@@ -975,7 +975,7 @@ cd "$(git rev-parse --show-toplevel)"
 ```
 
 runner 自动发现 0065 migration、directory check 和 fixture，并运行 interest directory Backend integration、独立 concurrency script、checksum
-和 dump／restore。恢复库重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。6BA integration 必须使用自己的 interest
+和 dump／restore。恢复库只重跑 check 和 fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。6BA integration 必须使用自己的 interest
 directory fixture，不得读取 `CURRENT_CITY_RUNTIME_FIXTURE` 或 current-city directory fixture。
 
 #### 专用测试库验证
@@ -1018,8 +1018,8 @@ cd "$(git rev-parse --show-toplevel)"
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-runner 会自动发现 0066 migration、check、fixture 和并发脚本，并在 checksum 与 dump／restore 阶段重跑 migration、check 和 fixture；恢复库不会重跑会提交
-synthetic 行的并发脚本。预期成功消息是 `PostgreSQL Docker 测试全部通过。`。这只证明 synthetic PostgreSQL 合同成立。
+runner 会在源库自动发现 0066 migration、check、fixture 和并发脚本，并验证 checksum。dump／restore 后，恢复库只重跑 check 和 fixture，
+不会重跑会提交 synthetic 行的并发脚本。预期成功消息是 `PostgreSQL Docker 测试全部通过。`。这只证明 synthetic PostgreSQL 合同成立。
 
 只调试专用测试库时，确认 `DATABASE_URL` 不是 production，并使用新的空库，因为并发脚本会提交 synthetic 行：
 
@@ -1058,8 +1058,8 @@ snapshot、attempt 和 request claim 追加不可变；`PUBLIC`、runtime、普�
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-runner 会自动发现 0068 migration、structural check、fixture 和并发脚本。restore 阶段先运行 `tool/postgres_prepare_restore_roles.sh`，再恢复 dump，
-随后重跑 migration、check 和 fixture；不会重跑会提交 synthetic 行的并发脚本。专用测试库的调试顺序是：
+runner 会在源库自动发现 0068 migration、structural check、fixture 和并发脚本。restore 阶段先运行 `tool/postgres_prepare_restore_roles.sh`，再恢复 dump，
+随后只重跑 check 和 fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。专用测试库的调试顺序是：
 
 ```bash
 export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
@@ -1100,8 +1100,8 @@ retention、warehouse 或生产身份。
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-runner 自动发现 0069 migration、structural check、rollback fixture 和 read／revoke 并发脚本，并执行 checksum 与 dump／restore。恢复库只重跑
-migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。调试已有专用测试库时按顺序运行：
+runner 在源库自动发现 0069 migration、structural check、rollback fixture 和 read／revoke 并发脚本，并验证 checksum。dump／restore 后，恢复库只重跑
+check 和 fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。调试已有专用测试库时按顺序运行：
 
 ```bash
 export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
@@ -1141,7 +1141,7 @@ SQLSTATE `42501` 映射为 typed `forbidden`，其他 SQLSTATE 保持为内部�
 ```
 
 runner 自动发现 0070 migration、structural check 和 rollback fixture，并显式运行原始区域 runtime integration。它继续运行 0069 read／revoke 并发、
-checksum 和 dump／restore。恢复库只重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。
+checksum 和 dump／restore。恢复库只重跑 check 和 fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。
 
 如果只调试专用测试库，先确认 `DATABASE_URL` 不是 production，再按以下顺序运行：
 
@@ -1182,7 +1182,7 @@ interest directory。结果最多 20 项，按 cutoff、release time 和 snapsho
 ```
 
 runner 自动发现 0071 migration、check 和 rollback fixture，并运行 original-region directory integration、独立 concurrency、checksum 和 dump／restore。
-恢复库重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。fixture 与并发脚本使用不同命名空间，避免已提交行与 rollback 数据冲突。
+恢复库只重跑 check 和 fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。fixture 与并发脚本使用不同命名空间，避免已提交行与 rollback 数据冲突。
 
 只调试专用测试库时，先确认 `DATABASE_URL` 不是 production，再按顺序运行：
 
@@ -1403,8 +1403,8 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file backend/database/fixtures/0054_management_region_attribution.sql
 ```
 
-完整 Docker 套件会从空库运行同一 migration、check 和 fixture，在 checksum 复跑及 dump／restore 后再次
-执行。synthetic fixture 必须覆盖 original 精确来源、current 坐标唯一／零命中／同链嵌套／跨链歧义／同深度
+完整 Docker 套件会在源库从空库运行 migration、check 和 fixture，并验证 checksum。dump／restore 后，恢复库只重跑
+check 和 fixture，不重新执行 migration。synthetic fixture 必须覆盖 original 精确来源、current 坐标唯一／零命中／同链嵌套／跨链歧义／同深度
 歧义、region-only 同版本／显式 mapping／缺失 mapping、错误指纹、草稿或未知树，以及 pending、N/A 和
 不完整来源的 `not_reportable`。这些检查不证明真实区域对应关系或生产报告已经验收。
 

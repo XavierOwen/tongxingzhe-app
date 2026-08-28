@@ -229,7 +229,7 @@ PostgreSQL 检查与 synthetic fixture 证明：
 - 撤销任一端分配后不可读取或结束关系；
 - 关系不增加对象分配、不建立接触关联，也不写 warehouse。
 
-CI 从空库执行全部 migration 两次，再运行检查和 fixture。随后执行 `pg_dump`／`pg_restore`，并在恢复库中重跑同一组验证。没有用过 Docker 的读者可以按[第 9 章](09-local-docker-and-ci-testing.md)从安装、启动到读取成功输出逐步执行；关系审计由 `verify_promotion_target_relationship_audit.sql` 和 `0018_promotion_target_relationship_audit.sql` fixture 覆盖。
+CI 在源库从空库执行全部 migration 两次，再运行 check、fixture、相关并发脚本和 checksum。随后执行 `pg_dump`／`pg_restore`，并在恢复库中只重跑 check 和 fixture。没有用过 Docker 的读者可以按[第 9 章](09-local-docker-and-ci-testing.md)从安装、启动到读取成功输出逐步执行；关系审计由 `verify_promotion_target_relationship_audit.sql` 和 `0018_promotion_target_relationship_audit.sql` fixture 覆盖。
 
 ## 用模拟器预检离线 PII
 

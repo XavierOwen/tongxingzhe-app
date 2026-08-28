@@ -397,7 +397,7 @@ npm test
 ```
 
 runner 会自动发现 0064 migration、check 和 fixture，并显式运行兴趣快照 runtime integration。它还运行 0063 read/revoke 并发、checksum 和
-dump／restore。恢复库只重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。通过只证明 DB-only bridge、adapter parser 和
+dump／restore。恢复库只重跑 check 和 fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。通过只证明 DB-only bridge、adapter parser 和
 ACL，不证明 HTTP、Flutter、目录、导出、生产身份提供方或真实平台运行时。
 
 ## 管理兴趣快照 HTTP 读取合同
@@ -511,8 +511,8 @@ cd ../..
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
-runner 自动发现 0065 migration、check 和 fixture，并运行 interest directory integration、独立并发、checksum 和 dump／restore。恢复库重跑
-migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。integration 必须读取自己的 interest directory fixture，不得使用
+runner 在源库自动发现 0065 migration、check 和 fixture，并运行 interest directory integration、独立并发和 checksum。dump／restore 后，恢复库只重跑
+check 和 fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。integration 必须读取自己的 interest directory fixture，不得使用
 `CURRENT_CITY_RUNTIME_FIXTURE`。上述证据只证明 DB、Backend 和 HTTP 合同，不证明 Flutter、导出、缓存、离线、生产身份或真实平台运行时。
 
 ## 原始区域快照 runtime bridge 合同
@@ -560,7 +560,7 @@ cd ../..
 ```
 
 runner 自动发现 0070 migration、structural check 和 rollback fixture，并显式运行原始区域 runtime integration。它还运行 0069 read／revoke 并发、
-checksum 和 dump／restore。恢复库只重跑 migration、check 和 fixture，不重跑会提交 synthetic 行的并发脚本。
+checksum 和 dump／restore。恢复库只重跑 check 和 fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。
 
 如果只调试专用测试库，先确认 `DATABASE_URL` 不是 production，再运行 migration、0070 check 和 fixture。fixture 使用 synthetic identity 和快照，
 不会连接真实 identity provider：
