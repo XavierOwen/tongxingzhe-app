@@ -327,6 +327,14 @@ reporting time zone 和 release lineage；新快照的 `data_cutoff_utc` 与发�
 关系和最小审计证据追加不可变，不允许 UPDATE 或 DELETE。
 _Avoid_: 生成新快照、静默改写旧快照、自动选择 latest、跨 report family 复用 lineage、把取代登记当作删除、tombstone 或 retention 策略
 
+**后续联系同意占比快照更正版取代**:
+6CE 在 private PostgreSQL 中登记两份已经通过 0075、结果为 `approved_baseline` 或 `approved` 的
+`contact_target_follow_up_consent_ratio_two_periods@1` 快照之间的直接 replacement。两份快照必须属于同一项目、报告定义、隐私与来源范围、报告时区 revision、期间和 release lineage；新快照的 cutoff 与发布时间必须晚于旧快照，source change sequence 不得回退。
+它只核对已经存在的 0075 approved attempt，不读取当前 6BO opt-in。停用 opt-in 不会阻止对既有 approved snapshot 登记合格的更正关系；发布能力、成员关系、项目状态和 0075 protected-document provenance 仍须在锁后重新确认。
+replacement 使用独立 consent-ratio request family 和 value-free lifecycle。replacement lineage lock 与 release lineage lock 分开；不同 request UUID 的普通发布和 replacement 不互相串行，只有同一 UUID 的共享 claim 互斥。生命周期只返回快照 ID、`active`／`superseded` 和直接 replacement ID，不返回 ratio、coverage、来源、贡献者、接触或 PII。
+这是 DB-only 合同，不生成或改写 snapshot，不改变 0074 candidate、0075 release、读取、runtime、HTTP、Flutter、目录、导出、缓存、删除或 retention。
+_Avoid_: 读取当前 opt-in 决定更正资格、复用 interest／current-city replacement、把 replacement lock 当作 release lock、让不同 request UUID 互相阻塞、返回 ratio 或 coverage、把 Docker synthetic 通过写成生产证据
+
 **current 城市报告受保护快照**:
 由 6AN 固定定义、两个完整 ISO 周、完整城市网格、目标树 tuple、可信报告时区 revision、数据截止时间和
 source change watermark 组成的不可变私有报告文档；它只能在 `release_management_reports` 能力和可信时区上下文重新确认后建立，
@@ -987,6 +995,17 @@ _Avoid_: 复用渠道或 original-region replacement 表、按目录排序猜测
 
 关系和最小 audit 追加不可变。每份旧快照最多一个直接 replacement，每份新快照最多一个 predecessor；自链接、循环、分叉、stale head、跨项目／family、倒序和撤权失败关闭。生命周期只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID，不返回 interest cells、计数、贡献者、接触或 PII。6CD 不生成 snapshot，不改变目录／读取／runtime／HTTP／Flutter／导出，也不处理跨版本更正、删除或 retention。
 _Avoid_: 复用渠道、current-city 或 original-region replacement 表、按目录排序猜测 latest、静默改写 snapshot、直接读取 0062 attempt、返回报告值、把 Docker synthetic 通过写成生产证据
+
+**后续联系同意占比快照更正版取代**:
+6CE 只登记两份已经通过 0075 的
+`contact_target_follow_up_consent_ratio_two_periods@1` approved snapshot（`approved_baseline` 或 `approved`）之间的直接 replacement。旧、新快照必须保持同一 project、report／version、query fingerprint、privacy policy、source scope、报告时区 revision、期间和 release lineage；新快照的 cutoff 与发布时间必须更晚，source watermark 不得回退。
+
+它只通过 0075 专用 provenance seam 核对已存在的 approved attempt，不直接读取 attempt ledger，也不读取当前 6BO opt-in。停用 opt-in 后，既有 approved snapshot 仍可在满足发布 capability、membership、项目状态和 provenance 的条件下登记更正关系。
+
+关系使用共享 value-free request UUID ledger 中的独立 consent-ratio replacement family。replacement lineage lock 与 release lineage lock 分开；不同 request UUID 的普通 release／replacement 不互相串行，只有同一 UUID 的 claim 互斥。关系和最小 audit 追加不可变；每份旧快照最多一个直接 replacement，每份新快照最多一个 predecessor。自链接、循环、分叉、stale head、跨项目／family、载荷漂移和时间倒序失败关闭。
+
+生命周期只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID，不返回 ratio、coverage、隐藏前值、来源、贡献者、接触或 PII。6CE 不生成或修改 snapshot，不改变 0074 candidate、0075 release、读取、runtime、HTTP、Flutter、目录、导出、缓存、删除或 retention。
+_Avoid_: 使用当前 opt-in 作更正门禁、复用其他 report family replacement、把两个 lineage lock 合并、让不同 request UUID 互相阻塞、返回 ratio／coverage、把 Docker synthetic 通过写成生产证据
 
 **项目去身份化地点异常只读合同**:
 6CC 只把 active contact 当前 accepted revision 中的 `pending_resolution + pending_coordinates` 和 `unknown + legacy_incomplete` 暴露为项目范围的去身份化异常。revision 必须为 `submitted` 或 `corrected`；resolved、not-applicable、draft、attempt、voided、旧 revision 和跨项目事实不进入候选。

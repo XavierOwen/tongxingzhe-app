@@ -984,6 +984,48 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 check、fixture 和 concurrency 不能互相替代。完整 runner 还验证 migration checksum 和独立 dump／restore。通过只证明 synthetic DB-only interest replacement、provenance、授权锁、不可变性和 ACL；不证明 snapshot 生成、生产身份、runtime、HTTP、Flutter、目录、导出或真人平台。
 
+### 6CE：验证后续联系同意占比快照 replacement lineage
+
+0083 只登记两份已经通过 0075 的
+`contact_target_follow_up_consent_ratio_two_periods@1` approved snapshot（`approved_baseline` 或 `approved`）之间的直接 replacement。它不生成或改写 snapshot，不改变 0074 candidate 或 0075 release。两份快照必须保持同一 project、报告定义、隐私与来源范围、报告时区 revision、期间和 release lineage；新快照的 cutoff 与发布时间必须更晚，source watermark 不得回退。
+
+replacement 只能通过 0075 专用 provenance seam 核对 approved attempt，不能直接读取 attempt ledger，也不读取当前 6BO opt-in。停用 opt-in 不会阻止既有 approved snapshot 的合格更正登记。数据库仍须在锁后重新确认 `release_management_reports`、membership、active project、项目状态、0075 provenance 和 protected-document validator。
+
+replacement 使用独立 consent-ratio family。replacement lineage lock 与 release lineage lock 分开。
+
+不同 request UUID 的普通 release 和 replacement 不互相串行，只有同一 UUID 的共享 request claim 互斥。原因只允许 `late_accepted_data`、`contact_revision` 和 `contact_void`。关系和最小 audit 追加不可变，每份旧快照最多一个直接 replacement，每份新快照最多一个 predecessor。载荷漂移、跨 project／family、same／earlier cutoff、自链接、分叉、循环和 stale head 失败关闭。
+
+#### 第一次运行 Docker
+
+1. 打开 Docker Desktop，等待 Docker Engine 显示正在运行。
+2. 从仓库根目录确认 Docker：
+   ```bash
+   docker version
+   ```
+3. 运行完整 PostgreSQL 套件：
+   ```bash
+   ./tool/run_postgres_tests_in_docker.sh
+   ```
+4. 确认输出包含 0083 migration、6CE structural check、rollback fixture、replacement concurrency、checksum、restore check 和 restore fixture，退出码为 `0`。
+
+#### 只调试 6CE
+
+并发脚本会提交 synthetic 行。先新建专用测试库，并确认 `DATABASE_URL` 不指向 production：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_follow_up_consent_ratio_snapshot_replacements.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0083_management_follow_up_consent_ratio_snapshot_replacements.sql
+./tool/verify_management_follow_up_consent_ratio_snapshot_replacements_concurrency.sh
+```
+
+check 证明 migration、函数、保护文档、两个 lineage lock namespace 和 ACL 结构。fixture 证明 approved provenance、当前 opt-in 不参与更正、停用后既有 snapshot 仍可登记、value-free lifecycle 和失败关闭。并发脚本证明 replacement／revoke 锁顺序、竞争 replacement，以及 replacement／release 的同 UUID 互斥。三者不能互相替代。
+
+完整 runner 还验证 migration checksum 和独立 dump／restore。恢复库只重跑 check 和 fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。通过只证明 synthetic DB-only consent-ratio replacement、0075 provenance、授权锁、不可变性和 ACL；不证明 snapshot 生成、runtime、HTTP、Flutter、目录、导出、缓存、删除、retention、生产身份或真人平台运行时。
+
 ### 6BO：验证组织项目后续联系同意占比 opt-in 配置
 
 6BO 只验证组织项目的配置生命周期。它不执行后续联系同意比例候选。个人项目的 0048 配置表与组织配置表必须分开。

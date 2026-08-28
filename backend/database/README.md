@@ -1280,6 +1280,38 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 这些测试只证明 synthetic DB-only interest replacement、授权锁、claim、provenance、不可变性和 ACL。它们不证明 snapshot 生成、runtime、HTTP、Flutter、目录、导出、删除、retention、production identity 或真人平台运行时。
 
+### 6CE：验证后续联系同意占比快照 replacement lineage
+
+0083 只在 private PostgreSQL 登记两份已经通过 0075 的
+`contact_target_follow_up_consent_ratio_two_periods@1` approved snapshot（`approved_baseline` 或 `approved`）之间的直接 replacement。它不生成或改写 snapshot，不改变 0074 candidate 或 0075 release。两份快照必须保持同一 project、报告定义、隐私与来源范围、报告时区 revision、期间和 release lineage；新快照的 cutoff 与发布时间必须更晚，source watermark 不得回退。
+
+replacement 只能通过 0075 专用 provenance seam 核对 approved attempt，不能直接读取 attempt ledger，也不读取当前 6BO opt-in。停用 opt-in 不会阻止既有 approved snapshot 的合格更正登记。数据库仍须在锁后重新确认 `release_management_reports`、membership、active project、项目状态、0075 provenance 和 protected-document validator。
+
+共享的 value-free request UUID ledger 使用独立 consent-ratio replacement family。replacement lineage lock 与 release lineage lock 分开。
+
+不同 request UUID 的普通 release 和 replacement 不互相串行，只有同一 UUID 的 request claim 互斥。原因只允许 `late_accepted_data`、`contact_revision` 和 `contact_void`。关系和最小 audit 追加不可变，每份旧快照最多一个直接 replacement，每份新快照最多一个 predecessor。载荷漂移、跨 project／family、same／earlier cutoff、自链接、分叉、循环和 stale head 失败关闭。
+
+生命周期只返回 snapshot ID、`active`／`superseded` 和直接 replacement ID，不返回 ratio、coverage、隐藏前值、来源、贡献者、接触或 PII。`PUBLIC`、runtime、普通 app role、reader、release writer 和其他 report-family writer 不能直接访问该合同。
+
+从仓库根目录运行完整测试：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 自动发现 0083 migration、structural check、rollback fixture 和 replacement concurrency script，并继续验证 checksum 与 dump／restore。只调试专用测试库时，先确认 `DATABASE_URL` 不是 production，再运行：
+
+```bash
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_management_follow_up_consent_ratio_snapshot_replacements.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0083_management_follow_up_consent_ratio_snapshot_replacements.sql
+./tool/verify_management_follow_up_consent_ratio_snapshot_replacements_concurrency.sh
+```
+
+fixture 会回滚，并发脚本使用独立 synthetic namespace。恢复库只重跑 check 和 fixture，不重新执行 migration，也不重跑会提交 synthetic 行的并发脚本。这些检查只证明 synthetic DB-only replacement、0075 provenance、授权锁、不可变性、value-free lifecycle 和 ACL，不证明 snapshot 生成、runtime、HTTP、Flutter、目录、导出、删除、retention、production identity 或真人平台运行时。
+
 ### 6CC：验证项目范围的去身份化地点异常读取
 
 0081 增加 private、DB-only 的异常目录与详情合同。候选只包含 active contact 当前 accepted revision 的
