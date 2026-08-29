@@ -95,8 +95,14 @@ run_overlap_case() {
         EXIT WHEN EXISTS (
           SELECT 1
           FROM pg_locks AS waiting_lock
-          WHERE waiting_lock.locktype = 'advisory'
-            AND NOT waiting_lock.granted
+          WHERE NOT waiting_lock.granted
+            AND (
+              waiting_lock.locktype IN ('advisory', 'transactionid')
+              OR (
+                waiting_lock.locktype = 'tuple'
+                AND waiting_lock.relation = 'app_data.app_users'::regclass
+              )
+            )
         );
         IF clock_timestamp() >= wait_deadline THEN
           RAISE EXCEPTION 'second authorization write did not wait';
@@ -267,7 +273,11 @@ run_overlap_case() {
 
 run_overlap_case \
   'organization' \
-  "SELECT pg_advisory_xact_lock(hashtextextended('organization-membership:d2000000-0000-4000-8000-000000000001:d1000000-0000-4000-8000-000000000001', 0));" \
+  "SELECT 1 FROM app_data.app_users
+     WHERE app_user_id = 'd1000000-0000-4000-8000-000000000001'::uuid
+     FOR UPDATE;
+   SELECT pg_advisory_xact_lock(hashtextextended('organization-governance:d2000000-0000-4000-8000-000000000001', 0));
+   SELECT pg_advisory_xact_lock(hashtextextended('organization-membership:d2000000-0000-4000-8000-000000000001:d1000000-0000-4000-8000-000000000001', 0));" \
   'management-authorization-ready:organization' \
   "INSERT INTO app_data.organization_memberships (
      organization_membership_id, organization_workspace_id,

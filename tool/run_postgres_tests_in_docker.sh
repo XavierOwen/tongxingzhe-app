@@ -12,8 +12,10 @@ keep_failed_container="${KEEP_POSTGRES_TEST_CONTAINER:-0}"
 test_database='tongxingzhe_test'
 restore_database='tongxingzhe_restore'
 upgrade_database='tongxingzhe_region_upgrade'
+ownerless_upgrade_database='tongxingzhe_ownerless_upgrade'
 database_url="postgresql://postgres:postgres@127.0.0.1:5432/${test_database}"
 upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${upgrade_database}"
+ownerless_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${ownerless_upgrade_database}"
 container_started=0
 restore_container_started=0
 restore_temporary_directory=''
@@ -505,6 +507,164 @@ docker exec "${container_name}" psql \
   >/dev/null
 echo '0038→0039 历史 resolved provenance 回填：通过。'
 echo '已有区域树升级为冻结发布版本：通过。'
+
+echo '验证 0085 拒绝无 owner 历史组织，并完整回滚 migration。'
+docker exec "${container_name}" createdb \
+  -U postgres \
+  "${ownerless_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "source_migration_count=\"\$(find /workspace/backend/database/migrations \
+     -maxdepth 1 -type f \
+     \( -name '000[1-9]_*.sql' \
+        -o -name '00[1-7][0-9]_*.sql' \
+        -o -name '008[0-4]_*.sql' \) \
+     | wc -l | tr -d ' ')\" && \
+   mkdir /tmp/ownerless-upgrade-migrations && \
+   find /workspace/backend/database/migrations \
+     -maxdepth 1 -type f \
+     \( -name '000[1-9]_*.sql' \
+        -o -name '00[1-7][0-9]_*.sql' \
+        -o -name '008[0-4]_*.sql' \) \
+     -exec cp {} /tmp/ownerless-upgrade-migrations/ \; && \
+   test \"\$(find /tmp/ownerless-upgrade-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" \
+     -eq \"\${source_migration_count}\" && \
+   test -f /tmp/ownerless-upgrade-migrations/0084_*.sql"
+docker exec \
+  --env DATABASE_URL="${ownerless_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/ownerless-upgrade-migrations \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh \
+  >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${ownerless_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    SET TIME ZONE 'UTC';
+    INSERT INTO app_data.app_users (app_user_id, status)
+    VALUES ('00000000-0085-0000-0000-000000000901'::uuid, 'active');
+    INSERT INTO app_data.workspaces (
+      workspace_id,
+      workspace_kind,
+      display_name,
+      personal_owner_app_user_id,
+      deleted_at
+    ) VALUES (
+      '00000000-0085-1000-0000-000000000901'::uuid,
+      'organization',
+      '0085 ownerless upgrade organization',
+      NULL,
+      NULL
+    );
+    INSERT INTO app_data.organization_memberships (
+      organization_membership_id,
+      organization_workspace_id,
+      app_user_id,
+      active_from_utc,
+      inactive_from_utc
+    ) VALUES (
+      '00000000-0085-1100-0000-000000000901'::uuid,
+      '00000000-0085-1000-0000-000000000901'::uuid,
+      '00000000-0085-0000-0000-000000000901'::uuid,
+      clock_timestamp() - interval '1 hour',
+      NULL
+    );
+  " \
+  >/dev/null
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/ownerless-upgrade-only && \
+   cp /workspace/backend/database/migrations/0085_*.sql \
+     /tmp/ownerless-upgrade-only/ && \
+   test \"\$(find /tmp/ownerless-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+ownerless_upgrade_output=''
+ownerless_upgrade_status=0
+ownerless_upgrade_output="$(
+  docker exec \
+    --env DATABASE_URL="${ownerless_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/ownerless-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh \
+    2>&1
+)" || ownerless_upgrade_status=$?
+if [[ "${ownerless_upgrade_status}" -eq 0 ]] \
+  || [[ "${ownerless_upgrade_output}" != *'organization must retain an active owner'* ]]
+then
+  echo '0085 无 owner 升级没有按预期失败，或缺少固定错误 message。' >&2
+  printf '%s\n' "${ownerless_upgrade_output}" >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${ownerless_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$check\$
+    DECLARE
+      trigger_count integer;
+      function_count integer;
+    BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM app_migrations.schema_migrations
+        WHERE version = '0085_organization_owner_invariant'
+      ) THEN
+        RAISE EXCEPTION '0085 migration record survived failed upgrade';
+      END IF;
+
+      SELECT count(*)
+      INTO function_count
+      FROM (
+        VALUES
+          (to_regprocedure(
+            'app_private.lock_organization_governance_v1(uuid)'
+          )),
+          (to_regprocedure(
+            'app_private.lock_organization_governance_for_mutation_v1()'
+          )),
+          (to_regprocedure(
+            'app_private.require_organization_active_owner_v1(uuid)'
+          )),
+          (to_regprocedure(
+            'app_private.enforce_organization_active_owner_v1()'
+          ))
+      ) AS expected_functions(function_identity)
+      WHERE function_identity IS NOT NULL;
+      IF function_count <> 0 THEN
+        RAISE EXCEPTION
+          '0085 functions survived failed upgrade: %', function_count;
+      END IF;
+
+      SELECT count(*)
+      INTO trigger_count
+      FROM pg_catalog.pg_trigger AS trigger_row
+      JOIN pg_catalog.pg_class AS relation_row
+        ON relation_row.oid = trigger_row.tgrelid
+      JOIN pg_catalog.pg_namespace AS namespace_row
+        ON namespace_row.oid = relation_row.relnamespace
+      WHERE namespace_row.nspname = 'app_data'
+        AND trigger_row.tgname IN (
+          'workspaces_governance_fence',
+          'organization_memberships_governance_fence',
+          'organization_owner_assignments_governance_fence',
+          'app_users_governance_fence',
+          'workspaces_active_owner_invariant',
+          'organization_memberships_active_owner_invariant',
+          'organization_owner_assignments_active_owner_invariant',
+          'app_users_active_owner_invariant'
+        );
+      IF trigger_count <> 0 THEN
+        RAISE EXCEPTION
+          '0085 triggers survived failed upgrade: %', trigger_count;
+      END IF;
+    END
+    \$check\$;
+  " \
+  >/dev/null
+echo '0085 无 owner 升级失败且事务完整回滚：通过。'
 
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations

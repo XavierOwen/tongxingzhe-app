@@ -198,10 +198,12 @@ BEGIN
   -- Keep the migration's small relational shape explicit: owner history has
   -- one containment FK, claims have one nullable actor FK, and all three
   -- tables have exactly the checks that protect finite temporal metadata.
+  -- Later deferred trigger constraints have contype 't' and their own check.
   IF (
     SELECT count(*)
     FROM pg_catalog.pg_constraint
     WHERE conrelid = owner_assignments
+      AND contype <> 't'
   ) <> 4
     OR NOT EXISTS (
       SELECT 1

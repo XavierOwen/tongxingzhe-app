@@ -101,7 +101,9 @@ Backend 将它们映射为 `503 organization_creation_unavailable`、`400 invali
 
 创建 audit 只保存 event／request ID、三个业务 ID、`organization-creation:v1` 和数据库时间，不保存直接 actor 引用。audit、错误响应和结构化日志也不保存组织名称、邮箱、external identity、token、Auth user object、provider metadata、SQL、数据库消息、堆栈或原始错误。该 audit 在组织删除恢复期内保留，并在期满清除时连同其他组织业务数据删除。
 
-这些内容当前是实现前合同。仓库尚未增加组织创建 migration、store、HTTP route 或 Flutter UI；文档检查不能证明数据库原子性、并发 owner 不变量或生产身份。
+0084 migration 已实现组织创建 bridge、private writer、owner assignment、claim 和 audit。
+0085 migration 为 workspace、membership、owner assignment 和 app user status 增加同一 governance lock fence。transaction 结束时执行延迟 active-owner 检查。
+配套结构检查、回滚 fixture 和独立会话并发测试只证明 synthetic PostgreSQL 合同。仓库仍未增加组织创建 HTTP route 或 Flutter UI。这些证据也不代表生产身份、真实账号删除或组织清除。
 
 ## 4. PostgreSQL transaction 建立哪些事实
 

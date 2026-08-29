@@ -465,10 +465,40 @@ if [[ "${serial_fact_counts}" != '2|2|2' ]]; then
 fi
 
 serial_owner_assignment_id="$(echo "${actor_first_result}" | cut -d'|' -f4)"
+serial_workspace_id="$(echo "${actor_first_result}" | cut -d'|' -f2)"
+replacement_user_id='84000000-0084-0000-0000-000000000002'
+replacement_membership_id='84000000-0084-3000-0000-000000000001'
+replacement_owner_assignment_id='84000000-0084-4000-0000-000000000001'
 
-echo '验证已提交 owner assignment 可合法 close 一次，随后不可改写或删除。'
+echo '验证已提交 owner assignment 可在 replacement owner 存在时合法 close 一次，随后不可改写或删除。'
 run_psql --quiet --command="
   BEGIN;
+  INSERT INTO app_data.app_users (app_user_id, status)
+  VALUES ('${replacement_user_id}'::uuid, 'active');
+  INSERT INTO app_data.organization_memberships (
+    organization_membership_id,
+    organization_workspace_id,
+    app_user_id,
+    active_from_utc,
+    inactive_from_utc
+  ) VALUES (
+    '${replacement_membership_id}'::uuid,
+    '${serial_workspace_id}'::uuid,
+    '${replacement_user_id}'::uuid,
+    transaction_timestamp(),
+    NULL
+  );
+  INSERT INTO app_data.organization_owner_assignments (
+    organization_owner_assignment_id,
+    organization_membership_id,
+    active_from_utc,
+    inactive_from_utc
+  ) VALUES (
+    '${replacement_owner_assignment_id}'::uuid,
+    '${replacement_membership_id}'::uuid,
+    transaction_timestamp(),
+    NULL
+  );
   DO \$close\$
   DECLARE
     changed_count integer;
