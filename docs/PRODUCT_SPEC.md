@@ -275,6 +275,96 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `ORG-004` | 组织删除后进入三十天可恢复只读期；期满清除组织业务数据，只保留不含业务内容的最小删除审计。 |
 | `ORG-005` | 账号删除也有三十天恢复期；期满清除身份、个人空间、个人反思和成员关系，组织历史事实以不可反查的“已删除成员”保留。 |
 | `ORG-006` | 完成邮箱验证的用户可以自助创建组织并成为首位所有者；平台可实施配额、停用和反滥用，但不把组织创建变成人工审批流程。 |
+| `ORG-007` | 组织创建必须在一个 PostgreSQL transaction 中原子建立 organization workspace、创建者 membership、首位 active owner、幂等 request claim 和不含组织名称的创建审计；失败不得留下部分组织。 |
+| `ORG-008` | owner 使用独立于项目 capability 的追加式 temporal assignment，并从同组织的有效 membership 取得归属；owner 不自动获得项目成员关系、管理报告、异常读取或 PII 权限。 |
+
+#### Slice 7B Spec：固定组织原子创建与首位所有者合同
+
+7B 接续 Slice 7A 的 request-scoped 身份资格，但不把 Auth user object 或邮箱确认事实写入业务数据库。
+未来 Backend 只把已验证的 exact `issuer` 和 `subject`、UUID request ID 与 display name 交给
+`app_data.create_organization_for_identity_v1`。该 `SECURITY DEFINER` bridge 只映射既有 active internal user，不做 trim、bootstrap 或身份修复。
+它再调用仅接收 trusted internal user、request ID 和 display name 的 `app_private.create_organization_v1`。
+bridge 要求 issuer 与 subject 非 null 且 `btrim` 后非空，并把原值 `char_length` 分别限制为 2048 和 512。
+bridge 和 private writer 都是 `VOLATILE SECURITY DEFINER`，并固定 `search_path = pg_catalog`。
+两者的 owner 与现有 private organization membership validator 相同，且不能是 runtime 或普通 writer role。
+`PUBLIC` 不得执行任一函数。runtime 只有 bridge `EXECUTE`，无 identity、owner、membership、claim、audit 表或 private function 权限。
+HTTP body 不能提供 issuer、subject、internal user、workspace、membership、owner、project、capability、时间或 audit 字段。
+
+owner 使用独立、追加式的 temporal assignment，并且只引用同一组织的 organization membership。assignment 和 membership 都使用 `[active_from_utc, inactive_from_utc)`；起点和非空终点必须是有限 `timestamptz`，终点必须晚于起点。assignment 的范围必须被 membership 包含，同一 membership 的 assignment 不得重叠。只能使用数据库当前时间立即授予或结束 owner，不接受未来时间。owner 不自动创建 project membership，也不能推导任何项目 capability、管理报告访问、异常读取或 PII 权限。
+
+除终结清除外，任意治理 transaction 提交时，每个物理存在的 organization workspace 都必须至少保有一位当前 owner。
+当前 owner 要求 assignment 和 membership 当前有效，且对应 `app_user.status = 'active'`。
+三十天组织删除恢复期仍保留 owner、membership、claim 和 creation audit。
+仅终结清除 transaction 可以连同 workspace 物理清除这些业务记录，并只留 `ORG-004` 的最小删除审计。
+后续 DB 必须用 `DEFERRABLE INITIALLY DEFERRED` constraint triggers 在 transaction 结束时检查 workspace、membership、owner assignment 和 app user 状态变更。
+它还必须撤销普通 runtime 对相关表的直接写权。migration 如发现已有组织无可证明的当前 owner，必须失败回滚，不自动指定或隔离。
+
+唯一 owner 的 assignment、membership 或账号不能单独结束。owner 转让必须在同一 transaction 中先授予另一位有效 owner，再结束旧 assignment。`deletion_pending` 账号不计作当前 owner；唯一 owner 的账号删除申请必须在改变账号状态前失败，即使组织正在恢复期也不例外。多 owner 组织可让某个 owner 进入账号恢复期；其 assignment 保留但暂不计作当前 owner，账号恢复 active 后重新生效。
+账号终结删除必须在同一 governance transaction 中使用同一时间结束该用户的 active owner assignments 和 memberships，然后才清除账号。
+该账号已在 `deletion_pending` 恢复期内，因此其 creation claim 集合不再增长。
+终结删除先按 UUID 取这些 claim 的 request locks，再取 user row 和 organization governance locks。
+
+创建 transaction 只调用一次 `transaction_timestamp()`。
+它把该值显式写入 organization workspace、创建者 membership、首位 owner assignment、request claim 和 creation audit。
+display name 的 canonical 形式是 PostgreSQL `btrim` 只去掉两端 U+0020 后的原文本。
+`char_length` 必须在 1 至 120 之间，且不得含 U+0000 到 U+001F 或 U+007F 到 U+009F。
+此外，canonical name 必须至少有一个不属于 Unicode `White_Space` 的字符，且不能只含 U+200B、U+200C、U+200D、U+2060 或 U+FEFF 这类零宽字符。
+canonical name 原样存入 workspace 和 private claim。
+服务不做 Unicode normalization、大小写折叠、唯一性检查或相似名称合并。
+
+request UUID 是组织创建命名空间的单列唯一键，不能与 actor 组成联合唯一键。
+private claim 只保存 `request_id`、可置空且 `ON DELETE SET NULL` 的 `actor_app_user_id`、`canonical_display_name`、
+workspace／membership／owner assignment ID 和单一 `created_at_utc`。
+相同 request、actor 和 canonical name 精确重放返回原结果，不追加第二条成功 audit。
+
+actor 或 name 漂移返回 conflict，不创建部分记录。
+claim 不是 owner 历史。它的 immutable trigger 只允许账号终结删除将 actor 从非空改为 null，并拒绝其他更改。
+去关联后，该 request 对任何 actor 均冲突。
+
+组织终结清除时，最小删除审计保留原 request UUID 作为 value-free idempotency tombstone，然后才删除含 actor、name 和业务 ID 的 claim。后续创建在同一 request lock 内检查 live claim 和 tombstone；任何已保留 UUID 均返回 conflict。因此新创建意图必须使用新 UUID。
+
+创建路径先取 `hashtextextended('organization-creation-request:' || request_id::text, 0)` transaction advisory lock 并检查 claim 与 tombstone。
+它再以 `FOR UPDATE` 锁定 active actor row。初次请求生成 workspace UUID 后，它取
+`hashtextextended('organization-governance:' || workspace_id::text, 0)` transaction advisory lock。
+最后由现有 membership 约束取 `organization-membership:<workspace>:<user>` lock。
+带 request UUID 的后续路径先取 request lock。
+多用户／多组织治理再按 UUID 排序取 user row locks，按 UUID 排序取 organization governance locks，
+然后遵循 organization membership、project membership、capability 的既有顺序。owner 转让、membership 结束和账号删除不得反向取锁。
+
+任何可改变当前 owner 集合的路径都必须在写入前取得所有受影响 organization governance locks。
+这包括 owner 授予或结束、membership 写入或结束、app user 状态变更、账号删除和组织清除。
+账号状态路径在 user row lock 后收集受影响组织，按 UUID 取锁，然后重新读取 owner 集合。
+deferred trigger 只检查事务末状态，不替代这个并发 fence。
+
+组织终结清除先读取不可变的 creation request UUID，取 request lock，再取 governance lock 和 workspace `FOR UPDATE` row lock。
+它在取锁后重新确认 claim 归属与恢复期已结束；claim 缺失或漂移均失败关闭。
+它在同一 transaction 中按依赖顺序清除 owner、membership、organization business data、claim、creation audit 和 workspace。
+所有组织写入路径都在 governance lock 后重新检查 workspace 仍可治理；因此清除与新 owner 或 membership 写入不能交叉提交。
+
+成功数据库结果是一行固定字段：`creation_contract_id = 'organization-creation:v1'`、`organization_workspace_id` UUID、`organization_membership_id` UUID、`organization_owner_assignment_id` UUID 和 `created_at_utc` `timestamptz`。bridge 和 private writer 都返回这一 exact row，不返回 JSONB。未来 HTTP 成功响应只使用同名字段，时间转为 UTC ISO-8601。
+
+数据库错误只固定以下 SQLSTATE 与 message 组合：
+
+| 位置 | SQLSTATE 与固定 message | Backend 结果 |
+| --- | --- | --- |
+| bridge 的 null、空白或过长 issuer／subject | `22023 invalid organization creation identity` | `503 organization_creation_unavailable` |
+| private writer 的 null request 或非法 name | `22023 invalid organization creation request` | `400 invalid_organization_creation_request` |
+| exact identity 未知、inactive，或锁后 actor 非 active | `42501 organization creation forbidden` | `403 organization_creation_forbidden` |
+| request 已被不同 actor／name 或 tombstone 使用 | `22023 organization creation idempotency conflict` | `409 organization_creation_conflict` |
+
+`401 unauthenticated` 只来自 Backend JWT／Slice 7A verifier，不由数据库生成。
+任何未列出的 SQLSTATE、message、约束、parser 或数据库错误均返回 `503 organization_creation_unavailable`。
+未来 HTTP 的成功和失败响应都使用 `Content-Type: application/json; charset=utf-8` 和 `Cache-Control: no-store`。
+失败 body 只能是 `{ "error": { "code": "<stable-code>" } }`。
+
+每个首次成功只追加一条 creation audit。
+其 allowlist 仅含 event ID、`organization-creation:v1`、request ID、workspace／membership／owner assignment ID 和数据库创建时间。
+它不保存直接 actor 引用。
+audit、失败响应和结构化日志都不得保存 display name、邮箱、external issuer／subject、token、
+Auth user object、provider metadata、自由文本、SQL、数据库消息、堆栈或原始错误。
+失败 transaction 不写成功 audit。
+
+7B Spec 只固定产品、数据、锁、幂等、审计和证据边界，不新增 migration、SQL、Backend、HTTP、Flutter 或 Apple 平台行为。后续 DB-only 实现必须用 migration、structural check、rollback fixture、并发、checksum 和 dump／restore 证明原子创建、精确重放、payload drift、零 owner 防护、最小 ACL 和失败回滚；synthetic 证据不代表生产身份、部署端点、真实 PII 清除或真人平台。
 
 ### 5.8 分析、指标与报告
 
@@ -1772,6 +1862,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-049` | 学习文档必须说明 6CD 的 0082 interest replacement、0062 approved provenance、共享 request ledger 中的独立 family、release／replacement 双向互斥、active／superseded、原因 allowlist、锁后授权、精确幂等、stale head／分叉／循环／跨 family 失败关闭、value-free 输出、最小 ACL，以及 migration／check／fixture／concurrency／checksum／dump／restore 命令。必须明确 6CD 不生成 snapshot，不改变目录、读取、runtime、HTTP、Flutter 或导出；synthetic Docker 证据不证明生产身份或真人平台。 |
 | `MANUAL-050` | 学习文档必须说明 6CE 的 0083 migration、0075 approved provenance、当前 6BO opt-in 不参与更正资格、停用后仍可登记既有 approved snapshot、更换原因 allowlist、独立 consent-ratio family、replacement／release lineage lock 分离、不同 request UUID 不互相串行、同 UUID claim 互斥、active／superseded、精确幂等、stale head／分叉／循环／跨 family 失败关闭、value-free 输出、最小 ACL，以及 migration／check／fixture／concurrency／checksum／dump／restore 命令。必须明确 6CE 不生成或修改 snapshot，不改变 0074／0075、读取、runtime、HTTP、Flutter、目录、导出、缓存、删除或 retention；synthetic Docker 证据不证明生产身份或真人平台。 |
 | `MANUAL-051` | 学习文档必须区分同版本数据更正与跨版本定义更正，说明 `manage_analysis_definitions` 与 `release_management_reports` 双授权、直接兼容证据、`analysis_definition_change`、锁后复核、撤销投影、各版本 replacement 图独立、PII-free 和组织删除边界。必须明确 6CF 只交付政策，不选择 report family、不实现数据库或客户端，也不把文档检查写成并发、生产或真人平台证据。 |
+| `MANUAL-052` | 学习文档必须区分 Slice 7A 身份资格与 7B 组织写入，说明 exact-identity bridge 与 private writer、独立 temporal owner assignment、membership containment、原子 workspace／membership／首位 owner、canonical display name、live claim／tombstone、精确重放、payload drift、governance fence 与锁顺序、延迟零 owner 防护、exact SQLSTATE／message、PII-free audit 和删除边界。必须明确 7B Spec 不实现数据库、route 或 UI，也不把文档检查写成 PostgreSQL、生产身份或真人平台证据。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -2011,6 +2102,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-059` | 6CD 的 0082 structural check、rollback fixture 和并发测试必须覆盖合法 interest approved snapshot、独立 replacement family、release／replacement UUID 双向互斥、0062 专用 provenance、同 report／version／query／privacy／source scope／时区 revision／期间／lineage、后续 cutoff／发布时间、watermark 不回退、原因 allowlist、active／superseded、精确幂等、载荷漂移、跨项目／family、same／earlier cutoff、自链接、分叉、循环、stale head、旧新 snapshot 字节不变、value-free 结果、锁后撤权、竞争 replacement、最小 ACL、checksum 和 dump／restore。通过只证明 synthetic DB-only replacement，不声称 snapshot 生成、runtime、HTTP、Flutter、目录、导出、删除、retention、生产身份或真人平台。 |
 | `TEST-060` | 6CE 的 0083 structural check、rollback fixture 和并发测试必须覆盖合法 0075 consent-ratio approved snapshot、独立 replacement family、release／replacement lineage lock 分离、只有同 request UUID claim 互斥、0075 专用 provenance、protected-document／snapshot binding、同 report／version／query／privacy／source scope／时区 revision／期间／lineage、后续 cutoff／发布时间、watermark 不回退、当前 6BO opt-in 不参与更正资格、停用后既有 approved snapshot 仍可更正、原因 allowlist、active／superseded、精确幂等、载荷漂移、跨项目／family、same／earlier cutoff、自链接、分叉、循环、stale head、旧新 snapshot 字节不变、value-free 结果、锁后授权、竞争 replacement、最小 ACL、checksum 和 dump／restore。通过只证明 synthetic DB-only replacement，不声称 snapshot 生成、runtime、HTTP、Flutter、目录、导出、删除、retention、生产身份或真人平台。 |
 | `TEST-061` | 6CF 当前只验证 Spec、ADR、手册和 Markdown 链接一致，不证明数据库合同。后续单一 report-family 实现必须用 migration、structural check、rollback fixture、concurrency、reader／directory／export 回归覆盖 approved provenance、版本／definition fingerprint 至少一项变化、compatibility 与两端 project／family／metric／方向／definition tuple 精确绑定、定义管理与报告发布两条独立 capability 路径、组织可选第二人批准、共同锁顺序、独立 lineage lock、仅同 UUID claim 互斥、锁后 active identity／membership／project／grant 复核、撤销先后竞争、专用原因、canonical 幂等／payload drift、每端单一 direct edge、缺失／未知／漂移／撤销／反向决定、全同版本、shape／validator drift、self-link／cycle／branch／stale head、value-free `compatibility_revoked`、PII-free allowlist／拒绝字段、最小 ACL、组织删除 compatibility history、checksum 和 dump／restore；synthetic 通过不证明生产身份、部署或真人平台。 |
+| `TEST-062` | 7B Spec 当前只验证 Spec、ADR、学习文档和 Markdown 链接一致，不证明数据库合同。后续 DB-only 实现必须用 migration、structural check、rollback fixture 和 concurrency 覆盖 active exact identity bridge、private writer、canonical name 边界、原子 workspace／membership／首位 owner／claim／audit、单列 request 唯一、live claim／tombstone 拒绝复用、actor 一次性去关联例外、相同请求精确重放、actor／payload drift、并发同请求、并发不同请求、assignment containment／不重叠、唯一 owner 结束拒绝、不同 owner 并发失效、先授予后结束、membership／账号结束防护、purge 与治理写入 fence、删除恢复与终结清除、失败零部分写入、exact SQLSTATE／message、owner／audit 追加不可变、延迟零 owner 约束、固定 owner／`VOLATILE SECURITY DEFINER`／search path、无 `PUBLIC` execute、runtime 最小 ACL、checksum 和 dump／restore。synthetic 通过不证明 HTTP、Flutter、production identity、部署、真实删除或真人平台。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -2280,6 +2372,8 @@ Dart synthetic 测试只证明 transport、parser 和内存边界。
 ### Slice 7：组织治理与数据可携带性
 
 交付：组织创建、定向邀请、可转发申请链接、审批、所有权、成员与 capability 管理、账号／组织删除恢复期，以及推广对象资料的完整导入、导出、重复处理和可逆合并流程。固定匿名管理报告文件导出属于 Slice 6，不改变本 Slice 的 PII 边界。
+
+当前切片：7A 只验证 request-scoped 组织创建资格；7B Spec 在 5.7 节固定原子创建、首位 owner、幂等、锁、失败和删除边界，不实现数据库或 HTTP。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 

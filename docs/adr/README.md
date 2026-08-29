@@ -6,7 +6,7 @@
 
 - ADR-0001 至 ADR-0095 作为 `TXZ-SPEC-001` 的首批决策集，于 2026-07-31 一并接受；文件另有状态时以文件为准。
 - ADR-0096、ADR-0097 于 2026-07-31 接受；ADR-0098、ADR-0099 于 2026-08-03 接受；ADR-0100 于 2026-08-05 接受；ADR-0101、ADR-0102 于 2026-08-10 接受；ADR-0103 至 ADR-0108 于 2026-08-11 接受；ADR-0109 至 ADR-0119 于 2026-08-12 接受；ADR-0120 至 ADR-0129 于 2026-08-13 接受；ADR-0130 于 2026-08-13 接受。
-- ADR-0131 至 ADR-0135 于 2026-08-14 接受；ADR-0136 于 2026-08-19 接受；ADR-0137 至 ADR-0140 于 2026-08-20 接受；ADR-0141 至 ADR-0151 于 2026-08-21 接受；ADR-0152 至 ADR-0155 于 2026-08-22 接受；ADR-0156 至 ADR-0164 于 2026-08-25 接受；ADR-0165 至 ADR-0171 于 2026-08-26 接受；ADR-0172 至 ADR-0174 于 2026-08-28 接受。
+- ADR-0131 至 ADR-0135 于 2026-08-14 接受；ADR-0136 于 2026-08-19 接受；ADR-0137 至 ADR-0140 于 2026-08-20 接受；ADR-0141 至 ADR-0151 于 2026-08-21 接受；ADR-0152 至 ADR-0155 于 2026-08-22 接受；ADR-0156 至 ADR-0164 于 2026-08-25 接受；ADR-0165 至 ADR-0171 于 2026-08-26 接受；ADR-0172 至 ADR-0174 于 2026-08-28 接受；ADR-0175 于 2026-08-29 接受。
 - 被取代的 ADR 保留原文和指向新 ADR 的状态，不再作为当前实现合同。
 - 新 ADR 默认只需一个清楚的决定段落。只有背景、备选和后果能帮助未来维护者避免误读时，才增加这些章节。
 - 可逆的 UI 细节、库选择和票内实现步骤留在 Spec 或 Issue，不为增加编号而创建 ADR。
@@ -97,6 +97,7 @@
 | [0172](./0172-interest-report-snapshot-replacements-are-append-only.md) | 已接受，2026-08-28 | Slice 6CD；Issue #257；`ANALYTICS-013`、`ANALYTICS-065`、`PRIVACY-056`、`TEST-059`、`MANUAL-049` | interest approved snapshot 使用独立追加式 replacement relation；0062 provenance、value-free lifecycle、锁后授权和最小 ACL 保持固定 |
 | [0173](./0173-follow-up-consent-ratio-report-snapshot-replacements-are-append-only.md) | 已接受，2026-08-28 | Slice 6CE；Issue #259；`ANALYTICS-013`、`ANALYTICS-066`、`PRIVACY-057`、`TEST-060`、`MANUAL-050` | follow-up consent-ratio approved snapshot 使用独立追加式 replacement relation；0075 provenance、6BO opt-in 独立、value-free lifecycle、锁后授权和最小 ACL 保持固定 |
 | [0174](./0174-cross-version-report-snapshot-replacements-require-active-definition-compatibility.md) | 已接受，2026-08-28 | Slice 6CF Spec；Issue #267；`ANALYTICS-013`、`ANALYTICS-067`、`PRIVACY-058`、`TEST-061`、`MANUAL-051` | 跨版本 snapshot 更正需要双授权和当前有效的直接定义兼容决定；撤销投影、专用原因、PII-free 与删除边界保持固定 |
+| [0175](./0175-organization-creation-is-atomic-with-first-active-owner.md) | 已接受，2026-08-29 | Slice 7B Spec；Issue #280；`CTX-002`、`AUTHZ-001`–`AUTHZ-006`、`ORG-003`、`ORG-006`–`ORG-008`、`TEST-062`、`MANUAL-052` | 组织创建原子建立 workspace、membership 和首位 owner；owner 独立于项目 capability，精确幂等、锁顺序和 PII-free audit 保持固定 |
 
 ## 按主题查找
 
@@ -105,7 +106,7 @@
 | 接触、工作空间、身份与权限 | [0001](./0001-contact-records-independent-of-promotion-targets.md)–[0010](./0010-capability-based-membership-permissions.md)，另见 [0103](./0103-management-analysis-view-and-report-release-use-separate-capabilities.md) | Slice 1、4、6、7；`CONTACT`、`AUTHZ`、`CTX` |
 | 区域、对象、隐私资料与修订 | [0011](./0011-shared-hierarchical-regions-with-eventual-resolution.md)–[0021](./0021-submitted-contacts-are-voided-not-silently-deleted.md) | Slice 1、2、4；`REGION`、`TARGET`、`CONTACT` |
 | 离线、同步、认证与平台 | [0022](./0022-offline-first-contact-recording-with-an-outbox.md)–[0029](./0029-use-one-capability-adaptive-flutter-application.md)，另见 [0096](./0096-use-supabase-auth-with-cognito-fallback.md)、[0098](./0098-persistent-outbox-uses-claim-lease-and-ack.md)、[0100](./0100-pull-cursor-advances-only-after-local-batch-apply.md) | Slice 0–2；`ARCH`、`AUTH`、`PLATFORM`、`TEST-003` |
-| 组织、保留、导入导出与合并 | [0030](./0030-allow-verified-users-to-create-organizations.md)–[0043](./0043-promotion-target-merges-are-reversible.md) | Slice 4、7；`ORG`、`TARGET`、`AUTHZ` |
+| 组织、保留、导入导出与合并 | [0030](./0030-allow-verified-users-to-create-organizations.md)–[0043](./0043-promotion-target-merges-are-reversible.md)，另见 [0175](./0175-organization-creation-is-atomic-with-first-active-owner.md) | Slice 4、7；`ORG`、`TARGET`、`AUTHZ` |
 | 私人计划、通知与周期 | [0044](./0044-personal-action-plans-are-private-and-user-controlled.md)–[0052](./0052-late-entered-contacts-count-in-their-occurrence-period.md) | Slice 5；`PLAN`、`PLATFORM` |
 | 说明书与发布检查 | [0053](./0053-production-code-and-learning-materials-evolve-together.md)–[0059](./0059-documentation-and-statistics-checks-block-releases.md) | 全部 Slice；`MANUAL`、Definition of Done |
 | 指标、报告与隐私 | [0060](./0060-ordinal-scale-distributions-are-primary.md)–[0077](./0077-core-metrics-ship-with-code-and-project-metrics-use-safe-configuration.md)，另见 [0099](./0099-management-analytics-use-bounded-query-surfaces.md)、[0101](./0101-management-weekly-reports-use-two-complete-iso-weeks.md)–[0174](./0174-cross-version-report-snapshot-replacements-require-active-definition-compatibility.md) | Slice 6；`ANALYTICS`、`PRIVACY`、`AUTHZ`、`REGION`、`ARCH`、`TEST-005`、`TEST-014`–`TEST-061` |
