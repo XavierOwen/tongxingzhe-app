@@ -368,7 +368,7 @@ Auth user object、provider metadata、自由文本、SQL、数据库消息、�
 
 #### Slice 7E Spec：固定组织创建 HTTP 合同
 
-7E（Issue #298）只固定组织创建的 HTTP transport contract。它不新增 handler、store、route、production composition、数据库或客户端实现；后续实现票必须逐项满足本节、`TEST-063` 和 `MANUAL-053`。
+7E 的 Issue #298 固定组织创建 HTTP transport contract。Issue #300 按本节、`TEST-063` 和 `MANUAL-053` 实现 Backend handler、store、route、production composition 与 synthetic PostgreSQL integration。
 
 唯一公开入口是 `POST /v1/organizations`，且该 path 不接受 query。
 其他 method 或未匹配 path 返回通用 `404 {"error":{"code":"not_found"}}`，不验证身份、读取 body 或调用 store。
@@ -415,10 +415,9 @@ verifier 先验证 JWT，再以同一 token 读取 Auth user endpoint。
 
 所有成功和失败响应都使用 `Content-Type: application/json; charset=utf-8` 与 `Cache-Control: no-store`。失败 body 只能是 `{ "error": { "code": "<stable-code>" } }`。响应、结构化日志和失败审计不得保存 display name、邮箱、external issuer／subject、access token、Auth user object、provider metadata、SQL、数据库 message、stack、自由文本或原始错误；creation audit 继续遵守 0084 的 value-free allowlist。
 
-7E 是 spec-only 工作单元，不实现 TypeScript handler、Postgres adapter、真实 HTTP route 或 production composition。
-它也不增加 migration、SQL function、Flutter、Drift 或 Apple 平台行为。
-后续实现票必须补齐 handler、adapter、真实 HTTP、production composition、synthetic PostgreSQL integration、脱敏和 promise-before-response 测试。
-这些 synthetic 证据不代表 production identity、部署端点或真人平台。
+Issue #298 是 spec-only 工作单元；Issue #300 随后实现 TypeScript handler、Postgres adapter、真实 HTTP route、production composition 和 synthetic PostgreSQL integration。
+实现复用 0084 bridge 与 0085 invariant，不增加 migration、SQL function、Flutter、Drift 或 Apple 平台行为。
+handler、adapter、真实 HTTP、production composition、脱敏和 promise-before-response 测试只证明 synthetic 合同，不代表 production identity、部署端点或真人平台。
 邀请、申请、owner 转让、membership／capability 管理、配额、反滥用和账号／组织删除仍由其他工作单元处理。
 
 ### 5.8 分析、指标与报告
@@ -1918,7 +1917,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-050` | 学习文档必须说明 6CE 的 0083 migration、0075 approved provenance、当前 6BO opt-in 不参与更正资格、停用后仍可登记既有 approved snapshot、更换原因 allowlist、独立 consent-ratio family、replacement／release lineage lock 分离、不同 request UUID 不互相串行、同 UUID claim 互斥、active／superseded、精确幂等、stale head／分叉／循环／跨 family 失败关闭、value-free 输出、最小 ACL，以及 migration／check／fixture／concurrency／checksum／dump／restore 命令。必须明确 6CE 不生成或修改 snapshot，不改变 0074／0075、读取、runtime、HTTP、Flutter、目录、导出、缓存、删除或 retention；synthetic Docker 证据不证明生产身份或真人平台。 |
 | `MANUAL-051` | 学习文档必须区分同版本数据更正与跨版本定义更正，说明 `manage_analysis_definitions` 与 `release_management_reports` 双授权、直接兼容证据、`analysis_definition_change`、锁后复核、撤销投影、各版本 replacement 图独立、PII-free 和组织删除边界。必须明确 6CF 只交付政策，不选择 report family、不实现数据库或客户端，也不把文档检查写成并发、生产或真人平台证据。 |
 | `MANUAL-052` | 学习文档必须区分 Slice 7A 身份资格与 7B 组织写入，说明 exact-identity bridge 与 private writer、独立 temporal owner assignment、membership containment、原子 workspace／membership／首位 owner、canonical display name、live claim／tombstone、精确重放、payload drift、governance fence 与锁顺序、延迟零 owner 防护、exact SQLSTATE／message、PII-free audit 和删除边界。必须明确 7B Spec 不实现数据库、route 或 UI，也不把文档检查写成 PostgreSQL、生产身份或真人平台证据。 |
-| `MANUAL-053` | 学习文档必须说明 7E 的固定 `POST /v1/organizations`、认证和 7A eligibility 先于 body／store、严格两字段 JSON、body request UUID、既有 1 MiB／`invalid_json`／`payload_too_large`、首次与精确重放同为 `200`、0084 五字段 success wire、四组 SQLSTATE 映射、JSON／`no-store`、PII-free 响应与日志，以及 promise-before-response。必须明确 7E 是 spec-only，后续实现票才覆盖 handler、adapter、真实 HTTP、production composition 和 synthetic PostgreSQL integration；synthetic 证据不证明生产身份、部署端点或真人平台。 |
+| `MANUAL-053` | 学习文档必须说明 7E 的固定 `POST /v1/organizations`、认证和 7A eligibility 先于 body／store、严格两字段 JSON、body request UUID、既有 1 MiB／`invalid_json`／`payload_too_large`、首次与精确重放同为 `200`、0084 五字段 success wire、四组 SQLSTATE 映射、JSON／`no-store`、PII-free 响应与日志，以及 promise-before-response。必须区分 #298 的 spec-only 决策与 #300 的 handler、adapter、真实 HTTP、production composition 和 synthetic PostgreSQL integration；synthetic 证据不证明生产身份、部署端点或真人平台。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -2433,8 +2432,8 @@ Dart synthetic 测试只证明 transport、parser 和内存边界。
 当前状态：7A 已固定 request-scoped 组织创建资格。
 7B Spec 在 5.7 节固定原子创建、首位 owner、幂等、锁、失败和删除边界。
 现有 0084 组织创建 DB writer 与 0085 active-owner invariant 已提供基础实现。
-7E（Issue #298）只固定 `POST /v1/organizations` 的 HTTP 合同。
-handler、Postgres adapter、真实 HTTP、production composition 和其他运行时代码由后续实现票交付；本 Issue 不实现数据库、HTTP、Flutter 或 Apple。
+7E 的 Issue #298 固定 `POST /v1/organizations` HTTP 合同。
+Issue #300 实现 handler、Postgres adapter、真实 HTTP 和 production composition，并复用 0084／0085；它不增加 Flutter 或 Apple 行为。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 

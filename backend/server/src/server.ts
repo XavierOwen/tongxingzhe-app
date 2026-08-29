@@ -130,6 +130,13 @@ import {
   selectManagementAnalysisContextForIdentity,
   type ManagementAnalysisContextStore,
 } from "./management-analysis-contexts.js";
+import {
+  handleOrganizationCreation,
+  type OrganizationCreationStore,
+} from "./organization-creation.js";
+import type {
+  OrganizationCreationIdentityVerifier,
+} from "./organization-creation-identity.js";
 
 export interface BackendServerDependencies
   extends SessionContextHttpDependencies {
@@ -176,6 +183,9 @@ export interface BackendServerDependencies
     ManagementInterestReportSnapshotDirectoryStore;
   readonly managementReportReleaseStore?: ManagementReportReleaseStore;
   readonly managementAnalysisContextStore?: ManagementAnalysisContextStore;
+  readonly organizationCreationIdentityVerifier?:
+    OrganizationCreationIdentityVerifier;
+  readonly organizationCreationStore?: OrganizationCreationStore;
 }
 
 export function createBackendServer(
@@ -189,6 +199,30 @@ export function createBackendServer(
     if (request.method === "GET" && request.url === "/healthz") {
       response.statusCode = 200;
       response.end(JSON.stringify({ status: "ok" }));
+      return;
+    }
+
+    if (
+      request.method === "POST" &&
+      requestUrl.pathname === "/v1/organizations"
+    ) {
+      try {
+        const result = await handleOrganizationCreation(
+          {
+            authorization: request.headers.authorization,
+            hasQuery: requestUrl.search.length > 0,
+            readBody: async () => readJsonBody(request),
+          },
+          {
+            identityVerifier: dependencies.organizationCreationIdentityVerifier,
+            creationStore: dependencies.organizationCreationStore,
+          },
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
+      }
       return;
     }
 
