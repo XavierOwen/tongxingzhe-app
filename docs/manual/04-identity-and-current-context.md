@@ -161,7 +161,7 @@ organization_owner_assignment_id
 effective_at_utc
 ```
 
-未来 Backend 使用以下稳定错误和 code。未知 SQLSTATE、constraint、parser 或 adapter 错误统一为 `organization_owner_transfer_unavailable`，并且不返回数据库原文。
+未来 Backend 使用以下稳定错误和 code。未知 SQLSTATE、message、constraint、parser、result shape 或 adapter 错误统一为 `organization_owner_transfer_unavailable`，并且不返回数据库原文。
 
 | 条件 | SQLSTATE 与固定 message | Backend code |
 | --- | --- | --- |
