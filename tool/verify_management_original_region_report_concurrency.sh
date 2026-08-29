@@ -54,6 +54,9 @@ questionnaire_version_id='6bdc4000-0000-4000-8000-000000000001'
 user_one='6bdc1000-0000-4000-8000-000000000001'
 user_two='6bdc1000-0000-4000-8000-000000000002'
 user_three='6bdc1000-0000-4000-8000-000000000003'
+owner_app_user_id='6bdc1000-0000-4000-8000-000000000004'
+owner_membership_id='6bdc5000-0000-4000-8000-000000000001'
+owner_assignment_id='6bdc6000-0000-4000-8000-000000000001'
 source_tree='concurrent-original-region-report-source-v1'
 target_tree='concurrent-original-region-report-target-v1'
 cutoff='2030-04-17T12:00:00Z'
@@ -61,16 +64,43 @@ cutoff='2030-04-17T12:00:00Z'
 # These committed synthetic rows use a namespace disjoint from rollback
 # fixtures and are intentionally included in dump/restore checks.
 "${psql_base[@]}" --command="
+  BEGIN;
+
   INSERT INTO app_data.app_users (app_user_id, status)
   VALUES
     ('${user_one}'::uuid, 'active'),
     ('${user_two}'::uuid, 'active'),
-    ('${user_three}'::uuid, 'active');
+    ('${user_three}'::uuid, 'active'),
+    ('${owner_app_user_id}'::uuid, 'active');
   INSERT INTO app_data.workspaces (
     workspace_id, workspace_kind, display_name
   ) VALUES (
     '${workspace_id}'::uuid, 'organization',
     'Concurrent 6BD original-region workspace'
+  );
+  INSERT INTO app_data.organization_memberships (
+    organization_membership_id,
+    organization_workspace_id,
+    app_user_id,
+    active_from_utc,
+    inactive_from_utc
+  ) VALUES (
+    '${owner_membership_id}'::uuid,
+    '${workspace_id}'::uuid,
+    '${owner_app_user_id}'::uuid,
+    transaction_timestamp(),
+    NULL
+  );
+  INSERT INTO app_data.organization_owner_assignments (
+    organization_owner_assignment_id,
+    organization_membership_id,
+    active_from_utc,
+    inactive_from_utc
+  ) VALUES (
+    '${owner_assignment_id}'::uuid,
+    '${owner_membership_id}'::uuid,
+    transaction_timestamp(),
+    NULL
   );
   INSERT INTO app_data.projects (project_id, workspace_id, display_name)
   VALUES (
@@ -179,6 +209,8 @@ cutoff='2030-04-17T12:00:00Z'
     '${user_one}'::uuid, '${workspace_id}'::uuid, '${project_id}'::uuid,
     'concurrent-6bd-watermark', 1, 'contact.submitted'
   );
+
+  COMMIT;
 " >/dev/null
 
 run_report() {

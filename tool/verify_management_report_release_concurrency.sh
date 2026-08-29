@@ -33,6 +33,8 @@ release_lineage_lock='management-report-release-lineage:93000000-0000-4000-8000-
 ready_signal_lock='management-report-release-concurrency-ready:93000000-0000-4000-8000-000000000001'
 
 "${psql_base[@]}" --command="
+  BEGIN;
+
   INSERT INTO app_data.app_users (app_user_id)
   VALUES
     ('91000000-0000-4000-8000-000000000001'::uuid),
@@ -45,6 +47,37 @@ ready_signal_lock='management-report-release-concurrency-ready:93000000-0000-400
     '92000000-0000-4000-8000-000000000001'::uuid,
     'organization',
     'Concurrent report release workspace'
+  );
+
+  INSERT INTO app_data.app_users (app_user_id, status)
+  VALUES ('91000000-0000-4000-8000-000000000004'::uuid, 'active');
+
+  -- Keep the dedicated active owner separate from the report actor.  It has
+  -- no project membership or capability grant.
+  INSERT INTO app_data.organization_memberships (
+    organization_membership_id,
+    organization_workspace_id,
+    app_user_id,
+    active_from_utc,
+    inactive_from_utc
+  ) VALUES (
+    '96000000-0000-4000-8000-000000000004'::uuid,
+    '92000000-0000-4000-8000-000000000001'::uuid,
+    '91000000-0000-4000-8000-000000000004'::uuid,
+    transaction_timestamp(),
+    NULL
+  );
+
+  INSERT INTO app_data.organization_owner_assignments (
+    organization_owner_assignment_id,
+    organization_membership_id,
+    active_from_utc,
+    inactive_from_utc
+  ) VALUES (
+    '97000000-0000-4000-8000-000000000004'::uuid,
+    '96000000-0000-4000-8000-000000000004'::uuid,
+    transaction_timestamp(),
+    NULL
   );
 
   INSERT INTO app_data.projects (
@@ -110,6 +143,8 @@ ready_signal_lock='management-report-release-concurrency-ready:93000000-0000-400
       ('week_c'::text, '2026-06-17 12:00:00+00'::timestamptz)
   ) AS period_row(period_key, occurred_at_utc)
   CROSS JOIN generate_series(1, 10) AS series_row;
+
+  COMMIT;
 " >/dev/null
 
 "${psql_base[@]}" --command="

@@ -30,6 +30,8 @@ psql_base=(
 )
 
 "${psql_base[@]}" --command="
+  BEGIN;
+
   INSERT INTO app_data.app_users (app_user_id)
   VALUES ('a1000000-0000-4000-8000-000000000001'::uuid);
 
@@ -39,6 +41,37 @@ psql_base=(
     'a2000000-0000-4000-8000-000000000001'::uuid,
     'organization',
     'Concurrent reporting time zone workspace'
+  );
+
+  INSERT INTO app_data.app_users (app_user_id, status)
+  VALUES ('a5000000-0000-4000-8000-000000000001'::uuid, 'active');
+
+  -- Keep the dedicated active owner separate from the time-zone actor.  It
+  -- has no project membership or capability grant.
+  INSERT INTO app_data.organization_memberships (
+    organization_membership_id,
+    organization_workspace_id,
+    app_user_id,
+    active_from_utc,
+    inactive_from_utc
+  ) VALUES (
+    'a6000000-0000-4000-8000-000000000001'::uuid,
+    'a2000000-0000-4000-8000-000000000001'::uuid,
+    'a5000000-0000-4000-8000-000000000001'::uuid,
+    transaction_timestamp(),
+    NULL
+  );
+
+  INSERT INTO app_data.organization_owner_assignments (
+    organization_owner_assignment_id,
+    organization_membership_id,
+    active_from_utc,
+    inactive_from_utc
+  ) VALUES (
+    'a7000000-0000-4000-8000-000000000001'::uuid,
+    'a6000000-0000-4000-8000-000000000001'::uuid,
+    transaction_timestamp(),
+    NULL
   );
 
   INSERT INTO app_data.projects (
@@ -57,6 +90,8 @@ psql_base=(
     'UTC',
     '2026-04-01 12:00:00+00'::timestamptz
   );
+
+  COMMIT;
 " >/dev/null
 
 project_lock='project-reporting-time-zone:a3000000-0000-4000-8000-000000000001'
