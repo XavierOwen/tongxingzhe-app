@@ -128,6 +128,8 @@ wait_for_waiting_lock() {
 # source container afterwards; a direct invocation must use a dedicated test
 # database.  The 6ax fixture uses 6c* identifiers and cannot collide with it.
 run_psql <<'SQL'
+BEGIN;
+
 INSERT INTO app_data.app_users (app_user_id, status)
 VALUES
   ('6d110000-0000-4000-8000-000000000001'::uuid, 'active'),
@@ -180,6 +182,19 @@ VALUES
     '6d110000-0000-4000-8000-000000000003'::uuid,
     clock_timestamp() - interval '30 days', NULL
   );
+
+INSERT INTO app_data.organization_owner_assignments (
+  organization_owner_assignment_id,
+  organization_membership_id,
+  active_from_utc,
+  inactive_from_utc
+)
+VALUES (
+  '6d190000-0000-4000-8000-000000000001'::uuid,
+  '6d160000-0000-4000-8000-000000000001'::uuid,
+  transaction_timestamp(),
+  NULL
+);
 
 INSERT INTO app_data.project_memberships (
   project_membership_id, organization_membership_id, project_id,
@@ -293,6 +308,7 @@ SELECT app_private.release_management_interest_report_snapshot_v1(
   '6d130000-0000-4000-8000-000000000001'::uuid,
   'contact_sessions_by_interest_level_two_periods', 1
 );
+COMMIT;
 SQL
 
 snapshot_id="$(run_psql --tuples-only --no-align --command="

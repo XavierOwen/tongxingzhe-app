@@ -83,6 +83,8 @@ wait_for_ready_lock() {
 # the same approved current-city snapshot.  The ae* namespace is unique to
 # this script and does not depend on rollback fixtures.
 run_psql <<'SQL'
+BEGIN;
+
 INSERT INTO app_data.app_users (app_user_id, status)
 VALUES
   ('ae110000-0000-4000-8000-000000000001'::uuid, 'active'),
@@ -128,6 +130,19 @@ VALUES
     'ae110000-0000-4000-8000-000000000002'::uuid,
     clock_timestamp() - interval '30 days', NULL
   );
+
+INSERT INTO app_data.organization_owner_assignments (
+  organization_owner_assignment_id,
+  organization_membership_id,
+  active_from_utc,
+  inactive_from_utc
+)
+VALUES (
+  'ae1a0000-0000-4000-8000-000000000001'::uuid,
+  'ae160000-0000-4000-8000-000000000001'::uuid,
+  transaction_timestamp(),
+  NULL
+);
 
 INSERT INTO app_data.project_memberships (
   project_membership_id, organization_membership_id, project_id,
@@ -280,6 +295,7 @@ VALUES (
   'ae130000-0000-4000-8000-000000000001'::uuid,
   'fixture-6ap-concurrency-watermark', 1, 'contact.submitted'
 );
+COMMIT;
 SQL
 
 snapshot_id="$(run_psql --tuples-only --no-align --command="
