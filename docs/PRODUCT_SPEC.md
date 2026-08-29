@@ -277,6 +277,10 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `ORG-006` | 完成邮箱验证的用户可以自助创建组织并成为首位所有者；平台可实施配额、停用和反滥用，但不把组织创建变成人工审批流程。 |
 | `ORG-007` | 组织创建必须在一个 PostgreSQL transaction 中原子建立 organization workspace、创建者 membership、首位 active owner、幂等 request claim 和不含组织名称的创建审计；失败不得留下部分组织。 |
 | `ORG-008` | owner 使用独立于项目 capability 的追加式 temporal assignment，并从同组织的有效 membership 取得归属；owner 不自动获得项目成员关系、管理报告、异常读取或 PII 权限。 |
+| `ORG-009` | 首次 owner transfer 执行只允许当前 owner 把所有权责任 handoff 给同组织已有的 active membership。actor 必须由 trusted exact identity 解析，并在锁后仍是 active app user、该组织 active member 和 current owner；不得复用 Slice 7A 的组织创建资格。target 使用同组织现有 `organization_membership_id`，且 membership 与 app user 在锁后仍 active。transfer 不隐式建立 membership、接受 invitation／application 或改变 capability；target 已是 current owner（包括 actor 等于 target）返回固定 conflict。 |
+| `ORG-010` | owner handoff 必须在同一 transaction 中使用同一数据库时间，先追加 target owner assignment，再结束 actor 当前 assignment；其他 current owners 保持不变。首次执行依次取得 request lock、按 UUID 排序的 actor／target app-user row locks、organization governance lock 和按 UUID 排序的 membership locks，并在锁后重读事实。exact replay 只继续锁定并重读 active actor row。 |
+| `ORG-011` | transfer 使用独立 request UUID claim、lock 和 tombstone family。相同 request、workspace、actor 与 target 必须精确重放原 receipt，不重新要求 actor current-owner 或 target not-owner；actor、workspace 或 target 漂移、actor 去关联和 transfer tombstone 必须返回固定 idempotency conflict。终结清除保留只含 family 与 request UUID 的 tombstone。 |
+| `ORG-012` | transfer 的数据库 result row、SQLSTATE／message、未来 Backend code、value-free audit allowlist 和 deletion boundary 必须固定。未知 SQLSTATE、constraint、parser 或 adapter 错误统一 unavailable。`deletion_pending`／`deleted` actor 或 target 不能开始新 transfer；组织删除恢复期冻结新 claim，live exact replay 只读。 |
 
 #### Slice 7B Spec：固定组织原子创建与首位所有者合同
 
@@ -424,7 +428,99 @@ Issue #302 在上述固定 wire 上增加独立 Flutter typed gateway。gateway 
 稳定 error envelope、canonical UUID 和 UTC 时间，把 identity、HTTP、timeout、network 与 parser 失败收敛为不含原始错误的 typed result。
 本切片不接入 `AppDependencies`、controller、UI、导航或 Drift，也不生成 request UUID；调用方必须在不确定重试中复用同一请求参数。
 
-邀请、申请、owner 转让、membership／capability 管理、配额、反滥用和账号／组织删除仍由其他工作单元处理。
+邀请、申请、membership／capability 管理、配额、反滥用和账号／组织删除仍由其他工作单元处理。owner transfer 只在本节固定合同；实现仍由后续工作单元处理。
+
+#### Slice 7G Spec：固定组织 owner transfer 合同
+
+7G 是 spec-only 工作单元。它只固定正常 owner handoff 的产品、身份、授权、事务、幂等、结果、错误、审计和删除边界，不实现 migration、SQL、Backend、HTTP、Flutter 或 Apple 平台行为。
+
+用户结果是：组织当前 owner 可以把自己的 owner 责任原子 handoff 给同组织另一名有效成员。首次 transfer 与相同请求的精确重放返回同一 receipt；参数漂移不得再次执行。transfer 不改变 membership，不自动授予 project membership、capability 或 PII 权限。
+
+未来 runtime 唯一可执行的 bridge 固定为
+`app_data.transfer_organization_owner_for_identity_v1(trusted_issuer text, trusted_subject text, requested_request_id uuid, requested_organization_workspace_id uuid, requested_target_organization_membership_id uuid)`。
+它从可信 issuer 与 subject 解析 actor，再调用
+`app_private.transfer_organization_owner_v1(trusted_app_user_id uuid, requested_request_id uuid, requested_organization_workspace_id uuid, requested_target_organization_membership_id uuid)`。
+transfer 不调用或复用 Slice 7A 的组织创建资格。
+它不把 Auth user object、邮箱、external identity 或客户端 actor 字段当作授权事实。
+
+bridge 对 issuer／subject 使用与 0084 相同的 null、空白和 2048／512 字符上限检查。它只做原值精确匹配。
+
+null、空白或过长 identity 返回固定 invalid-identity 错误。未知或非 active identity 返回 forbidden，不能区分身份是否存在。
+
+bridge 和 private writer 都是 `VOLATILE SECURITY DEFINER`，固定 `search_path = pg_catalog`。owner 与 `app_private.validate_organization_membership_v1()` 相同且不是 runtime。
+
+`PUBLIC` 不得执行两者。runtime 只有 bridge `EXECUTE`，没有 private writer 或 identity、membership、owner、claim、audit 表权限。两层都返回同一 exact 五字段 row，不返回 JSONB。
+
+首次执行必须在锁后重新确认 actor 是 active app user、该组织 active membership 和 current owner。
+HTTP body 不得提交 actor、email 或 internal user ID。
+target selector 固定为同组织现有的 `organization_membership_id`。
+organization workspace 和 target UUID 都是待校验的请求输入，不能当作可信授权事实。
+
+首次执行时，target membership 与对应 app user 必须在锁后仍为 active。target 不得属于其他组织。target 不得是 `deletion_pending` 或 `deleted` account。target 已是 current owner 时返回固定 conflict；actor 与 target 相同也属于该 conflict。
+
+正常 transfer 是 handoff，不是新增 co-owner。已有其他 current owners 不受影响。transfer 不隐式创建 membership、接受 directed invitation、批准 join application、改变 project membership 或增加 capability。
+
+transfer 使用独立于 organization creation 的 request UUID claim 表和 advisory-lock 前缀 `organization-owner-transfer-request:`。transfer claim 的单列主键是 `request_id`；与 creation 使用相同 UUID 不冲突，也不共享 claim 或 lock。
+
+private claim 只保存 `request_id`、可置空且 `ON DELETE SET NULL` 的 `actor_app_user_id`、`organization_workspace_id`、`target_organization_membership_id`、`previous_owner_assignment_id`、`organization_owner_assignment_id` 和有限的 `effective_at_utc`。除 actor 外的 UUID 不设 FK，避免组织终结清除被历史引用阻断；writer 必须在同一 transaction 中验证并写入全部事实。固定 contract ID 由 writer 返回，不在 claim 重复保存。
+
+claim 默认不可变。唯一更新例外是账号终结删除在同一治理 transaction 中把 actor 从非 null 改为 null；其他字段，包括 target membership UUID，不得去关联或改写。去关联后，任何 resolved active actor 使用该 request 都返回 idempotency conflict。已删除或无法解析的 identity 仍在 bridge 返回 forbidden。
+
+writer 取得 request lock 后先读取 live claim 和 transfer tombstone。exact request、workspace、actor 与 target 继续锁定 actor app-user row。它重读 `status = 'active'` 后返回 claim 保存的原始五字段 receipt。
+
+exact replay 不重新要求 actor 仍是 current owner，也不把首次成功后 target 已是 owner 当作 conflict。它不追加 assignment、claim 或 audit。它也不依赖 target 的后来 owner、membership 或账号状态。
+
+actor、workspace 或 target 漂移会返回 idempotency conflict。actor 已去关联或 request 已有 transfer tombstone 时也返回该 conflict。只有没有 live claim 或 tombstone 的请求才进入首次 transfer 的 current-state 校验和写入。
+
+未来 private writer 的事务顺序固定如下：
+
+1. 先取得 request lock。
+2. 再按 UUID 排序取得 actor 与 target app-user row locks。
+3. 再取得受影响 organization governance lock。
+4. 最后按 UUID 排序取得相关 organization membership locks。
+
+drift／tombstone 分支在 request lock 下结束；exact replay 再锁定并重读 actor app-user row 后结束。首次执行继续取得其余锁，再重读 actor、target、workspace、request claim 和 current-owner facts。所有改变 owner 集合的路径继续遵守 0085 的 governance fence，不能反向取锁。
+
+事务只使用一个数据库 transaction timestamp。它先追加 target owner assignment，再以同一时间结束 actor 当前 assignment。assignment history 只能追加和合法结束，不能改写或删除。sole-owner handoff 在结束旧 assignment 前必须已经拥有新的有效 owner；multi-owner handoff 不能结束其他 owner。deferred active-owner invariant 必须在 transaction 结束时仍成立。membership、project membership、capability 和其他业务资料不在本操作内改变；任何失败都不得留下部分写入。
+
+组织删除恢复期是只读期，不能开始新 transfer；live exact replay 只读取既有 receipt，不增加事实。actor 或 target 为 `deletion_pending`／`deleted` 时不能开始新 transfer；actor 终结删除后的去关联 claim 只能返回 conflict。账户恢复不会由本票自动转移或重新指定 owner。唯一 owner 的账号删除、组织终结清除和失主 recovery 使用各自的治理合同；本票不新增 lifecycle schema、purge writer 或 recovery 流程。
+
+未来删除流程进入恢复期时，必须在 governance lock 下冻结新的 transfer claim。
+
+终结清除按固定 `(claim_family, request_id)` 顺序取得该组织全部 creation 与 transfer request locks。family 顺序固定为 creation 后 transfer。然后按既有顺序取得 app-user、governance 和 membership locks。取得 governance lock 后必须重读 recovery 状态和 claim 集合。集合与已锁定请求不一致时回滚重试。
+
+清除 transaction 先写 transfer tombstone，再按 FK 依赖删除 transfer claim、audit 和组织业务记录。tombstone 只含 `claim_family = 'organization-owner-transfer:v1'` 与 `request_id`。
+
+transfer writer 只检查本 family 的 live claim 与 tombstone。因此 creation 与 transfer 可以安全复用同一 UUID。
+
+成功数据库结果必须是一行 exact 五字段：
+
+```text
+owner_transfer_contract_id = organization-owner-transfer:v1
+organization_workspace_id
+previous_owner_assignment_id
+organization_owner_assignment_id
+effective_at_utc
+```
+
+未来 Backend 只把该固定 result 映射为 typed success，不增加 replay 标志、owner name、email、身份或 capability 字段。数据库和未来 Backend 错误固定如下；未列出的 SQLSTATE、message、constraint、parser、result shape 或 adapter 错误统一映射为 `organization_owner_transfer_unavailable`。
+
+| 条件 | SQLSTATE 与固定 message | 未来 Backend code |
+| --- | --- | --- |
+| trusted identity 输入非法 | `22023 invalid organization owner transfer identity` | `organization_owner_transfer_unavailable` |
+| request、workspace 或 target 输入非法 | `22023 invalid organization owner transfer request` | `invalid_organization_owner_transfer_request` |
+| actor、target、组织状态或授权不允许 | `42501 organization owner transfer forbidden` | `organization_owner_transfer_forbidden` |
+| request 的 actor、workspace 或 target 漂移，或 request 已被 tombstone 保留 | `22023 organization owner transfer idempotency conflict` | `organization_owner_transfer_conflict` |
+| target 已是 current owner，包括 actor 等于 target | `22023 organization owner transfer target already owner` | `organization_owner_transfer_target_already_owner` |
+
+null 的 request／workspace／target 属于 invalid request。未知或非 organization workspace、未知／跨组织／非 active target membership、非 active target account、非 active member 或非 current owner actor，以及组织恢复状态，都返回同一个 forbidden，不区分对象不存在、跨组织或已失效。只有已经验证为同组织 active target 且当前是 owner 时才返回 target-already-owner conflict。
+
+transfer audit 的 exact allowlist 是 `organization_owner_transfer_audit_event_id`、`owner_transfer_contract_id`、`request_id`、`organization_workspace_id`、`previous_owner_assignment_id`、`organization_owner_assignment_id` 和 `effective_at_utc`。
+`target_organization_membership_id` 只保存在 private claim，不进入 audit；new owner assignment 已是 canonical target lineage。
+audit、失败响应和结构化日志不得保存 display name、email、external identity、token、Auth user object、provider metadata、SQL、数据库 message、stack 或自由文本。
+未来 transport 的错误 envelope 只能暴露稳定 code，不得把数据库错误或 target 成员资料返回给客户端。
+
+Issue #304 只固定本节合同。文档、链接和 no-slop 检查只证明 spec 文本一致；未来 DB-only 实现仍须用 migration、structural check、rollback fixture、并发、最小 ACL、checksum 和 dump／restore 证明上述行为。synthetic 证据不代表 production identity、部署端点、真实删除、Apple 平台或真人平台运行时。
 
 ### 5.8 分析、指标与报告
 
@@ -1924,6 +2020,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-051` | 学习文档必须区分同版本数据更正与跨版本定义更正，说明 `manage_analysis_definitions` 与 `release_management_reports` 双授权、直接兼容证据、`analysis_definition_change`、锁后复核、撤销投影、各版本 replacement 图独立、PII-free 和组织删除边界。必须明确 6CF 只交付政策，不选择 report family、不实现数据库或客户端，也不把文档检查写成并发、生产或真人平台证据。 |
 | `MANUAL-052` | 学习文档必须区分 Slice 7A 身份资格与 7B 组织写入，说明 exact-identity bridge 与 private writer、独立 temporal owner assignment、membership containment、原子 workspace／membership／首位 owner、canonical display name、live claim／tombstone、精确重放、payload drift、governance fence 与锁顺序、延迟零 owner 防护、exact SQLSTATE／message、PII-free audit 和删除边界。必须明确 7B Spec 不实现数据库、route 或 UI，也不把文档检查写成 PostgreSQL、生产身份或真人平台证据。 |
 | `MANUAL-053` | 学习文档必须说明 7E 的固定 `POST /v1/organizations`、认证和 7A eligibility 先于 body／store、严格两字段 JSON、body request UUID、既有 1 MiB／`invalid_json`／`payload_too_large`、首次与精确重放同为 `200`、0084 五字段 success wire、四组 SQLSTATE 映射、JSON／`no-store`、PII-free 响应与日志，以及 promise-before-response。必须区分 #298 的 spec-only 决策与 #300 的 handler、adapter、真实 HTTP、production composition 和 synthetic PostgreSQL integration；synthetic 证据不证明生产身份、部署端点或真人平台。 |
+| `MANUAL-054` | 学习文档必须说明 7G 的 trusted exact identity 与 7A 创建资格边界、current owner 到同组织 active membership 的 handoff、target membership UUID、独立 request claim、精确重放与 actor／workspace／target drift、固定锁序、锁后重读、同一数据库时间、grant-before-close、sole／multi-owner invariant、五字段 result、SQLSTATE／Backend code、value-free audit 和 deletion boundary。必须明确 7G 是 #304 spec-only，不实现 migration、writer、Backend、HTTP、Flutter、邀请、申请、成员／capability 管理、删除恢复或 owner recovery；文档检查不证明数据库并发、runtime ACL、生产身份或真人平台。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -2165,6 +2262,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-061` | 6CF 当前只验证 Spec、ADR、手册和 Markdown 链接一致，不证明数据库合同。后续单一 report-family 实现必须用 migration、structural check、rollback fixture、concurrency、reader／directory／export 回归覆盖 approved provenance、版本／definition fingerprint 至少一项变化、compatibility 与两端 project／family／metric／方向／definition tuple 精确绑定、定义管理与报告发布两条独立 capability 路径、组织可选第二人批准、共同锁顺序、独立 lineage lock、仅同 UUID claim 互斥、锁后 active identity／membership／project／grant 复核、撤销先后竞争、专用原因、canonical 幂等／payload drift、每端单一 direct edge、缺失／未知／漂移／撤销／反向决定、全同版本、shape／validator drift、self-link／cycle／branch／stale head、value-free `compatibility_revoked`、PII-free allowlist／拒绝字段、最小 ACL、组织删除 compatibility history、checksum 和 dump／restore；synthetic 通过不证明生产身份、部署或真人平台。 |
 | `TEST-062` | 7B Spec 当前只验证 Spec、ADR、学习文档和 Markdown 链接一致，不证明数据库合同。后续 DB-only 实现必须用 migration、structural check、rollback fixture 和 concurrency 覆盖 active exact identity bridge、private writer、canonical name 边界、原子 workspace／membership／首位 owner／claim／audit、单列 request 唯一、live claim／tombstone 拒绝复用、actor 一次性去关联例外、相同请求精确重放、actor／payload drift、并发同请求、并发不同请求、assignment containment／不重叠、唯一 owner 结束拒绝、不同 owner 并发失效、先授予后结束、membership／账号结束防护、purge 与治理写入 fence、删除恢复与终结清除、失败零部分写入、exact SQLSTATE／message、owner／audit 追加不可变、延迟零 owner 约束、固定 owner／`VOLATILE SECURITY DEFINER`／search path、无 `PUBLIC` execute、runtime 最小 ACL、checksum 和 dump／restore。synthetic 通过不证明 HTTP、Flutter、production identity、部署、真实删除或真人平台。 |
 | `TEST-063` | 7E 后续实现必须以 Backend unit／handler、real HTTP route、production composition、Postgres adapter 和 synthetic PostgreSQL integration 覆盖固定 `POST /v1/organizations`、wrong method／query、认证先于 body parser／store、`401`／`403`／`503` eligibility 分类、严格两字段／exact keys／types／UUID／额外字段、body request UUID 而非 `Idempotency-Key` 或缓存、既有 1 MiB／`invalid_json`／`payload_too_large`、原始 display name 传递、一次 0084 bridge 调用、promise-before-response、首次／精确重放同为 `200`、无 replay flag、五字段 success wire、四组 SQLSTATE 映射、unknown error 的 `503`、JSON／`no-store` 和 PII-free response／logs。必须明确这些测试不证明 production identity、部署端点、Flutter、Drift 或 Apple 平台运行时。 |
+| `TEST-064` | 7G Spec 当前只验证 Product Spec、ADR、学习文档和 Markdown 链接一致，不证明 owner transfer writer。后续 DB-only 实现必须覆盖 trusted exact identity 与 7A creation eligibility 分离、current owner／同组织 active target membership、target UUID 与 account 状态、target 已是 owner／actor 等于 target、sole／multi-owner handoff、request claim、精确 replay、actor／workspace／target drift、tombstone、同 request／不同 request 并发、固定锁序与锁后重读、grant-before-close、同一数据库时间、append-only history、deferred active-owner invariant、membership／capability 不变、删除恢复只读、失败零部分写入、五字段 result、精确 SQLSTATE／Backend code、未知错误 unavailable、PII-free audit／错误／日志、最小 ACL、rollback、checksum 和 dump／restore。文档与 synthetic 证据不证明 production identity、部署、真实删除、HTTP、Flutter 或 Apple 平台。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -2438,9 +2536,12 @@ Dart synthetic 测试只证明 transport、parser 和内存边界。
 当前状态：7A 已固定 request-scoped 组织创建资格。
 7B Spec 在 5.7 节固定原子创建、首位 owner、幂等、锁、失败和删除边界。
 现有 0084 组织创建 DB writer 与 0085 active-owner invariant 已提供基础实现。
+
 7E 的 Issue #298 固定 `POST /v1/organizations` HTTP 合同。
 Issue #300 实现 handler、Postgres adapter、真实 HTTP 和 production composition，并复用 0084／0085；它不增加 Flutter 或 Apple 行为。
 Issue #302 增加独立 Flutter typed gateway；它尚未接入 composition、controller、UI、Drift 或创建后的组织／项目上下文。
+7G 的 Issue #304 只固定 owner transfer spec：trusted exact identity、current owner 到同组织 active membership 的 handoff、独立 request claim、锁序、grant-before-close、固定 result／errors／audit 和 deletion boundary。
+尚未实现 transfer migration、writer、Backend、HTTP、Flutter 或 recovery 流程。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 

@@ -105,7 +105,87 @@ Backend 将它们映射为 `503 organization_creation_unavailable`、`400 invali
 0085 migration 为 workspace、membership、owner assignment 和 app user status 增加同一 governance lock fence。transaction 结束时执行延迟 active-owner 检查。
 配套结构检查、回滚 fixture 和独立会话并发测试只证明 synthetic PostgreSQL 合同。Issue #298 固定组织创建 HTTP 合同，Issue #300 已增加 route、store、production composition 和 synthetic PostgreSQL integration，但未增加 Flutter UI。这些证据也不代表生产身份、真实账号删除或组织清除。
 
-### 3.3 组织创建 HTTP route（Issue #298／#300）
+### 3.3 组织 owner 转让（Issue #304，spec-only）
+
+组织 owner 转让只发生在已经存在的组织中。当前 owner 把 owner 身份交给同一组织的另一名有效成员。它不是组织创建，也不是邀请或加入组织。
+
+首次转让开始前，数据库必须确认以下事实。确认必须在取得锁后再做一次。
+
+- 发起人是当前组织 owner，且其 `app_user.status` 为 `active`。
+- 目标使用已有的 `organization_membership_id`。该 membership 属于同一组织，且当前有效；对应账号也必须为 `active`。
+- 目标不能已经是当前 owner。发起人与目标相同也返回“目标已经是 owner”的冲突。
+
+首次执行时，发起人或目标账号只要是 `deletion_pending` 或 `deleted`，转让就被拒绝。组织进入删除恢复期后只读，也不能开始新转让；恢复失主的流程另行定义。
+
+这条路径不复用 Slice 7A 的 organization-creation eligibility。7A 只回答已验证身份能否创建组织。owner 转让还需要当前 owner 授权、同组织成员关系和目标账号状态。
+
+未来 Backend 仍把外部身份和数据库写入分成两层。`app_data.transfer_organization_owner_for_identity_v1(text, text, uuid, uuid, uuid)` 先把精确的 `(issuer, subject)` 映射到现有 active `app_user_id`，再调用 `app_private.transfer_organization_owner_v1(uuid, uuid, uuid, uuid)`。只有 resolved actor 是可信事实；request、组织 workspace 和目标 membership UUID 都是不可信 selector，private writer 必须在锁后验证。HTTP body 不能提交 actor、邮箱或 internal user ID。
+
+bridge 不 trim、bootstrap 或修复身份。null、空白、issuer 超过 2048 字符或 subject 超过 512 字符是 invalid identity。未知或非 active identity 使用同一个 forbidden。
+
+两函数都是 `VOLATILE SECURITY DEFINER`，固定 `search_path = pg_catalog`。owner 与 membership validator 相同且不是 runtime。`PUBLIC` 不得执行两函数。runtime 只能执行 bridge，不能执行 private writer。runtime 也不能直接读写 identity、membership、owner、claim 或 audit 表。
+
+转让使用独立的 claim 表和 `organization-owner-transfer-request:` lock 前缀。单列主键是 `request_id`；creation 和 transfer 分属不同 family，所以可以各自使用同一 UUID。
+
+private claim 只保存 request UUID、可置空且 `ON DELETE SET NULL` 的 actor app-user UUID、organization workspace UUID、target membership UUID、旧／新 owner assignment UUID 和有限的 effective time。
+
+除 actor 外的 UUID 不设 FK。claim 通常完全不可变。账号终结删除只能在同一治理 transaction 中把 actor 引用从非 null 置为 null。此后任何 resolved active actor 使用该 request 都返回 conflict。已删除或无法解析的 identity 仍返回 forbidden。
+
+private writer 在 request lock 下先检查 live claim 和 transfer tombstone。request、组织、actor 和 target 完全相同时继续锁定 actor app-user row。它重读 `status = 'active'` 后返回 claim 中的原五字段 receipt。
+
+精确重放不重新要求 actor 仍是 owner，也不因为 target 已经成为 owner而报错。它不新增 assignment 或 audit。它也不依赖 target 后来的 owner、membership 或账号状态。
+
+参数漂移、tombstone 或已去关联 actor 都返回 idempotency conflict。只有没有 claim 和 tombstone 时，才检查首次 transfer 的 current owner、active target 和 target-not-owner 条件。
+
+锁的顺序固定如下：
+
+1. 取得 transfer request lock。
+2. 按 UUID 顺序锁定 actor 和 target 的 app-user rows。
+3. 取得 organization governance lock。
+4. 按 UUID 顺序锁定相关 organization memberships。
+5. 锁后重新读取 actor、target、workspace、claim 和 owner facts。
+
+drift 和 tombstone 在第 1 步结束；精确重放再锁定并重读 actor app-user row 后结束。只有首次执行继续后续锁。不能反向取得这些锁。所有时间都使用同一个 `transaction_timestamp()`。private writer 先追加 target 的 owner assignment，再结束 actor 当前 assignment。assignment 历史只能追加和合法结束，不能改写或物理删除。事务末的 active-owner deferred check 必须看到至少一位 active owner。
+
+同一 request 由 request lock 串行化。同组织的不同 request 由 governance lock 串行化。任何失败都不能留下部分 workspace、assignment、membership、claim 或 audit。
+
+这是 handoff，不是 co-owner grant。多 owner 组织只结束发起人的当前 assignment，其他 current owners 保持不变。转让不改变 membership，不接受 invitation 或 application，不创建 project membership，也不授予或改变任何 project capability、管理报告能力或 PII 访问权。
+
+未来数据库 result row 固定为五个字段：
+
+```text
+owner_transfer_contract_id = organization-owner-transfer:v1
+organization_workspace_id
+previous_owner_assignment_id
+organization_owner_assignment_id
+effective_at_utc
+```
+
+未来 Backend 使用以下稳定错误和 code。未知 SQLSTATE、message、constraint、parser、result shape 或 adapter 错误统一为 `organization_owner_transfer_unavailable`，并且不返回数据库原文。
+
+| 条件 | SQLSTATE 与固定 message | Backend code |
+| --- | --- | --- |
+| trusted identity 输入非法 | `22023 invalid organization owner transfer identity` | `organization_owner_transfer_unavailable` |
+| request、workspace 或 target 输入非法 | `22023 invalid organization owner transfer request` | `invalid_organization_owner_transfer_request` |
+| actor、target、组织状态或 owner 授权不允许 | `42501 organization owner transfer forbidden` | `organization_owner_transfer_forbidden` |
+| request actor、workspace 或 target 漂移，或 request 已是 tombstone | `22023 organization owner transfer idempotency conflict` | `organization_owner_transfer_conflict` |
+| target 已是 current owner，包括 actor 等于 target | `22023 organization owner transfer target already owner` | `organization_owner_transfer_target_already_owner` |
+
+null request／workspace／target 是 invalid request。未知或非 organization workspace、未知／跨组织／非 active target membership、非 active target account、非 active member／非 current owner actor，以及组织恢复状态，都使用同一个 forbidden，不暴露对象是否存在。只有已验证为同组织 active target 且当前是 owner 时才使用 target-already-owner conflict。
+
+转让 audit 只能追加且不可变。它的 exact allowlist 是 `organization_owner_transfer_audit_event_id`、`owner_transfer_contract_id`、`request_id`、`organization_workspace_id`、`previous_owner_assignment_id`、`organization_owner_assignment_id` 和 `effective_at_utc`。
+target membership UUID 只保存在 private claim，不进入 audit；new assignment 是 canonical target lineage。
+audit、失败响应和结构化日志都不保存 actor 或 target 的直接身份、display name、邮箱、external issuer／subject、token、Auth user object、provider metadata、SQL、数据库 message、stack 或自由文本。
+
+组织进入删除恢复期时，governance lock 会冻结新 transfer claim，精确重放仍只读。期满清除按固定 family 和 request UUID 顺序锁定全部 creation／transfer requests。
+
+取得 governance lock 后，它重读 recovery 状态和 claim 集合；集合不一致时回滚重试。清除先写只含 `claim_family = 'organization-owner-transfer:v1'` 与 request UUID 的 transfer tombstone，再按 FK 依赖删除 claim、audit 和组织业务记录。
+
+transfer writer 只检查自己的 family，所以同一个 UUID 用于 creation 不会与 transfer 冲突。删除、恢复与 purge writer 本身仍由后续工作单元实现。
+
+本小节只固定未来的 spec，不实现 transfer migration、table、trigger、function、ACL、Backend store、HTTP route、Flutter、Drift 或 Apple 行为。账号或组织删除、purge、恢复失主、邀请、加入申请、membership 管理、capability 管理和 co-owner grant 另行定义。Markdown 和文档检查只能证明文字一致，不能证明 transfer writer、并发、runtime ACL、生产身份、真实删除或真人平台。
+
+### 3.4 组织创建 HTTP route（Issue #298／#300）
 
 Issue #298 固定 Backend 传输边界，Issue #300 实现 HTTP route、store adapter 和 production composition。入口为：
 
@@ -160,7 +240,7 @@ Store 只执行一次参数化 `app_data.create_organization_for_identity_v1`，
 
 production composition 显式组合专用 7A verifier、Supabase Auth user lookup 和 creation store，并要求 `SUPABASE_PUBLISHABLE_KEY`。缺配置时启动失败关闭，不能只使用 generic JWT、JWT metadata、请求 body、本地缓存或 `SessionContext`。Issue #300 不增加 migration、owner lifecycle、Flutter、Drift 或 Apple 行为。
 
-### 3.4 Flutter 组织创建 typed gateway（Issue #302）
+### 3.5 Flutter 组织创建 typed gateway（Issue #302）
 
 Issue #302 增加独立的 `OrganizationCreationGateway` 和 HTTP adapter。调用方显式提供 canonical request UUID 与原始 display name；gateway 不生成 UUID，
 不 trim 或 normalize 名称，也不读取 email、external subject、内部 user／workspace／project／capability 或 `SessionContext`。
