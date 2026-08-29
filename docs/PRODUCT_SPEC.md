@@ -418,6 +418,12 @@ verifier 先验证 JWT，再以同一 token 读取 Auth user endpoint。
 Issue #298 是 spec-only 工作单元；Issue #300 随后实现 TypeScript handler、Postgres adapter、真实 HTTP route、production composition 和 synthetic PostgreSQL integration。
 实现复用 0084 bridge 与 0085 invariant，不增加 migration、SQL function、Flutter、Drift 或 Apple 平台行为。
 handler、adapter、真实 HTTP、production composition、脱敏和 promise-before-response 测试只证明 synthetic 合同，不代表 production identity、部署端点或真人平台。
+
+Issue #302 在上述固定 wire 上增加独立 Flutter typed gateway。gateway 只接收调用方提供的 canonical request UUID 和原始 display name，
+通过 `IdentitySession` 取得 Bearer token，并在首次 `401` 后只刷新和重试一次。它严格校验 JSON／`no-store`、五字段 receipt、
+稳定 error envelope、canonical UUID 和 UTC 时间，把 identity、HTTP、timeout、network 与 parser 失败收敛为不含原始错误的 typed result。
+本切片不接入 `AppDependencies`、controller、UI、导航或 Drift，也不生成 request UUID；调用方必须在不确定重试中复用同一请求参数。
+
 邀请、申请、owner 转让、membership／capability 管理、配额、反滥用和账号／组织删除仍由其他工作单元处理。
 
 ### 5.8 分析、指标与报告
@@ -2434,6 +2440,7 @@ Dart synthetic 测试只证明 transport、parser 和内存边界。
 现有 0084 组织创建 DB writer 与 0085 active-owner invariant 已提供基础实现。
 7E 的 Issue #298 固定 `POST /v1/organizations` HTTP 合同。
 Issue #300 实现 handler、Postgres adapter、真实 HTTP 和 production composition，并复用 0084／0085；它不增加 Flutter 或 Apple 行为。
+Issue #302 增加独立 Flutter typed gateway；它尚未接入 composition、controller、UI、Drift 或创建后的组织／项目上下文。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 
