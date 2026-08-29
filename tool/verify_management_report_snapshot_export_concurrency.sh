@@ -75,6 +75,8 @@ wait_for_ready() {
 }
 
 "${psql_base[@]}" --command="
+  BEGIN;
+
   INSERT INTO app_data.app_users (app_user_id, status)
   VALUES
     ('8b100000-0000-4000-8000-000000000001'::uuid, 'active'),
@@ -179,6 +181,18 @@ wait_for_ready() {
       clock_timestamp() - interval '1 day'
     );
 
+  INSERT INTO app_data.organization_owner_assignments (
+    organization_owner_assignment_id,
+    organization_membership_id,
+    active_from_utc,
+    inactive_from_utc
+  ) VALUES (
+    '8ba00000-0000-4000-8000-000000000001'::uuid,
+    '8b400000-0000-4000-8000-000000000001'::uuid,
+    transaction_timestamp(),
+    NULL
+  );
+
   INSERT INTO app_data.project_memberships (
     project_membership_id,
     organization_membership_id,
@@ -254,6 +268,7 @@ wait_for_ready() {
     'contact_sessions_by_channel_two_periods',
     1
   );
+  COMMIT;
 " >/dev/null
 
 snapshot_id="$("${psql_base[@]}" \
