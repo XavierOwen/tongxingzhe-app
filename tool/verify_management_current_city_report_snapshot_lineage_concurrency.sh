@@ -73,6 +73,8 @@ wait_ready() {
 # ac* is reserved here for the committed setup. The two projects avoid
 # turning the second pair of requests into a replay of the first baseline.
 run_psql --command="
+  BEGIN;
+
   INSERT INTO app_data.app_users (app_user_id, status)
   VALUES ('ac100000-0000-4000-8000-000000000001'::uuid, 'active');
   INSERT INTO app_data.workspaces (workspace_id, workspace_kind, display_name)
@@ -98,6 +100,17 @@ run_psql --command="
     'ac200000-0000-4000-8000-000000000001'::uuid,
     'ac100000-0000-4000-8000-000000000001'::uuid,
     clock_timestamp() - interval '30 days', NULL);
+  INSERT INTO app_data.organization_owner_assignments (
+    organization_owner_assignment_id,
+    organization_membership_id,
+    active_from_utc,
+    inactive_from_utc
+  ) VALUES (
+    'acb00000-0000-4000-8000-000000000001'::uuid,
+    'ac400000-0000-4000-8000-000000000001'::uuid,
+    transaction_timestamp(),
+    NULL
+  );
   INSERT INTO app_data.project_memberships
     (project_membership_id, organization_membership_id, project_id,
       active_from_utc, inactive_from_utc)
@@ -151,6 +164,8 @@ run_psql --command="
   );
   SELECT app_private.publish_canonical_region_tree_v1(
     'concurrent-6ao-current-city-v1', true);
+
+  COMMIT;
 " >/dev/null
 
 same_first_output="$tmp_dir/same-first.out"

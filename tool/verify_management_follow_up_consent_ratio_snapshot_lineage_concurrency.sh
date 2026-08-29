@@ -311,6 +311,17 @@ run_psql --command="
     '6b75c600-0000-4000-8000-000000000001'::uuid, '$workspace_id'::uuid,
     '$actor_id'::uuid, transaction_timestamp() - interval '365 days', NULL
   );
+  INSERT INTO app_data.organization_owner_assignments (
+    organization_owner_assignment_id,
+    organization_membership_id,
+    active_from_utc,
+    inactive_from_utc
+  ) VALUES (
+    '6b75ca00-0000-4000-8000-000000000001'::uuid,
+    '6b75c600-0000-4000-8000-000000000001'::uuid,
+    transaction_timestamp(),
+    NULL
+  );
   INSERT INTO app_data.project_memberships (
     project_membership_id, organization_membership_id, project_id,
     active_from_utc, inactive_from_utc

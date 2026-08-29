@@ -150,6 +150,8 @@ lineage_id='management-original-region-report:contact_sessions_by_original_regio
 
 echo '建立 6BG concurrency synthetic original-region projects。'
 run_psql --command="
+  BEGIN;
+
   INSERT INTO app_data.app_users (app_user_id, status)
   VALUES
     ('${user_one}'::uuid, 'active'),
@@ -172,6 +174,11 @@ run_psql --command="
      active_from_utc, inactive_from_utc)
   VALUES ('${membership_id}'::uuid, '${workspace_id}'::uuid,
     '${user_one}'::uuid, clock_timestamp() - interval '30 days', NULL);
+  INSERT INTO app_data.organization_owner_assignments
+    (organization_owner_assignment_id, organization_membership_id,
+     active_from_utc, inactive_from_utc)
+  VALUES ('6bc90000-0000-4000-8000-000000000001'::uuid,
+    '${membership_id}'::uuid, transaction_timestamp(), NULL);
   INSERT INTO app_data.project_memberships
     (project_membership_id, organization_membership_id, project_id,
      active_from_utc, inactive_from_utc)
@@ -290,6 +297,8 @@ run_psql --command="
     END LOOP;
   END
   \$setup\$;
+
+  COMMIT;
 " >/dev/null
 
 same_first_output="${temporary_directory}/same-first.out"
