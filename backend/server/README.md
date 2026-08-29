@@ -1,6 +1,6 @@
 # Backend 身份上下文、项目与接触同步
 
-这个模块提供可信个人 session context、个人推广项目选择／创建、规范区域解析、问卷管理发布、问卷指标兼容审计、同步 command、change feed、独立的管理分析导航上下文，以及受保护管理报告的发布、目录、current-city 目录和单份读取。所有受保护端点都先验证 Supabase access token。大部分业务使用可信个人上下文；管理报告使用独立的组织授权边界。同步协议处理已提交接触、追加更正、带原因作废、跨设备更正的自动合并与显式解决、未获回应尝试和账号私有草稿；设备专用草稿不会离开本机。
+这个模块提供可信个人 session context、个人推广项目选择／创建、组织创建、规范区域解析、问卷管理发布、问卷指标兼容审计、同步 command、change feed、独立的管理分析导航上下文，以及受保护管理报告的发布、目录、current-city 目录和单份读取。所有受保护端点都先验证 Supabase access token。大部分业务使用可信个人上下文；管理报告使用独立的组织授权边界。同步协议处理已提交接触、追加更正、带原因作废、跨设备更正的自动合并与显式解决、未获回应尝试和账号私有草稿；设备专用草稿不会离开本机。
 
 客户端不能提交 `app_user_id`、role 或 capability。上传会把 payload 的 workspace 和 project 与可信上下文交叉核对。拉取也会核对 query 范围，并只接受属于同一范围的不透明 cursor。响应不返回外部 subject、email 或 token。所有受保护入口共用严格的 bearer header 解析器，防止端点之间出现不同的认证规则。
 
@@ -27,9 +27,9 @@ user object 的 `id` 必须与 JWT `subject` 完全相等，`is_anonymous` 必�
 
 本地测试使用临时 ES256 key、synthetic user object 和注入式 fake lookup／HTTP transport，不连接真实 Supabase。测试只证明 JWT、user object、请求 headers、严格解析和失败分类；它不证明生产 Supabase、部署端点、真实身份或六平台运行时。
 
-## Issue #298：组织创建 HTTP 合同（spec-only）
+## 组织创建 HTTP route 与 PostgreSQL integration
 
-Issue #298 只记录下一步 Backend route/store 的 HTTP 合同，不实现 route、store 或 production composition。当前仓库仍没有这些实现。
+Issue #298 固定 HTTP 合同。Issue #300 实现 route、store、production composition 和 synthetic PostgreSQL integration。
 
 固定入口为：
 
@@ -79,7 +79,12 @@ Store 只调用一次参数化 `app_data.create_organization_for_identity_v1`，
 
 响应、结构化日志和失败审计不得包含 access token、Auth user object、邮箱、确认时间、provider metadata、issuer、subject、SQL、数据库 message、stack 或 display name。creation audit 继续遵守 0084 的 value-free allowlist。组织 owner 仍独立于 project membership、capability、管理报告和 PII 权限。
 
-production composition 尚未实现。后续接入必须显式组合专用 7A verifier、Auth user lookup 和 organization creation store；缺少配置时必须失败关闭，不能回退到 generic JWT verifier、JWT metadata、请求 body、本地缓存或 `SessionContext`。Issue #298 不增加 PostgreSQL migration、owner lifecycle、Flutter、Drift 或 Apple 平台行为。
+production composition 显式组合专用 7A verifier、Supabase Auth user lookup 和 organization creation store。它从规范化的 `AUTH_ISSUER` 推导 `/user` endpoint，并要求 `SUPABASE_PUBLISHABLE_KEY`。
+缺少配置时启动失败关闭，不回退到 generic JWT verifier、JWT metadata、请求 body、本地缓存或 `SessionContext`。PostgreSQL adapter 只调用 0084 external identity bridge，不调用 private writer。
+
+Issue #300 没有新增 PostgreSQL migration、owner lifecycle、Flutter、Drift 或 Apple 平台行为。Docker integration 使用 synthetic identity，在事务中验证首次创建和精确重放返回同一五字段结果，最后回滚。它不证明真实 Supabase、部署端点或真人平台。
+
+实现证据见 [`organization-creation-composition.test.ts`](test/organization-creation-composition.test.ts) 和 [`organization-creation.integration.ts`](test/organization-creation.integration.ts)。前者检查 production wiring 与 route seam，后者通过 0084 bridge 检查真实 PostgreSQL adapter。
 
 ## 个人当前关系阶段快照
 
@@ -963,6 +968,7 @@ Backend 需要以下环境变量：
 | --- | --- |
 | `DATABASE_URL` | Backend 专用 PostgreSQL login；该 login 必须继承 `tongxingzhe_runtime` |
 | `AUTH_ISSUER` | Supabase Auth 的精确 issuer，例如 `https://PROJECT.supabase.co/auth/v1` |
+| `SUPABASE_PUBLISHABLE_KEY` | 组织创建 user lookup 使用的 publishable／legacy anon key；拒绝 JWT secret 和 service-role key |
 | `AUTH_AUDIENCE` | access token audience；默认 `authenticated` |
 | `AUTH_JWKS_URL` | 可选 JWKS 地址；默认由 issuer 加 `/.well-known/jwks.json` 得到 |
 | `PORT` | HTTP 端口；默认 `8080` |
@@ -990,7 +996,7 @@ npm run check
 
 接触对象关联见 [`0017_contact_target_links.sql`](../database/migrations/0017_contact_target_links.sql)。对应 fixture 验证零到多关联、阶段 0 确认、跨空间与未分配拒绝、机构代表约束、幂等重放、revision 历史、冲突比较和 warehouse PII 隔离。
 
-Node 24 Docker 阶段会在已迁移的 PostgreSQL 上运行十三条 integration。它们覆盖地点来源、当前关系阶段、个人同意占比开关／读取、个人阶段变更汇总、current-city 快照读取／目录、兴趣快照读取／目录、original-region 快照读取／目录，以及后续联系同意占比快照 runtime 读取／目录读取。
+Node 24 Docker 阶段会在已迁移的 PostgreSQL 上运行十四条 integration。它们覆盖组织创建 bridge、地点来源、当前关系阶段、个人同意占比开关／读取、个人阶段变更汇总、current-city 快照读取／目录、兴趣快照读取／目录、original-region 快照读取／目录，以及后续联系同意占比快照 runtime 读取／目录读取。
 
 地点来源测试和 Flutter 读取同一份 `contact_location_source_v1.csv`。其余测试分别对账窄 bridge、严格 parser、开关的版本／幂等合同、比例的 `not_enabled`／`ready` union，以及阶段变更汇总的 `5 / 4 / 3 / 2` 和空期间。SQL fixture 另证实匿名化历史，独立并发脚本证实项目锁边界。`npm test` 仍是无数据库的合同测试；它不能替代该阶段，也不能证明真机或生产环境。
 
@@ -1038,6 +1044,7 @@ current 城市快照目录见 [`0060_authorized_management_current_city_report_s
 ```bash
 export DATABASE_URL='postgresql://backend_login:REPLACE_ME@HOST/DATABASE'
 export AUTH_ISSUER='https://PROJECT.supabase.co/auth/v1'
+export SUPABASE_PUBLISHABLE_KEY='sb_publishable_REPLACE_ME'
 npm run build
 npm start
 ```

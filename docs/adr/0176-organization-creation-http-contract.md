@@ -61,10 +61,10 @@ Backend 只把 7A 已验证的 exact `issuer`、`subject`、body 中的 `request
 
 ## 后果与边界
 
-7E 是 spec-only 工作单元。
-本 ADR 不新增 TypeScript handler、Postgres adapter、真实 HTTP route 或 production composition。
-它也不新增 migration、SQL function、Flutter、Drift 或 Apple 平台行为。
-后续实现票必须覆盖 handler、adapter、真实 HTTP、production composition、synthetic PostgreSQL integration、四组错误映射、PII-free 日志和 promise-before-response。
+Issue #298 的 7E 合同决策是 spec-only 工作单元。
+本 ADR 本身不新增 TypeScript handler、Postgres adapter、真实 HTTP route 或 production composition。
+后续 Issue #300 实现这些 Backend 边界，但不新增 migration、SQL function、Flutter、Drift 或 Apple 平台行为。
+#300 覆盖 handler、adapter、真实 HTTP、production composition、synthetic PostgreSQL integration、四组错误映射、PII-free 日志和 promise-before-response。
 这些 synthetic 证据不证明 production identity、部署端点或真人平台。
 
 邀请、申请、owner 转让、membership／capability 管理、配额、反滥用和账号／组织删除不属于本合同，仍由其他工作单元定义。完整产品边界见 [`PRODUCT_SPEC.md`](../PRODUCT_SPEC.md) 的 Slice 7B／7E 条款。

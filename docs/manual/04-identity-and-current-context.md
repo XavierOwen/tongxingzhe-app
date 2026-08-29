@@ -103,11 +103,11 @@ Backend 将它们映射为 `503 organization_creation_unavailable`、`400 invali
 
 0084 migration 已实现组织创建 bridge、private writer、owner assignment、claim 和 audit。
 0085 migration 为 workspace、membership、owner assignment 和 app user status 增加同一 governance lock fence。transaction 结束时执行延迟 active-owner 检查。
-配套结构检查、回滚 fixture 和独立会话并发测试只证明 synthetic PostgreSQL 合同。Issue #298 只记录组织创建 HTTP 合同，仓库仍未增加 route、store、production composition 或 Flutter UI。这些证据也不代表生产身份、真实账号删除或组织清除。
+配套结构检查、回滚 fixture 和独立会话并发测试只证明 synthetic PostgreSQL 合同。Issue #298 固定组织创建 HTTP 合同，Issue #300 已增加 route、store、production composition 和 synthetic PostgreSQL integration，但未增加 Flutter UI。这些证据也不代表生产身份、真实账号删除或组织清除。
 
-### 3.3 Issue #298：组织创建 HTTP 合同（spec-only）
+### 3.3 组织创建 HTTP route（Issue #298／#300）
 
-Issue #298 固定下一步 Backend 传输边界，不实现 HTTP route、store adapter 或 production composition。入口为：
+Issue #298 固定 Backend 传输边界，Issue #300 实现 HTTP route、store adapter 和 production composition。入口为：
 
 ```text
 POST /v1/organizations
@@ -158,7 +158,7 @@ Store 只执行一次参数化 `app_data.create_organization_for_identity_v1`，
 
 响应、日志和失败审计不得包含 token、Auth user object、邮箱、确认时间、provider metadata、issuer、subject、SQL、数据库 message、stack 或 display name。creation audit 仍只保存 0084 规定的 value-free 字段。owner 不自动生成 project membership、capability、管理报告或 PII 权限。
 
-当前 production composition 和配置仍未实现。后续接入必须显式组合专用 7A verifier、Auth user lookup 和 creation store；缺配置时必须失败关闭，不能退回 generic JWT、JWT metadata、请求 body、本地缓存或 `SessionContext`。本票不增加 migration、owner lifecycle、Flutter、Drift 或 Apple 行为。
+production composition 显式组合专用 7A verifier、Supabase Auth user lookup 和 creation store，并要求 `SUPABASE_PUBLISHABLE_KEY`。缺配置时启动失败关闭，不能只使用 generic JWT、JWT metadata、请求 body、本地缓存或 `SessionContext`。Issue #300 不增加 migration、owner lifecycle、Flutter、Drift 或 Apple 行为。
 
 ## 4. PostgreSQL transaction 建立哪些事实
 

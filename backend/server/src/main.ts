@@ -1,6 +1,11 @@
 import { Pool } from "pg";
 
 import { createProductionIdentityVerifier } from "./identity.js";
+import {
+  createOrganizationCreationIdentityVerifier,
+  createSupabaseAuthUserLookup,
+} from "./organization-creation-identity.js";
+import { PostgresOrganizationCreationStore } from "./organization-creation.js";
 import { createBackendServer } from "./server.js";
 import { PostgresSessionContextStore } from "./session-context.js";
 import { PostgresSyncCommandStore } from "./sync-store.js";
@@ -58,6 +63,7 @@ import { PostgresManagementAnalysisContextStore } from "./management-analysis-co
 
 const databaseUrl = requireEnvironment("DATABASE_URL");
 const authIssuer = requireEnvironment("AUTH_ISSUER");
+const supabasePublishableKey = requireEnvironment("SUPABASE_PUBLISHABLE_KEY");
 const authAudience = process.env.AUTH_AUDIENCE?.trim() || "authenticated";
 const port = parsePort(process.env.PORT);
 
@@ -71,6 +77,18 @@ const identityVerifier = createProductionIdentityVerifier({
     ? {}
     : { jwksUrl: process.env.AUTH_JWKS_URL }),
 });
+const authUserEndpoint = new URL(
+  "user",
+  `${authIssuer.replace(/\/+$/, "")}/`,
+).toString();
+const organizationCreationIdentityVerifier =
+  createOrganizationCreationIdentityVerifier({
+    identityVerifier,
+    authUserLookup: createSupabaseAuthUserLookup({
+      userEndpoint: authUserEndpoint,
+      publishableKey: supabasePublishableKey,
+    }),
+  });
 const contextStore = new PostgresSessionContextStore(query);
 const commandStore = new PostgresSyncCommandStore(query);
 const regionResolutionStore = new PostgresRegionResolutionStore(query);
@@ -125,8 +143,11 @@ const managementReportReleaseStore = new PostgresManagementReportReleaseStore(
 );
 const managementAnalysisContextStore =
   new PostgresManagementAnalysisContextStore(query);
+const organizationCreationStore = new PostgresOrganizationCreationStore(query);
 const server = createBackendServer({
   identityVerifier,
+  organizationCreationIdentityVerifier,
+  organizationCreationStore,
   contextStore,
   commandStore,
   regionResolutionStore,
