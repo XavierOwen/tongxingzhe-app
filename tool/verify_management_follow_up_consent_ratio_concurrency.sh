@@ -184,6 +184,17 @@ wait_for_barrier() {
     fixture_now_utc - interval '365 days',
     NULL
   FROM fixture_6bpc_clock;
+  INSERT INTO app_data.organization_owner_assignments (
+    organization_owner_assignment_id,
+    organization_membership_id,
+    active_from_utc,
+    inactive_from_utc
+  ) VALUES (
+    '6bfc8000-0000-4000-8000-000000000001'::uuid,
+    '${organization_membership_id}'::uuid,
+    transaction_timestamp(),
+    NULL
+  );
   INSERT INTO app_data.project_memberships (
     project_membership_id, organization_membership_id, project_id,
     active_from_utc, inactive_from_utc

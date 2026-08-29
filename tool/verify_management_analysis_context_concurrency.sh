@@ -61,6 +61,7 @@ wait_for_ready() {
 }
 
 "${psql_base[@]}" --command="
+  BEGIN;
   INSERT INTO app_data.app_users (app_user_id, status) VALUES
     ('f4100000-0000-4000-8000-000000000001'::uuid, 'active'),
     ('f4100000-0000-4000-8000-000000000002'::uuid, 'active');
@@ -114,6 +115,18 @@ wait_for_ready() {
       '2026-01-01 00:00:00+00'::timestamptz
     );
 
+  INSERT INTO app_data.organization_owner_assignments (
+    organization_owner_assignment_id,
+    organization_membership_id,
+    active_from_utc,
+    inactive_from_utc
+  ) VALUES (
+    'f4700000-0000-4000-8000-000000000001'::uuid,
+    'f4400000-0000-4000-8000-000000000001'::uuid,
+    transaction_timestamp(),
+    NULL
+  );
+
   INSERT INTO app_data.project_memberships (
     project_membership_id, organization_membership_id,
     project_id, active_from_utc
@@ -147,6 +160,7 @@ wait_for_ready() {
       'view_anonymous_analytics',
       '2026-01-01 00:00:00+00'::timestamptz
     );
+  COMMIT;
 " >/dev/null
 
 selection_first_output="${temporary_directory}/selection-first.out"

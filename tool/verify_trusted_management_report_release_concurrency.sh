@@ -68,6 +68,8 @@ wait_for_ready() {
 }
 
 "${psql_base[@]}" --command="
+  BEGIN;
+
   INSERT INTO app_data.app_users (app_user_id, status)
   VALUES
     ('f1000000-0000-4000-8000-000000000001'::uuid, 'active'),
@@ -192,6 +194,18 @@ wait_for_ready() {
       clock_timestamp() - interval '1 day',
       NULL
     );
+
+  INSERT INTO app_data.organization_owner_assignments (
+    organization_owner_assignment_id,
+    organization_membership_id,
+    active_from_utc,
+    inactive_from_utc
+  ) VALUES (
+    'f7000000-0000-4000-8000-000000000001'::uuid,
+    'f4000000-0000-4000-8000-000000000001'::uuid,
+    transaction_timestamp(),
+    NULL
+  );
 
   INSERT INTO app_data.project_memberships (
     project_membership_id,
@@ -319,6 +333,7 @@ wait_for_ready() {
     'UTC',
     clock_timestamp() - interval '30 days'
   );
+  COMMIT;
 " >/dev/null
 
 release_before_revocation_output="${temporary_directory}/release-before-revocation.out"

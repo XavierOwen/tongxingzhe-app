@@ -148,6 +148,8 @@ run_overlap_case() {
 }
 
 "${psql_base[@]}" --command="
+  BEGIN;
+
   INSERT INTO app_data.app_users (app_user_id)
   VALUES
     ('d1000000-0000-4000-8000-000000000001'::uuid),
@@ -207,6 +209,18 @@ run_overlap_case() {
       '2026-01-01 00:00:00+00'::timestamptz
     );
 
+  INSERT INTO app_data.organization_owner_assignments (
+    organization_owner_assignment_id,
+    organization_membership_id,
+    active_from_utc,
+    inactive_from_utc
+  ) VALUES (
+    'd7000000-0000-4000-8000-000000000001'::uuid,
+    'd4000000-0000-4000-8000-000000000002'::uuid,
+    transaction_timestamp(),
+    NULL
+  );
+
   INSERT INTO app_data.project_memberships (
     project_membership_id,
     organization_membership_id,
@@ -248,6 +262,7 @@ run_overlap_case() {
     'view_anonymous_analytics',
     '2026-01-01 00:00:00+00'::timestamptz
   );
+  COMMIT;
 " >/dev/null
 
 run_overlap_case \
