@@ -8,7 +8,8 @@
 
 组织创建流程使用独立的资格 verifier。它不改变全局 `VerifiedIdentity`，后者仍只包含受信的 `issuer` 和 `subject`。该 verifier 只接受 access token，不接受请求 body、邮箱、`email_verified`、`email_confirmed_at` 或 `is_anonymous` 作为资格输入。
 
-它先复用通用 JWT verifier 的签名、issuer、audience、期限、subject 和 `authenticated` role 校验。JWT 通过后，再由注入的 provider-neutral Auth user lookup 使用同一 token 读取可信 user endpoint。Supabase adapter 只向配置的 HTTPS endpoint 发送 `Authorization: Bearer <access-token>`、publishable key 和受控超时；它拒绝 JWT secret、service-role key 和其他 secret，不跟随重定向，并把响应限制在 16 KiB。
+它先复用通用 JWT verifier 的签名、issuer、audience、期限、subject 和 `authenticated` role 校验。JWT 通过后，再由注入的 provider-neutral Auth user lookup 使用同一 token 读取可信 user endpoint。
+Supabase adapter 只向配置的 HTTPS endpoint 发送 `Authorization: Bearer <access-token>`、publishable key 和受控超时。它拒绝 JWT secret、service-role key 和其他 secret，不跟随重定向，并把响应限制在 16 KiB。
 
 user object 的 `id` 必须与 JWT `subject` 完全相等，`is_anonymous` 必须严格为 `false`，`email_confirmed_at` 必须是非空、有效且带时区的时间戳。JWT 中的 `email`、`email_verified`、可修改的 `user_metadata` 和请求 body 都不能提高资格。
 
@@ -22,9 +23,63 @@ user object 的 `id` 必须与 JWT `subject` 完全相等，`is_anonymous` 必�
 | `forbidden` | JWT 有效且身份一致，但用户是匿名用户，或邮箱尚未确认 |
 | `unavailable` | 配置非法、endpoint 非 HTTPS、超时、网络失败、5xx、非 JSON、匿名状态类型错误、确认时间格式错误或其他未知响应结构 |
 
-错误只向上层提供稳定类别，不包含数据库或 provider 原文。这个切片只交付 verifier 和 adapter 合同，不增加组织创建 route、PostgreSQL 写入或 Flutter UI。
+错误只向上层提供稳定类别，不包含数据库或 provider 原文。7A 只交付 verifier 和 adapter 合同，不增加组织创建 route、PostgreSQL 写入或 Flutter UI。
 
 本地测试使用临时 ES256 key、synthetic user object 和注入式 fake lookup／HTTP transport，不连接真实 Supabase。测试只证明 JWT、user object、请求 headers、严格解析和失败分类；它不证明生产 Supabase、部署端点、真实身份或六平台运行时。
+
+## Issue #298：组织创建 HTTP 合同（spec-only）
+
+Issue #298 只记录下一步 Backend route/store 的 HTTP 合同，不实现 route、store 或 production composition。当前仓库仍没有这些实现。
+
+固定入口为：
+
+```text
+POST /v1/organizations
+```
+
+其他 method 或未匹配 path 返回通用 `404 {"error":{"code":"not_found"}}`，不验证身份、读取 body 或调用 store。
+
+专用的 Slice 7A organization-creation eligibility verifier 必须先验证 Bearer token，再读取 body 或访问 store。它先完成 JWT 验证，再以同一 token 读取 Auth user endpoint。缺失或无效 token 返回 `401 unauthenticated`；资格 `forbidden` 返回 `403 organization_creation_forbidden`；资格或 Auth provider 不可用返回 `503 organization_creation_unavailable`。认证失败不能触发 body parser 或 store。
+
+请求 body 是 JSON object，且只能含以下两个字段：
+
+```json
+{
+  "request_id": "uuid",
+  "display_name": "string"
+}
+```
+
+`request_id` 必须位于 body 中。它是组织创建命名空间的单列幂等 UUID，不使用 `Idempotency-Key` header，也不使用 actor 与 UUID 的联合键。任何 query 都在认证成功后、读取 body 前返回 `400 invalid_organization_creation_request`。body 不得包含 issuer、subject、`app_user_id`、workspace、membership、owner、project、capability、时间或 audit 字段。额外字段、缺失字段、非 object、无效 UUID 或错误 JSON 形状返回 `400 invalid_organization_creation_request`。空 body 或非法 JSON 返回 `400 invalid_json`，超过现有 body 上限返回 `413 payload_too_large`。
+
+Backend 不 trim `display_name`，也不做 Unicode normalization、大小写折叠或名称合并。它把原字符串传给 0084 bridge；数据库再由 bridge 调用 private writer，并按既定规则移除两端 U+0020 与执行名称检查。
+
+首次创建和相同 `request_id`、actor、canonical name 的精确重放都返回 `200`，响应不增加 replay 标记。成功 JSON object 只能含以下五个字段：
+
+```json
+{
+  "creation_contract_id": "organization-creation:v1",
+  "organization_workspace_id": "uuid",
+  "organization_membership_id": "uuid",
+  "organization_owner_assignment_id": "uuid",
+  "created_at_utc": "2030-01-01T00:00:00.000Z"
+}
+```
+
+Store 只调用一次参数化 `app_data.create_organization_for_identity_v1`，并传入已验证的 exact issuer、subject、body 中的 request UUID 和 display name。handler 必须等待该 Promise settled，并确认数据库事务结果后才写 HTTP 响应。0084 的四组数据库错误映射如下：
+
+| 数据库错误 | HTTP 结果 |
+| --- | --- |
+| `22023 invalid organization creation identity` | `503 organization_creation_unavailable` |
+| `22023 invalid organization creation request` | `400 invalid_organization_creation_request` |
+| `42501 organization creation forbidden` | `403 organization_creation_forbidden` |
+| `22023 organization creation idempotency conflict` | `409 organization_creation_conflict` |
+
+未列出的 SQLSTATE、数据库错误、返回合同解析错误或 adapter 错误都返回 `503 organization_creation_unavailable`。所有成功和失败响应使用 `Content-Type: application/json; charset=utf-8` 与 `Cache-Control: no-store`；失败 body 只能是 `{ "error": { "code": "..." } }`。
+
+响应、结构化日志和失败审计不得包含 access token、Auth user object、邮箱、确认时间、provider metadata、issuer、subject、SQL、数据库 message、stack 或 display name。creation audit 继续遵守 0084 的 value-free allowlist。组织 owner 仍独立于 project membership、capability、管理报告和 PII 权限。
+
+production composition 尚未实现。后续接入必须显式组合专用 7A verifier、Auth user lookup 和 organization creation store；缺少配置时必须失败关闭，不能回退到 generic JWT verifier、JWT metadata、请求 body、本地缓存或 `SessionContext`。Issue #298 不增加 PostgreSQL migration、owner lifecycle、Flutter、Drift 或 Apple 平台行为。
 
 ## 个人当前关系阶段快照
 

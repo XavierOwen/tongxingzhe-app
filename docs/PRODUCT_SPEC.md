@@ -366,6 +366,61 @@ Auth user object、provider metadata、自由文本、SQL、数据库消息、�
 
 7B Spec 只固定产品、数据、锁、幂等、审计和证据边界，不新增 migration、SQL、Backend、HTTP、Flutter 或 Apple 平台行为。后续 DB-only 实现必须用 migration、structural check、rollback fixture、并发、checksum 和 dump／restore 证明原子创建、精确重放、payload drift、零 owner 防护、最小 ACL 和失败回滚；synthetic 证据不代表生产身份、部署端点、真实 PII 清除或真人平台。
 
+#### Slice 7E Spec：固定组织创建 HTTP 合同
+
+7E（Issue #298）只固定组织创建的 HTTP transport contract。它不新增 handler、store、route、production composition、数据库或客户端实现；后续实现票必须逐项满足本节、`TEST-063` 和 `MANUAL-053`。
+
+唯一公开入口是 `POST /v1/organizations`，且该 path 不接受 query。
+其他 method 或未匹配 path 返回通用 `404 {"error":{"code":"not_found"}}`，不验证身份、读取 body 或调用 store。
+命中固定 POST path 后，Backend 必须先严格解析 Bearer credential，再把 token 交给 Slice 7A 的 request-scoped `OrganizationCreationIdentityVerifier`。
+verifier 先验证 JWT，再以同一 token 读取 Auth user endpoint。
+整个身份和资格检查完成前，不读取或解析 JSON body，不调用 store，也不以 query、body 或 store 结果写业务响应。
+认证成功后，带 query 的请求返回 `400 invalid_organization_creation_request`，再进入 body 读取和校验。
+
+认证结果固定如下：缺少或无效身份返回 `401 unauthenticated`；匿名或邮箱未确认返回 `403 organization_creation_forbidden`；provider、配置或未知资格状态不可用返回 `503 organization_creation_unavailable`。Backend 不能以 `SessionContext`、客户端提交的 actor 或 body 字段替代 7A verifier 的 exact identity 与 eligibility。
+
+认证成功后，request body 必须是只含以下两个字段的 JSON object，不能有额外字段：
+
+```json
+{
+  "request_id": "uuid",
+  "display_name": "string"
+}
+```
+
+`request_id` 必须是 UUID 字符串，并且是 body 中唯一的幂等请求键；不使用 `Idempotency-Key` header、缓存或 actor 与 UUID 的联合键。`display_name` 只在 HTTP 层检查为 string；Backend 不 trim、Unicode normalize、大小写折叠、唯一性预检或名称合并，并把原字符串传给 0084 bridge。body 不能提供 issuer、subject、internal user、workspace、membership、owner、project、capability、时间或 audit 字段。空 body 或非法 JSON 复用既有 `400 invalid_json`；超过既有 1 MiB body 上限复用 `413 payload_too_large`；非 object、缺失字段、额外字段、错误类型或无效 UUID 返回 `400 invalid_organization_creation_request`。
+
+通过请求校验后，Backend 只把 7A 已验证的 exact `issuer`、`subject`、body 中的 `request_id` 和原始 `display_name` 交给 0084 的 `app_data.create_organization_for_identity_v1`。它不传入 `SessionContext`、Auth user object、内部 user／workspace／membership／owner ID、时间或审计值，也不绕过 0084 bridge 直接调用 private writer。handler、adapter 和 store 必须等待一次固定调用完成后才写响应。
+
+首次创建和同一 `request_id`、actor、canonical name 的精确重放都返回 `200`；响应不增加 replay 标记。成功 JSON root 的字段集合必须严格是 0084 的以下五项，不能包含组织名称、身份或内部附加字段：
+
+```json
+{
+  "creation_contract_id": "organization-creation:v1",
+  "organization_workspace_id": "uuid",
+  "organization_membership_id": "uuid",
+  "organization_owner_assignment_id": "uuid",
+  "created_at_utc": "UTC ISO-8601 timestamp"
+}
+```
+
+0084 的固定错误映射如下；任何未列出的 SQLSTATE、message、约束、parser、result shape 或 adapter 错误都返回 `503 organization_creation_unavailable`：
+
+| 来源 | HTTP 结果 |
+| --- | --- |
+| `22023 invalid organization creation identity` | `503 organization_creation_unavailable` |
+| `22023 invalid organization creation request` | `400 invalid_organization_creation_request` |
+| `42501 organization creation forbidden` | `403 organization_creation_forbidden` |
+| `22023 organization creation idempotency conflict` | `409 organization_creation_conflict` |
+
+所有成功和失败响应都使用 `Content-Type: application/json; charset=utf-8` 与 `Cache-Control: no-store`。失败 body 只能是 `{ "error": { "code": "<stable-code>" } }`。响应、结构化日志和失败审计不得保存 display name、邮箱、external issuer／subject、access token、Auth user object、provider metadata、SQL、数据库 message、stack、自由文本或原始错误；creation audit 继续遵守 0084 的 value-free allowlist。
+
+7E 是 spec-only 工作单元，不实现 TypeScript handler、Postgres adapter、真实 HTTP route 或 production composition。
+它也不增加 migration、SQL function、Flutter、Drift 或 Apple 平台行为。
+后续实现票必须补齐 handler、adapter、真实 HTTP、production composition、synthetic PostgreSQL integration、脱敏和 promise-before-response 测试。
+这些 synthetic 证据不代表 production identity、部署端点或真人平台。
+邀请、申请、owner 转让、membership／capability 管理、配额、反滥用和账号／组织删除仍由其他工作单元处理。
+
 ### 5.8 分析、指标与报告
 
 #### 5.8.1 统计单位和核心口径
@@ -1863,6 +1918,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-050` | 学习文档必须说明 6CE 的 0083 migration、0075 approved provenance、当前 6BO opt-in 不参与更正资格、停用后仍可登记既有 approved snapshot、更换原因 allowlist、独立 consent-ratio family、replacement／release lineage lock 分离、不同 request UUID 不互相串行、同 UUID claim 互斥、active／superseded、精确幂等、stale head／分叉／循环／跨 family 失败关闭、value-free 输出、最小 ACL，以及 migration／check／fixture／concurrency／checksum／dump／restore 命令。必须明确 6CE 不生成或修改 snapshot，不改变 0074／0075、读取、runtime、HTTP、Flutter、目录、导出、缓存、删除或 retention；synthetic Docker 证据不证明生产身份或真人平台。 |
 | `MANUAL-051` | 学习文档必须区分同版本数据更正与跨版本定义更正，说明 `manage_analysis_definitions` 与 `release_management_reports` 双授权、直接兼容证据、`analysis_definition_change`、锁后复核、撤销投影、各版本 replacement 图独立、PII-free 和组织删除边界。必须明确 6CF 只交付政策，不选择 report family、不实现数据库或客户端，也不把文档检查写成并发、生产或真人平台证据。 |
 | `MANUAL-052` | 学习文档必须区分 Slice 7A 身份资格与 7B 组织写入，说明 exact-identity bridge 与 private writer、独立 temporal owner assignment、membership containment、原子 workspace／membership／首位 owner、canonical display name、live claim／tombstone、精确重放、payload drift、governance fence 与锁顺序、延迟零 owner 防护、exact SQLSTATE／message、PII-free audit 和删除边界。必须明确 7B Spec 不实现数据库、route 或 UI，也不把文档检查写成 PostgreSQL、生产身份或真人平台证据。 |
+| `MANUAL-053` | 学习文档必须说明 7E 的固定 `POST /v1/organizations`、认证和 7A eligibility 先于 body／store、严格两字段 JSON、body request UUID、既有 1 MiB／`invalid_json`／`payload_too_large`、首次与精确重放同为 `200`、0084 五字段 success wire、四组 SQLSTATE 映射、JSON／`no-store`、PII-free 响应与日志，以及 promise-before-response。必须明确 7E 是 spec-only，后续实现票才覆盖 handler、adapter、真实 HTTP、production composition 和 synthetic PostgreSQL integration；synthetic 证据不证明生产身份、部署端点或真人平台。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -2103,6 +2159,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-060` | 6CE 的 0083 structural check、rollback fixture 和并发测试必须覆盖合法 0075 consent-ratio approved snapshot、独立 replacement family、release／replacement lineage lock 分离、只有同 request UUID claim 互斥、0075 专用 provenance、protected-document／snapshot binding、同 report／version／query／privacy／source scope／时区 revision／期间／lineage、后续 cutoff／发布时间、watermark 不回退、当前 6BO opt-in 不参与更正资格、停用后既有 approved snapshot 仍可更正、原因 allowlist、active／superseded、精确幂等、载荷漂移、跨项目／family、same／earlier cutoff、自链接、分叉、循环、stale head、旧新 snapshot 字节不变、value-free 结果、锁后授权、竞争 replacement、最小 ACL、checksum 和 dump／restore。通过只证明 synthetic DB-only replacement，不声称 snapshot 生成、runtime、HTTP、Flutter、目录、导出、删除、retention、生产身份或真人平台。 |
 | `TEST-061` | 6CF 当前只验证 Spec、ADR、手册和 Markdown 链接一致，不证明数据库合同。后续单一 report-family 实现必须用 migration、structural check、rollback fixture、concurrency、reader／directory／export 回归覆盖 approved provenance、版本／definition fingerprint 至少一项变化、compatibility 与两端 project／family／metric／方向／definition tuple 精确绑定、定义管理与报告发布两条独立 capability 路径、组织可选第二人批准、共同锁顺序、独立 lineage lock、仅同 UUID claim 互斥、锁后 active identity／membership／project／grant 复核、撤销先后竞争、专用原因、canonical 幂等／payload drift、每端单一 direct edge、缺失／未知／漂移／撤销／反向决定、全同版本、shape／validator drift、self-link／cycle／branch／stale head、value-free `compatibility_revoked`、PII-free allowlist／拒绝字段、最小 ACL、组织删除 compatibility history、checksum 和 dump／restore；synthetic 通过不证明生产身份、部署或真人平台。 |
 | `TEST-062` | 7B Spec 当前只验证 Spec、ADR、学习文档和 Markdown 链接一致，不证明数据库合同。后续 DB-only 实现必须用 migration、structural check、rollback fixture 和 concurrency 覆盖 active exact identity bridge、private writer、canonical name 边界、原子 workspace／membership／首位 owner／claim／audit、单列 request 唯一、live claim／tombstone 拒绝复用、actor 一次性去关联例外、相同请求精确重放、actor／payload drift、并发同请求、并发不同请求、assignment containment／不重叠、唯一 owner 结束拒绝、不同 owner 并发失效、先授予后结束、membership／账号结束防护、purge 与治理写入 fence、删除恢复与终结清除、失败零部分写入、exact SQLSTATE／message、owner／audit 追加不可变、延迟零 owner 约束、固定 owner／`VOLATILE SECURITY DEFINER`／search path、无 `PUBLIC` execute、runtime 最小 ACL、checksum 和 dump／restore。synthetic 通过不证明 HTTP、Flutter、production identity、部署、真实删除或真人平台。 |
+| `TEST-063` | 7E 后续实现必须以 Backend unit／handler、real HTTP route、production composition、Postgres adapter 和 synthetic PostgreSQL integration 覆盖固定 `POST /v1/organizations`、wrong method／query、认证先于 body parser／store、`401`／`403`／`503` eligibility 分类、严格两字段／exact keys／types／UUID／额外字段、body request UUID 而非 `Idempotency-Key` 或缓存、既有 1 MiB／`invalid_json`／`payload_too_large`、原始 display name 传递、一次 0084 bridge 调用、promise-before-response、首次／精确重放同为 `200`、无 replay flag、五字段 success wire、四组 SQLSTATE 映射、unknown error 的 `503`、JSON／`no-store` 和 PII-free response／logs。必须明确这些测试不证明 production identity、部署端点、Flutter、Drift 或 Apple 平台运行时。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -2373,7 +2430,11 @@ Dart synthetic 测试只证明 transport、parser 和内存边界。
 
 交付：组织创建、定向邀请、可转发申请链接、审批、所有权、成员与 capability 管理、账号／组织删除恢复期，以及推广对象资料的完整导入、导出、重复处理和可逆合并流程。固定匿名管理报告文件导出属于 Slice 6，不改变本 Slice 的 PII 边界。
 
-当前切片：7A 只验证 request-scoped 组织创建资格；7B Spec 在 5.7 节固定原子创建、首位 owner、幂等、锁、失败和删除边界，不实现数据库或 HTTP。
+当前状态：7A 已固定 request-scoped 组织创建资格。
+7B Spec 在 5.7 节固定原子创建、首位 owner、幂等、锁、失败和删除边界。
+现有 0084 组织创建 DB writer 与 0085 active-owner invariant 已提供基础实现。
+7E（Issue #298）只固定 `POST /v1/organizations` 的 HTTP 合同。
+handler、Postgres adapter、真实 HTTP、production composition 和其他运行时代码由后续实现票交付；本 Issue 不实现数据库、HTTP、Flutter 或 Apple。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 
