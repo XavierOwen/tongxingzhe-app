@@ -87,7 +87,10 @@ wait_for_ready_lock() {
 
 project_id='6a300000-0000-4000-8000-000000000001'
 app_user_id='6a100000-0000-4000-8000-000000000001'
+owner_app_user_id='6a100000-0000-4000-8000-000000000002'
 workspace_id='6a200000-0000-4000-8000-000000000001'
+owner_membership_id='6a400000-0000-4000-8000-000000000001'
+owner_assignment_id='6a500000-0000-4000-8000-000000000001'
 questionnaire_version_id='6a700000-0000-4000-8000-000000000001'
 base_tree_version='concurrent-current-city-report-base-v1'
 first_tree_version='concurrent-current-city-report-a-v1'
@@ -95,8 +98,12 @@ second_tree_version='concurrent-current-city-report-b-v1'
 report_id='contact_sessions_by_current_city_two_periods'
 
 "${psql_base[@]}" --command="
+  BEGIN;
+
   INSERT INTO app_data.app_users (app_user_id, status)
-  VALUES ('${app_user_id}'::uuid, 'active');
+  VALUES
+    ('${app_user_id}'::uuid, 'active'),
+    ('${owner_app_user_id}'::uuid, 'active');
 
   INSERT INTO app_data.workspaces (
     workspace_id, workspace_kind, display_name
@@ -104,6 +111,32 @@ report_id='contact_sessions_by_current_city_two_periods'
     '${workspace_id}'::uuid,
     'organization',
     'Concurrent current city report workspace'
+  );
+
+  INSERT INTO app_data.organization_memberships (
+    organization_membership_id,
+    organization_workspace_id,
+    app_user_id,
+    active_from_utc,
+    inactive_from_utc
+  ) VALUES (
+    '${owner_membership_id}'::uuid,
+    '${workspace_id}'::uuid,
+    '${owner_app_user_id}'::uuid,
+    transaction_timestamp(),
+    NULL
+  );
+
+  INSERT INTO app_data.organization_owner_assignments (
+    organization_owner_assignment_id,
+    organization_membership_id,
+    active_from_utc,
+    inactive_from_utc
+  ) VALUES (
+    '${owner_assignment_id}'::uuid,
+    '${owner_membership_id}'::uuid,
+    transaction_timestamp(),
+    NULL
   );
 
   INSERT INTO app_data.projects (
@@ -182,6 +215,8 @@ report_id='contact_sessions_by_current_city_two_periods'
   SELECT app_private.publish_canonical_region_tree_v1(
     '${base_tree_version}', true
   );
+
+  COMMIT;
 " >/dev/null
 
 assert_report_shape() {
