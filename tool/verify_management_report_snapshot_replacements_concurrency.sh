@@ -188,6 +188,19 @@ INSERT INTO app_data.organization_memberships (
     '2025-01-01T00:00:00Z', NULL
   );
 
+INSERT INTO app_data.organization_owner_assignments (
+  organization_owner_assignment_id,
+  organization_membership_id,
+  active_from_utc,
+  inactive_from_utc
+)
+VALUES (
+  '6becd000-0000-4000-8000-000000000001'::uuid,
+  '6bec4000-0000-4000-8000-000000000001'::uuid,
+  transaction_timestamp(),
+  NULL
+);
+
 INSERT INTO app_data.project_memberships (
   project_membership_id, organization_membership_id, project_id,
   active_from_utc, inactive_from_utc
