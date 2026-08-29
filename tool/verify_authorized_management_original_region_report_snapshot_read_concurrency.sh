@@ -122,6 +122,8 @@ wait_for_waiting_lock() {
 # need to observe one common snapshot.  It is separate from the 6BH rollback
 # fixture and from all earlier 6AP/6AX/6AO concurrency namespaces.
 run_psql <<'SQL'
+BEGIN;
+
 INSERT INTO app_data.app_users (app_user_id, status)
 VALUES
   ('6fc10000-0000-4000-8000-000000000001'::uuid, 'active'),
@@ -170,6 +172,20 @@ VALUES
     '6fc10000-0000-4000-8000-000000000003'::uuid,
     clock_timestamp() - interval '30 days', NULL
   );
+
+INSERT INTO app_data.organization_owner_assignments (
+  organization_owner_assignment_id,
+  organization_membership_id,
+  active_from_utc,
+  inactive_from_utc
+)
+VALUES (
+  '6fca0000-0000-4000-8000-000000000001'::uuid,
+  '6fc60000-0000-4000-8000-000000000001'::uuid,
+  transaction_timestamp(),
+  NULL
+);
+
 INSERT INTO app_data.project_memberships (
   project_membership_id, organization_membership_id, project_id,
   active_from_utc, inactive_from_utc
@@ -318,6 +334,7 @@ INSERT INTO app_data.change_feed (
   '6fc30000-0000-4000-8000-000000000001'::uuid,
   'fixture-6bhc-original-watermark', 1, 'contact.submitted'
 );
+COMMIT;
 SQL
 
 snapshot_id="$(run_psql --tuples-only --no-align --command="
