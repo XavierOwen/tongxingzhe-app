@@ -24,6 +24,7 @@ import '../management_reports/interest_report_gateway.dart';
 import '../management_reports/management_report_gateway.dart';
 import '../management_reports/management_report_export_delivery.dart';
 import '../management_reports/original_region_report_gateway.dart';
+import '../organization_creation/organization_creation.dart';
 import '../plans/personal_action_plan.dart';
 import '../project_settings/personal_follow_up_consent_opt_in.dart';
 import '../reminders/personal_action_reminder.dart';
@@ -63,6 +64,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
   late final Future<AppStartupResult> _startup;
   LocalDatabase? _database;
   IdentitySession? _identitySession;
+  OrganizationCreationGateway? _organizationCreationGateway;
   AppSession? _appSession;
   SyncEngineFactory? _syncEngineFactory;
   ContactRegionResolver? _regionResolver;
@@ -101,6 +103,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
     if (result case AppStartupReady(
       :final database,
       :final identitySession,
+      :final organizationCreationGateway,
       :final appSession,
       :final syncEngineFactory,
       :final regionResolver,
@@ -123,6 +126,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
     )) {
       _database = database;
       _identitySession = identitySession;
+      _organizationCreationGateway = organizationCreationGateway;
       _appSession = appSession;
       _syncEngineFactory = syncEngineFactory;
       _regionResolver = regionResolver;
@@ -153,6 +157,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
     await Future.wait([
       startup.appSession.close(),
       startup.identitySession.close(),
+      startup.organizationCreationGateway.close(),
       startup.syncEngineFactory?.close() ?? Future<void>.value(),
       startup.regionResolver.close(),
       startup.questionnaireCatalog.close(),
@@ -179,6 +184,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
   void dispose() {
     unawaited(_appSession?.close());
     unawaited(_identitySession?.close());
+    unawaited(_organizationCreationGateway?.close());
     unawaited(_syncEngineFactory?.close());
     unawaited(_regionResolver?.close());
     unawaited(_questionnaireCatalog?.close());

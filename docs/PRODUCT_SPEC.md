@@ -426,7 +426,10 @@ handler、adapter、真实 HTTP、production composition、脱敏和 promise-bef
 Issue #302 在上述固定 wire 上增加独立 Flutter typed gateway。gateway 只接收调用方提供的 canonical request UUID 和原始 display name，
 通过 `IdentitySession` 取得 Bearer token，并在首次 `401` 后只刷新和重试一次。它严格校验 JSON／`no-store`、五字段 receipt、
 稳定 error envelope、canonical UUID 和 UTC 时间，把 identity、HTTP、timeout、network 与 parser 失败收敛为不含原始错误的 typed result。
-本切片不接入 `AppDependencies`、controller、UI、导航或 Drift，也不生成 request UUID；调用方必须在不确定重试中复用同一请求参数。
+Issue #306 将该 gateway 接入 `AppDependencies` 生命周期。builder 接收启动时打开的同一个 `IdentitySession`，
+`AppStartupReady` 暴露 builder 返回的同一个 gateway；未提供 builder 时使用不访问网络的 deferred gateway。
+后续启动步骤失败、App 在启动完成前被移除或 `TongxingzheApp` 正常 dispose 时，已创建的 gateway 都只关闭一次。
+该切片仍不接入 controller、UI、route 或导航，也不增加 Drift、request UUID 生成器或跨重启 durable retry；调用方必须在不确定重试中复用同一请求参数。
 
 邀请、申请、membership／capability 管理、配额、反滥用和账号／组织删除仍由其他工作单元处理。owner transfer 只在本节固定合同；实现仍由后续工作单元处理。
 
@@ -2539,7 +2542,9 @@ Dart synthetic 测试只证明 transport、parser 和内存边界。
 
 7E 的 Issue #298 固定 `POST /v1/organizations` HTTP 合同。
 Issue #300 实现 handler、Postgres adapter、真实 HTTP 和 production composition，并复用 0084／0085；它不增加 Flutter 或 Apple 行为。
-Issue #302 增加独立 Flutter typed gateway；它尚未接入 composition、controller、UI、Drift 或创建后的组织／项目上下文。
+Issue #302 增加独立 Flutter typed gateway。Issue #306 已将其接入 `AppDependencies` 生命周期：builder 与 `AppStartupReady` 使用同一个
+`IdentitySession` 和同一个 gateway，启动后续失败、启动完成前移除 App 或正常 dispose 时只关闭一次。它仍未接入 controller、UI、route、Drift、
+request UUID 生成或跨重启 durable retry，也未接入创建后的组织／项目上下文。
 7G 的 Issue #304 只固定 owner transfer spec：trusted exact identity、current owner 到同组织 active membership 的 handoff、独立 request claim、锁序、grant-before-close、固定 result／errors／audit 和 deletion boundary。
 尚未实现 transfer migration、writer、Backend、HTTP、Flutter 或 recovery 流程。
 

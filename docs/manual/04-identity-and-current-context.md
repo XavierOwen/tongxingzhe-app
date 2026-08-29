@@ -240,9 +240,9 @@ Store 只执行一次参数化 `app_data.create_organization_for_identity_v1`，
 
 production composition 显式组合专用 7A verifier、Supabase Auth user lookup 和 creation store，并要求 `SUPABASE_PUBLISHABLE_KEY`。缺配置时启动失败关闭，不能只使用 generic JWT、JWT metadata、请求 body、本地缓存或 `SessionContext`。Issue #300 不增加 migration、owner lifecycle、Flutter、Drift 或 Apple 行为。
 
-### 3.5 Flutter 组织创建 typed gateway（Issue #302）
+### 3.5 Flutter 组织创建 typed gateway 与 AppDependencies 生命周期（Issue #302、#306）
 
-Issue #302 增加独立的 `OrganizationCreationGateway` 和 HTTP adapter。调用方显式提供 canonical request UUID 与原始 display name；gateway 不生成 UUID，
+Issue #302 增加独立的 `OrganizationCreationGateway` 和 HTTP adapter。Issue #306 将它接入 `AppDependencies` 生命周期。调用方显式提供 canonical request UUID 与原始 display name；gateway 不生成 UUID，
 不 trim 或 normalize 名称，也不读取 email、external subject、内部 user／workspace／project／capability 或 `SessionContext`。
 
 HTTP adapter 只发送无 query 的 `POST /v1/organizations`，body 仍只有 `request_id` 和 `display_name`。它通过 `IdentitySession` 取得 Bearer token；
@@ -250,13 +250,16 @@ HTTP adapter 只发送无 query 的 `POST /v1/organizations`，body 仍只有 `r
 与 canonical UTC 时间；所有响应都必须是 JSON 且带 `Cache-Control: no-store`。稳定 Backend error envelope、identity、timeout、network 和协议漂移只返回 typed failure，
 不会把 response body、provider 或数据库错误交给调用方。
 
-未配置 `BACKEND_BASE_URL` 时，production factory 返回不触网的 deferred gateway。`close()` 只负责关闭它拥有的 HTTP client；receipt 不写入 Drift、缓存或日志。
-本切片没有接入 `AppDependencies`、controller、Screen、导航、创建后的组织／项目上下文或跨重启 durable retry。
+未配置 `BACKEND_BASE_URL` 时，production factory 返回不触网的 deferred gateway。`AppDependencies` 的 builder 接收启动时打开的同一个 `IdentitySession`，
+`AppStartupReady` 暴露 builder 返回的同一个 gateway。`close()` 只负责关闭它拥有的 HTTP client；receipt 不写入 Drift、缓存或日志。
+后续启动步骤失败、App 在启动完成前被移除或 `TongxingzheApp` 正常 dispose 时，已创建的 gateway 都只关闭一次。
+本切片仍没有接入 controller、UI、Screen、route、导航、创建后的组织／项目上下文、Drift、request UUID 生成器或跨重启 durable retry。
 
-先运行 focused transport tests，再运行全量 Flutter 回归：
+先运行 focused gateway 与 composition tests，再运行全量 Flutter 回归：
 
 ```bash
 flutter test test/organization_creation/http_organization_creation_gateway_test.dart
+flutter test test/app/app_dependencies_test.dart test/app/tongxingzhe_app_test.dart
 dart analyze
 flutter test
 dart run tool/check_markdown_links.dart

@@ -19,6 +19,7 @@ import 'package:tongxingzhe_app/management_reports/management_report_export_deli
 import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/original_region_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/follow_up_consent_ratio_report_gateway.dart';
+import 'package:tongxingzhe_app/organization_creation/organization_creation.dart';
 import 'package:tongxingzhe_app/privacy/drift_offline_pii_lock_store.dart';
 import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
 import 'package:tongxingzhe_app/project_settings/http_personal_follow_up_consent_opt_in_gateway.dart';
@@ -80,6 +81,10 @@ void main() {
     expect(
       ready.originalRegionReportGateway,
       isA<DeferredOriginalRegionReportGateway>(),
+    );
+    expect(
+      ready.organizationCreationGateway,
+      isA<DeferredOrganizationCreationGateway>(),
     );
   });
 
@@ -193,6 +198,38 @@ void main() {
     expect(identical(receivedIdentity, ready.identitySession), isTrue);
     expect(identical(ready.followUpConsentRatioReportGateway, gateway), isTrue);
     await ready.followUpConsentRatioReportGateway.close();
+    expect(gateway.closeCount, 1);
+    await ready.appSession.close();
+    await ready.identitySession.close();
+    await database.close();
+  });
+
+  test('composition root 装配并释放组织创建 gateway', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession();
+    final gateway = _TrackingOrganizationCreationGateway();
+    IdentitySession? receivedIdentity;
+    final dependencies = AppDependencies(
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      organizationCreationGatewayBuilder: (identitySession) {
+        receivedIdentity = identitySession;
+        return gateway;
+      },
+    );
+
+    final startup = await dependencies.start();
+
+    expect(startup, isA<AppStartupReady>());
+    final ready = startup as AppStartupReady;
+    expect(identical(receivedIdentity, identity), isTrue);
+    expect(identical(receivedIdentity, ready.identitySession), isTrue);
+    expect(identical(ready.organizationCreationGateway, gateway), isTrue);
+    await ready.organizationCreationGateway.close();
     expect(gateway.closeCount, 1);
     await ready.appSession.close();
     await ready.identitySession.close();
@@ -414,6 +451,7 @@ void main() {
     final originalRegionGateway = _TrackingOriginalRegionReportGateway();
     final relationshipGateway = _TrackingCurrentRelationshipStageGateway();
     final followUpGateway = _TrackingFollowUpConsentRatioReportGateway();
+    final organizationGateway = _TrackingOrganizationCreationGateway();
     final dependencies = AppDependencies(
       databaseFactory: SingleDatabaseFactory(database),
       clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
@@ -427,6 +465,7 @@ void main() {
       originalRegionReportGatewayBuilder: (_) => originalRegionGateway,
       currentRelationshipStageGatewayBuilder: (_) => relationshipGateway,
       followUpConsentRatioReportGatewayBuilder: (_) => followUpGateway,
+      organizationCreationGatewayBuilder: (_) => organizationGateway,
       reminderSchedulerBuilder: (_) => throw StateError('synthetic failure'),
     );
 
@@ -439,6 +478,7 @@ void main() {
     expect(originalRegionGateway.closeCount, 1);
     expect(relationshipGateway.closeCount, 1);
     expect(followUpGateway.closeCount, 1);
+    expect(organizationGateway.closeCount, 1);
   });
 
   test('能力通过时 composition root 装配离线对象 gateway', () async {
@@ -658,6 +698,22 @@ final class _TrackingFollowUpConsentRatioReportGateway
   }) async => const FollowUpConsentRatioReportRejected(
     FollowUpConsentRatioReportFailureCode.notConfigured,
   );
+}
+
+final class _TrackingOrganizationCreationGateway
+    implements OrganizationCreationGateway {
+  var closeCount = 0;
+
+  @override
+  Future<OrganizationCreationResult> create({
+    required String requestId,
+    required String displayName,
+  }) async => const OrganizationCreationRejected(
+    OrganizationCreationFailureCode.notConfigured,
+  );
+
+  @override
+  Future<void> close() async => closeCount++;
 }
 
 final class _TrackingManagementReportExportDelivery
