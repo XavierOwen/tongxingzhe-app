@@ -25,6 +25,7 @@ import '../management_reports/management_report_gateway.dart';
 import '../management_reports/management_report_export_delivery.dart';
 import '../management_reports/original_region_report_gateway.dart';
 import '../organization_creation/organization_creation.dart';
+import '../organization_owner_transfer/organization_owner_transfer.dart';
 import '../plans/personal_action_plan.dart';
 import '../project_settings/personal_follow_up_consent_opt_in.dart';
 import '../reminders/personal_action_reminder.dart';
@@ -65,6 +66,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
   LocalDatabase? _database;
   IdentitySession? _identitySession;
   OrganizationCreationGateway? _organizationCreationGateway;
+  OrganizationOwnerTransferGateway? _organizationOwnerTransferGateway;
   AppSession? _appSession;
   SyncEngineFactory? _syncEngineFactory;
   ContactRegionResolver? _regionResolver;
@@ -104,6 +106,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       :final database,
       :final identitySession,
       :final organizationCreationGateway,
+      :final organizationOwnerTransferGateway,
       :final appSession,
       :final syncEngineFactory,
       :final regionResolver,
@@ -127,6 +130,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       _database = database;
       _identitySession = identitySession;
       _organizationCreationGateway = organizationCreationGateway;
+      _organizationOwnerTransferGateway = organizationOwnerTransferGateway;
       _appSession = appSession;
       _syncEngineFactory = syncEngineFactory;
       _regionResolver = regionResolver;
@@ -158,6 +162,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       startup.appSession.close(),
       startup.identitySession.close(),
       startup.organizationCreationGateway.close(),
+      startup.organizationOwnerTransferGateway.close(),
       startup.syncEngineFactory?.close() ?? Future<void>.value(),
       startup.regionResolver.close(),
       startup.questionnaireCatalog.close(),
@@ -185,6 +190,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
     unawaited(_appSession?.close());
     unawaited(_identitySession?.close());
     unawaited(_organizationCreationGateway?.close());
+    unawaited(_organizationOwnerTransferGateway?.close());
     unawaited(_syncEngineFactory?.close());
     unawaited(_regionResolver?.close());
     unawaited(_questionnaireCatalog?.close());

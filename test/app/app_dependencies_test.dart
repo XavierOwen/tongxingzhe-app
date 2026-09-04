@@ -20,6 +20,7 @@ import 'package:tongxingzhe_app/management_reports/management_report_gateway.dar
 import 'package:tongxingzhe_app/management_reports/original_region_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/follow_up_consent_ratio_report_gateway.dart';
 import 'package:tongxingzhe_app/organization_creation/organization_creation.dart';
+import 'package:tongxingzhe_app/organization_owner_transfer/organization_owner_transfer.dart';
 import 'package:tongxingzhe_app/privacy/drift_offline_pii_lock_store.dart';
 import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
 import 'package:tongxingzhe_app/project_settings/http_personal_follow_up_consent_opt_in_gateway.dart';
@@ -85,6 +86,10 @@ void main() {
     expect(
       ready.organizationCreationGateway,
       isA<DeferredOrganizationCreationGateway>(),
+    );
+    expect(
+      ready.organizationOwnerTransferGateway,
+      isA<DeferredOrganizationOwnerTransferGateway>(),
     );
   });
 
@@ -230,6 +235,38 @@ void main() {
     expect(identical(receivedIdentity, ready.identitySession), isTrue);
     expect(identical(ready.organizationCreationGateway, gateway), isTrue);
     await ready.organizationCreationGateway.close();
+    expect(gateway.closeCount, 1);
+    await ready.appSession.close();
+    await ready.identitySession.close();
+    await database.close();
+  });
+
+  test('composition root 装配并释放组织 owner transfer gateway', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession();
+    final gateway = _TrackingOrganizationOwnerTransferGateway();
+    IdentitySession? receivedIdentity;
+    final dependencies = AppDependencies(
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      organizationOwnerTransferGatewayBuilder: (identitySession) {
+        receivedIdentity = identitySession;
+        return gateway;
+      },
+    );
+
+    final startup = await dependencies.start();
+
+    expect(startup, isA<AppStartupReady>());
+    final ready = startup as AppStartupReady;
+    expect(identical(receivedIdentity, identity), isTrue);
+    expect(identical(receivedIdentity, ready.identitySession), isTrue);
+    expect(identical(ready.organizationOwnerTransferGateway, gateway), isTrue);
+    await ready.organizationOwnerTransferGateway.close();
     expect(gateway.closeCount, 1);
     await ready.appSession.close();
     await ready.identitySession.close();
@@ -452,6 +489,8 @@ void main() {
     final relationshipGateway = _TrackingCurrentRelationshipStageGateway();
     final followUpGateway = _TrackingFollowUpConsentRatioReportGateway();
     final organizationGateway = _TrackingOrganizationCreationGateway();
+    final organizationOwnerTransferGateway =
+        _TrackingOrganizationOwnerTransferGateway();
     final dependencies = AppDependencies(
       databaseFactory: SingleDatabaseFactory(database),
       clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
@@ -466,6 +505,8 @@ void main() {
       currentRelationshipStageGatewayBuilder: (_) => relationshipGateway,
       followUpConsentRatioReportGatewayBuilder: (_) => followUpGateway,
       organizationCreationGatewayBuilder: (_) => organizationGateway,
+      organizationOwnerTransferGatewayBuilder: (_) =>
+          organizationOwnerTransferGateway,
       reminderSchedulerBuilder: (_) => throw StateError('synthetic failure'),
     );
 
@@ -479,6 +520,7 @@ void main() {
     expect(relationshipGateway.closeCount, 1);
     expect(followUpGateway.closeCount, 1);
     expect(organizationGateway.closeCount, 1);
+    expect(organizationOwnerTransferGateway.closeCount, 1);
   });
 
   test('能力通过时 composition root 装配离线对象 gateway', () async {
@@ -710,6 +752,23 @@ final class _TrackingOrganizationCreationGateway
     required String displayName,
   }) async => const OrganizationCreationRejected(
     OrganizationCreationFailureCode.notConfigured,
+  );
+
+  @override
+  Future<void> close() async => closeCount++;
+}
+
+final class _TrackingOrganizationOwnerTransferGateway
+    implements OrganizationOwnerTransferGateway {
+  var closeCount = 0;
+
+  @override
+  Future<OrganizationOwnerTransferResult> transfer({
+    required String requestId,
+    required String organizationWorkspaceId,
+    required String targetOrganizationMembershipId,
+  }) async => const OrganizationOwnerTransferRejected(
+    OrganizationOwnerTransferFailureCode.notConfigured,
   );
 
   @override

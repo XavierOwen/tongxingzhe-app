@@ -21,6 +21,7 @@ import 'package:tongxingzhe_app/management_reports/interest_report_gateway.dart'
 import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/original_region_report_gateway.dart';
 import 'package:tongxingzhe_app/organization_creation/organization_creation.dart';
+import 'package:tongxingzhe_app/organization_owner_transfer/organization_owner_transfer.dart';
 import 'package:tongxingzhe_app/platform/platform_capabilities.dart';
 import 'package:tongxingzhe_app/project_settings/personal_follow_up_consent_opt_in.dart';
 import 'package:tongxingzhe_app/questionnaires/questionnaire_contract.dart';
@@ -81,6 +82,69 @@ void main() {
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       organizationCreationGatewayBuilder: (_) => gateway,
+    );
+    addTearDown(database.close);
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    expect(gateway.closeCount, 1);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    expect(gateway.closeCount, 1);
+  });
+
+  testWidgets('启动尚未完成时移除 App 仍关闭后来取得的 owner transfer gateway 一次', (
+    tester,
+  ) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final startupGate = _BlockingPlatformCapabilitiesProvider();
+    final gateway = _TrackingOrganizationOwnerTransferGateway();
+    var builderCalls = 0;
+    final dependencies = AppDependencies(
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: startupGate,
+      organizationOwnerTransferGatewayBuilder: (_) {
+        builderCalls++;
+        return gateway;
+      },
+    );
+    addTearDown(database.close);
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pump();
+    expect(startupGate.loadCalls, 1);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    startupGate.complete();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+
+    expect(builderCalls, 1);
+    expect(gateway.closeCount, 1);
+  });
+
+  testWidgets('移除 TongxingzheApp 后关闭 owner transfer gateway 恰好一次', (
+    tester,
+  ) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final gateway = _TrackingOrganizationOwnerTransferGateway();
+    final dependencies = AppDependencies(
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      organizationOwnerTransferGatewayBuilder: (_) => gateway,
     );
     addTearDown(database.close);
 
@@ -2282,6 +2346,23 @@ final class _TrackingOrganizationCreationGateway
     required String displayName,
   }) async => const OrganizationCreationRejected(
     OrganizationCreationFailureCode.notConfigured,
+  );
+
+  @override
+  Future<void> close() async => closeCount++;
+}
+
+final class _TrackingOrganizationOwnerTransferGateway
+    implements OrganizationOwnerTransferGateway {
+  var closeCount = 0;
+
+  @override
+  Future<OrganizationOwnerTransferResult> transfer({
+    required String requestId,
+    required String organizationWorkspaceId,
+    required String targetOrganizationMembershipId,
+  }) async => const OrganizationOwnerTransferRejected(
+    OrganizationOwnerTransferFailureCode.notConfigured,
   );
 
   @override
