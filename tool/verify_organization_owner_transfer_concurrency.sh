@@ -174,6 +174,14 @@ result_from() {
   awk '/^organization-owner-transfer:v1\|/ { print; exit }' "${output_file}"
 }
 
+marker_value() {
+  local marker="$1"
+  local output_file="$2"
+  awk -F'|' -v marker="${marker}" \
+    '$1 == marker { print substr($0, index($0, "|") + 1); exit }' \
+    "${output_file}"
+}
+
 assert_result_row() {
   local result_row="$1"
   local label="$2"
@@ -255,6 +263,25 @@ race_target_membership_id='86000000-0086-3000-8000-000000000011'
 race_owner_assignment_id='86000000-0086-5000-8000-000000000005'
 race_request_id='86000000-0086-6000-8000-000000000005'
 
+actor_membership_race_workspace_id='86000000-0086-4000-8000-000000000006'
+actor_membership_race_actor_id='86000000-0086-0000-8000-000000000013'
+actor_membership_race_backup_id='86000000-0086-0000-8000-000000000014'
+actor_membership_race_target_id='86000000-0086-0000-8000-000000000015'
+actor_membership_race_actor_membership_id='86000000-0086-3000-8000-000000000013'
+actor_membership_race_backup_membership_id='86000000-0086-3000-8000-000000000014'
+actor_membership_race_target_membership_id='86000000-0086-3000-8000-000000000015'
+actor_membership_race_actor_owner_assignment_id='86000000-0086-5000-8000-000000000006'
+actor_membership_race_backup_owner_assignment_id='86000000-0086-5000-8000-000000000007'
+actor_membership_race_request_id='86000000-0086-6000-8000-000000000006'
+
+target_membership_race_workspace_id='86000000-0086-4000-8000-000000000007'
+target_membership_race_actor_id='86000000-0086-0000-8000-000000000016'
+target_membership_race_target_id='86000000-0086-0000-8000-000000000017'
+target_membership_race_actor_membership_id='86000000-0086-3000-8000-000000000016'
+target_membership_race_target_membership_id='86000000-0086-3000-8000-000000000017'
+target_membership_race_owner_assignment_id='86000000-0086-5000-8000-000000000008'
+target_membership_race_request_id='86000000-0086-6000-8000-000000000007'
+
 replay_request_lock="organization-owner-transfer-request:${replay_request_id}"
 drift_request_lock="organization-owner-transfer-request:${drift_request_id}"
 governance_lock="organization-governance:${governance_workspace_id}"
@@ -263,6 +290,8 @@ replay_ready_lock='86-owner-transfer-replay-ready'
 drift_ready_lock='86-owner-transfer-drift-ready'
 governance_ready_lock='86-owner-transfer-governance-ready'
 race_ready_lock='86-owner-transfer-race-ready'
+actor_membership_race_ready_lock='86-owner-transfer-actor-membership-ready'
+target_membership_race_ready_lock='86-owner-transfer-target-membership-ready'
 
 echo '建立 0086 owner-transfer synthetic 并发基线。'
 run_psql --quiet --command="
@@ -282,7 +311,12 @@ run_psql --quiet --command="
     ('${governance_actor_two_id}'::uuid, 'active'),
     ('${governance_target_two_id}'::uuid, 'active'),
     ('${race_actor_id}'::uuid, 'active'),
-    ('${race_target_id}'::uuid, 'active');
+    ('${race_target_id}'::uuid, 'active'),
+    ('${actor_membership_race_actor_id}'::uuid, 'active'),
+    ('${actor_membership_race_backup_id}'::uuid, 'active'),
+    ('${actor_membership_race_target_id}'::uuid, 'active'),
+    ('${target_membership_race_actor_id}'::uuid, 'active'),
+    ('${target_membership_race_target_id}'::uuid, 'active');
 
   INSERT INTO app_data.workspaces (
     workspace_id,
@@ -317,6 +351,20 @@ run_psql --quiet --command="
       '${race_workspace_id}'::uuid,
       'organization',
       '0086 status-race organization',
+      NULL,
+      transaction_timestamp()
+    ),
+    (
+      '${actor_membership_race_workspace_id}'::uuid,
+      'organization',
+      '0086 actor-membership-race organization',
+      NULL,
+      transaction_timestamp()
+    ),
+    (
+      '${target_membership_race_workspace_id}'::uuid,
+      'organization',
+      '0086 target-membership-race organization',
       NULL,
       transaction_timestamp()
     );
@@ -405,6 +453,41 @@ run_psql --quiet --command="
       '${race_target_id}'::uuid,
       transaction_timestamp(),
       NULL
+    ),
+    (
+      '${actor_membership_race_actor_membership_id}'::uuid,
+      '${actor_membership_race_workspace_id}'::uuid,
+      '${actor_membership_race_actor_id}'::uuid,
+      transaction_timestamp(),
+      NULL
+    ),
+    (
+      '${actor_membership_race_backup_membership_id}'::uuid,
+      '${actor_membership_race_workspace_id}'::uuid,
+      '${actor_membership_race_backup_id}'::uuid,
+      transaction_timestamp(),
+      NULL
+    ),
+    (
+      '${actor_membership_race_target_membership_id}'::uuid,
+      '${actor_membership_race_workspace_id}'::uuid,
+      '${actor_membership_race_target_id}'::uuid,
+      transaction_timestamp(),
+      NULL
+    ),
+    (
+      '${target_membership_race_actor_membership_id}'::uuid,
+      '${target_membership_race_workspace_id}'::uuid,
+      '${target_membership_race_actor_id}'::uuid,
+      transaction_timestamp(),
+      NULL
+    ),
+    (
+      '${target_membership_race_target_membership_id}'::uuid,
+      '${target_membership_race_workspace_id}'::uuid,
+      '${target_membership_race_target_id}'::uuid,
+      transaction_timestamp(),
+      NULL
     );
 
   INSERT INTO app_data.organization_owner_assignments (
@@ -443,9 +526,273 @@ run_psql --quiet --command="
       '${race_actor_membership_id}'::uuid,
       transaction_timestamp(),
       NULL
+    ),
+    (
+      '${actor_membership_race_actor_owner_assignment_id}'::uuid,
+      '${actor_membership_race_actor_membership_id}'::uuid,
+      transaction_timestamp(),
+      NULL
+    ),
+    (
+      '${actor_membership_race_backup_owner_assignment_id}'::uuid,
+      '${actor_membership_race_backup_membership_id}'::uuid,
+      transaction_timestamp(),
+      NULL
+    ),
+    (
+      '${target_membership_race_owner_assignment_id}'::uuid,
+      '${target_membership_race_actor_membership_id}'::uuid,
+      transaction_timestamp(),
+      NULL
     );
   COMMIT;
 "
+
+echo '验证 actor membership 在 transfer 等待期间关闭后固定 forbidden。'
+actor_membership_closer_output="${temporary_directory}/actor-membership-closer.out"
+actor_membership_transfer_output="${temporary_directory}/actor-membership-transfer.out"
+run_psql --quiet --tuples-only --no-align --field-separator='|' \
+  --command="
+    BEGIN;
+    SET TIME ZONE 'UTC';
+    SELECT app_user_id
+    FROM app_data.app_users
+    WHERE app_user_id = '${actor_membership_race_actor_id}'::uuid
+    FOR UPDATE;
+    SELECT pg_advisory_lock(
+      hashtextextended('${actor_membership_race_ready_lock}', 0)
+    );
+    SELECT pg_sleep(2);
+    UPDATE app_data.organization_memberships
+    SET inactive_from_utc = clock_timestamp()
+    WHERE organization_membership_id =
+      '${actor_membership_race_actor_membership_id}'::uuid;
+    SELECT 'membership_closed|' || inactive_from_utc
+    FROM app_data.organization_memberships
+    WHERE organization_membership_id =
+      '${actor_membership_race_actor_membership_id}'::uuid;
+    COMMIT;
+  " >"${actor_membership_closer_output}" 2>&1 &
+actor_membership_closer_pid=$!
+child_pids+=("${actor_membership_closer_pid}")
+wait_for_lock_holder "${actor_membership_race_ready_lock}" \
+  "${actor_membership_closer_pid}" "${actor_membership_closer_output}"
+
+run_psql --quiet --set=VERBOSITY=verbose --tuples-only --no-align \
+  --field-separator='|' \
+  --command="
+    BEGIN;
+    SET TIME ZONE 'UTC';
+    SELECT 'waiter_start|' || transaction_timestamp();
+    SELECT * FROM app_private.transfer_organization_owner_v1(
+      '${actor_membership_race_actor_id}'::uuid,
+      '${actor_membership_race_request_id}'::uuid,
+      '${actor_membership_race_workspace_id}'::uuid,
+      '${actor_membership_race_target_membership_id}'::uuid
+    );
+    COMMIT;
+  " >"${actor_membership_transfer_output}" 2>&1 &
+actor_membership_transfer_pid=$!
+child_pids+=("${actor_membership_transfer_pid}")
+wait_for_app_user_waiter "${actor_membership_transfer_pid}" \
+  "${actor_membership_transfer_output}"
+
+actor_membership_closer_status=0
+actor_membership_transfer_status=0
+wait "${actor_membership_closer_pid}" || \
+  actor_membership_closer_status=$?
+wait "${actor_membership_transfer_pid}" || \
+  actor_membership_transfer_status=$?
+if [[ "${actor_membership_closer_status}" -ne 0 ]]; then
+  echo 'actor membership close 会话失败。' >&2
+  sed -n '1,160p' "${actor_membership_closer_output}" >&2
+  exit 1
+fi
+if [[ "${actor_membership_transfer_status}" -eq 0 ]]; then
+  echo 'RED: 0086 在 actor membership 关闭后仍成功完成 transfer。' >&2
+  echo "waiter_start=$(marker_value waiter_start "${actor_membership_transfer_output}")" >&2
+  echo "membership_closed=$(marker_value membership_closed "${actor_membership_closer_output}")" >&2
+  sed -n '1,160p' "${actor_membership_transfer_output}" >&2
+  exit 1
+fi
+assert_failure "${actor_membership_transfer_output}" \
+  'actor membership close 竞态' \
+  '42501' 'organization owner transfer forbidden'
+
+actor_membership_waiter_start="$(marker_value waiter_start \
+  "${actor_membership_transfer_output}")"
+actor_membership_closed_at="$(marker_value membership_closed \
+  "${actor_membership_closer_output}")"
+if [[ -z "${actor_membership_waiter_start}" \
+  || -z "${actor_membership_closed_at}" ]]; then
+  echo 'actor membership 竞态缺少 waiter start 或 close timestamp。' >&2
+  exit 1
+fi
+actor_membership_time_order="$(run_psql --tuples-only --no-align \
+  --command="SELECT ('${actor_membership_waiter_start}'::timestamptz < '${actor_membership_closed_at}'::timestamptz);" \
+  | tr -d '[:space:]')"
+if [[ "${actor_membership_time_order}" != 't' ]]; then
+  echo "actor membership 时间顺序错误：waiter=${actor_membership_waiter_start}, close=${actor_membership_closed_at}" >&2
+  exit 1
+fi
+
+actor_membership_fact_counts="$(run_psql --tuples-only --no-align \
+  --field-separator='|' \
+  --command="
+    SELECT
+      (SELECT count(*)
+       FROM app_private.organization_owner_transfer_request_claims
+       WHERE request_id = '${actor_membership_race_request_id}'::uuid),
+      (SELECT count(*)
+       FROM app_private.organization_owner_transfer_audit_events
+       WHERE request_id = '${actor_membership_race_request_id}'::uuid),
+      (SELECT count(*)
+       FROM app_data.organization_owner_assignments AS owner_row
+       JOIN app_data.organization_memberships AS membership_row
+         ON membership_row.organization_membership_id =
+           owner_row.organization_membership_id
+       WHERE membership_row.organization_workspace_id =
+         '${actor_membership_race_workspace_id}'::uuid),
+      (SELECT count(*)
+       FROM app_data.organization_owner_assignments AS owner_row
+       JOIN app_data.organization_memberships AS membership_row
+         ON membership_row.organization_membership_id =
+           owner_row.organization_membership_id
+       JOIN app_data.app_users AS app_user
+         ON app_user.app_user_id = membership_row.app_user_id
+       WHERE membership_row.organization_workspace_id =
+         '${actor_membership_race_workspace_id}'::uuid
+         AND app_user.status = 'active'
+         AND membership_row.inactive_from_utc IS NULL
+         AND owner_row.inactive_from_utc IS NULL);
+  " | tr -d '[:space:]')"
+if [[ "${actor_membership_fact_counts}" != '0|0|2|1' ]]; then
+  echo "actor membership 竞态留下错误事实：${actor_membership_fact_counts}" >&2
+  exit 1
+fi
+
+echo '验证 target membership 在 transfer 等待期间关闭后固定 forbidden。'
+target_membership_closer_output="${temporary_directory}/target-membership-closer.out"
+target_membership_transfer_output="${temporary_directory}/target-membership-transfer.out"
+run_psql --quiet --tuples-only --no-align --field-separator='|' \
+  --command="
+    BEGIN;
+    SET TIME ZONE 'UTC';
+    SELECT app_user_id
+    FROM app_data.app_users
+    WHERE app_user_id = '${target_membership_race_target_id}'::uuid
+    FOR UPDATE;
+    SELECT pg_advisory_lock(
+      hashtextextended('${target_membership_race_ready_lock}', 0)
+    );
+    SELECT pg_sleep(2);
+    UPDATE app_data.organization_memberships
+    SET inactive_from_utc = clock_timestamp()
+    WHERE organization_membership_id =
+      '${target_membership_race_target_membership_id}'::uuid;
+    SELECT 'membership_closed|' || inactive_from_utc
+    FROM app_data.organization_memberships
+    WHERE organization_membership_id =
+      '${target_membership_race_target_membership_id}'::uuid;
+    COMMIT;
+  " >"${target_membership_closer_output}" 2>&1 &
+target_membership_closer_pid=$!
+child_pids+=("${target_membership_closer_pid}")
+wait_for_lock_holder "${target_membership_race_ready_lock}" \
+  "${target_membership_closer_pid}" "${target_membership_closer_output}"
+
+run_psql --quiet --set=VERBOSITY=verbose --tuples-only --no-align \
+  --field-separator='|' \
+  --command="
+    BEGIN;
+    SET TIME ZONE 'UTC';
+    SELECT 'waiter_start|' || transaction_timestamp();
+    SELECT * FROM app_private.transfer_organization_owner_v1(
+      '${target_membership_race_actor_id}'::uuid,
+      '${target_membership_race_request_id}'::uuid,
+      '${target_membership_race_workspace_id}'::uuid,
+      '${target_membership_race_target_membership_id}'::uuid
+    );
+    COMMIT;
+  " >"${target_membership_transfer_output}" 2>&1 &
+target_membership_transfer_pid=$!
+child_pids+=("${target_membership_transfer_pid}")
+wait_for_app_user_waiter "${target_membership_transfer_pid}" \
+  "${target_membership_transfer_output}"
+
+target_membership_closer_status=0
+target_membership_transfer_status=0
+wait "${target_membership_closer_pid}" || \
+  target_membership_closer_status=$?
+wait "${target_membership_transfer_pid}" || \
+  target_membership_transfer_status=$?
+if [[ "${target_membership_closer_status}" -ne 0 ]]; then
+  echo 'target membership close 会话失败。' >&2
+  sed -n '1,160p' "${target_membership_closer_output}" >&2
+  exit 1
+fi
+if [[ "${target_membership_transfer_status}" -eq 0 ]]; then
+  echo 'RED: 0086 在 target membership 关闭后仍成功完成 transfer。' >&2
+  echo "waiter_start=$(marker_value waiter_start "${target_membership_transfer_output}")" >&2
+  echo "membership_closed=$(marker_value membership_closed "${target_membership_closer_output}")" >&2
+  sed -n '1,160p' "${target_membership_transfer_output}" >&2
+  exit 1
+fi
+assert_failure "${target_membership_transfer_output}" \
+  'target membership close 竞态' \
+  '42501' 'organization owner transfer forbidden'
+
+target_membership_waiter_start="$(marker_value waiter_start \
+  "${target_membership_transfer_output}")"
+target_membership_closed_at="$(marker_value membership_closed \
+  "${target_membership_closer_output}")"
+if [[ -z "${target_membership_waiter_start}" \
+  || -z "${target_membership_closed_at}" ]]; then
+  echo 'target membership 竞态缺少 waiter start 或 close timestamp。' >&2
+  exit 1
+fi
+target_membership_time_order="$(run_psql --tuples-only --no-align \
+  --command="SELECT ('${target_membership_waiter_start}'::timestamptz < '${target_membership_closed_at}'::timestamptz);" \
+  | tr -d '[:space:]')"
+if [[ "${target_membership_time_order}" != 't' ]]; then
+  echo "target membership 时间顺序错误：waiter=${target_membership_waiter_start}, close=${target_membership_closed_at}" >&2
+  exit 1
+fi
+
+target_membership_fact_counts="$(run_psql --tuples-only --no-align \
+  --field-separator='|' \
+  --command="
+    SELECT
+      (SELECT count(*)
+       FROM app_private.organization_owner_transfer_request_claims
+       WHERE request_id = '${target_membership_race_request_id}'::uuid),
+      (SELECT count(*)
+       FROM app_private.organization_owner_transfer_audit_events
+       WHERE request_id = '${target_membership_race_request_id}'::uuid),
+      (SELECT count(*)
+       FROM app_data.organization_owner_assignments AS owner_row
+       JOIN app_data.organization_memberships AS membership_row
+         ON membership_row.organization_membership_id =
+           owner_row.organization_membership_id
+       WHERE membership_row.organization_workspace_id =
+         '${target_membership_race_workspace_id}'::uuid),
+      (SELECT count(*)
+       FROM app_data.organization_owner_assignments AS owner_row
+       JOIN app_data.organization_memberships AS membership_row
+         ON membership_row.organization_membership_id =
+           owner_row.organization_membership_id
+       JOIN app_data.app_users AS app_user
+         ON app_user.app_user_id = membership_row.app_user_id
+       WHERE membership_row.organization_workspace_id =
+         '${target_membership_race_workspace_id}'::uuid
+         AND app_user.status = 'active'
+         AND membership_row.inactive_from_utc IS NULL
+         AND owner_row.inactive_from_utc IS NULL);
+  " | tr -d '[:space:]')"
+if [[ "${target_membership_fact_counts}" != '0|0|1|1' ]]; then
+  echo "target membership 竞态留下错误事实：${target_membership_fact_counts}" >&2
+  exit 1
+fi
 
 echo '验证同 request 并发只产生一套事实，并精确重放五字段 receipt。'
 replay_first_output="${temporary_directory}/replay-first.out"
