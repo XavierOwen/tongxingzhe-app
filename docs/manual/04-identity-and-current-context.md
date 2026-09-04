@@ -119,7 +119,7 @@ Backend 将它们映射为 `503 organization_creation_unavailable`、`400 invali
 
 这条路径不复用 Slice 7A 的 organization-creation eligibility。7A 只回答已验证身份能否创建组织。owner 转让还需要当前 owner 授权、同组织成员关系和目标账号状态。
 
-未来 Backend 仍把外部身份和数据库写入分成两层。`app_data.transfer_organization_owner_for_identity_v1(text, text, uuid, uuid, uuid)` 先把精确的 `(issuer, subject)` 映射到现有 active `app_user_id`，再调用 `app_private.transfer_organization_owner_v1(uuid, uuid, uuid, uuid)`。只有 resolved actor 是可信事实；request、组织 workspace 和目标 membership UUID 都是不可信 selector，private writer 必须在锁后验证。HTTP body 不能提交 actor、邮箱或 internal user ID。
+Backend 把外部身份和数据库写入分成两层。`app_data.transfer_organization_owner_for_identity_v1(text, text, uuid, uuid, uuid)` 先把精确的 `(issuer, subject)` 映射到现有 active `app_user_id`，再调用 `app_private.transfer_organization_owner_v1(uuid, uuid, uuid, uuid)`。只有 resolved actor 是可信事实；request、组织 workspace 和目标 membership UUID 都是不可信 selector，private writer 必须在锁后验证。HTTP body 不能提交 actor、邮箱或 internal user ID。
 
 bridge 不 trim、bootstrap 或修复身份。null、空白、issuer 超过 2048 字符或 subject 超过 512 字符是 invalid identity。未知或非 active identity 使用同一个 forbidden。
 
@@ -161,7 +161,7 @@ organization_owner_assignment_id
 effective_at_utc
 ```
 
-未来 Backend 使用以下稳定错误和 code。未知 SQLSTATE、message、constraint、parser、result shape 或 adapter 错误统一为 `organization_owner_transfer_unavailable`，并且不返回数据库原文。
+Backend 使用以下稳定错误和 code。未知 SQLSTATE、message、constraint、parser、result shape 或 adapter 错误统一为 `organization_owner_transfer_unavailable`，并且不返回数据库原文。
 
 | 条件 | SQLSTATE 与固定 message | Backend code |
 | --- | --- | --- |
@@ -272,9 +272,9 @@ dart run tool/check_markdown_links.dart
 
 这些 fake identity 与 mock HTTP 测试只证明客户端 transport、strict parser 和资源生命周期，不证明 production Supabase、部署端点、真实组织创建或真人平台。
 
-### 3.6 组织 owner transfer HTTP route（Issue #309，spec-only）
+### 3.6 组织 owner transfer HTTP route（Issue #309，Backend 实现见 #312）
 
-3.3 固定数据库 handoff 合同。本节固定未来 Backend 的 HTTP transport，不实现 route。
+3.3 固定数据库 handoff 合同。本节记录 Issue #309 固定的 HTTP transport；Issue #312 已按该合同实现 Backend handler、store、route 和 composition。
 客户端只选择目标 membership 和 request UUID。当前 owner 身份来自 Bearer token，不能由 body 提供。
 
 公开入口只有：
@@ -311,7 +311,7 @@ router 先从 request target 取 `?` 前的 raw pathname，再匹配这一条含
 route 已命中但动态 segment 不是合法 UUID 的请求，在认证后返回 `400 invalid_organization_owner_transfer_request`。
 
 `IdentityVerifier` 只提供 exact external identity。owner transfer 不使用 7A 的 `OrganizationCreationIdentityVerifier`、Auth user lookup、邮箱资格或 `SessionContext`。
-未来 composition 只注入 generic verifier 和 dedicated Postgres transfer store，不增加环境变量或组织创建资格。
+Issue #312 的 production composition 只注入 generic verifier 和 dedicated Postgres transfer store，不增加环境变量或组织创建资格。
 
 body reader 按收到的实际 bytes 计数，不信任 `Content-Length`，也必须覆盖 chunked body。
 最多 `1,048,576` bytes 可以继续解析。收到第 `1,048,577` byte 时返回 `413 payload_too_large`。
@@ -385,13 +385,11 @@ Content-Type: application/json; charset=utf-8
 Cache-Control: no-store
 ```
 
-未来 Backend tests 必须覆盖 raw pathname、method 和 slash 边界。
-测试还要覆盖认证先于 query／path／body／store、generic verifier、缺少 store、实际 byte 上限和严格 request parser。
-测试还要覆盖 canonical UUID／timestamp、单次 bridge 调用、Promise gate、首次／精确 replay、错误映射、enumeration 防护、headers、composition 和错误脱敏。
+Issue #312 的 tests 覆盖 raw pathname、method、slash、认证顺序、generic verifier、缺少 store、实际 byte 上限和 strict request parser。
+测试还覆盖 canonical UUID／timestamp、单次 bridge 调用、Promise gate、首次／精确 replay、稳定错误映射、non-enumeration、headers、composition 和错误脱敏。
 
-Issue #309 只固定 transport spec，不修改已由 Issue #310 交付的 0086 DB-only migration、函数、ACL 和测试证据。
-它也不实现 handler、store、composition、Flutter、Drift、controller、UI、部署端点、生产 identity 或 Apple 行为。
-Markdown、no-slop 和链接检查只证明文档一致，不能证明 HTTP route、PostgreSQL 调用、生产身份或真人平台运行时。
+Issue #309 只固定 transport spec，Issue #310 交付 0086 DB-only migration、函数、ACL 和测试证据，Issue #312 交付 local synthetic Backend／HTTP／PostgreSQL integration。
+这些证据不证明 production identity、部署端点、Flutter、Drift、controller、UI、Apple 或其他真人平台运行时。
 
 ## 4. PostgreSQL transaction 建立哪些事实
 

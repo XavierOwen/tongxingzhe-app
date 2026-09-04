@@ -86,6 +86,12 @@ Issue #300 没有新增 PostgreSQL migration、owner lifecycle、Flutter、Drift
 
 实现证据见 [`organization-creation-composition.test.ts`](test/organization-creation-composition.test.ts) 和 [`organization-creation.integration.ts`](test/organization-creation.integration.ts)。前者检查 production wiring 与 route seam，后者通过 0084 bridge 检查真实 PostgreSQL adapter。
 
+## 组织 owner transfer Backend route 与 0086 integration
+
+Issue #312 实现固定的 `POST /v1/organizations/:organizationWorkspaceId/owner-transfer`。production `main.ts` 复用 generic `IdentityVerifier` 和同一 `pool.query`，只注入 `PostgresOrganizationOwnerTransferStore`；该 store 只调用 0086 的 exact-identity bridge，不调用 7A Auth lookup 或 `SessionContext`。handler、raw route 和 strict wire 的证据见 [`organization-owner-transfer.test.ts`](test/organization-owner-transfer.test.ts) 与 [`organization-owner-transfer-route.test.ts`](test/organization-owner-transfer-route.test.ts)，production wiring 见 [`organization-owner-transfer-composition.test.ts`](test/organization-owner-transfer-composition.test.ts)。
+
+[`organization-owner-transfer.integration.ts`](test/organization-owner-transfer.integration.ts) 显式读取 `OWNER_TRANSFER_FIXTURE`，在事务中执行 fixture、切换到 `tongxingzhe_runtime`，验证首次调用与 exact replay 返回同一五字段 receipt，最后回滚。Docker runner 注入 0086 fixture 并运行该 integration；这些检查只证明 synthetic Backend、runtime bridge 和 PostgreSQL 合同，不证明 production identity、部署端点、真实组织数据或真人平台运行时。
+
 ## 个人当前关系阶段快照
 
 | 方法与路径 | 行为 |

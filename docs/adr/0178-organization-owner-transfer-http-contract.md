@@ -111,18 +111,18 @@ HTTP 不读取成员资料来决定 404，不在 store 外实现 actor、workspa
 
 ## 后果与边界
 
-本 ADR 是 Issue #309 的 spec-only transport 决策。
-它不实现 Backend handler、dedicated store、real HTTP route、production composition、Flutter、Drift、recovery、deletion 或 purge。
+本 ADR 是 Issue #309 的 spec-only transport 决策。#312／7K 已按本决策交付 Backend handler、dedicated store、real HTTP route、production composition 和 local synthetic tests。
+它不实现 Flutter、Drift、recovery、deletion 或 purge。
 它不修改 0086 migration、claim、audit、tombstone、ACL、owner invariant 或锁序，也不增加 request `Content-Type` gate、`Idempotency-Key`、SessionContext、缓存或 durable retry。
 
-后续实现必须用 handler、store、real HTTP 和 composition tests 覆盖 raw route、认证分类、精确处理顺序、actual-byte inclusive 1 MiB／chunked boundary、strict parser 和 UUID canonicalization。
-测试还必须覆盖一次 0086 bridge call、五字段 success／replay、RFC 3339 时间输出、全部 400／401／403／409／413／503 映射、unknown／recovery non-enumeration、JSON／no-store、PII-free response／logs 和 Promise gate。
-这些 synthetic tests 只证明 transport 合同，不证明 production identity、部署端点、PostgreSQL 调用、Flutter、删除流程、Apple 或其他真人平台运行时。
+#312／7K 的 handler、store、real HTTP 和 composition tests 覆盖 raw route、认证分类、精确处理顺序、actual-byte inclusive 1 MiB／chunked boundary、strict parser 和 UUID canonicalization。
+测试还覆盖一次 0086 bridge call、五字段 success／replay、RFC 3339 时间输出、全部 400／401／403／409／413／503 映射、unknown／recovery non-enumeration、JSON／no-store、PII-free response／logs 和 Promise gate。
+这些 local synthetic Backend、HTTP 和 PostgreSQL integration 证据不证明 production identity、部署端点、Flutter、删除流程、Apple 或其他真人平台运行时。
 
 邀请、申请、membership／capability 管理、owner recovery、账号或组织 deletion、project capability、配额和反滥用不属于本决定。
 
 ## 验证
 
-本 ADR 的验证只检查 Product Spec、ADR 索引、学习文档、Markdown links、no-slop 和 diff。
-Issue #310 的 0086 数据库证据另行验证 database writer、并发、runtime ACL、checksum 和 dump／restore。
-两类证据都不证明 production identity、部署环境、真实删除、Apple 或其他真人平台。
+本 ADR 的文档验证检查 Product Spec、ADR 索引、学习文档、Markdown links、no-slop 和 diff。
+Issue #310 的 0086 数据库证据验证 writer、并发、runtime ACL、checksum 和 dump／restore；Issue #312 还验证 Backend unit／HTTP／composition 和通过 runtime bridge 的 PostgreSQL integration。
+这些 local synthetic 证据不证明 production identity、部署环境、真实删除、Flutter、Apple 或其他真人平台。
