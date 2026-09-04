@@ -56,7 +56,7 @@ body reader 按实际 byte 数计数，不信任 `Content-Length`，并支持 ch
 
 JSON root 必须严格只含 `request_id` 和 `target_organization_membership_id` 两个字段。
 两个字段都必须是 UUID 字符串。非 object、缺字段、额外字段、错误类型或无效 UUID 返回 `400 invalid_organization_owner_transfer_request`。
-输入 UUID 可以是大小写 RFC 形式，验证后统一使用 lowercase canonical value。
+输入 UUID 必须是 `8-4-4-4-12` 十六进制 wire shape，字母可以大写或小写，不额外限制 version／variant nibble。验证后统一使用 lowercase canonical value。
 客户端不能提交 actor、workspace、owner assignment、email、name、时间或 capability。
 
 dedicated store 只接收 verified issuer、subject、canonical body request、canonical path workspace 和 canonical body target membership。
