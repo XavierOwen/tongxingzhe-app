@@ -532,7 +532,7 @@ claim 不保存邮箱或外部身份。pending claim 只追加一次接受结果
 接受的精确 target replay 必须仍由同一 active target identity 发起，并返回原 membership receipt，不重复建立 membership 或追加审计。它不重新检查 owner 或 target membership；identity 不再 active 或 target 引用去关联时返回 forbidden。只有尚未接受的 live claim 才重新检查 target、workspace、期限和当前成员关系。
 
 创建 receipt 固定为 contract ID、invitation ID、workspace ID、issued time 和 expiry time。接受 receipt 固定为 contract ID、invitation ID、workspace ID、membership ID 和 accepted time。
-UUID 使用 canonical lowercase，时间使用 UTC 毫秒精度。receipt 不含目标资料、邮箱或 replay flag。
+未来 HTTP 的 UUID 使用 canonical lowercase，时间使用 UTC 毫秒精度。SQL row 保留完整的 `timestamptz` 精度，membership、claim、audit 和返回时间使用同一个未截断的 `transaction_timestamp()`。receipt 不含目标资料、邮箱或 replay flag。
 
 #### 信任边界、锁和原子性
 
