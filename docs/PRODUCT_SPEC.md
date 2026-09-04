@@ -646,7 +646,7 @@ POST /v1/organizations/:organizationWorkspaceId/owner-transfer
 
 请求 headers 固定为 `Accept: application/json`、`Authorization: Bearer <token>` 和 `Content-Type: application/json; charset=utf-8`。不发送 `Idempotency-Key`、actor 或 workspace 字段。body 只能含 `request_id` 与 `target_organization_membership_id` 两个 canonical lowercase UUID。
 
-gateway 从同一 `IdentitySession` 取得 Bearer token。identity failure 映射固定为：`IdentityFailureCode.notConfigured` 到 `notConfigured`，`networkUnavailable` 到 `networkUnavailable`，其他 `IdentityFailureCode` 到 `unauthorized`。首个响应只有在 headers 和 error envelope 都严格匹配 `401 {"error":{"code":"unauthenticated"}}` 时才强制 refresh 一次；重试复用相同 canonical URL、headers、body 和参数。第二个 `401` 返回 `unauthorized`，不得循环刷新。
+gateway 从同一 `IdentitySession` 取得 Bearer token。identity failure 映射固定为：`IdentityFailureCode.notConfigured` 到 `notConfigured`，`networkUnavailable` 到 `networkUnavailable`，其他 `IdentityFailureCode` 到 `unauthorized`。首个响应只有在 headers 和 error envelope 都严格匹配 `401 {"error":{"code":"unauthenticated"}}` 时才强制 refresh 一次；重试复用相同 method、canonical URL 和 body，`Authorization` 使用强制刷新取得的 token。第二个 `401` 返回 `unauthorized`，不得循环刷新。
 
 所有响应先严格要求 `Content-Type: application/json; charset=utf-8` 和 `Cache-Control: no-store`。成功 `200` 只接受 exact 五字段 root、`organization-owner-transfer:v1`、三个 lowercase canonical UUID、与 path 相同的 workspace，以及有效 UTC `YYYY-MM-DDTHH:mm:ss.SSSZ` 时间；结果转为不可变内存 receipt。客户端不判断 replay、owner、membership、组织状态或权限。
 

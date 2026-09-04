@@ -67,7 +67,7 @@ path 使用 canonical workspace UUID。headers 固定为 `Accept: application/js
 
 gateway 从同一个 `IdentitySession` 取得 Bearer token。identity failure 映射固定为：`IdentityFailureCode.notConfigured` 到 `notConfigured`，`IdentityFailureCode.networkUnavailable` 到 `networkUnavailable`，其他 `IdentityFailureCode` 到 `unauthorized`。
 
-首次 response 只有在 headers 严格正确且 error envelope 精确为 `401 {"error":{"code":"unauthenticated"}}` 时，才强制 refresh 一次。retry 复用完全相同的 canonical URL、headers、body 和参数。第二个 `401` 返回 `unauthorized`，不得循环刷新；其他响应不触发 refresh。
+首次 response 只有在 headers 严格正确且 error envelope 精确为 `401 {"error":{"code":"unauthenticated"}}` 时，才强制 refresh 一次。retry 复用相同 method、canonical URL 和 body，`Authorization` 使用强制刷新取得的 token。第二个 `401` 返回 `unauthorized`，不得循环刷新；其他响应不触发 refresh。
 
 ### Response parser 与 typed failure
 

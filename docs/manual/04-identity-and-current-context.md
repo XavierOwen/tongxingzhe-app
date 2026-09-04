@@ -439,7 +439,7 @@ Content-Type: application/json; charset=utf-8
 ```
 
 gateway 使用同一个 `IdentitySession` 取得 Bearer token。identity failure 的映射固定为：`notConfigured` 返回 `notConfigured`，`networkUnavailable` 返回 `networkUnavailable`，其他 identity failure 返回 `unauthorized`。
-如果首个 response 恰好是 `401` 且 error code 为 `unauthenticated`，gateway 只强制刷新一次 token，并用完全相同的 canonical URL、body 和参数重试。第二个相同 `401` 返回 `unauthorized`，不得循环刷新。
+如果首个 response 恰好是 `401` 且 error code 为 `unauthenticated`，gateway 只强制刷新一次 token。重试使用相同 method、canonical URL 和 body，`Authorization` 使用强制刷新取得的 token。第二个相同 `401` 返回 `unauthorized`，不得循环刷新。
 
 adapter 在解析任何 response 前都要求精确的：
 
