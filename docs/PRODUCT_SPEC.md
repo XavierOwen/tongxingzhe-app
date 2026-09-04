@@ -700,7 +700,7 @@ dart run tool/check_markdown_links.dart
 接受者不能提交 actor、email、external identity、Auth user object 或 invite token 作为业务事实。
 接受成功只建立一条新的 organization membership，并使用同一 transaction 的数据库时间作为 membership 起点。
 它不建立 owner assignment、project membership 或 capability，也不复活或改写历史 membership。
-邀请发出后 inviter 失去 owner 身份，不影响 target 对仍有效邀请的首次接受。
+邀请发出后，即使 inviter 后来失去 owner 身份，也不影响 target 对仍有效邀请的首次接受。
 
 创建与接受各使用一条 operation-specific exact-identity bridge 和一条 private writer。
 bridge 接收可信验证流程提供的 exact `(issuer, subject)`，只映射当前 internal `app_user_id`。
