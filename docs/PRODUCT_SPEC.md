@@ -431,15 +431,15 @@ Issue #306 将该 gateway 接入 `AppDependencies` 生命周期。builder 接收
 后续启动步骤失败、App 在启动完成前被移除或 `TongxingzheApp` 正常 dispose 时，已创建的 gateway 都只关闭一次。
 该切片仍不接入 controller、UI、route 或导航，也不增加 Drift、request UUID 生成器或跨重启 durable retry；调用方必须在不确定重试中复用同一请求参数。
 
-邀请、申请、membership／capability 管理、配额、反滥用和账号／组织删除仍由其他工作单元处理。owner transfer 只在本节固定合同；实现仍由后续工作单元处理。
+邀请、申请、membership／capability 管理、配额、反滥用和账号／组织删除仍由其他工作单元处理。#304／7G 固定 owner transfer 数据库合同，#310／0086 已提供 DB-only 实现；#309／7J 固定 HTTP 合同，Backend transport 仍由后续工作单元处理。
 
 #### Slice 7G Spec：固定组织 owner transfer 合同
 
-7G 是 spec-only 工作单元。它只固定正常 owner handoff 的产品、身份、授权、事务、幂等、结果、错误、审计和删除边界，不实现 migration、SQL、Backend、HTTP、Flutter 或 Apple 平台行为。
+7G／Issue #304 是 spec-only 决策；#310／0086 已交付其 DB-only 实现。该决策固定正常 owner handoff 的产品、身份、授权、事务、幂等、结果、错误、审计和删除边界；Backend、HTTP、Flutter 和 Apple 平台行为仍未实现。
 
 用户结果是：组织当前 owner 可以把自己的 owner 责任原子 handoff 给同组织另一名有效成员。首次 transfer 与相同请求的精确重放返回同一 receipt；参数漂移不得再次执行。transfer 不改变 membership，不自动授予 project membership、capability 或 PII 权限。
 
-未来 runtime 唯一可执行的 bridge 固定为
+0086 runtime 唯一可执行的 bridge 固定为
 `app_data.transfer_organization_owner_for_identity_v1(trusted_issuer text, trusted_subject text, requested_request_id uuid, requested_organization_workspace_id uuid, requested_target_organization_membership_id uuid)`。
 它从可信 issuer 与 subject 解析 actor，再调用
 `app_private.transfer_organization_owner_v1(trusted_app_user_id uuid, requested_request_id uuid, requested_organization_workspace_id uuid, requested_target_organization_membership_id uuid)`。
@@ -521,9 +521,94 @@ null 的 request／workspace／target 属于 invalid request。未知或非 orga
 transfer audit 的 exact allowlist 是 `organization_owner_transfer_audit_event_id`、`owner_transfer_contract_id`、`request_id`、`organization_workspace_id`、`previous_owner_assignment_id`、`organization_owner_assignment_id` 和 `effective_at_utc`。
 `target_organization_membership_id` 只保存在 private claim，不进入 audit；new owner assignment 已是 canonical target lineage。
 audit、失败响应和结构化日志不得保存 display name、email、external identity、token、Auth user object、provider metadata、SQL、数据库 message、stack 或自由文本。
-未来 transport 的错误 envelope 只能暴露稳定 code，不得把数据库错误或 target 成员资料返回给客户端。
+7J 固定的 transport error envelope 只能暴露稳定 code，不得把数据库错误或 target 成员资料返回给客户端。
 
-Issue #304 只固定本节合同。文档、链接和 no-slop 检查只证明 spec 文本一致；未来 DB-only 实现仍须用 migration、structural check、rollback fixture、并发、最小 ACL、checksum 和 dump／restore 证明上述行为。synthetic 证据不代表 production identity、部署端点、真实删除、Apple 平台或真人平台运行时。
+Issue #304 只固定本节数据库合同。Issue #310 已按本节交付 0086 DB-only migration、writer、identity bridge 及 structural check、rollback fixture、并发、最小 ACL、checksum 和 dump／restore 证据。7G 文档与链接检查不证明 HTTP、production identity、部署端点、真实删除、Apple 平台或真人平台运行时。
+
+#### Slice 7J Spec：固定组织 owner transfer HTTP 合同
+
+7J 是 Issue #309 的 spec-only transport 工作单元。它固定 0086 owner transfer 的 route、认证、请求处理顺序、body 限制、store seam、成功／错误 wire、重放和 non-enumeration 边界，不实现 Backend handler、store、composition、Flutter、Drift 或 Apple 平台行为。
+
+唯一公开入口是 `POST /v1/organizations/:organizationWorkspaceId/owner-transfer`。
+router 必须在 WHATWG normalization 前，从 request-target 取第一个 `?` 之前的 raw pathname，并只匹配一个未编码的动态 workspace segment。
+wrong method、trailing slash、repeated slash、literal 或 percent-encoded dot segment、任何 percent-encoded path segment 和未匹配 path 都返回通用 `404 {"error":{"code":"not_found"}}`。
+这些路径不认证、不读取 body、不调用 store。命中单一动态 segment 但 workspace UUID 无效的请求，在认证后返回 `400 invalid_organization_owner_transfer_request`。
+
+命中 route 后，Backend 必须先严格解析 Bearer，再调用现有 generic `IdentityVerifier`，只取得 exact `issuer` 和 `subject`。
+它不得复用 Slice 7A 的 `OrganizationCreationIdentityVerifier`、Auth user lookup 或组织创建 eligibility。
+缺少或无效 token、JWT claim／signature 失败返回 `401 unauthenticated`。
+缺少 verifier、provider／configuration 错误或未知 verifier exception 返回 `503 organization_owner_transfer_unavailable`。
+`IdentityVerificationError.category === "unauthenticated"` 映射前一结果；`category === "unavailable"` 或非 `IdentityVerificationError` 异常映射后一结果。
+
+处理顺序固定为：
+
+1. Bearer 解析；
+2. generic `IdentityVerifier` 验证；
+3. 拒绝任何 query；
+4. 校验 path workspace UUID 并 canonicalize 为 lowercase；
+5. 检查 dedicated transfer store 是否存在；
+6. 按实际 bytes 读取并解析 body；
+7. 只调用一次 transfer store；
+8. 等待 Promise settled；
+9. 写出响应。
+
+query（包括空 query）和 path UUID 无效都返回 `400 invalid_organization_owner_transfer_request`。
+missing verifier 或 store 必须在读取 body 前返回 unavailable。
+
+body reader 按实际 byte 数计数，不信任 `Content-Length`，并支持 chunked body。
+
+1,048,576 bytes 可以继续解析，第 1,048,577 byte 返回 `413 payload_too_large`。
+请求不增加 `Content-Type` gate。空 body 或非法 JSON 返回 `400 invalid_json`。
+JSON root 必须严格只含 `request_id` 和 `target_organization_membership_id` 两个字符串 UUID。
+缺字段、额外字段、非 object、错误类型或无效 UUID 返回 `400 invalid_organization_owner_transfer_request`。
+输入 UUID 可以是大小写 RFC 形式，验证后统一传递 lowercase canonical value。
+客户端不能提交 actor、workspace、owner assignment、email、name、时间或 capability。
+
+dedicated store 只接收 verified issuer、subject、canonical body request、canonical path workspace 和 canonical body target membership。
+它只执行一次参数化的
+`app_data.transfer_organization_owner_for_identity_v1(trusted_issuer text, trusted_subject text, requested_request_id uuid, requested_organization_workspace_id uuid, requested_target_organization_membership_id uuid)`。
+它不得访问 `app_private`、`SessionContext`、creation store 或客户端 actor。
+production composition 复用 generic identity verifier 并注入 dedicated Postgres transfer store，不新增环境变量或组织创建 eligibility。
+
+首次成功与 exact replay 都返回 `200`。成功 JSON root 只含 0086 的五个字段：
+
+```json
+{
+  "owner_transfer_contract_id": "organization-owner-transfer:v1",
+  "organization_workspace_id": "uuid",
+  "previous_owner_assignment_id": "uuid",
+  "organization_owner_assignment_id": "uuid",
+  "effective_at_utc": "YYYY-MM-DDTHH:mm:ss.SSSZ"
+}
+```
+
+contract ID 固定，三个 UUID 必须是 lowercase canonical form，workspace 必须等于 canonical path。
+Backend 接受数据库 Date 或带 offset／fraction 的 RFC 3339 instant，并统一输出 `YYYY-MM-DDTHH:mm:ss.SSSZ`。
+不得增加 replay flag 或 target／member 资料。
+
+数据库错误和 transport 结果固定如下：
+
+| 条件 | HTTP 结果 |
+| --- | --- |
+| wrong method、非法 route、percent-encoded path segment 或未匹配 path | `404 {"error":{"code":"not_found"}}` |
+| 缺少或无效 Bearer、JWT claim／signature 失败 | `401 unauthenticated` |
+| query、path UUID 或 body shape 无效 | `400 invalid_organization_owner_transfer_request` |
+| 空 body 或非法 JSON | `400 invalid_json` |
+| body 超过 1,048,576 bytes | `413 payload_too_large` |
+| DB forbidden | `403 organization_owner_transfer_forbidden` |
+| drift、tombstone 或 deassociated actor | `409 organization_owner_transfer_conflict` |
+| target 已是 current owner，包括 actor 等于 target | `409 organization_owner_transfer_target_already_owner` |
+| invalid trusted identity、missing verifier／store 或未知错误 | `503 organization_owner_transfer_unavailable` |
+
+未知或非 organization／recovery workspace，以及未知、跨组织、inactive 或 deleted actor／target，只由 DB 收敛为 `403`，不能由 HTTP 预先枚举为 `404`。
+只有 DB 已验证同组织 active target 且 target 当前是 owner 时，才返回 target-already-owner conflict。
+所有响应都使用精确 `Content-Type: application/json; charset=utf-8` 和 `Cache-Control: no-store`。
+错误 root 精确为 `{"error":{"code":"stable_code"}}`，不得返回数据库原文、成员资料或其他自由字段。
+响应、结构化日志和失败审计继续遵守 7G 的 PII-free allowlist。
+
+7J 的后续实现必须用 handler、store、real HTTP 和 composition tests 覆盖 raw route、认证分类、精确处理顺序、actual-byte inclusive 1 MiB／chunked boundary、strict parser 和 UUID canonicalization。
+测试还必须覆盖一次 0086 bridge call、五字段 success／replay、RFC 3339 时间输出、全部 400／401／403／409／413／503 映射、unknown／recovery non-enumeration、JSON／no-store、PII-free response／logs 和 Promise gate。
+这些 synthetic tests 只证明 transport 合同，不证明 production identity、部署端点、PostgreSQL 调用、Flutter、删除流程、Apple 或其他真人平台运行时。
 
 ### 5.8 分析、指标与报告
 
@@ -2023,7 +2108,8 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-051` | 学习文档必须区分同版本数据更正与跨版本定义更正，说明 `manage_analysis_definitions` 与 `release_management_reports` 双授权、直接兼容证据、`analysis_definition_change`、锁后复核、撤销投影、各版本 replacement 图独立、PII-free 和组织删除边界。必须明确 6CF 只交付政策，不选择 report family、不实现数据库或客户端，也不把文档检查写成并发、生产或真人平台证据。 |
 | `MANUAL-052` | 学习文档必须区分 Slice 7A 身份资格与 7B 组织写入，说明 exact-identity bridge 与 private writer、独立 temporal owner assignment、membership containment、原子 workspace／membership／首位 owner、canonical display name、live claim／tombstone、精确重放、payload drift、governance fence 与锁顺序、延迟零 owner 防护、exact SQLSTATE／message、PII-free audit 和删除边界。必须明确 7B Spec 不实现数据库、route 或 UI，也不把文档检查写成 PostgreSQL、生产身份或真人平台证据。 |
 | `MANUAL-053` | 学习文档必须说明 7E 的固定 `POST /v1/organizations`、认证和 7A eligibility 先于 body／store、严格两字段 JSON、body request UUID、既有 1 MiB／`invalid_json`／`payload_too_large`、首次与精确重放同为 `200`、0084 五字段 success wire、四组 SQLSTATE 映射、JSON／`no-store`、PII-free 响应与日志，以及 promise-before-response。必须区分 #298 的 spec-only 决策与 #300 的 handler、adapter、真实 HTTP、production composition 和 synthetic PostgreSQL integration；synthetic 证据不证明生产身份、部署端点或真人平台。 |
-| `MANUAL-054` | 学习文档必须说明 7G 的 trusted exact identity 与 7A 创建资格边界、current owner 到同组织 active membership 的 handoff、target membership UUID、独立 request claim、精确重放与 actor／workspace／target drift、固定锁序、锁后重读、同一数据库时间、grant-before-close、sole／multi-owner invariant、五字段 result、SQLSTATE／Backend code、value-free audit 和 deletion boundary。必须明确 7G 是 #304 spec-only，不实现 migration、writer、Backend、HTTP、Flutter、邀请、申请、成员／capability 管理、删除恢复或 owner recovery；文档检查不证明数据库并发、runtime ACL、生产身份或真人平台。 |
+| `MANUAL-054` | 学习文档必须说明 7G 的 trusted exact identity 与 7A 创建资格边界、current owner 到同组织 active membership 的 handoff、target membership UUID、独立 request claim、精确重放与 actor／workspace／target drift、固定锁序、锁后重读、同一数据库时间、grant-before-close、sole／multi-owner invariant、五字段 result、SQLSTATE／Backend code、value-free audit 和 deletion boundary。必须区分 #304 的 spec-only 决策与 #310 已交付的 0086 DB-only migration、writer、identity bridge 和验证；7G 不实现 Backend、HTTP、Flutter、邀请、申请、成员／capability 管理、删除恢复或 owner recovery。文档检查不证明数据库并发、runtime ACL、生产身份或真人平台。 |
+| `MANUAL-055` | 学习文档必须说明 7J 的 raw owner-transfer route、generic `IdentityVerifier`、Bearer→verifier→query→path→missing store→body→一次 store→Promise→response 顺序、actual-byte inclusive 1 MiB 边界、strict two-field UUID body、0086 exact-identity store seam、五字段 receipt、RFC 3339 时间归一化、稳定 HTTP 错误、replay／non-enumeration 和 JSON／`no-store`。必须明确 #309 只固定 transport，#310 已交付 0086 DB-only 证据；文档检查不证明 Backend route、PostgreSQL 调用、production identity、部署、Flutter 或真人平台。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -2265,7 +2351,8 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-061` | 6CF 当前只验证 Spec、ADR、手册和 Markdown 链接一致，不证明数据库合同。后续单一 report-family 实现必须用 migration、structural check、rollback fixture、concurrency、reader／directory／export 回归覆盖 approved provenance、版本／definition fingerprint 至少一项变化、compatibility 与两端 project／family／metric／方向／definition tuple 精确绑定、定义管理与报告发布两条独立 capability 路径、组织可选第二人批准、共同锁顺序、独立 lineage lock、仅同 UUID claim 互斥、锁后 active identity／membership／project／grant 复核、撤销先后竞争、专用原因、canonical 幂等／payload drift、每端单一 direct edge、缺失／未知／漂移／撤销／反向决定、全同版本、shape／validator drift、self-link／cycle／branch／stale head、value-free `compatibility_revoked`、PII-free allowlist／拒绝字段、最小 ACL、组织删除 compatibility history、checksum 和 dump／restore；synthetic 通过不证明生产身份、部署或真人平台。 |
 | `TEST-062` | 7B Spec 当前只验证 Spec、ADR、学习文档和 Markdown 链接一致，不证明数据库合同。后续 DB-only 实现必须用 migration、structural check、rollback fixture 和 concurrency 覆盖 active exact identity bridge、private writer、canonical name 边界、原子 workspace／membership／首位 owner／claim／audit、单列 request 唯一、live claim／tombstone 拒绝复用、actor 一次性去关联例外、相同请求精确重放、actor／payload drift、并发同请求、并发不同请求、assignment containment／不重叠、唯一 owner 结束拒绝、不同 owner 并发失效、先授予后结束、membership／账号结束防护、purge 与治理写入 fence、删除恢复与终结清除、失败零部分写入、exact SQLSTATE／message、owner／audit 追加不可变、延迟零 owner 约束、固定 owner／`VOLATILE SECURITY DEFINER`／search path、无 `PUBLIC` execute、runtime 最小 ACL、checksum 和 dump／restore。synthetic 通过不证明 HTTP、Flutter、production identity、部署、真实删除或真人平台。 |
 | `TEST-063` | 7E 后续实现必须以 Backend unit／handler、real HTTP route、production composition、Postgres adapter 和 synthetic PostgreSQL integration 覆盖固定 `POST /v1/organizations`、wrong method／query、认证先于 body parser／store、`401`／`403`／`503` eligibility 分类、严格两字段／exact keys／types／UUID／额外字段、body request UUID 而非 `Idempotency-Key` 或缓存、既有 1 MiB／`invalid_json`／`payload_too_large`、原始 display name 传递、一次 0084 bridge 调用、promise-before-response、首次／精确重放同为 `200`、无 replay flag、五字段 success wire、四组 SQLSTATE 映射、unknown error 的 `503`、JSON／`no-store` 和 PII-free response／logs。必须明确这些测试不证明 production identity、部署端点、Flutter、Drift 或 Apple 平台运行时。 |
-| `TEST-064` | 7G Spec 当前只验证 Product Spec、ADR、学习文档和 Markdown 链接一致，不证明 owner transfer writer。后续 DB-only 实现必须覆盖 trusted exact identity 与 7A creation eligibility 分离、current owner／同组织 active target membership、target UUID 与 account 状态、target 已是 owner／actor 等于 target、sole／multi-owner handoff、request claim、精确 replay、actor／workspace／target drift、tombstone、同 request／不同 request 并发、固定锁序与锁后重读、grant-before-close、同一数据库时间、append-only history、deferred active-owner invariant、membership／capability 不变、删除恢复只读、失败零部分写入、五字段 result、精确 SQLSTATE／Backend code、未知错误 unavailable、PII-free audit／错误／日志、最小 ACL、rollback、checksum 和 dump／restore。文档与 synthetic 证据不证明 production identity、部署、真实删除、HTTP、Flutter 或 Apple 平台。 |
+| `TEST-064` | 7G 的 0086 DB-only 实现必须覆盖 trusted exact identity 与 7A creation eligibility 分离、current owner／同组织 active target membership、target UUID 与 account 状态、target 已是 owner／actor 等于 target、sole／multi-owner handoff、request claim、精确 replay、actor／workspace／target drift、tombstone、同 request／不同 request 并发、固定锁序与锁后重读、grant-before-close、同一数据库时间、append-only history、deferred active-owner invariant、membership／capability 不变、删除恢复只读、失败零部分写入、五字段 result、精确 SQLSTATE／Backend code、未知错误 unavailable、PII-free audit／错误／日志、最小 ACL、rollback、checksum 和 dump／restore。现有 synthetic DB 证据不证明 production identity、部署、真实删除、HTTP、Flutter 或 Apple 平台。 |
+| `TEST-065` | 7J 后续实现必须覆盖 raw route（wrong method、trailing／repeated slash、literal／percent-encoded dot、任意 percent-encoded path segment 和 unmatched path 均在认证前返回 404）、generic Bearer／`IdentityVerifier`（`unauthenticated` category 映射 401，`unavailable` 与非 typed 异常映射 503，且不复用 7A 或 Auth lookup）、Bearer→verifier→query→path→missing store→body→一次 store→Promise→response 顺序、actual-byte inclusive 1 MiB／chunked boundary、strict two-field UUID body 与 lowercase canonicalization、一次参数化 0086 bridge call、五字段 strict result／canonical path workspace／RFC 3339 到 SSSZ 时间、首次／replay 200、全部 400／401／403／409／413／503 映射、unknown／recovery non-enumeration、JSON／no-store、PII-free response／logs、handler／store／real HTTP／composition synthetic tests。证据不证明 production identity、部署、PostgreSQL 运行、Flutter、删除流程或 Apple 平台。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -2545,8 +2632,9 @@ Issue #300 实现 handler、Postgres adapter、真实 HTTP 和 production compos
 Issue #302 增加独立 Flutter typed gateway。Issue #306 已将其接入 `AppDependencies` 生命周期：builder 与 `AppStartupReady` 使用同一个
 `IdentitySession` 和同一个 gateway，启动后续失败、启动完成前移除 App 或正常 dispose 时只关闭一次。它仍未接入 controller、UI、route、Drift、
 request UUID 生成或跨重启 durable retry，也未接入创建后的组织／项目上下文。
-7G 的 Issue #304 只固定 owner transfer spec：trusted exact identity、current owner 到同组织 active membership 的 handoff、独立 request claim、锁序、grant-before-close、固定 result／errors／audit 和 deletion boundary。
-尚未实现 transfer migration、writer、Backend、HTTP、Flutter 或 recovery 流程。
+7G 的 Issue #304 固定 owner transfer 数据库合同：trusted exact identity、current owner 到同组织 active membership 的 handoff、独立 request claim、锁序、grant-before-close、固定 result／errors／audit 和 deletion boundary。
+Issue #310 已交付 0086 DB-only migration、writer、identity bridge 及对应结构、回滚、并发、checksum 和 dump／restore 证据。
+7J 的 Issue #309 固定 HTTP route、generic authentication、请求处理顺序、严格 body、store seam、成功／错误 wire、replay 和 non-enumeration；Backend、Flutter、Drift 与 recovery 流程仍待后续工作单元。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 

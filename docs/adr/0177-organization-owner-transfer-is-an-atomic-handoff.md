@@ -4,7 +4,7 @@
 - 日期：2026-08-29
 - Slice：7G Spec
 - Issue：[#304](https://github.com/XavierOwen/tongxingzhe-app/issues/304)
-- 关联：ADR-0035、[ADR-0175](./0175-organization-creation-is-atomic-with-first-active-owner.md)、[ADR-0176](./0176-organization-creation-http-contract.md)、Slice 7A、0084、0085
+- 关联：ADR-0035、[ADR-0175](./0175-organization-creation-is-atomic-with-first-active-owner.md)、[ADR-0176](./0176-organization-creation-http-contract.md)、[ADR-0178](./0178-organization-owner-transfer-http-contract.md)、Slice 7A、0084、0085、0086
 - Requirement：`AUTHZ-001`、`AUTHZ-004`、`AUTHZ-006`、`ORG-003` 至 `ORG-005`、`ORG-008` 至 `ORG-012`、`TEST-064`、`MANUAL-054`
 
 ## 背景
@@ -15,9 +15,9 @@ ADR-0175 和 0085 已固定 organization owner 的 temporal assignment、active-
 
 owner transfer 是当前 organization owner 到同组织另一名有效成员的原子 handoff，不是新增 co-owner。
 
-未来 runtime bridge 固定为 `app_data.transfer_organization_owner_for_identity_v1(text, text, uuid, uuid, uuid)`。它依次接收 trusted issuer、trusted subject、request、organization workspace 和 target membership。
+0086 runtime bridge 固定为 `app_data.transfer_organization_owner_for_identity_v1(text, text, uuid, uuid, uuid)`。它依次接收 trusted issuer、trusted subject、request、organization workspace 和 target membership。
 
-bridge 调用 `app_private.transfer_organization_owner_v1(uuid, uuid, uuid, uuid)`。private writer 依次接收 resolved actor、request、workspace 和 target membership。
+bridge 调用 `app_private.transfer_organization_owner_v1(uuid, uuid, uuid, uuid)`。0086 private writer 依次接收 resolved actor、request、workspace 和 target membership。
 
 只有 resolved actor identity 是可信事实。workspace 与 target UUID 是不可信 selector，writer 必须锁后验证。客户端不能提交 actor、email、internal user ID、owner assignment ID 或时间。
 
@@ -87,7 +87,7 @@ private writer 返回一行 exact result，未来 Backend 只序列化以下五�
 | `22023 organization owner transfer idempotency conflict` | `organization_owner_transfer_conflict` |
 | `22023 organization owner transfer target already owner` | `organization_owner_transfer_target_already_owner` |
 
-未知 SQLSTATE、message、constraint、parser、result shape 或 adapter 错误统一返回 `organization_owner_transfer_unavailable`。未来 HTTP route、status 和 envelope 留给 transport 工作单元固定；本 ADR 只禁止客户端提交 actor、email 或 internal user ID。
+未知 SQLSTATE、message、constraint、parser、result shape 或 adapter 错误统一返回 `organization_owner_transfer_unavailable`。HTTP route、status 和 envelope 由 [ADR-0178](./0178-organization-owner-transfer-http-contract.md) 与 Issue #309 固定；本 ADR 只禁止客户端提交 actor、email 或 internal user ID。
 
 null request／workspace／target 是 invalid request。未知或非 organization workspace、未知／跨组织／非 active target membership、非 active target account、非 active member／非 current owner actor，以及组织恢复状态，统一返回 forbidden，不区分不存在、跨组织或已失效。只有已验证为同组织 active target 且当前是 owner 时才返回 target-already-owner conflict。
 
@@ -98,13 +98,12 @@ target membership UUID 只在 private claim 中保存，不进入 audit；new as
 
 ## 后果与边界
 
-Issue #304 和本 ADR 是 spec-only 工作单元。
-本工作单元只更新 Product Spec、ADR、ADR 索引和 manual，不新增 migration、table、trigger、private writer、identity bridge、Backend route、production composition、Flutter 或 Drift 实现。
-后续实现必须验证 exact identity、锁序、active-owner deferred check 和 claim replay／drift。
-后续实现也必须验证稳定错误、ACL、append-only audit 和 recovery／purge fence。
+Issue #304 和本 ADR 是 spec-only 决策。Issue #310 已按本 ADR 交付 0086 migration、claim、tombstone、audit、private writer、identity bridge 及对应验证。
+本 ADR 不定义 Backend route、production composition、Flutter 或 Drift 实现。HTTP transport 由 [ADR-0178](./0178-organization-owner-transfer-http-contract.md) 单独固定。
+0086 的实现必须继续满足 exact identity、锁序、active-owner deferred check、claim replay／drift、稳定错误、ACL、append-only audit 和 recovery／purge fence。
 
 邀请、申请、member management、co-owner grant、owner recovery／manual reassignment、账号或组织 deletion 实现、project membership、capability、配额和反滥用不属于本决定。synthetic PostgreSQL 或 Backend 证据不等同于 production identity、部署端点、真实删除或 Apple 平台证据。
 
 ## 验证
 
-本 ADR 的 spec-only 验证只检查 Product Spec、ADR、学习文档、Markdown links 和 diff。它不证明 transfer writer、数据库并发、runtime ACL、生产身份、部署环境或真人平台。
+本 ADR 的文档验证只检查 Product Spec、ADR、学习文档、Markdown links 和 diff。Issue #310 另行提供 0086 的数据库 writer、并发、runtime ACL、checksum 和 dump／restore 证据；这些证据仍不证明生产身份、部署环境、真实删除或真人平台。
