@@ -120,7 +120,7 @@ family 顺序是 creation、directed invitation、owner transfer。随后按 UUI
 }
 ```
 
-所有 UUID 使用 canonical lowercase。时间使用 UTC、毫秒精度的 ISO-8601 表示。receipt 不含 target 资料、inviter 资料、owner assignment、capability、replay flag 或自由字段。创建和接受的 receipt 是两个独立的 typed 结果，不能用一个含糊 envelope 合并。
+未来 HTTP 的 UUID 使用 canonical lowercase，时间使用 UTC、毫秒精度的 ISO-8601 表示。SQL row 保留 `timestamptz` 的完整精度；membership、claim acceptance、audit 和返回行使用同一个未截断的 `transaction_timestamp()`。receipt 不含 target 资料、inviter 资料、owner assignment、capability、replay flag 或自由字段。创建和接受的 receipt 是两个独立的 typed 结果，不能用一个含糊 envelope 合并。
 
 未来 HTTP response 使用精确 `Content-Type: application/json; charset=utf-8` 和 `Cache-Control: no-store`。错误 root 只能是 `{ "error": { "code": "<stable-code>" } }`。具体 route、method 和 transport 顺序由后续 slice 固定。
 
@@ -133,7 +133,7 @@ family 顺序是 creation、directed invitation、owner transfer。随后按 UUI
 | `42501 organization invitation forbidden` | `organization_invitation_forbidden` |
 | `22023 organization invitation idempotency conflict` | `organization_invitation_conflict` |
 
-unknown SQLSTATE、message、constraint、parser 或内部异常统一映射为 `organization_invitation_unavailable`。invalid request 只表示请求字段或 UUID shape 不符合合同。
+unknown SQLSTATE、message、constraint、parser 或内部异常统一映射为 `organization_invitation_unavailable`。SQL seam 只接收 typed UUID，参数为空时返回 invalid request。非法 UUID 文本在函数体前由 PostgreSQL parser 拒绝；未来 transport 负责验证 wire UUID 格式，不改变 SQL 函数签名。
 
 未知 invitation／target selector、未知或非 organization workspace、inactive、deleted、deletion_pending、expired、已接受但非 exact target、已有 current membership、deassociated claim 或 recovery 状态统一使用 forbidden。已识别且引用仍在的 claim actor/workspace/target drift 和 tombstone 使用 idempotency conflict。
 
@@ -146,7 +146,7 @@ invitation audit 使用追加式、不可变、value-free allowlist，只允许�
 - `invitation_id`；
 - organization workspace UUID；
 - 固定 event kind（`invitation_issued` 或 `invitation_accepted`）；
-- 接受成功时的 `accepted_organization_membership_id`，创建事件为 NULL；
+- 接受成功时的 `organization_membership_id`，创建事件为 NULL；
 - 数据库生成的 UTC `occurred_at_utc`。
 
 每次首次创建只追加一条 `invitation_issued` audit，每次首次接受只追加一条 `invitation_accepted` audit。audit 不保存 inviter 或 target internal user UUID、姓名、display name、email、external issuer/subject、access/refresh/invite token、Auth user/provider metadata、request/body/URL 原文、SQL、数据库 message、stack、target 资料或自由文本。失败操作不追加含邀请状态或身份的 audit。成功精确重放不追加第二条 audit。
@@ -160,7 +160,7 @@ invitation audit 使用追加式、不可变、value-free allowlist，只允许�
 - `app_data.accept_organization_directed_account_invitation_for_identity_v1(text, text, uuid)`：trusted issuer、trusted subject、invitation；
 - `app_private.accept_organization_directed_account_invitation_v1(uuid, uuid)`：trusted actor、invitation。
 
-参数名依次固定为 create bridge 的 `trusted_issuer`、`trusted_subject`、`invitation_id`、`organization_workspace_id`、`target_app_user_id`，create writer 的 `trusted_actor_app_user_id` 加后三个 UUID，accept bridge 的 `trusted_issuer`、`trusted_subject`、`invitation_id`，以及 accept writer 的 `trusted_actor_app_user_id`、`invitation_id`。
+参数名依次固定为 create bridge 的 `trusted_issuer`、`trusted_subject`、`requested_invitation_id`、`requested_organization_workspace_id`、`requested_target_app_user_id`，create writer 的 `trusted_actor_app_user_id` 加后三个 UUID，accept bridge 的 `trusted_issuer`、`trusted_subject`、`requested_invitation_id`，以及 accept writer 的 `trusted_actor_app_user_id`、`requested_invitation_id`。输入 selector 使用 `requested_` 前缀，避免与 PL/pgSQL 返回列重名；返回字段不加前缀。
 
 两个 create 函数返回 exact row：`organization_invitation_contract_id text`、`invitation_id uuid`、`organization_workspace_id uuid`、`issued_at_utc timestamptz`、`expires_at_utc timestamptz`。两个 accept 函数返回 exact row：`organization_invitation_contract_id text`、`invitation_id uuid`、`organization_workspace_id uuid`、`organization_membership_id uuid`、`accepted_at_utc timestamptz`。bridge 只调用对应的 private writer。private writer 只接收 bridge 解析出的内部 actor 和不可信 selector，并在锁后重验。migration 拆分可以由后续 DB slice 决定，但不得改变这些关系、函数、输入、输出和权限边界。
 

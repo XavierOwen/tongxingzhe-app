@@ -715,7 +715,7 @@ issuer／subject 的 null、空白和长度边界沿用 0084 的 exact identity 
 - `app_data.accept_organization_directed_account_invitation_for_identity_v1(text, text, uuid)`：trusted issuer、trusted subject、invitation；
 - `app_private.accept_organization_directed_account_invitation_v1(uuid, uuid)`：trusted actor、invitation。
 
-参数名依次固定为 create bridge 的 `trusted_issuer`、`trusted_subject`、`invitation_id`、`organization_workspace_id`、`target_app_user_id`，create writer 的 `trusted_actor_app_user_id` 加后三个 UUID，accept bridge 的 `trusted_issuer`、`trusted_subject`、`invitation_id`，以及 accept writer 的 `trusted_actor_app_user_id`、`invitation_id`。
+参数名依次固定为 create bridge 的 `trusted_issuer`、`trusted_subject`、`requested_invitation_id`、`requested_organization_workspace_id`、`requested_target_app_user_id`，create writer 的 `trusted_actor_app_user_id` 加后三个 UUID，accept bridge 的 `trusted_issuer`、`trusted_subject`、`requested_invitation_id`，以及 accept writer 的 `trusted_actor_app_user_id`、`requested_invitation_id`。输入 selector 使用 `requested_` 前缀，避免与 PL/pgSQL 返回列重名；返回字段不加前缀。
 
 两个 create 函数返回 exact row：`organization_invitation_contract_id text`、`invitation_id uuid`、`organization_workspace_id uuid`、`issued_at_utc timestamptz`、`expires_at_utc timestamptz`。两个 accept 函数返回 exact row：`organization_invitation_contract_id text`、`invitation_id uuid`、`organization_workspace_id uuid`、`organization_membership_id uuid`、`accepted_at_utc timestamptz`。bridge 只调用对应的 private writer，不调用另一个 operation 的 writer。
 
@@ -798,8 +798,10 @@ exact replay 仍先取得 request lock，并在需要时锁定可解析的 targe
 ```
 
 两个成功 root 分开定义，不能合并为含糊的可选字段 envelope。
-UUID 输出必须 canonical lowercase，时间输出必须是 UTC 毫秒精度 RFC3339。
+未来 HTTP 的 UUID 输出必须 canonical lowercase，时间输出必须是 UTC 毫秒精度 RFC3339。
+SQL row 保留 `timestamptz` 的完整精度；membership、claim acceptance、audit 和返回行使用同一个未截断的 `transaction_timestamp()`。
 receipt 不含 target profile、name、email、external identity、owner、project、capability 或 replay flag。
+
 未来 HTTP 层的成功和失败响应都使用精确 `Content-Type: application/json; charset=utf-8` 与 `Cache-Control: no-store`。
 错误 root 只能是 `{ "error": { "code": "<stable-code>" } }`。
 具体 route、method、body byte limit 和 refresh 顺序留给后续 transport slice。
@@ -809,11 +811,12 @@ receipt 不含 target profile、name、email、external identity、owner、proje
 | 条件 | SQLSTATE 与固定 message | Backend code |
 | --- | --- | --- |
 | exact identity 输入为 null、空白或超出既有边界 | `22023 invalid organization invitation identity` | `organization_invitation_unavailable` |
-| invitation、workspace 或 target 输入为空或格式非法 | `22023 invalid organization invitation request` | `invalid_organization_invitation_request` |
+| invitation、workspace 或 target 的 typed UUID 参数为空 | `22023 invalid organization invitation request` | `invalid_organization_invitation_request` |
 | actor、target、workspace、expiry、current membership 或 recovery 状态不允许 | `42501 organization invitation forbidden` | `organization_invitation_forbidden` |
 | 已识别 claim 的 inviter／workspace／target drift 或本 family tombstone | `22023 organization invitation idempotency conflict` | `organization_invitation_conflict` |
 
 未知 invitation／target UUID、未知或非 organization workspace、inactive／`deletion_pending`／`deleted` account、已过期或已接受但由错误账号调用，都统一返回 forbidden。
+SQL seam 只接收 typed UUID；非法 UUID 文本会在进入函数前由 PostgreSQL parser 拒绝。未来 transport 负责把 wire 格式错误映射为 invalid request，不改变 SQL 函数签名。
 已有 current membership 和组织 recovery 状态也返回 forbidden。
 这些结果不区分对象不存在、错误 target、过期或已使用。
 只有已经识别且引用仍在的 claim drift，或本 family tombstone 返回 conflict。账号引用去关联统一返回 forbidden。
