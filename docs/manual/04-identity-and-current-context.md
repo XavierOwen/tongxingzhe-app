@@ -391,10 +391,11 @@ Issue #312 的 tests 覆盖 raw pathname、method、slash、认证顺序、gener
 Issue #309 只固定 transport spec，Issue #310 交付 0086 DB-only migration、函数、ACL 和测试证据，Issue #312 交付 local synthetic Backend／HTTP／PostgreSQL integration。
 这些证据不证明 production identity、部署端点、Flutter、Drift、controller、UI、Apple 或其他真人平台运行时。
 
-### 3.7 Flutter 组织 owner transfer typed gateway（Issue #314，MANUAL-056，spec-only）
+### 3.7 Flutter 组织 owner transfer typed gateway（Issue #314/#316，MANUAL-056，已交付）
 
-Issue #314 只固定 Flutter 业务层的 typed gateway 合同。它复用 Issue #309 的 HTTP transport 和 Issue #312 的 Backend route，不重新定义 0086 的 owner、membership、claim、audit、recovery 或 purge 规则。
-本节不实现 Dart gateway、HTTP adapter、AppDependencies、AppStartupReady、UI 或生产接线。
+Issue #314 固定 Flutter 业务层的 typed gateway 合同，#316 已交付 Dart gateway、HTTP adapter 和 focused tests。它复用 Issue #309 的 HTTP transport 和 Issue #312 的 Backend route。
+这些切片不重新定义 0086 的 owner、membership、claim、audit、recovery 或 purge 规则。
+本节说明 7L 的 gateway。`AppDependencies`、`AppStartupReady` 和 App lifecycle 接入见 3.8 的 7N。
 
 公共接口固定为：
 
@@ -456,7 +457,7 @@ Backend stable error 映射为：`400 invalid_json` → `invalidJson`；`400 inv
 缺少或错误 response header、response JSON 无法解析、非 exact error envelope、unknown status 或 code、`404 not_found`、字段漂移、非法 UUID 或时间，以及其他 parser 或 adapter 错误，都返回 `invalidResponse`。failure 只保留 typed code，不把 response body、provider error、SQL、数据库 message、stack、token 或成员资料交给调用方。
 
 `DeferredOrganizationOwnerTransferGateway` 的每次调用返回 `OrganizationOwnerTransferRejected(OrganizationOwnerTransferFailureCode.notConfigured)`。`HttpOrganizationOwnerTransferGateway` 拥有并关闭传入的 `http.Client`；production factory 创建该 client。`close()` 可重复调用且不得关闭 `IdentitySession`，deferred gateway 的 `close()` 是 no-op。
-receipt、failure 和原始 response 只存在于内存，不写 Drift、缓存、同步队列或日志。本票不定义 `AppDependencies`、App lifecycle、controller、ViewModel、Screen、导航或成功后的组织上下文切换。
+receipt、failure 和原始 response 只存在于内存，不写 Drift、缓存、同步队列或日志。7L 不定义 `AppDependencies`、App lifecycle、controller、ViewModel、Screen、导航或成功后的组织上下文切换。
 
 后续实现使用 fake `IdentitySession` 和内存 `MockClient` 运行 focused tests：
 
@@ -469,7 +470,26 @@ dart run tool/check_markdown_links.dart
 
 测试必须覆盖 path、body、headers、UUID canonicalization、非法输入的 no-token/no-request short-circuit、deferred no-network、identity failure、一次 `401` 刷新与相同 retry body、strict receipt／error parser、全部 stable mapping、脱敏、内存结果和可重复 `close()`。
 
-本节是 spec-only。文档、Markdown link、no-slop 和 Dart analyzer 检查只证明文字或静态语法一致，不证明 Dart gateway、HTTP adapter、Backend、PostgreSQL、production identity、部署端点、真实组织、Drift、UI、删除恢复、Apple 或其他真人平台行为。
+本节的文档、Markdown link、no-slop 和 Dart analyzer 检查，以及 #316 的 Dart tests，只证明文字、静态语法、Flutter transport、strict parser 和内存边界，不证明 Backend、PostgreSQL、production identity、部署端点、真实组织、Drift、UI、删除恢复、Apple 或其他真人平台行为。
+
+### 3.8 Flutter 组织 owner transfer composition（Issue #318，MANUAL-056，已交付）
+
+Issue #318 将 #316 创建的 `OrganizationOwnerTransferGateway` 接入 `AppDependencies` composition root。builder 使用启动时打开的同一个 `IdentitySession`；`AppStartupReady.organizationOwnerTransferGateway` 暴露 builder 返回的同一个 gateway。没有注入 builder 时，composition root 使用不触网的 `DeferredOrganizationOwnerTransferGateway`。
+
+如果 gateway 已创建而后续启动步骤失败，`AppDependencies.start()` 只关闭它一次。`TongxingzheApp` 在启动完成前被移除时，异步启动结果也只关闭该 gateway 一次；正常 `dispose()` 同样只关闭一次，重复 pump 不增加 close 次数。gateway 只由 composition root 持有和关闭，不传入 `_ReadyApp`、controller、UI、route 或 context switch。
+
+本切片不改变 owner-transfer gateway、HTTP、Backend、PostgreSQL、identity、Drift 或组织状态合同，也不生成 request UUID、增加缓存、离线队列、同步或 durable retry。
+
+运行以下本地检查：
+
+```bash
+flutter test test/app/app_dependencies_test.dart test/app/tongxingzhe_app_test.dart
+dart analyze
+flutter test
+dart run tool/check_markdown_links.dart
+```
+
+这些 fake identity、fake gateway 和 widget tests 只证明本地 composition、deferred fallback 和资源生命周期，不证明 production identity、部署端点、真实 owner transfer、Backend、PostgreSQL、Drift、UI、Apple 或其他真人平台运行时。
 
 ## 4. PostgreSQL transaction 建立哪些事实
 

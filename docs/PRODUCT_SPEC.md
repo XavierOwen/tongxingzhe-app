@@ -668,10 +668,11 @@ gateway 从同一 `IdentitySession` 取得 Bearer token。identity failure 映�
 
 首次成功和 exact replay 在客户端都返回相同的五字段 success。响应和 receipt 只留在内存，不写 Drift、缓存、同步队列或日志。`HttpOrganizationOwnerTransferGateway` 接管并关闭传入的 `http.Client`；production factory 创建该 client，deferred gateway 的 `close()` 是 no-op。任何 gateway 都不关闭 `IdentitySession`。创建后的 AppDependencies、AppStartupReady、controller、UI、lifecycle 和上下文切换不属于本切片。
 
-`TEST-066` 固定后续实现的 focused Flutter tests：path、body、headers、UUID canonicalization、invalid-input short-circuit、deferred no-network、identity failure、一次 `401`、相同 retry body、strict response parser、stable mappings、脱敏、内存结果和 close。`MANUAL-056` 必须用零基础步骤说明这些 interface、request／response、`IdentitySession`、一次 `401`、strict parser、typed failure、deferred、close、测试命令和 evidence boundary。
+`TEST-066` 固定 7L／#314 与 7N／#318 的 focused Flutter tests：path、body、headers、UUID canonicalization、invalid-input short-circuit、deferred no-network、identity failure、一次 `401`、相同 retry body、strict response parser、stable mappings、脱敏、内存结果和 close。它还必须覆盖 `AppDependencies` builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gateway、启动失败清理、启动完成前移除 App 以及正常 dispose 的单次 close。`MANUAL-056` 必须用零基础步骤说明这些 interface、request／response、`IdentitySession`、一次 `401`、strict parser、typed failure、deferred、composition、close、测试命令和 evidence boundary。
 
-7L 是 spec-only 工作单元，不实现 Dart gateway、HTTP adapter、AppDependencies、UI、Drift、缓存、离线队列、同步、UUID generator 或 durable retry。
-它也不实现 Backend、PostgreSQL、邀请、申请、membership／capability、recovery、deletion、purge 或 owner recovery。它不使用 7A eligibility、Auth lookup、email、external subject、客户端 actor 或 `SessionContext`。
+7L／Issue #314 是 spec-only 工作单元；#316 已交付 Dart gateway、HTTP adapter 和 focused tests。7L 不实现 `AppDependencies`、UI、Drift、缓存、离线队列、同步、UUID generator 或 durable retry。
+7N／Issue #318 已将该 gateway 接入 `AppDependencies` composition root：builder 使用启动时打开的同一个 `IdentitySession`，`AppStartupReady` 暴露 builder 返回的同一个 gateway；启动失败、启动完成前移除 App 和正常 dispose 都只关闭已创建的 gateway 一次。gateway 仍只由 composition root 持有，不传入 `_ReadyApp`、controller、UI、route 或 context switch。
+7L 与 7N 都不实现 Backend、PostgreSQL、邀请、申请、membership／capability、recovery、deletion、purge 或 owner recovery。它们不使用 7A eligibility、Auth lookup、email、external subject、客户端 actor 或 `SessionContext`。
 
 后续实现使用 fake `IdentitySession` 和内存 `MockClient`，至少运行：
 
@@ -682,7 +683,7 @@ flutter test --no-pub
 dart run tool/check_markdown_links.dart
 ```
 
-这些文档、Markdown link、no-slop 和 Dart synthetic tests 只证明 Flutter transport、parser、内存和资源生命周期合同，不证明 Backend、PostgreSQL、production identity、部署、真实组织、Drift、UI、删除恢复、Apple 或其他真人平台运行时。
+这些文档、Markdown link、no-slop、Dart analyzer、composition 和 widget tests 只证明本地 Flutter transport、parser、内存和资源生命周期合同，不证明 Backend、PostgreSQL、production identity、部署、真实组织、Drift、UI、删除恢复、Apple 或其他真人平台运行时。
 
 ### 5.8 分析、指标与报告
 
@@ -2712,7 +2713,14 @@ request UUID 生成或跨重启 durable retry，也未接入创建后的组织�
 Issue #310 已交付 0086 DB-only migration、writer、identity bridge 及对应结构、回滚、并发、checksum 和 dump／restore 证据。
 7J 的 Issue #309 固定 HTTP route、generic authentication、请求处理顺序、严格 body、store seam、成功／错误 wire、replay 和 non-enumeration。
 #312／7K 已交付 Backend handler、store、route、composition 和 local synthetic PostgreSQL integration。Flutter、Drift 与 recovery 流程仍待后续工作单元。
-7L 的 Issue #314 固定组织 owner transfer 的 Flutter typed gateway、immutable receipt、typed failure、IdentitySession、一次 401、deferred fallback、配置与 close 边界；Dart adapter、AppDependencies、UI、Drift 与 lifecycle 仍待后续工作单元。
+7L 的 Issue #314 固定组织 owner transfer 的 Flutter typed gateway、immutable receipt、typed failure、IdentitySession、一次 401、deferred fallback、配置与 close 边界；#316 已交付 Dart gateway、HTTP adapter 和 focused tests。
+7N 的 Issue #318 已将该 gateway 接入 `AppDependencies` 生命周期。
+builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gateway。
+后续启动失败、启动完成前移除 App 或正常 dispose 时，已创建的 gateway 只关闭一次。
+它不把 gateway 传入 controller、UI、route、context switch 或 `_ReadyApp`。
+它不增加 Drift、缓存、离线队列、同步或 request UUID 生成。
+本地 composition／widget tests 不证明 production identity、Backend、PostgreSQL 或部署。
+它们也不证明真实组织、Apple 或真人平台运行时。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 
