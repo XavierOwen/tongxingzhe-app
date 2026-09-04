@@ -611,6 +611,79 @@ Backend 接受数据库 Date 或带 offset／fraction 的 RFC 3339 instant，并
 测试还覆盖一次 0086 bridge call、五字段 success／replay、RFC 3339 时间输出、全部 400／401／403／409／413／503 映射、unknown／recovery non-enumeration、JSON／no-store、PII-free response／logs 和 Promise gate。
 这些 local synthetic Backend、HTTP 和 PostgreSQL integration 证据不证明 production identity、部署端点、Flutter、删除流程、Apple 或其他真人平台运行时。
 
+#### Slice 7L Spec：固定组织 owner transfer Flutter typed gateway 合同
+
+7L／Issue #314 只固定组织 owner transfer 的 Flutter typed gateway contract。#309／ADR-0178 已固定 HTTP transport。#312 已交付 Backend handler、dedicated store、route、production composition 和 local synthetic PostgreSQL integration。
+本切片不重新定义 0086、owner、membership、recovery 或 purge 合同。
+
+公共接口固定为 `OrganizationOwnerTransferGateway`：
+
+```dart
+abstract interface class OrganizationOwnerTransferGateway {
+  Future<OrganizationOwnerTransferResult> transfer({
+    required String requestId,
+    required String organizationWorkspaceId,
+    required String targetOrganizationMembershipId,
+  });
+
+  Future<void> close();
+}
+```
+
+公共类型固定为 `OrganizationOwnerTransferReceipt`、`OrganizationOwnerTransferResult`、`OrganizationOwnerTransferSuccess`、`OrganizationOwnerTransferRejected` 和 `OrganizationOwnerTransferFailureCode`。receipt 只含以下不可变字段：`ownerTransferContractId`、`organizationWorkspaceId`、`previousOwnerAssignmentId`、`organizationOwnerAssignmentId`（均为 `String`）和 `effectiveAtUtc`（UTC `DateTime`）。result 只能是 success 或 rejected；failure enum 只能含 `notConfigured`、`unauthorized`、`invalidJson`、`payloadTooLarge`、`invalidRequest`、`forbidden`、`conflict`、`targetAlreadyOwner`、`serviceUnavailable`、`networkUnavailable` 和 `invalidResponse`，不增加业务性 `notFound`。
+
+公开实现名称固定为 `HttpOrganizationOwnerTransferGateway`、`DeferredOrganizationOwnerTransferGateway` 和 `productionOrganizationOwnerTransferGateway(IdentitySession)`。HTTP gateway 复用 `IdentitySession`、pathless `validatePathlessBackendBaseUri`、已安装的 `http.Client` 和现有一次 `401` refresh 模式；不建立通用 router、UUID、时间或错误抽象。
+
+调用方必须提供 request、workspace 和 target membership UUID。输入接受大小写 RFC 形式，gateway 在取得 token 或发 HTTP 前校验并 canonicalize 为 lowercase；非法输入直接返回 `OrganizationOwnerTransferRejected(invalidRequest)`。gateway 不生成 request UUID，不做 workspace、actor、membership、owner 或权限预查。
+
+`productionOrganizationOwnerTransferGateway` 读取 `BACKEND_BASE_URL`。空或全为空白时返回不触网的 `DeferredOrganizationOwnerTransferGateway`，调用返回 `notConfigured`，`close()` 不做网络操作。非空配置必须先完成 `Uri.parse` 与 pathless validator；URI 非法或 validator 拒绝时同步抛出配置异常，且不创建 HTTP gateway 或 `http.Client`。
+
+HTTP 只发送无 query、无 fragment 的：
+
+```text
+POST /v1/organizations/:organizationWorkspaceId/owner-transfer
+```
+
+请求 headers 固定为 `Accept: application/json`、`Authorization: Bearer <token>` 和 `Content-Type: application/json; charset=utf-8`。不发送 `Idempotency-Key`、actor 或 workspace 字段。body 只能含 `request_id` 与 `target_organization_membership_id` 两个 canonical lowercase UUID。
+
+gateway 从同一 `IdentitySession` 取得 Bearer token。identity failure 映射固定为：`IdentityFailureCode.notConfigured` 到 `notConfigured`，`networkUnavailable` 到 `networkUnavailable`，其他 `IdentityFailureCode` 到 `unauthorized`。首个响应只有在 headers 和 error envelope 都严格匹配 `401 {"error":{"code":"unauthenticated"}}` 时才强制 refresh 一次；重试复用相同 canonical URL、headers、body 和参数。第二个 `401` 返回 `unauthorized`，不得循环刷新。
+
+所有响应先严格要求 `Content-Type: application/json; charset=utf-8` 和 `Cache-Control: no-store`。成功 `200` 只接受 exact 五字段 root、`organization-owner-transfer:v1`、三个 lowercase canonical UUID、与 path 相同的 workspace，以及有效 UTC `YYYY-MM-DDTHH:mm:ss.SSSZ` 时间；结果转为不可变内存 receipt。客户端不判断 replay、owner、membership、组织状态或权限。
+
+稳定错误映射固定如下：
+
+| HTTP response | `OrganizationOwnerTransferFailureCode` |
+| --- | --- |
+| `400 invalid_json` | `invalidJson` |
+| `400 invalid_organization_owner_transfer_request` | `invalidRequest` |
+| `401 unauthenticated` | `unauthorized` |
+| `403 organization_owner_transfer_forbidden` | `forbidden` |
+| `409 organization_owner_transfer_conflict` | `conflict` |
+| `409 organization_owner_transfer_target_already_owner` | `targetAlreadyOwner` |
+| `413 payload_too_large` | `payloadTooLarge` |
+| `503 organization_owner_transfer_unavailable` | `serviceUnavailable` |
+| 网络、timeout 或 `http.ClientException` | `networkUnavailable` |
+
+缺少或错误 headers、非法 JSON、非 exact error envelope、unknown status／code、`404 not_found`、字段漂移、非法 UUID／时间和其他 parser／adapter 错误统一返回 `invalidResponse`。不得暴露 HTTP client、provider、数据库、身份或成员原文。
+
+首次成功和 exact replay 在客户端都返回相同的五字段 success。响应和 receipt 只留在内存，不写 Drift、缓存、同步队列或日志。`HttpOrganizationOwnerTransferGateway` 接管并关闭传入的 `http.Client`；production factory 创建该 client，deferred gateway 的 `close()` 是 no-op。任何 gateway 都不关闭 `IdentitySession`。创建后的 AppDependencies、AppStartupReady、controller、UI、lifecycle 和上下文切换不属于本切片。
+
+`TEST-066` 固定后续实现的 focused Flutter tests：path、body、headers、UUID canonicalization、invalid-input short-circuit、deferred no-network、identity failure、一次 `401`、相同 retry body、strict response parser、stable mappings、脱敏、内存结果和 close。`MANUAL-056` 必须用零基础步骤说明这些 interface、request／response、`IdentitySession`、一次 `401`、strict parser、typed failure、deferred、close、测试命令和 evidence boundary。
+
+7L 是 spec-only 工作单元，不实现 Dart gateway、HTTP adapter、AppDependencies、UI、Drift、缓存、离线队列、同步、UUID generator 或 durable retry。
+它也不实现 Backend、PostgreSQL、邀请、申请、membership／capability、recovery、deletion、purge 或 owner recovery。它不使用 7A eligibility、Auth lookup、email、external subject、客户端 actor 或 `SessionContext`。
+
+后续实现使用 fake `IdentitySession` 和内存 `MockClient`，至少运行：
+
+```bash
+flutter test --no-pub test/organization_owner_transfer/http_organization_owner_transfer_gateway_test.dart
+dart analyze
+flutter test --no-pub
+dart run tool/check_markdown_links.dart
+```
+
+这些文档、Markdown link、no-slop 和 Dart synthetic tests 只证明 Flutter transport、parser、内存和资源生命周期合同，不证明 Backend、PostgreSQL、production identity、部署、真实组织、Drift、UI、删除恢复、Apple 或其他真人平台运行时。
+
 ### 5.8 分析、指标与报告
 
 #### 5.8.1 统计单位和核心口径
@@ -2111,6 +2184,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-053` | 学习文档必须说明 7E 的固定 `POST /v1/organizations`、认证和 7A eligibility 先于 body／store、严格两字段 JSON、body request UUID、既有 1 MiB／`invalid_json`／`payload_too_large`、首次与精确重放同为 `200`、0084 五字段 success wire、四组 SQLSTATE 映射、JSON／`no-store`、PII-free 响应与日志，以及 promise-before-response。必须区分 #298 的 spec-only 决策与 #300 的 handler、adapter、真实 HTTP、production composition 和 synthetic PostgreSQL integration；synthetic 证据不证明生产身份、部署端点或真人平台。 |
 | `MANUAL-054` | 学习文档必须说明 7G 的 trusted exact identity 与 7A 创建资格边界、current owner 到同组织 active membership 的 handoff、target membership UUID、独立 request claim、精确重放与 actor／workspace／target drift、固定锁序、锁后重读、同一数据库时间、grant-before-close、sole／multi-owner invariant、五字段 result、SQLSTATE／Backend code、value-free audit 和 deletion boundary。必须区分 #304 的 spec-only 决策与 #310 已交付的 0086 DB-only migration、writer、identity bridge 和验证；7G 不实现 Backend、HTTP、Flutter、邀请、申请、成员／capability 管理、删除恢复或 owner recovery。文档检查不证明数据库并发、runtime ACL、生产身份或真人平台。 |
 | `MANUAL-055` | 学习文档必须说明 7J 的 raw owner-transfer route、generic `IdentityVerifier`、Bearer→verifier→query→path→missing store→body→一次 store→Promise→response 顺序、actual-byte inclusive 1 MiB 边界、strict two-field UUID body、0086 exact-identity store seam、五字段 receipt、RFC 3339 时间归一化、稳定 HTTP 错误、replay／non-enumeration 和 JSON／`no-store`。必须区分 #309 的 spec-only transport、#310 的 0086 DB-only 实现与 #312 的 Backend route、store、composition 和 PostgreSQL integration；local synthetic 证据不证明 production identity、部署、Flutter、Apple 或真人平台。 |
+| `MANUAL-056` | 学习文档必须用零基础步骤说明 7L 的 `OrganizationOwnerTransferGateway`、五字段 immutable receipt、typed result／failure、三个 UUID、`IdentitySession`、固定 request headers、空配置 deferred、一次 `401` refresh、strict response parser、stable mappings、内存结果和 `close`。必须说明非法输入在取得 token 前失败、非空非法 Backend URI 同步配置失败、客户端不做 owner／membership 预查、不保存 PII，并给出 focused／全量 Flutter tests、`dart analyze`、Markdown link 和 evidence boundary；文档不证明 Dart adapter、Backend、PostgreSQL、production identity、部署、Drift、UI、Apple 或真人平台。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -2354,6 +2428,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-063` | 7E 后续实现必须以 Backend unit／handler、real HTTP route、production composition、Postgres adapter 和 synthetic PostgreSQL integration 覆盖固定 `POST /v1/organizations`、wrong method／query、认证先于 body parser／store、`401`／`403`／`503` eligibility 分类、严格两字段／exact keys／types／UUID／额外字段、body request UUID 而非 `Idempotency-Key` 或缓存、既有 1 MiB／`invalid_json`／`payload_too_large`、原始 display name 传递、一次 0084 bridge 调用、promise-before-response、首次／精确重放同为 `200`、无 replay flag、五字段 success wire、四组 SQLSTATE 映射、unknown error 的 `503`、JSON／`no-store` 和 PII-free response／logs。必须明确这些测试不证明 production identity、部署端点、Flutter、Drift 或 Apple 平台运行时。 |
 | `TEST-064` | 7G 的 0086 DB-only 实现必须覆盖 trusted exact identity 与 7A creation eligibility 分离、current owner／同组织 active target membership、target UUID 与 account 状态、target 已是 owner／actor 等于 target、sole／multi-owner handoff、request claim、精确 replay、actor／workspace／target drift、tombstone、同 request／不同 request 并发、固定锁序与锁后重读、grant-before-close、同一数据库时间、append-only history、deferred active-owner invariant、membership／capability 不变、删除恢复只读、失败零部分写入、五字段 result、精确 SQLSTATE／Backend code、未知错误 unavailable、PII-free audit／错误／日志、最小 ACL、rollback、checksum 和 dump／restore。现有 synthetic DB 证据不证明 production identity、部署、真实删除、HTTP、Flutter 或 Apple 平台。 |
 | `TEST-065` | 7K／#312 的 Backend unit、real HTTP、composition 和 PostgreSQL integration tests 必须覆盖 raw route（wrong method、trailing／repeated slash、literal／percent-encoded dot、任意 percent-encoded path segment 和 unmatched path 均在认证前返回 404）、generic Bearer／`IdentityVerifier`（`unauthenticated` category 映射 401，`unavailable` 与非 typed 异常映射 503，且不复用 7A 或 Auth lookup）、Bearer→verifier→query→path→missing store→body→一次 store→Promise→response 顺序、actual-byte inclusive 1 MiB／chunked boundary、strict two-field UUID body 与 lowercase canonicalization、一次参数化 0086 bridge call、五字段 strict result／canonical path workspace／RFC 3339 到 SSSZ 时间、首次／replay 200、全部 400／401／403／409／413／503 映射、unknown／recovery non-enumeration、JSON／no-store、PII-free response／logs。这些 local synthetic 证据不证明 production identity、部署、Flutter、删除流程或 Apple 平台。 |
+| `TEST-066` | 7L／#314 的 focused Flutter tests 必须覆盖 `OrganizationOwnerTransferGateway` 的固定 interface、path／body／`Accept`／`Authorization`／`Content-Type` headers、无 `Idempotency-Key`、三个 UUID lowercase canonicalization、非法输入在 token／HTTP 前 short-circuit、空 `BACKEND_BASE_URL` 的 `DeferredOrganizationOwnerTransferGateway` 与 no-network、非空非法 URI／path validator 的同步配置失败、`IdentitySession` failure、一次精确 `401 unauthenticated` refresh 与完全相同 retry URL／body、strict JSON／`no-store`／五字段 receipt／UTC `DateTime`、全部 stable mappings、unknown／404／parser／network／timeout 脱敏、immutable in-memory result 和 `close`。fake identity／`MockClient` 证据不证明 Backend、PostgreSQL、production identity、部署、Drift、UI、Apple 或真人平台。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -2637,6 +2712,7 @@ request UUID 生成或跨重启 durable retry，也未接入创建后的组织�
 Issue #310 已交付 0086 DB-only migration、writer、identity bridge 及对应结构、回滚、并发、checksum 和 dump／restore 证据。
 7J 的 Issue #309 固定 HTTP route、generic authentication、请求处理顺序、严格 body、store seam、成功／错误 wire、replay 和 non-enumeration。
 #312／7K 已交付 Backend handler、store、route、composition 和 local synthetic PostgreSQL integration。Flutter、Drift 与 recovery 流程仍待后续工作单元。
+7L 的 Issue #314 固定组织 owner transfer 的 Flutter typed gateway、immutable receipt、typed failure、IdentitySession、一次 401、deferred fallback、配置与 close 边界；Dart adapter、AppDependencies、UI、Drift 与 lifecycle 仍待后续工作单元。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 

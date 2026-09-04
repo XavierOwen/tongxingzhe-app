@@ -391,6 +391,86 @@ Issue #312 的 tests 覆盖 raw pathname、method、slash、认证顺序、gener
 Issue #309 只固定 transport spec，Issue #310 交付 0086 DB-only migration、函数、ACL 和测试证据，Issue #312 交付 local synthetic Backend／HTTP／PostgreSQL integration。
 这些证据不证明 production identity、部署端点、Flutter、Drift、controller、UI、Apple 或其他真人平台运行时。
 
+### 3.7 Flutter 组织 owner transfer typed gateway（Issue #314，MANUAL-056，spec-only）
+
+Issue #314 只固定 Flutter 业务层的 typed gateway 合同。它复用 Issue #309 的 HTTP transport 和 Issue #312 的 Backend route，不重新定义 0086 的 owner、membership、claim、audit、recovery 或 purge 规则。
+本节不实现 Dart gateway、HTTP adapter、AppDependencies、AppStartupReady、UI 或生产接线。
+
+公共接口固定为：
+
+```dart
+abstract interface class OrganizationOwnerTransferGateway {
+  Future<OrganizationOwnerTransferResult> transfer({
+    required String requestId,
+    required String organizationWorkspaceId,
+    required String targetOrganizationMembershipId,
+  });
+
+  Future<void> close();
+}
+```
+
+公共类型名称固定为 `OrganizationOwnerTransferResult`、`OrganizationOwnerTransferReceipt`、`OrganizationOwnerTransferFailureCode`、`OrganizationOwnerTransferSuccess` 和 `OrganizationOwnerTransferRejected`。`HttpOrganizationOwnerTransferGateway` 是配置后的 HTTP 实现；`DeferredOrganizationOwnerTransferGateway` 是未配置时的不触网实现；生产工厂名称为 `productionOrganizationOwnerTransferGateway`。
+
+调用方必须提供三个 UUID：request、organization workspace 和 target organization membership。gateway 不生成 request UUID，不预查组织、owner 或 membership，也不接受 actor、email、external subject、owner assignment 或 capability。
+输入 UUID 可以使用 RFC 形式的大小写字母。adapter 在取得 token 或发 HTTP 前把三者统一为 lowercase canonical value；非法 UUID 直接返回 `OrganizationOwnerTransferRejected(OrganizationOwnerTransferFailureCode.invalidRequest)`。
+
+成功结果和失败结果是两个固定分支：
+
+- `OrganizationOwnerTransferSuccess(receipt)` 的 `OrganizationOwnerTransferReceipt` 只有 `ownerTransferContractId`、`organizationWorkspaceId`、`previousOwnerAssignmentId` 和 `organizationOwnerAssignmentId` 四个 `String` 字段，以及 `effectiveAtUtc` 一个 UTC `DateTime` 字段。这些值不可变。
+- `OrganizationOwnerTransferRejected(code)` 的 `OrganizationOwnerTransferFailureCode` 只有 `notConfigured`、`unauthorized`、`invalidJson`、`payloadTooLarge`、`invalidRequest`、`forbidden`、`conflict`、`targetAlreadyOwner`、`serviceUnavailable`、`networkUnavailable` 和 `invalidResponse`。不增加业务性的 `notFound`。
+
+`productionOrganizationOwnerTransferGateway` 读取 `BACKEND_BASE_URL`。空或只含空白时返回 `const DeferredOrganizationOwnerTransferGateway`，不创建 HTTP client，也不触网；非空值先解析并由 `validatePathlessBackendBaseUri` 验证无 path 的 Backend base URI。URI 解析或 validator 失败必须同步抛出，且不得创建或返回 gateway/client。验证通过后才创建 `HttpOrganizationOwnerTransferGateway`，并可注入测试用的 `http.Client`。
+
+configured gateway 只发送无 query、无 fragment 的：
+
+```text
+POST /v1/organizations/:organizationWorkspaceId/owner-transfer
+```
+
+path 使用 canonical workspace UUID。JSON body 严格只有 `request_id` 和 `target_organization_membership_id`，两者也使用 canonical UUID。请求不发送 `Idempotency-Key`、actor 或重复的 workspace 字段。
+
+每个请求严格只有三项相关 headers：
+
+```text
+Accept: application/json
+Authorization: Bearer <token>
+Content-Type: application/json; charset=utf-8
+```
+
+gateway 使用同一个 `IdentitySession` 取得 Bearer token。identity failure 的映射固定为：`notConfigured` 返回 `notConfigured`，`networkUnavailable` 返回 `networkUnavailable`，其他 identity failure 返回 `unauthorized`。
+如果首个 response 恰好是 `401` 且 error code 为 `unauthenticated`，gateway 只强制刷新一次 token，并用完全相同的 canonical URL、body 和参数重试。第二个相同 `401` 返回 `unauthorized`，不得循环刷新。
+
+adapter 在解析任何 response 前都要求精确的：
+
+```text
+Content-Type: application/json; charset=utf-8
+Cache-Control: no-store
+```
+
+`200` 只接受 exact 五字段 receipt、固定 contract ID、三个 lowercase UUID、与 path 相同的 workspace，以及 `YYYY-MM-DDTHH:mm:ss.SSSZ` UTC 时间。adapter 不判断 replay、owner、membership、组织状态或权限。
+
+Backend stable error 映射为：`400 invalid_json` → `invalidJson`；`400 invalid_organization_owner_transfer_request` → `invalidRequest`；`401 unauthenticated` → `unauthorized`；`403 organization_owner_transfer_forbidden` → `forbidden`；`409 organization_owner_transfer_conflict` → `conflict`；`409 organization_owner_transfer_target_already_owner` → `targetAlreadyOwner`；`413 payload_too_large` → `payloadTooLarge`；`503 organization_owner_transfer_unavailable` → `serviceUnavailable`。
+网络、timeout 和 `http.ClientException` 返回 `networkUnavailable`。
+
+缺少或错误 response header、response JSON 无法解析、非 exact error envelope、unknown status 或 code、`404 not_found`、字段漂移、非法 UUID 或时间，以及其他 parser 或 adapter 错误，都返回 `invalidResponse`。failure 只保留 typed code，不把 response body、provider error、SQL、数据库 message、stack、token 或成员资料交给调用方。
+
+`DeferredOrganizationOwnerTransferGateway` 的每次调用返回 `OrganizationOwnerTransferRejected(OrganizationOwnerTransferFailureCode.notConfigured)`。`HttpOrganizationOwnerTransferGateway` 拥有并关闭传入的 `http.Client`；production factory 创建该 client。`close()` 可重复调用且不得关闭 `IdentitySession`，deferred gateway 的 `close()` 是 no-op。
+receipt、failure 和原始 response 只存在于内存，不写 Drift、缓存、同步队列或日志。本票不定义 `AppDependencies`、App lifecycle、controller、ViewModel、Screen、导航或成功后的组织上下文切换。
+
+后续实现使用 fake `IdentitySession` 和内存 `MockClient` 运行 focused tests：
+
+```bash
+flutter test test/organization_owner_transfer/http_organization_owner_transfer_gateway_test.dart
+dart analyze
+flutter test
+dart run tool/check_markdown_links.dart
+```
+
+测试必须覆盖 path、body、headers、UUID canonicalization、非法输入的 no-token/no-request short-circuit、deferred no-network、identity failure、一次 `401` 刷新与相同 retry body、strict receipt／error parser、全部 stable mapping、脱敏、内存结果和可重复 `close()`。
+
+本节是 spec-only。文档、Markdown link、no-slop 和 Dart analyzer 检查只证明文字或静态语法一致，不证明 Dart gateway、HTTP adapter、Backend、PostgreSQL、production identity、部署端点、真实组织、Drift、UI、删除恢复、Apple 或其他真人平台行为。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
