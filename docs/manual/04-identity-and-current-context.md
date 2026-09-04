@@ -528,8 +528,8 @@ private 关系固定为 `app_private.organization_directed_account_invitation_re
 claim 只保存以下字段：invitation UUID、workspace UUID、可去关联的 inviter／target internal user UUID、`issued_at_utc`、`expires_at_utc`、可空的 `accepted_at_utc` 和 membership UUID。
 claim 不保存邮箱或外部身份。pending claim 只追加一次接受结果；账号终结删除可以按统一规则去关联内部账号引用，除此和一次 pending-to-accepted 更新外，其他字段不能改写。
 
-创建的精确重放必须由同一 active inviter identity 发起，并返回原 invitation receipt，不重复 claim 或审计。相同 inviter、workspace 和 target 才是精确重放；它不重新检查 inviter 的 owner／membership 或 target membership。identity 不再 active 时返回 forbidden，任何漂移、去关联 claim 或 invitation tombstone 都返回 conflict。
-接受的精确 target replay 必须仍由同一 active target identity 发起，并返回原 membership receipt，不重复建立 membership 或追加审计。它不重新检查 owner 或 target membership；identity 不再 active 时返回 forbidden，target 引用已经去关联时返回 conflict。只有尚未接受的 live claim 才重新检查 target、workspace、期限和当前成员关系。
+创建的精确重放必须由同一 active inviter identity 发起，并返回原 invitation receipt，不重复 claim 或审计。相同 inviter、workspace 和 target 才是精确重放；它不重新检查 inviter 的 owner／membership 或 target membership。identity 不再 active 或 claim 引用去关联时返回 forbidden；漂移或 invitation tombstone 返回 conflict。
+接受的精确 target replay 必须仍由同一 active target identity 发起，并返回原 membership receipt，不重复建立 membership 或追加审计。它不重新检查 owner 或 target membership；identity 不再 active 或 target 引用去关联时返回 forbidden。只有尚未接受的 live claim 才重新检查 target、workspace、期限和当前成员关系。
 
 创建 receipt 固定为 contract ID、invitation ID、workspace ID、issued time 和 expiry time。接受 receipt 固定为 contract ID、invitation ID、workspace ID、membership ID 和 accepted time。
 UUID 使用 canonical lowercase，时间使用 UTC 毫秒精度。receipt 不含目标资料、邮箱或 replay flag。
@@ -584,7 +584,9 @@ bridge 只调用对应 private writer。四个函数都是 `VOLATILE SECURITY DE
 邀请 audit 只能追加且不可变。allowlist 只有 event ID、contract ID、invitation ID、workspace ID、固定 event kind、接受后的 membership ID 和数据库时间。
 audit、响应、错误和结构化日志不得保存 inviter／target user ID、邮箱、名称、external issuer／subject、access／refresh token、Auth user object、provider metadata、请求原文、SQL、数据库 message、stack 或自由文本。
 
-组织进入删除恢复期后，冻结新邀请和首次接受。已经接受的邀请仍可由同一 active target identity 只读精确重放；target 引用已去关联时返回 conflict。最终清除先按 creation → directed invitation → owner transfer family、再按每个 family 内 UUID 排序取得 request locks，不能先拿 governance lock 再反向拿 request lock。随后才按既有顺序取得 app-user、governance 和 membership locks，并在治理锁后重读。
+组织进入删除恢复期后，冻结新邀请和首次接受。已经接受的邀请仍可由同一 active target identity 只读精确重放；target 引用去关联后统一 forbidden。账号终结删除也先收集并排序取得受影响 invitation request locks，再取得 app-user、governance 和 membership locks。治理锁后重读 claim 集合；若出现未锁定的新 invitation，则回滚并用完整集合重试。
+
+最终清除先按 creation → directed invitation → owner transfer family、再按每个 family 内 UUID 排序取得 request locks，不能先拿 governance lock 再反向拿 request lock。随后才按既有顺序取得 app-user、governance 和 membership locks，并在治理锁后重读。
 清除先保留只含 `claim_family` 和 invitation UUID 的 tombstone，再删除 claim、audit 和组织业务记录。删除、恢复和 purge writer 本身由后续工作单元实现。
 
 本票不实现邮箱或未注册账号邀请、邮件投递、邀请 revoke、可分享链接、加入申请、审批或成员目录。

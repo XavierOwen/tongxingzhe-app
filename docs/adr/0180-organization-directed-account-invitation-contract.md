@@ -54,16 +54,16 @@ pending 状态由 `accepted_at_utc IS NULL` 且数据库当前时间早于 `expi
 
 创建首次成功时只写一条 pending claim 和一条创建成功 audit。request lock 下，writer 先检查已有 claim 和本 family tombstone。
 
-相同 `invitation_id`、active inviter identity、workspace 和 target 的精确重放返回原 receipt。它不重复写 claim 或 audit，也不重新检查 inviter 的 owner／membership 或 target membership。inviter identity 不再映射 active 账号时返回 forbidden。inviter、workspace 或 target 漂移、claim 去关联，或本 family tombstone 都返回 idempotency conflict。
+相同 `invitation_id`、active inviter identity、workspace 和 target 的精确重放返回原 receipt。它不重复写 claim 或 audit，也不重新检查 inviter 的 owner／membership 或 target membership。inviter identity 不再映射 active 账号或 claim 引用去关联时返回 forbidden。inviter、workspace 或 target 漂移，或本 family tombstone 返回 idempotency conflict。
 
 接受首先判断 claim 是否已经 accepted。已接受 claim 只有仍映射同一 active target 的 exact identity 可以直接返回原 membership receipt。
 
 replay 不重新检查 owner 或 target membership，也不重复写入。target identity 不再映射 active 账号时返回 forbidden。
-target 引用已经去关联时返回 idempotency conflict。未接受 claim 必须匹配 target。
+target 引用已经去关联时返回 forbidden。未接受 claim 必须匹配 target。
 锁后再检查 claim、workspace recovery、expiry、target account status 和 current membership。
 任一检查失败都不消费 invitation。target 已通过其他路径入组时返回 forbidden，不改变已有 membership。
 
-接受成功只把 `accepted_at_utc` 与新建的 `accepted_organization_membership_id` 从 NULL 写成一次性值，并在同一 transaction 中追加一条接受成功 audit。相同 target 对同一已接受 invitation 的精确重放返回原 membership receipt，不重复建立 membership 或 audit。其他 actor 不能得到该 receipt，统一返回 forbidden。claim drift、已去关联 claim 或 tombstone 使用 idempotency conflict，不泄露 invitation 状态。
+接受成功只把 `accepted_at_utc` 与新建的 `accepted_organization_membership_id` 从 NULL 写成一次性值，并在同一 transaction 中追加一条接受成功 audit。相同 target 对同一已接受 invitation 的精确重放返回原 membership receipt，不重复建立 membership 或 audit。其他 actor 和已去关联 claim 统一返回 forbidden。claim drift 或 tombstone 使用 idempotency conflict，不泄露 invitation 状态。
 
 ### Membership 与原子性
 
@@ -92,7 +92,7 @@ family 顺序是 creation、directed invitation、owner transfer。随后按 UUI
 
 清除不得因 claim 的历史内部引用而阻断，也不得把 invitation UUID 跨 family 视为冲突。
 
-账号终结删除沿现有 governance 规则去关联 claim 中的 inviter/target 内部引用。去关联后的 invitation 不能被重新绑定或接受；它的存在、过期和原始 target 不得通过错误响应、日志或 audit 暴露。具体 deletion、recovery 和 purge writer 不属于本票。
+账号终结删除先收集并排序取得所有受影响 invitation request locks，再取得 app-user、governance 和 membership locks。治理锁后必须重读 claim 集合；如果出现未锁定的新 invitation，则回滚并按完整集合重试。随后才可按现有 governance 规则去关联 claim 中的 inviter/target 内部引用。去关联后的 invitation 不能被重新绑定或接受，公开路径统一 forbidden。它的存在、过期和原始 target 不得通过错误、日志或 audit 暴露。具体 deletion、recovery 和 purge writer 不属于本票。
 
 ### Receipt、错误与审计
 
@@ -135,7 +135,7 @@ family 顺序是 creation、directed invitation、owner transfer。随后按 UUI
 
 unknown SQLSTATE、message、constraint、parser 或内部异常统一映射为 `organization_invitation_unavailable`。invalid request 只表示请求字段或 UUID shape 不符合合同。
 
-未知 invitation／target selector、未知或非 organization workspace、inactive、deleted、deletion_pending、expired、已接受但非 exact target、已有 current membership 或 recovery 状态统一使用 forbidden。已识别的 claim actor/workspace/target drift、deassociated claim 和 tombstone 使用 idempotency conflict。
+未知 invitation／target selector、未知或非 organization workspace、inactive、deleted、deletion_pending、expired、已接受但非 exact target、已有 current membership、deassociated claim 或 recovery 状态统一使用 forbidden。已识别且引用仍在的 claim actor/workspace/target drift 和 tombstone 使用 idempotency conflict。
 
 错误不得返回数据库原文或用不同错误区分 invitation 是否存在。未来 HTTP route、认证状态、body parser、status、envelope 和 refresh 由后续 slice 固定，不改变本数据库错误 taxonomy。
 

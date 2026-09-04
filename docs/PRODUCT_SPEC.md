@@ -283,7 +283,7 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `ORG-012` | transfer 的数据库 result row、SQLSTATE／message、Backend code、value-free audit allowlist 和 deletion boundary 必须固定。未知 SQLSTATE、constraint、parser 或 adapter 错误统一 unavailable。`deletion_pending`／`deleted` actor 或 target 不能开始新 transfer；组织删除恢复期冻结新 claim，live exact replay 只读。 |
 | `ORG-013` | 定向账号邀请只允许组织当前 active owner 发起，并且只面向已有 active 账号。target 是不可信的 opaque internal `app_user_id` selector；锁后必须确认 target 不是 inviter、不是该组织当前成员且账号仍 active。首版不新增或猜测成员管理 capability，不实现 revoke；接受者只能是绑定 target 账号。 |
 | `ORG-014` | 邀请创建和接受分别通过 exact `(issuer, subject)` identity bridge 解析当前 actor，不 trim、normalize、bootstrap 或复用 Slice 7A 创建资格。`invitation_id` 是 invitation selector、创建幂等键和 request-lock key；claim、advisory lock 与 tombstone 使用独立的 `organization-directed-account-invitation:v1` family。 |
-| `ORG-015` | claim 只保存 invitation、workspace、可去关联的 inviter／target internal user、issued／expiry 和可空 acceptance／membership 字段；expiry 固定为 issued 后连续 168 小时。exact identity 仍须解析 active actor；随后创建与接受 replay 先于 owner、membership、expiry 或 recovery 状态检查。漂移、去关联或 tombstone 返回 conflict；接受成功只原子建立一条 organization membership，不建立 project membership、capability 或 owner assignment。 |
+| `ORG-015` | claim 只保存 invitation、workspace、可去关联的 inviter／target internal user、issued／expiry 和可空 acceptance／membership 字段；expiry 固定为 issued 后连续 168 小时。exact identity 仍须解析 active actor；随后创建与接受 replay 先于 owner、membership、expiry 或 recovery 状态检查。漂移或 tombstone 返回 conflict，账号引用去关联后统一 forbidden；接受成功只原子建立一条 organization membership，不建立 project membership、capability 或 owner assignment。 |
 | `ORG-016` | 首次创建／接受使用 request lock、按 UUID 排序的受影响 app-user row locks、organization governance lock、按 UUID 排序的 membership locks，并在锁后重读 claim、tombstone、账号、workspace 和 membership。四个 operation-specific bridge／writer 使用 `VOLATILE SECURITY DEFINER`、`pg_catalog` search path、受控 owner 和最小 ACL；固定 result、SQLSTATE／message、Backend code 与 JSON／`no-store` 传输合同。 |
 | `ORG-017` | invitation audit 追加且不可变，只保存固定 event、contract、invitation、workspace、接受后的 membership 与数据库时间；响应、失败审计和结构化日志不得保存身份、邮箱、名称、token、请求原文或数据库原文。组织恢复期冻结新 claim，终结清除按 creation → directed invitation → owner transfer family 取锁，先留 family／UUID tombstone；本票不实现 purge writer。 |
 
@@ -748,7 +748,7 @@ target 在锁后仍须 active、不是 inviter 且没有 current membership。
 
 首次创建在一个 transaction 中写入 claim。它用一次数据库时间生成 issued time 和 expiry，再追加 invitation-issued audit。
 相同 `invitation_id`、inviter、workspace 和 target 的请求返回原始 receipt，不追加第二条 audit。
-inviter、workspace、target 漂移、user 引用去关联或本 family tombstone 都返回固定 conflict。
+inviter、workspace、target 漂移或本 family tombstone 都返回固定 conflict。user 引用去关联后统一返回 forbidden。
 exact replay 仍须由同一 active inviter identity 进入 bridge。解析后先于新的 owner、inviter membership 或 target membership 状态检查。
 
 接受首次路径也先取得 invitation request lock。
@@ -759,7 +759,7 @@ target 已有 current membership、账号不 active、workspace 处于 recovery�
 
 claim 已接受时，只有仍映射同一 active target 的 exact identity 才返回原 membership receipt。
 replay 不重新要求当前 owner 或 target current membership，也不重复建立 membership、更新 claim 或追加 audit。
-target 不再 active 时由 bridge 返回 forbidden。target 引用在终结删除时去关联后，任何请求返回固定 conflict。
+target 不再 active 时由 bridge 返回 forbidden。target 引用在终结删除时去关联后也返回 forbidden。
 未接受 claim 的 exact target replay 不能绕过 active-account、expiry 或 current-membership 检查。
 
 接受 transaction 使用一个 `transaction_timestamp()`，原子完成 organization membership 插入、claim acceptance 写入和一条 invitation-accepted audit。membership 必须属于 claim 的 organization workspace，target 是 membership 的 internal user，且 `inactive_from_utc` 为 null。任何校验、约束、授权或并发失败都不得留下 membership、claim acceptance 或 audit 的部分写入。
@@ -811,12 +811,12 @@ receipt 不含 target profile、name、email、external identity、owner、proje
 | exact identity 输入为 null、空白或超出既有边界 | `22023 invalid organization invitation identity` | `organization_invitation_unavailable` |
 | invitation、workspace 或 target 输入为空或格式非法 | `22023 invalid organization invitation request` | `invalid_organization_invitation_request` |
 | actor、target、workspace、expiry、current membership 或 recovery 状态不允许 | `42501 organization invitation forbidden` | `organization_invitation_forbidden` |
-| 已识别 claim 的 inviter／workspace／target drift、账号去关联或本 family tombstone | `22023 organization invitation idempotency conflict` | `organization_invitation_conflict` |
+| 已识别 claim 的 inviter／workspace／target drift 或本 family tombstone | `22023 organization invitation idempotency conflict` | `organization_invitation_conflict` |
 
 未知 invitation／target UUID、未知或非 organization workspace、inactive／`deletion_pending`／`deleted` account、已过期或已接受但由错误账号调用，都统一返回 forbidden。
 已有 current membership 和组织 recovery 状态也返回 forbidden。
 这些结果不区分对象不存在、错误 target、过期或已使用。
-只有已经识别的 claim drift、去关联或本 family tombstone 返回 conflict。
+只有已经识别且引用仍在的 claim drift，或本 family tombstone 返回 conflict。账号引用去关联统一返回 forbidden。
 未知 SQLSTATE、constraint、parser、result shape、数据库错误或 adapter 错误统一返回 `organization_invitation_unavailable`，不返回数据库原文。
 `401 unauthenticated`、`invalid_json`、`payload_too_large` 和未匹配 route 的通用 `404` 由后续 HTTP contract 固定，不由 invitation database writer 生成。
 
@@ -827,7 +827,9 @@ audit、失败响应、失败审计和结构化日志都不得保存 inviter／t
 它们也不得保存 external issuer／subject、access／refresh／invite token、Auth user object、provider metadata、请求 body／URL 原文、SQL、数据库 message、stack 或自由文本。
 失败与 replay 不追加成功 audit。
 
-组织进入删除恢复期后冻结新 invitation claim 和首次接受；已经接受的 claim 只允许 exact target replay。账号终结删除可以按统一 lifecycle contract 把 claim 中 inviter／target internal user ID 去关联，但不保留邮箱或 external identity；去关联 claim 不再开始新操作，并按已识别 claim 的 conflict 规则关闭。组织恢复、账号恢复、membership lifecycle、invitation revoke 和 owner recovery 不由本票新增。
+组织进入删除恢复期后冻结新 invitation claim 和首次接受；已经接受的 claim 只允许 exact target replay。账号终结删除可以按统一 lifecycle contract 把 claim 中 inviter／target internal user ID 去关联，但不保留邮箱或 external identity；去关联 claim 不再开始新操作，公开路径统一 forbidden。
+
+账号终结删除必须先收集并按 `(claim_family, invitation_id)` 排序取得受影响 invitation request locks，再取得 app-user、governance 和 membership locks。取得治理锁后必须重读 claim 集合；若集合新增了未锁定的 invitation，则回滚并按完整集合重试。组织恢复、账号恢复、membership lifecycle、invitation revoke 和 owner recovery 不由本票新增。
 
 组织终结清除必须先按 `(claim_family, invitation_id)` 排序取得 request locks。
 family 顺序固定为 organization creation、directed account invitation、owner transfer。
