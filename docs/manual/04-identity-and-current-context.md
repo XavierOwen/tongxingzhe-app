@@ -491,6 +491,115 @@ dart run tool/check_markdown_links.dart
 
 这些 fake identity、fake gateway 和 widget tests 只证明本地 composition、deferred fallback 和资源生命周期，不证明 production identity、部署端点、真实 owner transfer、Backend、PostgreSQL、Drift、UI、Apple 或其他真人平台运行时。
 
+### 3.9 组织定向账号邀请与接受（Issue #320，MANUAL-057，spec-only）
+
+Issue #320 只固定已有内部账号的定向邀请合同。它落实 `ORG-001` 和 `ORG-002` 的私有组织边界，但不实现邀请功能。
+用户看到的结果是：当前 active owner 可以邀请一个已有的 active 账号；只有这个指定账号可以在连续 168 小时内接受。
+接受成功后只建立 organization membership，不自动成为 owner，不建立 project membership，也不授予任何 capability。
+这不是邮箱邀请、可分享链接或公开加入入口。可分享链接只能创建待审批申请，另有独立合同。
+
+#### 先确定谁可以做什么
+
+首版只允许当前 active owner 创建邀请。实现不得猜测或新增成员管理 capability。目标是一个不可信的 opaque internal `app_user_id` selector。
+数据库必须在锁后确认目标账号为 active、不是发起人，且尚未是该组织的 current member。目标组织由不可信的 workspace selector 指定，目标账号不需要预先属于该组织。
+客户端不能提交 actor、email、external identity、Auth user object 或 raw invite token 作为业务事实，也不能通过目标 selector 枚举组织成员。
+未注册账号和邮箱绑定邀请不在本节内。
+
+创建和接受都先用 generic identity verifier 验证精确 `(issuer, subject)`，再由 identity bridge 解析当前 actor。
+bridge 不 trim、normalize、bootstrap 或修复身份，也不复用 Slice 7A 的组织创建资格。只有解析出的 active internal account 是可信 actor。
+
+#### 创建、接受和 168 小时期限
+
+`invitation_id` 是单列 UUID，同时是邀请选择器、创建幂等键和 request-lock key。claim family 固定为
+`organization-directed-account-invitation:v1`，request advisory-lock 前缀固定为
+`organization-directed-account-invitation-request:`。
+
+可以把一次邀请理解为以下步骤：
+
+1. 当前 owner 提交新的 `invitation_id`、organization workspace selector 和目标账号 selector。数据库锁后重读 owner、目标账号、组织恢复状态和成员关系。
+2. 首次创建把 claim、创建审计和邀请 receipt 放进同一个 transaction。`issued_at_utc` 使用一次数据库时间，`expires_at_utc` 恰好晚 168 小时，不受数据库 session time zone 或 DST 影响。
+3. 目标账号用自己的精确 identity 接受。数据库锁后再次检查 claim、期限、目标账号和成员关系，然后在同一 transaction 中建立 organization membership、消费 claim 并追加接受审计。
+
+pending 不是另存的状态。claim 尚未 accepted 且数据库当前时间早于 `expires_at_utc` 时，它就是 pending。系统不增加后台 sweeper 或 status history。
+接受只建立 organization membership，不复活或改写已经结束的 membership，也不创建 project membership 或 capability。
+目标账号若已通过其他路径入组，接受失败且不消费 invitation。
+
+private 关系固定为 `app_private.organization_directed_account_invitation_request_claims`、`app_private.organization_directed_account_invitation_request_tombstones` 和 `app_private.organization_directed_account_invitation_audit_events`。
+claim 只保存以下字段：invitation UUID、workspace UUID、可去关联的 inviter／target internal user UUID、`issued_at_utc`、`expires_at_utc`、可空的 `accepted_at_utc` 和 membership UUID。
+claim 不保存邮箱或外部身份。pending claim 只追加一次接受结果；账号终结删除可以按统一规则去关联内部账号引用，除此和一次 pending-to-accepted 更新外，其他字段不能改写。
+
+创建的精确重放必须由同一 active inviter identity 发起，并返回原 invitation receipt，不重复 claim 或审计。相同 inviter、workspace 和 target 才是精确重放；它不重新检查 inviter 的 owner／membership 或 target membership。identity 不再 active 时返回 forbidden，任何漂移、去关联 claim 或 invitation tombstone 都返回 conflict。
+接受的精确 target replay 必须仍由同一 active target identity 发起，并返回原 membership receipt，不重复建立 membership 或追加审计。它不重新检查 owner 或 target membership；identity 不再 active 时返回 forbidden，target 引用已经去关联时返回 conflict。只有尚未接受的 live claim 才重新检查 target、workspace、期限和当前成员关系。
+
+创建 receipt 固定为 contract ID、invitation ID、workspace ID、issued time 和 expiry time。接受 receipt 固定为 contract ID、invitation ID、workspace ID、membership ID 和 accepted time。
+UUID 使用 canonical lowercase，时间使用 UTC 毫秒精度。receipt 不含目标资料、邮箱或 replay flag。
+
+#### 信任边界、锁和原子性
+
+四个函数的名称、参数顺序和类型固定为：
+
+- `app_data.create_organization_directed_account_invitation_for_identity_v1(text, text, uuid, uuid, uuid)`：issuer、subject、invitation、organization workspace、target app user；
+- `app_private.create_organization_directed_account_invitation_v1(uuid, uuid, uuid, uuid)`：trusted actor、invitation、organization workspace、target app user；
+- `app_data.accept_organization_directed_account_invitation_for_identity_v1(text, text, uuid)`：issuer、subject、invitation；
+- `app_private.accept_organization_directed_account_invitation_v1(uuid, uuid)`：trusted actor、invitation。
+
+返回类型固定为：
+
+```text
+create: text, uuid, uuid, timestamptz, timestamptz
+accept: text, uuid, uuid, uuid, timestamptz
+```
+
+create row 依次是 contract ID、invitation ID、workspace ID、issued time、expiry time。
+accept row 依次是 contract ID、invitation ID、workspace ID、membership ID、accepted time。
+bridge 只调用对应 private writer。四个函数都是 `VOLATILE SECURITY DEFINER`，并固定 `search_path = pg_catalog`。
+函数 owner 与现有 membership validator 相同，且不是 runtime。`PUBLIC` 不得执行这些函数；runtime 只能执行两个 bridge，不能直接写 claim、audit 或 membership。
+
+锁序固定为：invitation request lock → 按 UUID 排序的受影响 app-user row locks → organization governance lock → organization membership lock。
+锁后必须重读 claim、tombstone、账号状态、workspace recovery 状态和 membership，不能用锁前的检查结果写入。
+同一 invitation request 由 request lock 串行化，同一组织的不同 request 由 governance lock 串行化。
+
+接受 transaction 使用同一 `transaction_timestamp()` 原子完成 membership、claim acceptance 和 audit。创建也必须让 claim 与成功审计一起提交。
+任何错误都必须回滚，不得留下半个 membership、半个 claim、半条 audit 或其他部分事实。
+
+#### 稳定错误和不枚举对象
+
+数据库与 Backend 只使用以下稳定分类：
+
+| 条件 | SQLSTATE 与固定 message | Backend code |
+| --- | --- | --- |
+| trusted identity 输入非法 | `22023 invalid organization invitation identity` | `organization_invitation_unavailable` |
+| invitation 或 selector 输入非法 | `22023 invalid organization invitation request` | `invalid_organization_invitation_request` |
+| 当前 actor、目标、组织状态或邀请状态不允许 | `42501 organization invitation forbidden` | `organization_invitation_forbidden` |
+| request、actor、workspace 或 target 漂移，或 tombstone 已存在 | `22023 organization invitation idempotency conflict` | `organization_invitation_conflict` |
+| 未知数据库、parser 或 adapter 错误 | 不返回原始错误 | `organization_invitation_unavailable` |
+
+未知 invitation／target selector、未知或非 organization workspace、inactive／deleted 账号、已过期 invitation、已通过其他路径入组，及恢复期组织中的新操作都统一返回 forbidden。
+已接受 invitation 只允许原 target 做 exact replay；其他调用不能借此枚举邀请状态。
+系统不区分 `not_found`、`expired`、`wrong_target` 或 `already_member`，以免暴露对象是否存在。首版没有 revoke 操作，也不增加 `revoked` 状态。
+未来 HTTP 的成功和失败响应必须使用精确 `Content-Type: application/json; charset=utf-8` 与 `Cache-Control: no-store`；错误 root 只能是 `{ "error": { "code": "<stable-code>" } }`。后续 transport slice 再固定 raw route、method、认证顺序、body byte limit 和既有 `401`、`400`、`413`、`404` 结果。
+
+#### 审计、恢复和清除
+
+邀请 audit 只能追加且不可变。allowlist 只有 event ID、contract ID、invitation ID、workspace ID、固定 event kind、接受后的 membership ID 和数据库时间。
+audit、响应、错误和结构化日志不得保存 inviter／target user ID、邮箱、名称、external issuer／subject、access／refresh token、Auth user object、provider metadata、请求原文、SQL、数据库 message、stack 或自由文本。
+
+组织进入删除恢复期后，冻结新邀请和首次接受。已经接受的邀请仍可由同一 active target identity 只读精确重放；target 引用已去关联时返回 conflict。最终清除先按 creation → directed invitation → owner transfer family、再按每个 family 内 UUID 排序取得 request locks，不能先拿 governance lock 再反向拿 request lock。随后才按既有顺序取得 app-user、governance 和 membership locks，并在治理锁后重读。
+清除先保留只含 `claim_family` 和 invitation UUID 的 tombstone，再删除 claim、audit 和组织业务记录。删除、恢复和 purge writer 本身由后续工作单元实现。
+
+本票不实现邮箱或未注册账号邀请、邮件投递、邀请 revoke、可分享链接、加入申请、审批或成员目录。
+它也不实现 migration、SQL、Backend route／store、Flutter gateway、controller、UI、通知、project membership／capability、co-owner grant、owner transfer、组织上下文切换、Drift、缓存、离线、同步、账号／组织 deletion、recovery 或 purge writer。
+
+验证只运行文档检查：
+
+```bash
+node /Users/xavieredith/.codex/skills/no-slop/slop-lint.mjs docs/manual/04-identity-and-current-context.md
+dart run tool/check_markdown_links.dart
+git diff --check
+```
+
+这些检查只证明文字、链接和补丁格式。Issue #320 不证明数据库 schema、事务原子性、并发锁、真实 identity、HTTP、邮件投递、UI、生产部署、Apple 或真人平台行为。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
