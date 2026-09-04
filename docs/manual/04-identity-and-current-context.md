@@ -181,9 +181,14 @@ audit、失败响应和结构化日志都不保存 actor 或 target 的直接身
 
 取得 governance lock 后，它重读 recovery 状态和 claim 集合；集合不一致时回滚重试。清除先写只含 `claim_family = 'organization-owner-transfer:v1'` 与 request UUID 的 transfer tombstone，再按 FK 依赖删除 claim、audit 和组织业务记录。
 
-transfer writer 只检查自己的 family，所以同一个 UUID 用于 creation 不会与 transfer 冲突。删除、恢复与 purge writer 本身仍由后续工作单元实现。
+transfer writer 只检查自己的 family，所以同一个 UUID 用于 creation 不会与 transfer 冲突。
+删除、恢复与 purge writer 本身仍由后续工作单元实现。
 
-本小节只固定未来的 spec，不实现 transfer migration、table、trigger、function、ACL、Backend store、HTTP route、Flutter、Drift 或 Apple 行为。账号或组织删除、purge、恢复失主、邀请、加入申请、membership 管理、capability 管理和 co-owner grant 另行定义。Markdown 和文档检查只能证明文字一致，不能证明 transfer writer、并发、runtime ACL、生产身份、真实删除或真人平台。
+Issue #304 仍记录 spec 合同。Issue #310 已交付 0086 DB-only 实现。
+实现包括 transfer migration、表、trigger、函数、ACL、结构检查、回滚 fixture 和并发测试。
+这些 synthetic PostgreSQL 证据不证明 Backend store、HTTP route、Flutter、Drift、生产 identity、真实删除或 Apple 行为。
+账号或组织删除、purge、恢复失主、邀请、加入申请、membership 管理、capability 管理和 co-owner grant 另行定义。
+Markdown 和文档检查只证明文字一致。
 
 ### 3.4 组织创建 HTTP route（Issue #298／#300）
 
@@ -266,6 +271,127 @@ dart run tool/check_markdown_links.dart
 ```
 
 这些 fake identity 与 mock HTTP 测试只证明客户端 transport、strict parser 和资源生命周期，不证明 production Supabase、部署端点、真实组织创建或真人平台。
+
+### 3.6 组织 owner transfer HTTP route（Issue #309，spec-only）
+
+3.3 固定数据库 handoff 合同。本节固定未来 Backend 的 HTTP transport，不实现 route。
+客户端只选择目标 membership 和 request UUID。当前 owner 身份来自 Bearer token，不能由 body 提供。
+
+公开入口只有：
+
+```text
+POST /v1/organizations/:organizationWorkspaceId/owner-transfer
+```
+
+router 先从 request target 取 `?` 前的 raw pathname，再匹配这一条含一个动态 segment 的 path。
+它不能先使用 WHATWG URL 的 dot-segment normalization。错误 method、trailing slash、repeated slash、literal 或 percent-encoded dot segment、任何 percent-encoded path segment 或其他未匹配 path 都返回：
+
+```json
+{"error":{"code":"not_found"}}
+```
+
+这类 `404` 不解析 Bearer，不读取 body，也不调用 store。带 query 的合法 path 仍先命中 route，随后按固定顺序拒绝 query。
+
+命中 route 后，handler 必须按以下顺序处理：
+
+1. 严格解析 Bearer credential。
+2. 调用现有 generic `IdentityVerifier`，只取得 verified exact `issuer` 和 `subject`。
+3. 拒绝 query。
+4. 验证 path 中的 `organizationWorkspaceId`，然后转为 canonical lowercase UUID。
+5. 检查 dedicated transfer store 是否存在。
+6. 用既有 reader 按实际 body bytes 读取 JSON。
+7. 解析请求并调用一次 store。
+8. 等待 Promise settled 后写 HTTP 响应。
+
+缺少或无效 token、JWT claim 或 signature 失败返回 `401 unauthenticated`。
+缺少 verifier、provider、配置或未知 verifier 异常返回 `503 organization_owner_transfer_unavailable`。
+`IdentityVerificationError.category === "unauthenticated"` 映射 `401`；`category === "unavailable"` 或非 `IdentityVerificationError` 异常映射 `503`。
+前两步完成前，handler 不读取 body、不检查 path UUID、不拒绝 query，也不调用 store。
+缺少 store 在读取 body 前返回同一个 `503`。
+route 已命中但动态 segment 不是合法 UUID 的请求，在认证后返回 `400 invalid_organization_owner_transfer_request`。
+
+`IdentityVerifier` 只提供 exact external identity。owner transfer 不使用 7A 的 `OrganizationCreationIdentityVerifier`、Auth user lookup、邮箱资格或 `SessionContext`。
+未来 composition 只注入 generic verifier 和 dedicated Postgres transfer store，不增加环境变量或组织创建资格。
+
+body reader 按收到的实际 bytes 计数，不信任 `Content-Length`，也必须覆盖 chunked body。
+最多 `1,048,576` bytes 可以继续解析。收到第 `1,048,577` byte 时返回 `413 payload_too_large`。
+空 body 或非法 JSON 返回 `400 invalid_json`。本合同不增加 request `Content-Type` gate。
+
+JSON root 必须严格只含以下两个字段：
+
+```json
+{
+  "request_id": "uuid",
+  "target_organization_membership_id": "uuid"
+}
+```
+
+两个值都必须是 UUID 字符串。接受大小写 RFC 形式，验证后统一为 lowercase。
+缺失字段、额外字段、错误类型、null 或无效 UUID 返回 `400 invalid_organization_owner_transfer_request`。
+客户端不能提交 actor、workspace、owner assignment、email、name、时间或 capability。
+request UUID 仍在 body 中，不使用 `Idempotency-Key` header。
+
+请求校验通过后，dedicated store 只执行一次参数化调用：
+
+```sql
+app_data.transfer_organization_owner_for_identity_v1(
+  trusted_issuer,
+  trusted_subject,
+  requested_request_id,
+  requested_organization_workspace_id,
+  requested_target_organization_membership_id
+)
+```
+
+store 传入 verifier 返回的 exact identity、canonical request UUID、canonical path workspace UUID 和 canonical target membership UUID。
+它不能访问 `app_private`、creation store 或客户端 actor。handler 必须等数据库 Promise 完成后才写响应。
+
+首次成功和 exact replay 都返回 `200`。成功 JSON root 只能含以下五个字段：
+
+```json
+{
+  "owner_transfer_contract_id": "organization-owner-transfer:v1",
+  "organization_workspace_id": "uuid",
+  "previous_owner_assignment_id": "uuid",
+  "organization_owner_assignment_id": "uuid",
+  "effective_at_utc": "2030-01-01T00:00:00.000Z"
+}
+```
+
+contract ID 必须精确匹配。三个 UUID 必须是 canonical lowercase，响应 workspace 必须等于 canonical path UUID。
+`effective_at_utc` 必须是有效 RFC 3339 instant。store 可以返回数据库 `Date` 或带 offset、fraction 的文本，parser 统一输出毫秒精度的 `YYYY-MM-DDTHH:mm:ss.SSSZ`。
+响应不能增加 replay flag、target 资料、成员资料、身份或 capability 字段。
+
+错误 root 严格为 `{ "error": { "code": "stable_code" } }`，不得返回数据库原文：
+
+| 条件 | HTTP 结果 |
+| --- | --- |
+| body 是空或非法 JSON | `400 invalid_json` |
+| query、path 或 body 请求不合法 | `400 invalid_organization_owner_transfer_request` |
+| body 超过 1 MiB | `413 payload_too_large` |
+| generic verifier 缺失或异常、store 缺失、非法 trusted identity、未知错误 | `503 organization_owner_transfer_unavailable` |
+| DB actor、target、workspace、恢复状态或 owner 授权不允许 | `403 organization_owner_transfer_forbidden` |
+| request、actor、workspace 或 target drift，tombstone，或 actor 已去关联 | `409 organization_owner_transfer_conflict` |
+| target 已经是 owner，包括 actor 与 target 相同 | `409 organization_owner_transfer_target_already_owner` |
+
+未知、跨组织、非 organization、恢复期 workspace，或 inactive／deleted actor、target，都由 DB 映射为 `403`。
+transport 不能提前查询这些对象，也不能把它们改写成 `404`，否则会暴露成员或组织是否存在。
+未知 SQLSTATE、message、constraint、result shape、parser、provider 或 adapter 错误统一返回 `503`。
+
+所有响应，包括 `404` 和错误响应，都使用精确的：
+
+```text
+Content-Type: application/json; charset=utf-8
+Cache-Control: no-store
+```
+
+未来 Backend tests 必须覆盖 raw pathname、method 和 slash 边界。
+测试还要覆盖认证先于 query／path／body／store、generic verifier、缺少 store、实际 byte 上限和严格 request parser。
+测试还要覆盖 canonical UUID／timestamp、单次 bridge 调用、Promise gate、首次／精确 replay、错误映射、enumeration 防护、headers、composition 和错误脱敏。
+
+Issue #309 只固定 transport spec，不修改已由 Issue #310 交付的 0086 DB-only migration、函数、ACL 和测试证据。
+它也不实现 handler、store、composition、Flutter、Drift、controller、UI、部署端点、生产 identity 或 Apple 行为。
+Markdown、no-slop 和链接检查只证明文档一致，不能证明 HTTP route、PostgreSQL 调用、生产身份或真人平台运行时。
 
 ## 4. PostgreSQL transaction 建立哪些事实
 
