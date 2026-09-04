@@ -134,6 +134,11 @@ import {
   handleOrganizationCreation,
   type OrganizationCreationStore,
 } from "./organization-creation.js";
+import {
+  handleOrganizationOwnerTransfer,
+  matchOrganizationOwnerTransferRequestTarget,
+  type OrganizationOwnerTransferStore,
+} from "./organization-owner-transfer.js";
 import type {
   OrganizationCreationIdentityVerifier,
 } from "./organization-creation-identity.js";
@@ -186,6 +191,7 @@ export interface BackendServerDependencies
   readonly organizationCreationIdentityVerifier?:
     OrganizationCreationIdentityVerifier;
   readonly organizationCreationStore?: OrganizationCreationStore;
+  readonly organizationOwnerTransferStore?: OrganizationOwnerTransferStore;
 }
 
 export function createBackendServer(
@@ -194,6 +200,32 @@ export function createBackendServer(
   return createServer(async (request, response) => {
     response.setHeader("content-type", "application/json; charset=utf-8");
     response.setHeader("cache-control", "no-store");
+
+    const ownerTransferMatch = matchOrganizationOwnerTransferRequestTarget(
+      request.url,
+    );
+    if (request.method === "POST" && ownerTransferMatch !== null) {
+      try {
+        const result = await handleOrganizationOwnerTransfer(
+          {
+            authorization: request.headers.authorization,
+            workspaceId: ownerTransferMatch.workspaceId,
+            hasQuery: ownerTransferMatch.hasQuery,
+            readBody: async () => readJsonBody(request),
+          },
+          {
+            identityVerifier: dependencies.identityVerifier,
+            transferStore: dependencies.organizationOwnerTransferStore,
+          },
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
+      }
+      return;
+    }
+
     const requestUrl = new URL(request.url ?? "/", "http://localhost");
 
     if (request.method === "GET" && request.url === "/healthz") {
