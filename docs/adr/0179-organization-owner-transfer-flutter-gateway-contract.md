@@ -53,7 +53,7 @@ abstract interface class OrganizationOwnerTransferGateway {
 
 ### 输入、route、headers 与 body
 
-调用方提供 request、organization workspace 和 target membership UUID。gateway 接受 RFC UUID 的大小写形式，先校验并 canonicalize 为 lowercase；非法 UUID 在取得 token 或发送 HTTP 前返回 `OrganizationOwnerTransferRejected(invalidRequest)`。gateway 不生成 request UUID，也不做 workspace、actor、membership、owner 或权限预查。
+调用方提供 request、organization workspace 和 target membership UUID。输入必须是 `8-4-4-4-12` 十六进制 wire shape，字母可以大写或小写，不额外限制 version／variant nibble。gateway 先校验并 canonicalize 为 lowercase；非法 UUID 在取得 token 或发送 HTTP 前返回 `OrganizationOwnerTransferRejected(invalidRequest)`。gateway 不生成 request UUID，也不做 workspace、actor、membership、owner 或权限预查。
 
 请求只发送无 query、无 fragment 的：
 

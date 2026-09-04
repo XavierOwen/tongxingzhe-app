@@ -326,7 +326,7 @@ JSON root 必须严格只含以下两个字段：
 }
 ```
 
-两个值都必须是 UUID 字符串。接受大小写 RFC 形式，验证后统一为 lowercase。
+两个值都必须使用 `8-4-4-4-12` 十六进制 UUID wire shape。字母可以大写或小写，不额外限制 version／variant nibble；验证后统一为 lowercase。
 缺失字段、额外字段、错误类型、null 或无效 UUID 返回 `400 invalid_organization_owner_transfer_request`。
 客户端不能提交 actor、workspace、owner assignment、email、name、时间或 capability。
 request UUID 仍在 body 中，不使用 `Idempotency-Key` header。
@@ -413,7 +413,7 @@ abstract interface class OrganizationOwnerTransferGateway {
 公共类型名称固定为 `OrganizationOwnerTransferResult`、`OrganizationOwnerTransferReceipt`、`OrganizationOwnerTransferFailureCode`、`OrganizationOwnerTransferSuccess` 和 `OrganizationOwnerTransferRejected`。`HttpOrganizationOwnerTransferGateway` 是配置后的 HTTP 实现；`DeferredOrganizationOwnerTransferGateway` 是未配置时的不触网实现；生产工厂名称为 `productionOrganizationOwnerTransferGateway`。
 
 调用方必须提供三个 UUID：request、organization workspace 和 target organization membership。gateway 不生成 request UUID，不预查组织、owner 或 membership，也不接受 actor、email、external subject、owner assignment 或 capability。
-输入 UUID 可以使用 RFC 形式的大小写字母。adapter 在取得 token 或发 HTTP 前把三者统一为 lowercase canonical value；非法 UUID 直接返回 `OrganizationOwnerTransferRejected(OrganizationOwnerTransferFailureCode.invalidRequest)`。
+输入 UUID 必须使用 `8-4-4-4-12` 十六进制 wire shape。字母可以大写或小写，不额外限制 version／variant nibble。adapter 在取得 token 或发 HTTP 前把三者统一为 lowercase canonical value；非法 UUID 直接返回 `OrganizationOwnerTransferRejected(OrganizationOwnerTransferFailureCode.invalidRequest)`。
 
 成功结果和失败结果是两个固定分支：
 
