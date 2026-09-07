@@ -1195,6 +1195,13 @@ dart run tool/check_markdown_links.dart
 回归用可控的取消 Future 验证未完成清理不阻塞交付、清理错误不逸出，以及清理启动时换号或 close 后的最终检查。原有 token／HTTP／401、输入和 strict parser 测试继续执行。
 本票未修改 UI、Backend、SQL 或依赖，不重复本地数据库实验；synthetic stream／HTTP 和 CI 仍不证明生产身份、网络取消或真人平台行为。
 
+### 3.21 删除与恢复的接入准备（Issue #350）
+
+[组织生命周期接入清单](../research/organization-lifecycle-readiness.md)按现有 SQL 和领域合同列出后续实施边界，不代表删除／恢复已经实现。
+当前 `status`、`deleted_at`、治理锁与 owner invariant 不能组成完整的三十天恢复流程；恢复期应继续允许的报告读取，也不能因冻结写入而一起切断。
+清单区分已确认结果、现有入口和待确认授权，后续先补成对的申请／恢复合同，再实现数据库及适配层。本次只检查文档与源码依据，不运行新的数据库实验，也不接受新的产品规则。
+账号删除 ADR 中的历史 Firebase 名称已加上当前认证决策的修订指向；这不表示任何认证商的账号删除接口已经交付。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
