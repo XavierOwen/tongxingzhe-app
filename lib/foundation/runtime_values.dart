@@ -16,6 +16,18 @@ final class SystemClock implements AppClock {
   DateTime now() => DateTime.now();
 }
 
+String secureUuidV4() {
+  final random = Random.secure();
+  final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  final hex = bytes.map((value) => value.toRadixString(16).padLeft(2, '0'));
+  final text = hex.join();
+  return '${text.substring(0, 8)}-${text.substring(8, 12)}-'
+      '${text.substring(12, 16)}-${text.substring(16, 20)}-'
+      '${text.substring(20)}';
+}
+
 /// 生成不携带业务含义的稳定标识。
 ///
 /// 调用者只依赖“每次调用得到新的不透明字符串”，不依赖时间戳格式。

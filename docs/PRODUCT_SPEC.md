@@ -946,6 +946,45 @@ gateway 只由 composition root 持有，不传入 `_ReadyApp`、controller、UI
 7S 不修改 Backend、PostgreSQL、权限或邀请规则，不提供 UI、账号／成员／邀请目录、邮件、通知、分享链接、审批、revoke、owner／capability、上下文切换、UUID generator、离线、durable retry 或删除 API。
 fake identity、MockClient、analyzer 与 widget tests 只证明本地 Flutter 合同，不证明 production identity、部署服务、真实组织、邮件、Apple 或真人平台运行时。
 
+#### Slice 7T：当前项目菜单中的组织创建入口
+
+7T／Issue #330 把既有 `OrganizationCreationGateway` 接到 `project-context-menu`，提供一个局部 Material 3 创建对话框。
+所有 ready 登录账号都能看到入口，不按当前 workspace kind、owner 或 capability 隐藏，也不从客户端邮箱／身份快照判断 7A 创建资格。
+未登录界面没有该入口；Backend 继续决定实际资格。
+
+唯一可见输入是组织名称。界面只提示明显空值或去掉两端 U+0020 后 Unicode scalar 数超过 120 的输入，不截断或重写名称，不复制完整数据库 Unicode validator。
+提交给 gateway 的 display name 保持输入原文本；界面不接收 actor、owner、membership、project、capability 或业务时间。
+隐藏 request ID 使用既有 UUID-v4 算法提取出的 `secureUuidV4()`，不新增依赖，不改变 `SecureIdGenerator` 的非 UUID 输出格式。
+既有 consent opt-in generator 复用同一函数，保留原 API 与 UUID-v4 行为。
+
+同一个对话框中的提交意图由 request UUID 和原名称组成。首次有效提交才生成 ID，同原名称的重试复用它；busy 时禁止重复点击、Enter 提交和误关闭。
+`networkUnavailable`、`serviceUnavailable`、`invalidResponse` 和 `conflict` 按不确定结果处理，冻结原名称与 ID，重试只发送原参数。
+不确定性在该意图内保持，直到成功或明确放弃；后续重试的明确拒绝不能证明先前请求没有成功，不能据此解冻名称。
+未知异常归入 invalidResponse，不展示原文。只有从未出现不确定结果的明确拒绝后才允许编辑；原名称改变时，下一次提交建立新意图 ID。
+不自动重试，不以 timeout、网络恢复或关闭重开静默生成替代请求。
+
+不确定意图关闭前必须明确确认：请求可能已经成功；关闭后无法继续该次重试；再次创建可能产生另一个组织。
+该确认在当前对话框完成，不叠加多层对话框。保留操作返回原表单，放弃操作才关闭。
+创建意图仅在当前对话框内存保留，不写 Drift、偏好、缓存、日志、同步队列或 durable retry；页面提前说明关闭 App 后不恢复。
+取消、退出身份或关闭 App 都不能撤销已经发送的 Backend 请求。
+
+对话框记录开窗时的 trusted app user，并在每次提交前确认仍是同一 ready 账号。
+它观察 `AppSession.changes`；账号不再 ready 或 app user 改变时立即清除旧表单，不允许提交或展示迟到结果。
+它只清理自己持有的 controller／subscription，不关闭 gateway 或 AppSession。
+
+十种既有 typed failure 都有脱敏中英文提示。失败保留表单，明确拒绝可修正，不确定结果可同意图重试或确认放弃。
+成功关闭对话框并提示“组织已创建，当前项目未切换”，不显示内部 IDs 或原始 response。
+创建只产生 workspace、membership 和首位 owner，receipt 没有 project；当前上下文又必须含 project 与 questionnaire。
+因此本切片不刷新或伪造组织目录，不创建组织项目，不自动选择上下文，不把 owner 推导为项目 capability。
+
+同一个 startup gateway 经 `_ReadyApp` 传给 `ProductionHomeShell`，仍由 composition root 负责关闭。
+入口沿用项目菜单、既有主题与对话框；不新增主导航、route、视觉系统或第二套产品文档。
+键盘提交／Escape／焦点返回、状态 live region、48 dp 控件、小屏与大字号属于本切片验收，不以颜色或 spinner 单独表达状态。
+
+`TEST-070` 和 `MANUAL-060` 覆盖 UI 状态、请求意图、身份边界、既有 gateway／生命周期回归与证据范围。
+本切片不修改 Backend、数据库、权限、邀请 UI／目录／投递、组织项目／context discovery／selection、跨重启恢复、删除或生产配置。
+synthetic widget／视觉检查和六平台 build 不等于真实身份、部署服务、真实组织或真人平台操作已经验收。
+
 ### 5.8 分析、指标与报告
 
 #### 5.8.1 统计单位和核心口径
@@ -2450,6 +2489,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-057` | 学习文档必须用零基础步骤说明 7O 的现有账号定向邀请与接受：current owner、opaque target selector、exact identity bridge、连续 168 小时 expiry、claim 字段、invitation selector／幂等／request lock、exact replay 与 drift、只建立 organization membership、固定锁序、稳定 SQLSTATE／Backend code、五字段 create／accept receipt、JSON／`no-store`、value-free immutable audit、账号去关联、recovery 与 purge family。必须说明首版没有 revoke、邮箱／未注册／分享链接／申请／审批，也不证明数据库、Backend、HTTP、邮件、生产身份、部署、Apple 或真人平台。 |
 | `MANUAL-058` | 学习文档必须说明 7R 两个 raw POST route、create 两字段／accept 空 object、认证先于 query／path／store／body、generic verifier 与 7A 分离、actual-byte inclusive 1 MiB、UUID lowercase、两个 store method 与独立五字段 receipt、一次对应 0087 bridge、Promise gate、固定错误、non-enumeration 和 JSON／no-store。提供 unit／route／composition／runtime integration 命令，并区分本地 synthetic、数据库、production identity、部署、邮件、Flutter、UI 与真人平台证据。 |
 | `MANUAL-059` | 学习文档必须说明 7S 的两操作 typed gateway、两个 immutable receipt／result、共用 failure enum、输入在 token 前校验、固定 route／body／headers、一次严格 401 刷新、相同请求重试、strict parser、UTC 毫秒与 168 小时、deferred／非法配置、client ownership、内存结果、同一 IdentitySession 与三类启动／关闭路径。提供 focused／完整 Flutter tests、配置变体、analyzer、格式与链接命令，明确不提供 UI、目录、投递或生产／真人平台证据。 |
+| `MANUAL-060` | 学习文档必须说明 7T 的项目菜单创建入口、唯一原名称输入、Backend 资格边界、隐藏 UUID-v4、同意图重试、busy 防重、不确定结果冻结／放弃确认、明确拒绝后的编辑、仅对话框内存、身份失效后清理、十种错误与成功不切换上下文。提供 focused／完整 tests、analyzer、格式、生产边界与链接检查，说明 synthetic UI／视觉、六平台 build 与真实身份／运行时的区别。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -2697,6 +2737,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-067` | 7O 的文档验收必须核对 ORG-013–ORG-017 在 Product Spec、ADR-0180 和学习文档中的一致性：current-owner-only、existing active account、exact identity、target selector、连续 168 小时 expiry、claim 字段与独立 family、同 invitation replay／drift、接受只建 organization membership、request→sorted user→governance→sorted membership 锁序、稳定 SQLSTATE／Backend code、分开的五字段 receipts、精确 JSON／`no-store`、append-only value-free audit、账号去关联、recovery freeze 和 creation→invitation→owner-transfer purge locks。Markdown link、no-slop 和 diff 检查通过只证明文档一致，不证明数据库、并发、Backend、HTTP、邮件、生产身份、部署、Apple 或真人平台。 |
 | `TEST-068` | 7R 的 Backend handler／store、真实本地 HTTP、production composition 与 PostgreSQL runtime integration 必须覆盖两个 raw POST route、无认证 404、认证先于 query（含空 query）／path／store／body、generic verifier 分类、create 两字段／accept 空 object、exact keys／types／UUID canonicalization、actual-byte inclusive 1 MiB／chunked／多字节边界、一次对应 0087 bridge、两个 strict receipt 的请求绑定／有效日期／168 小时、首次与 replay 200、400／401／403／409／413／503、unknown 与 recovery non-enumeration、Promise gate、JSON／no-store 与脱敏。既有 0087 fixture／concurrency／ACL／restore 继续运行；这些 synthetic 证据不证明 production identity、部署、邮件、Flutter、UI、Apple 或真人平台。 |
 | `TEST-069` | 7S 的 focused Flutter tests 必须覆盖两操作 API／独立 receipt／result、输入 UUID lowercase 与 token 前 short-circuit、固定 URL／body／headers、精确 401 单次刷新与相同 retry request、全部 typed failure、strict JSON／no-store／keys／UUID／UTC 日期／请求绑定／168 小时、旧 receipt 不按设备时间拒绝、deferred 无网络、非法配置同步失败和 client close ownership。composition／widget tests 覆盖同一 identity／gateway、缺省 deferred、后续启动失败、启动完成前移除 App 与正常 dispose 的单次 close；不把本地证据写成 Backend、数据库、生产身份、UI 或真人平台验收。 |
+| `TEST-070` | 7T 的 Widget／App tests 必须覆盖个人／组织 ready 入口与未登录隐藏、原名称与 UUID-v4、首次意图与同参重试、busy 防双击、全部 failure、明确拒绝编辑新意图、不确定结果冻结与放弃确认、异常脱敏、身份失效／切换与迟到结果、成功 receipt 和保持当前 context、Keyboard／Escape／焦点返回、live region、中英文、320×568／200% 字号及宽屏。既有 creation gateway／生命周期与 consent UUID 回归继续通过；本地 synthetic 和 CI build 不证明 production identity、部署或真人平台运行。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3002,6 +3043,9 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 7S／#328 增加两操作 Flutter typed gateway，并接入 `AppDependencies` 与 App 启停生命周期。
 它严格消费 7R、只保留内存 receipt，并在同一 identity session 下执行一次 401 刷新。
 它仍未接入 `_ReadyApp`、controller、UI、账号目录、邀请投递或组织上下文，不能据此宣称用户邀请流程已经交付。
+
+7T／#330 在现有项目菜单接通组织创建对话框，复用已交付 creation gateway，保护同意图重试并保持当前项目。
+它不提供邀请页面、组织项目或上下文发现，也不提供跨重启请求恢复；不能据此宣称组织治理闭环已经完成。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 

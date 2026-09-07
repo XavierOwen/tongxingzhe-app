@@ -15,6 +15,7 @@ import 'package:tongxingzhe_app/features/contact_metrics/current_relationship_st
 import 'package:tongxingzhe_app/features/contact_metrics/personal_follow_up_consent_ratio.dart';
 import 'package:tongxingzhe_app/features/contact_metrics/relationship_stage_change_summary.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
+import 'package:tongxingzhe_app/l10n/app_strings.dart';
 import 'package:tongxingzhe_app/management_reports/current_city_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/follow_up_consent_ratio_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/interest_report_gateway.dart';
@@ -770,6 +771,121 @@ void main() {
     expect(find.text('问卷版本 2'), findsOneWidget);
   });
 
+  testWidgets('个人项目菜单使用启动时的 gateway 创建组织且保留当前上下文', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final contextGateway = FakeSessionContextGateway();
+    final organizationGateway = _TrackingOrganizationCreationGateway(
+      result: OrganizationCreationSuccess(
+        OrganizationCreationReceipt(
+          creationContractId: 'organization-creation:v1',
+          organizationWorkspaceId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          organizationMembershipId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+          organizationOwnerAssignmentId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+          createdAtUtc: DateTime.utc(2030, 1, 2, 3, 4),
+        ),
+      ),
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: contextGateway,
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      organizationCreationGatewayBuilder: (_) => organizationGateway,
+    );
+    addTearDown(database.close);
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    final initialContextRequests = contextGateway.receivedTokens.length;
+
+    await tester.tap(find.byKey(const ValueKey('project-context-menu')));
+    await tester.pumpAndSettle();
+    final createItem = find.byKey(
+      const ValueKey('organization-create-menu-item'),
+    );
+    expect(createItem, findsOneWidget);
+    await tester.tap(createItem);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('organization-name')),
+      '  同行者组织  ',
+    );
+    await tester.tap(find.byKey(const ValueKey('organization-create-submit')));
+    await tester.pumpAndSettle();
+
+    expect(organizationGateway.createRequests, hasLength(1));
+    expect(organizationGateway.createRequests.single.displayName, '  同行者组织  ');
+    expect(find.text('个人空间 → 我的推广项目'), findsOneWidget);
+    expect(contextGateway.receivedTokens, hasLength(initialContextRequests));
+    expect(contextGateway.selectedProjectIds, isEmpty);
+    expect(contextGateway.createdProjectNames, isEmpty);
+    expect(
+      find.text(const AppStrings('zh').t('organizationCreateSuccess')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('退出账号会移除组织创建表单且旧表单不能继续提交', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final organizationGateway = _TrackingOrganizationCreationGateway();
+    final dependencies = AppDependencies(
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      organizationCreationGatewayBuilder: (_) => organizationGateway,
+    );
+    addTearDown(database.close);
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('project-context-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('organization-create-menu-item')),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('organization-name')),
+      '旧身份的组织',
+    );
+
+    await identity.signOut();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('organization-name')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('organization-create-submit')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('project-context-menu')), findsNothing);
+    expect(organizationGateway.createRequests, isEmpty);
+  });
+
   testWidgets('个人项目菜单打开后续联系同意占比设置且不会自动启用', (tester) async {
     final database = LocalDatabase(NativeDatabase.memory());
     final identity = FakeIdentitySession(
@@ -899,6 +1015,10 @@ void main() {
     expect(
       find.byKey(const ValueKey('project-settings-menu-item')),
       findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('organization-create-menu-item')),
+      findsOneWidget,
     );
     expect(find.text('项目设置'), findsNothing);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
@@ -2398,15 +2518,24 @@ final class _TrackingFollowUpConsentRatioReportGateway
 
 final class _TrackingOrganizationCreationGateway
     implements OrganizationCreationGateway {
+  _TrackingOrganizationCreationGateway({
+    this.result = const OrganizationCreationRejected(
+      OrganizationCreationFailureCode.notConfigured,
+    ),
+  });
+
+  final OrganizationCreationResult result;
+  final createRequests = <({String requestId, String displayName})>[];
   var closeCount = 0;
 
   @override
   Future<OrganizationCreationResult> create({
     required String requestId,
     required String displayName,
-  }) async => const OrganizationCreationRejected(
-    OrganizationCreationFailureCode.notConfigured,
-  );
+  }) async {
+    createRequests.add((requestId: requestId, displayName: displayName));
+    return result;
+  }
 
   @override
   Future<void> close() async => closeCount++;

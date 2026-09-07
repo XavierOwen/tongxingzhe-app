@@ -21,6 +21,7 @@ import '../features/contact_metrics/personal_interest_ratio_trend_panel.dart';
 import '../features/contact_metrics/relationship_stage_change_summary.dart';
 import '../features/contact_metrics/relationship_stage_change_summary_panel.dart';
 import '../features/home/production_home_view_model.dart';
+import '../features/organization_creation/organization_creation_dialog.dart';
 import '../features/plans/personal_action_plan_panel.dart';
 import '../features/project_settings/personal_follow_up_consent_opt_in_screen.dart';
 import '../features/reminders/personal_action_reminder_panel.dart';
@@ -34,6 +35,7 @@ import '../management_reports/interest_report_gateway.dart';
 import '../management_reports/management_report_gateway.dart';
 import '../management_reports/management_report_export_delivery.dart';
 import '../management_reports/original_region_report_gateway.dart';
+import '../organization_creation/organization_creation.dart';
 import '../plans/personal_action_plan.dart';
 import '../project_settings/personal_follow_up_consent_opt_in.dart';
 import '../reminders/personal_action_reminder.dart';
@@ -73,6 +75,7 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.followUpConsentRatioReportGateway,
     required this.interestReportGateway,
     required this.originalRegionReportGateway,
+    required this.organizationCreationGateway,
     required this.managementReportExportDelivery,
     required this.currentRelationshipStageRepository,
     required this.deviceReminderPreferenceStore,
@@ -108,6 +111,7 @@ final class ProductionHomeShell extends StatefulWidget {
   final FollowUpConsentRatioReportGateway followUpConsentRatioReportGateway;
   final InterestReportGateway interestReportGateway;
   final OriginalRegionReportGateway originalRegionReportGateway;
+  final OrganizationCreationGateway organizationCreationGateway;
   final ManagementReportExportDelivery managementReportExportDelivery;
   final CurrentRelationshipStageRepository currentRelationshipStageRepository;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
@@ -400,6 +404,17 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
               ],
             ),
           ),
+          PopupMenuItem<String>(
+            key: const ValueKey('organization-create-menu-item'),
+            value: _createOrganizationMenuValue,
+            child: Row(
+              children: [
+                const Icon(Icons.group_add_outlined, size: 18),
+                const SizedBox(width: 8),
+                Text(strings.t('organizationCreate')),
+              ],
+            ),
+          ),
           if (widget.context.workspace.kind == WorkspaceKind.personal) ...[
             const PopupMenuDivider(),
             PopupMenuItem<String>(
@@ -529,6 +544,10 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
   }
 
   Future<void> _handleProjectMenuSelection(String value) async {
+    if (value == _createOrganizationMenuValue) {
+      await _createOrganization();
+      return;
+    }
     if (value == _projectSettingsMenuValue) {
       await _openProjectSettings();
       return;
@@ -586,6 +605,31 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
       return;
     }
     await _viewModel.createPersonalProject(name);
+  }
+
+  Future<void> _createOrganization() async {
+    final text = AppStrings(widget.localeCode);
+    final appUserId = widget.context.appUserId;
+    final receipt = await showDialog<OrganizationCreationReceipt>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => OrganizationCreationDialog(
+        text: text,
+        gateway: widget.organizationCreationGateway,
+        appSession: widget.appSession,
+      ),
+    );
+    if (receipt == null || !mounted) {
+      return;
+    }
+    final session = widget.appSession.current;
+    if (session.stage != AppSessionStage.ready ||
+        session.context?.appUserId != appUserId) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text.t('organizationCreateSuccess'))),
+    );
   }
 
   void _contactPageClosed() {
@@ -813,6 +857,7 @@ final class _ProductionContextTitle extends StatelessWidget {
 }
 
 const _createProjectMenuValue = '__create_personal_project__';
+const _createOrganizationMenuValue = '__create_organization__';
 const _manageQuestionnaireMenuValue = '__manage_questionnaire__';
 const _projectSettingsMenuValue = '__project_settings__';
 

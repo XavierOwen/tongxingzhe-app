@@ -109,6 +109,29 @@ const Map<String, Map<String, String>> _strings = {
     'contextIdentityFailed': '登录状态无效，请重新登录。',
     'projectMenu': '切换推广项目',
     'createProject': '创建推广项目',
+    'organizationCreate': '创建组织',
+    'organizationName': '组织名称',
+    'organizationCreateHelp': '创建私有组织后，你将成为首位所有者。当前项目不会切换。组织项目与成员管理尚未开放。',
+    'organizationCreateRetryScope': '重试信息只在此窗口保留，不会在关闭 App 后恢复。',
+    'organizationCreateNameInvalid': '请输入 1–120 个字符的组织名称。',
+    'organizationCreating': '正在创建组织…',
+    'organizationCreateSuccess': '组织已创建，当前项目未切换。',
+    'organizationCreateFailure.notConfigured': '组织创建服务尚未配置。请稍后在此窗口重试。',
+    'organizationCreateFailure.unauthorized': '登录状态已失效。请关闭窗口，重新登录后再创建。',
+    'organizationCreateFailure.invalidJson': '创建请求格式无效，请稍后重试。',
+    'organizationCreateFailure.payloadTooLarge': '请求内容过长。请缩短组织名称后重试。',
+    'organizationCreateFailure.invalidRequest': '组织名称不符合要求。请检查名称后重试。',
+    'organizationCreateFailure.forbidden': '账号暂不符合创建条件。请确认已完成邮箱验证。',
+    'organizationCreateFailure.conflict': '这次请求与已有记录冲突。重试仍会使用原请求。',
+    'organizationCreateFailure.serviceUnavailable': '暂时无法确认创建结果，请在此窗口重试。',
+    'organizationCreateFailure.networkUnavailable':
+        '网络不可用，暂时无法确认创建结果。请检查网络后重试。',
+    'organizationCreateFailure.invalidResponse': '未收到可验证的创建结果，请在此窗口重试。',
+    'organizationCreateUncertain': '创建可能已成功。重试会使用同一个请求和名称，请勿关闭窗口后重新创建。',
+    'organizationCreateDiscardTitle': '放弃这次重试？',
+    'organizationCreateDiscardBody': '创建可能已成功。关闭后无法继续此请求；再次创建可能产生另一个组织。',
+    'organizationCreateDiscard': '放弃并关闭',
+    'organizationCreateKeepRetry': '保留并返回',
     'projectSettings': '项目设置',
     'projectName': '项目名称',
     'create': '创建',
@@ -1170,6 +1193,52 @@ const Map<String, Map<String, String>> _strings = {
     'contextIdentityFailed': 'The sign-in session is invalid. Sign in again.',
     'projectMenu': 'Switch promotion project',
     'createProject': 'Create promotion project',
+    'organizationCreate': 'Create organization',
+    'organizationName': 'Organization name',
+    'organizationCreateHelp':
+        'You will be the first owner of a private organization. Your current '
+        'project will not change. Organization projects and member management '
+        'are not available yet.',
+    'organizationCreateRetryScope':
+        'Retry details stay in this dialog only. They are not restored after '
+        'the app closes.',
+    'organizationCreateNameInvalid':
+        'Enter an organization name of 1–120 characters.',
+    'organizationCreating': 'Creating organization…',
+    'organizationCreateSuccess':
+        'Organization created. Your current project has not changed.',
+    'organizationCreateFailure.notConfigured':
+        'Organization creation is not configured. Retry in this dialog later.',
+    'organizationCreateFailure.unauthorized':
+        'Your login has expired. Close this dialog and sign in again before creating.',
+    'organizationCreateFailure.invalidJson':
+        'The creation request has an invalid format. Try again later.',
+    'organizationCreateFailure.payloadTooLarge':
+        'The request is too large. Shorten the name and retry.',
+    'organizationCreateFailure.invalidRequest':
+        'The organization name is not valid. Check it and retry.',
+    'organizationCreateFailure.forbidden':
+        'This account is not eligible to create an organization. Check that '
+        'you have verified your email.',
+    'organizationCreateFailure.conflict':
+        'This request conflicts with an existing record. A retry will use '
+        'the same request.',
+    'organizationCreateFailure.serviceUnavailable':
+        'The creation result is uncertain. Retry in this dialog.',
+    'organizationCreateFailure.networkUnavailable':
+        'The network is unavailable and the creation result is uncertain. '
+        'Check your connection and retry.',
+    'organizationCreateFailure.invalidResponse':
+        'The creation result could not be verified. Retry in this dialog.',
+    'organizationCreateUncertain':
+        'The organization may already exist. Retry with the same request and '
+        'name. Do not close this dialog and create again.',
+    'organizationCreateDiscardTitle': 'Stop retrying this request?',
+    'organizationCreateDiscardBody':
+        'The organization may already exist. Closing discards this request. '
+        'Creating again could create another organization.',
+    'organizationCreateDiscard': 'Discard and close',
+    'organizationCreateKeepRetry': 'Keep and go back',
     'projectSettings': 'Project settings',
     'projectName': 'Project name',
     'create': 'Create',

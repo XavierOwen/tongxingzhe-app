@@ -785,6 +785,75 @@ dart run tool/check_markdown_links.dart
 两个 App 测试文件检查同一 identity／gateway、缺省 deferred 和三类关闭路径。它们不模拟真实邀请投递，也不证明 UI、production identity、部署、Backend 授权、数据库事务或真人平台行为。
 7S 不改变 0087／HTTP，也不新增目录、邮件、通知、审批、revoke、capability、离线、durable retry 或删除 API。
 
+### 3.12 从当前项目菜单创建组织（Issue #330，MANUAL-060）
+
+7T 把 3.5 的组织创建 gateway 接到正式 App：登录并载入项目后，打开顶部项目菜单，选择“创建组织”。
+个人和组织当前上下文中的账号都能看到入口。界面不会因为你不是当前组织 owner 就隐藏它，因为这里创建的是一个新组织。
+能看到入口不等于已获创建资格；Backend 仍按 7A 验证当前账号和邮箱状态。
+
+[organization_creation_dialog.dart](../../lib/features/organization_creation/organization_creation_dialog.dart) 只接收组织名称。
+它提示明显空值或过长输入，但不替数据库决定完整 Unicode 名称规则，也不把输入 trim 后再提交。
+隐藏的 request UUID 来自 [secureUuidV4](../../lib/foundation/runtime_values.dart)，该函数复用现有 consent opt-in 的算法。
+既有 `SecureIdGenerator` 仍产生原来的不透明非 UUID 字符串；不能把两种 ID 格式混用。
+
+#### 为什么重试必须保留请求
+
+一次有效提交把“请求 UUID＋原名称”组成当前意图，随后显示“正在创建组织”，禁止重复提交。
+服务器可能已经成功创建，但响应在返回途中丢失。此时再生成一个 UUID，会被服务器视为另一次创建。
+因此网络失败、服务不可用、无法验证响应或 conflict 后，表单冻结原名称和 ID，只允许重试原请求或明确放弃。
+
+不确定性不能被后来的拒绝覆盖。例如第一次创建已提交但响应丢失，第二次账号状态变化而被拒绝，不能据此断定第一次没有创建。
+这个意图仍保持冻结，直到收到成功 receipt 或用户确认放弃。
+只有从未出现不确定结果的明确拒绝，才允许修改名称；改名后的首次提交使用新的意图 ID，同名重试仍用原 ID。
+界面不自动重试，不把重新连网当成重新创建的命令。
+
+普通取消直接关闭。对不确定结果选择关闭时，当前对话框先说明：组织可能已经存在，关闭后不能继续该次重试，再次创建可能产生另一个组织。
+“保留并返回”回到原表单，“放弃并关闭”才丢弃本地意图。
+这里的放弃只丢弃重试资料，不撤销已经发送的服务器请求。
+
+意图只存在当前对话框内存，不写 Drift、偏好、日志或同步队列。
+关闭 App 后不能恢复该请求；界面提前显示这个限制。本切片没有跨重启恢复、创建请求查询或组织目录。
+
+#### 身份变化和成功反馈
+
+对话框记录开窗时 Backend 已验证的 app user，并观察 `AppSession.changes`。
+账号不再 ready 或换成另一位 app user 时，旧表单立即移除，不能继续提交，也不展示迟到的结果。
+每次点击提交前还会再次检查会话。关闭对话框只释放自己的输入 controller 和 subscription，不关闭 AppSession 或 gateway。
+
+十种 gateway failure 都映射为中英文提示，不显示身份服务、HTTP、数据库或异常原文。
+成功 receipt 由 gateway 校验后返回；对话框关闭，App 提示“组织已创建，当前项目未切换”。
+
+为什么不马上进入新组织？组织创建只返回 workspace、membership 和首位 owner，没有 project。
+现有 `TrustedSessionContext` 必须有 project 和 questionnaire；owner 也不自动取得项目 membership 或 capability。
+所以本切片既不切换 AppSession，也不假装刷新后就能看见新组织。组织项目、目录和上下文选择仍需后续工作。
+
+[TongxingzheApp](../../lib/app/tongxingzhe_app.dart) 把已有 startup gateway 传给 `_ReadyApp`，再传给 [ProductionHomeShell](../../lib/screens/production_home_shell.dart)。
+UI 使用同一个实例，不另建 HTTP client；启动失败、提前卸载和正常退出的资源清理由原 composition root 负责。
+
+#### 验证与证据范围
+
+```bash
+flutter test --no-pub \
+  test/features/organization_creation/organization_creation_dialog_test.dart \
+  test/foundation/secure_uuid_v4_test.dart \
+  test/organization_creation/http_organization_creation_gateway_test.dart \
+  test/project_settings/http_personal_follow_up_consent_opt_in_gateway_test.dart \
+  test/app/app_dependencies_test.dart \
+  test/app/tongxingzhe_app_test.dart \
+  test/features/home/production_home_shell_accessibility_test.dart
+dart analyze
+dart format --output=none --set-exit-if-changed lib test
+flutter test --no-pub
+dart run tool/check_production_boundary.dart
+dart run tool/check_markdown_links.dart
+```
+
+Widget 检查覆盖原名称、UUID、重复点击、十种错误、不确定性保持、编辑后的新意图、取消确认、身份切换和迟到结果。
+还需检查键盘／Escape／焦点返回、状态 live region、中英文、320×568 小屏与 200% 字号、宽屏和触控目标。
+App 测试验证入口真实使用注入 gateway，成功后没有调用项目创建、目录刷新或上下文切换。
+这些 fake identity／gateway 与 synthetic UI 检查不证明生产服务已部署、真实账号可用或真人平台已验收；六平台 build 也不能替代运行时证据。
+本切片不修改 Backend／数据库，不提供邀请、组织项目、跨重启恢复或删除流程。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
