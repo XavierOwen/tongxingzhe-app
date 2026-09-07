@@ -694,6 +694,65 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('窄屏 200% 长名下 unknown 关键状态首屏可见', (tester) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    _useNarrowLargeText(tester);
+    final leaveGateway = _SelfLeaveGateway(const [
+      OrganizationMembershipSelfLeaveRejected(
+        OrganizationMembershipSelfLeaveFailureCode.networkUnavailable,
+      ),
+    ]);
+    const text = AppStrings('zh');
+    await _openSelfLeave(
+      tester,
+      fixture.session,
+      leaveGateway,
+      organization: _longOrganization,
+      textScaler: TextScaler.linear(2),
+    );
+
+    await tester.tap(_leaveConfirm);
+    await tester.pumpAndSettle();
+
+    _expectCriticalLeaveStateVisible(tester, text);
+  });
+
+  testWidgets('提交前已滚到底部时，unknown 到达后回到关键状态', (tester) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    _useNarrowLargeText(tester);
+    final pending = Completer<OrganizationMembershipSelfLeaveResult>();
+    final leaveGateway = _SelfLeaveGateway([pending]);
+    const text = AppStrings('zh');
+    await _openSelfLeave(
+      tester,
+      fixture.session,
+      leaveGateway,
+      organization: _longOrganization,
+      textScaler: TextScaler.linear(2),
+    );
+    final contentScroll = find.descendant(
+      of: find.byType(OrganizationMembershipSelfLeaveDialog),
+      matching: find.byType(SingleChildScrollView),
+    );
+    expect(contentScroll, findsOneWidget);
+    await tester.drag(contentScroll, const Offset(0, -3000));
+    await tester.pumpAndSettle();
+
+    await tester.tap(_leaveConfirm);
+    await tester.pump();
+    expect(leaveGateway.calls, hasLength(1));
+    pending.complete(
+      const OrganizationMembershipSelfLeaveRejected(
+        OrganizationMembershipSelfLeaveFailureCode.networkUnavailable,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    _expectCriticalLeaveStateVisible(tester, text);
+  });
+
   testWidgets('退出对话框在窄屏 200% 长名和英文宽屏暗色下无 overflow', (tester) async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.close);
@@ -742,6 +801,33 @@ void main() {
     );
     semantics.dispose();
   });
+}
+
+void _useNarrowLargeText(WidgetTester tester) {
+  tester.view.devicePixelRatio = 1;
+  tester.view.physicalSize = const Size(320, 568);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  addTearDown(tester.view.resetPhysicalSize);
+}
+
+void _expectCriticalLeaveStateVisible(WidgetTester tester, AppStrings text) {
+  final dialogTop = tester
+      .getRect(find.byType(OrganizationMembershipSelfLeaveDialog))
+      .top;
+  final actionsTop = tester.getRect(_leaveConfirm).top;
+  final failure = find.text(
+    text.t('organizationLeaveFailure.networkUnavailable'),
+  );
+  final uncertain = find.text(text.t('organizationLeaveUncertain'));
+  for (final message in [uncertain, failure]) {
+    final rect = tester.getRect(message);
+    expect(rect.top, lessThan(actionsTop), reason: '$message below actions');
+    expect(rect.bottom, greaterThan(dialogTop), reason: '$message above view');
+  }
+  expect(
+    tester.getRect(uncertain).top,
+    lessThan(tester.getRect(find.text(_longOrganization.organizationName)).top),
+  );
 }
 
 final _launcher = find.byKey(const ValueKey('open-organization-directory'));
@@ -1214,6 +1300,11 @@ const _organizationA = OrganizationDirectoryEntry(
 const _organizationB = OrganizationDirectoryEntry(
   organizationWorkspaceId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
   organizationName: '  同名组织  ',
+);
+
+final _longOrganization = OrganizationDirectoryEntry(
+  organizationWorkspaceId: _organizationA.organizationWorkspaceId,
+  organizationName: '很长的组织原始名称 ${List.filled(60, '界').join()}',
 );
 
 const _requestIdA = 'c1111111-1111-4111-8111-111111111111';

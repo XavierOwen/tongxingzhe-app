@@ -37,6 +37,7 @@ enum _LeaveStage { ready, clearing, submitting, sessionExpired }
 
 final class _OrganizationMembershipSelfLeaveDialogState
     extends State<OrganizationMembershipSelfLeaveDialog> {
+  final _contentScrollController = ScrollController();
   StreamSubscription<AppSessionSnapshot>? _sessionSubscription;
   String? _appUserId;
   String? _requestId;
@@ -63,6 +64,7 @@ final class _OrganizationMembershipSelfLeaveDialogState
   void dispose() {
     _generation += 1;
     unawaited(_sessionSubscription?.cancel());
+    _contentScrollController.dispose();
     super.dispose();
   }
 
@@ -89,7 +91,6 @@ final class _OrganizationMembershipSelfLeaveDialogState
               vertical: 24,
             ),
             constraints: const BoxConstraints(maxWidth: 560),
-            scrollable: true,
             title: Text(
               widget.text.t(
                 _confirmDiscard
@@ -97,7 +98,14 @@ final class _OrganizationMembershipSelfLeaveDialogState
                     : 'organizationLeaveTitle',
               ),
             ),
-            content: _content(),
+            content: Scrollbar(
+              controller: _contentScrollController,
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                controller: _contentScrollController,
+                child: _content(),
+              ),
+            ),
             actions: _actions(),
           ),
         ),
@@ -116,29 +124,33 @@ final class _OrganizationMembershipSelfLeaveDialogState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (_stage != _LeaveStage.sessionExpired) ...[
+        if (_uncertain) ...[
           Semantics(
-            header: true,
-            child: SelectableText(widget.organization.organizationName),
+            key: const ValueKey('organization-leave-uncertain'),
+            liveRegion: true,
+            child: Text(widget.text.t('organizationLeaveUncertain')),
           ),
-          const SizedBox(height: 8),
-          SelectableText(widget.organization.organizationWorkspaceId),
-          const SizedBox(height: 16),
-          Text(widget.text.t('organizationLeaveHelp')),
           const SizedBox(height: 12),
-          Text(widget.text.t('organizationLeaveCacheNotice')),
         ],
         if (statusKey != null) ...[
-          const SizedBox(height: 16),
           Semantics(
             key: const ValueKey('organization-leave-status'),
             liveRegion: true,
             child: Text(widget.text.t(statusKey)),
           ),
+          const SizedBox(height: 16),
         ],
-        if (_uncertain) ...[
+        if (_stage != _LeaveStage.sessionExpired) ...[
+          Semantics(
+            header: true,
+            child: SelectableText(widget.organization.organizationName),
+          ),
+          const SizedBox(height: 16),
+          Text(widget.text.t('organizationLeaveCacheNotice')),
           const SizedBox(height: 12),
-          Text(widget.text.t('organizationLeaveUncertain')),
+          Text(widget.text.t('organizationLeaveHelp')),
+          const SizedBox(height: 12),
+          SelectableText(widget.organization.organizationWorkspaceId),
         ],
       ],
     );
@@ -189,6 +201,7 @@ final class _OrganizationMembershipSelfLeaveDialogState
       _requestId ??= widget.requestIdGenerator();
     } catch (_) {
       setState(() => _failureKey = 'organizationLeaveInvalidRequest');
+      _scrollToStatus();
       return;
     }
     final generation = ++_generation;
@@ -196,6 +209,7 @@ final class _OrganizationMembershipSelfLeaveDialogState
       _stage = _LeaveStage.clearing;
       _failureKey = null;
     });
+    _scrollToStatus();
 
     OfflinePiiWorkspaceDeletionResult cleanup;
     try {
@@ -213,10 +227,12 @@ final class _OrganizationMembershipSelfLeaveDialogState
         _stage = _LeaveStage.ready;
         _failureKey = 'organizationLeaveCleanupFailed';
       });
+      _scrollToStatus();
       return;
     }
 
     setState(() => _stage = _LeaveStage.submitting);
+    _scrollToStatus();
     OrganizationMembershipSelfLeaveResult result;
     try {
       result = await widget.gateway.leave(
@@ -244,6 +260,7 @@ final class _OrganizationMembershipSelfLeaveDialogState
             _ => false,
           };
         });
+        _scrollToStatus();
     }
   }
 
@@ -270,12 +287,20 @@ final class _OrganizationMembershipSelfLeaveDialogState
       _failureKey = null;
       _confirmDiscard = false;
     });
+    _scrollToStatus();
+  }
+
+  void _scrollToStatus() {
+    if (_contentScrollController.hasClients) {
+      _contentScrollController.jumpTo(0);
+    }
   }
 
   void _requestClose() {
     if (_busy) return;
     if (_uncertain) {
       setState(() => _confirmDiscard = true);
+      _scrollToStatus();
     } else {
       Navigator.of(context).pop();
     }

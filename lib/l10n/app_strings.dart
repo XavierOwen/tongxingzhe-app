@@ -125,7 +125,7 @@ const Map<String, Map<String, String>> _strings = {
     'organizationDirectoryNetworkUnavailable': '网络不可用，未能读取组织列表。请检查连接后刷新。',
     'organizationDirectoryInvalidResponse': '未收到可验证的组织列表，请稍后刷新。',
     'organizationLeaveAction': '退出组织',
-    'organizationLeaveTitle': '确认退出这个组织？',
+    'organizationLeaveTitle': '退出组织？',
     'organizationLeaveHelp':
         '目前仅支持退出没有下游关系的成员身份。当前成员身份只要有项目参与历史，或你仍有当前／未来所有者身份、未结束的对象分配，就不能从这里退出。当前项目不会切换。',
     'organizationLeaveCacheNotice':
@@ -139,8 +139,7 @@ const Map<String, Map<String, String>> _strings = {
     'organizationLeaveInvalidRequest': '未能建立退出请求，请在此窗口重试。',
     'organizationLeaveUnauthorized': '账号或会话状态已改变。此窗口不会继续操作；请关闭后重新查看组织列表。',
     'organizationLeaveSuccess': '这次退出请求已完成。是否仍属于该组织，以重新读取的列表为准。',
-    'organizationLeaveUncertain':
-        '退出可能已完成。重试只会核对同一个请求；请求信息仅在此窗口保留，关闭 App 后无法恢复。',
+    'organizationLeaveUncertain': '退出可能已完成。重试仍用同一请求；仅在此窗口保留。',
     'organizationLeaveDiscardTitle': '停止重试这次退出？',
     'organizationLeaveDiscardBody':
         '退出可能已完成。关闭后不能继续核对这次请求；请重新读取组织列表，再决定是否发起新的退出。',
@@ -1272,9 +1271,9 @@ const Map<String, Map<String, String>> _strings = {
         'The organization list could not be verified. Refresh later.',
     'organizationCreate': 'Create organization',
     'organizationLeaveAction': 'Leave organization',
-    'organizationLeaveTitle': 'Leave this organization?',
+    'organizationLeaveTitle': 'Leave organization?',
     'organizationLeaveHelp':
-        'Only memberships without downstream relationships can leave here. Any project history for this membership, current or future ownership, or an unended target assignment prevents leaving. Your current project will not change.',
+        'Only memberships without downstream relationships can leave here. Any project membership history for this membership, current or future ownership, or an unended target assignment prevents leaving. Your current project will not change.',
     'organizationLeaveCacheNotice':
         'This device will clear sensitive cached data for this organization before submitting. It will not restore that cache if the server refuses the request. Personal and other organization caches stay unchanged.',
     'organizationLeaveCancel': 'Cancel',
@@ -1292,7 +1291,7 @@ const Map<String, Map<String, String>> _strings = {
     'organizationLeaveSuccess':
         'This leave request is complete. The reloaded list shows whether you still belong to the organization.',
     'organizationLeaveUncertain':
-        'Leaving may already be complete. Retry checks the same request. This window keeps its details only until you close it.',
+        'Leaving may already be complete. Retry checks the same request, kept only in this window.',
     'organizationLeaveDiscardTitle': 'Stop retrying this leave request?',
     'organizationLeaveDiscardBody':
         'Leaving may already be complete. Closing loses the ability to check this request. Reload your organizations before deciding whether to make a new leave request.',
