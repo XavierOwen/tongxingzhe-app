@@ -1102,6 +1102,28 @@ canonical raw path 先匹配；有效入口依次验证 strict Bearer／generic 
 不实现 Flutter、成员移除、owner relinquish、项目或对象级递归撤权、敏感缓存清除、邀请预览、删除／恢复／purge writer 或生产配置。
 现有组织 target writer 尚未开放；未来接入时必须另定与退出共同使用的授权、锁与撤权合同。synthetic 与 CI 不证明真实用户退出、生产部署、PII 清除或真人平台运行时。
 
+#### Slice 7X：成员自助退出 Flutter 网关与生命周期
+
+7X／Issue #338 只消费 7W／ADR-0183，增加独立 Flutter gateway 与 App composition；不新增退出按钮或修改组织目录。
+`OrganizationMembershipSelfLeaveGateway.leave()` 只接收 named `requestId` 与 `organizationWorkspaceId`，返回 Success 的不可变四字段 receipt 或 Rejected 的固定 code；`close()` 只释放自有资源。
+failure 固定为 notConfigured、unauthorized、invalidJson、payloadTooLarge、invalidRequest、forbidden、conflict、serviceUnavailable、networkUnavailable、invalidResponse，没有 targetAlreadyOwner 或下游依赖专用分类。
+
+gateway 在取得 token 或联网前验证输入 UUID，并将合法大小写规范为小写。POST 路径与 body 精确沿用 7W，无 query、额外 selector 或 Idempotency-Key，不生成 UUID。
+200 parser 验证 JSON UTF-8／no-store、四个 exact keys、固定 `organization-membership-self-leave:v1`、小写 canonical workspace／membership UUID、与请求 workspace 相同和合法 UTC 毫秒时间。
+其他响应只接受 7W exact status／code／shape；网络或 timeout 为 networkUnavailable，无法验证的响应及未知异常为 invalidResponse，不保存或输出内部原文。
+只有完整合法的 `401 unauthenticated` 才刷新 token 一次，向同一 URL 重发同一 JSON body 与 request UUID；第二次 401 为 unauthorized，不循环，不自动重试业务失败。
+
+receipt 只证明这个 request 的结果，不证明 membership 现在仍结束；重加入后的新退出意图需要调用者提供新 UUID。
+空 Backend 配置使用 deferred；非法非空配置在分配 client 前同步失败。复用既有 pathless URI validator、IdentitySession 和 http，gateway 只关闭 client 一次，不关闭共享 session。
+不写 Drift、缓存、偏好、日志、同步队列或持久化 receipt，不提供跨重启恢复。
+
+AppDependencies 的可选 builder 缺省 deferred，production 使用 factory，并传同一 startup IdentitySession。
+AppStartupReady 暴露同一 gateway；后续启动失败、启动完成前移除 App 和正常 dispose 都只关闭一次，保持既有资源生命周期。
+本切片不向 controller／UI 发出请求，不增加 `_ReadyApp` 功能接线，不刷新目录或切换项目。
+
+`TEST-074` 与 `MANUAL-064` 覆盖 strict wire、重试意图、配置和三类关闭路径。
+没有 DB／Backend／权限变更，也不实现完整退出、级联撤权、敏感缓存清除或生产配置；synthetic 与 build 不代表真人或生产退出已验收。
+
 ### 5.8 分析、指标与报告
 
 #### 5.8.1 统计单位和核心口径
@@ -2610,6 +2632,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-061` | 学习文档必须说明 7U 的独立当前账号组织目录、projectless 与空列表、exact active identity、单次时间取样／查询快照、成员半开区间、deleted 排除、名称与 UUID 稳定顺序、只读 bridge／ACL、GET 与既有 POST 共存、认证优先与无 query／body、strict response／错误、无任意截断和读取后重新授权。提供 DB／Backend／runtime／Docker 验证命令，区分 synthetic 与生产、Flutter／UI、真实组织和真人平台。 |
 | `MANUAL-062` | 学习文档必须说明 7V 的独立 Flutter directory gateway、不可修改列表、无 body GET、strict response、七类失败与单次 401、配置与 client ownership、App 三类关闭路径、项目菜单只读入口、开窗／显式刷新、刷新先清空、身份失效与迟到结果隔离、完整 UUID 和不切换项目。提供相关测试／分析／格式／边界／链接命令，并区分 synthetic UI、六平台 build 与生产、真实组织和真人平台。 |
 | `MANUAL-063` | 学习文档必须区分 7W 的无下游 membership end 与完整组织退出，解释未排定结束、owner／项目历史／对象分配拒绝、锁后单次时间、旧 request 不结束重加入的新 membership、claim／audit／tombstone／去关联、exact identity 与 runtime ACL、strict HTTP 和稳定错误。提供 DB／Backend／并发／Docker 命令，明确没有级联撤权、缓存清除、Flutter 或生产证明。 |
+| `MANUAL-064` | 学习文档必须说明 7X 的不可变 receipt／十类失败、输入先验、strict POST 与响应、单次 401 保留请求意图、receipt 不是当前成员状态、配置与 client ownership、同一 identity／gateway、三类 App close 及 focused／完整 Flutter 验证命令；明确没有 UI、UUID 生成、目录刷新、完整退出、缓存清除或生产证明。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -2861,6 +2884,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-071` | 7U 必须用结构 check／回滚 fixture 覆盖 exact identity、原值长度、active／inactive／去关联、空目录、projectless、当前成员半开区间、恢复期／个人／跨账号排除、同名组织顺序与 owner／ACL／无写入，并确认 PUBLIC 无函数权限；用 Backend unit／real HTTP／composition／runtime integration 覆盖 GET 与 POST 共存、raw path／query、Bearer 优先、声明 body、store 缺省、一次参数化 SQL、Promise gate、strict 两字段 row／固定 root、重复 UUID、稳定错误与 JSON／no-store。既有 Docker rebuild／checksum／dump／restore 和 CI 继续通过；不把 synthetic 证据扩大为生产或真人平台验收。 |
 | `TEST-072` | 7V 的 gateway／widget／App tests 必须覆盖不可修改列表、顺序／同名保留、GET URL／headers／无 body、strict root／row／UUID／名称／重复 ID、七类失败、合法 401 单次刷新、deferred／非法配置、client ownership与三类 App close；覆盖 personal／organization ready 菜单、未登录隐藏、同一 gateway、开窗／刷新／busy、空列表与失败分离、刷新先清空、账号失效／切换／迟到结果、关闭和不改变当前项目；检查中英文、键盘／Escape／焦点、live region、48 dp、长文本／UUID、320×568／200% 字号与暗色宽屏。完整 Flutter tests、analyzer、format、生产边界和链接通过，synthetic 与 build 不等于生产或真人平台验收。 |
 | `TEST-073` | 7W structural check／rollback fixture／独立会话并发必须覆盖 exact active identity、current unended membership、过去 owner 可退出、当前／未来 owner、未来已排定结束、任何项目历史和未结束组织对象分配拒绝；覆盖锁后时间、等待中失效、退出事务开始后由独立事务建立新 membership（模拟接受邀请的产物）、同／异 request、exact replay、重新入组旧请求、drift、去关联、tombstone、恢复期和失败零写入。验证 claim／audit 不可变、单次时间、受控 owner、PUBLIC／runtime ACL、一次参数化 SQL、严格 receipt／错误、真实 HTTP／composition／runtime integration，并通过 Docker rebuild／checksum／dump／restore 与 CI；不据此宣称完整退出、生产身份或 PII 清除。 |
+| `TEST-074` | 7X gateway／App tests 必须覆盖四字段 receipt、十类失败、输入先于 token／网络、固定 POST／headers／body、strict keys／lowercase UUID／workspace echo／UTC 毫秒、全部 exact error code、合法 401 单次刷新且 URL／UUID／body 不变、非法 401 不刷新、网络／timeout 与未知异常、deferred／valid／invalid 配置、client 只关一次、同一 session／gateway、三类 App close。完整 Flutter tests、analyzer、format、生产边界、链接与 CI 通过，不重复执行未改变的数据库实验，也不把 synthetic 当完整退出或真人平台证明。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3178,6 +3202,9 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 
 7W／#336 增加无下游关系成员自助结束 membership 的 DB／HTTP 合同，保护锁后时间、同请求重放和 owner／依赖拒绝。
 它尚无 Flutter UI，也不提供有项目或对象分配成员的完整退出、递归撤权或本地敏感缓存清除。
+
+7X／#338 增加同一合同的 Flutter gateway 与 App 生命周期，固定输入、receipt、错误和单次 token 刷新中的相同请求意图。
+它仍无 UI、目录操作或敏感缓存清除，不代表完整用户退出流程已完成。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 
