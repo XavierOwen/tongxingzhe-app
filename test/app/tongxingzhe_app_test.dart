@@ -24,6 +24,7 @@ import 'package:tongxingzhe_app/management_reports/original_region_report_gatewa
 import 'package:tongxingzhe_app/organization_creation/organization_creation.dart';
 import 'package:tongxingzhe_app/organization_directory/organization_directory.dart';
 import 'package:tongxingzhe_app/organization_directed_account_invitation/organization_directed_account_invitation.dart';
+import 'package:tongxingzhe_app/organization_membership_self_leave/organization_membership_self_leave.dart';
 import 'package:tongxingzhe_app/organization_owner_transfer/organization_owner_transfer.dart';
 import 'package:tongxingzhe_app/platform/platform_capabilities.dart';
 import 'package:tongxingzhe_app/project_settings/personal_follow_up_consent_opt_in.dart';
@@ -46,6 +47,7 @@ void main() {
     final startupGate = _BlockingPlatformCapabilitiesProvider();
     final gateway = _TrackingOrganizationCreationGateway();
     final directoryGateway = _TrackingOrganizationDirectoryGateway();
+    final selfLeaveGateway = _TrackingOrganizationMembershipSelfLeaveGateway();
     var builderCalls = 0;
     final dependencies = AppDependencies(
       databaseFactory: SingleDatabaseFactory(database),
@@ -59,6 +61,7 @@ void main() {
         return gateway;
       },
       organizationDirectoryGatewayBuilder: (_) => directoryGateway,
+      organizationMembershipSelfLeaveGatewayBuilder: (_) => selfLeaveGateway,
     );
     addTearDown(database.close);
 
@@ -75,12 +78,14 @@ void main() {
     expect(builderCalls, 1);
     expect(gateway.closeCount, 1);
     expect(directoryGateway.closeCount, 1);
+    expect(selfLeaveGateway.closeCount, 1);
   });
 
   testWidgets('移除 TongxingzheApp 后关闭组织 gateways 恰好一次', (tester) async {
     final database = LocalDatabase(NativeDatabase.memory());
     final gateway = _TrackingOrganizationCreationGateway();
     final directoryGateway = _TrackingOrganizationDirectoryGateway();
+    final selfLeaveGateway = _TrackingOrganizationMembershipSelfLeaveGateway();
     final dependencies = AppDependencies(
       databaseFactory: SingleDatabaseFactory(database),
       clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
@@ -90,6 +95,7 @@ void main() {
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       organizationCreationGatewayBuilder: (_) => gateway,
       organizationDirectoryGatewayBuilder: (_) => directoryGateway,
+      organizationMembershipSelfLeaveGatewayBuilder: (_) => selfLeaveGateway,
     );
     addTearDown(database.close);
 
@@ -100,11 +106,13 @@ void main() {
     await tester.pump();
     expect(gateway.closeCount, 1);
     expect(directoryGateway.closeCount, 1);
+    expect(selfLeaveGateway.closeCount, 1);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
     expect(gateway.closeCount, 1);
     expect(directoryGateway.closeCount, 1);
+    expect(selfLeaveGateway.closeCount, 1);
   });
 
   testWidgets('启动尚未完成时移除 App 仍关闭后来取得的 owner transfer gateway 一次', (
@@ -2693,6 +2701,22 @@ final class _TrackingOrganizationOwnerTransferGateway
     required String targetOrganizationMembershipId,
   }) async => const OrganizationOwnerTransferRejected(
     OrganizationOwnerTransferFailureCode.notConfigured,
+  );
+
+  @override
+  Future<void> close() async => closeCount++;
+}
+
+final class _TrackingOrganizationMembershipSelfLeaveGateway
+    implements OrganizationMembershipSelfLeaveGateway {
+  var closeCount = 0;
+
+  @override
+  Future<OrganizationMembershipSelfLeaveResult> leave({
+    required String requestId,
+    required String organizationWorkspaceId,
+  }) async => const OrganizationMembershipSelfLeaveRejected(
+    OrganizationMembershipSelfLeaveFailureCode.notConfigured,
   );
 
   @override

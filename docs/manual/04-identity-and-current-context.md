@@ -1024,6 +1024,40 @@ runtime 只能执行 exact identity bridge，不可读写 membership、owner、c
 Docker 还检查 Backend integration、checksum 和独立 dump／restore；恢复库重跑 check／fixture，不重跑已提交型并发脚本。
 通过只证明本地数据库与 transport 合同，不证明 Flutter、真人退出、生产身份、服务部署、敏感缓存清除或 Apple 行为。
 
+### 3.16 成员退出客户端网关（Issue #338，MANUAL-064）
+
+7X 接通上一节的 Flutter transport 与 App 资源生命周期，但没有退出按钮或确认对话框。
+gateway 的调用者只提供 request UUID 与组织 workspace UUID；账号由同一个 IdentitySession 提供，不从表单接受。
+无效输入在取得 token 或联网前拒绝。合法 UUID 规范为小写，POST body 只含 request_id，不增加 query 或其他幂等 header。
+
+成功返回不可变四字段 receipt；十种 typed failure 保留 notConfigured、unauthorized、invalidJson、payloadTooLarge、invalidRequest、forbidden、conflict、serviceUnavailable、networkUnavailable、invalidResponse 的区别。
+响应必须有 JSON UTF-8 与 no-store，200 还检查 exact keys、固定合同、小写 UUID、请求组织一致和合法 UTC 毫秒时间。
+失败只映射 Backend 的 exact status／code，不输出 provider、网络或数据库原文。
+
+只有合法的 `401 unauthenticated` 才刷新 token 一次，URL、request UUID 与 JSON body 都保持不变；第二次 401 停止。
+网络断开与响应无法验证不同，不自动生成新 request 或重试业务失败。
+同一 request 返回的是先前操作的 receipt，不是当前成员状态。重新入组后要再次退出，调用者必须创建新的请求意图并提供新 UUID。
+
+空配置使用无网络 deferred；非法非空配置在分配 HTTP client 前失败。有效配置复用既有 pathless URI validator。
+gateway 只关闭自己的 client 一次，不关闭 IdentitySession，也不持久化 receipt。
+AppDependencies 缺省 builder 使用 deferred，production 注入 factory；AppStartupReady 持有同一 gateway。
+后续启动失败、完成前移除 App、正常 dispose 均关闭一次。没有向 controller／UI 发起请求，也不刷新组织目录或切换项目。
+
+```bash
+flutter test --no-pub \
+  test/organization_membership_self_leave/http_organization_membership_self_leave_gateway_test.dart \
+  test/app/app_dependencies_test.dart \
+  test/app/tongxingzhe_app_test.dart
+dart analyze
+dart format --output=none --set-exit-if-changed lib test
+flutter test --no-pub
+dart run tool/check_production_boundary.dart
+dart run tool/check_markdown_links.dart
+```
+
+MockClient、fake identity 与 App tests 验证 transport、配置和资源生命周期；不重复运行未改变的 DB 实验。
+本切片没有 UI、跨重启恢复、权限级联或 PII cache 清除，不能据此宣称完整用户退出或生产／真人平台已验收。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
