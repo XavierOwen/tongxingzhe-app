@@ -38,6 +38,7 @@ import '../management_reports/management_report_export_delivery.dart';
 import '../management_reports/original_region_report_gateway.dart';
 import '../organization_creation/organization_creation.dart';
 import '../organization_directory/organization_directory.dart';
+import '../organization_membership_self_leave/organization_membership_self_leave.dart';
 import '../plans/personal_action_plan.dart';
 import '../project_settings/personal_follow_up_consent_opt_in.dart';
 import '../reminders/personal_action_reminder.dart';
@@ -79,6 +80,7 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.originalRegionReportGateway,
     required this.organizationCreationGateway,
     required this.organizationDirectoryGateway,
+    required this.organizationMembershipSelfLeaveGateway,
     required this.managementReportExportDelivery,
     required this.currentRelationshipStageRepository,
     required this.deviceReminderPreferenceStore,
@@ -116,6 +118,8 @@ final class ProductionHomeShell extends StatefulWidget {
   final OriginalRegionReportGateway originalRegionReportGateway;
   final OrganizationCreationGateway organizationCreationGateway;
   final OrganizationDirectoryGateway organizationDirectoryGateway;
+  final OrganizationMembershipSelfLeaveGateway
+  organizationMembershipSelfLeaveGateway;
   final ManagementReportExportDelivery managementReportExportDelivery;
   final CurrentRelationshipStageRepository currentRelationshipStageRepository;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
@@ -657,6 +661,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
       builder: (_) => OrganizationDirectoryDialog(
         text: AppStrings(widget.localeCode),
         gateway: widget.organizationDirectoryGateway,
+        selfLeaveGateway: widget.organizationMembershipSelfLeaveGateway,
         appSession: widget.appSession,
       ),
     );

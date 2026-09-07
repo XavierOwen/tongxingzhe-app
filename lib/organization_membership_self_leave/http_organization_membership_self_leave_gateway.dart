@@ -82,8 +82,33 @@ final class HttpOrganizationMembershipSelfLeaveGateway
     required String requestBody,
     required String organizationWorkspaceId,
   }) async {
+    StreamSubscription<IdentitySnapshot>? identitySubscription;
     try {
+      const unauthorized = OrganizationMembershipSelfLeaveRejected(
+        OrganizationMembershipSelfLeaveFailureCode.unauthorized,
+      );
+      final subject = identitySession.current.principal?.externalSubject;
+      var identityChanged = false;
+      bool matches(IdentitySnapshot snapshot) =>
+          subject != null &&
+          snapshot.stage == IdentityStage.signedIn &&
+          snapshot.principal?.externalSubject == subject;
+      bool isCurrent() =>
+          !_closed && !identityChanged && matches(identitySession.current);
+      if (!isCurrent()) return unauthorized;
+
+      // A leave intent belongs to one uninterrupted sign-in, including 401
+      // retry. Comparing only the final subject would miss sign-out/sign-in ABA.
+      identitySubscription = identitySession.changes.listen(
+        (snapshot) {
+          if (!matches(snapshot)) identityChanged = true;
+        },
+        onError: (Object error, StackTrace stackTrace) =>
+            identityChanged = true,
+        onDone: () => identityChanged = true,
+      );
       var access = await identitySession.accessToken();
+      if (!isCurrent()) return unauthorized;
       if (access is! IdentitySuccess<IdentityAccessToken>) {
         return OrganizationMembershipSelfLeaveRejected(
           _identityFailure(access),
@@ -95,6 +120,7 @@ final class HttpOrganizationMembershipSelfLeaveGateway
         organizationWorkspaceId: organizationWorkspaceId,
         requestBody: requestBody,
       );
+      if (!isCurrent()) return unauthorized;
       var root = _jsonObject(response);
 
       if (response.statusCode == 401) {
@@ -107,6 +133,7 @@ final class HttpOrganizationMembershipSelfLeaveGateway
         }
 
         access = await identitySession.accessToken(forceRefresh: true);
+        if (!isCurrent()) return unauthorized;
         if (access is! IdentitySuccess<IdentityAccessToken>) {
           return OrganizationMembershipSelfLeaveRejected(
             _identityFailure(access),
@@ -117,6 +144,7 @@ final class HttpOrganizationMembershipSelfLeaveGateway
           organizationWorkspaceId: organizationWorkspaceId,
           requestBody: requestBody,
         );
+        if (!isCurrent()) return unauthorized;
         root = _jsonObject(response);
       }
 
@@ -145,6 +173,8 @@ final class HttpOrganizationMembershipSelfLeaveGateway
       return const OrganizationMembershipSelfLeaveRejected(
         OrganizationMembershipSelfLeaveFailureCode.invalidResponse,
       );
+    } finally {
+      await identitySubscription?.cancel();
     }
   }
 

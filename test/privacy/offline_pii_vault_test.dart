@@ -8,6 +8,218 @@ import 'package:tongxingzhe_app/targets/promotion_target.dart';
 import '../support/fake_runtime_values.dart';
 
 void main() {
+  test('deleteWorkspaceSnapshot 只删除匹配 workspace 的密文', () async {
+    final secureStore = _MemorySecureValueStore();
+    final vault = OfflinePiiVault(
+      secureStore: secureStore,
+      lockStore: _MemoryOfflinePiiLockStore(),
+      clock: MutableClock(DateTime.utc(2026, 8, 6, 13)),
+      installationId: 'installation-1',
+    );
+    await vault.replace(
+      externalSubject: 'identity-subject-1',
+      context: _context,
+      assignedTargets: [_target('target-1', '王小明')],
+      authorizedAtUtc: DateTime.utc(2026, 8, 6, 12),
+    );
+
+    final result = await vault.deleteWorkspaceSnapshot(
+      externalSubject: 'identity-subject-1',
+      workspaceId: _context.workspace.id,
+    );
+
+    expect(result, OfflinePiiWorkspaceDeletionResult.deleted);
+    expect(secureStore.values, isEmpty);
+  });
+
+  test('deleteWorkspaceSnapshot 缺少快照时返回 notPresent', () async {
+    final vault = OfflinePiiVault(
+      secureStore: _MemorySecureValueStore(),
+      lockStore: _MemoryOfflinePiiLockStore(),
+      clock: MutableClock(DateTime.utc(2026, 8, 6, 13)),
+      installationId: 'installation-1',
+    );
+
+    expect(
+      await vault.deleteWorkspaceSnapshot(
+        externalSubject: 'identity-subject-1',
+        workspaceId: _context.workspace.id,
+      ),
+      OfflinePiiWorkspaceDeletionResult.notPresent,
+    );
+  });
+
+  test('异 workspace ciphertext 与既有 lock 原样保留', () async {
+    final secureStore = _MemorySecureValueStore();
+    final lockStore = _MemoryOfflinePiiLockStore();
+    final vault = OfflinePiiVault(
+      secureStore: secureStore,
+      lockStore: lockStore,
+      clock: MutableClock(DateTime.utc(2026, 8, 6, 13)),
+      installationId: 'installation-1',
+    );
+    await vault.replace(
+      externalSubject: 'identity-subject-1',
+      context: _organizationContext,
+      assignedTargets: [_target('target-1', '王小明')],
+      authorizedAtUtc: DateTime.utc(2026, 8, 6, 12),
+    );
+    final key = secureStore.values.keys.single;
+    final encoded = secureStore.values.values.single;
+    await vault.revoke('identity-subject-1', OfflinePiiLockReason.unauthorized);
+    secureStore.values[key] = encoded;
+
+    final result = await vault.deleteWorkspaceSnapshot(
+      externalSubject: 'identity-subject-1',
+      workspaceId: _context.workspace.id,
+    );
+
+    expect(result, OfflinePiiWorkspaceDeletionResult.notPresent);
+    expect(secureStore.values[key], encoded);
+    expect(
+      lockStore.locks.values.single.reason,
+      OfflinePiiLockReason.unauthorized,
+    );
+  });
+
+  test('无法读取或解码 workspace 快照时返回 unavailable 且不删除', () async {
+    final secureStore = _MemorySecureValueStore();
+    final vault = OfflinePiiVault(
+      secureStore: secureStore,
+      lockStore: _MemoryOfflinePiiLockStore(),
+      clock: MutableClock(DateTime.utc(2026, 8, 6, 13)),
+      installationId: 'installation-1',
+    );
+    await vault.replace(
+      externalSubject: 'identity-subject-1',
+      context: _context,
+      assignedTargets: [_target('target-1', '王小明')],
+      authorizedAtUtc: DateTime.utc(2026, 8, 6, 12),
+    );
+    final key = secureStore.values.keys.single;
+    secureStore.failRead = true;
+
+    expect(
+      await vault.deleteWorkspaceSnapshot(
+        externalSubject: 'identity-subject-1',
+        workspaceId: _context.workspace.id,
+      ),
+      OfflinePiiWorkspaceDeletionResult.unavailable,
+    );
+    expect(secureStore.values, isNotEmpty);
+
+    secureStore.failRead = false;
+    secureStore.values[key] = '{invalid';
+    expect(
+      await vault.deleteWorkspaceSnapshot(
+        externalSubject: 'identity-subject-1',
+        workspaceId: _context.workspace.id,
+      ),
+      OfflinePiiWorkspaceDeletionResult.unavailable,
+    );
+    expect(secureStore.values[key], '{invalid');
+  });
+
+  test('删除失败返回 pending 并锁定为 organizationLeaveRequested', () async {
+    final secureStore = _MemorySecureValueStore();
+    final lockStore = _MemoryOfflinePiiLockStore();
+    final vault = OfflinePiiVault(
+      secureStore: secureStore,
+      lockStore: lockStore,
+      clock: MutableClock(DateTime.utc(2026, 8, 6, 13)),
+      installationId: 'installation-1',
+    );
+    await vault.replace(
+      externalSubject: 'identity-subject-1',
+      context: _organizationContext,
+      assignedTargets: [_target('target-1', '王小明')],
+      authorizedAtUtc: DateTime.utc(2026, 8, 6, 12),
+    );
+    secureStore.failDelete = true;
+
+    expect(
+      await vault.deleteWorkspaceSnapshot(
+        externalSubject: 'identity-subject-1',
+        workspaceId: _organizationContext.workspace.id,
+      ),
+      OfflinePiiWorkspaceDeletionResult.pending,
+    );
+    expect(
+      lockStore.locks.values.single.reason,
+      OfflinePiiLockReason.organizationLeaveRequested,
+    );
+  });
+
+  test('删除同步使旧 fence 失效且清理后 fresh request 可恢复其他 workspace', () async {
+    final secureStore = _MemorySecureValueStore();
+    final vault = OfflinePiiVault(
+      secureStore: secureStore,
+      lockStore: _MemoryOfflinePiiLockStore(),
+      clock: MutableClock(DateTime.utc(2026, 8, 6, 13)),
+      installationId: 'installation-1',
+    );
+    await vault.replace(
+      externalSubject: 'identity-subject-1',
+      context: _organizationContext,
+      assignedTargets: [_target('target-1', '王小明')],
+      authorizedAtUtc: DateTime.utc(2026, 8, 6, 12),
+    );
+    final oldFence = vault.captureRequest('identity-subject-1');
+    expect(
+      await vault.deleteWorkspaceSnapshot(
+        externalSubject: 'identity-subject-1',
+        workspaceId: _organizationContext.workspace.id,
+      ),
+      OfflinePiiWorkspaceDeletionResult.deleted,
+    );
+    expect(vault.isRequestCurrent(oldFence), isFalse);
+
+    final freshFence = vault.captureRequest('identity-subject-1');
+    expect(
+      await vault.replace(
+        externalSubject: 'identity-subject-1',
+        context: _context,
+        assignedTargets: [_target('target-2', '新资料')],
+        authorizedAtUtc: DateTime.utc(2026, 8, 6, 13),
+        expectedFence: freshFence,
+      ),
+      isA<OfflinePiiSaved>(),
+    );
+    expect(await vault.read('identity-subject-1'), isA<OfflinePiiAvailable>());
+  });
+
+  test('旧 replace 已开始时 cleanup 最终删除且 replace 返回 stale', () async {
+    final secureStore = _MemorySecureValueStore();
+    final vault = OfflinePiiVault(
+      secureStore: secureStore,
+      lockStore: _MemoryOfflinePiiLockStore(),
+      clock: MutableClock(DateTime.utc(2026, 8, 6, 13)),
+      installationId: 'installation-1',
+    );
+    final oldFence = vault.captureRequest('identity-subject-1');
+    final writeStarted = Completer<void>();
+    final releaseWrite = Completer<void>();
+    secureStore.onNextWriteStarted = writeStarted;
+    secureStore.releaseNextWrite = releaseWrite;
+    final oldReplace = vault.replace(
+      externalSubject: 'identity-subject-1',
+      context: _organizationContext,
+      assignedTargets: [_target('target-old', '旧资料')],
+      authorizedAtUtc: DateTime.utc(2026, 8, 6, 12),
+      expectedFence: oldFence,
+    );
+    await writeStarted.future;
+    final deletion = vault.deleteWorkspaceSnapshot(
+      externalSubject: 'identity-subject-1',
+      workspaceId: _organizationContext.workspace.id,
+    );
+    releaseWrite.complete();
+
+    expect(await oldReplace, isA<OfflinePiiStaleRefreshIgnored>());
+    expect(await deletion, OfflinePiiWorkspaceDeletionResult.deleted);
+    expect(secureStore.values, isEmpty);
+  });
+
   test('联网验权后只开放本次明确分配的对象', () async {
     final clock = MutableClock(DateTime.utc(2026, 8, 6, 12));
     final vault = OfflinePiiVault(
@@ -481,6 +693,24 @@ const _context = TrustedSessionContext(
   ),
   questionnaireVersion: QuestionnaireVersionContext(
     id: '44444444-4444-4444-8444-444444444444',
+    versionNumber: 1,
+  ),
+  capabilities: {'view_assigned_target_pii'},
+);
+
+const _organizationContext = TrustedSessionContext(
+  appUserId: '11111111-1111-4111-8111-111111111111',
+  workspace: WorkspaceContext(
+    id: '66666666-6666-4666-8666-666666666666',
+    kind: WorkspaceKind.organization,
+    name: '同行组织',
+  ),
+  project: ProjectContext(
+    id: '77777777-7777-4777-8777-777777777777',
+    name: '组织推广项目',
+  ),
+  questionnaireVersion: QuestionnaireVersionContext(
+    id: '88888888-8888-4888-8888-888888888888',
     versionNumber: 1,
   ),
   capabilities: {'view_assigned_target_pii'},

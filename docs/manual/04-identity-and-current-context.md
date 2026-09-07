@@ -1058,6 +1058,48 @@ dart run tool/check_markdown_links.dart
 MockClient、fake identity 与 App tests 验证 transport、配置和资源生命周期；不重复运行未改变的 DB 实验。
 本切片没有 UI、跨重启恢复、权限级联或 PII cache 清除，不能据此宣称完整用户退出或生产／真人平台已验收。
 
+### 3.17 在我的组织确认退出（Issue #342，MANUAL-065）
+
+7Z 在组织目录的每个条目加入退出入口。用户先选择组织，再看名称、完整标识、资格限制和缓存影响；仅打开确认页或取消不会发退出请求。
+“没有项目历史”指本次将结束的 membership；不是把用户以前所有 membership 的历史混在一起。其余资格仍按 [ADR-0183](../adr/0183-bare-organization-membership-self-leave.md) 由数据库判断。
+
+#### 为什么先清缓存
+
+如果先发 HTTP，再等成功响应清缓存，网络中断会留下一个难判断的状态：服务端可能已经退出，设备却还保存旧资料。
+所以这里先按所选组织清除本地敏感缓存，确认清除完成后再发退出请求。代价是服务端随后拒绝时缓存也不会恢复；确认页会提前说明。
+个人空间和其他组织快照不会被一并清除，也不因这次操作解除已有锁。
+
+Vault 每个登录主体只有一份加密快照。条件清除在同一队列内读取它并比较 workspace；匹配才先写 `organizationLeaveRequested` 锁再删除。
+没有快照或快照属于其他 workspace 是 `notPresent`。不能读取或判断归属是 `unavailable`，删除失败是 `pending`；后两种都停止 HTTP 并显示重试提示。
+清除前同步增加旧请求代次，因此在清除前启动的迟到刷新不能恢复资料。不新增多 workspace 表、持久退出请求或 tombstone。
+
+`AppSession.isCurrentUser` 不只看界面保存的 app user，还核对实时登录主体。清除前后复核账号与会话代次，HTTP 前再同步检查。
+网关在 token 等待、HTTP 和一次 401 刷新期间继续绑定原始登录；切账号以及注销再回到同一账号都不能让旧意图继续发请求。
+Widget 从不读取 token 或 external subject。当前正式组织上下文及组织对象 writer 尚未开放；未来开放时，仍需另行处理退出期间新发起的组织 PII 请求，不把旧请求 fence 当永久撤权。
+
+#### 重试和回执
+
+第一次确认生成 UUID-v4。结果不确定时，只在本窗口保留同一 UUID 与所选组织；用户点重试才再次提交，不自动重发。
+关闭不确定结果要再次确认；关闭 App 后不恢复这次请求。重新打开先读当前目录，再由用户决定是否建立新的退出意图。
+成功回执只证明这一次请求，不能证明用户现在仍未入组。父窗口重新读取目录；若用户已重新加入，组织仍会显示，不按旧回执删掉它。
+清除失败、服务端拒绝、会话失效和网络不确定分别显示提示，不把它们写成退出成功；当前项目不变。
+
+```bash
+flutter test --no-pub test/features/organization_directory \
+  test/organization_membership_self_leave \
+  test/privacy/offline_pii_vault_test.dart \
+  test/app_session/app_session_test.dart \
+  test/app/tongxingzhe_app_test.dart
+dart analyze
+dart format --output=none --set-exit-if-changed lib test integration_test test_driver tool
+flutter test --no-pub
+dart run tool/check_production_boundary.dart
+dart run tool/check_markdown_links.dart
+```
+
+这次没有改动 DB 或 Backend，不重复跑未改变的数据库实验。可控 Future、fake identity／存储和 Widget 证明本地顺序、拒绝与清除合同；CI build 证明可编译。
+这些证据不证明真实设备安全存储删除、真实用户退出、生产配置或完整组织退出。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：

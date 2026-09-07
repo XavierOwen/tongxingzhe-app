@@ -787,7 +787,7 @@ void main() {
     expect(find.text('问卷版本 2'), findsOneWidget);
   });
 
-  testWidgets('个人项目菜单打开组织目录并只读刷新', (tester) async {
+  testWidgets('项目菜单复用组织目录和退出 gateway，退出后重读且不切换项目', (tester) async {
     final database = LocalDatabase(NativeDatabase.memory());
     final identity = FakeIdentitySession(
       initial: IdentitySnapshot(
@@ -808,6 +808,18 @@ void main() {
         ),
       ]),
     );
+    final selfLeaveGateway = _TrackingOrganizationMembershipSelfLeaveGateway(
+      result: OrganizationMembershipSelfLeaveSuccess(
+        OrganizationMembershipSelfLeaveReceipt(
+          membershipSelfLeaveContractId:
+              'organization-membership-self-leave:v1',
+          organizationWorkspaceId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          organizationMembershipId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+          effectiveAtUtc: DateTime.utc(2030, 1, 2),
+        ),
+      ),
+    );
+    IdentitySession? selfLeaveIdentity;
     final dependencies = AppDependencies(
       databaseFactory: SingleDatabaseFactory(database),
       clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
@@ -816,6 +828,10 @@ void main() {
       sessionContextGateway: contextGateway,
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       organizationDirectoryGatewayBuilder: (_) => directoryGateway,
+      organizationMembershipSelfLeaveGatewayBuilder: (session) {
+        selfLeaveIdentity = session;
+        return selfLeaveGateway;
+      },
     );
     addTearDown(database.close);
 
@@ -864,6 +880,41 @@ void main() {
     expect(contextGateway.receivedTokens, hasLength(initialContextRequests));
     expect(contextGateway.selectedProjectIds, isEmpty);
     expect(contextGateway.createdProjectNames, isEmpty);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey(
+          'organization-leave-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(selfLeaveGateway.requests, isEmpty);
+    await tester.tap(find.byKey(const ValueKey('organization-leave-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(identical(selfLeaveIdentity, identity), isTrue);
+    expect(selfLeaveGateway.requests, hasLength(1));
+    expect(
+      selfLeaveGateway.requests.single.organizationWorkspaceId,
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    );
+    expect(
+      selfLeaveGateway.requests.single.requestId,
+      matches(
+        r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+      ),
+    );
+    expect(directoryGateway.listCalls, 3);
+    expect(find.text('同行者组织'), findsOneWidget);
+    expect(
+      find.text(const AppStrings('zh').t('organizationLeaveSuccess')),
+      findsOneWidget,
+    );
+    expect(contextGateway.receivedTokens, hasLength(initialContextRequests));
+    expect(contextGateway.selectedProjectIds, isEmpty);
+    expect(contextGateway.createdProjectNames, isEmpty);
+    expect(selfLeaveGateway.closeCount, 0);
   });
 
   testWidgets('个人项目菜单使用启动时的 gateway 创建组织且保留当前上下文', (tester) async {
@@ -2709,15 +2760,27 @@ final class _TrackingOrganizationOwnerTransferGateway
 
 final class _TrackingOrganizationMembershipSelfLeaveGateway
     implements OrganizationMembershipSelfLeaveGateway {
+  _TrackingOrganizationMembershipSelfLeaveGateway({
+    this.result = const OrganizationMembershipSelfLeaveRejected(
+      OrganizationMembershipSelfLeaveFailureCode.notConfigured,
+    ),
+  });
+
+  final OrganizationMembershipSelfLeaveResult result;
+  final requests = <({String requestId, String organizationWorkspaceId})>[];
   var closeCount = 0;
 
   @override
   Future<OrganizationMembershipSelfLeaveResult> leave({
     required String requestId,
     required String organizationWorkspaceId,
-  }) async => const OrganizationMembershipSelfLeaveRejected(
-    OrganizationMembershipSelfLeaveFailureCode.notConfigured,
-  );
+  }) async {
+    requests.add((
+      requestId: requestId,
+      organizationWorkspaceId: organizationWorkspaceId,
+    ));
+    return result;
+  }
 
   @override
   Future<void> close() async => closeCount++;

@@ -11,6 +11,150 @@ import '../support/fake_runtime_values.dart';
 import '../support/fake_session_context_gateway.dart';
 
 void main() {
+  test('ready 且 actor exact 时清除当前身份的组织离线 PII', () async {
+    final identity = FakeIdentitySession(initial: _signedInIdentity());
+    final secureStore = _MemorySecureValueStore();
+    final vault = OfflinePiiVault(
+      secureStore: secureStore,
+      lockStore: _MemoryOfflinePiiLockStore(),
+      clock: FixedClock(DateTime.utc(2026, 8, 6, 13)),
+      installationId: 'installation-1',
+    );
+    final context = _withPii(_organizationContext);
+    await vault.replace(
+      externalSubject: 'external-subject-not-an-app-user-id',
+      context: context,
+      assignedTargets: const [],
+      authorizedAtUtc: DateTime.utc(2026, 8, 6, 12),
+    );
+    final session = AppSession(
+      identitySession: identity,
+      contextGateway: FakeSessionContextGateway(context: context),
+      offlinePiiVault: vault,
+    );
+    addTearDown(session.close);
+    addTearDown(identity.close);
+    await session.start();
+
+    final result = await session.clearOrganizationOfflinePii(
+      expectedAppUserId: context.appUserId,
+      organizationWorkspaceId: context.workspace.id,
+    );
+
+    expect(result, OfflinePiiWorkspaceDeletionResult.deleted);
+    expect(secureStore.values, isEmpty);
+  });
+
+  test('vault 为 null 时组织离线 PII 清理返回 notPresent', () async {
+    final identity = FakeIdentitySession(initial: _signedInIdentity());
+    final session = AppSession(
+      identitySession: identity,
+      contextGateway: FakeSessionContextGateway(),
+    );
+    addTearDown(session.close);
+    addTearDown(identity.close);
+    await session.start();
+
+    expect(
+      await session.clearOrganizationOfflinePii(
+        expectedAppUserId: syntheticSessionContext.appUserId,
+        organizationWorkspaceId: syntheticSessionContext.workspace.id,
+      ),
+      OfflinePiiWorkspaceDeletionResult.notPresent,
+    );
+  });
+
+  test('actor mismatch、not ready 或 unavailable 时组织离线 PII 清理拒绝', () async {
+    final identity = FakeIdentitySession(initial: _signedInIdentity());
+    final secureStore = _MemorySecureValueStore();
+    final vault = OfflinePiiVault(
+      secureStore: secureStore,
+      lockStore: _MemoryOfflinePiiLockStore(),
+      clock: FixedClock(DateTime.utc(2026, 8, 6, 13)),
+      installationId: 'installation-1',
+    );
+    final context = _withPii(_organizationContext);
+    await vault.replace(
+      externalSubject: 'external-subject-not-an-app-user-id',
+      context: context,
+      assignedTargets: const [],
+      authorizedAtUtc: DateTime.utc(2026, 8, 6, 12),
+    );
+    final session = AppSession(
+      identitySession: identity,
+      contextGateway: FakeSessionContextGateway(context: context),
+      offlinePiiVault: vault,
+    );
+    addTearDown(session.close);
+    addTearDown(identity.close);
+
+    expect(
+      await session.clearOrganizationOfflinePii(
+        expectedAppUserId: 'wrong-app-user-id',
+        organizationWorkspaceId: context.workspace.id,
+      ),
+      OfflinePiiWorkspaceDeletionResult.unavailable,
+    );
+    await session.start();
+    expect(
+      await session.clearOrganizationOfflinePii(
+        expectedAppUserId: 'wrong-app-user-id',
+        organizationWorkspaceId: context.workspace.id,
+      ),
+      OfflinePiiWorkspaceDeletionResult.unavailable,
+    );
+    expect(secureStore.values, isNotEmpty);
+  });
+
+  test('组织离线 PII 清理期间会话变化返回 unavailable 且不清新账号', () async {
+    final identity = FakeIdentitySession(initial: _signedInIdentity());
+    final secureStore = _MemorySecureValueStore();
+    final vault = OfflinePiiVault(
+      secureStore: secureStore,
+      lockStore: _MemoryOfflinePiiLockStore(),
+      clock: FixedClock(DateTime.utc(2026, 8, 6, 13)),
+      installationId: 'installation-1',
+    );
+    final context = _withPii(_organizationContext);
+    await vault.replace(
+      externalSubject: 'external-subject-not-an-app-user-id',
+      context: context,
+      assignedTargets: const [],
+      authorizedAtUtc: DateTime.utc(2026, 8, 6, 12),
+    );
+    await vault.replace(
+      externalSubject: 'test-subject',
+      context: context,
+      assignedTargets: const [],
+      authorizedAtUtc: DateTime.utc(2026, 8, 6, 12),
+    );
+    final session = AppSession(
+      identitySession: identity,
+      contextGateway: FakeSessionContextGateway(context: context),
+      offlinePiiVault: vault,
+    );
+    addTearDown(session.close);
+    addTearDown(identity.close);
+    await session.start();
+    secureStore.deleteRequested = Completer<void>();
+    secureStore.releaseDelete = Completer<void>();
+
+    final cleanup = session.clearOrganizationOfflinePii(
+      expectedAppUserId: context.appUserId,
+      organizationWorkspaceId: context.workspace.id,
+    );
+    await secureStore.deleteRequested!.future;
+    final signIn = identity.signIn(
+      email: 'new-account@example.test',
+      password: 'ignored',
+    );
+    secureStore.releaseDelete!.complete();
+
+    expect(await cleanup, OfflinePiiWorkspaceDeletionResult.unavailable);
+    await signIn;
+    expect(await vault.read('test-subject'), isA<OfflinePiiAvailable>());
+  });
+
   test('已登录身份通过 bearer token 取得可信内部上下文', () async {
     final identity = FakeIdentitySession(initial: _signedInIdentity());
     final gateway = FakeSessionContextGateway();
@@ -666,6 +810,24 @@ const _secondProject = TrustedSessionContext(
     versionNumber: 1,
   ),
   capabilities: {'record_contact'},
+);
+
+const _organizationContext = TrustedSessionContext(
+  appUserId: '11111111-1111-4111-8111-111111111111',
+  workspace: WorkspaceContext(
+    id: '66666666-6666-4666-8666-666666666666',
+    kind: WorkspaceKind.organization,
+    name: '同行组织',
+  ),
+  project: ProjectContext(
+    id: '77777777-7777-4777-8777-777777777777',
+    name: '组织推广项目',
+  ),
+  questionnaireVersion: QuestionnaireVersionContext(
+    id: '88888888-8888-4888-8888-888888888888',
+    versionNumber: 1,
+  ),
+  capabilities: {'record_contact', 'view_assigned_target_pii'},
 );
 
 TrustedSessionContext _withPii(TrustedSessionContext context) =>

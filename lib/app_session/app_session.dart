@@ -70,6 +70,48 @@ final class AppSession {
 
   Stream<AppSessionSnapshot> get changes => _changes.stream;
 
+  /// 当前 ready 上下文是否仍属于调用方捕获的 App user。
+  ///
+  /// 同时对照 IdentitySession，避免 identity change 尚在异步解析时继续使用
+  /// AppSession 中短暂保留的旧 ready snapshot。
+  bool isCurrentUser(String expectedAppUserId) {
+    if (_closed || _current.stage != AppSessionStage.ready) return false;
+    final snapshotIdentity = _current.identity;
+    final liveIdentity = _identitySession.current;
+    final snapshotSubject = snapshotIdentity?.principal?.externalSubject;
+    final liveSubject = liveIdentity.principal?.externalSubject;
+    return _current.context?.appUserId == expectedAppUserId &&
+        snapshotIdentity?.stage == IdentityStage.signedIn &&
+        liveIdentity.stage == IdentityStage.signedIn &&
+        snapshotSubject != null &&
+        snapshotSubject == liveSubject;
+  }
+
+  /// 在组织 self-leave 请求发出前清除该组织对应的离线 PII 快照。
+  Future<OfflinePiiWorkspaceDeletionResult> clearOrganizationOfflinePii({
+    required String expectedAppUserId,
+    required String organizationWorkspaceId,
+  }) async {
+    if (!isCurrentUser(expectedAppUserId)) {
+      return OfflinePiiWorkspaceDeletionResult.unavailable;
+    }
+    final generation = _generation;
+    final subject = _current.identity!.principal!.externalSubject;
+    final vault = _offlinePiiVault;
+    final result = vault == null
+        ? OfflinePiiWorkspaceDeletionResult.notPresent
+        : await vault.deleteWorkspaceSnapshot(
+            externalSubject: subject,
+            workspaceId: organizationWorkspaceId,
+          );
+    if (!_isCurrent(generation) ||
+        !isCurrentUser(expectedAppUserId) ||
+        _current.identity?.principal?.externalSubject != subject) {
+      return OfflinePiiWorkspaceDeletionResult.unavailable;
+    }
+    return result;
+  }
+
   Future<void> start() async {
     if (_started || _closed) {
       return;
