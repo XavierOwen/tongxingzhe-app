@@ -398,6 +398,33 @@ void main() {
     },
   );
 
+  test('late HTTP failure after account change is unauthorized', () async {
+    final identity = _RotatingTokenIdentitySession();
+    final sent = Completer<void>();
+    final response = Completer<http.Response>();
+    final gateway = HttpOrganizationMembershipSelfLeaveGateway(
+      baseUri: Uri.parse('https://backend.example.test'),
+      identitySession: identity,
+      client: MockClient((_) {
+        sent.complete();
+        return response.future;
+      }),
+    );
+    addTearDown(gateway.close);
+    addTearDown(identity.close);
+
+    final pending = gateway.leave(
+      requestId: _requestId,
+      organizationWorkspaceId: _workspaceId,
+    );
+    await sent.future;
+    identity.emit(_otherIdentity);
+    response.completeError(http.ClientException('test-only late failure'));
+
+    expect(_failureCode(await pending), _Failure.unauthorized);
+    expect(identity.accessTokenForceRefreshValues, [false]);
+  });
+
   test(
     'close during token wait prevents HTTP, while same-account refresh remains valid',
     () async {
@@ -446,6 +473,108 @@ void main() {
         }
         await gateway.close();
         await identity.close();
+      }
+    },
+  );
+
+  test('cleanup start is covered by the final identity check', () async {
+    for (final lateFailure in [false, true]) {
+      for (final closeGateway in [false, true]) {
+        late _RotatingTokenIdentitySession identity;
+        late HttpOrganizationMembershipSelfLeaveGateway gateway;
+        identity = _RotatingTokenIdentitySession(
+          onChangesCancel: () {
+            if (closeGateway) {
+              gateway.close();
+            } else {
+              identity.setCurrentWithoutEmit(_otherIdentity);
+            }
+          },
+        );
+        gateway = _gateway(
+          (_) async => lateFailure
+              ? _error('organization_membership_self_leave_forbidden', 403)
+              : _json(_receiptJson()),
+          identity: identity,
+        );
+        addTearDown(gateway.close);
+        addTearDown(identity.close);
+
+        final result = await gateway.leave(
+          requestId: _requestId,
+          organizationWorkspaceId: _workspaceId,
+        );
+
+        expect(
+          _failureCode(result),
+          _Failure.unauthorized,
+          reason: 'lateFailure=$lateFailure, close=$closeGateway',
+        );
+      }
+    }
+  });
+
+  test(
+    'cleanup gate and future errors preserve success and typed failure',
+    () async {
+      for (final lateFailure in [false, true]) {
+        for (final failCleanup in [false, true]) {
+          final cancelStarted = Completer<void>();
+          final finishCancel = Completer<void>();
+          final identity = _RotatingTokenIdentitySession(
+            onChangesCancel: () {
+              cancelStarted.complete();
+              return finishCancel.future;
+            },
+          );
+          final gateway = _gateway(
+            (_) async => lateFailure
+                ? _error('organization_membership_self_leave_forbidden', 403)
+                : _json(_receiptJson()),
+            identity: identity,
+          );
+          addTearDown(gateway.close);
+          addTearDown(identity.close);
+          addTearDown(() {
+            if (!finishCancel.isCompleted) finishCancel.complete();
+          });
+
+          final resultDelivered =
+              Completer<OrganizationMembershipSelfLeaveResult>();
+          gateway
+              .leave(
+                requestId: _requestId,
+                organizationWorkspaceId: _workspaceId,
+              )
+              .then(
+                resultDelivered.complete,
+                onError: resultDelivered.completeError,
+              );
+          await cancelStarted.future;
+          await Future<void>.delayed(Duration.zero);
+
+          expect(
+            resultDelivered.isCompleted,
+            isTrue,
+            reason: 'lateFailure=$lateFailure, failCleanup=$failCleanup',
+          );
+          final result = await resultDelivered.future;
+          if (lateFailure) {
+            expect(result, isA<OrganizationMembershipSelfLeaveRejected>());
+            expect(
+              (result as OrganizationMembershipSelfLeaveRejected).code,
+              _Failure.forbidden,
+            );
+          } else {
+            expect(result, isA<OrganizationMembershipSelfLeaveSuccess>());
+          }
+          if (failCleanup) {
+            finishCancel.completeError(StateError('test-only cleanup failure'));
+          } else {
+            finishCancel.complete();
+          }
+          await Future<void>.delayed(Duration.zero);
+        }
       }
     },
   );
@@ -756,7 +885,7 @@ FakeIdentitySession _identity() => FakeIdentitySession(
 
 HttpOrganizationMembershipSelfLeaveGateway _gateway(
   Future<http.Response> Function(http.Request) handler, {
-  FakeIdentitySession? identity,
+  IdentitySession? identity,
   http.Client? client,
   Duration timeout = const Duration(seconds: 15),
 }) => HttpOrganizationMembershipSelfLeaveGateway(
@@ -810,8 +939,14 @@ final class _TrackingMockClient extends MockClient {
 }
 
 final class _RotatingTokenIdentitySession implements IdentitySession {
+  _RotatingTokenIdentitySession({FutureOr<void> Function()? onChangesCancel})
+    : _changes = StreamController<IdentitySnapshot>(
+        sync: true,
+        onCancel: onChangesCancel,
+      );
+
   final List<bool> accessTokenForceRefreshValues = [];
-  final _changes = StreamController<IdentitySnapshot>.broadcast(sync: true);
+  final StreamController<IdentitySnapshot> _changes;
   IdentitySnapshot _current = const IdentitySnapshot(
     stage: IdentityStage.signedIn,
     principal: IdentityPrincipal(externalSubject: 'subject-1', email: null),
@@ -828,6 +963,8 @@ final class _RotatingTokenIdentitySession implements IdentitySession {
     _current = snapshot;
     _changes.add(snapshot);
   }
+
+  void setCurrentWithoutEmit(IdentitySnapshot snapshot) => _current = snapshot;
 
   @override
   Future<void> close() => _changes.close();

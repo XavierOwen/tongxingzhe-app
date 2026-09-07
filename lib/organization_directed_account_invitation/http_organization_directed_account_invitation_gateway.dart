@@ -175,73 +175,92 @@ final class HttpOrganizationDirectedAccountInvitationGateway
     Result unauthorized() =>
         rejected(OrganizationDirectedAccountInvitationFailureCode.unauthorized);
 
-    try {
-      subject = identitySession.current.principal?.externalSubject;
-      if (!isCurrent()) return unauthorized();
+    Future<Result> performRequest() async {
+      try {
+        subject = identitySession.current.principal?.externalSubject;
+        if (!isCurrent()) return unauthorized();
 
-      // One request belongs to one uninterrupted sign-in. Comparing only the
-      // final subject would miss a sign-out/sign-in ABA during token or HTTP IO.
-      identitySubscription = identitySession.changes.listen(
-        (snapshot) {
-          if (!matches(snapshot)) identityChanged = true;
-        },
-        onError: (Object error, StackTrace stackTrace) =>
-            identityChanged = true,
-        onDone: () => identityChanged = true,
-      );
-      if (!isCurrent()) return unauthorized();
-      var access = await identitySession.accessToken();
-      if (!isCurrent()) return unauthorized();
-      if (access is! IdentitySuccess<IdentityAccessToken>) {
-        return rejected(_identityFailure(access));
-      }
-
-      var response = await _send(uri, requestBody, access.value);
-      if (!isCurrent()) return unauthorized();
-      var root = _jsonObject(response);
-      if (response.statusCode == 401) {
-        if (_failure(response.statusCode, root) !=
-            OrganizationDirectedAccountInvitationFailureCode.unauthorized) {
-          return rejected(
-            OrganizationDirectedAccountInvitationFailureCode.invalidResponse,
-          );
-        }
-        access = await identitySession.accessToken(forceRefresh: true);
+        // One request belongs to one uninterrupted sign-in. Comparing only the
+        // final subject would miss a sign-out/sign-in ABA during token or HTTP IO.
+        identitySubscription = identitySession.changes.listen(
+          (snapshot) {
+            if (!matches(snapshot)) identityChanged = true;
+          },
+          onError: (Object error, StackTrace stackTrace) =>
+              identityChanged = true,
+          onDone: () => identityChanged = true,
+        );
+        if (!isCurrent()) return unauthorized();
+        var access = await identitySession.accessToken();
         if (!isCurrent()) return unauthorized();
         if (access is! IdentitySuccess<IdentityAccessToken>) {
           return rejected(_identityFailure(access));
         }
-        response = await _send(uri, requestBody, access.value);
-        if (!isCurrent()) return unauthorized();
-        root = _jsonObject(response);
-      }
 
-      final result = response.statusCode == 200
-          ? success(root)
-          : rejected(_failure(response.statusCode, root));
-      return isCurrent() ? result : unauthorized();
-    } on TimeoutException {
-      if (fenceWasBroken()) return unauthorized();
-      return rejected(
-        OrganizationDirectedAccountInvitationFailureCode.networkUnavailable,
-      );
-    } on http.ClientException {
-      if (fenceWasBroken()) return unauthorized();
-      return rejected(
-        OrganizationDirectedAccountInvitationFailureCode.networkUnavailable,
-      );
-    } on FormatException {
-      if (fenceWasBroken()) return unauthorized();
-      return rejected(
-        OrganizationDirectedAccountInvitationFailureCode.invalidResponse,
-      );
+        var response = await _send(uri, requestBody, access.value);
+        if (!isCurrent()) return unauthorized();
+        var root = _jsonObject(response);
+        if (response.statusCode == 401) {
+          if (_failure(response.statusCode, root) !=
+              OrganizationDirectedAccountInvitationFailureCode.unauthorized) {
+            return rejected(
+              OrganizationDirectedAccountInvitationFailureCode.invalidResponse,
+            );
+          }
+          access = await identitySession.accessToken(forceRefresh: true);
+          if (!isCurrent()) return unauthorized();
+          if (access is! IdentitySuccess<IdentityAccessToken>) {
+            return rejected(_identityFailure(access));
+          }
+          response = await _send(uri, requestBody, access.value);
+          if (!isCurrent()) return unauthorized();
+          root = _jsonObject(response);
+        }
+
+        final result = response.statusCode == 200
+            ? success(root)
+            : rejected(_failure(response.statusCode, root));
+        return isCurrent() ? result : unauthorized();
+      } on TimeoutException {
+        if (fenceWasBroken()) return unauthorized();
+        return rejected(
+          OrganizationDirectedAccountInvitationFailureCode.networkUnavailable,
+        );
+      } on http.ClientException {
+        if (fenceWasBroken()) return unauthorized();
+        return rejected(
+          OrganizationDirectedAccountInvitationFailureCode.networkUnavailable,
+        );
+      } on FormatException {
+        if (fenceWasBroken()) return unauthorized();
+        return rejected(
+          OrganizationDirectedAccountInvitationFailureCode.invalidResponse,
+        );
+      } on Object {
+        if (fenceWasBroken()) return unauthorized();
+        return rejected(
+          OrganizationDirectedAccountInvitationFailureCode.invalidResponse,
+        );
+      }
+    }
+
+    final result = await performRequest();
+    try {
+      // cancel() stops events before its cleanup Future completes. Awaiting it
+      // would hide identity changes before delivery. ignore() keeps errors typed.
+      identitySubscription?.cancel().ignore();
     } on Object {
       if (fenceWasBroken()) return unauthorized();
       return rejected(
         OrganizationDirectedAccountInvitationFailureCode.invalidResponse,
       );
-    } finally {
-      await identitySubscription?.cancel();
+    }
+    try {
+      return isCurrent() ? result : unauthorized();
+    } on Object {
+      return rejected(
+        OrganizationDirectedAccountInvitationFailureCode.invalidResponse,
+      );
     }
   }
 

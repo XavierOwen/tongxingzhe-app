@@ -846,6 +846,96 @@ void main() {
     await identity.close();
   });
 
+  test(
+    'cleanup start is covered by the final identity check for every operation',
+    () async {
+      for (final closeGateway in [false, true]) {
+        for (final operation in _Operation.values) {
+          late _RotatingTokenIdentitySession identity;
+          late HttpOrganizationDirectedAccountInvitationGateway gateway;
+          identity = _RotatingTokenIdentitySession(
+            onChangesCancel: () {
+              if (closeGateway) {
+                gateway.close();
+              } else {
+                identity.setCurrentWithoutEmit(_otherIdentity);
+              }
+            },
+          );
+          gateway = _gateway(
+            (_) async => _json(_successJson(operation)),
+            identity: identity,
+          );
+          addTearDown(gateway.close);
+          addTearDown(identity.close);
+
+          final result = await _invokeOperation(gateway, operation);
+
+          expect(
+            _failureCode(result),
+            _Failure.unauthorized,
+            reason: '${operation.name}, close=$closeGateway',
+          );
+        }
+      }
+    },
+  );
+
+  test(
+    'cleanup gate and future errors do not delay or escape typed results',
+    () async {
+      for (final failCleanup in [false, true]) {
+        for (final operation in _Operation.values) {
+          final cancelStarted = Completer<void>();
+          final finishCancel = Completer<void>();
+          final identity = _RotatingTokenIdentitySession(
+            onChangesCancel: () {
+              cancelStarted.complete();
+              return finishCancel.future;
+            },
+          );
+          final gateway = _gateway(
+            (_) async => _json(_successJson(operation)),
+            identity: identity,
+          );
+          addTearDown(gateway.close);
+          addTearDown(identity.close);
+          addTearDown(() {
+            if (!finishCancel.isCompleted) finishCancel.complete();
+          });
+
+          final resultDelivered = Completer<Object>();
+          _invokeOperation(gateway, operation).then(
+            resultDelivered.complete,
+            onError: resultDelivered.completeError,
+          );
+          await cancelStarted.future;
+          await Future<void>.delayed(Duration.zero);
+
+          expect(
+            resultDelivered.isCompleted,
+            isTrue,
+            reason: '${operation.name}, failCleanup=$failCleanup',
+          );
+          expect(await resultDelivered.future, switch (operation) {
+            _Operation.create =>
+              isA<OrganizationDirectedAccountInvitationCreateSuccess>(),
+            _Operation.preview =>
+              isA<OrganizationDirectedAccountInvitationPreviewSuccess>(),
+            _Operation.accept =>
+              isA<OrganizationDirectedAccountInvitationAcceptSuccess>(),
+          });
+          if (failCleanup) {
+            finishCancel.completeError(StateError('test-only cleanup failure'));
+          } else {
+            finishCancel.complete();
+          }
+          await Future<void>.delayed(Duration.zero);
+        }
+      }
+    },
+  );
+
   test('unknown status, code, or envelope maps to invalidResponse', () async {
     final cases = <http.Response Function()>[
       () => _error('not_found', 404),
@@ -1073,12 +1163,18 @@ final class _TrackingMockClient extends MockClient {
 }
 
 final class _RotatingTokenIdentitySession implements IdentitySession {
-  _RotatingTokenIdentitySession({this.accessTokenHandler});
+  _RotatingTokenIdentitySession({
+    this.accessTokenHandler,
+    FutureOr<void> Function()? onChangesCancel,
+  }) : _changes = StreamController<IdentitySnapshot>(
+         sync: true,
+         onCancel: onChangesCancel,
+       );
 
   final Future<IdentityResult<IdentityAccessToken>> Function(bool forceRefresh)?
   accessTokenHandler;
   final List<bool> accessTokenForceRefreshValues = [];
-  final _changes = StreamController<IdentitySnapshot>.broadcast(sync: true);
+  final StreamController<IdentitySnapshot> _changes;
   IdentitySnapshot _current = _initialIdentity;
 
   @override

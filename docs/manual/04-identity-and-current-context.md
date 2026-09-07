@@ -1173,6 +1173,28 @@ dart run tool/check_markdown_links.dart
 可控 Future 先复现跨号 token、401 刷新、迟到成功和 close，再验证修复；既有正常请求、parser 和 App 生命周期测试继续通过。
 本切片未改 Backend 或 SQL，不重复本地数据库实验。synthetic identity／HTTP 与 CI build 不证明生产身份、真实账号切换、平台网络取消或数据库回滚。
 
+### 3.20 监听清理不能重新打开交付窗口（Issue #348，MANUAL-068）
+
+`subscription.cancel()` 会停止后续事件，但返回的 Future 可能还在等待资源清理。如果先选定 success，再等待这个 Future，等待期间就没有监听可以记录注销／重登；清理报错也可能直接覆盖原来的 typed result。
+
+7AC 将 3.19 节的修复用于 invitation 的 create／preview／accept 共用请求方法，以及 membership self-leave。
+操作先在监听有效时完成 token、HTTP、单次 401 和解析，再同步发起取消，最后检查原登录和 gateway 是否仍有效；最后检查之后没有 await。
+清理 Future 可以稍后完成，但不阻塞结果，其异步错误不外泄。同步清理异常被稳定错误类型吸收；已知身份失效优先返回 `unauthorized`，self-leave 的迟到失败也不能带回旧状态。
+这不是取消服务端请求，也不是回滚数据库。已经交付后才发生的 close，不会追溯撤回调用方已经收到的回执。
+
+```bash
+flutter test --no-pub test/organization_directed_account_invitation \
+  test/organization_membership_self_leave
+flutter test --no-pub
+dart analyze
+dart format --output=none --set-exit-if-changed lib test integration_test test_driver tool
+dart run tool/check_production_boundary.dart
+dart run tool/check_markdown_links.dart
+```
+
+回归用可控的取消 Future 验证未完成清理不阻塞交付、清理错误不逸出，以及清理启动时换号或 close 后的最终检查。原有 token／HTTP／401、输入和 strict parser 测试继续执行。
+本票未修改 UI、Backend、SQL 或依赖，不重复本地数据库实验；synthetic stream／HTTP 和 CI 仍不证明生产身份、网络取消或真人平台行为。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
