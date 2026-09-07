@@ -602,6 +602,103 @@ git diff --check
 
 这些检查只证明文字、链接和补丁格式。Issue #320 不证明数据库 schema、事务原子性、并发锁、真实 identity、HTTP、邮件投递、UI、生产部署、Apple 或真人平台行为。
 
+### 3.10 通过 HTTP 创建与接受定向账号邀请（Issue #326，MANUAL-058）
+
+3.9 说明邀请的数据库合同；7P／#322 已用 0087 实现它。7R／#326 把两个操作接到 Backend。
+它仍没有 App 页面、账号目录或邀请投递功能。目标账号 UUID 只是调用方明确提供的 selector，不是查询邮箱或搜索账号的权限。
+HTTP 决定见 [ADR-0181](../adr/0181-organization-directed-account-invitation-http-contract.md)，实现见 [invitation module](../../backend/server/src/organization-directed-account-invitations.ts)。
+
+#### 两个请求分别携带什么
+
+创建者使用自己的 Bearer token。组织来自 path；body 只允许 invitation 与目标账号 UUID：
+
+```http
+POST /v1/organizations/00000000-0000-0000-0000-000000000001/directed-account-invitations
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{"invitation_id":"00000000-0000-0000-0000-000000000002","target_app_user_id":"00000000-0000-0000-0000-000000000003"}
+```
+
+接受者使用绑定目标账号自己的 Bearer token。invitation 来自 path，body 必须是空 JSON object：
+
+```http
+POST /v1/organization-directed-account-invitations/00000000-0000-0000-0000-000000000002/accept
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{}
+```
+
+`{}` 与没有 body 不同：前者表示没有额外业务参数；后者不是有效 JSON 请求，返回 `invalid_json`。
+接受时不能再提交 workspace、target、actor、email 或 token 字段，数据库从 invitation claim 决定组织与目标账号。
+UUID 可以用大写或小写十六进制，但形状必须是 `8-4-4-4-12`；Backend 校验后统一小写，不另行限制 UUID version 或 variant。
+重试创建必须使用同一 invitation、组织和 target；接受重试只使用同一 invitation 和 exact target identity。HTTP 不生成新幂等键，也不维护重试队列。
+
+#### 为什么先认证、后解析
+
+[server](../../backend/server/src/server.ts) 先用 raw pathname 匹配 route，再交给 handler：
+
+1. 错误 method、额外／重复／末尾 slash、dot segment 或任何 percent-encoded path 返回通用 404，不认证或读取 body。
+2. 命中后严格解析 Bearer，再用 generic `IdentityVerifier` 验证身份。此处不调用 7A 组织创建资格或 Auth user endpoint。
+3. 认证成功后拒绝 query（只有 `?` 也算），再验证 path UUID、检查专用 store。
+4. 最后按实际 byte 数读取 JSON，验证精确字段，调用一次对应 store method，等待结果后响应。
+
+因此无效 token 不能靠 malformed body 或未知 invitation 探测业务状态。missing verifier／store 也在 body 读取前失败关闭。
+reader 支持 chunked，并按 UTF-8 的实际 byte 数计数，不按字符数或 `Content-Length` 声明判断。
+1,048,576 bytes 仍可解析，超过这个边界返回 413。示例发送 JSON Content-Type，但 handler 不增加该请求 header 的门禁。
+
+#### Store 与两个独立结果
+
+`OrganizationDirectedAccountInvitationStore.create` 只接收已验证 identity、invitation、workspace 和 target。
+`accept` 只接收已验证 identity 与 invitation。两个 method 各自只运行一次对应的 0087 参数化 identity bridge，不拆成多条业务 SQL。
+它们不访问 `app_private`，不查询账号资料，也不使用 session context 或 creation／transfer store。
+[main](../../backend/server/src/main.ts) 复用既有 pool query 和 generic verifier，注入一个 dedicated Postgres invitation store，不新增环境变量。
+
+create 与 accept 分别返回 3.9 的五字段 receipt，不使用带可选字段的混合 envelope。
+create 结果须绑定请求 invitation 与组织；accept 结果须绑定 path invitation，组织与 membership 由数据库返回。
+Backend 检查精确字段、contract ID、UUID、日期与请求绑定。create 的 expiry 仍须精确晚于 issued 168 小时。
+有效数据库 Date／RFC3339 instant 转成 UTC 毫秒时间，SQL 中的完整时间精度不变。未知或漂移结果不交给调用者。
+首次和精确重放都返回 200，没有 replay flag。等待 pool query 完成只说明数据库调用已完成，不证明远端客户端收到或保存了 receipt。
+
+#### 错误不能变成邀请状态查询
+
+| 状态 | 稳定 code |
+| --- | --- |
+| 404 | `not_found`，只用于 route／method 不匹配 |
+| 401 | `unauthenticated` |
+| 400 | `invalid_json` 或 `invalid_organization_invitation_request` |
+| 413 | `payload_too_large` |
+| 403 | `organization_invitation_forbidden` |
+| 409 | `organization_invitation_conflict` |
+| 503 | `organization_invitation_unavailable` |
+
+DB 错误只接受 3.9 的 exact SQLSTATE／message 配对。未知 invitation、target 或组织，以及过期、错误接受者、已有成员、恢复期或账号去关联，都不由 HTTP 预查。
+数据库将这些业务拒绝收敛为 forbidden；只有 claim drift／tombstone 使用 conflict。不能添加 `expired`、`already_member` 或业务 `not_found`。
+未知数据库、verifier、adapter 和 parser 错误统一 unavailable，不带原始 message、SQL、stack 或身份资料。
+所有响应固定 `Content-Type: application/json; charset=utf-8` 和 `Cache-Control: no-store`，错误只含 `{"error":{"code":"stable_code"}}`。
+响应、日志和失败审计仍遵守 3.9 的 value-free allowlist，不保存身份、token 或请求原文。
+
+#### 可以复制的验证命令
+
+```bash
+npm --prefix backend/server run check
+npm --prefix backend/server run build
+node --test \
+  backend/server/dist/test/organization-directed-account-invitations.test.js \
+  backend/server/dist/test/organization-directed-account-invitations-route.test.js \
+  backend/server/dist/test/organization-directed-account-invitations-composition.test.js
+npm --prefix backend/server test
+./tool/run_postgres_tests_in_docker.sh
+dart run tool/check_markdown_links.dart
+git diff --check
+```
+
+unit tests 验证 handler／store 合同；本地 HTTP tests 验证 raw route、认证顺序、bytes、headers、错误和 Promise gate。
+composition tests 检查生产接线源码，不等于生产服务已部署。Docker runner 使用隔离 synthetic PostgreSQL，运行 create／accept runtime bridge integration、既有 0087 检查与 dump／restore。
+7R 不新增 migration、权限、Flutter、UI、邮件、账号／成员／邀请目录、通知、分享链接、审批、revoke、capability、上下文切换、缓存、离线或删除 API。
+上述检查不证明 production identity、部署端点、邮件送达、真实组织、Apple 或真人平台运行时。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
