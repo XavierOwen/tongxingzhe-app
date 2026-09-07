@@ -3334,6 +3334,9 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 
 7AC／#348 将同一监听清理与最终检查顺序用于 invitation 三操作和 membership self-leave，消除清理等待窗口及原始清理异常。它不增加业务功能或生产验证结论。
 
+7AD／#350 的[组织生命周期接入准备](./research/organization-lifecycle-readiness.md)记录现有读写入口、锁与恢复期要求之间的接点，供后续删除／恢复合同使用。
+这是一份代码依据清单，不是已经实现的生命周期。删除申请和恢复的授权选择仍待确认；不新增已接受的执行合同、状态字段、writer、HTTP 或 UI。
+
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 
 ## 13. 每个切片的 Definition of Done
