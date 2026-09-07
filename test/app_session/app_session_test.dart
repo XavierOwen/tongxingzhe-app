@@ -139,6 +139,189 @@ void main() {
     expect(session.current.fromOfflineCache, isTrue);
   });
 
+  for (final operation in ['resolve', 'select', 'create']) {
+    test('$operation 确认同项目失去 PII 权限后重启也不能恢复旧快照', () async {
+      final identity = FakeIdentitySession(initial: _signedInIdentity());
+      final secureStore = _MemorySecureValueStore();
+      final lockStore = _MemoryOfflinePiiLockStore();
+      OfflinePiiVault openVault() => OfflinePiiVault(
+        secureStore: secureStore,
+        lockStore: lockStore,
+        clock: FixedClock(DateTime.utc(2026, 8, 6, 13)),
+        installationId: 'installation-1',
+      );
+      final vault = openVault();
+      await vault.replace(
+        externalSubject: 'external-subject-not-an-app-user-id',
+        context: _withPii(syntheticSessionContext),
+        assignedTargets: const [],
+        authorizedAtUtc: DateTime.utc(2026, 8, 6, 12),
+      );
+      final gateway = FakeSessionContextGateway(
+        context: operation == 'resolve'
+            ? syntheticSessionContext
+            : _withPii(syntheticSessionContext),
+        selectedContexts: {
+          syntheticSessionContext.project.id: syntheticSessionContext,
+        },
+        createdContexts: const {'同项目': syntheticSessionContext},
+      );
+      final session = AppSession(
+        identitySession: identity,
+        contextGateway: gateway,
+        offlinePiiVault: vault,
+      );
+      addTearDown(session.close);
+      addTearDown(identity.close);
+      await session.start();
+      if (operation == 'select') {
+        await session.selectProject(syntheticSessionContext.project.id);
+      } else if (operation == 'create') {
+        await session.createPersonalProject('同项目');
+      }
+
+      expect(session.current.stage, AppSessionStage.ready);
+      expect(session.current.context, same(syntheticSessionContext));
+      final cached = await vault.read('external-subject-not-an-app-user-id');
+      expect(cached, isA<OfflinePiiLocked>());
+      expect(
+        (cached as OfflinePiiLocked).reason,
+        OfflinePiiLockReason.unauthorized,
+      );
+      expect(secureStore.values, isEmpty);
+      await session.close();
+
+      final restarted = AppSession(
+        identitySession: identity,
+        contextGateway: FakeSessionContextGateway(
+          rejectWith: SessionContextFailureCode.networkUnavailable,
+        ),
+        offlinePiiVault: openVault(),
+      );
+      addTearDown(restarted.close);
+      await restarted.start();
+      expect(restarted.current.stage, AppSessionStage.failed);
+      expect(restarted.current.fromOfflineCache, isFalse);
+    });
+  }
+
+  test('同身份在线重新解析到另一个项目先锁定旧快照', () async {
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'test-subject',
+          email: 'synthetic@example.test',
+        ),
+        expiresAt: DateTime.utc(2029),
+      ),
+    );
+    final vault = await _vaultWithEmptySnapshot();
+    final original = _withPii(syntheticSessionContext);
+    final next = _withPii(_secondProject);
+    final gateway = FakeSessionContextGateway(context: original);
+    final session = AppSession(
+      identitySession: identity,
+      contextGateway: gateway,
+      offlinePiiVault: vault,
+    );
+    addTearDown(session.close);
+    addTearDown(identity.close);
+    await session.start();
+    await vault.replace(
+      externalSubject: 'test-subject',
+      context: original,
+      assignedTargets: const [],
+      authorizedAtUtc: DateTime.utc(2026, 8, 6, 12),
+    );
+    gateway.context = next;
+    final resolved = session.changes.firstWhere(
+      (snapshot) => identical(snapshot.context, next),
+    );
+    await identity.signIn(email: 'synthetic@example.test', password: 'ignored');
+    await resolved;
+    final cached = await vault.read('test-subject');
+    expect(cached, isA<OfflinePiiLocked>());
+    expect(
+      (cached as OfflinePiiLocked).reason,
+      OfflinePiiLockReason.contextChanged,
+    );
+  });
+
+  for (final sameProject in [false, true]) {
+    test('全新会话在线解析时比较磁盘快照项目 sameProject=$sameProject', () async {
+      final identity = FakeIdentitySession(initial: _signedInIdentity());
+      final vault = await _vaultWithEmptySnapshot(
+        context: _withPii(syntheticSessionContext),
+      );
+      final next = _withPii(
+        sameProject ? syntheticSessionContext : _secondProject,
+      );
+      final session = AppSession(
+        identitySession: identity,
+        contextGateway: FakeSessionContextGateway(context: next),
+        offlinePiiVault: vault,
+      );
+      addTearDown(session.close);
+      addTearDown(identity.close);
+      await session.start();
+
+      expect(session.current.context, same(next));
+      final cached = await vault.read('external-subject-not-an-app-user-id');
+      if (sameProject) {
+        expect(cached, isA<OfflinePiiAvailable>());
+      } else {
+        expect(cached, isA<OfflinePiiLocked>());
+        expect(
+          (cached as OfflinePiiLocked).reason,
+          OfflinePiiLockReason.contextChanged,
+        );
+      }
+    });
+  }
+
+  test('切换项目等待 PII 清除时注销不会发布旧成功上下文', () async {
+    final identity = FakeIdentitySession(initial: _signedInIdentity());
+    final secureStore = _MemorySecureValueStore();
+    final vault = OfflinePiiVault(
+      secureStore: secureStore,
+      lockStore: _MemoryOfflinePiiLockStore(),
+      clock: FixedClock(DateTime.utc(2026, 8, 6, 13)),
+      installationId: 'installation-1',
+    );
+    final session = AppSession(
+      identitySession: identity,
+      contextGateway: FakeSessionContextGateway(
+        context: _withPii(syntheticSessionContext),
+        selectedContexts: {_secondProject.project.id: _withPii(_secondProject)},
+      ),
+      offlinePiiVault: vault,
+    );
+    addTearDown(session.close);
+    addTearDown(identity.close);
+    await session.start();
+    secureStore.deleteRequested = Completer<void>();
+    secureStore.releaseDelete = Completer<void>();
+    final selection = session.selectProject(_secondProject.project.id);
+    await secureStore.deleteRequested!.future;
+    final published = <AppSessionSnapshot>[];
+    final subscription = session.changes.listen(published.add);
+    addTearDown(subscription.cancel);
+    final signedOut = session.changes.firstWhere(
+      (snapshot) => snapshot.stage == AppSessionStage.signedOut,
+    );
+    await identity.signOut();
+    secureStore.releaseDelete!.complete();
+    final result = await selection;
+    await signedOut;
+    expect(result, isA<SessionContextRejected>());
+    expect(
+      published.where((snapshot) => snapshot.stage == AppSessionStage.ready),
+      isEmpty,
+    );
+    expect(session.current.stage, AppSessionStage.signedOut);
+  });
+
   test('身份刷新因断网失败时可用本机已知 subject 恢复 vault', () async {
     final identity = FakeIdentitySession(initial: _signedInIdentity())
       ..rejectNextWith = const IdentityFailure(
@@ -485,6 +668,15 @@ const _secondProject = TrustedSessionContext(
   capabilities: {'record_contact'},
 );
 
+TrustedSessionContext _withPii(TrustedSessionContext context) =>
+    TrustedSessionContext(
+      appUserId: context.appUserId,
+      workspace: context.workspace,
+      project: context.project,
+      questionnaireVersion: context.questionnaireVersion,
+      capabilities: {...context.capabilities, 'view_assigned_target_pii'},
+    );
+
 IdentitySnapshot _signedInIdentity() {
   return IdentitySnapshot(
     stage: IdentityStage.signedIn,
@@ -496,7 +688,9 @@ IdentitySnapshot _signedInIdentity() {
   );
 }
 
-Future<OfflinePiiVault> _vaultWithEmptySnapshot() async {
+Future<OfflinePiiVault> _vaultWithEmptySnapshot({
+  TrustedSessionContext context = syntheticSessionContext,
+}) async {
   final vault = OfflinePiiVault(
     secureStore: _MemorySecureValueStore(),
     lockStore: _MemoryOfflinePiiLockStore(),
@@ -505,7 +699,7 @@ Future<OfflinePiiVault> _vaultWithEmptySnapshot() async {
   );
   await vault.replace(
     externalSubject: 'external-subject-not-an-app-user-id',
-    context: syntheticSessionContext,
+    context: context,
     assignedTargets: const [],
     authorizedAtUtc: DateTime.utc(2026, 8, 6, 12),
   );
@@ -545,9 +739,14 @@ final class _DelayedGateway implements SessionContextGateway {
 final class _MemorySecureValueStore implements SecureValueStore {
   final values = <String, String>{};
   var failDelete = false;
+  Completer<void>? deleteRequested;
+  Completer<void>? releaseDelete;
 
   @override
   Future<void> delete(String key) async {
+    final requested = deleteRequested;
+    if (requested != null && !requested.isCompleted) requested.complete();
+    await releaseDelete?.future;
     if (failDelete) throw StateError('synthetic delete failure');
     values.remove(key);
   }

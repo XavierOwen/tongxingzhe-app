@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
 import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
@@ -180,7 +182,11 @@ void main() {
   });
 
   test('较旧的并发刷新不能在较新分配结果之后重新写回', () async {
-    final secureStore = _MemorySecureValueStore()..delayFirstWrite = true;
+    final secureStore = _MemorySecureValueStore();
+    final writeStarted = Completer<void>();
+    final releaseWrite = Completer<void>();
+    secureStore.onNextWriteStarted = writeStarted;
+    secureStore.releaseNextWrite = releaseWrite;
     final vault = OfflinePiiVault(
       secureStore: secureStore,
       lockStore: _MemoryOfflinePiiLockStore(),
@@ -194,13 +200,14 @@ void main() {
       assignedTargets: [_target('target-old', '旧分配')],
       authorizedAtUtc: DateTime.utc(2026, 8, 6, 12),
     );
-    await Future<void>.delayed(Duration.zero);
+    await writeStarted.future;
     final newer = vault.replace(
       externalSubject: 'identity-subject-1',
       context: _context,
       assignedTargets: [_target('target-new', '新分配')],
       authorizedAtUtc: DateTime.utc(2026, 8, 6, 13),
     );
+    releaseWrite.complete();
     await Future.wait([older, newer]);
 
     final read = await vault.read('identity-subject-1');
@@ -212,7 +219,11 @@ void main() {
   });
 
   test('并发撤权必须排在已开始的刷新之后且保持最终锁定', () async {
-    final secureStore = _MemorySecureValueStore()..delayFirstWrite = true;
+    final secureStore = _MemorySecureValueStore();
+    final writeStarted = Completer<void>();
+    final releaseWrite = Completer<void>();
+    secureStore.onNextWriteStarted = writeStarted;
+    secureStore.releaseNextWrite = releaseWrite;
     final vault = OfflinePiiVault(
       secureStore: secureStore,
       lockStore: _MemoryOfflinePiiLockStore(),
@@ -226,11 +237,12 @@ void main() {
       assignedTargets: [_target('target-old', '即将撤权')],
       authorizedAtUtc: DateTime.utc(2026, 8, 6, 13),
     );
-    await Future<void>.delayed(Duration.zero);
+    await writeStarted.future;
     final revocation = vault.revoke(
       'identity-subject-1',
       OfflinePiiLockReason.unauthorized,
     );
+    releaseWrite.complete();
     await Future.wait([refresh, revocation]);
 
     final read = await vault.read('identity-subject-1');
@@ -240,6 +252,77 @@ void main() {
       (read as OfflinePiiLocked).reason,
       OfflinePiiLockReason.unauthorized,
     );
+  });
+
+  test('撤权先完成后旧 fence 的晚到 replace 不能清锁或复活', () async {
+    final secureStore = _MemorySecureValueStore();
+    final vault = OfflinePiiVault(
+      secureStore: secureStore,
+      lockStore: _MemoryOfflinePiiLockStore(),
+      clock: MutableClock(DateTime.utc(2026, 8, 6, 14)),
+      installationId: 'installation-1',
+    );
+    final oldFence = vault.captureRequest('identity-subject-1');
+    await vault.replace(
+      externalSubject: 'identity-subject-1',
+      context: _context,
+      assignedTargets: [_target('target-old', '旧资料')],
+      authorizedAtUtc: DateTime.utc(2026, 8, 6, 13),
+      expectedFence: oldFence,
+    );
+
+    await vault.revoke(
+      'identity-subject-1',
+      OfflinePiiLockReason.contextChanged,
+      expectedFence: oldFence,
+    );
+    expect(await vault.read('identity-subject-1'), isA<OfflinePiiLocked>());
+
+    final lateReplace = vault.replace(
+      externalSubject: 'identity-subject-1',
+      context: _context,
+      assignedTargets: [_target('target-old', '旧资料')],
+      authorizedAtUtc: DateTime.utc(2026, 8, 6, 13),
+      expectedFence: oldFence,
+    );
+
+    expect(await lateReplace, isA<OfflinePiiStaleRefreshIgnored>());
+    expect(await vault.read('identity-subject-1'), isA<OfflinePiiLocked>());
+    expect(secureStore.values, isEmpty);
+  });
+
+  test('撤权调用当下使进行中的旧 fence 失效并最终保持锁定', () async {
+    final secureStore = _MemorySecureValueStore();
+    final vault = OfflinePiiVault(
+      secureStore: secureStore,
+      lockStore: _MemoryOfflinePiiLockStore(),
+      clock: MutableClock(DateTime.utc(2026, 8, 6, 14)),
+      installationId: 'installation-1',
+    );
+    final oldFence = vault.captureRequest('identity-subject-1');
+    final writeStarted = Completer<void>();
+    final releaseWrite = Completer<void>();
+    secureStore.onNextWriteStarted = writeStarted;
+    secureStore.releaseNextWrite = releaseWrite;
+    final oldReplace = vault.replace(
+      externalSubject: 'identity-subject-1',
+      context: _context,
+      assignedTargets: [_target('target-old', '旧资料')],
+      authorizedAtUtc: DateTime.utc(2026, 8, 6, 13),
+      expectedFence: oldFence,
+    );
+    await writeStarted.future;
+
+    final revoke = vault.revoke(
+      'identity-subject-1',
+      OfflinePiiLockReason.contextChanged,
+    );
+    expect(vault.isRequestCurrent(oldFence), isFalse);
+    releaseWrite.complete();
+    await Future.wait([oldReplace, revoke]);
+
+    expect(await vault.read('identity-subject-1'), isA<OfflinePiiLocked>());
+    expect(secureStore.values, isEmpty);
   });
 
   test('安全存储跨重装残留时由新的安装 ID 锁定', () async {
@@ -456,8 +539,8 @@ final class _MemorySecureValueStore implements SecureValueStore {
   var failDelete = false;
   var failRead = false;
   var failWrite = false;
-  var delayFirstWrite = false;
-  var writeCount = 0;
+  Completer<void>? onNextWriteStarted;
+  Completer<void>? releaseNextWrite;
 
   @override
   Future<void> delete(String key) async {
@@ -474,10 +557,12 @@ final class _MemorySecureValueStore implements SecureValueStore {
   @override
   Future<void> write(String key, String value) async {
     if (failWrite) throw StateError('synthetic write failure');
-    writeCount += 1;
-    if (delayFirstWrite && writeCount == 1) {
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-    }
+    final started = onNextWriteStarted;
+    final release = releaseNextWrite;
+    onNextWriteStarted = null;
+    releaseNextWrite = null;
+    started?.complete();
+    if (release != null) await release.future;
     values[key] = value;
   }
 }

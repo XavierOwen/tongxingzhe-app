@@ -382,20 +382,24 @@ final class AppDependencies {
           : OfflinePromotionTargetGateway(
               remote: remoteTargetGateway,
               vault: offlinePiiVault,
-              externalSubject: () {
-                final subject =
-                    identitySession!.current.principal?.externalSubject;
-                if (subject == null) {
-                  throw StateError('offline_pii_identity_missing');
+              currentScope: () {
+                final liveIdentity = identitySession!.current;
+                final session = appSession!.current;
+                final liveSubject = liveIdentity.principal?.externalSubject;
+                final sessionSubject =
+                    session.identity?.principal?.externalSubject;
+                final context = session.context;
+                if (liveIdentity.stage != IdentityStage.signedIn ||
+                    session.stage != AppSessionStage.ready ||
+                    liveSubject == null ||
+                    sessionSubject != liveSubject ||
+                    context == null ||
+                    !context.capabilities.contains(
+                      'view_assigned_target_pii',
+                    )) {
+                  throw StateError('offline_pii_scope_missing');
                 }
-                return subject;
-              },
-              currentContext: () {
-                final context = appSession!.current.context;
-                if (context == null) {
-                  throw StateError('offline_pii_context_missing');
-                }
-                return context;
+                return (externalSubject: liveSubject, context: context);
               },
             );
       final planningCache = DriftPersonalPlanningCache(database);

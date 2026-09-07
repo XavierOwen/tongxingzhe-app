@@ -103,7 +103,19 @@ final class OfflinePiiStaleRefreshIgnored extends OfflinePiiSaveResult {
   const OfflinePiiStaleRefreshIgnored();
 }
 
-enum OfflinePiiDeletionResult { deleted, pending, notLocked }
+enum OfflinePiiDeletionResult { deleted, pending, notLocked, stale }
+
+/// 把一次异步在线请求绑定到它发出时的本地授权代次。
+///
+/// 请求完成后必须把该 fence 传回 vault；撤权、锁定或删除会使旧 fence
+/// 失效。代次只防本进程内尚未完成的 Future，不是持久化授权证据。
+final class OfflinePiiRequestFence {
+  const OfflinePiiRequestFence._(this._owner, this._scopeKey, this._generation);
+
+  final OfflinePiiVault _owner;
+  final String _scopeKey;
+  final int _generation;
+}
 
 /// 受平台安全存储保护的最小离线跟进资料。
 ///
@@ -125,23 +137,44 @@ final class OfflinePiiVault {
   final AppClock _clock;
   final String _installationId;
   final Map<String, Future<void>> _operationQueues = {};
+  final Map<String, int> _generations = {};
 
+  OfflinePiiRequestFence captureRequest(String externalSubject) {
+    final scopeKey = _scopeKey(externalSubject);
+    return OfflinePiiRequestFence._(
+      this,
+      scopeKey,
+      _generations[scopeKey] ?? 0,
+    );
+  }
+
+  bool isRequestCurrent(OfflinePiiRequestFence fence) =>
+      _matchesFence(fence, fence._scopeKey);
+
+  /// 已在调用点就绪的 seed/probe 可不传 fence。如果数据来自异步
+  /// 远程授权，必须在发请求前 [captureRequest] 并在这里传入。
   Future<OfflinePiiSaveResult> replace({
     required String externalSubject,
     required TrustedSessionContext context,
     required List<PromotionTargetProfile> assignedTargets,
     required DateTime authorizedAtUtc,
+    OfflinePiiRequestFence? expectedFence,
   }) {
     final scopeKey = _scopeKey(externalSubject);
-    return _serialize(
-      scopeKey,
-      () => _replace(
+    return _serialize(scopeKey, () async {
+      if (expectedFence != null && !_matchesFence(expectedFence, scopeKey)) {
+        return const OfflinePiiStaleRefreshIgnored();
+      }
+      final result = await _replace(
         scopeKey: scopeKey,
         context: context,
         assignedTargets: assignedTargets,
         authorizedAtUtc: authorizedAtUtc.toUtc(),
-      ),
-    );
+      );
+      return expectedFence != null && !_matchesFence(expectedFence, scopeKey)
+          ? const OfflinePiiStaleRefreshIgnored()
+          : result;
+    });
   }
 
   Future<OfflinePiiSaveResult> _replace({
@@ -215,9 +248,20 @@ final class OfflinePiiVault {
     return result.future;
   }
 
-  Future<OfflinePiiReadResult> read(String externalSubject) {
+  Future<OfflinePiiReadResult> read(
+    String externalSubject, {
+    OfflinePiiRequestFence? expectedFence,
+  }) {
     final scopeKey = _scopeKey(externalSubject);
-    return _serialize(scopeKey, () => _read(scopeKey));
+    return _serialize(scopeKey, () async {
+      if (expectedFence != null && !_matchesFence(expectedFence, scopeKey)) {
+        return const OfflinePiiUnavailable();
+      }
+      final result = await _read(scopeKey);
+      return expectedFence != null && !_matchesFence(expectedFence, scopeKey)
+          ? const OfflinePiiUnavailable()
+          : result;
+    });
   }
 
   Future<OfflinePiiReadResult> _read(String scopeKey) async {
@@ -279,10 +323,17 @@ final class OfflinePiiVault {
 
   Future<OfflinePiiDeletionResult> revoke(
     String externalSubject,
-    OfflinePiiLockReason reason,
-  ) {
+    OfflinePiiLockReason reason, {
+    OfflinePiiRequestFence? expectedFence,
+  }) {
     final scopeKey = _scopeKey(externalSubject);
-    return _serialize(scopeKey, () => _revoke(scopeKey, reason));
+    if (expectedFence != null && !_matchesFence(expectedFence, scopeKey)) {
+      return Future.value(OfflinePiiDeletionResult.stale);
+    }
+    _invalidate(scopeKey);
+    return _serialize(scopeKey, () {
+      return _revoke(scopeKey, reason);
+    });
   }
 
   Future<OfflinePiiDeletionResult> _revoke(
@@ -312,6 +363,7 @@ final class OfflinePiiVault {
     String scopeKey,
     OfflinePiiLockReason reason,
   ) async {
+    _invalidate(scopeKey);
     await _lockStore.write(
       scopeKey,
       OfflinePiiLock(reason: reason, lockedAtUtc: _clock.now().toUtc()),
@@ -328,6 +380,15 @@ final class OfflinePiiVault {
       // 锁已先持久化。删除失败时仍不可读取，后续联网或启动流程可以重试。
       return OfflinePiiDeletionResult.pending;
     }
+  }
+
+  bool _matchesFence(OfflinePiiRequestFence fence, String scopeKey) =>
+      identical(fence._owner, this) &&
+      fence._scopeKey == scopeKey &&
+      fence._generation == (_generations[scopeKey] ?? 0);
+
+  void _invalidate(String scopeKey) {
+    _generations[scopeKey] = (_generations[scopeKey] ?? 0) + 1;
   }
 
   String _scopeKey(String externalSubject) {
