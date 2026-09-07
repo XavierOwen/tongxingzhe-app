@@ -1071,6 +1071,13 @@ final class _TrackingOrganizationDirectedAccountInvitationGateway
   var closeCount = 0;
 
   @override
+  Future<OrganizationDirectedAccountInvitationPreviewResult> preview({
+    required String invitationId,
+  }) async => const OrganizationDirectedAccountInvitationPreviewRejected(
+    OrganizationDirectedAccountInvitationFailureCode.notConfigured,
+  );
+
+  @override
   Future<OrganizationDirectedAccountInvitationCreateResult> create({
     required String invitationId,
     required String organizationWorkspaceId,

@@ -317,13 +317,11 @@ void main() {
       selfLeaveGateway: leaveGateway,
     );
 
-    await tester.tap(
-      find.byKey(
-        ValueKey(
-          'organization-leave-${_organizationB.organizationWorkspaceId}',
-        ),
-      ),
+    final selectedLeave = find.byKey(
+      ValueKey('organization-leave-${_organizationB.organizationWorkspaceId}'),
     );
+    await tester.ensureVisible(selectedLeave);
+    await tester.tap(selectedLeave);
     await tester.pumpAndSettle();
 
     final dialog = find.byType(OrganizationMembershipSelfLeaveDialog);

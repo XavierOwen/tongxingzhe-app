@@ -223,12 +223,16 @@ export function createBackendServer(
     const invitationMatch = matchOrganizationDirectedAccountInvitationRequestTarget(
       request.url,
     );
-    if (request.method === "POST" && invitationMatch !== null) {
+    if (
+      invitationMatch !== null &&
+      request.method === (invitationMatch.operation === "preview" ? "GET" : "POST")
+    ) {
       try {
         const result = await handleOrganizationDirectedAccountInvitation(
           {
             ...invitationMatch,
             authorization: request.headers.authorization,
+            hasBody: requestDeclaresBody(request.headers),
             readBody: async () => readJsonBody(request),
           },
           {

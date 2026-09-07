@@ -5,9 +5,11 @@ import 'package:flutter/services.dart';
 
 import '../../app_session/app_session.dart';
 import '../../l10n/app_strings.dart';
+import '../../organization_directed_account_invitation/organization_directed_account_invitation.dart';
 import '../../organization_directory/organization_directory.dart';
 import '../../organization_membership_self_leave/organization_membership_self_leave.dart';
 import 'organization_membership_self_leave_dialog.dart';
+import 'organization_invitation_accept_dialog.dart';
 
 /// 读取当前账号的组织目录，不改变当前项目。
 ///
@@ -20,12 +22,15 @@ final class OrganizationDirectoryDialog extends StatefulWidget {
     required this.appSession,
     this.selfLeaveGateway =
         const DeferredOrganizationMembershipSelfLeaveGateway(),
+    this.invitationGateway =
+        const DeferredOrganizationDirectedAccountInvitationGateway(),
   });
 
   final AppStrings text;
   final OrganizationDirectoryGateway gateway;
   final AppSession appSession;
   final OrganizationMembershipSelfLeaveGateway selfLeaveGateway;
+  final OrganizationDirectedAccountInvitationGateway invitationGateway;
 
   @override
   State<OrganizationDirectoryDialog> createState() =>
@@ -96,6 +101,16 @@ final class _OrganizationDirectoryDialogState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Align(
+          alignment: AlignmentDirectional.centerEnd,
+          child: TextButton.icon(
+            key: const ValueKey('organization-directory-accept-invitation'),
+            onPressed: _busy || _sessionInvalidated ? null : _acceptInvitation,
+            icon: const Icon(Icons.mark_email_read_outlined),
+            label: Text(widget.text.t('organizationInvitationAction')),
+          ),
+        ),
+        const SizedBox(height: 8),
         Text(widget.text.t('organizationDirectoryHelp')),
         const SizedBox(height: 16),
         if (_notice case final notice?) ...[
@@ -258,6 +273,28 @@ final class _OrganizationDirectoryDialogState
 
   void _close() => Navigator.of(context).pop();
 
+  Future<void> _acceptInvitation() async {
+    if (_busy || !_hasTrustedSession(widget.appSession.current)) return;
+    final receipt =
+        await showDialog<OrganizationDirectedAccountInvitationAcceptReceipt>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => OrganizationInvitationAcceptDialog(
+            text: widget.text,
+            gateway: widget.invitationGateway,
+            appSession: widget.appSession,
+          ),
+        );
+    if (!mounted ||
+        receipt == null ||
+        !_hasTrustedSession(widget.appSession.current)) {
+      return;
+    }
+    setState(() => _notice = widget.text.t('organizationInvitationSuccess'));
+    // 接受重放可能描述已结束的成员关系，不按旧 receipt 添加组织行。
+    await _load();
+  }
+
   Future<void> _leave(OrganizationDirectoryEntry entry) async {
     if (_busy ||
         !_organizations.contains(entry) ||
@@ -288,7 +325,9 @@ final class _OrganizationDirectoryDialogState
   bool _hasTrustedSession(AppSessionSnapshot snapshot) =>
       !_sessionInvalidated &&
       snapshot.stage == AppSessionStage.ready &&
-      snapshot.context?.appUserId == _trustedAppUserId;
+      snapshot.context?.appUserId == _trustedAppUserId &&
+      _trustedAppUserId != null &&
+      widget.appSession.isCurrentUser(_trustedAppUserId!);
 
   static String? _readyAppUserId(AppSessionSnapshot snapshot) =>
       snapshot.stage == AppSessionStage.ready

@@ -296,10 +296,11 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `ORG-014` | 邀请创建和接受分别通过 exact `(issuer, subject)` identity bridge 解析当前 actor，不 trim、normalize、bootstrap 或复用 Slice 7A 创建资格。`invitation_id` 是 invitation selector、创建幂等键和 request-lock key；claim、advisory lock 与 tombstone 使用独立的 `organization-directed-account-invitation:v1` family。 |
 | `ORG-015` | claim 只保存 invitation、workspace、可去关联的 inviter／target internal user、issued／expiry 和可空 acceptance／membership 字段；expiry 固定为 issued 后连续 168 小时。exact identity 仍须解析 active actor；随后创建与接受 replay 先于 owner、membership、expiry 或 recovery 状态检查。漂移或 tombstone 返回 conflict，账号引用去关联后统一 forbidden；接受成功只原子建立一条 organization membership，不建立 project membership、capability 或 owner assignment。 |
 | `ORG-016` | 首次创建／接受使用 request lock、按 UUID 排序的受影响 app-user row locks、organization governance lock、按 UUID 排序的 membership locks，并在锁后重读 claim、tombstone、账号、workspace 和 membership。四个 operation-specific bridge／writer 使用 `VOLATILE SECURITY DEFINER`、`pg_catalog` search path、受控 owner 和最小 ACL；固定 result、SQLSTATE／message、Backend code 与 JSON／`no-store` 传输合同。 |
-| `ORG-017` | invitation audit 追加且不可变，只保存固定 event、contract、invitation、workspace、接受后的 membership 与数据库时间；响应、失败审计和结构化日志不得保存身份、邮箱、名称、token、请求原文或数据库原文。组织恢复期冻结新 claim，终结清除按 ADR-0183 的当前全局 family 顺序取锁，先留 family／UUID tombstone；本票不实现 purge writer。 |
+| `ORG-017` | invitation audit 追加且不可变，只保存固定 event、contract、invitation、workspace、接受后的 membership 与数据库时间；创建／接受回执、全部失败响应、失败审计和结构化日志不得保存身份、邮箱、名称、token、请求原文或数据库原文。绑定收件人的组织名称预览仅按 ORG-021 例外开放。组织恢复期冻结新 claim，终结清除按 ADR-0183 的当前全局 family 顺序取锁，先留 family／UUID tombstone；本票不实现 purge writer。 |
 | `ORG-018` | 当前账号的组织目录只列出 active app user 在读取时具有有效组织成员关系、且未删除的 organization workspace 名称和标识；包含尚无项目的组织，空列表正常，同名组织不合并。目录不授予项目、owner 或 capability，不成为全 App 搜索、成员或恢复期目录。 |
 | `ORG-019` | 无下游关系成员可自助结束本人当前、尚未安排结束的组织 membership。首次执行在锁后确认 active exact identity、未删除组织、无仍有效或未来有效 owner assignment、无该 membership 的任何项目成员历史、无本人在本组织未结束的对象分配；否则整体 forbidden。不级联关闭权限或清除缓存，不冒充完整组织退出。 |
 | `ORG-020` | self-leave 使用独立 `organization-membership-self-leave:v1` claim、request lock、tombstone 和 value-free audit；request → actor row → governance → membership 锁后取一次数据库时间用于授权、membership end、claim、audit 与 receipt。相同 request、active actor、workspace 精确重放旧结果，重新入组后旧请求不得结束新 membership。drift、去关联或同 family tombstone 固定 conflict；runtime 仅可执行 exact identity bridge。 |
+| `ORG-021` | 只有 active 的绑定 target，才能按已知 invitation UUID 预览未接受、未过期且组织可加入的邀请名称与有效期。预览不列出 workspace、成员、inviter、target 或权限，不修改数据，不缓存，不保留接受资格；未知、错误收件人、过期、已接受、去关联、已有当前 membership 或恢复期一律 forbidden。接受仍按 ORG-013–ORG-017 锁后重验。 |
 
 #### Slice 7B Spec：固定组织原子创建与首位所有者合同
 
@@ -1162,6 +1163,48 @@ busy 阻止重复提交；注销、账号变化或 dispose 使旧 UI 回应失�
 `TEST-075`／`MANUAL-065` 覆盖该路径。当前正式组织 target writer 与组织 SessionContext 尚未开放；未来开放时必须补充本次退出期间对新组织 PII 请求的作用域门禁，不能把本进程旧请求 fence 当成跨进程或永久 workspace 撤权。
 本切片不修改 DB／Backend、组织权限、完整成员退出、删除恢复或生产配置，也不增加持久 request、workspace tombstone 或多 workspace 缓存。
 本地可控存储／identity／Widget 与 CI build 只证明 synthetic 合同，不证明真实设备物理清除、production identity、部署端点或 Apple 行为。
+
+#### Slice 7AA：绑定收件人预览并确认接受组织邀请
+
+7AA／Issue #344 让现有账号从“我的组织”输入已知 invitation UUID，先核对组织名称与有效期，再明确接受。
+用户已允许这一限域的入组前读取；它是私有组织目录之外的例外，见 [ADR-0184](./adr/0184-bound-recipient-organization-invitation-preview.md)。UUID 只是 selector，不是身份凭证。
+
+数据库只新增 `app_data.preview_organization_directed_invitation_for_identity_v1(text, text, uuid)`。函数名省略 `account`，以保留 `_v1` 并遵守 PostgreSQL 的 63-byte 标识符上限。
+参数依次为 `trusted_issuer`、`trusted_subject`、`requested_invitation_id`；不 trim、normalize、bootstrap，也不复用组织创建资格。
+函数为 `VOLATILE SECURITY DEFINER`、`search_path = pg_catalog`，复用成员校验器的非 runtime owner，仅给 runtime EXECUTE，不给 PUBLIC 或表直读权。
+一次 `clock_timestamp()` 与同一查询快照核对 exact identity、active target、绑定 claim、组织状态与 target 当前 membership。
+claim 的 inviter／target 不能已去关联，acceptance 必须为空，读取时间必须早于 expiry；workspace 须为未删除的 organization，target 不能已有当前成员关系。
+不重验邀者的当前 owner 身份，不读取 tombstone 详情，不取得写锁，不写 membership、claim 或 audit。
+非法 identity、空 typed UUID 与无权读取分别沿用既有 invitation identity／request／forbidden SQLSTATE 和固定 message；所有不可见邀请状态统一 forbidden。
+
+HTTP 固定为 `GET /v1/organization-directed-account-invitations/:invitationId`，无 query 或 body，认证先于形状与 store 检查。
+原始 URL 中的编码、dot segment、额外路径或错误 method 不经归一化别名到达其他入口。成功与错误均使用严格 JSON／`no-store`。
+成功只有下列四个字段，不附加 workspace、target、inviter、成员状态或权限：
+
+```json
+{
+  "organization_invitation_preview_contract_id": "organization-directed-account-invitation-preview:v1",
+  "invitation_id": "uuid",
+  "organization_name": "组织原名称",
+  "expires_at_utc": "UTC RFC3339 timestamp"
+}
+```
+
+SQL 时间保留完整精度，HTTP 输出 canonical lowercase UUID 与 UTC 毫秒时间。名称沿用组织目录边界并保留原值。
+既有 invitation store／gateway 增加 `preview` 和独立不可变 preview result；它不是操作 receipt，也不重新定义 create／accept receipt 或十种客户端错误。
+共享 HTTP 请求入口在 token、HTTP 和一次 401 refresh 前后绑定不间断原登录；换账号、注销再登录、stream 失效或 close 都不能借用新凭证或返回旧账号内容。
+
+确认页只显示在线验证的名称、有效期与“只加入组织，不加入项目或取得权限”的说明。用户可返回修改 invitation UUID；修改后旧预览失效。
+只有用户明确确认才调用现有 accept。客户端时间仅用于展示，不代替数据库 expiry 判定；预览成功后资格仍可能变化。
+接受结果不确定时，在同一窗口保留相同 invitation UUID，由用户主动重试接受，不以再次预览成功作为重试前提。
+因为首次接受可能已经完成，之后预览会 forbidden，而旧 accept 仍可 exact replay。关闭不确定结果须提示重新读取我的组织。
+成功回执只表示历史接受操作；父目录重新在线读取，不按回执添加成员行，不切换项目，不解除已有离线 PII 锁。
+
+AppSession 在异步清除旧缓存前发布非 ready 状态，隐藏旧账号内容；旧清除完成不能覆盖后来的会话。
+窗口在会话失效、账号变化或 dispose 后清除预览并拒绝迟到结果。preview、invitation UUID、receipt 和重试意图仅在窗口内存，不写 Drift、Outbox、偏好或日志，不自动写剪贴板。
+界面采用既有 Material 3，对关键状态置顶并保证窄屏、大字号、键盘、焦点和 live region 可用。
+`TEST-076`／`MANUAL-066` 覆盖数据库权限与只读边界、Backend、gateway、UI、composition 及会话切换。
+本票不实现创建邀请 UI、邮件投递、未注册账号、分享链接、收件箱、revoke、审批、项目成员或 capability；本地 PostgreSQL／Flutter 和 CI 不证明生产身份、部署或真实 Apple／设备行为。
 
 ### 5.8 分析、指标与报告
 
@@ -2673,6 +2716,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-063` | 学习文档必须区分 7W 的无下游 membership end 与完整组织退出，解释未排定结束、owner／项目历史／对象分配拒绝、锁后单次时间、旧 request 不结束重加入的新 membership、claim／audit／tombstone／去关联、exact identity 与 runtime ACL、strict HTTP 和稳定错误。提供 DB／Backend／并发／Docker 命令，明确没有级联撤权、缓存清除、Flutter 或生产证明。 |
 | `MANUAL-064` | 学习文档必须说明 7X 的不可变 receipt／十类失败、输入先验、strict POST 与响应、单次 401 保留请求意图、receipt 不是当前成员状态、配置与 client ownership、同一 identity／gateway、三类 App close 及 focused／完整 Flutter 验证命令；明确没有 UI、UUID 生成、目录刷新、完整退出、缓存清除或生产证明。 |
 | `MANUAL-065` | 学习文档说明 7Z 的明确选择与确认、匹配 workspace 预清、清除失败零 HTTP、其他缓存与锁保持、旧请求代次、原账号及 token／401 身份绑定、同窗口 UUID 重试与放弃确认、历史 receipt 与目录重读，以及 focused／完整 Flutter 验证命令；区分 synthetic 清除、完整组织退出与真实平台证据。 |
+| `MANUAL-066` | 学习文档说明 7AA 仅绑定收件人的入组前预览、只读和非枚举边界、固定四字段与认证顺序、预览后资格可变、未知接受结果直接同 ID 重试、历史回执后重读目录、不切项目、会话立即失效及验证命令；区分 synthetic 与生产／真机证据。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -2926,6 +2970,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-073` | 7W structural check／rollback fixture／独立会话并发必须覆盖 exact active identity、current unended membership、过去 owner 可退出、当前／未来 owner、未来已排定结束、任何项目历史和未结束组织对象分配拒绝；覆盖锁后时间、等待中失效、退出事务开始后由独立事务建立新 membership（模拟接受邀请的产物）、同／异 request、exact replay、重新入组旧请求、drift、去关联、tombstone、恢复期和失败零写入。验证 claim／audit 不可变、单次时间、受控 owner、PUBLIC／runtime ACL、一次参数化 SQL、严格 receipt／错误、真实 HTTP／composition／runtime integration，并通过 Docker rebuild／checksum／dump／restore 与 CI；不据此宣称完整退出、生产身份或 PII 清除。 |
 | `TEST-074` | 7X gateway／App tests 必须覆盖四字段 receipt、十类失败、输入先于 token／网络、固定 POST／headers／body、strict keys／lowercase UUID／workspace echo／UTC 毫秒、全部 exact error code、合法 401 单次刷新且 URL／UUID／body 不变、非法 401 不刷新、网络／timeout 与未知异常、deferred／valid／invalid 配置、client 只关一次、同一 session／gateway、三类 App close。完整 Flutter tests、analyzer、format、生产边界、链接与 CI 通过，不重复执行未改变的数据库实验，也不把 synthetic 当完整退出或真人平台证明。 |
 | `TEST-075` | 7Z 覆盖匹配／其他 workspace／无缓存、已有锁保持、read／decode／delete 失败、旧请求与排队写入、原账号预清及清除期间换账号；覆盖明确选择／取消、busy 防重、十类拒绝、同 UUID 主动重试、放弃确认、历史 receipt 后重读不盲删、同一 App gateway、不切项目、迟到结果与 dispose 隔离，以及 token wait／401 refresh／注销再登录的身份竞态。Widget 检查中英文、小屏 200% 字号、暗色、键盘／焦点、live region 和触控目标；完整 Flutter、analyzer、format、生产边界、链接和 CI 通过，不重复未改 DB 实验，不把 synthetic 写成真机清除或生产退出。 |
+| `TEST-076` | 7AA 覆盖 preview exact identity、active 绑定收件人、当前状态、墙钟有效期、原名称、只读与 ACL；Backend 覆盖原始路径、method、认证优先、无 query／body、strict 四字段、一次 SQL 和 runtime 集成。Flutter 覆盖原登录代次与 401、严格解析、明确预览与接受、十类失败、同 ID 直接重试、编辑／放弃／忙状态、会话失效和迟到结果、目录重读及不切项目；检查中英文、窄屏 200% 字号、暗色、键盘、焦点、live region 与触控目标。完整 Flutter／Backend、Docker rebuild／checksum／restore、静态检查及 CI 通过，不据此宣称生产或真机验收。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3249,6 +3294,10 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 
 7Z／#342 将无下游关系成员的确认退出、匹配本地缓存预清、同意图重试和目录重读接入“我的组织”。
 它仍拒绝 7W 下游关系，不实现级联退出或生产配置；synthetic 通过不表示真机清除和完整组织治理已经验收。
+
+7AA／#344 允许绑定收件人在“我的组织”输入已知 invitation UUID，在线核对组织名称与有效期后明确接受。
+它只增加受限预览读取并复用既有接受合同；接受结果不确定时直接同 ID 重试，成功后重读目录但不切项目。
+它不提供创建邀请页面、邀请投递、公开链接、收件箱或成员权限管理，仍不构成完整组织治理闭环。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 

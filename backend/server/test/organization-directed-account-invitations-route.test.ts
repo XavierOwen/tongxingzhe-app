@@ -15,6 +15,7 @@ import {
   OrganizationDirectedAccountInvitationStoreError,
   type OrganizationDirectedAccountInvitationAcceptResult,
   type OrganizationDirectedAccountInvitationCreateResult,
+  type OrganizationDirectedAccountInvitationPreviewResult,
   type OrganizationDirectedAccountInvitationStore,
 } from "../src/organization-directed-account-invitations.js";
 import {createBackendServer} from "../src/server.js";
@@ -43,9 +44,52 @@ const acceptResult: OrganizationDirectedAccountInvitationAcceptResult = {
   organizationMembershipId: membershipId,
   acceptedAtUtc: "2030-01-02T00:00:00.000Z",
 };
+const previewResult: OrganizationDirectedAccountInvitationPreviewResult = {
+  organizationInvitationPreviewContractId:
+    "organization-directed-account-invitation-preview:v1",
+  invitationId,
+  organizationName: " 同行组织 ",
+  expiresAtUtc: "2030-01-08T00:00:00.000Z",
+};
+
+test("recipient preview GET returns only the authorized four fields", async () => {
+  let previewCalls = 0;
+  const store = {
+    create: async () => assert.fail("preview must not create"),
+    accept: async () => assert.fail("preview must not accept"),
+    preview: async (actor: VerifiedIdentity, selectedInvitationId: string) => {
+      previewCalls += 1;
+      assert.deepEqual(actor, identity);
+      assert.equal(selectedInvitationId, invitationId);
+      return previewResult;
+    },
+  };
+  const server = createBackendServer({
+    ...unusedDependencies({verify: async () => identity}),
+    organizationDirectedAccountInvitationStore: store,
+  });
+  const address = await listen(server);
+  test.after(() => close(server));
+  const response = await rawRequest(
+    address.port,
+    "GET",
+    `/v1/organization-directed-account-invitations/${invitationId.toUpperCase()}`,
+    {authorization: "Bearer token"},
+    "",
+  );
+  assertResponse(response, 200, {
+    organization_invitation_preview_contract_id:
+      "organization-directed-account-invitation-preview:v1",
+    invitation_id: invitationId,
+    organization_name: " 同行组织 ",
+    expires_at_utc: "2030-01-08T00:00:00.000Z",
+  });
+  assert.equal(previewCalls, 1);
+});
 
 test("raw invitation aliases return 404 before authentication or store access", async () => {
   let verifierCalls = 0;
+  let previewCalls = 0;
   let createCalls = 0;
   let acceptCalls = 0;
   let organizationCreationIdentityCalls = 0;
@@ -58,6 +102,10 @@ test("raw invitation aliases return 404 before authentication or store access", 
       },
     }),
     organizationDirectedAccountInvitationStore: {
+      preview: async () => {
+        previewCalls += 1;
+        return previewResult;
+      },
       create: async () => {
         createCalls += 1;
         return createResult;
@@ -104,6 +152,21 @@ test("raw invitation aliases return 404 before authentication or store access", 
     ["POST", `${acceptPath()}/extra`],
     ["POST", `${acceptPath()}/../../../organizations`],
     ["POST", "/v1/organization-directed-account-invitation/accept"],
+    ["GET", `${previewPath()}/`],
+    ["GET", `/v1/organization-directed-account-invitations//${invitationId}`],
+    ["GET", "/v1/organization-directed-account-invitations/."],
+    ["GET", "/v1/organization-directed-account-invitations/.."],
+    ["GET", "/v1/organization-directed-account-invitations/%2e"],
+    ["GET", "/v1/organization-directed-account-invitations/%2E%2E"],
+    ["GET", "/v1/organization-directed-account-invitations/%41"],
+    ["GET", `${previewPath()}/extra`],
+    ["POST", previewPath()],
+    ["HEAD", previewPath()],
+    ["PUT", previewPath()],
+    ["PATCH", previewPath()],
+    ["DELETE", previewPath()],
+    ["OPTIONS", previewPath()],
+    ["POST", `${previewPath()}/../../organizations`],
   ] as const;
 
   for (const [method, path] of paths) {
@@ -114,9 +177,14 @@ test("raw invitation aliases return 404 before authentication or store access", 
       {authorization: "Bearer token"},
       "not-json",
     );
-    assertResponse(response, 404, {error: {code: "not_found"}});
+    assertResponse(
+      response,
+      404,
+      method === "HEAD" ? undefined : {error: {code: "not_found"}},
+    );
   }
   assert.equal(verifierCalls, 0);
+  assert.equal(previewCalls, 0);
   assert.equal(createCalls, 0);
   assert.equal(acceptCalls, 0);
   assert.equal(organizationCreationIdentityCalls, 0);
@@ -137,6 +205,7 @@ test("invitation routes authenticate before request and dependency checks", asyn
       },
     }),
     organizationDirectedAccountInvitationStore: {
+      preview: async () => assert.fail("preview must not run for write tests"),
       create: async () => {
         storeCalls += 1;
         return createResult;
@@ -192,6 +261,135 @@ test("invitation routes authenticate before request and dependency checks", asyn
   assert.equal(storeCalls, 0);
 });
 
+test("preview authenticates before UUID, query, or body validation", async () => {
+  let verifierCalls = 0;
+  let previewCalls = 0;
+  const server = createBackendServer({
+    ...unusedDependencies({
+      verify: async (token) => {
+        verifierCalls += 1;
+        if (token === "invalid") {
+          throw new IdentityVerificationError("unauthenticated");
+        }
+        throw new IdentityVerificationError("unavailable");
+      },
+    }),
+    organizationDirectedAccountInvitationStore: {
+      preview: async () => {
+        previewCalls += 1;
+        return previewResult;
+      },
+      create: async () => assert.fail("preview must not create"),
+      accept: async () => assert.fail("preview must not accept"),
+    },
+  });
+  const address = await listen(server);
+  test.after(() => close(server));
+  const malformedPath = `${previewPath("not-a-uuid")}?private=value`;
+
+  for (const [headers, status, code] of [
+    [{}, 401, "unauthenticated"],
+    [{authorization: "Bearer invalid"}, 401, "unauthenticated"],
+    [
+      {authorization: "Bearer unavailable"},
+      503,
+      "organization_invitation_unavailable",
+    ],
+  ] as const) {
+    const response = await rawRequest(
+      address.port,
+      "GET",
+      malformedPath,
+      headers,
+      "not-json",
+    );
+    assertResponse(response, status, {error: {code}});
+  }
+
+  assert.equal(verifierCalls, 2);
+  assert.equal(previewCalls, 0);
+});
+
+test("preview rejects query or declared body without reading JSON", async () => {
+  const received: Array<
+    Parameters<OrganizationDirectedAccountInvitationStore["preview"]>
+  > = [];
+  const server = createBackendServer({
+    ...unusedDependencies({verify: async () => identity}),
+    organizationDirectedAccountInvitationStore: {
+      preview: async (...args) => {
+        received.push(args);
+        return previewResult;
+      },
+      create: async () => assert.fail("preview must not create"),
+      accept: async () => assert.fail("preview must not accept"),
+    },
+  });
+  const address = await listen(server);
+  test.after(() => close(server));
+
+  for (const [path, headers, body, autoContentLength] of [
+    [previewPath("not-a-uuid"), {authorization: "Bearer token"}, "", false],
+    [`${previewPath()}?`, {authorization: "Bearer token"}, "", false],
+    [
+      `${previewPath()}?private=value`,
+      {authorization: "Bearer token"},
+      "",
+      false,
+    ],
+    [
+      previewPath(),
+      {authorization: "Bearer token", "content-length": "1"},
+      "x",
+      true,
+    ],
+    [
+      previewPath(),
+      {authorization: "Bearer token", "transfer-encoding": "chunked"},
+      "not-json",
+      true,
+    ],
+  ] as const) {
+    const response = await rawRequest(
+      address.port,
+      "GET",
+      path,
+      headers,
+      body,
+      autoContentLength,
+    );
+    assertResponse(response, 400, {
+      error: {code: "invalid_organization_invitation_request"},
+    });
+  }
+
+  for (const [headers, autoContentLength] of [
+    [{authorization: "Bearer token"}, false],
+    [{authorization: "Bearer token", "content-length": "0"}, true],
+  ] as const) {
+    const response = await rawRequest(
+      address.port,
+      "GET",
+      previewPath(),
+      headers,
+      "",
+      autoContentLength,
+    );
+    assertResponse(response, 200, {
+      organization_invitation_preview_contract_id:
+        previewResult.organizationInvitationPreviewContractId,
+      invitation_id: invitationId,
+      organization_name: previewResult.organizationName,
+      expires_at_utc: previewResult.expiresAtUtc,
+    });
+  }
+
+  assert.deepEqual(received, [
+    [identity, invitationId],
+    [identity, invitationId],
+  ]);
+});
+
 test("create and accept routes use only their dedicated store methods", async () => {
   let createCalls = 0;
   let acceptCalls = 0;
@@ -204,6 +402,7 @@ test("create and accept routes use only their dedicated store methods", async ()
   const server = createBackendServer({
     ...unusedDependencies({verify: async () => identity}),
     organizationDirectedAccountInvitationStore: {
+      preview: async () => assert.fail("preview must not run for write tests"),
       create: async (...args) => {
         createCalls += 1;
         receivedCreate = args;
@@ -257,6 +456,7 @@ test("invitation routes count chunked bytes at the inclusive 1 MiB limit", async
   const server = createBackendServer({
     ...unusedDependencies({verify: async () => identity}),
     organizationDirectedAccountInvitationStore: {
+      preview: async () => assert.fail("preview must not run for write tests"),
       create: async () => {
         createCalls += 1;
         return createResult;
@@ -310,6 +510,7 @@ test("invitation routes reject invalid JSON and exact body drift", async () => {
   const server = createBackendServer({
     ...unusedDependencies({verify: async () => identity}),
     organizationDirectedAccountInvitationStore: {
+      preview: async () => assert.fail("preview must not run for write tests"),
       create: async () => {
         storeCalls += 1;
         return createResult;
@@ -382,6 +583,15 @@ test("invitation routes stop before body parsing when dependencies are missing",
     503,
     "organization_invitation_unavailable",
   );
+  await assertInvitationError(
+    missingVerifierAddress.port,
+    previewPath(),
+    {authorization: "Bearer token"},
+    "",
+    503,
+    "organization_invitation_unavailable",
+    "GET",
+  );
 
   const missingStoreServer = createBackendServer({
     ...unusedDependencies({verify: async () => identity}),
@@ -396,6 +606,15 @@ test("invitation routes stop before body parsing when dependencies are missing",
     503,
     "organization_invitation_unavailable",
   );
+  await assertInvitationError(
+    missingStoreAddress.port,
+    previewPath(),
+    {authorization: "Bearer token"},
+    "",
+    503,
+    "organization_invitation_unavailable",
+    "GET",
+  );
 });
 
 test("invitation routes wait for store completion before responding", async () => {
@@ -407,6 +626,7 @@ test("invitation routes wait for store completion before responding", async () =
   const server = createBackendServer({
     ...unusedDependencies({verify: async () => identity}),
     organizationDirectedAccountInvitationStore: {
+      preview: async () => assert.fail("preview must not run for write tests"),
       create: async () => createResult,
       async accept() {
         markStoreStarted?.();
@@ -436,6 +656,69 @@ test("invitation routes wait for store completion before responding", async () =
   releaseStore?.();
 
   assertResponse(await responsePromise, 200, acceptWire());
+});
+
+test("preview waits for only its store operation", async () => {
+  let releasePreview: (() => void) | undefined;
+  let markPreviewStarted: (() => void) | undefined;
+  let createCalls = 0;
+  let acceptCalls = 0;
+  let previewCalls = 0;
+  const previewStarted = new Promise<void>((resolve) => {
+    markPreviewStarted = resolve;
+  });
+  const server = createBackendServer({
+    ...unusedDependencies({verify: async () => identity}),
+    organizationDirectedAccountInvitationStore: {
+      create: async () => {
+        createCalls += 1;
+        return createResult;
+      },
+      accept: async () => {
+        acceptCalls += 1;
+        return acceptResult;
+      },
+      async preview(actor, selectedInvitationId) {
+        previewCalls += 1;
+        assert.deepEqual(actor, identity);
+        assert.equal(selectedInvitationId, invitationId);
+        markPreviewStarted?.();
+        await new Promise<void>((resolve) => {
+          releasePreview = resolve;
+        });
+        return previewResult;
+      },
+    },
+  });
+  const address = await listen(server);
+  test.after(() => close(server));
+
+  let responseSettled = false;
+  const responsePromise = rawRequest(
+    address.port,
+    "GET",
+    previewPath(),
+    {authorization: "Bearer token"},
+    "",
+    false,
+  ).then((response) => {
+    responseSettled = true;
+    return response;
+  });
+  await previewStarted;
+  assert.equal(responseSettled, false);
+  assert.equal(previewCalls, 1);
+  assert.equal(createCalls, 0);
+  assert.equal(acceptCalls, 0);
+  releasePreview?.();
+
+  assertResponse(await responsePromise, 200, {
+    organization_invitation_preview_contract_id:
+      previewResult.organizationInvitationPreviewContractId,
+    invitation_id: invitationId,
+    organization_name: previewResult.organizationName,
+    expires_at_utc: previewResult.expiresAtUtc,
+  });
 });
 
 test("invitation routes return exact redacted dependency and store errors", async () => {
@@ -506,6 +789,7 @@ test("invitation routes return exact redacted dependency and store errors", asyn
   const storeFailureServer = createBackendServer({
     ...unusedDependencies({verify: async () => identity}),
     organizationDirectedAccountInvitationStore: {
+      preview: async () => assert.fail("preview must not run for write tests"),
       create: async (_identity, receivedId) => {
         createCalls += 1;
         const entry = typedCases.find(([id]) => id === receivedId);
@@ -567,9 +851,69 @@ test("invitation routes return exact redacted dependency and store errors", asyn
   assert.equal(acceptCalls, typedCases.length + 1);
 });
 
+test("preview returns only stable redacted store errors", async () => {
+  const unknownPreviewId = "123e4567-e89b-12d3-a456-426614174099";
+  const sensitive = [
+    "Secret Organization Name",
+    unknownPreviewId,
+    "SELECT target_app_user_id FROM private_claims",
+    identity.issuer,
+    identity.subject,
+  ];
+  let previewCalls = 0;
+  const server = createBackendServer({
+    ...unusedDependencies({verify: async () => identity}),
+    organizationDirectedAccountInvitationStore: {
+      create: async () => assert.fail("preview must not create"),
+      accept: async () => assert.fail("preview must not accept"),
+      preview: async (_identity, selectedInvitationId) => {
+        previewCalls += 1;
+        if (selectedInvitationId === invitationId) {
+          throw new OrganizationDirectedAccountInvitationStoreError(
+            "organization_invitation_forbidden",
+          );
+        }
+        throw new Error(sensitive.join(" | "));
+      },
+    },
+  });
+  const address = await listen(server);
+  test.after(() => close(server));
+
+  const forbidden = await rawRequest(
+    address.port,
+    "GET",
+    previewPath(),
+    {authorization: "Bearer token"},
+    "",
+    false,
+  );
+  assertResponse(forbidden, 403, {
+    error: {code: "organization_invitation_forbidden"},
+  });
+
+  const unknown = await rawRequest(
+    address.port,
+    "GET",
+    previewPath(unknownPreviewId),
+    {authorization: "Bearer token"},
+    "",
+    false,
+  );
+  assertResponse(unknown, 503, {
+    error: {code: "organization_invitation_unavailable"},
+  });
+  const unknownWire = JSON.stringify(unknown.body);
+  for (const secret of sensitive) {
+    assert.equal(unknownWire.includes(secret), false);
+  }
+  assert.equal(previewCalls, 2);
+});
+
 const successfulStore: OrganizationDirectedAccountInvitationStore = {
   create: async () => createResult,
   accept: async () => acceptResult,
+  preview: async () => previewResult,
 };
 
 function createPath(value = workspaceId): string {
@@ -578,6 +922,10 @@ function createPath(value = workspaceId): string {
 
 function acceptPath(value = invitationId): string {
   return `/v1/organization-directed-account-invitations/${value}/accept`;
+}
+
+function previewPath(value = invitationId): string {
+  return `/v1/organization-directed-account-invitations/${value}`;
 }
 
 function createBody(value: string): string {
@@ -631,8 +979,9 @@ async function assertInvitationError(
   body: string,
   status: number,
   code: string,
+  method = "POST",
 ): Promise<void> {
-  const response = await rawRequest(port, "POST", path, headers, body);
+  const response = await rawRequest(port, method, path, headers, body);
   assertResponse(response, status, {error: {code}});
 }
 
@@ -662,10 +1011,12 @@ function rawRequest(
   path: string,
   headers: Readonly<Record<string, string>>,
   body: string,
+  autoContentLength = true,
 ): Promise<RawResponse> {
   return new Promise((resolve, reject) => {
     const requestHeaders = {...headers};
     if (
+      autoContentLength &&
       requestHeaders["transfer-encoding"] === undefined &&
       requestHeaders["content-length"] === undefined
     ) {
@@ -685,10 +1036,13 @@ function rawRequest(
         response.on("data", (chunk: Buffer) => chunks.push(chunk));
         response.on("end", () => {
           try {
+            const responseBody = Buffer.concat(chunks).toString("utf8");
             resolve({
               status: response.statusCode ?? 0,
               headers: response.headers,
-              body: JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown,
+              body: responseBody.length === 0
+                ? undefined
+                : JSON.parse(responseBody) as unknown,
             });
           } catch (error) {
             reject(error);
@@ -697,7 +1051,11 @@ function rawRequest(
       },
     );
     request.on("error", reject);
-    request.end(body);
+    if (!autoContentLength && body.length === 0) {
+      request.end();
+    } else {
+      request.end(body);
+    }
   });
 }
 

@@ -8,9 +8,11 @@ import {
   parseOrganizationDirectedAccountInvitationAcceptResult,
   parseOrganizationDirectedAccountInvitationCreateBody,
   parseOrganizationDirectedAccountInvitationCreateResult,
+  parseOrganizationDirectedAccountInvitationPreviewResult,
   PostgresOrganizationDirectedAccountInvitationStore,
   type OrganizationDirectedAccountInvitationAcceptResult,
   type OrganizationDirectedAccountInvitationCreateResult,
+  type OrganizationDirectedAccountInvitationPreviewResult,
   type OrganizationDirectedAccountInvitationRequest,
   type OrganizationDirectedAccountInvitationStore,
 } from "../src/organization-directed-account-invitations.js";
@@ -45,6 +47,13 @@ const acceptResult: OrganizationDirectedAccountInvitationAcceptResult = {
   organizationMembershipId: membershipId,
   acceptedAtUtc: "2030-01-02T00:00:00.000Z",
 };
+const previewResult: OrganizationDirectedAccountInvitationPreviewResult = {
+  organizationInvitationPreviewContractId:
+    "organization-directed-account-invitation-preview:v1",
+  invitationId,
+  organizationName: " 同行组织 ",
+  expiresAtUtc: createResult.expiresAtUtc,
+};
 
 type CreateRequest = OrganizationDirectedAccountInvitationRequest & {
   readonly operation: "create";
@@ -52,6 +61,21 @@ type CreateRequest = OrganizationDirectedAccountInvitationRequest & {
 type AcceptRequest = OrganizationDirectedAccountInvitationRequest & {
   readonly operation: "accept";
 };
+type PreviewRequest = OrganizationDirectedAccountInvitationRequest & {
+  readonly operation: "preview";
+};
+
+function previewRequest(overrides: Partial<PreviewRequest> = {}): PreviewRequest {
+  return {
+    operation: "preview",
+    authorization: "Bearer access-token",
+    invitationId,
+    hasQuery: false,
+    hasBody: false,
+    readBody: async () => assert.fail("preview must not read a body"),
+    ...overrides,
+  };
+}
 
 function createRequest(
   body: unknown,
@@ -62,6 +86,7 @@ function createRequest(
     authorization: "Bearer access-token",
     workspaceId,
     hasQuery: false,
+    hasBody: true,
     readBody: async () => body,
     ...overrides,
   };
@@ -76,6 +101,7 @@ function acceptRequest(
     authorization: "Bearer access-token",
     invitationId,
     hasQuery: false,
+    hasBody: true,
     readBody: async () => body,
     ...overrides,
   };
@@ -91,9 +117,83 @@ function invitationStore(
   return {
     create: async () => createResult,
     accept: async () => acceptResult,
+    preview: async () => previewResult,
     ...overrides,
   };
 }
+
+test("preview authenticates then reads only its bound selector without a body", async () => {
+  const events: string[] = [];
+  const result = await handleOrganizationDirectedAccountInvitation(
+    previewRequest({invitationId: invitationId.toUpperCase()}),
+    {
+      identityVerifier: {
+        verify: async () => {
+          events.push("verify");
+          return identity;
+        },
+      },
+      invitationStore: invitationStore({
+        create: async () => assert.fail("preview must not create"),
+        accept: async () => assert.fail("preview must not accept"),
+        preview: async (actor, selectedId) => {
+          events.push("preview");
+          assert.deepEqual(actor, identity);
+          assert.equal(selectedId, invitationId);
+          return previewResult;
+        },
+      }),
+    },
+  );
+  assert.deepEqual(events, ["verify", "preview"]);
+  assert.deepEqual(result, {
+    status: 200,
+    body: {
+      organization_invitation_preview_contract_id:
+        "organization-directed-account-invitation-preview:v1",
+      invitation_id: invitationId,
+      organization_name: " 同行组织 ",
+      expires_at_utc: createResult.expiresAtUtc,
+    },
+  });
+});
+
+test("preview rejects query, body, and selector only after authentication", async () => {
+  let reads = 0;
+  const dependencies = {
+    identityVerifier: verifier(),
+    invitationStore: invitationStore({
+      preview: async () => {
+        reads += 1;
+        return previewResult;
+      },
+    }),
+  };
+  for (const override of [
+    {hasQuery: true},
+    {hasBody: true},
+    {invitationId: "not-a-uuid"},
+  ]) {
+    assert.deepEqual(
+      await handleOrganizationDirectedAccountInvitation(
+        previewRequest({...override, authorization: undefined}),
+        dependencies,
+      ),
+      {status: 401, body: {error: {code: "unauthenticated"}}},
+    );
+    assert.deepEqual(
+      await handleOrganizationDirectedAccountInvitation(
+        previewRequest(override),
+        dependencies,
+      ),
+      {
+        status: 400,
+        body: {error: {code: "invalid_organization_invitation_request"}},
+      },
+    );
+  }
+  assert.equal(reads, 0);
+});
 
 test("create verifies, validates, reads, and calls only create in order", async () => {
   const events: string[] = [];
@@ -401,7 +501,13 @@ test("body parsers accept only canonicalizable operation fields", () => {
   }
 });
 
-test("raw matcher recognizes only the two unnormalized paths", () => {
+test("raw matcher recognizes only the three unnormalized paths", () => {
+  assert.deepEqual(
+    matchOrganizationDirectedAccountInvitationRequestTarget(
+      `/v1/organization-directed-account-invitations/${invitationId}`,
+    ),
+    {operation: "preview", invitationId, hasQuery: false},
+  );
   assert.deepEqual(
     matchOrganizationDirectedAccountInvitationRequestTarget(
       `/v1/organizations/${workspaceId}/directed-account-invitations`,
@@ -424,6 +530,11 @@ test("raw matcher recognizes only the two unnormalized paths", () => {
     `/v1/organizations/${workspaceId}/directed-account%2dinvitations`,
     `/v1/organizations/${workspaceId}//directed-account-invitations`,
     `/v1/organization-directed-account-invitations/${invitationId}/accept/`,
+    `/v1/organization-directed-account-invitations/${invitationId}/`,
+    `/v1/organization-directed-account-invitations/${invitationId}/extra`,
+    "/v1/organization-directed-account-invitations/.",
+    "/v1/organization-directed-account-invitations/..",
+    `/v1/organization-directed-account-invitations/%31${invitationId.slice(1)}`,
     "/v1/organization-directed-account-invitations//accept",
     "/v1/organization-directed-account-invitations/./accept",
     "/v1/organization-directed-account-invitations/../accept",
@@ -437,6 +548,99 @@ test("raw matcher recognizes only the two unnormalized paths", () => {
     assert.equal(
       matchOrganizationDirectedAccountInvitationRequestTarget(target),
       null,
+    );
+  }
+});
+
+test("Postgres preview uses one exact identity bridge and retains the name", async () => {
+  const calls: Array<{text: string; values: readonly unknown[]}> = [];
+  const store = new PostgresOrganizationDirectedAccountInvitationStore(
+    async (text, values) => {
+      calls.push({text, values});
+      return {rows: [{
+        organization_invitation_preview_contract_id:
+          "organization-directed-account-invitation-preview:v1",
+        invitation_id: invitationId.toUpperCase(),
+        organization_name: " 同行组织 ",
+        expires_at_utc: "2030-01-08T01:00:00.000001+01:00",
+      }]};
+    },
+  );
+  const exactIdentity = {issuer: "  https://issuer.example  ", subject: " target "};
+  assert.deepEqual(await store.preview(exactIdentity, invitationId), previewResult);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0]?.values, [
+    exactIdentity.issuer, exactIdentity.subject, invitationId,
+  ]);
+  assert.match(
+    calls[0]?.text ?? "",
+    /app_data\.preview_organization_directed_invitation_for_identity_v1/,
+  );
+  assert.doesNotMatch(calls[0]?.text ?? "", /app_private|create_|accept_|bootstrap/);
+});
+
+test("preview result rejects field, selector, name, and timestamp drift", () => {
+  const row = {
+    organization_invitation_preview_contract_id:
+      "organization-directed-account-invitation-preview:v1",
+    invitation_id: invitationId,
+    organization_name: " 同行组织 ",
+    expires_at_utc: new Date(createResult.expiresAtUtc),
+  };
+  assert.deepEqual(
+    parseOrganizationDirectedAccountInvitationPreviewResult(row, invitationId),
+    previewResult,
+  );
+  for (const bad of [
+    null, [], {},
+    {...row, organization_invitation_preview_contract_id: "wrong:v1"},
+    {...row, organization_workspace_id: workspaceId},
+    {...row, target_app_user_id: targetAppUserId},
+    {...row, invitation_id: otherId},
+    {...row, organization_name: ""},
+    {...row, organization_name: "   "},
+    {...row, organization_name: null},
+    {...row, expires_at_utc: "2030-02-30T00:00:00.000Z"},
+    {...row, expires_at_utc: "2030-01-08"},
+    {...row, expires_at_utc: "infinity"},
+    {...row, expires_at_utc: new Date(Number.NaN)},
+  ]) {
+    assert.throws(
+      () => parseOrganizationDirectedAccountInvitationPreviewResult(bad, invitationId),
+      /invalid organization invitation preview result/,
+    );
+  }
+});
+
+test("preview store rejects row counts and maps only the existing SQL errors", async () => {
+  for (const rows of [[], [{}, {}], [{}]]) {
+    const store = new PostgresOrganizationDirectedAccountInvitationStore(
+      async () => ({rows}),
+    );
+    await assert.rejects(
+      () => store.preview(identity, invitationId),
+      /organization invitation store unavailable/,
+    );
+  }
+  for (const [error, status, code] of [
+    [{code: "42501", message: "organization invitation forbidden"}, 403,
+      "organization_invitation_forbidden"],
+    [{code: "22023", message: "invalid organization invitation request"}, 400,
+      "invalid_organization_invitation_request"],
+    [{code: "22023", message: "invalid organization invitation identity"}, 503,
+      "organization_invitation_unavailable"],
+    [{code: "42501", message: "secret SQL"}, 503,
+      "organization_invitation_unavailable"],
+    [new Error("secret token"), 503, "organization_invitation_unavailable"],
+  ] as const) {
+    const store = new PostgresOrganizationDirectedAccountInvitationStore(
+      async () => { throw error; },
+    );
+    assert.deepEqual(
+      await handleOrganizationDirectedAccountInvitation(previewRequest(), {
+        identityVerifier: verifier(), invitationStore: store,
+      }),
+      {status, body: {error: {code}}},
     );
   }
 });

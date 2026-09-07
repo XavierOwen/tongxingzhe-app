@@ -7,6 +7,8 @@ import {
 
 const invitationContractId =
   "organization-directed-account-invitation:v1" as const;
+const invitationPreviewContractId =
+  "organization-directed-account-invitation-preview:v1" as const;
 const invitationLifetimeSeconds = 168 * 60 * 60;
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -15,6 +17,7 @@ const timestampPattern =
 
 interface OrganizationDirectedAccountInvitationRequestBase {
   readonly authorization: string | undefined;
+  readonly hasBody: boolean;
   readonly readBody: () => Promise<unknown>;
 }
 
@@ -30,9 +33,16 @@ export interface OrganizationDirectedAccountInvitationAcceptRouteMatch {
   readonly hasQuery: boolean;
 }
 
+export interface OrganizationDirectedAccountInvitationPreviewRouteMatch {
+  readonly operation: "preview";
+  readonly invitationId: string;
+  readonly hasQuery: boolean;
+}
+
 export type OrganizationDirectedAccountInvitationRouteMatch =
   | OrganizationDirectedAccountInvitationCreateRouteMatch
-  | OrganizationDirectedAccountInvitationAcceptRouteMatch;
+  | OrganizationDirectedAccountInvitationAcceptRouteMatch
+  | OrganizationDirectedAccountInvitationPreviewRouteMatch;
 
 export type OrganizationDirectedAccountInvitationRequest =
   OrganizationDirectedAccountInvitationRequestBase &
@@ -68,10 +78,19 @@ export interface OrganizationDirectedAccountInvitationAcceptResult {
   readonly acceptedAtUtc: string;
 }
 
+export interface OrganizationDirectedAccountInvitationPreviewResult {
+  readonly organizationInvitationPreviewContractId:
+    typeof invitationPreviewContractId;
+  readonly invitationId: string;
+  readonly organizationName: string;
+  readonly expiresAtUtc: string;
+}
+
 /**
  * identity 来自已验证的 exact issuer／subject，UUID 仍是不可信 selector。
  * 创建写 claim／审计，接受写 membership／claim／审计；授权与精确重放由数据库决定。
- * 两种返回值是独立 receipt，不含账号资料；失败只抛稳定分类，不交付部分结果。
+ * 预览只读绑定收件人可见的名称与期限，不保留接受资格。
+ * 创建与接受是独立 receipt，不含账号资料；失败只抛稳定分类。
  */
 export interface OrganizationDirectedAccountInvitationStore {
   create(
@@ -85,6 +104,11 @@ export interface OrganizationDirectedAccountInvitationStore {
     identity: VerifiedIdentity,
     invitationId: string,
   ): Promise<OrganizationDirectedAccountInvitationAcceptResult>;
+
+  preview(
+    identity: VerifiedIdentity,
+    invitationId: string,
+  ): Promise<OrganizationDirectedAccountInvitationPreviewResult>;
 }
 
 export type OrganizationDirectedAccountInvitationQuery = (
@@ -140,16 +164,20 @@ export function matchOrganizationDirectedAccountInvitationRequestTarget(
       : { operation: "create", workspaceId, hasQuery: queryIndex >= 0 };
   }
 
-  const acceptMatch =
-    /^\/v1\/organization-directed-account-invitations\/([^/]+)\/accept$/.exec(
+  const invitationMatch =
+    /^\/v1\/organization-directed-account-invitations\/([^/]+)(\/accept)?$/.exec(
       pathname,
     );
-  const invitationId = acceptMatch?.[1];
+  const invitationId = invitationMatch?.[1];
   if (invitationId === undefined || invitationId === "." || invitationId === "..") {
     return null;
   }
 
-  return { operation: "accept", invitationId, hasQuery: queryIndex >= 0 };
+  return {
+    operation: invitationMatch?.[2] === undefined ? "preview" : "accept",
+    invitationId,
+    hasQuery: queryIndex >= 0,
+  };
 }
 
 export async function handleOrganizationDirectedAccountInvitation(
@@ -175,7 +203,7 @@ export async function handleOrganizationDirectedAccountInvitation(
     return failure(503, "organization_invitation_unavailable");
   }
 
-  if (request.hasQuery) {
+  if (request.hasQuery || (request.operation === "preview" && request.hasBody)) {
     return failure(400, "invalid_organization_invitation_request");
   }
 
@@ -188,6 +216,15 @@ export async function handleOrganizationDirectedAccountInvitation(
 
   if (dependencies.invitationStore === undefined) {
     return failure(503, "organization_invitation_unavailable");
+  }
+
+  if (request.operation === "preview") {
+    try {
+      const result = await dependencies.invitationStore.preview(identity, pathId);
+      return previewSuccess(result);
+    } catch (error) {
+      return storeFailure(error);
+    }
   }
 
   const body = await request.readBody();
@@ -245,6 +282,36 @@ export class PostgresOrganizationDirectedAccountInvitationStore
   implements OrganizationDirectedAccountInvitationStore
 {
   constructor(private readonly query: OrganizationDirectedAccountInvitationQuery) {}
+
+  async preview(
+    identity: VerifiedIdentity,
+    invitationId: string,
+  ): Promise<OrganizationDirectedAccountInvitationPreviewResult> {
+    try {
+      const result = await this.query(
+        `SELECT
+           organization_invitation_preview_contract_id,
+           invitation_id,
+           organization_name,
+           expires_at_utc
+         FROM app_data.preview_organization_directed_invitation_for_identity_v1(
+           $1::text,
+           $2::text,
+           $3::uuid
+         )`,
+        [identity.issuer, identity.subject, invitationId],
+      );
+      if (result.rows.length !== 1) {
+        throw new Error("invalid organization invitation preview result");
+      }
+      return parseOrganizationDirectedAccountInvitationPreviewResult(
+        result.rows[0],
+        invitationId,
+      );
+    } catch (error) {
+      throw mapStoreError(error);
+    }
+  }
 
   async create(
     identity: VerifiedIdentity,
@@ -318,6 +385,45 @@ export class PostgresOrganizationDirectedAccountInvitationStore
       throw mapStoreError(error);
     }
   }
+}
+
+export function parseOrganizationDirectedAccountInvitationPreviewResult(
+  value: unknown,
+  expectedInvitationId: string,
+): OrganizationDirectedAccountInvitationPreviewResult {
+  const row = object(value);
+  if (
+    row === null ||
+    !hasExactKeys(row, [
+      "organization_invitation_preview_contract_id",
+      "invitation_id",
+      "organization_name",
+      "expires_at_utc",
+    ]) ||
+    row.organization_invitation_preview_contract_id !== invitationPreviewContractId
+  ) {
+    throw new Error("invalid organization invitation preview result");
+  }
+
+  const expectedInvitation = uuid(expectedInvitationId);
+  const invitationId = uuid(row.invitation_id);
+  const name = row.organization_name;
+  const expiresAt = utcTimestamp(row.expires_at_utc);
+  if (
+    expectedInvitation === null ||
+    invitationId !== expectedInvitation ||
+    typeof name !== "string" ||
+    name.replace(/^ +| +$/g, "").length === 0 ||
+    expiresAt === null
+  ) {
+    throw new Error("invalid organization invitation preview result");
+  }
+  return {
+    organizationInvitationPreviewContractId: invitationPreviewContractId,
+    invitationId,
+    organizationName: name,
+    expiresAtUtc: expiresAt.wire,
+  };
 }
 
 export function parseOrganizationDirectedAccountInvitationCreateResult(
@@ -473,6 +579,21 @@ function identityFailure(
     case "unavailable":
       return failure(503, "organization_invitation_unavailable");
   }
+}
+
+function previewSuccess(
+  result: OrganizationDirectedAccountInvitationPreviewResult,
+): OrganizationDirectedAccountInvitationHttpResult {
+  return {
+    status: 200,
+    body: {
+      organization_invitation_preview_contract_id:
+        result.organizationInvitationPreviewContractId,
+      invitation_id: result.invitationId,
+      organization_name: result.organizationName,
+      expires_at_utc: result.expiresAtUtc,
+    },
+  };
 }
 
 function createSuccess(

@@ -276,6 +276,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
             :final organizationCreationGateway,
             :final organizationDirectoryGateway,
             :final organizationMembershipSelfLeaveGateway,
+            :final organizationDirectedAccountInvitationGateway,
             :final managementReportExportDelivery,
             :final currentRelationshipStageRepository,
             :final deviceReminderPreferenceStore,
@@ -315,6 +316,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
               organizationDirectoryGateway: organizationDirectoryGateway,
               organizationMembershipSelfLeaveGateway:
                   organizationMembershipSelfLeaveGateway,
+              organizationDirectedAccountInvitationGateway:
+                  organizationDirectedAccountInvitationGateway,
               managementReportExportDelivery: managementReportExportDelivery,
               currentRelationshipStageRepository:
                   currentRelationshipStageRepository,
@@ -361,6 +364,7 @@ class _ReadyApp extends StatefulWidget {
     required this.organizationCreationGateway,
     required this.organizationDirectoryGateway,
     required this.organizationMembershipSelfLeaveGateway,
+    required this.organizationDirectedAccountInvitationGateway,
     required this.managementReportExportDelivery,
     required this.currentRelationshipStageRepository,
     required this.deviceReminderPreferenceStore,
@@ -398,6 +402,8 @@ class _ReadyApp extends StatefulWidget {
   final OrganizationDirectoryGateway organizationDirectoryGateway;
   final OrganizationMembershipSelfLeaveGateway
   organizationMembershipSelfLeaveGateway;
+  final OrganizationDirectedAccountInvitationGateway
+  organizationDirectedAccountInvitationGateway;
   final ManagementReportExportDelivery managementReportExportDelivery;
   final CurrentRelationshipStageRepository currentRelationshipStageRepository;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
@@ -492,6 +498,8 @@ final class _ReadyAppState extends State<_ReadyApp> {
         organizationDirectoryGateway: widget.organizationDirectoryGateway,
         organizationMembershipSelfLeaveGateway:
             widget.organizationMembershipSelfLeaveGateway,
+        organizationDirectedAccountInvitationGateway:
+            widget.organizationDirectedAccountInvitationGateway,
         managementReportExportDelivery: widget.managementReportExportDelivery,
         currentRelationshipStageRepository:
             widget.currentRelationshipStageRepository,

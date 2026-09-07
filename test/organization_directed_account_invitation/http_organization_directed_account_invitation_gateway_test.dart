@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -70,6 +71,170 @@ void main() {
     expect(result, isA<OrganizationDirectedAccountInvitationAcceptSuccess>());
   });
 
+  test(
+    'preview sends a bodyless GET and parses the exact preview snapshot',
+    () async {
+      late http.Request request;
+      final gateway = _gateway((value) async {
+        request = value;
+        return _json(_previewJson());
+      });
+      addTearDown(gateway.close);
+
+      final result = await gateway.preview(
+        invitationId: _invitationId.toUpperCase(),
+      );
+
+      expect(request.method, 'GET');
+      expect(
+        request.url,
+        Uri.parse(
+          'https://backend.example.test/v1/'
+          'organization-directed-account-invitations/$_invitationId',
+        ),
+      );
+      expect(request.body, isEmpty);
+      expect(request.headers, {
+        'accept': 'application/json',
+        'authorization': 'Bearer test-only-access-token',
+      });
+      final preview =
+          (result as OrganizationDirectedAccountInvitationPreviewSuccess)
+              .preview;
+      expect(
+        preview.organizationInvitationPreviewContractId,
+        'organization-directed-account-invitation-preview:v1',
+      );
+      expect(preview.invitationId, _invitationId);
+      expect(preview.organizationName, '同行组织');
+      expect(preview.expiresAtUtc, DateTime.utc(2030, 1, 8));
+    },
+  );
+
+  test(
+    'preview late transport failure after identity change is unauthorized',
+    () async {
+      final identity = _RotatingTokenIdentitySession();
+      final sent = Completer<void>();
+      final response = Completer<http.Response>();
+      final gateway = HttpOrganizationDirectedAccountInvitationGateway(
+        baseUri: Uri.parse('https://backend.example.test'),
+        identitySession: identity,
+        client: MockClient((_) {
+          sent.complete();
+          return response.future;
+        }),
+      );
+      addTearDown(gateway.close);
+      addTearDown(identity.close);
+
+      final pending = gateway.preview(invitationId: _invitationId);
+      await sent.future;
+      identity.emit(_otherIdentity);
+      response.completeError(http.ClientException('late old-account failure'));
+
+      expect(_failureCode(await pending), _Failure.unauthorized);
+    },
+  );
+
+  test(
+    'preview late transport failure checks the current identity fence',
+    () async {
+      final identity = _RotatingTokenIdentitySession();
+      final sent = Completer<void>();
+      final response = Completer<http.Response>();
+      final gateway = HttpOrganizationDirectedAccountInvitationGateway(
+        baseUri: Uri.parse('https://backend.example.test'),
+        identitySession: identity,
+        client: MockClient((_) {
+          sent.complete();
+          return response.future;
+        }),
+      );
+      addTearDown(gateway.close);
+      addTearDown(identity.close);
+
+      final pending = gateway.preview(invitationId: _invitationId);
+      await sent.future;
+      identity.setCurrentWithoutEmit(_otherIdentity);
+      response.completeError(http.ClientException('late old-account failure'));
+
+      expect(_failureCode(await pending), _Failure.unauthorized);
+    },
+  );
+
+  test(
+    'preview rejects every invalid snapshot field and preserves name',
+    () async {
+      final invalid = <String, http.Response>{
+        'malformed JSON': _raw('{'),
+        'non-object': _raw('[]'),
+        'extra sensitive field': _json({
+          ..._previewJson(),
+          'organization_workspace_id': _workspaceId,
+        }),
+        'missing field': _json(_previewJson()..remove('expires_at_utc')),
+        'contract': _json({
+          ..._previewJson(),
+          'organization_invitation_preview_contract_id': 'other:v1',
+        }),
+        'invitation binding': _json({
+          ..._previewJson(),
+          'invitation_id': _otherId,
+        }),
+        'uppercase UUID': _json({
+          ..._previewJson(),
+          'invitation_id': _invitationId.toUpperCase(),
+        }),
+        'name type': _json({..._previewJson(), 'organization_name': 1}),
+        'ordinary-space-only name': _json({
+          ..._previewJson(),
+          'organization_name': '   ',
+        }),
+        'offset time': _json({
+          ..._previewJson(),
+          'expires_at_utc': '2030-01-07T18:00:00.000-06:00',
+        }),
+        'invalid date': _json({
+          ..._previewJson(),
+          'expires_at_utc': '2030-02-30T00:00:00.000Z',
+        }),
+        'cacheable response': _json(
+          _previewJson(),
+          headers: const {
+            'content-type': 'application/json; charset=utf-8',
+            'cache-control': 'private',
+          },
+        ),
+      };
+
+      for (final entry in invalid.entries) {
+        final gateway = _gateway((_) async => entry.value);
+        final result = await gateway.preview(invitationId: _invitationId);
+        await gateway.close();
+        expect(
+          _failureCode(result),
+          _Failure.invalidResponse,
+          reason: entry.key,
+        );
+      }
+
+      const originalName = '\u00a0Legacy\u200b 0  ';
+      final gateway = _gateway(
+        (_) async =>
+            _json({..._previewJson(), 'organization_name': originalName}),
+      );
+      final result = await gateway.preview(invitationId: _invitationId);
+      await gateway.close();
+      expect(
+        (result as OrganizationDirectedAccountInvitationPreviewSuccess)
+            .preview
+            .organizationName,
+        originalName,
+      );
+    },
+  );
+
   test('invalid UUIDs stop before identity and HTTP access', () async {
     final createInputs = [
       (
@@ -119,10 +284,21 @@ void main() {
     expect(_failureCode(result), _Failure.invalidRequest);
     expect(identity.accessTokenForceRefreshValues, isEmpty);
     expect(requests, 0);
+
+    final previewIdentity = _identity();
+    final previewGateway = _gateway((_) async {
+      requests++;
+      return _json(_previewJson());
+    }, identity: previewIdentity);
+    final preview = await previewGateway.preview(invitationId: 'not-a-uuid');
+    await previewGateway.close();
+    expect(_failureCode(preview), _Failure.invalidRequest);
+    expect(previewIdentity.accessTokenForceRefreshValues, isEmpty);
+    expect(requests, 0);
   });
 
   test(
-    'deferred create and accept are no-network and repeatably close',
+    'deferred create, preview, and accept are no-network and repeatably close',
     () async {
       const gateway = DeferredOrganizationDirectedAccountInvitationGateway();
 
@@ -131,11 +307,13 @@ void main() {
         organizationWorkspaceId: _workspaceId,
         targetAppUserId: _targetAppUserId,
       );
+      final preview = await gateway.preview(invitationId: _invitationId);
       final accept = await gateway.accept(invitationId: _invitationId);
       await gateway.close();
       await gateway.close();
 
       expect(_failureCode(create), _Failure.notConfigured);
+      expect(_failureCode(preview), _Failure.notConfigured);
       expect(_failureCode(accept), _Failure.notConfigured);
     },
   );
@@ -336,6 +514,31 @@ void main() {
     expect(secondIdentity.accessTokenForceRefreshValues, [false, true]);
   });
 
+  test('preview refreshes once and retries the same bodyless GET', () async {
+    final identity = _RotatingTokenIdentitySession();
+    final requests = <http.Request>[];
+    final gateway = _gateway((request) async {
+      requests.add(request);
+      return requests.length == 1
+          ? _error('unauthenticated', 401)
+          : _json(_previewJson());
+    }, identity: identity);
+
+    final result = await gateway.preview(invitationId: _invitationId);
+    await gateway.close();
+    await identity.close();
+
+    expect(result, isA<OrganizationDirectedAccountInvitationPreviewSuccess>());
+    expect(requests, hasLength(2));
+    expect(requests.every((request) => request.method == 'GET'), isTrue);
+    expect(requests.every((request) => request.body.isEmpty), isTrue);
+    expect(requests[0].url, requests[1].url);
+    expect(requests.map((request) => request.headers['authorization']), [
+      'Bearer stale-test-access-token',
+      'Bearer refreshed-test-access-token',
+    ]);
+  });
+
   test(
     'strict independent receipts preserve UTC values and old create replay',
     () async {
@@ -521,6 +724,128 @@ void main() {
     }
   });
 
+  test('preview maps every stable error envelope', () async {
+    const cases = [
+      (400, 'invalid_json', _Failure.invalidJson),
+      (400, 'invalid_organization_invitation_request', _Failure.invalidRequest),
+      (401, 'unauthenticated', _Failure.unauthorized),
+      (403, 'organization_invitation_forbidden', _Failure.forbidden),
+      (409, 'organization_invitation_conflict', _Failure.conflict),
+      (413, 'payload_too_large', _Failure.payloadTooLarge),
+      (503, 'organization_invitation_unavailable', _Failure.serviceUnavailable),
+    ];
+
+    for (final testCase in cases) {
+      final gateway = _gateway((_) async => _error(testCase.$2, testCase.$1));
+      final result = await gateway.preview(invitationId: _invitationId);
+      await gateway.close();
+      expect(_failureCode(result), testCase.$3);
+    }
+  });
+
+  test(
+    'identity change while awaiting a token stops every operation',
+    () async {
+      for (final operation in _Operation.values) {
+        final tokenRequested = Completer<void>();
+        final token = Completer<IdentityResult<IdentityAccessToken>>();
+        final identity = _RotatingTokenIdentitySession(
+          accessTokenHandler: (_) {
+            tokenRequested.complete();
+            return token.future;
+          },
+        );
+        var requests = 0;
+        final gateway = _gateway((_) async {
+          requests++;
+          return _json(_successJson(operation));
+        }, identity: identity);
+
+        final pending = _invokeOperation(gateway, operation);
+        await tokenRequested.future;
+        identity.emit(_otherIdentity);
+        token.complete(_accessToken('new-account-token'));
+
+        expect(_failureCode(await pending), _Failure.unauthorized);
+        expect(requests, 0);
+        await gateway.close();
+        await identity.close();
+      }
+    },
+  );
+
+  test('HTTP sign-out and sign-in ABA invalidates every operation', () async {
+    for (final operation in _Operation.values) {
+      final sent = Completer<void>();
+      final response = Completer<http.Response>();
+      final identity = _RotatingTokenIdentitySession();
+      final gateway = _gateway((_) {
+        sent.complete();
+        return response.future;
+      }, identity: identity);
+
+      final pending = _invokeOperation(gateway, operation);
+      await sent.future;
+      identity.emit(const IdentitySnapshot.signedOut());
+      identity.emit(_initialIdentity);
+      response.complete(_json(_successJson(operation)));
+
+      expect(_failureCode(await pending), _Failure.unauthorized);
+      await gateway.close();
+      await identity.close();
+    }
+  });
+
+  test(
+    '401 refresh ABA cannot send new credentials for any operation',
+    () async {
+      for (final operation in _Operation.values) {
+        late _RotatingTokenIdentitySession identity;
+        identity = _RotatingTokenIdentitySession(
+          accessTokenHandler: (forceRefresh) async {
+            if (forceRefresh) {
+              identity.emit(const IdentitySnapshot.signedOut());
+              identity.emit(_initialIdentity);
+              return _accessToken('new-account-token');
+            }
+            return _accessToken('stale-test-access-token');
+          },
+        );
+        var requests = 0;
+        final gateway = _gateway((_) async {
+          requests++;
+          return _error('unauthenticated', 401);
+        }, identity: identity);
+
+        final result = await _invokeOperation(gateway, operation);
+
+        expect(_failureCode(result), _Failure.unauthorized);
+        expect(requests, 1);
+        expect(identity.accessTokenForceRefreshValues, [false, true]);
+        await gateway.close();
+        await identity.close();
+      }
+    },
+  );
+
+  test('close during HTTP prevents stale preview delivery', () async {
+    final sent = Completer<void>();
+    final response = Completer<http.Response>();
+    final identity = _RotatingTokenIdentitySession();
+    final gateway = _gateway((_) {
+      sent.complete();
+      return response.future;
+    }, identity: identity);
+
+    final pending = gateway.preview(invitationId: _invitationId);
+    await sent.future;
+    await gateway.close();
+    response.complete(_json(_previewJson()));
+
+    expect(_failureCode(await pending), _Failure.unauthorized);
+    await identity.close();
+  });
+
   test('unknown status, code, or envelope maps to invalidResponse', () async {
     final cases = <http.Response Function()>[
       () => _error('not_found', 404),
@@ -601,6 +926,8 @@ void main() {
 
 typedef _Failure = OrganizationDirectedAccountInvitationFailureCode;
 
+enum _Operation { create, preview, accept }
+
 const _contractId = 'organization-directed-account-invitation:v1';
 const _invitationId = 'abcdefab-cdef-0abc-0def-abcdefabcdef';
 const _workspaceId = 'abcdefab-cdef-0abc-0def-abcdefabcdea';
@@ -620,7 +947,7 @@ FakeIdentitySession _identity() => FakeIdentitySession(
 
 HttpOrganizationDirectedAccountInvitationGateway _gateway(
   Future<http.Response> Function(http.Request) handler, {
-  FakeIdentitySession? identity,
+  IdentitySession? identity,
   http.Client? client,
   Duration timeout = const Duration(seconds: 15),
 }) => HttpOrganizationDirectedAccountInvitationGateway(
@@ -641,9 +968,23 @@ Future<Object> _invoke(
       )
     : gateway.accept(invitationId: _invitationId);
 
+Future<Object> _invokeOperation(
+  OrganizationDirectedAccountInvitationGateway gateway,
+  _Operation operation,
+) => switch (operation) {
+  _Operation.create => gateway.create(
+    invitationId: _invitationId,
+    organizationWorkspaceId: _workspaceId,
+    targetAppUserId: _targetAppUserId,
+  ),
+  _Operation.preview => gateway.preview(invitationId: _invitationId),
+  _Operation.accept => gateway.accept(invitationId: _invitationId),
+};
+
 OrganizationDirectedAccountInvitationFailureCode _failureCode(Object result) {
   return switch (result) {
     OrganizationDirectedAccountInvitationCreateRejected(:final code) => code,
+    OrganizationDirectedAccountInvitationPreviewRejected(:final code) => code,
     OrganizationDirectedAccountInvitationAcceptRejected(:final code) => code,
     _ => throw StateError('expected rejected invitation result'),
   };
@@ -695,6 +1036,25 @@ Map<String, Object?> _acceptReceiptJson() => {
   'accepted_at_utc': '2030-01-02T04:05:06.000Z',
 };
 
+Map<String, Object?> _previewJson() => {
+  'organization_invitation_preview_contract_id':
+      'organization-directed-account-invitation-preview:v1',
+  'invitation_id': _invitationId,
+  'organization_name': '同行组织',
+  'expires_at_utc': '2030-01-08T00:00:00.000Z',
+};
+
+Map<String, Object?> _successJson(_Operation operation) => switch (operation) {
+  _Operation.create => _createReceiptJson(),
+  _Operation.preview => _previewJson(),
+  _Operation.accept => _acceptReceiptJson(),
+};
+
+IdentitySuccess<IdentityAccessToken> _accessToken(String value) =>
+    IdentitySuccess(
+      IdentityAccessToken(value: value, expiresAt: DateTime.utc(2030)),
+    );
+
 const _jsonHeaders = {
   'content-type': 'application/json; charset=utf-8',
   'cache-control': 'no-store',
@@ -713,13 +1073,37 @@ final class _TrackingMockClient extends MockClient {
 }
 
 final class _RotatingTokenIdentitySession implements IdentitySession {
+  _RotatingTokenIdentitySession({this.accessTokenHandler});
+
+  final Future<IdentityResult<IdentityAccessToken>> Function(bool forceRefresh)?
+  accessTokenHandler;
   final List<bool> accessTokenForceRefreshValues = [];
+  final _changes = StreamController<IdentitySnapshot>.broadcast(sync: true);
+  IdentitySnapshot _current = _initialIdentity;
+
+  @override
+  IdentitySnapshot get current => _current;
+
+  @override
+  Stream<IdentitySnapshot> get changes => _changes.stream;
+
+  void emit(IdentitySnapshot snapshot) {
+    _current = snapshot;
+    _changes.add(snapshot);
+  }
+
+  void setCurrentWithoutEmit(IdentitySnapshot snapshot) => _current = snapshot;
+
+  @override
+  Future<void> close() => _changes.close();
 
   @override
   Future<IdentityResult<IdentityAccessToken>> accessToken({
     bool forceRefresh = false,
   }) async {
     accessTokenForceRefreshValues.add(forceRefresh);
+    final handler = accessTokenHandler;
+    if (handler != null) return handler(forceRefresh);
     return IdentitySuccess(
       IdentityAccessToken(
         value: forceRefresh
@@ -734,3 +1118,13 @@ final class _RotatingTokenIdentitySession implements IdentitySession {
   dynamic noSuchMethod(Invocation invocation) =>
       throw UnsupportedError('unused test-only identity method');
 }
+
+const _otherIdentity = IdentitySnapshot(
+  stage: IdentityStage.signedIn,
+  principal: IdentityPrincipal(externalSubject: 'subject-2', email: null),
+);
+
+const _initialIdentity = IdentitySnapshot(
+  stage: IdentityStage.signedIn,
+  principal: IdentityPrincipal(externalSubject: 'subject-1', email: null),
+);

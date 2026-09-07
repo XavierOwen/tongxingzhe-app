@@ -1100,6 +1100,51 @@ dart run tool/check_markdown_links.dart
 这次没有改动 DB 或 Backend，不重复跑未改变的数据库实验。可控 Future、fake identity／存储和 Widget 证明本地顺序、拒绝与清除合同；CI build 证明可编译。
 这些证据不证明真实设备安全存储删除、真实用户退出、生产配置或完整组织退出。
 
+### 3.18 预览并确认接受组织邀请（Issue #344，MANUAL-066）
+
+7AA 在“我的组织”提供“接受邀请”。用户输入已有 invitation UUID，先在线核对组织原名称与 UTC 有效期，再点“确认加入”。
+邀请编号只是定位邀请的标识，不是任何持有者都能使用的通行证。只有绑定的 active 收件人可读；组织目录仍只列出当前已加入的组织。
+这项入组前读取经过用户明确授权，范围见 [ADR-0184](../adr/0184-bound-recipient-organization-invitation-preview.md)。
+
+#### 预览不保留加入资格
+
+`0091_organization_directed_account_invitation_preview.sql` 只增加一个 runtime identity bridge。
+它按一次墙钟时间和同一查询快照检查身份、邀请、组织和当前成员关系，不加写锁、不写 claim、成员关系或审计。
+错误收件人、已过期、已接受、去关联、恢复期或已经入组等不可见状态都返回同一个 forbidden，不透露邀请是否存在。
+函数名 `preview_organization_directed_invitation_for_identity_v1` 省略 `account`，防止 PostgreSQL 的 63-byte 标识符上限截掉版本后缀。
+
+Backend 仅开放 `GET /v1/organization-directed-account-invitations/:invitationId`。认证先于请求形状与 store 检查，拒绝 query 和非空 body。
+成功 JSON 只有 preview contract ID、invitation ID、组织原名称和 UTC 毫秒有效期；不附带收件人、邀者、workspace 或权限，响应使用 `no-store`。
+点击确认时仍由既有接受函数重新授权。预览之后邀请可能过期、组织可能进入恢复期，所以不能把预览成功当作加入成功。
+加入只建立组织成员关系，不自动加入项目或取得 capability；既有离线敏感缓存锁不解除。
+
+#### 接受结果不确定时为什么不重新预览
+
+网络中断时，第一次接受可能已经提交。此时预览会拒绝已接受邀请，但相同 invitation ID 的接受仍可返回原回执。
+因此同一窗口的重试直接调用 accept，不再要求 preview 成功；不自动重试，也不建立新的 UUID。
+用户修改编号会清除旧预览；关闭不确定结果要再次确认，并提示重开“我的组织”核对。请求意图不跨重启保存。
+回执是历史操作证据，父窗口在线重读当前目录，不凭旧回执添加组织，不切换当前项目。
+
+账号失效时，`AppSession` 先发布非 ready 状态，再等待旧缓存删除，防止慢存储延长旧账号内容的可见时间。
+每次异步操作按会话代次复核；旧清除完成不能覆盖新登录。网关在 token 等待、HTTP 和一次 401 刷新期间也绑定同一次登录。
+界面不读取凭据，预览、编号和回执只保留在窗口内存；不写日志、Drift、Outbox 或偏好，不自动写剪贴板。
+
+```bash
+flutter test --no-pub test/organization_directed_account_invitation \
+  test/features/organization_directory test/app test/app_session
+npm --prefix backend/server run check
+npm --prefix backend/server test
+tool/run_postgres_tests_in_docker.sh
+flutter test --no-pub
+dart analyze
+dart format --output=none --set-exit-if-changed lib test integration_test test_driver tool
+dart run tool/check_production_boundary.dart
+dart run tool/check_markdown_links.dart
+```
+
+Docker 使用隔离的 synthetic 数据库，执行 migration、结构／回滚 fixture、既有并发与 runtime adapter、checksum 和 dump／restore；恢复库不重跑提交型并发脚本。
+Widget 覆盖中英文、320×568／200% 字号、暗色宽屏、键盘／焦点、live region 和 48 dp 操作目标。这些证据不证明生产身份、部署端点、真实组织或 Apple／真机行为。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：

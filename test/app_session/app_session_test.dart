@@ -687,6 +687,112 @@ void main() {
     );
   });
 
+  for (final switchAccount in [false, true]) {
+    test('身份变化在慢 PII 清除前撤下旧 ready 上下文 switchAccount=$switchAccount', () async {
+      final identity = FakeIdentitySession(initial: _signedInIdentity());
+      final secureStore = _MemorySecureValueStore();
+      final session = AppSession(
+        identitySession: identity,
+        contextGateway: FakeSessionContextGateway(
+          context: _withPii(syntheticSessionContext),
+        ),
+        offlinePiiVault: OfflinePiiVault(
+          secureStore: secureStore,
+          lockStore: _MemoryOfflinePiiLockStore(),
+          clock: FixedClock(DateTime.utc(2026, 8, 6, 13)),
+          installationId: 'installation-1',
+        ),
+      );
+      addTearDown(session.close);
+      addTearDown(identity.close);
+      await session.start();
+      expect(session.current.stage, AppSessionStage.ready);
+      secureStore.deleteRequested = Completer<void>();
+      secureStore.releaseDelete = Completer<void>();
+      final published = <AppSessionSnapshot>[];
+      final subscription = session.changes.listen(published.add);
+      addTearDown(subscription.cancel);
+      final settled = session.changes.firstWhere(
+        (snapshot) => switchAccount
+            ? snapshot.stage == AppSessionStage.ready &&
+                  snapshot.identity?.principal?.externalSubject ==
+                      'test-subject'
+            : snapshot.stage == AppSessionStage.signedOut,
+      );
+      if (switchAccount) {
+        await identity.signIn(email: 'next@example.test', password: 'ignored');
+      } else {
+        await identity.signOut();
+      }
+      await secureStore.deleteRequested!.future;
+      try {
+        expect(
+          session.current.stage,
+          switchAccount
+              ? AppSessionStage.resolvingContext
+              : AppSessionStage.signedOut,
+        );
+        expect(session.current.context, isNull);
+        expect(published, isNotEmpty);
+        expect(published.last.context, isNull);
+      } finally {
+        secureStore.releaseDelete!.complete();
+        await settled;
+      }
+    });
+  }
+
+  for (final latestIsSignedIn in [false, true]) {
+    test('旧身份清除完成不覆盖后来的会话 latestIsSignedIn=$latestIsSignedIn', () async {
+      final identity = FakeIdentitySession(initial: _signedInIdentity());
+      final secureStore = _MemorySecureValueStore();
+      final session = AppSession(
+        identitySession: identity,
+        contextGateway: FakeSessionContextGateway(
+          context: _withPii(syntheticSessionContext),
+        ),
+        offlinePiiVault: OfflinePiiVault(
+          secureStore: secureStore,
+          lockStore: _MemoryOfflinePiiLockStore(),
+          clock: FixedClock(DateTime.utc(2026, 8, 6, 13)),
+          installationId: 'installation-1',
+        ),
+      );
+      addTearDown(session.close);
+      addTearDown(identity.close);
+      await session.start();
+      secureStore.deleteRequested = Completer<void>();
+      secureStore.releaseDelete = Completer<void>();
+      if (latestIsSignedIn) {
+        await identity.signOut();
+      } else {
+        await identity.signIn(email: 'next@example.test', password: 'ignored');
+      }
+      await secureStore.deleteRequested!.future;
+      final latest = session.changes.firstWhere(
+        (snapshot) => latestIsSignedIn
+            ? snapshot.stage == AppSessionStage.ready
+            : snapshot.stage == AppSessionStage.signedOut,
+      );
+      if (latestIsSignedIn) {
+        await identity.signIn(email: 'next@example.test', password: 'ignored');
+      } else {
+        await identity.signOut();
+      }
+      await latest;
+      secureStore.releaseDelete!.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        session.current.stage,
+        latestIsSignedIn ? AppSessionStage.ready : AppSessionStage.signedOut,
+      );
+      expect(
+        session.current.identity?.principal?.externalSubject,
+        latestIsSignedIn ? 'test-subject' : null,
+      );
+    });
+  }
+
   test('解析中的旧响应不能在注销后恢复上下文', () async {
     final identity = FakeIdentitySession(initial: _signedInIdentity());
     final gateway = _DelayedGateway();
