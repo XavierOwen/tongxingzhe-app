@@ -7,9 +7,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/app_session/app_session.dart';
 import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_directory_dialog.dart';
+import 'package:tongxingzhe_app/features/organization_directory/organization_invitation_create_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_membership_self_leave_dialog.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/l10n/app_strings.dart';
+import 'package:tongxingzhe_app/organization_directed_account_invitation/organization_directed_account_invitation.dart';
 import 'package:tongxingzhe_app/organization_directory/organization_directory.dart';
 import 'package:tongxingzhe_app/organization_membership_self_leave/organization_membership_self_leave.dart';
 import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
@@ -337,6 +339,63 @@ void main() {
     await tester.pumpAndSettle();
     expect(leaveGateway.calls, isEmpty);
     expect(directoryGateway.listCalls, 1);
+  });
+
+  testWidgets('每个组织行创建邀请固定选中组织，不刷新目录且不猜 owner', (tester) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final directoryGateway = _Gateway([
+      OrganizationDirectorySuccess(const [_organizationA, _organizationB]),
+    ]);
+    final invitationGateway = _InvitationGateway();
+    await _open(
+      tester,
+      fixture.session,
+      directoryGateway,
+      invitationGateway: invitationGateway,
+    );
+
+    final create = find.byKey(
+      ValueKey(
+        'organization-invitation-create-${_organizationB.organizationWorkspaceId}',
+      ),
+    );
+    expect(create, findsOneWidget);
+    await tester.ensureVisible(create);
+    await tester.tap(create);
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(OrganizationInvitationCreateDialog);
+    expect(dialog, findsOneWidget);
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.text(_organizationB.organizationWorkspaceId),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.text(_organizationA.organizationWorkspaceId),
+      ),
+      findsNothing,
+    );
+    expect(directoryGateway.listCalls, 1);
+    await tester.enterText(
+      find.byKey(const ValueKey('organization-invitation-create-target-id')),
+      _targetAppUserId,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('organization-invitation-create-submit')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      invitationGateway.calls.single.organizationWorkspaceId,
+      _organizationB.organizationWorkspaceId,
+    );
+    expect(directoryGateway.listCalls, 1);
+    expect(invitationGateway.closed, isFalse);
   });
 
   testWidgets('成功时必须先删本地快照，再提交并以新目录为准', (tester) async {
@@ -849,6 +908,8 @@ Future<void> _open(
   ThemeMode themeMode = ThemeMode.light,
   OrganizationMembershipSelfLeaveGateway selfLeaveGateway =
       const DeferredOrganizationMembershipSelfLeaveGateway(),
+  OrganizationDirectedAccountInvitationGateway invitationGateway =
+      const DeferredOrganizationDirectedAccountInvitationGateway(),
 }) async {
   await _pumpLauncher(
     tester,
@@ -858,6 +919,7 @@ Future<void> _open(
     textScaler: textScaler,
     themeMode: themeMode,
     selfLeaveGateway: selfLeaveGateway,
+    invitationGateway: invitationGateway,
   );
   await tester.tap(_launcher);
   if (settle) {
@@ -876,6 +938,8 @@ Future<void> _pumpLauncher(
   ThemeMode themeMode = ThemeMode.light,
   OrganizationMembershipSelfLeaveGateway selfLeaveGateway =
       const DeferredOrganizationMembershipSelfLeaveGateway(),
+  OrganizationDirectedAccountInvitationGateway invitationGateway =
+      const DeferredOrganizationDirectedAccountInvitationGateway(),
 }) => tester.pumpWidget(
   MaterialApp(
     theme: ThemeData(useMaterial3: true),
@@ -897,6 +961,7 @@ Future<void> _pumpLauncher(
                 gateway: gateway,
                 appSession: session,
                 selfLeaveGateway: selfLeaveGateway,
+                invitationGateway: invitationGateway,
               ),
             ),
             child: const Text('Open'),
@@ -1176,6 +1241,47 @@ final class _Gateway implements OrganizationDirectoryGateway {
   Future<void> close() async => closed = true;
 }
 
+typedef _InvitationCall = ({
+  String invitationId,
+  String organizationWorkspaceId,
+  String targetAppUserId,
+});
+
+final class _InvitationGateway
+    implements OrganizationDirectedAccountInvitationGateway {
+  final calls = <_InvitationCall>[];
+  var closed = false;
+
+  @override
+  Future<OrganizationDirectedAccountInvitationCreateResult> create({
+    required String invitationId,
+    required String organizationWorkspaceId,
+    required String targetAppUserId,
+  }) async {
+    calls.add((
+      invitationId: invitationId,
+      organizationWorkspaceId: organizationWorkspaceId,
+      targetAppUserId: targetAppUserId,
+    ));
+    return const OrganizationDirectedAccountInvitationCreateRejected(
+      OrganizationDirectedAccountInvitationFailureCode.notConfigured,
+    );
+  }
+
+  @override
+  Future<OrganizationDirectedAccountInvitationPreviewResult> preview({
+    required String invitationId,
+  }) => throw UnsupportedError('unused directory wiring preview');
+
+  @override
+  Future<OrganizationDirectedAccountInvitationAcceptResult> accept({
+    required String invitationId,
+  }) => throw UnsupportedError('unused directory wiring accept');
+
+  @override
+  Future<void> close() async => closed = true;
+}
+
 typedef _LeaveCall = ({String requestId, String organizationWorkspaceId});
 
 final class _SelfLeaveGateway
@@ -1307,6 +1413,7 @@ final _longOrganization = OrganizationDirectoryEntry(
 
 const _requestIdA = 'c1111111-1111-4111-8111-111111111111';
 const _requestIdB = 'c2222222-2222-4222-8222-222222222222';
+const _targetAppUserId = '99999999-9999-4999-8999-999999999999';
 
 final _receipt = OrganizationMembershipSelfLeaveReceipt(
   membershipSelfLeaveContractId: 'organization-membership-self-leave:v1',

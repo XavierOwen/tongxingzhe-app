@@ -1202,6 +1202,34 @@ dart run tool/check_markdown_links.dart
 清单区分已确认结果、现有入口和待确认授权，后续先补成对的申请／恢复合同，再实现数据库及适配层。本次只检查文档与源码依据，不运行新的数据库实验，也不接受新的产品规则。
 账号删除 ADR 中的历史 Firebase 名称已加上当前认证决策的修订指向；这不表示任何认证商的账号删除接口已经交付。
 
+### 3.22 按已知账号编号创建邀请（Issue #351，MANUAL-069）
+
+此入口服务手头已有收件人内部账号 UUID 的组织所有者。账号编号不是邮箱，也不是认证商 subject；本页不查找账号、不列成员、不显示自己的编号。普通用户如何取得该编号仍是独立待确认项。
+
+1. 打开“我的组织”，在目标组织行选择“创建邀请”。组织目录只证明当前成员关系，不能证明当前 owner 权限；服务端会重新检查。
+2. 核对固定的组织，填写收件人内部账号 UUID，再提交。非法格式不发请求；首次有效提交才生成 invitation UUID。
+3. 若结果不确定，只在当前窗口重试同一组组织、target 和 invitation UUID。即使下一次收到 403，也不能据此断言之前没有创建成功。关闭前须明确放弃本页重试信息；放弃不是撤销邀请。
+4. 成功后核对服务端回执中的 invitation UUID 与 UTC 签发／过期时间。点击复制只复制 invitation UUID；复制失败重试不会再次创建邀请。
+5. 把邀请编号手工交给指定收件人。App 没有自动发邮件或通知；只有绑定收件人可在线预览并接受，创建回执本身不保证当前可接受。
+
+请求、回执和输入仅保存在窗口内存。会话失效、换号、同账号注销重登或离开窗口都会清除它们并丢弃迟到结果；页面不关闭共享服务、不切换当前项目、不产生项目权限。
+复制由用户触发，且触发前检查原会话。已经写入系统剪贴板的内容不随本页销毁而自动删除，也不会在以后登录时被本页读取。
+状态提示、放弃确认和回执沿用现有 Material 3 对话框，支持滚动、小屏大字号、键盘关闭和 live region。保持 owner、组织成员与邀请收件人的含义分离，不把统一 forbidden 改成账号枚举提示。
+状态变化后，等待新布局完成再把提示滚回可见区域；同步滚动可能被新布局的滚动锚定抵消。该回调核对页面与请求代次，离开页面或开始新请求后不执行旧滚动。
+
+相关验证：
+
+```sh
+flutter test test/features/organization_directory/organization_invitation_create_dialog_test.dart test/features/organization_directory/organization_directory_dialog_test.dart test/features/organization_directory/organization_invitation_accept_dialog_test.dart
+flutter test
+dart analyze
+dart format --output=none --set-exit-if-changed lib test tool integration_test test_driver
+dart run tool/check_production_boundary.dart
+dart run tool/check_markdown_links.dart
+```
+
+本票复用原 HTTP／SQL 合同，没有新增本地数据库实验。Widget、synthetic Clipboard 与渲染结果不能代替生产身份、真人投递或六平台真实运行证据。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
