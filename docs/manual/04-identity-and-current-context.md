@@ -699,6 +699,92 @@ composition tests 检查生产接线源码，不等于生产服务已部署。Do
 7R 不新增 migration、权限、Flutter、UI、邮件、账号／成员／邀请目录、通知、分享链接、审批、revoke、capability、上下文切换、缓存、离线或删除 API。
 上述检查不证明 production identity、部署端点、邮件送达、真实组织、Apple 或真人平台运行时。
 
+### 3.11 Flutter 定向邀请 gateway 与资源生命周期（Issue #328，MANUAL-059）
+
+7S 为 3.10 的两条 HTTP 入口提供 Flutter typed gateway，并把它接入 App 启动与关闭流程。
+调用方只交明确的 UUID，得到 success 或稳定 failure；它不需要解释 token、HTTP response 或数据库错误。
+这仍不是可点击的邀请功能：App 尚未提供账号目录、邀请投递、组织上下文或操作页面。
+
+接口与不可变结果在 [organization_directed_account_invitation.dart](../../lib/organization_directed_account_invitation/organization_directed_account_invitation.dart)。
+HTTP 实现在 [http_organization_directed_account_invitation_gateway.dart](../../lib/organization_directed_account_invitation/http_organization_directed_account_invitation_gateway.dart)。
+
+#### 两个 method 与两个 receipt
+
+`OrganizationDirectedAccountInvitationGateway.create` 接收调用方提供的 invitation、organization workspace 和 target app user UUID。
+`accept` 只接收 invitation UUID；gateway 自动把它放入 acceptance path，并发送 `{}`，不能替用户选择接受者。
+两者先验证 UUID 并转 lowercase，再取 token；非法输入直接返回 invalidRequest，不触网。
+gateway 不生成 invitation UUID，也不查询目标账号、owner、membership 或邀请状态。
+
+下面是简化调用示例，变量均由调用方提供，不表示当前 App 已有对应 UI。
+两次调用分别来自 owner 与绑定 target 的身份会话；owner 不能替另一个账号接受邀请：
+
+```dart
+final created = await ownerGateway.create(
+  invitationId: invitationId,
+  organizationWorkspaceId: organizationWorkspaceId,
+  targetAppUserId: targetAppUserId,
+);
+final accepted = await targetGateway.accept(invitationId: invitationId);
+```
+
+create 与 accept 分别返回 `CreateSuccess`／`CreateRejected` 和 `AcceptSuccess`／`AcceptRejected`，完整类型名都以 `OrganizationDirectedAccountInvitation` 开头。
+两个 receipt 分别保存 3.9 的五个字段；ID 为 String，时间为 UTC DateTime，字段不可修改。
+create parser 绑定 invitation 与 workspace，accept parser 绑定 invitation。两者都拒绝多余／缺少字段、错误 contract、非小写 UUID、无效日期和错误绑定。
+日期必须是 canonical UTC 毫秒格式，不能让 DateTime 自动把不存在的日期改成下个月。
+create 的 expires 必须精确晚于 issued 168 小时，但不会拿设备当前时间拒绝旧 receipt。
+因为精确重放可以返回历史 receipt，判断过期、已接受或成员资格仍是 Backend／0087 的责任。
+
+#### Token、重试和错误
+
+gateway 使用同一个 `IdentitySession`，请求固定带 Accept JSON、Bearer 和 JSON utf-8 headers。
+只有第一次响应同时通过 JSON／no-store 和精确 `401 unauthenticated` 检查，才强制刷新一次 token。
+retry 复用相同 URL 与 body；第二次 401 返回 unauthorized，不能再次刷新。响应字段或 headers 不合法时直接 invalidResponse，不尝试“修复”数据。
+
+两操作共用十个 failure code：notConfigured、unauthorized、invalidJson、payloadTooLarge、invalidRequest、forbidden、conflict、serviceUnavailable、networkUnavailable、invalidResponse。
+其中 400／401／403／409／413／503 沿用 3.10 的固定映射；网络、timeout 和 HTTP client 异常映射 networkUnavailable。
+未知 status／code、404、非法 JSON／headers／receipt 和其他异常为 invalidResponse，不向调用者暴露原文。
+不存在 expired、wrongTarget、alreadyMember、业务 notFound 或 replay flag；这些字段会把邀请状态变成可探测信息。
+
+#### 配置与关闭由谁负责
+
+`productionOrganizationDirectedAccountInvitationGateway` 读取既有 `BACKEND_BASE_URL`。
+空配置返回 deferred，两个 method 都给出 notConfigured，不创建或发送 HTTP 请求。
+非空配置先通过 URI 解析和现有 pathless validator，再创建 client；非法配置同步失败，不静默降级。
+HTTP gateway 接管传入 client，重复 close 只关闭一次；它不关闭 identity session，不写 Drift、缓存、同步队列或日志。
+
+[AppDependencies](../../lib/app/app_dependencies.dart) 的 invitation builder 接收启动时同一个 identity session。
+production 使用上述 factory，测试或调用方没有提供 builder 时使用 deferred。
+`AppStartupReady.organizationDirectedAccountInvitationGateway` 保存 builder 返回的同一实例，不再创建第二个 gateway。
+
+App 资源关闭分为三种路径：
+
+1. gateway 创建后，后续启动步骤失败：AppDependencies 清理已创建的实例。
+2. App 已被移除，启动结果才回来：TongxingzheApp 清理该结果中的实例。
+3. App 正常启动后退出：dispose 关闭持有的实例。
+
+每种路径都只关闭一次。gateway 仍只由 composition root 持有，不传给 `_ReadyApp`、controller、UI 或 context switch。
+
+#### 验证与证据范围
+
+```bash
+flutter test --no-pub \
+  test/organization_directed_account_invitation/http_organization_directed_account_invitation_gateway_test.dart \
+  test/app/app_dependencies_test.dart \
+  test/app/tongxingzhe_app_test.dart
+flutter test --no-pub \
+  --dart-define=BACKEND_BASE_URL=https://example.invalid/prefix \
+  test/organization_directed_account_invitation/http_organization_directed_account_invitation_gateway_test.dart
+dart format --output=none --set-exit-if-changed lib test
+dart analyze
+flutter test --no-pub
+dart run tool/check_production_boundary.dart
+dart run tool/check_markdown_links.dart
+```
+
+第二条命令只检查非法 build-time 配置，测试不连接 example.invalid。focused tests 使用 fake identity 与 MockClient，覆盖两个操作、headers、一次刷新、严格 parser、错误和 client ownership。
+两个 App 测试文件检查同一 identity／gateway、缺省 deferred 和三类关闭路径。它们不模拟真实邀请投递，也不证明 UI、production identity、部署、Backend 授权、数据库事务或真人平台行为。
+7S 不改变 0087／HTTP，也不新增目录、邮件、通知、审批、revoke、capability、离线、durable retry 或删除 API。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：

@@ -885,6 +885,67 @@ query／path 错误也为 400 invalid request。HTTP 不预查 invitation、账�
 7R 不新增 migration、SQL function、权限、Flutter、UI、邮件、账号／成员／邀请目录、通知、分享链接、审批、revoke、owner／capability、上下文切换、Drift、缓存、离线、durable retry 或 deletion／recovery／purge API。
 local synthetic HTTP、PostgreSQL 与 CI 不证明 production identity、部署端点、邮件、真实组织、Apple 或真人平台运行时。
 
+#### Slice 7S：定向邀请 Flutter gateway 与启动生命周期
+
+7S／Issue #328 消费 7R 的两个 HTTP 操作，并在同一工作单元接入 App composition。
+它沿用 7O／ADR-0180 的邀请语义、7R／ADR-0181 的 transport 和 ADR-0179 的身份刷新／资源模式，不重新定义邀请资格或数据库状态。
+
+公共接口固定为：
+
+```dart
+abstract interface class OrganizationDirectedAccountInvitationGateway {
+  Future<OrganizationDirectedAccountInvitationCreateResult> create({
+    required String invitationId,
+    required String organizationWorkspaceId,
+    required String targetAppUserId,
+  });
+
+  Future<OrganizationDirectedAccountInvitationAcceptResult> accept({
+    required String invitationId,
+  });
+
+  Future<void> close();
+}
+```
+
+`OrganizationDirectedAccountInvitationCreateReceipt` 和 `OrganizationDirectedAccountInvitationAcceptReceipt` 是独立不可变值，各有 7O 对应的五个字段。
+ID 字段为 `String`，时间字段为 UTC `DateTime`。create 字段为 `organizationInvitationContractId`、`invitationId`、`organizationWorkspaceId`、`issuedAtUtc`、`expiresAtUtc`；accept 的末两项改为 `organizationMembershipId`、`acceptedAtUtc`。
+两种 result 各有同前缀的 `CreateSuccess(receipt)`／`CreateRejected(code)` 和 `AcceptSuccess(receipt)`／`AcceptRejected(code)`，不使用可选字段混合结果。
+它们共用 `OrganizationDirectedAccountInvitationFailureCode`，且只有 `notConfigured`、`unauthorized`、`invalidJson`、`payloadTooLarge`、`invalidRequest`、`forbidden`、`conflict`、`serviceUnavailable`、`networkUnavailable`、`invalidResponse`。
+
+实现固定为 `HttpOrganizationDirectedAccountInvitationGateway`、`DeferredOrganizationDirectedAccountInvitationGateway` 和 `productionOrganizationDirectedAccountInvitationGateway(IdentitySession)`。
+factory 读取既有 `BACKEND_BASE_URL`；空或全空白使用 deferred，create／accept 返回 notConfigured，不触网。
+非空配置先解析并运行既有 pathless URI validator，非法配置在分配 HTTP client 前同步失败，不降级为 deferred。
+只复用 `IdentitySession`、`validatePathlessBackendBaseUri`、现有 `http.Client` 和一次 401 模式，不新增依赖或公共 router／UUID／日期／错误框架。
+
+create 的三个 UUID 与 accept 的 invitation UUID 都在取 token／HTTP 前验证 `8-4-4-4-12` 十六进制形状并转 lowercase；无效值返回 invalidRequest。
+请求严格使用 7R 的 POST route 和 body：create 只交 invitation／target，accept path 带 invitation 且 body 精确为 `{}`。
+headers 为 `Accept: application/json`、`Authorization: Bearer <token>`、`Content-Type: application/json; charset=utf-8`；没有 query、fragment、`Idempotency-Key` 或其他业务字段。
+gateway 不生成 invitation UUID，不读取账号目录或预查 owner、membership、组织、邀请状态与权限。
+
+两操作都从同一 `IdentitySession` 取得 token。identity 的 notConfigured／networkUnavailable 映射为同名 failure，其他 identity failure 映射 unauthorized。
+只有 headers 和精确 error envelope 均符合 `401 unauthenticated` 的首次响应，才强制 refresh 一次。
+retry 使用相同 method、canonical URL 和 body，换用新 token；第二次 401 返回 unauthorized，其他状态不刷新。
+
+所有响应先验证 JSON utf-8 与 `Cache-Control: no-store`。200 只接受各自精确五字段、固定 contract ID、小写 canonical UUID 和有效 UTC `YYYY-MM-DDTHH:mm:ss.SSSZ` 时间。
+create receipt 绑定请求 invitation／workspace，accept receipt 绑定请求 invitation；create 的两个时间必须相差 168 小时。
+时间必须通过 UTC 解析与 canonical round-trip，不能接受日期溢出后的自动归一化。
+客户端不按设备当前时间拒绝旧 receipt，也不判断 expiry、replay、owner 或 membership 资格；这些由 Backend／0087 决定。
+
+稳定错误沿用 7R status／code：400 invalid_json → invalidJson，400 invalid request → invalidRequest，401 → unauthorized，403 → forbidden，409 → conflict，413 → payloadTooLarge，503 → serviceUnavailable。
+network、timeout 或 `http.ClientException` 为 networkUnavailable；缺少／错误 headers、非法 JSON、非精确 error root、未知 status／code、404、错误字段／类型／日期／绑定或其他未知异常为 invalidResponse。
+不增加业务 notFound、expired、wrongTarget、alreadyMember 或 replay flag，也不返回 provider、HTTP client、数据库、身份或账号原文。
+
+HTTP gateway 接管传入的 client，重复 close 只关闭一次；deferred close 不触网，任何 gateway 都不关闭 `IdentitySession`。
+response／receipt 只存在内存，不写 Drift、缓存、同步队列或日志。
+`AppDependencies.organizationDirectedAccountInvitationGatewayBuilder` 接收启动时同一个 identity session，production builder 使用上述 factory，缺少 builder 时返回 deferred。
+`AppStartupReady.organizationDirectedAccountInvitationGateway` 暴露同一实例。后续启动失败、启动完成前移除 App、正常 dispose 都只关闭已创建的 gateway 一次。
+gateway 只由 composition root 持有，不传入 `_ReadyApp`、controller、UI、route 或 context switch。
+
+`TEST-069` 与 `MANUAL-059` 覆盖输入、transport、parser、身份刷新、错误、内存和三类关闭路径。
+7S 不修改 Backend、PostgreSQL、权限或邀请规则，不提供 UI、账号／成员／邀请目录、邮件、通知、分享链接、审批、revoke、owner／capability、上下文切换、UUID generator、离线、durable retry 或删除 API。
+fake identity、MockClient、analyzer 与 widget tests 只证明本地 Flutter 合同，不证明 production identity、部署服务、真实组织、邮件、Apple 或真人平台运行时。
+
 ### 5.8 分析、指标与报告
 
 #### 5.8.1 统计单位和核心口径
@@ -2388,6 +2449,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-056` | 学习文档必须用零基础步骤说明 7L 的 `OrganizationOwnerTransferGateway`、五字段 immutable receipt、typed result／failure、三个 UUID、`IdentitySession`、固定 request headers、空配置 deferred、一次 `401` refresh、strict response parser、stable mappings、内存结果和 `close`。必须说明非法输入在取得 token 前失败、非空非法 Backend URI 同步配置失败、客户端不做 owner／membership 预查、不保存 PII，并给出 focused／全量 Flutter tests、`dart analyze`、Markdown link 和 evidence boundary；文档不证明 Dart adapter、Backend、PostgreSQL、production identity、部署、Drift、UI、Apple 或真人平台。 |
 | `MANUAL-057` | 学习文档必须用零基础步骤说明 7O 的现有账号定向邀请与接受：current owner、opaque target selector、exact identity bridge、连续 168 小时 expiry、claim 字段、invitation selector／幂等／request lock、exact replay 与 drift、只建立 organization membership、固定锁序、稳定 SQLSTATE／Backend code、五字段 create／accept receipt、JSON／`no-store`、value-free immutable audit、账号去关联、recovery 与 purge family。必须说明首版没有 revoke、邮箱／未注册／分享链接／申请／审批，也不证明数据库、Backend、HTTP、邮件、生产身份、部署、Apple 或真人平台。 |
 | `MANUAL-058` | 学习文档必须说明 7R 两个 raw POST route、create 两字段／accept 空 object、认证先于 query／path／store／body、generic verifier 与 7A 分离、actual-byte inclusive 1 MiB、UUID lowercase、两个 store method 与独立五字段 receipt、一次对应 0087 bridge、Promise gate、固定错误、non-enumeration 和 JSON／no-store。提供 unit／route／composition／runtime integration 命令，并区分本地 synthetic、数据库、production identity、部署、邮件、Flutter、UI 与真人平台证据。 |
+| `MANUAL-059` | 学习文档必须说明 7S 的两操作 typed gateway、两个 immutable receipt／result、共用 failure enum、输入在 token 前校验、固定 route／body／headers、一次严格 401 刷新、相同请求重试、strict parser、UTC 毫秒与 168 小时、deferred／非法配置、client ownership、内存结果、同一 IdentitySession 与三类启动／关闭路径。提供 focused／完整 Flutter tests、配置变体、analyzer、格式与链接命令，明确不提供 UI、目录、投递或生产／真人平台证据。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -2634,6 +2696,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-066` | 7L／#314 的 focused Flutter tests 必须覆盖 `OrganizationOwnerTransferGateway` 的固定 interface、path／body／`Accept`／`Authorization`／`Content-Type` headers、无 `Idempotency-Key`、三个 `8-4-4-4-12` 十六进制 UUID 的大小写输入与 lowercase canonicalization、非法输入在 token／HTTP 前 short-circuit、空 `BACKEND_BASE_URL` 的 `DeferredOrganizationOwnerTransferGateway` 与 no-network、非空非法 URI／path validator 的同步配置失败、`IdentitySession` failure、一次精确 `401 unauthenticated` refresh 与完全相同 retry URL／body、strict JSON／`no-store`／五字段 receipt／UTC `DateTime`、全部 stable mappings、unknown／404／parser／network／timeout 脱敏、immutable in-memory result 和 `close`。fake identity／`MockClient` 证据不证明 Backend、PostgreSQL、production identity、部署、Drift、UI、Apple 或真人平台。 |
 | `TEST-067` | 7O 的文档验收必须核对 ORG-013–ORG-017 在 Product Spec、ADR-0180 和学习文档中的一致性：current-owner-only、existing active account、exact identity、target selector、连续 168 小时 expiry、claim 字段与独立 family、同 invitation replay／drift、接受只建 organization membership、request→sorted user→governance→sorted membership 锁序、稳定 SQLSTATE／Backend code、分开的五字段 receipts、精确 JSON／`no-store`、append-only value-free audit、账号去关联、recovery freeze 和 creation→invitation→owner-transfer purge locks。Markdown link、no-slop 和 diff 检查通过只证明文档一致，不证明数据库、并发、Backend、HTTP、邮件、生产身份、部署、Apple 或真人平台。 |
 | `TEST-068` | 7R 的 Backend handler／store、真实本地 HTTP、production composition 与 PostgreSQL runtime integration 必须覆盖两个 raw POST route、无认证 404、认证先于 query（含空 query）／path／store／body、generic verifier 分类、create 两字段／accept 空 object、exact keys／types／UUID canonicalization、actual-byte inclusive 1 MiB／chunked／多字节边界、一次对应 0087 bridge、两个 strict receipt 的请求绑定／有效日期／168 小时、首次与 replay 200、400／401／403／409／413／503、unknown 与 recovery non-enumeration、Promise gate、JSON／no-store 与脱敏。既有 0087 fixture／concurrency／ACL／restore 继续运行；这些 synthetic 证据不证明 production identity、部署、邮件、Flutter、UI、Apple 或真人平台。 |
+| `TEST-069` | 7S 的 focused Flutter tests 必须覆盖两操作 API／独立 receipt／result、输入 UUID lowercase 与 token 前 short-circuit、固定 URL／body／headers、精确 401 单次刷新与相同 retry request、全部 typed failure、strict JSON／no-store／keys／UUID／UTC 日期／请求绑定／168 小时、旧 receipt 不按设备时间拒绝、deferred 无网络、非法配置同步失败和 client close ownership。composition／widget tests 覆盖同一 identity／gateway、缺省 deferred、后续启动失败、启动完成前移除 App 与正常 dispose 的单次 close；不把本地证据写成 Backend、数据库、生产身份、UI 或真人平台验收。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -2935,6 +2998,10 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 7Q／#324 的 0088 修复 owner transfer 等待锁后仍使用旧授权时间的问题，不改变 invitation 合同。
 7R／#326 接通两个 invitation HTTP 操作、dedicated store、production composition 与 synthetic HTTP／runtime integration。
 它不提供 Flutter、UI、邀请投递或账号目录，不能据此宣称邀请已可由普通用户在 App 中完成。
+
+7S／#328 增加两操作 Flutter typed gateway，并接入 `AppDependencies` 与 App 启停生命周期。
+它严格消费 7R、只保留内存 receipt，并在同一 identity session 下执行一次 401 刷新。
+它仍未接入 `_ReadyApp`、controller、UI、账号目录、邀请投递或组织上下文，不能据此宣称用户邀请流程已经交付。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 

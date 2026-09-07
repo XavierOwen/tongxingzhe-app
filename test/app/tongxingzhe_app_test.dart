@@ -21,6 +21,7 @@ import 'package:tongxingzhe_app/management_reports/interest_report_gateway.dart'
 import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/original_region_report_gateway.dart';
 import 'package:tongxingzhe_app/organization_creation/organization_creation.dart';
+import 'package:tongxingzhe_app/organization_directed_account_invitation/organization_directed_account_invitation.dart';
 import 'package:tongxingzhe_app/organization_owner_transfer/organization_owner_transfer.dart';
 import 'package:tongxingzhe_app/platform/platform_capabilities.dart';
 import 'package:tongxingzhe_app/project_settings/personal_follow_up_consent_opt_in.dart';
@@ -145,6 +146,65 @@ void main() {
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       organizationOwnerTransferGatewayBuilder: (_) => gateway,
+    );
+    addTearDown(database.close);
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    expect(gateway.closeCount, 1);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    expect(gateway.closeCount, 1);
+  });
+
+  testWidgets('启动完成前移除 App 仍只关闭后来取得的组织邀请 gateway 一次', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final startupGate = _BlockingPlatformCapabilitiesProvider();
+    final gateway = _TrackingOrganizationDirectedAccountInvitationGateway();
+    var builderCalls = 0;
+    final dependencies = AppDependencies(
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: startupGate,
+      organizationDirectedAccountInvitationGatewayBuilder: (_) {
+        builderCalls++;
+        return gateway;
+      },
+    );
+    addTearDown(database.close);
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pump();
+    expect(startupGate.loadCalls, 1);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    startupGate.complete();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+
+    expect(builderCalls, 1);
+    expect(gateway.closeCount, 1);
+  });
+
+  testWidgets('移除 TongxingzheApp 后只关闭组织邀请 gateway 一次', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final gateway = _TrackingOrganizationDirectedAccountInvitationGateway();
+    final dependencies = AppDependencies(
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      organizationDirectedAccountInvitationGatewayBuilder: (_) => gateway,
     );
     addTearDown(database.close);
 
@@ -2346,6 +2406,30 @@ final class _TrackingOrganizationCreationGateway
     required String displayName,
   }) async => const OrganizationCreationRejected(
     OrganizationCreationFailureCode.notConfigured,
+  );
+
+  @override
+  Future<void> close() async => closeCount++;
+}
+
+final class _TrackingOrganizationDirectedAccountInvitationGateway
+    implements OrganizationDirectedAccountInvitationGateway {
+  var closeCount = 0;
+
+  @override
+  Future<OrganizationDirectedAccountInvitationCreateResult> create({
+    required String invitationId,
+    required String organizationWorkspaceId,
+    required String targetAppUserId,
+  }) async => const OrganizationDirectedAccountInvitationCreateRejected(
+    OrganizationDirectedAccountInvitationFailureCode.notConfigured,
+  );
+
+  @override
+  Future<OrganizationDirectedAccountInvitationAcceptResult> accept({
+    required String invitationId,
+  }) async => const OrganizationDirectedAccountInvitationAcceptRejected(
+    OrganizationDirectedAccountInvitationFailureCode.notConfigured,
   );
 
   @override

@@ -25,6 +25,7 @@ import '../management_reports/management_report_gateway.dart';
 import '../management_reports/management_report_export_delivery.dart';
 import '../management_reports/original_region_report_gateway.dart';
 import '../organization_creation/organization_creation.dart';
+import '../organization_directed_account_invitation/organization_directed_account_invitation.dart';
 import '../organization_owner_transfer/organization_owner_transfer.dart';
 import '../plans/personal_action_plan.dart';
 import '../project_settings/personal_follow_up_consent_opt_in.dart';
@@ -66,6 +67,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
   LocalDatabase? _database;
   IdentitySession? _identitySession;
   OrganizationCreationGateway? _organizationCreationGateway;
+  OrganizationDirectedAccountInvitationGateway?
+  _organizationDirectedAccountInvitationGateway;
   OrganizationOwnerTransferGateway? _organizationOwnerTransferGateway;
   AppSession? _appSession;
   SyncEngineFactory? _syncEngineFactory;
@@ -106,6 +109,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       :final database,
       :final identitySession,
       :final organizationCreationGateway,
+      :final organizationDirectedAccountInvitationGateway,
       :final organizationOwnerTransferGateway,
       :final appSession,
       :final syncEngineFactory,
@@ -130,6 +134,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       _database = database;
       _identitySession = identitySession;
       _organizationCreationGateway = organizationCreationGateway;
+      _organizationDirectedAccountInvitationGateway =
+          organizationDirectedAccountInvitationGateway;
       _organizationOwnerTransferGateway = organizationOwnerTransferGateway;
       _appSession = appSession;
       _syncEngineFactory = syncEngineFactory;
@@ -162,6 +168,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       startup.appSession.close(),
       startup.identitySession.close(),
       startup.organizationCreationGateway.close(),
+      startup.organizationDirectedAccountInvitationGateway.close(),
       startup.organizationOwnerTransferGateway.close(),
       startup.syncEngineFactory?.close() ?? Future<void>.value(),
       startup.regionResolver.close(),
@@ -190,6 +197,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
     unawaited(_appSession?.close());
     unawaited(_identitySession?.close());
     unawaited(_organizationCreationGateway?.close());
+    unawaited(_organizationDirectedAccountInvitationGateway?.close());
     unawaited(_organizationOwnerTransferGateway?.close());
     unawaited(_syncEngineFactory?.close());
     unawaited(_regionResolver?.close());
