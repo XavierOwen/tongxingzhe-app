@@ -8,8 +8,9 @@ import '../../l10n/app_strings.dart';
 import '../../organization_directed_account_invitation/organization_directed_account_invitation.dart';
 import '../../organization_directory/organization_directory.dart';
 import '../../organization_membership_self_leave/organization_membership_self_leave.dart';
-import 'organization_membership_self_leave_dialog.dart';
+import 'organization_invitation_create_dialog.dart';
 import 'organization_invitation_accept_dialog.dart';
+import 'organization_membership_self_leave_dialog.dart';
 
 /// 读取当前账号的组织目录，不改变当前项目。
 ///
@@ -158,18 +159,34 @@ final class _OrganizationDirectoryDialogState
             const SizedBox(height: 4),
             SelectableText(entry.organizationWorkspaceId),
             const SizedBox(height: 8),
-            Align(
-              alignment: AlignmentDirectional.centerEnd,
-              child: TextButton.icon(
-                key: ValueKey(
-                  'organization-leave-${entry.organizationWorkspaceId}',
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              children: [
+                TextButton.icon(
+                  key: ValueKey(
+                    'organization-invitation-create-'
+                    '${entry.organizationWorkspaceId}',
+                  ),
+                  onPressed: _busy || _sessionInvalidated
+                      ? null
+                      : () => _createInvitation(entry),
+                  icon: const Icon(Icons.person_add_alt_1_outlined),
+                  label: Text(
+                    widget.text.t('organizationInvitationCreateAction'),
+                  ),
                 ),
-                onPressed: _busy || _sessionInvalidated
-                    ? null
-                    : () => _leave(entry),
-                icon: const Icon(Icons.logout),
-                label: Text(widget.text.t('organizationLeaveAction')),
-              ),
+                TextButton.icon(
+                  key: ValueKey(
+                    'organization-leave-${entry.organizationWorkspaceId}',
+                  ),
+                  onPressed: _busy || _sessionInvalidated
+                      ? null
+                      : () => _leave(entry),
+                  icon: const Icon(Icons.logout),
+                  label: Text(widget.text.t('organizationLeaveAction')),
+                ),
+              ],
             ),
           ],
         ),
@@ -293,6 +310,24 @@ final class _OrganizationDirectoryDialogState
     setState(() => _notice = widget.text.t('organizationInvitationSuccess'));
     // 接受重放可能描述已结束的成员关系，不按旧 receipt 添加组织行。
     await _load();
+  }
+
+  Future<void> _createInvitation(OrganizationDirectoryEntry entry) async {
+    if (_busy ||
+        !_organizations.contains(entry) ||
+        !_hasTrustedSession(widget.appSession.current)) {
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => OrganizationInvitationCreateDialog(
+        text: widget.text,
+        organization: entry,
+        gateway: widget.invitationGateway,
+        appSession: widget.appSession,
+      ),
+    );
   }
 
   Future<void> _leave(OrganizationDirectoryEntry entry) async {

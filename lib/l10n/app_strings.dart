@@ -156,6 +156,52 @@ const Map<String, Map<String, String>> _strings = {
     'organizationInvitationFailure.serviceUnavailable': '服务暂时不可用，请稍后重试。',
     'organizationInvitationFailure.networkUnavailable': '网络不可用，请检查连接后重试。',
     'organizationInvitationFailure.invalidResponse': '未收到可验证的结果，请重试。',
+    'organizationInvitationCreateAction': '创建邀请',
+    'organizationInvitationCreateTitle': '创建定向邀请',
+    'organizationInvitationCreateOwnerHelp':
+        '仅这个组织的当前有效所有者可以创建。组织列表不判断所有者身份；服务端会在提交时检查。',
+    'organizationInvitationCreateDeliveryHelp':
+        '输入已有账号的内部 UUID。这不是邀请编号；App 不搜索账号，也不显示你的编号。',
+    'organizationInvitationCreateOrganizationId': '组织标识',
+    'organizationInvitationCreateTargetId': '收件人账号编号',
+    'organizationInvitationCreateInvalidTarget': '请输入完整的 UUID 账号编号。',
+    'organizationInvitationCreateInvalidRequest': '未能建立邀请编号，请在此窗口重试。',
+    'organizationInvitationCreateSubmitting': '正在创建邀请…',
+    'organizationInvitationCreateSubmit': '创建邀请',
+    'organizationInvitationCreateRetry': '重试这次创建',
+    'organizationInvitationCreateClose': '关闭',
+    'organizationInvitationCreateUnauthorized':
+        '账号或会话已改变。已清除账号编号和邀请回执；请关闭后重新登录。',
+    'organizationInvitationCreateUncertain': '邀请可能已创建。请重试原请求。',
+    'organizationInvitationCreateSuccess': '邀请已创建。',
+    'organizationInvitationCreateInvitationId': '邀请编号（UUID）',
+    'organizationInvitationCreateIssuedAt': '签发时间（UTC）',
+    'organizationInvitationCreateExpiresAt': '过期时间（UTC）',
+    'organizationInvitationCreateNoDelivery':
+        'App 未自动投递这份邀请。请将邀请编号安全地交给指定收件人；只有绑定账号可以接受。',
+    'organizationInvitationCreateFreshnessNotice':
+        '这份历史回执不证明你现在仍是所有者，也不保证邀请现在仍可接受。接受不会自动加入项目、增加权限或切换当前项目。',
+    'organizationInvitationCreateCopy': '复制邀请编号',
+    'organizationInvitationCreateCopySuccess': '邀请编号已复制。',
+    'organizationInvitationCreateCopyFailure': '未能复制邀请编号，请再试一次。',
+    'organizationInvitationCreateDiscardTitle': '停止重试这次创建？',
+    'organizationInvitationCreateDiscardBody':
+        '邀请可能已创建。关闭只会放弃此窗口中的重试信息，不会撤销服务端上可能已创建的邀请。',
+    'organizationInvitationCreateKeepRetry': '返回重试',
+    'organizationInvitationCreateDiscard': '放弃重试并关闭',
+    'organizationInvitationCreateFailure.notConfigured':
+        '邀请服务尚未配置，没有提交创建请求。请稍后重试。',
+    'organizationInvitationCreateFailure.invalidJson': '创建请求格式无效，请稍后重试。',
+    'organizationInvitationCreateFailure.payloadTooLarge': '创建请求未被接受，请稍后重试。',
+    'organizationInvitationCreateFailure.invalidRequest': '创建请求无效，请检查账号编号后重试。',
+    'organizationInvitationCreateFailure.forbidden':
+        '当前账号无权为这个组织创建邀请，或请求不符合邀请条件。此结果不显示收件账号是否存在。',
+    'organizationInvitationCreateFailure.conflict': '无法确认这次邀请的结果。请在此窗口重试原请求。',
+    'organizationInvitationCreateFailure.serviceUnavailable':
+        '服务暂时不可用，无法确认创建结果。请在此窗口重试。',
+    'organizationInvitationCreateFailure.networkUnavailable': '网络不可用，请检查连接。',
+    'organizationInvitationCreateFailure.invalidResponse':
+        '未收到可验证的创建结果，请在此窗口重试。',
     'organizationLeaveAction': '退出组织',
     'organizationLeaveTitle': '退出组织？',
     'organizationLeaveHelp':
@@ -1349,6 +1395,79 @@ const Map<String, Map<String, String>> _strings = {
         'The network is unavailable. Check your connection and try again.',
     'organizationInvitationFailure.invalidResponse':
         'The app could not verify the result. Try again.',
+    'organizationInvitationCreateAction': 'Create invitation',
+    'organizationInvitationCreateTitle': 'Create directed invitation',
+    'organizationInvitationCreateOwnerHelp':
+        'Only a current, active owner of this organization can create one. '
+        'The organization list does not infer ownership; the server checks it '
+        'when you submit.',
+    'organizationInvitationCreateDeliveryHelp':
+        'Enter an existing account\'s internal UUID. This is not an invitation '
+        'ID. The app does not search accounts or display your ID.',
+    'organizationInvitationCreateOrganizationId': 'Organization ID',
+    'organizationInvitationCreateTargetId':
+        'Recipient internal account ID (UUID)',
+    'organizationInvitationCreateInvalidTarget':
+        'Enter the complete UUID account ID.',
+    'organizationInvitationCreateInvalidRequest':
+        'Could not prepare an invitation ID. Retry in this window.',
+    'organizationInvitationCreateSubmitting': 'Creating invitation…',
+    'organizationInvitationCreateSubmit': 'Create invitation',
+    'organizationInvitationCreateRetry': 'Retry this creation',
+    'organizationInvitationCreateClose': 'Close',
+    'organizationInvitationCreateUnauthorized':
+        'The account or session changed. The account ID and receipt were '
+        'cleared. Close this window and sign in again.',
+    'organizationInvitationCreateUncertain':
+        'The invitation may already exist. A retry uses the same organization, '
+        'recipient, and invitation ID, kept only in this window.',
+    'organizationInvitationCreateSuccess': 'Invitation created.',
+    'organizationInvitationCreateInvitationId': 'Invitation ID (UUID)',
+    'organizationInvitationCreateIssuedAt': 'Issued at (UTC)',
+    'organizationInvitationCreateExpiresAt': 'Expires at (UTC)',
+    'organizationInvitationCreateNoDelivery':
+        'The app did not deliver this invitation. Give the invitation ID '
+        'securely to the intended recipient. Only the bound account can accept '
+        'it.',
+    'organizationInvitationCreateFreshnessNotice':
+        'This historical receipt does not prove that you are still an owner or '
+        'that the invitation can still be accepted. Acceptance does not join '
+        'projects, grant permissions, or switch the current project.',
+    'organizationInvitationCreateCopy': 'Copy invitation ID',
+    'organizationInvitationCreateCopySuccess': 'Invitation ID copied.',
+    'organizationInvitationCreateCopyFailure':
+        'Could not copy the invitation ID. Try again.',
+    'organizationInvitationCreateDiscardTitle': 'Stop retrying this creation?',
+    'organizationInvitationCreateDiscardBody':
+        'The invitation may already exist. Closing only discards the retry '
+        'details in this window. It does not revoke an invitation that may '
+        'exist on the server.',
+    'organizationInvitationCreateKeepRetry': 'Keep retrying',
+    'organizationInvitationCreateDiscard': 'Discard retry and close',
+    'organizationInvitationCreateFailure.notConfigured':
+        'The invitation service is not configured. It did not submit a create '
+        'request. Try again later.',
+    'organizationInvitationCreateFailure.invalidJson':
+        'The create request format is invalid. Try again later.',
+    'organizationInvitationCreateFailure.payloadTooLarge':
+        'The service did not accept the create request. Try again later.',
+    'organizationInvitationCreateFailure.invalidRequest':
+        'The create request is invalid. Check the account ID and retry.',
+    'organizationInvitationCreateFailure.forbidden':
+        'This account cannot create an invitation for this organization, or '
+        'the request is not eligible. This result does not reveal whether the '
+        'recipient account exists.',
+    'organizationInvitationCreateFailure.conflict':
+        'The invitation result is uncertain. Retry the original request in '
+        'this window.',
+    'organizationInvitationCreateFailure.serviceUnavailable':
+        'The service is unavailable, so the creation result is uncertain. '
+        'Retry in this window.',
+    'organizationInvitationCreateFailure.networkUnavailable':
+        'The network is unavailable, so the creation result is uncertain. '
+        'Check your connection and retry in this window.',
+    'organizationInvitationCreateFailure.invalidResponse':
+        'The creation result could not be verified. Retry in this window.',
     'organizationLeaveAction': 'Leave organization',
     'organizationLeaveTitle': 'Leave organization?',
     'organizationLeaveHelp':
