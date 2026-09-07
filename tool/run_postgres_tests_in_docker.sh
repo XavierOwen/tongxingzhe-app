@@ -709,6 +709,7 @@ docker run \
   --env OWNER_TRANSFER_FIXTURE=/source/backend/database/fixtures/0086_organization_owner_transfer.sql \
   --env ORGANIZATION_DIRECTED_ACCOUNT_INVITATION_FIXTURE=/source/backend/database/fixtures/0087_organization_directed_account_invitation.sql \
   --env ORGANIZATION_DIRECTORY_FIXTURE=/source/backend/database/fixtures/0089_organization_directory.sql \
+  --env ORGANIZATION_MEMBERSHIP_SELF_LEAVE_FIXTURE=/source/backend/database/fixtures/0090_organization_membership_self_leave.sql \
   "${backend_image}" \
   bash -lc \
     'mkdir -p backend/server backend/database/fixtures &&
@@ -728,6 +729,7 @@ docker run \
        dist/test/organization-creation.integration.js \
        dist/test/organization-directory.integration.js \
        dist/test/organization-directed-account-invitations.integration.js \
+       dist/test/organization-membership-self-leave.integration.js \
        dist/test/organization-owner-transfer.integration.js \
        dist/test/personal-current-relationship-stage.integration.js \
        dist/test/personal-relationship-stage-change-summary.integration.js \

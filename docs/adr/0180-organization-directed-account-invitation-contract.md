@@ -87,7 +87,7 @@ exact replay 仍先取得 request lock，并在 actor 可解析时锁定对应 u
 
 最终清除不在本 ADR 实现。清除先按固定 family 顺序取得 request locks。
 每个 family 内按 invitation／request UUID 排序。不得先取得 governance lock 再反向取得 request lock。
-family 顺序是 creation、directed invitation、owner transfer。随后按 UUID 排序取得 app-user row locks，再取得 governance lock 和 membership locks。
+本 ADR 原有 creation、directed invitation、owner transfer 顺序由 [ADR-0183](./0183-bare-organization-membership-self-leave.md) 在末尾追加 membership self-leave，当前全局顺序以该 ADR 为准。随后按 UUID 排序取得 app-user row locks，再取得 governance lock 和 membership locks。
 治理锁后必须重读 recovery 状态和 claim 集合。然后先写仅含 family 与 UUID 的 tombstone，再删除该 family 的 claim、audit 和组织业务数据。
 
 清除不得因 claim 的历史内部引用而阻断，也不得把 invitation UUID 跨 family 视为冲突。

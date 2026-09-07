@@ -144,6 +144,11 @@ import {
   type OrganizationOwnerTransferStore,
 } from "./organization-owner-transfer.js";
 import {
+  handleOrganizationMembershipSelfLeave,
+  matchOrganizationMembershipSelfLeaveRequestTarget,
+  type OrganizationMembershipSelfLeaveStore,
+} from "./organization-membership-self-leave.js";
+import {
   handleOrganizationDirectedAccountInvitation,
   matchOrganizationDirectedAccountInvitationRequestTarget,
   type OrganizationDirectedAccountInvitationStore,
@@ -202,6 +207,8 @@ export interface BackendServerDependencies
   readonly organizationCreationStore?: OrganizationCreationStore;
   readonly organizationDirectoryStore?: OrganizationDirectoryStore;
   readonly organizationOwnerTransferStore?: OrganizationOwnerTransferStore;
+  readonly organizationMembershipSelfLeaveStore?:
+    OrganizationMembershipSelfLeaveStore;
   readonly organizationDirectedAccountInvitationStore?:
     OrganizationDirectedAccountInvitationStore;
 }
@@ -252,6 +259,30 @@ export function createBackendServer(
           {
             identityVerifier: dependencies.identityVerifier,
             transferStore: dependencies.organizationOwnerTransferStore,
+          },
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
+      }
+      return;
+    }
+
+    const membershipSelfLeaveMatch =
+      matchOrganizationMembershipSelfLeaveRequestTarget(request.url);
+    if (request.method === "POST" && membershipSelfLeaveMatch !== null) {
+      try {
+        const result = await handleOrganizationMembershipSelfLeave(
+          {
+            authorization: request.headers.authorization,
+            workspaceId: membershipSelfLeaveMatch.workspaceId,
+            hasQuery: membershipSelfLeaveMatch.hasQuery,
+            readBody: async () => readJsonBody(request),
+          },
+          {
+            identityVerifier: dependencies.identityVerifier,
+            leaveStore: dependencies.organizationMembershipSelfLeaveStore,
           },
         );
         response.statusCode = result.status;

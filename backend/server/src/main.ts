@@ -11,6 +11,9 @@ import {
   PostgresOrganizationOwnerTransferStore,
 } from "./organization-owner-transfer.js";
 import {
+  PostgresOrganizationMembershipSelfLeaveStore,
+} from "./organization-membership-self-leave.js";
+import {
   PostgresOrganizationDirectedAccountInvitationStore,
 } from "./organization-directed-account-invitations.js";
 import { createBackendServer } from "./server.js";
@@ -154,6 +157,8 @@ const organizationCreationStore = new PostgresOrganizationCreationStore(query);
 const organizationDirectoryStore = new PostgresOrganizationDirectoryStore(query);
 const organizationOwnerTransferStore =
   new PostgresOrganizationOwnerTransferStore(query);
+const organizationMembershipSelfLeaveStore =
+  new PostgresOrganizationMembershipSelfLeaveStore(query);
 const organizationDirectedAccountInvitationStore =
   new PostgresOrganizationDirectedAccountInvitationStore(query);
 const server = createBackendServer({
@@ -162,6 +167,7 @@ const server = createBackendServer({
   organizationCreationStore,
   organizationDirectoryStore,
   organizationOwnerTransferStore,
+  organizationMembershipSelfLeaveStore,
   organizationDirectedAccountInvitationStore,
   contextStore,
   commandStore,
