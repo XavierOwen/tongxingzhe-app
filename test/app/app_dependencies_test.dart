@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:tongxingzhe_app/app/app_dependencies.dart';
+import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
 import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/data/local_database_factory.dart';
 import 'package:tongxingzhe_app/device/device_identity_store.dart';
@@ -28,6 +29,7 @@ import 'package:tongxingzhe_app/privacy/drift_offline_pii_lock_store.dart';
 import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
 import 'package:tongxingzhe_app/project_settings/http_personal_follow_up_consent_opt_in_gateway.dart';
 import 'package:tongxingzhe_app/project_settings/personal_follow_up_consent_opt_in.dart';
+import 'package:tongxingzhe_app/targets/http_promotion_target_gateway.dart';
 import 'package:tongxingzhe_app/targets/promotion_target.dart';
 
 import '../support/fake_identity_session.dart';
@@ -671,7 +673,7 @@ void main() {
     );
     await vault.replace(
       externalSubject: 'external-subject-not-an-app-user-id',
-      context: syntheticSessionContext,
+      context: _offlineCapableContext,
       assignedTargets: [_target],
       authorizedAtUtc: DateTime.utc(2030, 1, 2, 12),
     );
@@ -690,7 +692,10 @@ void main() {
       clock: clock,
       idGenerator: ids,
       identitySessionFactory: FakeIdentitySessionFactory(identity),
-      sessionContextGateway: FakeSessionContextGateway(),
+      sessionContextGateway: FakeSessionContextGateway(
+        context: _offlineCapableContext,
+        availableContexts: const [_offlineCapableContext],
+      ),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       offlinePiiSecureStore: secureStore,
     );
@@ -711,6 +716,166 @@ void main() {
     expect(success.fromOfflineCache, isTrue);
     expect(success.value.single.displayName, '王小明');
   });
+
+  test('live 身份已切换而 AppSession 仍公开旧 snapshot 时 fail closed', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = _MutableIdentitySession(_identityA);
+    final secureStore = _MemorySecureValueStore();
+    var remoteCalls = 0;
+    final dependencies = AppDependencies(
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 13)),
+      idGenerator: CountingIdGenerator(),
+      identitySessionFactory: _SingleIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(
+        context: _offlineCapableContext,
+        availableContexts: const [_offlineCapableContext],
+      ),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      offlinePiiSecureStore: secureStore,
+      promotionTargetGatewayBuilder: (session) => HttpPromotionTargetGateway(
+        baseUri: Uri.parse('https://backend.example.test'),
+        identitySession: session,
+        client: MockClient((request) async {
+          remoteCalls += 1;
+          return http.Response('{}', 500);
+        }),
+      ),
+    );
+
+    final startup = await dependencies.start();
+    expect(startup, isA<AppStartupReady>());
+    final ready = startup as AppStartupReady;
+    addTearDown(ready.promotionTargetGateway.close);
+    addTearDown(ready.identitySession.close);
+    addTearDown(ready.appSession.close);
+    addTearDown(ready.database.close);
+
+    identity.currentSnapshot = _identityB;
+    final result = await ready.promotionTargetGateway.loadAssigned();
+
+    expect(
+      (result as PromotionTargetRejected<List<PromotionTargetProfile>>).code,
+      PromotionTargetFailureCode.unauthorized,
+    );
+    expect(remoteCalls, 0);
+    expect(secureStore.values, isEmpty);
+  });
+
+  test('缺少 PII 能力时 composition gateway fail closed 且不调用 remote', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = _MutableIdentitySession(_identityA);
+    final secureStore = _MemorySecureValueStore();
+    var remoteCalls = 0;
+    final dependencies = AppDependencies(
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 13)),
+      idGenerator: CountingIdGenerator(),
+      identitySessionFactory: _SingleIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      offlinePiiSecureStore: secureStore,
+      promotionTargetGatewayBuilder: (session) => HttpPromotionTargetGateway(
+        baseUri: Uri.parse('https://backend.example.test'),
+        identitySession: session,
+        client: MockClient((request) async {
+          remoteCalls += 1;
+          return http.Response('{}', 500);
+        }),
+      ),
+    );
+
+    final startup = await dependencies.start();
+    expect(startup, isA<AppStartupReady>());
+    final ready = startup as AppStartupReady;
+    addTearDown(ready.promotionTargetGateway.close);
+    addTearDown(ready.identitySession.close);
+    addTearDown(ready.appSession.close);
+    addTearDown(ready.database.close);
+
+    final result = await ready.promotionTargetGateway.loadAssigned();
+
+    expect(
+      (result as PromotionTargetRejected<List<PromotionTargetProfile>>).code,
+      PromotionTargetFailureCode.unauthorized,
+    );
+    expect(remoteCalls, 0);
+    expect(secureStore.values, isEmpty);
+  });
+}
+
+const _identityA = IdentitySnapshot(
+  stage: IdentityStage.signedIn,
+  principal: IdentityPrincipal(
+    externalSubject: 'external-subject-a',
+    email: 'a@example.test',
+  ),
+);
+
+const _identityB = IdentitySnapshot(
+  stage: IdentityStage.signedIn,
+  principal: IdentityPrincipal(
+    externalSubject: 'external-subject-b',
+    email: 'b@example.test',
+  ),
+);
+
+const _offlineCapableContext = TrustedSessionContext(
+  appUserId: '11111111-1111-4111-8111-111111111111',
+  workspace: WorkspaceContext(
+    id: '22222222-2222-4222-8222-222222222222',
+    kind: WorkspaceKind.personal,
+    name: '个人空间',
+  ),
+  project: ProjectContext(
+    id: '33333333-3333-4333-8333-333333333333',
+    name: '我的推广项目',
+  ),
+  questionnaireVersion: QuestionnaireVersionContext(
+    id: '44444444-4444-4444-8444-444444444444',
+    versionNumber: 1,
+  ),
+  capabilities: {'record_contact', 'view_assigned_target_pii'},
+);
+
+final class _SingleIdentitySessionFactory implements IdentitySessionFactory {
+  const _SingleIdentitySessionFactory(this.session);
+
+  final IdentitySession session;
+
+  @override
+  Future<IdentitySession> open() async => session;
+}
+
+final class _MutableIdentitySession implements IdentitySession {
+  _MutableIdentitySession(this.currentSnapshot);
+
+  IdentitySnapshot currentSnapshot;
+
+  @override
+  IdentitySnapshot get current => currentSnapshot;
+
+  @override
+  Stream<IdentitySnapshot> get changes =>
+      const Stream<IdentitySnapshot>.empty();
+
+  @override
+  Future<IdentityResult<IdentitySnapshot>> restore() async =>
+      IdentitySuccess(currentSnapshot);
+
+  @override
+  Future<IdentityResult<IdentityAccessToken>> accessToken({
+    bool forceRefresh = false,
+  }) async => const IdentitySuccess(
+    IdentityAccessToken(value: 'test-access-token', expiresAt: null),
+  );
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('unused identity operation');
 }
 
 final class _ThrowingDatabaseFactory implements LocalDatabaseFactory {

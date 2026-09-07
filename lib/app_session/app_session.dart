@@ -173,7 +173,16 @@ final class AppSession {
         }
         switch (result) {
           case SessionContextSuccess(:final context, :final availableContexts):
-            await _revokeOfflinePiiAfterContextChange(identity, context);
+            await _revokeOfflinePiiAfterContextChange(
+              identity,
+              context,
+              generation: generation,
+            );
+            if (!_isCurrent(generation)) {
+              return const SessionContextRejected(
+                SessionContextFailureCode.unauthorized,
+              );
+            }
             _publish(
               AppSessionSnapshot(
                 stage: AppSessionStage.ready,
@@ -203,7 +212,16 @@ final class AppSession {
     }
     switch (result) {
       case SessionContextSuccess(:final context, :final availableContexts):
-        await _revokeOfflinePiiAfterContextChange(identity, context);
+        await _revokeOfflinePiiAfterContextChange(
+          identity,
+          context,
+          generation: generation,
+        );
+        if (!_isCurrent(generation)) {
+          return const SessionContextRejected(
+            SessionContextFailureCode.unauthorized,
+          );
+        }
         _publish(
           AppSessionSnapshot(
             stage: AppSessionStage.ready,
@@ -233,6 +251,11 @@ final class AppSession {
   }
 
   Future<void> _resolveIdentity(IdentitySnapshot identity) async {
+    final previousContext =
+        _current.identity?.principal?.externalSubject ==
+            identity.principal?.externalSubject
+        ? _current.context
+        : null;
     final generation = ++_generation;
     if (identity.stage == IdentityStage.signedIn) {
       final nextSubject = identity.principal?.externalSubject;
@@ -309,6 +332,13 @@ final class AppSession {
         }
         switch (contextResult) {
           case SessionContextSuccess(:final context, :final availableContexts):
+            await _revokeOfflinePiiAfterContextChange(
+              identity,
+              context,
+              generation: generation,
+              previousContext: previousContext,
+            );
+            if (!_isCurrent(generation)) return;
             _publish(
               AppSessionSnapshot(
                 stage: AppSessionStage.ready,
@@ -368,18 +398,31 @@ final class AppSession {
 
   Future<void> _revokeOfflinePiiAfterContextChange(
     IdentitySnapshot identity,
-    TrustedSessionContext nextContext,
-  ) async {
-    final previousContext = _current.context;
+    TrustedSessionContext nextContext, {
+    required int generation,
+    TrustedSessionContext? previousContext,
+  }) async {
+    var previous = previousContext ?? _current.context;
     final subject = identity.principal?.externalSubject;
-    if (previousContext == null ||
-        subject == null ||
-        _offlinePiiVault == null ||
-        (previousContext.workspace.id == nextContext.workspace.id &&
-            previousContext.project.id == nextContext.project.id)) {
-      return;
+    final vault = _offlinePiiVault;
+    if (subject == null || vault == null) return;
+    if (previous == null &&
+        nextContext.capabilities.contains('view_assigned_target_pii')) {
+      final cached = await vault.read(
+        subject,
+        expectedFence: vault.captureRequest(subject),
+      );
+      if (!_isCurrent(generation)) return;
+      if (cached is OfflinePiiAvailable) previous = cached.snapshot.context;
     }
-    await _offlinePiiVault.revoke(subject, OfflinePiiLockReason.contextChanged);
+    if (previous != null &&
+        (previous.appUserId != nextContext.appUserId ||
+            previous.workspace.id != nextContext.workspace.id ||
+            previous.project.id != nextContext.project.id)) {
+      await vault.revoke(subject, OfflinePiiLockReason.contextChanged);
+    } else if (!nextContext.capabilities.contains('view_assigned_target_pii')) {
+      await vault.revoke(subject, OfflinePiiLockReason.unauthorized);
+    }
   }
 
   Future<void> _revokeOfflinePiiForIdentityFailure(
