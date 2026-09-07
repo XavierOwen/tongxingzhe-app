@@ -139,6 +139,11 @@ import {
   matchOrganizationOwnerTransferRequestTarget,
   type OrganizationOwnerTransferStore,
 } from "./organization-owner-transfer.js";
+import {
+  handleOrganizationDirectedAccountInvitation,
+  matchOrganizationDirectedAccountInvitationRequestTarget,
+  type OrganizationDirectedAccountInvitationStore,
+} from "./organization-directed-account-invitations.js";
 import type {
   OrganizationCreationIdentityVerifier,
 } from "./organization-creation-identity.js";
@@ -192,6 +197,8 @@ export interface BackendServerDependencies
     OrganizationCreationIdentityVerifier;
   readonly organizationCreationStore?: OrganizationCreationStore;
   readonly organizationOwnerTransferStore?: OrganizationOwnerTransferStore;
+  readonly organizationDirectedAccountInvitationStore?:
+    OrganizationDirectedAccountInvitationStore;
 }
 
 export function createBackendServer(
@@ -200,6 +207,30 @@ export function createBackendServer(
   return createServer(async (request, response) => {
     response.setHeader("content-type", "application/json; charset=utf-8");
     response.setHeader("cache-control", "no-store");
+
+    const invitationMatch = matchOrganizationDirectedAccountInvitationRequestTarget(
+      request.url,
+    );
+    if (request.method === "POST" && invitationMatch !== null) {
+      try {
+        const result = await handleOrganizationDirectedAccountInvitation(
+          {
+            ...invitationMatch,
+            authorization: request.headers.authorization,
+            readBody: async () => readJsonBody(request),
+          },
+          {
+            identityVerifier: dependencies.identityVerifier,
+            invitationStore: dependencies.organizationDirectedAccountInvitationStore,
+          },
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
+      }
+      return;
+    }
 
     const ownerTransferMatch = matchOrganizationOwnerTransferRequestTarget(
       request.url,
@@ -227,6 +258,12 @@ export function createBackendServer(
     }
 
     const requestUrl = new URL(request.url ?? "/", "http://localhost");
+    // raw route 拒绝的路径不能经 URL 归一化后落入另一项写操作。
+    if (requestUrl.pathname !== (request.url ?? "/").split("?")[0]) {
+      response.statusCode = 404;
+      response.end(JSON.stringify({ error: { code: "not_found" } }));
+      return;
+    }
 
     if (request.method === "GET" && request.url === "/healthz") {
       response.statusCode = 200;

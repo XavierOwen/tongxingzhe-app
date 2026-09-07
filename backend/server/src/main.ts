@@ -9,6 +9,9 @@ import { PostgresOrganizationCreationStore } from "./organization-creation.js";
 import {
   PostgresOrganizationOwnerTransferStore,
 } from "./organization-owner-transfer.js";
+import {
+  PostgresOrganizationDirectedAccountInvitationStore,
+} from "./organization-directed-account-invitations.js";
 import { createBackendServer } from "./server.js";
 import { PostgresSessionContextStore } from "./session-context.js";
 import { PostgresSyncCommandStore } from "./sync-store.js";
@@ -149,11 +152,14 @@ const managementAnalysisContextStore =
 const organizationCreationStore = new PostgresOrganizationCreationStore(query);
 const organizationOwnerTransferStore =
   new PostgresOrganizationOwnerTransferStore(query);
+const organizationDirectedAccountInvitationStore =
+  new PostgresOrganizationDirectedAccountInvitationStore(query);
 const server = createBackendServer({
   identityVerifier,
   organizationCreationIdentityVerifier,
   organizationCreationStore,
   organizationOwnerTransferStore,
+  organizationDirectedAccountInvitationStore,
   contextStore,
   commandStore,
   regionResolutionStore,
