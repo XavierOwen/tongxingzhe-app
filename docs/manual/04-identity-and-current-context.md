@@ -177,7 +177,7 @@ null request／workspace／target 是 invalid request。未知或非 organizatio
 target membership UUID 只保存在 private claim，不进入 audit；new assignment 是 canonical target lineage。
 audit、失败响应和结构化日志都不保存 actor 或 target 的直接身份、display name、邮箱、external issuer／subject、token、Auth user object、provider metadata、SQL、数据库 message、stack 或自由文本。
 
-组织进入删除恢复期时，governance lock 会冻结新 transfer claim，精确重放仍只读。期满清除按固定 family 和 request UUID 顺序锁定全部 creation／transfer requests。
+组织进入删除恢复期时，governance lock 会冻结新 transfer claim，精确重放仍只读。期满清除按 [ADR-0183](../adr/0183-bare-organization-membership-self-leave.md) 的当前全局 family 和各 family 内 UUID 顺序锁定全部 requests，包含 creation／transfer。
 
 取得 governance lock 后，它重读 recovery 状态和 claim 集合；集合不一致时回滚重试。清除先写只含 `claim_family = 'organization-owner-transfer:v1'` 与 request UUID 的 transfer tombstone，再按 FK 依赖删除 claim、audit 和组织业务记录。
 
@@ -586,7 +586,7 @@ audit、响应、错误和结构化日志不得保存 inviter／target user ID�
 
 组织进入删除恢复期后，冻结新邀请和首次接受。已经接受的邀请仍可由同一 active target identity 只读精确重放；target 引用去关联后统一 forbidden。账号终结删除也先收集并排序取得受影响 invitation request locks，再取得 app-user、governance 和 membership locks。治理锁后重读 claim 集合；若出现未锁定的新 invitation，则回滚并用完整集合重试。
 
-最终清除先按 creation → directed invitation → owner transfer family、再按每个 family 内 UUID 排序取得 request locks，不能先拿 governance lock 再反向拿 request lock。随后才按既有顺序取得 app-user、governance 和 membership locks，并在治理锁后重读。
+最终清除按 [ADR-0183](../adr/0183-bare-organization-membership-self-leave.md) 的当前全局 family 顺序、再按每个 family 内 UUID 排序取得 request locks；7W 已在 owner transfer 后追加 membership self-leave。不能先拿 governance lock 再反向拿 request lock。随后才按既有顺序取得 app-user、governance 和 membership locks，并在治理锁后重读。
 清除先保留只含 `claim_family` 和 invitation UUID 的 tombstone，再删除 claim、audit 和组织业务记录。删除、恢复和 purge writer 本身由后续工作单元实现。
 
 本票不实现邮箱或未注册账号邀请、邮件投递、邀请 revoke、可分享链接、加入申请、审批或成员目录。
@@ -960,6 +960,69 @@ focused tests 检查 strict wire、七类失败、401、配置、单次 close、
 UI 还需核对中英文、keyboard／Escape／焦点返回、状态 live region、48 dp 控件、长名称／UUID、320×568／200% 字号及暗色宽屏。
 这里的 MockClient、fake identity／gateway、synthetic widget 和视觉检查不证明真实身份、服务部署或真人平台已验收；六平台 build 也不能替代运行时。
 本切片不修改数据库或 Backend，不提供组织项目、成员管理、邀请 UI、恢复期或删除操作。
+
+### 3.15 无下游关系成员自助退出（Issue #336，MANUAL-063）
+
+7W 先服务一种简单情况：用户接受邀请后，还没有组织项目成员记录，也没有组织对象分配，希望离开该组织。
+数据库只结束这条组织 membership，不删除账号、组织或历史事实，不切换当前项目。
+它不是完整退出 UI，也没有实现 PII-003 的本地敏感缓存清除。
+
+#### 为什么有依赖时整体拒绝
+
+当前或未来 owner 必须先完成相应所有权处理；即使组织有多个 owner，这个入口也不替其放弃所有权。
+过去已经结束的 owner 历史可以保留。membership 若已有未来结束时间，也不能再修改一次。
+只要该 membership 存在任何项目成员历史，或本人有本组织 `ended_at IS NULL` 的对象分配，就统一返回 forbidden。
+这样不会把仅关闭父 membership 误当成已经结束项目 capability、对象分配或清除了缓存。
+未来完整退出需按 capability → project membership → organization membership 处理，并独立结束对象分配和清除缓存。
+
+当前正式对象 writer 仅接受 personal workspace；7W 不开放组织对象写入。未来组织分配和重新激活必须与退出共享明确的授权与锁协议。
+旧的 management-analysis context 绑定 exact membership lineage；结束旧 membership 后不会因重新入组而复活。
+
+#### 请求、重放与数据库时间
+
+Backend 接受 `POST /v1/organizations/:organizationWorkspaceId/membership-self-leave`，body 只有 `request_id` UUID。
+账号来自经过验证的 exact identity，不接受 body 里的 actor、membership、owner、项目或时间。
+缺配置和未知内部错误为 unavailable；身份／资格／依赖失败与输入错误分开，完整 status／code 见 [Product Spec 7W](../PRODUCT_SPEC.md#slice-7w无下游关系成员自助退出)。
+
+数据库依次锁定 request、actor、组织治理和 membership，锁后才取一次当前时间。
+同一时间用于重新判断资格、结束 membership、保存 claim／audit 和返回 receipt。不能使用事务开始时间，因为事务可能正在等待另一次入组完成。
+两个并发请求不会各自结束一次；同 request 精确重放，另一新 request 在 membership 已结束后 forbidden。
+并发测试让另一事务在退出事务开始后实际插入 membership，模拟接受邀请的数据库产物；它不把这个 INSERT 证明写成完整邀请 HTTP 流程证明。
+
+网络丢失成功响应时，用同一 request 和组织重试即可取得原四字段 receipt。
+重新加入后，旧 request 仍只返回旧退出结果，不能结束新 membership；新的退出意图必须用新 request。
+不同 actor／workspace、去关联 claim 或同 family tombstone 为 conflict。恢复期禁止首次操作，但已有 live claim 可以只读重放。
+
+claim 的 actor 只能在账号终结删除中去关联一次；audit 不含 actor、组织名称或身份。
+未来组织 purge 先按创建、邀请、owner transfer、self-leave family 锁定完整 request 集合，再保留只有 family／request UUID 的 tombstone 后清除业务记录。
+7W 只固定这些边界，不执行账号或组织删除。见 [ADR-0183](../adr/0183-bare-organization-membership-self-leave.md)。
+
+#### 在隔离测试库验证
+
+最直接的入口会建立并自动清理 synthetic PostgreSQL 容器，不使用真实用户：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+只调试这一切片时，先确认 `DATABASE_URL` 指向可丢弃的测试库，然后从仓库根目录运行：
+
+```bash
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_organization_membership_self_leave.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0090_organization_membership_self_leave.sql
+./tool/verify_organization_membership_self_leave_concurrency.sh
+npm --prefix backend/server run check
+npm --prefix backend/server test
+dart run tool/check_markdown_links.dart
+```
+
+fixture 会回滚；并发脚本会在测试库提交独立 synthetic namespace，所以不能向真实数据库执行。
+runtime 只能执行 exact identity bridge，不可读写 membership、owner、claim 或 audit 表，也不可调用 private writer。
+Docker 还检查 Backend integration、checksum 和独立 dump／restore；恢复库重跑 check／fixture，不重跑已提交型并发脚本。
+通过只证明本地数据库与 transport 合同，不证明 Flutter、真人退出、生产身份、服务部署、敏感缓存清除或 Apple 行为。
 
 ## 4. PostgreSQL transaction 建立哪些事实
 

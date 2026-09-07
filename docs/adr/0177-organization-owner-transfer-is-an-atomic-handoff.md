@@ -43,7 +43,7 @@ drift、tombstone 或已去关联 actor 返回 idempotency conflict。只有没�
 
 组织删除恢复期在 governance lock 下冻结新 transfer claim。live exact replay 只读返回既有 receipt。
 
-终结清除按 `(claim_family, request_id)` 排序取得该组织全部 creation 与 transfer request locks。family 顺序固定为 creation 后 transfer。随后按既有顺序取得 app-user、governance 与 membership locks。取得 governance lock 后必须重读 recovery 状态和 claim 集合。集合与已锁定请求不一致时回滚重试。
+终结清除按 family、各 family 内 request UUID 排序取得该组织全部 request locks，包含 creation 与 transfer。后续 invitation 与 self-leave 扩展后的全局顺序以 [ADR-0183](./0183-bare-organization-membership-self-leave.md) 为准，creation 仍先于 transfer。随后按既有顺序取得 app-user、governance 与 membership locks。取得 governance lock 后必须重读 recovery 状态和 claim 集合。集合与已锁定请求不一致时回滚重试。
 
 清除先写只含 `claim_family = 'organization-owner-transfer:v1'` 和 `request_id` 的 tombstone，再按 FK 依赖删除 claim、audit 与组织业务记录。transfer writer 只检查本 family。因此 creation 与 transfer 的相同 UUID 不冲突。
 

@@ -285,8 +285,10 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `ORG-014` | 邀请创建和接受分别通过 exact `(issuer, subject)` identity bridge 解析当前 actor，不 trim、normalize、bootstrap 或复用 Slice 7A 创建资格。`invitation_id` 是 invitation selector、创建幂等键和 request-lock key；claim、advisory lock 与 tombstone 使用独立的 `organization-directed-account-invitation:v1` family。 |
 | `ORG-015` | claim 只保存 invitation、workspace、可去关联的 inviter／target internal user、issued／expiry 和可空 acceptance／membership 字段；expiry 固定为 issued 后连续 168 小时。exact identity 仍须解析 active actor；随后创建与接受 replay 先于 owner、membership、expiry 或 recovery 状态检查。漂移或 tombstone 返回 conflict，账号引用去关联后统一 forbidden；接受成功只原子建立一条 organization membership，不建立 project membership、capability 或 owner assignment。 |
 | `ORG-016` | 首次创建／接受使用 request lock、按 UUID 排序的受影响 app-user row locks、organization governance lock、按 UUID 排序的 membership locks，并在锁后重读 claim、tombstone、账号、workspace 和 membership。四个 operation-specific bridge／writer 使用 `VOLATILE SECURITY DEFINER`、`pg_catalog` search path、受控 owner 和最小 ACL；固定 result、SQLSTATE／message、Backend code 与 JSON／`no-store` 传输合同。 |
-| `ORG-017` | invitation audit 追加且不可变，只保存固定 event、contract、invitation、workspace、接受后的 membership 与数据库时间；响应、失败审计和结构化日志不得保存身份、邮箱、名称、token、请求原文或数据库原文。组织恢复期冻结新 claim，终结清除按 creation → directed invitation → owner transfer family 取锁，先留 family／UUID tombstone；本票不实现 purge writer。 |
+| `ORG-017` | invitation audit 追加且不可变，只保存固定 event、contract、invitation、workspace、接受后的 membership 与数据库时间；响应、失败审计和结构化日志不得保存身份、邮箱、名称、token、请求原文或数据库原文。组织恢复期冻结新 claim，终结清除按 ADR-0183 的当前全局 family 顺序取锁，先留 family／UUID tombstone；本票不实现 purge writer。 |
 | `ORG-018` | 当前账号的组织目录只列出 active app user 在读取时具有有效组织成员关系、且未删除的 organization workspace 名称和标识；包含尚无项目的组织，空列表正常，同名组织不合并。目录不授予项目、owner 或 capability，不成为全 App 搜索、成员或恢复期目录。 |
+| `ORG-019` | 无下游关系成员可自助结束本人当前、尚未安排结束的组织 membership。首次执行在锁后确认 active exact identity、未删除组织、无仍有效或未来有效 owner assignment、无该 membership 的任何项目成员历史、无本人在本组织未结束的对象分配；否则整体 forbidden。不级联关闭权限或清除缓存，不冒充完整组织退出。 |
+| `ORG-020` | self-leave 使用独立 `organization-membership-self-leave:v1` claim、request lock、tombstone 和 value-free audit；request → actor row → governance → membership 锁后取一次数据库时间用于授权、membership end、claim、audit 与 receipt。相同 request、active actor、workspace 精确重放旧结果，重新入组后旧请求不得结束新 membership。drift、去关联或同 family tombstone 固定 conflict；runtime 仅可执行 exact identity bridge。 |
 
 #### Slice 7B Spec：固定组织原子创建与首位所有者合同
 
@@ -496,7 +498,7 @@ drift／tombstone 分支在 request lock 下结束；exact replay 再锁定并�
 
 未来删除流程进入恢复期时，必须在 governance lock 下冻结新的 transfer claim。
 
-终结清除按固定 `(claim_family, request_id)` 顺序取得该组织全部 creation 与 transfer request locks。family 顺序固定为 creation 后 transfer。然后按既有顺序取得 app-user、governance 和 membership locks。取得 governance lock 后必须重读 recovery 状态和 claim 集合。集合与已锁定请求不一致时回滚重试。
+终结清除按 [ADR-0183](./adr/0183-bare-organization-membership-self-leave.md) 的当前全局 family 顺序、各 family 内 request UUID 顺序取得该组织全部 request locks，包含 creation 与 transfer。然后按既有顺序取得 app-user、governance 和 membership locks。取得 governance lock 后必须重读 recovery 状态和 claim 集合。集合与已锁定请求不一致时回滚重试。
 
 清除 transaction 先写 transfer tombstone，再按 FK 依赖删除 transfer claim、audit 和组织业务记录。tombstone 只含 `claim_family = 'organization-owner-transfer:v1'` 与 `request_id`。
 
@@ -836,7 +838,7 @@ audit、失败响应、失败审计和结构化日志都不得保存 inviter／t
 账号终结删除必须先收集并按 `(claim_family, invitation_id)` 排序取得受影响 invitation request locks，再取得 app-user、governance 和 membership locks。取得治理锁后必须重读 claim 集合；若集合新增了未锁定的 invitation，则回滚并按完整集合重试。组织恢复、账号恢复、membership lifecycle、invitation revoke 和 owner recovery 不由本票新增。
 
 组织终结清除必须先按 `(claim_family, invitation_id)` 排序取得 request locks。
-family 顺序固定为 organization creation、directed account invitation、owner transfer。
+当前全局 family 顺序见 [ADR-0183](./adr/0183-bare-organization-membership-self-leave.md)，包含 organization creation、directed account invitation、owner transfer 与 membership self-leave。
 取得 request locks 后，再按既有顺序取得 app-user、governance 和 membership locks，并在治理锁后重读 recovery 状态和 claim 集合。
 
 清除 transaction 先写仅含 `claim_family = 'organization-directed-account-invitation:v1'` 与 `invitation_id` 的 tombstone。
@@ -1063,6 +1065,42 @@ HTTP gateway 接管传入 client，重复 close 只关闭一次；不关闭 Iden
 
 `TEST-072` 与 `MANUAL-062` 覆盖 gateway、身份与关闭边界、真实 App 接线、UI 状态和相关回归。
 synthetic widget／视觉与六平台 build 不证明 production identity、部署、真实组织或真人平台操作。
+
+#### Slice 7W：无下游关系成员自助退出
+
+7W／Issue #336 增加 DB 与 Backend HTTP 操作，服务于刚接受邀请、尚未参与组织项目的成员。
+完整合同见 [ADR-0183](./adr/0183-bare-organization-membership-self-leave.md)；这是一个受限的 membership end，不是完整组织退出 UI。
+
+0090 bridge 为 `app_data.leave_organization_membership_for_identity_v1(text,text,uuid,uuid)`，依次接收 trusted issuer、subject、request、workspace；private writer 为 `app_private.leave_organization_membership_v1(uuid,uuid,uuid)`，依次接收 resolved actor、request、workspace。
+identity 原值精确匹配 active app user，沿用原 issuer 2048／subject 512 字符与 ASCII-space 空值检查，不 normalize、bootstrap 或复用创建资格。
+首次执行固定 request → actor row → governance → membership 锁序，取得全部锁后以一次 `clock_timestamp()` 重读资格并结束 membership。
+只允许当前且 `inactive_from_utc IS NULL` 的成员；任何已排定结束、仍有效或未来有效 owner assignment、任何项目成员历史、同组织任何未结束对象分配都统一 forbidden。
+过去已结束的 owner 历史不阻止退出；其他成员、项目、capability、对象分配与当前项目均不修改。
+
+成功原子写一条 membership end、一条独立 claim 与一条 value-free audit；四字段 receipt 为 `membership_self_leave_contract_id`、`organization_workspace_id`、`organization_membership_id`、`effective_at_utc`。
+contract 固定 `organization-membership-self-leave:v1`，数据库保存同一未截断时间，HTTP 按既有 adapter 规范输出 UTC 毫秒。
+exact request、active actor 与 workspace 只读重放旧 receipt，不重新要求 membership 当前有效；重新入组后再次退出必须用新 request UUID。
+actor／workspace drift、actor 去关联或本 family tombstone 返回 conflict。恢复期禁止首次执行，仅保留 live exact replay。
+claim 只有 actor 是可一次性去关联的 FK；审计不保存 actor、名称、身份、token、PII 或自由文本。其余 claim／audit 追加不可变，具体 allowlist 与未来 purge 锁序见 ADR-0183。
+
+唯一入口为 `POST /v1/organizations/:organizationWorkspaceId/membership-self-leave`，body 精确为 `{ "request_id": "uuid" }`。
+canonical raw path 先匹配；有效入口依次验证 strict Bearer／generic identity、禁止任何 query（含裸 `?`）、path UUID、dedicated store、实际 1 MiB 上限 JSON body，然后等待一次参数化 bridge 调用。
+路径或 body 不能提交 actor、membership、时间、owner、project 或 capability；不查询当前项目，也不执行 Auth user lookup。
+成功 200 只返回固定四字段、小写 canonical UUID、有限 UTC 时间且 workspace 与请求一致。全部响应 JSON UTF-8、no-store，错误精确为 `{ "error": { "code": "stable_code" } }`。
+
+| 条件 | HTTP status 与 code |
+| --- | --- |
+| 未认证 | `401 unauthenticated` |
+| 非 canonical route／wrong method | `404 not_found`，不认证或调用 store |
+| query／path／body 形状或 exact DB invalid request | `400 invalid_organization_membership_self_leave_request` |
+| 空 body／非法 JSON；超过实际 body 上限 | `400 invalid_json`；`413 payload_too_large` |
+| exact DB forbidden，包括 owner／下游关系 | `403 organization_membership_self_leave_forbidden` |
+| exact DB idempotency conflict | `409 organization_membership_self_leave_conflict` |
+| 缺配置、invalid trusted identity、未知 DB／parser／adapter | `503 organization_membership_self_leave_unavailable` |
+
+`TEST-073` 与 `MANUAL-063` 覆盖时间／并发、重放、依赖拒绝、ACL、Backend transport 与 Docker restore。
+不实现 Flutter、成员移除、owner relinquish、项目或对象级递归撤权、敏感缓存清除、邀请预览、删除／恢复／purge writer 或生产配置。
+现有组织 target writer 尚未开放；未来接入时必须另定与退出共同使用的授权、锁与撤权合同。synthetic 与 CI 不证明真实用户退出、生产部署、PII 清除或真人平台运行时。
 
 ### 5.8 分析、指标与报告
 
@@ -2571,6 +2609,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-060` | 学习文档必须说明 7T 的项目菜单创建入口、唯一原名称输入、Backend 资格边界、隐藏 UUID-v4、同意图重试、busy 防重、不确定结果冻结／放弃确认、明确拒绝后的编辑、仅对话框内存、身份失效后清理、十种错误与成功不切换上下文。提供 focused／完整 tests、analyzer、格式、生产边界与链接检查，说明 synthetic UI／视觉、六平台 build 与真实身份／运行时的区别。 |
 | `MANUAL-061` | 学习文档必须说明 7U 的独立当前账号组织目录、projectless 与空列表、exact active identity、单次时间取样／查询快照、成员半开区间、deleted 排除、名称与 UUID 稳定顺序、只读 bridge／ACL、GET 与既有 POST 共存、认证优先与无 query／body、strict response／错误、无任意截断和读取后重新授权。提供 DB／Backend／runtime／Docker 验证命令，区分 synthetic 与生产、Flutter／UI、真实组织和真人平台。 |
 | `MANUAL-062` | 学习文档必须说明 7V 的独立 Flutter directory gateway、不可修改列表、无 body GET、strict response、七类失败与单次 401、配置与 client ownership、App 三类关闭路径、项目菜单只读入口、开窗／显式刷新、刷新先清空、身份失效与迟到结果隔离、完整 UUID 和不切换项目。提供相关测试／分析／格式／边界／链接命令，并区分 synthetic UI、六平台 build 与生产、真实组织和真人平台。 |
+| `MANUAL-063` | 学习文档必须区分 7W 的无下游 membership end 与完整组织退出，解释未排定结束、owner／项目历史／对象分配拒绝、锁后单次时间、旧 request 不结束重加入的新 membership、claim／audit／tombstone／去关联、exact identity 与 runtime ACL、strict HTTP 和稳定错误。提供 DB／Backend／并发／Docker 命令，明确没有级联撤权、缓存清除、Flutter 或生产证明。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -2815,12 +2854,13 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-064` | 7G 的 0086 DB-only 实现必须覆盖 trusted exact identity 与 7A creation eligibility 分离、current owner／同组织 active target membership、target UUID 与 account 状态、target 已是 owner／actor 等于 target、sole／multi-owner handoff、request claim、精确 replay、actor／workspace／target drift、tombstone、同 request／不同 request 并发、固定锁序与锁后重读、grant-before-close、同一数据库时间、append-only history、deferred active-owner invariant、membership／capability 不变、删除恢复只读、失败零部分写入、五字段 result、精确 SQLSTATE／Backend code、未知错误 unavailable、PII-free audit／错误／日志、最小 ACL、rollback、checksum 和 dump／restore。现有 synthetic DB 证据不证明 production identity、部署、真实删除、HTTP、Flutter 或 Apple 平台。 |
 | `TEST-065` | 7K／#312 的 Backend unit、real HTTP、composition 和 PostgreSQL integration tests 必须覆盖 raw route（wrong method、trailing／repeated slash、literal／percent-encoded dot、任意 percent-encoded path segment 和 unmatched path 均在认证前返回 404）、generic Bearer／`IdentityVerifier`（`unauthenticated` category 映射 401，`unavailable` 与非 typed 异常映射 503，且不复用 7A 或 Auth lookup）、Bearer→verifier→query→path→missing store→body→一次 store→Promise→response 顺序、actual-byte inclusive 1 MiB／chunked boundary、strict two-field UUID body 与 lowercase canonicalization、一次参数化 0086 bridge call、五字段 strict result／canonical path workspace／RFC 3339 到 SSSZ 时间、首次／replay 200、全部 400／401／403／409／413／503 映射、unknown／recovery non-enumeration、JSON／no-store、PII-free response／logs。这些 local synthetic 证据不证明 production identity、部署、Flutter、删除流程或 Apple 平台。 |
 | `TEST-066` | 7L／#314 的 focused Flutter tests 必须覆盖 `OrganizationOwnerTransferGateway` 的固定 interface、path／body／`Accept`／`Authorization`／`Content-Type` headers、无 `Idempotency-Key`、三个 `8-4-4-4-12` 十六进制 UUID 的大小写输入与 lowercase canonicalization、非法输入在 token／HTTP 前 short-circuit、空 `BACKEND_BASE_URL` 的 `DeferredOrganizationOwnerTransferGateway` 与 no-network、非空非法 URI／path validator 的同步配置失败、`IdentitySession` failure、一次精确 `401 unauthenticated` refresh 与完全相同 retry URL／body、strict JSON／`no-store`／五字段 receipt／UTC `DateTime`、全部 stable mappings、unknown／404／parser／network／timeout 脱敏、immutable in-memory result 和 `close`。fake identity／`MockClient` 证据不证明 Backend、PostgreSQL、production identity、部署、Drift、UI、Apple 或真人平台。 |
-| `TEST-067` | 7O 的文档验收必须核对 ORG-013–ORG-017 在 Product Spec、ADR-0180 和学习文档中的一致性：current-owner-only、existing active account、exact identity、target selector、连续 168 小时 expiry、claim 字段与独立 family、同 invitation replay／drift、接受只建 organization membership、request→sorted user→governance→sorted membership 锁序、稳定 SQLSTATE／Backend code、分开的五字段 receipts、精确 JSON／`no-store`、append-only value-free audit、账号去关联、recovery freeze 和 creation→invitation→owner-transfer purge locks。Markdown link、no-slop 和 diff 检查通过只证明文档一致，不证明数据库、并发、Backend、HTTP、邮件、生产身份、部署、Apple 或真人平台。 |
+| `TEST-067` | 7O 的文档验收必须核对 ORG-013–ORG-017 在 Product Spec、ADR-0180 和学习文档中的一致性：current-owner-only、existing active account、exact identity、target selector、连续 168 小时 expiry、claim 字段与独立 family、同 invitation replay／drift、接受只建 organization membership、request→sorted user→governance→sorted membership 锁序、稳定 SQLSTATE／Backend code、分开的五字段 receipts、精确 JSON／`no-store`、append-only value-free audit、账号去关联、recovery freeze 和当前全局 purge family 锁序。Markdown link、no-slop 和 diff 检查通过只证明文档一致，不证明数据库、并发、Backend、HTTP、邮件、生产身份、部署、Apple 或真人平台。 |
 | `TEST-068` | 7R 的 Backend handler／store、真实本地 HTTP、production composition 与 PostgreSQL runtime integration 必须覆盖两个 raw POST route、无认证 404、认证先于 query（含空 query）／path／store／body、generic verifier 分类、create 两字段／accept 空 object、exact keys／types／UUID canonicalization、actual-byte inclusive 1 MiB／chunked／多字节边界、一次对应 0087 bridge、两个 strict receipt 的请求绑定／有效日期／168 小时、首次与 replay 200、400／401／403／409／413／503、unknown 与 recovery non-enumeration、Promise gate、JSON／no-store 与脱敏。既有 0087 fixture／concurrency／ACL／restore 继续运行；这些 synthetic 证据不证明 production identity、部署、邮件、Flutter、UI、Apple 或真人平台。 |
 | `TEST-069` | 7S 的 focused Flutter tests 必须覆盖两操作 API／独立 receipt／result、输入 UUID lowercase 与 token 前 short-circuit、固定 URL／body／headers、精确 401 单次刷新与相同 retry request、全部 typed failure、strict JSON／no-store／keys／UUID／UTC 日期／请求绑定／168 小时、旧 receipt 不按设备时间拒绝、deferred 无网络、非法配置同步失败和 client close ownership。composition／widget tests 覆盖同一 identity／gateway、缺省 deferred、后续启动失败、启动完成前移除 App 与正常 dispose 的单次 close；不把本地证据写成 Backend、数据库、生产身份、UI 或真人平台验收。 |
 | `TEST-070` | 7T 的 Widget／App tests 必须覆盖个人／组织 ready 入口与未登录隐藏、原名称与 UUID-v4、首次意图与同参重试、busy 防双击、全部 failure、明确拒绝编辑新意图、不确定结果冻结与放弃确认、异常脱敏、身份失效／切换与迟到结果、成功 receipt 和保持当前 context、Keyboard／Escape／焦点返回、live region、中英文、320×568／200% 字号及宽屏。既有 creation gateway／生命周期与 consent UUID 回归继续通过；本地 synthetic 和 CI build 不证明 production identity、部署或真人平台运行。 |
 | `TEST-071` | 7U 必须用结构 check／回滚 fixture 覆盖 exact identity、原值长度、active／inactive／去关联、空目录、projectless、当前成员半开区间、恢复期／个人／跨账号排除、同名组织顺序与 owner／ACL／无写入，并确认 PUBLIC 无函数权限；用 Backend unit／real HTTP／composition／runtime integration 覆盖 GET 与 POST 共存、raw path／query、Bearer 优先、声明 body、store 缺省、一次参数化 SQL、Promise gate、strict 两字段 row／固定 root、重复 UUID、稳定错误与 JSON／no-store。既有 Docker rebuild／checksum／dump／restore 和 CI 继续通过；不把 synthetic 证据扩大为生产或真人平台验收。 |
 | `TEST-072` | 7V 的 gateway／widget／App tests 必须覆盖不可修改列表、顺序／同名保留、GET URL／headers／无 body、strict root／row／UUID／名称／重复 ID、七类失败、合法 401 单次刷新、deferred／非法配置、client ownership与三类 App close；覆盖 personal／organization ready 菜单、未登录隐藏、同一 gateway、开窗／刷新／busy、空列表与失败分离、刷新先清空、账号失效／切换／迟到结果、关闭和不改变当前项目；检查中英文、键盘／Escape／焦点、live region、48 dp、长文本／UUID、320×568／200% 字号与暗色宽屏。完整 Flutter tests、analyzer、format、生产边界和链接通过，synthetic 与 build 不等于生产或真人平台验收。 |
+| `TEST-073` | 7W structural check／rollback fixture／独立会话并发必须覆盖 exact active identity、current unended membership、过去 owner 可退出、当前／未来 owner、未来已排定结束、任何项目历史和未结束组织对象分配拒绝；覆盖锁后时间、等待中失效、退出事务开始后由独立事务建立新 membership（模拟接受邀请的产物）、同／异 request、exact replay、重新入组旧请求、drift、去关联、tombstone、恢复期和失败零写入。验证 claim／audit 不可变、单次时间、受控 owner、PUBLIC／runtime ACL、一次参数化 SQL、严格 receipt／错误、真实 HTTP／composition／runtime integration，并通过 Docker rebuild／checksum／dump／restore 与 CI；不据此宣称完整退出、生产身份或 PII 清除。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3135,6 +3175,9 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 
 7V／#333 接入同一合同的 Flutter gateway、App 生命周期与“我的组织”只读对话框。
 它在开窗和显式刷新时读取，身份失效时清空，并保持当前项目；仍不提供组织项目、成员治理、邀请 UI 或恢复期操作。
+
+7W／#336 增加无下游关系成员自助结束 membership 的 DB／HTTP 合同，保护锁后时间、同请求重放和 owner／依赖拒绝。
+它尚无 Flutter UI，也不提供有项目或对象分配成员的完整退出、递归撤权或本地敏感缓存清除。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 
