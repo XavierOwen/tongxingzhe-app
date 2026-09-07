@@ -910,6 +910,57 @@ fixture 需覆盖项目为空仍可见、有效账号空列表、时间边界、
 HTTP 检查覆盖认证先后、声明 body、无 query、await、精确结果和错误脱敏，并确认 POST 未受影响。
 这些 synthetic 证据不证明生产身份、部署端点、真实组织或真人平台；本切片还没有 Flutter gateway／列表、项目创建／切换、成员治理或恢复流程。
 
+### 3.14 在当前项目菜单查看我的组织（Issue #333，MANUAL-062）
+
+7V 把上一节的 GET 接到正式 App。用户打开“我的组织”时读取一次，之后由“刷新”重新读取。
+它是账号范围的只读列表，不是项目切换器：只显示组织名与完整 UUID，没有进入项目、邀请或成员管理按钮。
+UUID 用于区分同名组织，可选中文字，但不是访问凭证。查看列表后，原当前项目保持不变。
+
+#### Gateway 怎样保持读取合同
+
+`OrganizationDirectoryGateway.list()` 返回成功的不可修改列表，或七种脱敏 typed failure。
+`OrganizationDirectoryEntry` 只有组织 workspace ID 与原名称；它不带 owner、membership、project、能力或原 response。
+HTTP 只发无 query／body 的 GET，传 Accept JSON 和 Bearer，不发送 Content-Type 或幂等键。
+200 parser 先验证 JSON UTF-8 和 no-store，再检查固定两字段 root 与每项两字段、contract ID、小写 UUID、非 ASCII-space 空名称和重复 UUID。
+任何一项坏数据都使整个目录失败，不留下部分列表；旧名称不 trim、不按新建规则重验，顺序与同名组织原样保留。
+
+只有完整合法的 `401 unauthenticated` 才允许一次 token refresh，并向同一 URL 重发 GET。
+第二次 401 为 unauthorized，不能递归刷新。其他 HTTP status／code 只接受 7U allowlist；网络故障与响应无法验证保持不同错误类别。
+目录错误没有 creation／invitation 的写入幂等问题，不需要 request UUID、uncertainty 状态或 durable retry。
+
+空 Backend URL 返回 deferred 的 notConfigured，不发送网络请求。非法非空 URL 在分配 client 前同步失败。
+HTTP gateway 只关闭自己的 client 一次，不关闭 IdentitySession；目录不写 Drift、偏好、日志、同步或缓存。
+
+#### 开窗和账号变化
+
+对话框记录开窗时的 ready appUserId。刷新前先清除上次结果，再发送新 GET；失败是失败，不保留旧权限快照，也不显示成“没有组织”。
+AppSession 不再 ready 或换成另一个账号时，立即清空并禁用读取。晚到的结果不显示；本次开窗失效后，即使账号恢复，也需要关闭后重新打开。
+同一账号的项目变化不作为目录筛选条件。读取期间可以关闭窗口，关闭只停止本地展示，不宣称撤销已经发出的请求。
+
+同一个 startup gateway 经 AppStartupReady、`_ReadyApp` 传到 ProductionHomeShell。
+composition root 处理后续启动失败、启动完成前移除 App 和正常 dispose 三种关闭路径；对话框只取消自己的订阅，不接管共享资源。
+创建组织成功后，下次打开目录会读取新结果；不因此自动切换项目、创建项目或发起项目目录刷新。
+
+#### 验证与证据范围
+
+```bash
+flutter test --no-pub \
+  test/organization_directory/http_organization_directory_gateway_test.dart \
+  test/features/organization_directory/organization_directory_dialog_test.dart \
+  test/app/app_dependencies_test.dart \
+  test/app/tongxingzhe_app_test.dart
+dart analyze
+dart format --output=none --set-exit-if-changed lib test
+flutter test --no-pub
+dart run tool/check_production_boundary.dart
+dart run tool/check_markdown_links.dart
+```
+
+focused tests 检查 strict wire、七类失败、401、配置、单次 close、菜单与同一 gateway、空列表／刷新、身份切换和迟到结果。
+UI 还需核对中英文、keyboard／Escape／焦点返回、状态 live region、48 dp 控件、长名称／UUID、320×568／200% 字号及暗色宽屏。
+这里的 MockClient、fake identity／gateway、synthetic widget 和视觉检查不证明真实身份、服务部署或真人平台已验收；六平台 build 也不能替代运行时。
+本切片不修改数据库或 Backend，不提供组织项目、成员管理、邀请 UI、恢复期或删除操作。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：

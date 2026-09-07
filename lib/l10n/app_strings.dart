@@ -109,6 +109,21 @@ const Map<String, Map<String, String>> _strings = {
     'contextIdentityFailed': '登录状态无效，请重新登录。',
     'projectMenu': '切换推广项目',
     'createProject': '创建推广项目',
+    'organizationDirectoryTitle': '我的组织',
+    'organizationDirectoryHelp': '仅显示你目前加入的组织。查看列表不会切换当前项目。',
+    'organizationDirectoryLoading': '正在读取组织列表…',
+    'organizationDirectoryLoaded': '组织列表已更新。',
+    'organizationDirectoryEmpty': '目前没有可显示的组织。创建组织后，可在这里查看。',
+    'organizationDirectoryRefresh': '刷新',
+    'organizationDirectoryClose': '关闭',
+    'organizationDirectoryIdentifier': '组织标识',
+    'organizationDirectoryNotConfigured': '组织列表服务尚未配置，请稍后重试。',
+    'organizationDirectoryUnauthorized': '登录状态已失效。请关闭窗口，重新登录后再查看。',
+    'organizationDirectoryInvalidRequest': '读取请求无效，请稍后重试。',
+    'organizationDirectoryForbidden': '当前账号暂时无法读取组织列表。请关闭窗口后重新登录。',
+    'organizationDirectoryServiceUnavailable': '组织列表服务暂时不可用，请稍后刷新。',
+    'organizationDirectoryNetworkUnavailable': '网络不可用，未能读取组织列表。请检查连接后刷新。',
+    'organizationDirectoryInvalidResponse': '未收到可验证的组织列表，请稍后刷新。',
     'organizationCreate': '创建组织',
     'organizationName': '组织名称',
     'organizationCreateHelp': '创建私有组织后，你将成为首位所有者。当前项目不会切换。组织项目与成员管理尚未开放。',
@@ -1193,6 +1208,34 @@ const Map<String, Map<String, String>> _strings = {
     'contextIdentityFailed': 'The sign-in session is invalid. Sign in again.',
     'projectMenu': 'Switch promotion project',
     'createProject': 'Create promotion project',
+    'organizationDirectoryTitle': 'My organizations',
+    'organizationDirectoryHelp':
+        'Only organizations you currently belong to appear here. '
+        'Viewing this list does not switch your current project.',
+    'organizationDirectoryLoading': 'Loading organizations…',
+    'organizationDirectoryLoaded': 'Organization list updated.',
+    'organizationDirectoryEmpty':
+        'No organizations to show. After creating an organization, '
+        'you can view it here.',
+    'organizationDirectoryRefresh': 'Refresh',
+    'organizationDirectoryClose': 'Close',
+    'organizationDirectoryIdentifier': 'Organization ID',
+    'organizationDirectoryNotConfigured':
+        'The organization list service is not configured. Try again later.',
+    'organizationDirectoryUnauthorized':
+        'Your session has expired. Close this window and sign in again.',
+    'organizationDirectoryInvalidRequest':
+        'The list request was invalid. Try again later.',
+    'organizationDirectoryForbidden':
+        'This account cannot read the organization list right now. '
+        'Close this window and sign in again.',
+    'organizationDirectoryServiceUnavailable':
+        'The organization list service is unavailable. Refresh later.',
+    'organizationDirectoryNetworkUnavailable':
+        'The organization list could not be loaded. '
+        'Check your connection and refresh.',
+    'organizationDirectoryInvalidResponse':
+        'The organization list could not be verified. Refresh later.',
     'organizationCreate': 'Create organization',
     'organizationName': 'Organization name',
     'organizationCreateHelp':

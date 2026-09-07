@@ -20,6 +20,7 @@ import 'package:tongxingzhe_app/management_reports/management_report_gateway.dar
 import 'package:tongxingzhe_app/management_reports/original_region_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/follow_up_consent_ratio_report_gateway.dart';
 import 'package:tongxingzhe_app/organization_creation/organization_creation.dart';
+import 'package:tongxingzhe_app/organization_directory/organization_directory.dart';
 import 'package:tongxingzhe_app/organization_directed_account_invitation/organization_directed_account_invitation.dart';
 import 'package:tongxingzhe_app/organization_owner_transfer/organization_owner_transfer.dart';
 import 'package:tongxingzhe_app/privacy/drift_offline_pii_lock_store.dart';
@@ -87,6 +88,10 @@ void main() {
     expect(
       ready.organizationCreationGateway,
       isA<DeferredOrganizationCreationGateway>(),
+    );
+    expect(
+      ready.organizationDirectoryGateway,
+      isA<DeferredOrganizationDirectoryGateway>(),
     );
     expect(
       ready.organizationDirectedAccountInvitationGateway,
@@ -240,6 +245,38 @@ void main() {
     expect(identical(receivedIdentity, ready.identitySession), isTrue);
     expect(identical(ready.organizationCreationGateway, gateway), isTrue);
     await ready.organizationCreationGateway.close();
+    expect(gateway.closeCount, 1);
+    await ready.appSession.close();
+    await ready.identitySession.close();
+    await database.close();
+  });
+
+  test('composition root 使用启动身份装配并释放组织目录 gateway', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession();
+    final gateway = _TrackingOrganizationDirectoryGateway();
+    IdentitySession? receivedIdentity;
+    final dependencies = AppDependencies(
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      organizationDirectoryGatewayBuilder: (identitySession) {
+        receivedIdentity = identitySession;
+        return gateway;
+      },
+    );
+
+    final startup = await dependencies.start();
+
+    expect(startup, isA<AppStartupReady>());
+    final ready = startup as AppStartupReady;
+    expect(identical(receivedIdentity, identity), isTrue);
+    expect(identical(receivedIdentity, ready.identitySession), isTrue);
+    expect(identical(ready.organizationDirectoryGateway, gateway), isTrue);
+    await ready.organizationDirectoryGateway.close();
     expect(gateway.closeCount, 1);
     await ready.appSession.close();
     await ready.identitySession.close();
@@ -529,6 +566,8 @@ void main() {
     final relationshipGateway = _TrackingCurrentRelationshipStageGateway();
     final followUpGateway = _TrackingFollowUpConsentRatioReportGateway();
     final organizationGateway = _TrackingOrganizationCreationGateway();
+    final organizationDirectoryGateway =
+        _TrackingOrganizationDirectoryGateway();
     final organizationInvitationGateway =
         _TrackingOrganizationDirectedAccountInvitationGateway();
     final organizationOwnerTransferGateway =
@@ -547,6 +586,7 @@ void main() {
       currentRelationshipStageGatewayBuilder: (_) => relationshipGateway,
       followUpConsentRatioReportGatewayBuilder: (_) => followUpGateway,
       organizationCreationGatewayBuilder: (_) => organizationGateway,
+      organizationDirectoryGatewayBuilder: (_) => organizationDirectoryGateway,
       organizationDirectedAccountInvitationGatewayBuilder: (_) =>
           organizationInvitationGateway,
       organizationOwnerTransferGatewayBuilder: (_) =>
@@ -564,6 +604,7 @@ void main() {
     expect(relationshipGateway.closeCount, 1);
     expect(followUpGateway.closeCount, 1);
     expect(organizationGateway.closeCount, 1);
+    expect(organizationDirectoryGateway.closeCount, 1);
     expect(organizationInvitationGateway.closeCount, 1);
     expect(organizationOwnerTransferGateway.closeCount, 1);
   });
@@ -798,6 +839,18 @@ final class _TrackingOrganizationCreationGateway
   }) async => const OrganizationCreationRejected(
     OrganizationCreationFailureCode.notConfigured,
   );
+
+  @override
+  Future<void> close() async => closeCount++;
+}
+
+final class _TrackingOrganizationDirectoryGateway
+    implements OrganizationDirectoryGateway {
+  var closeCount = 0;
+
+  @override
+  Future<OrganizationDirectoryResult> list() async =>
+      OrganizationDirectorySuccess(const []);
 
   @override
   Future<void> close() async => closeCount++;

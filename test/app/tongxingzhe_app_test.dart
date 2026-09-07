@@ -22,6 +22,7 @@ import 'package:tongxingzhe_app/management_reports/interest_report_gateway.dart'
 import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
 import 'package:tongxingzhe_app/management_reports/original_region_report_gateway.dart';
 import 'package:tongxingzhe_app/organization_creation/organization_creation.dart';
+import 'package:tongxingzhe_app/organization_directory/organization_directory.dart';
 import 'package:tongxingzhe_app/organization_directed_account_invitation/organization_directed_account_invitation.dart';
 import 'package:tongxingzhe_app/organization_owner_transfer/organization_owner_transfer.dart';
 import 'package:tongxingzhe_app/platform/platform_capabilities.dart';
@@ -40,10 +41,11 @@ import '../support/fake_runtime_values.dart';
 import '../support/fake_session_context_gateway.dart';
 
 void main() {
-  testWidgets('启动尚未完成时移除 App 仍关闭后来取得的组织创建 gateway 一次', (tester) async {
+  testWidgets('启动尚未完成时移除 App 仍关闭后来取得的组织 gateways 一次', (tester) async {
     final database = LocalDatabase(NativeDatabase.memory());
     final startupGate = _BlockingPlatformCapabilitiesProvider();
     final gateway = _TrackingOrganizationCreationGateway();
+    final directoryGateway = _TrackingOrganizationDirectoryGateway();
     var builderCalls = 0;
     final dependencies = AppDependencies(
       databaseFactory: SingleDatabaseFactory(database),
@@ -56,6 +58,7 @@ void main() {
         builderCalls++;
         return gateway;
       },
+      organizationDirectoryGatewayBuilder: (_) => directoryGateway,
     );
     addTearDown(database.close);
 
@@ -71,11 +74,13 @@ void main() {
 
     expect(builderCalls, 1);
     expect(gateway.closeCount, 1);
+    expect(directoryGateway.closeCount, 1);
   });
 
-  testWidgets('移除 TongxingzheApp 后关闭组织创建 gateway 恰好一次', (tester) async {
+  testWidgets('移除 TongxingzheApp 后关闭组织 gateways 恰好一次', (tester) async {
     final database = LocalDatabase(NativeDatabase.memory());
     final gateway = _TrackingOrganizationCreationGateway();
+    final directoryGateway = _TrackingOrganizationDirectoryGateway();
     final dependencies = AppDependencies(
       databaseFactory: SingleDatabaseFactory(database),
       clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
@@ -84,6 +89,7 @@ void main() {
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       organizationCreationGatewayBuilder: (_) => gateway,
+      organizationDirectoryGatewayBuilder: (_) => directoryGateway,
     );
     addTearDown(database.close);
 
@@ -93,10 +99,12 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
     expect(gateway.closeCount, 1);
+    expect(directoryGateway.closeCount, 1);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
     expect(gateway.closeCount, 1);
+    expect(directoryGateway.closeCount, 1);
   });
 
   testWidgets('启动尚未完成时移除 App 仍关闭后来取得的 owner transfer gateway 一次', (
@@ -771,6 +779,85 @@ void main() {
     expect(find.text('问卷版本 2'), findsOneWidget);
   });
 
+  testWidgets('个人项目菜单打开组织目录并只读刷新', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'external-subject-not-an-app-user-id',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+    final contextGateway = FakeSessionContextGateway();
+    final directoryGateway = _TrackingOrganizationDirectoryGateway(
+      result: OrganizationDirectorySuccess(const [
+        OrganizationDirectoryEntry(
+          organizationWorkspaceId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          organizationName: '同行者组织',
+        ),
+      ]),
+    );
+    final dependencies = AppDependencies(
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: contextGateway,
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      organizationDirectoryGatewayBuilder: (_) => directoryGateway,
+    );
+    addTearDown(database.close);
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    final initialContextRequests = contextGateway.receivedTokens.length;
+
+    await tester.tap(find.byKey(const ValueKey('project-context-menu')));
+    await tester.pumpAndSettle();
+    final directoryItem = find.byKey(
+      const ValueKey('organization-directory-menu-item'),
+    );
+    final createItem = find.byKey(
+      const ValueKey('organization-create-menu-item'),
+    );
+    expect(directoryItem, findsOneWidget);
+    expect(createItem, findsOneWidget);
+    expect(
+      tester.getTopLeft(directoryItem).dy,
+      lessThan(tester.getTopLeft(createItem).dy),
+    );
+
+    await tester.tap(directoryItem);
+    await tester.pumpAndSettle();
+
+    expect(directoryGateway.listCalls, 1);
+    expect(
+      find.byKey(
+        const ValueKey(
+          'organization-directory-entry-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('同行者组织'), findsOneWidget);
+    expect(contextGateway.receivedTokens, hasLength(initialContextRequests));
+    expect(contextGateway.selectedProjectIds, isEmpty);
+    expect(contextGateway.createdProjectNames, isEmpty);
+
+    await tester.tap(
+      find.byKey(const ValueKey('organization-directory-refresh')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(directoryGateway.listCalls, 2);
+    expect(contextGateway.receivedTokens, hasLength(initialContextRequests));
+    expect(contextGateway.selectedProjectIds, isEmpty);
+    expect(contextGateway.createdProjectNames, isEmpty);
+  });
+
   testWidgets('个人项目菜单使用启动时的 gateway 创建组织且保留当前上下文', (tester) async {
     final database = LocalDatabase(NativeDatabase.memory());
     final identity = FakeIdentitySession(
@@ -883,6 +970,10 @@ void main() {
       findsNothing,
     );
     expect(find.byKey(const ValueKey('project-context-menu')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('organization-directory-menu-item')),
+      findsNothing,
+    );
     expect(organizationGateway.createRequests, isEmpty);
   });
 
@@ -1018,6 +1109,10 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('organization-create-menu-item')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('organization-directory-menu-item')),
       findsOneWidget,
     );
     expect(find.text('项目设置'), findsNothing);
@@ -2534,6 +2629,28 @@ final class _TrackingOrganizationCreationGateway
     required String displayName,
   }) async {
     createRequests.add((requestId: requestId, displayName: displayName));
+    return result;
+  }
+
+  @override
+  Future<void> close() async => closeCount++;
+}
+
+final class _TrackingOrganizationDirectoryGateway
+    implements OrganizationDirectoryGateway {
+  _TrackingOrganizationDirectoryGateway({
+    this.result = const OrganizationDirectoryRejected(
+      OrganizationDirectoryFailureCode.notConfigured,
+    ),
+  });
+
+  final OrganizationDirectoryResult result;
+  var listCalls = 0;
+  var closeCount = 0;
+
+  @override
+  Future<OrganizationDirectoryResult> list() async {
+    listCalls++;
     return result;
   }
 
