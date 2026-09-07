@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -213,6 +214,125 @@ void main() {
     expect(identity.accessTokenForceRefreshValues, [false, true]);
   });
 
+  test(
+    'account change during token wait never sends the old leave intent',
+    () async {
+      final identity = _RotatingTokenIdentitySession();
+      final token = Completer<IdentityResult<IdentityAccessToken>>();
+      identity.tokenResult = (_) => token.future;
+      var requests = 0;
+      final gateway = HttpOrganizationMembershipSelfLeaveGateway(
+        baseUri: Uri.parse('https://backend.example.test'),
+        identitySession: identity,
+        client: MockClient((_) async {
+          requests++;
+          return _json(_receiptJson());
+        }),
+      );
+      addTearDown(gateway.close);
+      addTearDown(identity.close);
+
+      final pending = gateway.leave(
+        requestId: _requestId,
+        organizationWorkspaceId: _workspaceId,
+      );
+      identity.emit(_otherIdentity);
+      token.complete(
+        const IdentitySuccess(
+          IdentityAccessToken(value: 'new-account-token', expiresAt: null),
+        ),
+      );
+
+      final result = await pending;
+      expect(requests, 0);
+      expect(_failureCode(result), _Failure.unauthorized);
+    },
+  );
+
+  test(
+    'account change during 401 refresh never retries with the new token',
+    () async {
+      final identity = _RotatingTokenIdentitySession();
+      final refreshing = Completer<void>();
+      final token = Completer<IdentityResult<IdentityAccessToken>>();
+      identity.tokenResult = (forceRefresh) async {
+        if (!forceRefresh) {
+          return const IdentitySuccess(
+            IdentityAccessToken(value: 'original-token', expiresAt: null),
+          );
+        }
+        refreshing.complete();
+        return token.future;
+      };
+      var requests = 0;
+      final gateway = HttpOrganizationMembershipSelfLeaveGateway(
+        baseUri: Uri.parse('https://backend.example.test'),
+        identitySession: identity,
+        client: MockClient((_) async {
+          requests++;
+          return requests == 1
+              ? _error('unauthenticated', 401)
+              : _json(_receiptJson());
+        }),
+      );
+      addTearDown(gateway.close);
+      addTearDown(identity.close);
+
+      final pending = gateway.leave(
+        requestId: _requestId,
+        organizationWorkspaceId: _workspaceId,
+      );
+      await refreshing.future;
+      identity.emit(_otherIdentity);
+      token.complete(
+        const IdentitySuccess(
+          IdentityAccessToken(value: 'new-account-token', expiresAt: null),
+        ),
+      );
+
+      final result = await pending;
+      expect(requests, 1);
+      expect(_failureCode(result), _Failure.unauthorized);
+    },
+  );
+
+  test(
+    'sign-out and return to the same account cannot revive an in-flight leave',
+    () async {
+      final identity = _RotatingTokenIdentitySession();
+      final token = Completer<IdentityResult<IdentityAccessToken>>();
+      identity.tokenResult = (_) => token.future;
+      var requests = 0;
+      final gateway = HttpOrganizationMembershipSelfLeaveGateway(
+        baseUri: Uri.parse('https://backend.example.test'),
+        identitySession: identity,
+        client: MockClient((_) async {
+          requests++;
+          return _json(_receiptJson());
+        }),
+      );
+      addTearDown(gateway.close);
+      addTearDown(identity.close);
+
+      final original = identity.current;
+      final pending = gateway.leave(
+        requestId: _requestId,
+        organizationWorkspaceId: _workspaceId,
+      );
+      identity.emit(const IdentitySnapshot.signedOut());
+      identity.emit(original);
+      token.complete(
+        const IdentitySuccess(
+          IdentityAccessToken(value: 'returned-account-token', expiresAt: null),
+        ),
+      );
+
+      final result = await pending;
+      expect(requests, 0);
+      expect(_failureCode(result), _Failure.unauthorized);
+    },
+  );
+
   test('malformed 401 does not refresh', () async {
     final cases = <http.Response Function()>[
       () => _json(
@@ -247,6 +367,88 @@ void main() {
       expect(identity.accessTokenForceRefreshValues, [false]);
     }
   });
+
+  test(
+    'late success after account change is not returned to the new account',
+    () async {
+      final identity = _RotatingTokenIdentitySession();
+      final sent = Completer<void>();
+      final response = Completer<http.Response>();
+      final gateway = HttpOrganizationMembershipSelfLeaveGateway(
+        baseUri: Uri.parse('https://backend.example.test'),
+        identitySession: identity,
+        client: MockClient((_) {
+          sent.complete();
+          return response.future;
+        }),
+      );
+      addTearDown(gateway.close);
+      addTearDown(identity.close);
+
+      final pending = gateway.leave(
+        requestId: _requestId,
+        organizationWorkspaceId: _workspaceId,
+      );
+      await sent.future;
+      identity.emit(_otherIdentity);
+      response.complete(_json(_receiptJson()));
+
+      expect(_failureCode(await pending), _Failure.unauthorized);
+      expect(identity.accessTokenForceRefreshValues, [false]);
+    },
+  );
+
+  test(
+    'close during token wait prevents HTTP, while same-account refresh remains valid',
+    () async {
+      for (final closeDuringWait in [true, false]) {
+        final identity = _RotatingTokenIdentitySession();
+        final token = Completer<IdentityResult<IdentityAccessToken>>();
+        identity.tokenResult = (_) => token.future;
+        var requests = 0;
+        final gateway = HttpOrganizationMembershipSelfLeaveGateway(
+          baseUri: Uri.parse('https://backend.example.test'),
+          identitySession: identity,
+          client: MockClient((_) async {
+            requests++;
+            return _json(_receiptJson());
+          }),
+        );
+        final pending = gateway.leave(
+          requestId: _requestId,
+          organizationWorkspaceId: _workspaceId,
+        );
+        if (closeDuringWait) {
+          await gateway.close();
+        } else {
+          identity.emit(
+            IdentitySnapshot(
+              stage: IdentityStage.signedIn,
+              principal: identity.current.principal,
+              expiresAt: DateTime.utc(2031),
+            ),
+          );
+        }
+        token.complete(
+          const IdentitySuccess(
+            IdentityAccessToken(
+              value: 'refreshed-same-account-token',
+              expiresAt: null,
+            ),
+          ),
+        );
+        final result = await pending;
+        expect(requests, closeDuringWait ? 0 : 1);
+        if (closeDuringWait) {
+          expect(_failureCode(result), _Failure.unauthorized);
+        } else {
+          expect(result, isA<OrganizationMembershipSelfLeaveSuccess>());
+        }
+        await gateway.close();
+        await identity.close();
+      }
+    },
+  );
 
   test('forced refresh failure does not send a second request', () async {
     final identity = _identity();
@@ -609,12 +811,33 @@ final class _TrackingMockClient extends MockClient {
 
 final class _RotatingTokenIdentitySession implements IdentitySession {
   final List<bool> accessTokenForceRefreshValues = [];
+  final _changes = StreamController<IdentitySnapshot>.broadcast(sync: true);
+  IdentitySnapshot _current = const IdentitySnapshot(
+    stage: IdentityStage.signedIn,
+    principal: IdentityPrincipal(externalSubject: 'subject-1', email: null),
+  );
+  Future<IdentityResult<IdentityAccessToken>> Function(bool)? tokenResult;
+
+  @override
+  IdentitySnapshot get current => _current;
+
+  @override
+  Stream<IdentitySnapshot> get changes => _changes.stream;
+
+  void emit(IdentitySnapshot snapshot) {
+    _current = snapshot;
+    _changes.add(snapshot);
+  }
+
+  @override
+  Future<void> close() => _changes.close();
 
   @override
   Future<IdentityResult<IdentityAccessToken>> accessToken({
     bool forceRefresh = false,
   }) async {
     accessTokenForceRefreshValues.add(forceRefresh);
+    if (tokenResult case final result?) return result(forceRefresh);
     return IdentitySuccess(
       IdentityAccessToken(
         value: forceRefresh
@@ -629,3 +852,8 @@ final class _RotatingTokenIdentitySession implements IdentitySession {
   dynamic noSuchMethod(Invocation invocation) =>
       throw UnsupportedError('unused test-only identity method');
 }
+
+const _otherIdentity = IdentitySnapshot(
+  stage: IdentityStage.signedIn,
+  principal: IdentityPrincipal(externalSubject: 'subject-2', email: null),
+);

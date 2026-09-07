@@ -124,6 +124,39 @@ const Map<String, Map<String, String>> _strings = {
     'organizationDirectoryServiceUnavailable': '组织列表服务暂时不可用，请稍后刷新。',
     'organizationDirectoryNetworkUnavailable': '网络不可用，未能读取组织列表。请检查连接后刷新。',
     'organizationDirectoryInvalidResponse': '未收到可验证的组织列表，请稍后刷新。',
+    'organizationLeaveAction': '退出组织',
+    'organizationLeaveTitle': '退出组织？',
+    'organizationLeaveHelp':
+        '目前仅支持退出没有下游关系的成员身份。当前成员身份只要有项目参与历史，或你仍有当前／未来所有者身份、未结束的对象分配，就不能从这里退出。当前项目不会切换。',
+    'organizationLeaveCacheNotice':
+        '提交前会清除该组织在此设备的敏感缓存，即使服务端随后拒绝退出，也不会恢复这些缓存。个人空间和其他组织的缓存不受影响。',
+    'organizationLeaveCancel': '取消',
+    'organizationLeaveConfirm': '清除缓存并退出',
+    'organizationLeaveRetry': '重试这次退出',
+    'organizationLeaveClearing': '正在清除该组织的本地敏感缓存…',
+    'organizationLeaveSubmitting': '正在提交退出请求…',
+    'organizationLeaveCleanupFailed': '未能确认本地敏感缓存已清除，因此没有提交退出请求。请在此窗口重试。',
+    'organizationLeaveInvalidRequest': '未能建立退出请求，请在此窗口重试。',
+    'organizationLeaveUnauthorized': '账号或会话状态已改变。此窗口不会继续操作；请关闭后重新查看组织列表。',
+    'organizationLeaveSuccess': '这次退出请求已完成。是否仍属于该组织，以重新读取的列表为准。',
+    'organizationLeaveUncertain': '退出可能已完成。重试仍用同一请求；仅在此窗口保留。',
+    'organizationLeaveDiscardTitle': '停止重试这次退出？',
+    'organizationLeaveDiscardBody':
+        '退出可能已完成。关闭后不能继续核对这次请求；请重新读取组织列表，再决定是否发起新的退出。',
+    'organizationLeaveKeepRetry': '返回并保留请求',
+    'organizationLeaveDiscard': '关闭窗口',
+    'organizationLeaveFailure.notConfigured': '退出服务尚未配置，没有提交退出请求。请稍后重试。',
+    'organizationLeaveFailure.unauthorized': '登录状态已失效。请关闭窗口，重新登录后查看组织列表。',
+    'organizationLeaveFailure.invalidJson': '退出请求格式无效，请稍后重试。',
+    'organizationLeaveFailure.payloadTooLarge': '退出请求未被接受，请稍后重试。',
+    'organizationLeaveFailure.invalidRequest': '退出请求无效，请关闭窗口后重新查看组织列表。',
+    'organizationLeaveFailure.forbidden':
+        '当前成员身份不符合自助退出条件，或组织状态不允许退出。请联系组织所有者处理相关关系。',
+    'organizationLeaveFailure.conflict': '这次请求与已有记录冲突。请关闭窗口，重新读取组织列表后再确认。',
+    'organizationLeaveFailure.serviceUnavailable': '服务暂时不可用，无法确认退出结果。请在此窗口重试。',
+    'organizationLeaveFailure.networkUnavailable':
+        '网络不可用，无法确认退出结果。请检查连接后在此窗口重试。',
+    'organizationLeaveFailure.invalidResponse': '未收到可验证的退出结果，请在此窗口重试。',
     'organizationCreate': '创建组织',
     'organizationName': '组织名称',
     'organizationCreateHelp': '创建私有组织后，你将成为首位所有者。当前项目不会切换。组织项目与成员管理尚未开放。',
@@ -1237,6 +1270,53 @@ const Map<String, Map<String, String>> _strings = {
     'organizationDirectoryInvalidResponse':
         'The organization list could not be verified. Refresh later.',
     'organizationCreate': 'Create organization',
+    'organizationLeaveAction': 'Leave organization',
+    'organizationLeaveTitle': 'Leave organization?',
+    'organizationLeaveHelp':
+        'Only memberships without downstream relationships can leave here. Any project membership history for this membership, current or future ownership, or an unended target assignment prevents leaving. Your current project will not change.',
+    'organizationLeaveCacheNotice':
+        'This device will clear sensitive cached data for this organization before submitting. It will not restore that cache if the server refuses the request. Personal and other organization caches stay unchanged.',
+    'organizationLeaveCancel': 'Cancel',
+    'organizationLeaveConfirm': 'Clear cache and leave',
+    'organizationLeaveRetry': 'Retry this request',
+    'organizationLeaveClearing':
+        'Clearing this organization’s sensitive cache…',
+    'organizationLeaveSubmitting': 'Submitting the leave request…',
+    'organizationLeaveCleanupFailed':
+        'The app could not confirm that it cleared the sensitive cache. It did not send a leave request. Retry in this window.',
+    'organizationLeaveInvalidRequest':
+        'Could not prepare the leave request. Retry in this window.',
+    'organizationLeaveUnauthorized':
+        'The account or session changed. This window will take no further action. Close it and reload your organizations.',
+    'organizationLeaveSuccess':
+        'This leave request is complete. The reloaded list shows whether you still belong to the organization.',
+    'organizationLeaveUncertain':
+        'Leaving may already be complete. Retry checks the same request, kept only in this window.',
+    'organizationLeaveDiscardTitle': 'Stop retrying this leave request?',
+    'organizationLeaveDiscardBody':
+        'Leaving may already be complete. Closing loses the ability to check this request. Reload your organizations before deciding whether to make a new leave request.',
+    'organizationLeaveKeepRetry': 'Keep request and go back',
+    'organizationLeaveDiscard': 'Close window',
+    'organizationLeaveFailure.notConfigured':
+        'The app has no configured leave service. It did not send a leave request. Try again later.',
+    'organizationLeaveFailure.unauthorized':
+        'Your sign-in has expired. Close this window, sign in again, then reload your organizations.',
+    'organizationLeaveFailure.invalidJson':
+        'The leave request format is invalid. Try again later.',
+    'organizationLeaveFailure.payloadTooLarge':
+        'The service did not accept the leave request. Try again later.',
+    'organizationLeaveFailure.invalidRequest':
+        'The leave request is invalid. Close this window and reload your organizations.',
+    'organizationLeaveFailure.forbidden':
+        'This membership does not qualify for self-service leaving, or the organization state prevents it. Ask an organization owner to resolve the related relationships.',
+    'organizationLeaveFailure.conflict':
+        'This request conflicts with an existing record. Close this window and reload your organizations before confirming again.',
+    'organizationLeaveFailure.serviceUnavailable':
+        'The service is unavailable, so the leave result is unknown. Retry in this window.',
+    'organizationLeaveFailure.networkUnavailable':
+        'The network is unavailable, so the leave result is unknown. Check your connection and retry in this window.',
+    'organizationLeaveFailure.invalidResponse':
+        'The app could not verify the leave result. Retry in this window.',
     'organizationName': 'Organization name',
     'organizationCreateHelp':
         'You will be the first owner of a private organization. Your current '

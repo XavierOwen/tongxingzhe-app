@@ -1135,6 +1135,34 @@ AppStartupReady 暴露同一 gateway；后续启动失败、启动完成前移�
 `TEST-074` 与 `MANUAL-064` 覆盖 strict wire、重试意图、配置和三类关闭路径。
 没有 DB／Backend／权限变更，也不实现完整退出、级联撤权、敏感缓存清除或生产配置；synthetic 与 build 不代表真人或生产退出已验收。
 
+#### Slice 7Z：在我的组织安全退出无下游关系的成员身份
+
+7Z／Issue #342 把 7V 组织目录、7X 退出 gateway 和本地敏感缓存清除接成一个用户路径。
+用户只能明确选择本次目录中的一个组织；确认页显示原名称、完整组织 UUID、7W 资格限制，以及“先清除本设备匹配缓存，再提交退出”的影响。
+本次 membership 的任何项目成员历史、当前或未来 owner、未结束的组织对象分配仍由 7W 拒绝；不开放级联退出或替他人移除成员。
+
+确认时生成一次 UUID-v4，仅在本对话框保存 request 与所选组织。每次提交或重试先调用 AppSession 的窄清除入口；Widget 不取得 external subject、token 或 Vault。
+Vault 同步失效该 subject 的旧请求代次，在既有串行队列内解读唯一快照，并 exact 比较 workspace。
+匹配时先持久化 `organizationLeaveRequested` 锁再删除；无快照或其他 workspace 返回 `notPresent`，其他 workspace 密文与已有锁保持原样。
+无法读取或判断归属时返回 `unavailable`，不盲目清除；删除失败返回 `pending`，不解除锁。
+只有 `deleted`／`notPresent` 且原账号仍可信，才调用退出 gateway；未启用离线 Vault 时视为无缓存。
+因此服务端拒绝或网络失败也不会恢复已经预清的缓存。确认页必须在提交前说明这一代价。
+
+清除前后同时核对可信 app user、实时登录 subject 和会话代次，清除后／HTTP 前再次同步核对。
+退出 HTTP gateway 绑定一次不间断登录，等待 token、HTTP 或单次 401 refresh 后均复核；账号变化、注销后回到同一账号、gateway close 或 identity stream 失效都会拒绝迟到结果，不把原请求交给新账号。
+同账号 token 更新本身不改变 gateway 的请求身份；UI 的可信上下文失效仍停止该窗口。
+
+网络不可用、服务不可用或无法验证响应是结果不确定，保持同一 UUID 和组织，只有用户主动重试才发送；不增加自动重试或持久化恢复。
+一旦结果不确定，后续本地清除失败或明确拒绝也不能静默丢弃该状态。关闭时须确认放弃本窗口重试，并提示重新读取组织目录。
+busy 阻止重复提交；注销、账号变化或 dispose 使旧 UI 回应失效。清除失败不发送 HTTP，也不显示退出成功。
+成功只表示这次请求已完成；父目录重新读取，不按 receipt 盲删组织行。重新入组仍可能出现在新目录里，新退出须重新确认并生成新 UUID。
+当前项目不切换，目录、receipt 和请求意图不进入 Drift、Outbox、日志或偏好。
+
+界面沿用 Material 3，支持中英文、键盘／Escape、焦点返回、live region、48 logical pixel 触控、小屏及 200% 字号。
+`TEST-075`／`MANUAL-065` 覆盖该路径。当前正式组织 target writer 与组织 SessionContext 尚未开放；未来开放时必须补充本次退出期间对新组织 PII 请求的作用域门禁，不能把本进程旧请求 fence 当成跨进程或永久 workspace 撤权。
+本切片不修改 DB／Backend、组织权限、完整成员退出、删除恢复或生产配置，也不增加持久 request、workspace tombstone 或多 workspace 缓存。
+本地可控存储／identity／Widget 与 CI build 只证明 synthetic 合同，不证明真实设备物理清除、production identity、部署端点或 Apple 行为。
+
 ### 5.8 分析、指标与报告
 
 #### 5.8.1 统计单位和核心口径
@@ -2644,6 +2672,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-062` | 学习文档必须说明 7V 的独立 Flutter directory gateway、不可修改列表、无 body GET、strict response、七类失败与单次 401、配置与 client ownership、App 三类关闭路径、项目菜单只读入口、开窗／显式刷新、刷新先清空、身份失效与迟到结果隔离、完整 UUID 和不切换项目。提供相关测试／分析／格式／边界／链接命令，并区分 synthetic UI、六平台 build 与生产、真实组织和真人平台。 |
 | `MANUAL-063` | 学习文档必须区分 7W 的无下游 membership end 与完整组织退出，解释未排定结束、owner／项目历史／对象分配拒绝、锁后单次时间、旧 request 不结束重加入的新 membership、claim／audit／tombstone／去关联、exact identity 与 runtime ACL、strict HTTP 和稳定错误。提供 DB／Backend／并发／Docker 命令，明确没有级联撤权、缓存清除、Flutter 或生产证明。 |
 | `MANUAL-064` | 学习文档必须说明 7X 的不可变 receipt／十类失败、输入先验、strict POST 与响应、单次 401 保留请求意图、receipt 不是当前成员状态、配置与 client ownership、同一 identity／gateway、三类 App close 及 focused／完整 Flutter 验证命令；明确没有 UI、UUID 生成、目录刷新、完整退出、缓存清除或生产证明。 |
+| `MANUAL-065` | 学习文档说明 7Z 的明确选择与确认、匹配 workspace 预清、清除失败零 HTTP、其他缓存与锁保持、旧请求代次、原账号及 token／401 身份绑定、同窗口 UUID 重试与放弃确认、历史 receipt 与目录重读，以及 focused／完整 Flutter 验证命令；区分 synthetic 清除、完整组织退出与真实平台证据。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -2896,6 +2925,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-072` | 7V 的 gateway／widget／App tests 必须覆盖不可修改列表、顺序／同名保留、GET URL／headers／无 body、strict root／row／UUID／名称／重复 ID、七类失败、合法 401 单次刷新、deferred／非法配置、client ownership与三类 App close；覆盖 personal／organization ready 菜单、未登录隐藏、同一 gateway、开窗／刷新／busy、空列表与失败分离、刷新先清空、账号失效／切换／迟到结果、关闭和不改变当前项目；检查中英文、键盘／Escape／焦点、live region、48 dp、长文本／UUID、320×568／200% 字号与暗色宽屏。完整 Flutter tests、analyzer、format、生产边界和链接通过，synthetic 与 build 不等于生产或真人平台验收。 |
 | `TEST-073` | 7W structural check／rollback fixture／独立会话并发必须覆盖 exact active identity、current unended membership、过去 owner 可退出、当前／未来 owner、未来已排定结束、任何项目历史和未结束组织对象分配拒绝；覆盖锁后时间、等待中失效、退出事务开始后由独立事务建立新 membership（模拟接受邀请的产物）、同／异 request、exact replay、重新入组旧请求、drift、去关联、tombstone、恢复期和失败零写入。验证 claim／audit 不可变、单次时间、受控 owner、PUBLIC／runtime ACL、一次参数化 SQL、严格 receipt／错误、真实 HTTP／composition／runtime integration，并通过 Docker rebuild／checksum／dump／restore 与 CI；不据此宣称完整退出、生产身份或 PII 清除。 |
 | `TEST-074` | 7X gateway／App tests 必须覆盖四字段 receipt、十类失败、输入先于 token／网络、固定 POST／headers／body、strict keys／lowercase UUID／workspace echo／UTC 毫秒、全部 exact error code、合法 401 单次刷新且 URL／UUID／body 不变、非法 401 不刷新、网络／timeout 与未知异常、deferred／valid／invalid 配置、client 只关一次、同一 session／gateway、三类 App close。完整 Flutter tests、analyzer、format、生产边界、链接与 CI 通过，不重复执行未改变的数据库实验，也不把 synthetic 当完整退出或真人平台证明。 |
+| `TEST-075` | 7Z 覆盖匹配／其他 workspace／无缓存、已有锁保持、read／decode／delete 失败、旧请求与排队写入、原账号预清及清除期间换账号；覆盖明确选择／取消、busy 防重、十类拒绝、同 UUID 主动重试、放弃确认、历史 receipt 后重读不盲删、同一 App gateway、不切项目、迟到结果与 dispose 隔离，以及 token wait／401 refresh／注销再登录的身份竞态。Widget 检查中英文、小屏 200% 字号、暗色、键盘／焦点、live region 和触控目标；完整 Flutter、analyzer、format、生产边界、链接和 CI 通过，不重复未改 DB 实验，不把 synthetic 写成真机清除或生产退出。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3216,6 +3246,9 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 
 7X／#338 增加同一合同的 Flutter gateway 与 App 生命周期，固定输入、receipt、错误和单次 token 刷新中的相同请求意图。
 它仍无 UI、目录操作或敏感缓存清除，不代表完整用户退出流程已完成。
+
+7Z／#342 将无下游关系成员的确认退出、匹配本地缓存预清、同意图重试和目录重读接入“我的组织”。
+它仍拒绝 7W 下游关系，不实现级联退出或生产配置；synthetic 通过不表示真机清除和完整组织治理已经验收。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 

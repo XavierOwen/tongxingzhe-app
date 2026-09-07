@@ -32,6 +32,7 @@ enum OfflinePiiLockReason {
   corrupt,
   storageFailure,
   targetAnonymized,
+  organizationLeaveRequested,
 }
 
 final class OfflinePiiLock {
@@ -104,6 +105,13 @@ final class OfflinePiiStaleRefreshIgnored extends OfflinePiiSaveResult {
 }
 
 enum OfflinePiiDeletionResult { deleted, pending, notLocked, stale }
+
+enum OfflinePiiWorkspaceDeletionResult {
+  notPresent,
+  deleted,
+  pending,
+  unavailable,
+}
 
 /// 把一次异步在线请求绑定到它发出时的本地授权代次。
 ///
@@ -334,6 +342,59 @@ final class OfflinePiiVault {
     return _serialize(scopeKey, () {
       return _revoke(scopeKey, reason);
     });
+  }
+
+  /// 删除当前主体唯一快照中属于指定 workspace 的资料。
+  ///
+  /// 代次在排队前立即失效，因此较早发出的远程请求不能在检查后复活旧资料。
+  /// 无法确认快照 workspace 时保持原值，由调用方停止退出操作。
+  Future<OfflinePiiWorkspaceDeletionResult> deleteWorkspaceSnapshot({
+    required String externalSubject,
+    required String workspaceId,
+  }) {
+    final scopeKey = _scopeKey(externalSubject);
+    _invalidate(scopeKey);
+    return _serialize(
+      scopeKey,
+      () => _deleteWorkspaceSnapshot(scopeKey, workspaceId),
+    );
+  }
+
+  Future<OfflinePiiWorkspaceDeletionResult> _deleteWorkspaceSnapshot(
+    String scopeKey,
+    String workspaceId,
+  ) async {
+    try {
+      final encoded = await _secureStore.read(_secureKey(scopeKey));
+      if (encoded == null) {
+        return OfflinePiiWorkspaceDeletionResult.notPresent;
+      }
+
+      late final _Envelope envelope;
+      try {
+        envelope = _decodeEnvelope(jsonDecode(encoded));
+      } on Object {
+        return OfflinePiiWorkspaceDeletionResult.unavailable;
+      }
+      if (envelope.context.workspace.id != workspaceId) {
+        return OfflinePiiWorkspaceDeletionResult.notPresent;
+      }
+
+      final deleted = await _revoke(
+        scopeKey,
+        OfflinePiiLockReason.organizationLeaveRequested,
+      );
+      return switch (deleted) {
+        OfflinePiiDeletionResult.deleted =>
+          OfflinePiiWorkspaceDeletionResult.deleted,
+        OfflinePiiDeletionResult.pending =>
+          OfflinePiiWorkspaceDeletionResult.pending,
+        OfflinePiiDeletionResult.notLocked || OfflinePiiDeletionResult.stale =>
+          OfflinePiiWorkspaceDeletionResult.unavailable,
+      };
+    } on Object {
+      return OfflinePiiWorkspaceDeletionResult.unavailable;
+    }
   }
 
   Future<OfflinePiiDeletionResult> _revoke(

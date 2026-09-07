@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import '../../app_session/app_session.dart';
 import '../../l10n/app_strings.dart';
 import '../../organization_directory/organization_directory.dart';
+import '../../organization_membership_self_leave/organization_membership_self_leave.dart';
+import 'organization_membership_self_leave_dialog.dart';
 
 /// 读取当前账号的组织目录，不改变当前项目。
 ///
@@ -16,11 +18,14 @@ final class OrganizationDirectoryDialog extends StatefulWidget {
     required this.text,
     required this.gateway,
     required this.appSession,
+    this.selfLeaveGateway =
+        const DeferredOrganizationMembershipSelfLeaveGateway(),
   });
 
   final AppStrings text;
   final OrganizationDirectoryGateway gateway;
   final AppSession appSession;
+  final OrganizationMembershipSelfLeaveGateway selfLeaveGateway;
 
   @override
   State<OrganizationDirectoryDialog> createState() =>
@@ -32,6 +37,7 @@ final class _OrganizationDirectoryDialogState
   StreamSubscription<AppSessionSnapshot>? _sessionSubscription;
   List<OrganizationDirectoryEntry> _organizations = const [];
   OrganizationDirectoryFailureCode? _failure;
+  String? _notice;
   String? _trustedAppUserId;
   var _busy = false;
   var _sessionInvalidated = false;
@@ -92,6 +98,10 @@ final class _OrganizationDirectoryDialogState
       children: [
         Text(widget.text.t('organizationDirectoryHelp')),
         const SizedBox(height: 16),
+        if (_notice case final notice?) ...[
+          Semantics(liveRegion: true, child: Text(notice)),
+          const SizedBox(height: 12),
+        ],
         Semantics(
           key: const ValueKey('organization-directory-status'),
           container: true,
@@ -132,6 +142,20 @@ final class _OrganizationDirectoryDialogState
             ),
             const SizedBox(height: 4),
             SelectableText(entry.organizationWorkspaceId),
+            const SizedBox(height: 8),
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: TextButton.icon(
+                key: ValueKey(
+                  'organization-leave-${entry.organizationWorkspaceId}',
+                ),
+                onPressed: _busy || _sessionInvalidated
+                    ? null
+                    : () => _leave(entry),
+                icon: const Icon(Icons.logout),
+                label: Text(widget.text.t('organizationLeaveAction')),
+              ),
+            ),
           ],
         ),
       );
@@ -227,11 +251,39 @@ final class _OrganizationDirectoryDialogState
       _sessionInvalidated = true;
       _busy = false;
       _organizations = const [];
+      _notice = null;
       _failure = OrganizationDirectoryFailureCode.unauthorized;
     });
   }
 
   void _close() => Navigator.of(context).pop();
+
+  Future<void> _leave(OrganizationDirectoryEntry entry) async {
+    if (_busy ||
+        !_organizations.contains(entry) ||
+        !_hasTrustedSession(widget.appSession.current)) {
+      return;
+    }
+    final receipt = await showDialog<OrganizationMembershipSelfLeaveReceipt>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => OrganizationMembershipSelfLeaveDialog(
+        text: widget.text,
+        organization: entry,
+        gateway: widget.selfLeaveGateway,
+        appSession: widget.appSession,
+      ),
+    );
+    if (!mounted ||
+        receipt == null ||
+        !_hasTrustedSession(widget.appSession.current)) {
+      return;
+    }
+    setState(() => _notice = widget.text.t('organizationLeaveSuccess'));
+    // Exact replay may describe an old membership; only a fresh directory
+    // tells us whether this organization should still be shown.
+    await _load();
+  }
 
   bool _hasTrustedSession(AppSessionSnapshot snapshot) =>
       !_sessionInvalidated &&
