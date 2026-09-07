@@ -787,7 +787,7 @@ void main() {
     expect(find.text('问卷版本 2'), findsOneWidget);
   });
 
-  testWidgets('项目菜单复用组织目录和退出 gateway，退出后重读且不切换项目', (tester) async {
+  testWidgets('项目菜单复用组织 gateway，退出与接受邀请后重读且不切换项目', (tester) async {
     final database = LocalDatabase(NativeDatabase.memory());
     final identity = FakeIdentitySession(
       initial: IdentitySnapshot(
@@ -819,7 +819,31 @@ void main() {
         ),
       ),
     );
+    const invitationId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+    final invitationGateway =
+        _TrackingOrganizationDirectedAccountInvitationGateway(
+          previewResult: OrganizationDirectedAccountInvitationPreviewSuccess(
+            OrganizationDirectedAccountInvitationPreview(
+              organizationInvitationPreviewContractId:
+                  'organization-directed-account-invitation-preview:v1',
+              invitationId: invitationId,
+              organizationName: '受邀组织',
+              expiresAtUtc: DateTime.utc(2030, 1, 9),
+            ),
+          ),
+          acceptResult: OrganizationDirectedAccountInvitationAcceptSuccess(
+            OrganizationDirectedAccountInvitationAcceptReceipt(
+              organizationInvitationContractId:
+                  'organization-directed-account-invitation:v1',
+              invitationId: invitationId,
+              organizationWorkspaceId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+              organizationMembershipId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+              acceptedAtUtc: DateTime.utc(2030, 1, 2),
+            ),
+          ),
+        );
     IdentitySession? selfLeaveIdentity;
+    IdentitySession? invitationIdentity;
     final dependencies = AppDependencies(
       databaseFactory: SingleDatabaseFactory(database),
       clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
@@ -831,6 +855,10 @@ void main() {
       organizationMembershipSelfLeaveGatewayBuilder: (session) {
         selfLeaveIdentity = session;
         return selfLeaveGateway;
+      },
+      organizationDirectedAccountInvitationGatewayBuilder: (session) {
+        invitationIdentity = session;
+        return invitationGateway;
       },
     );
     addTearDown(database.close);
@@ -915,6 +943,36 @@ void main() {
     expect(contextGateway.selectedProjectIds, isEmpty);
     expect(contextGateway.createdProjectNames, isEmpty);
     expect(selfLeaveGateway.closeCount, 0);
+
+    await tester.tap(
+      find.byKey(const ValueKey('organization-directory-accept-invitation')),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('organization-invitation-id')),
+      invitationId,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('organization-invitation-preview')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('受邀组织'), findsOneWidget);
+    expect(invitationGateway.acceptIds, isEmpty);
+
+    await tester.tap(
+      find.byKey(const ValueKey('organization-invitation-accept')),
+    );
+    await tester.pumpAndSettle();
+    expect(identical(invitationIdentity, identity), isTrue);
+    expect(invitationGateway.previewIds, [invitationId]);
+    expect(invitationGateway.acceptIds, [invitationId]);
+    expect(directoryGateway.listCalls, 4);
+    expect(find.text('同行者组织'), findsOneWidget);
+    expect(find.text('受邀组织'), findsNothing);
+    expect(contextGateway.receivedTokens, hasLength(initialContextRequests));
+    expect(contextGateway.selectedProjectIds, isEmpty);
+    expect(contextGateway.createdProjectNames, isEmpty);
+    expect(invitationGateway.closeCount, 0);
   });
 
   testWidgets('个人项目菜单使用启动时的 gateway 创建组织且保留当前上下文', (tester) async {
@@ -2719,7 +2777,30 @@ final class _TrackingOrganizationDirectoryGateway
 
 final class _TrackingOrganizationDirectedAccountInvitationGateway
     implements OrganizationDirectedAccountInvitationGateway {
+  _TrackingOrganizationDirectedAccountInvitationGateway({
+    this.previewResult =
+        const OrganizationDirectedAccountInvitationPreviewRejected(
+          OrganizationDirectedAccountInvitationFailureCode.notConfigured,
+        ),
+    this.acceptResult =
+        const OrganizationDirectedAccountInvitationAcceptRejected(
+          OrganizationDirectedAccountInvitationFailureCode.notConfigured,
+        ),
+  });
+
+  final OrganizationDirectedAccountInvitationPreviewResult previewResult;
+  final OrganizationDirectedAccountInvitationAcceptResult acceptResult;
+  final previewIds = <String>[];
+  final acceptIds = <String>[];
   var closeCount = 0;
+
+  @override
+  Future<OrganizationDirectedAccountInvitationPreviewResult> preview({
+    required String invitationId,
+  }) async {
+    previewIds.add(invitationId);
+    return previewResult;
+  }
 
   @override
   Future<OrganizationDirectedAccountInvitationCreateResult> create({
@@ -2733,9 +2814,10 @@ final class _TrackingOrganizationDirectedAccountInvitationGateway
   @override
   Future<OrganizationDirectedAccountInvitationAcceptResult> accept({
     required String invitationId,
-  }) async => const OrganizationDirectedAccountInvitationAcceptRejected(
-    OrganizationDirectedAccountInvitationFailureCode.notConfigured,
-  );
+  }) async {
+    acceptIds.add(invitationId);
+    return acceptResult;
+  }
 
   @override
   Future<void> close() async => closeCount++;

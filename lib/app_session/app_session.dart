@@ -299,6 +299,17 @@ final class AppSession {
         ? _current.context
         : null;
     final generation = ++_generation;
+    // UI 撤下旧上下文不能等待磁盘清除；缓存删除仍由下面的 Vault 路径完成。
+    _publish(
+      AppSessionSnapshot(
+        stage: switch (identity.stage) {
+          IdentityStage.signedIn => AppSessionStage.resolvingContext,
+          IdentityStage.unavailable => AppSessionStage.unavailable,
+          _ => AppSessionStage.signedOut,
+        },
+        identity: identity,
+      ),
+    );
     if (identity.stage == IdentityStage.signedIn) {
       final nextSubject = identity.principal?.externalSubject;
       final previousSubject = _lastSignedInSubject;
@@ -310,15 +321,16 @@ final class AppSession {
           OfflinePiiLockReason.signedOut,
         );
       }
+      if (!_isCurrent(generation)) return;
       _lastSignedInSubject = nextSubject;
       if (nextSubject != null) {
         await _offlinePiiVault?.retryLockedDeletion(nextSubject);
       }
+      if (!_isCurrent(generation)) return;
     }
 
     switch (identity.stage) {
       case IdentityStage.unavailable:
-        _publish(const AppSessionSnapshot.unavailable());
         return;
       case IdentityStage.signedOut:
       case IdentityStage.awaitingEmailConfirmation:
@@ -332,20 +344,9 @@ final class AppSession {
             OfflinePiiLockReason.signedOut,
           );
         }
-        _publish(
-          AppSessionSnapshot(
-            stage: AppSessionStage.signedOut,
-            identity: identity,
-          ),
-        );
         return;
       case IdentityStage.signedIn:
-        _publish(
-          AppSessionSnapshot(
-            stage: AppSessionStage.resolvingContext,
-            identity: identity,
-          ),
-        );
+        break;
     }
 
     final tokenResult = await _identitySession.accessToken();
@@ -359,6 +360,7 @@ final class AppSession {
           return;
         }
         await _revokeOfflinePiiForIdentityFailure(identity, failure.code);
+        if (!_isCurrent(generation)) return;
         _publish(
           AppSessionSnapshot(
             stage: AppSessionStage.failed,
@@ -403,6 +405,7 @@ final class AppSession {
                 );
               }
             }
+            if (!_isCurrent(generation)) return;
             _publish(
               AppSessionSnapshot(
                 stage: AppSessionStage.failed,

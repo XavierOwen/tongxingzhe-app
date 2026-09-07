@@ -32,7 +32,22 @@ final class OrganizationDirectedAccountInvitationAcceptReceipt {
   final DateTime acceptedAtUtc;
 }
 
-/// 创建或接受邀请失败时使用的稳定失败分类。
+/// 入组前可见的组织定向账号邀请快照。
+final class OrganizationDirectedAccountInvitationPreview {
+  const OrganizationDirectedAccountInvitationPreview({
+    required this.organizationInvitationPreviewContractId,
+    required this.invitationId,
+    required this.organizationName,
+    required this.expiresAtUtc,
+  });
+
+  final String organizationInvitationPreviewContractId;
+  final String invitationId;
+  final String organizationName;
+  final DateTime expiresAtUtc;
+}
+
+/// 创建、预览或接受邀请失败时使用的稳定失败分类。
 enum OrganizationDirectedAccountInvitationFailureCode {
   notConfigured,
   unauthorized,
@@ -63,6 +78,27 @@ final class OrganizationDirectedAccountInvitationCreateSuccess
 final class OrganizationDirectedAccountInvitationCreateRejected
     extends OrganizationDirectedAccountInvitationCreateResult {
   const OrganizationDirectedAccountInvitationCreateRejected(this.code);
+
+  final OrganizationDirectedAccountInvitationFailureCode code;
+}
+
+/// 预览组织定向账号邀请的结果。
+sealed class OrganizationDirectedAccountInvitationPreviewResult {
+  const OrganizationDirectedAccountInvitationPreviewResult();
+}
+
+/// 预览成功，并携带仅存在于内存中的快照。
+final class OrganizationDirectedAccountInvitationPreviewSuccess
+    extends OrganizationDirectedAccountInvitationPreviewResult {
+  const OrganizationDirectedAccountInvitationPreviewSuccess(this.preview);
+
+  final OrganizationDirectedAccountInvitationPreview preview;
+}
+
+/// 预览被拒绝，并携带失败分类。
+final class OrganizationDirectedAccountInvitationPreviewRejected
+    extends OrganizationDirectedAccountInvitationPreviewResult {
+  const OrganizationDirectedAccountInvitationPreviewRejected(this.code);
 
   final OrganizationDirectedAccountInvitationFailureCode code;
 }
@@ -100,6 +136,11 @@ abstract interface class OrganizationDirectedAccountInvitationGateway {
     required String targetAppUserId,
   });
 
+  /// 在接受前预览邀请所属组织与过期时间。
+  Future<OrganizationDirectedAccountInvitationPreviewResult> preview({
+    required String invitationId,
+  });
+
   /// 接受邀请。
   Future<OrganizationDirectedAccountInvitationAcceptResult> accept({
     required String invitationId,
@@ -120,6 +161,13 @@ final class DeferredOrganizationDirectedAccountInvitationGateway
     required String organizationWorkspaceId,
     required String targetAppUserId,
   }) async => const OrganizationDirectedAccountInvitationCreateRejected(
+    OrganizationDirectedAccountInvitationFailureCode.notConfigured,
+  );
+
+  @override
+  Future<OrganizationDirectedAccountInvitationPreviewResult> preview({
+    required String invitationId,
+  }) async => const OrganizationDirectedAccountInvitationPreviewRejected(
     OrganizationDirectedAccountInvitationFailureCode.notConfigured,
   );
 

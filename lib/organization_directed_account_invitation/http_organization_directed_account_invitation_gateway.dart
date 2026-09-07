@@ -9,6 +9,8 @@ import 'organization_directed_account_invitation.dart';
 
 const _backendBaseUrl = String.fromEnvironment('BACKEND_BASE_URL');
 const _contractId = 'organization-directed-account-invitation:v1';
+const _previewContractId =
+    'organization-directed-account-invitation-preview:v1';
 const _invitationLifetime = Duration(hours: 168);
 
 /// 使用既有 Backend 配置创建网关；空配置不分配 HTTP client。
@@ -29,7 +31,7 @@ productionOrganizationDirectedAccountInvitationGateway(
   );
 }
 
-/// 通过已配置的 Backend 创建或接受定向账号邀请。
+/// 通过已配置的 Backend 创建、预览或接受定向账号邀请。
 ///
 /// 调用方提供不透明 UUID；本类通过 [identitySession] 取得身份凭证。响应只在
 /// 内存中解析。实例拥有 [client]，但不拥有也不会关闭 [identitySession]。
@@ -86,11 +88,36 @@ final class HttpOrganizationDirectedAccountInvitationGateway
     });
     return _request(
       uri: uri,
-      body: body,
+      requestBody: body,
       success: (root) => OrganizationDirectedAccountInvitationCreateSuccess(
         _parseCreateReceipt(root, invitation, workspace),
       ),
       rejected: OrganizationDirectedAccountInvitationCreateRejected.new,
+    );
+  }
+
+  @override
+  Future<OrganizationDirectedAccountInvitationPreviewResult> preview({
+    required String invitationId,
+  }) {
+    final invitation = _canonicalInputUuid(invitationId);
+    if (invitation == null) {
+      return Future.value(
+        const OrganizationDirectedAccountInvitationPreviewRejected(
+          OrganizationDirectedAccountInvitationFailureCode.invalidRequest,
+        ),
+      );
+    }
+
+    final uri = baseUri.resolve(
+      '/v1/organization-directed-account-invitations/$invitation',
+    );
+    return _request(
+      uri: uri,
+      success: (root) => OrganizationDirectedAccountInvitationPreviewSuccess(
+        _parsePreview(root, invitation),
+      ),
+      rejected: OrganizationDirectedAccountInvitationPreviewRejected.new,
     );
   }
 
@@ -112,7 +139,7 @@ final class HttpOrganizationDirectedAccountInvitationGateway
     );
     return _request(
       uri: uri,
-      body: jsonEncode(const <String, Object?>{}),
+      requestBody: jsonEncode(const <String, Object?>{}),
       success: (root) => OrganizationDirectedAccountInvitationAcceptSuccess(
         _parseAcceptReceipt(root, invitation),
       ),
@@ -122,18 +149,55 @@ final class HttpOrganizationDirectedAccountInvitationGateway
 
   Future<Result> _request<Result>({
     required Uri uri,
-    required String body,
+    String? requestBody,
     required Result Function(Map<String, Object?>) success,
     required Result Function(OrganizationDirectedAccountInvitationFailureCode)
     rejected,
   }) async {
+    StreamSubscription<IdentitySnapshot>? identitySubscription;
+    String? subject;
+    var identityChanged = false;
+    bool matches(IdentitySnapshot snapshot) =>
+        subject != null &&
+        snapshot.stage == IdentityStage.signedIn &&
+        snapshot.principal?.externalSubject == subject;
+    bool isCurrent() =>
+        !_closed && !identityChanged && matches(identitySession.current);
+    bool fenceWasBroken() {
+      if (_closed || identityChanged) return true;
+      try {
+        return !matches(identitySession.current);
+      } on Object {
+        return false;
+      }
+    }
+
+    Result unauthorized() =>
+        rejected(OrganizationDirectedAccountInvitationFailureCode.unauthorized);
+
     try {
+      subject = identitySession.current.principal?.externalSubject;
+      if (!isCurrent()) return unauthorized();
+
+      // One request belongs to one uninterrupted sign-in. Comparing only the
+      // final subject would miss a sign-out/sign-in ABA during token or HTTP IO.
+      identitySubscription = identitySession.changes.listen(
+        (snapshot) {
+          if (!matches(snapshot)) identityChanged = true;
+        },
+        onError: (Object error, StackTrace stackTrace) =>
+            identityChanged = true,
+        onDone: () => identityChanged = true,
+      );
+      if (!isCurrent()) return unauthorized();
       var access = await identitySession.accessToken();
+      if (!isCurrent()) return unauthorized();
       if (access is! IdentitySuccess<IdentityAccessToken>) {
         return rejected(_identityFailure(access));
       }
 
-      var response = await _send(uri, body, access.value);
+      var response = await _send(uri, requestBody, access.value);
+      if (!isCurrent()) return unauthorized();
       var root = _jsonObject(response);
       if (response.statusCode == 401) {
         if (_failure(response.statusCode, root) !=
@@ -143,50 +207,65 @@ final class HttpOrganizationDirectedAccountInvitationGateway
           );
         }
         access = await identitySession.accessToken(forceRefresh: true);
+        if (!isCurrent()) return unauthorized();
         if (access is! IdentitySuccess<IdentityAccessToken>) {
           return rejected(_identityFailure(access));
         }
-        response = await _send(uri, body, access.value);
+        response = await _send(uri, requestBody, access.value);
+        if (!isCurrent()) return unauthorized();
         root = _jsonObject(response);
       }
 
-      return response.statusCode == 200
+      final result = response.statusCode == 200
           ? success(root)
           : rejected(_failure(response.statusCode, root));
+      return isCurrent() ? result : unauthorized();
     } on TimeoutException {
+      if (fenceWasBroken()) return unauthorized();
       return rejected(
         OrganizationDirectedAccountInvitationFailureCode.networkUnavailable,
       );
     } on http.ClientException {
+      if (fenceWasBroken()) return unauthorized();
       return rejected(
         OrganizationDirectedAccountInvitationFailureCode.networkUnavailable,
       );
     } on FormatException {
+      if (fenceWasBroken()) return unauthorized();
       return rejected(
         OrganizationDirectedAccountInvitationFailureCode.invalidResponse,
       );
     } on Object {
+      if (fenceWasBroken()) return unauthorized();
       return rejected(
         OrganizationDirectedAccountInvitationFailureCode.invalidResponse,
       );
+    } finally {
+      await identitySubscription?.cancel();
     }
   }
 
   Future<http.Response> _send(
     Uri uri,
-    String body,
+    String? requestBody,
     IdentityAccessToken token,
-  ) => client
-      .post(
-        uri,
-        headers: {
-          'accept': 'application/json',
-          'authorization': 'Bearer ${token.value}',
-          'content-type': 'application/json; charset=utf-8',
-        },
-        body: body,
-      )
-      .timeout(timeout);
+  ) {
+    final headers = {
+      'accept': 'application/json',
+      'authorization': 'Bearer ${token.value}',
+    };
+    final response = requestBody == null
+        ? client.get(uri, headers: headers)
+        : client.post(
+            uri,
+            headers: {
+              ...headers,
+              'content-type': 'application/json; charset=utf-8',
+            },
+            body: requestBody,
+          );
+    return response.timeout(timeout);
+  }
 
   @override
   Future<void> close() async {
@@ -262,6 +341,34 @@ OrganizationDirectedAccountInvitationAcceptReceipt _parseAcceptReceipt(
       root['organization_membership_id'],
     ),
     acceptedAtUtc: _canonicalUtcTimestamp(root['accepted_at_utc']),
+  );
+}
+
+OrganizationDirectedAccountInvitationPreview _parsePreview(
+  Map<String, Object?> root,
+  String expectedInvitationId,
+) {
+  _requireExactKeys(root, const [
+    'organization_invitation_preview_contract_id',
+    'invitation_id',
+    'organization_name',
+    'expires_at_utc',
+  ]);
+  if (root['organization_invitation_preview_contract_id'] !=
+      _previewContractId) {
+    throw const FormatException('invalid organization invitation preview');
+  }
+
+  final invitationId = _canonicalResponseUuid(root['invitation_id']);
+  if (invitationId != expectedInvitationId) {
+    throw const FormatException('organization invitation preview mismatch');
+  }
+
+  return OrganizationDirectedAccountInvitationPreview(
+    organizationInvitationPreviewContractId: _previewContractId,
+    invitationId: invitationId,
+    organizationName: _organizationName(root['organization_name']),
+    expiresAtUtc: _canonicalUtcTimestamp(root['expires_at_utc']),
   );
 }
 
@@ -361,6 +468,14 @@ String _canonicalResponseUuid(Object? value) {
       !_uuidPattern.hasMatch(value) ||
       value.toLowerCase() != value) {
     throw const FormatException('invalid organization invitation UUID');
+  }
+  return value;
+}
+
+String _organizationName(Object? value) {
+  if (value is! String ||
+      !value.codeUnits.any((codeUnit) => codeUnit != 0x20)) {
+    throw const FormatException('invalid organization invitation name');
   }
   return value;
 }

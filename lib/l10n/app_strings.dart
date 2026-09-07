@@ -124,6 +124,38 @@ const Map<String, Map<String, String>> _strings = {
     'organizationDirectoryServiceUnavailable': '组织列表服务暂时不可用，请稍后刷新。',
     'organizationDirectoryNetworkUnavailable': '网络不可用，未能读取组织列表。请检查连接后刷新。',
     'organizationDirectoryInvalidResponse': '未收到可验证的组织列表，请稍后刷新。',
+    'organizationInvitationAction': '接受邀请',
+    'organizationInvitationTitle': '接受邀请',
+    'organizationInvitationInputHelp': '输入收到的邀请编号。只有绑定收件账号能查看组织名称和有效期。',
+    'organizationInvitationIdentifier': '邀请编号（UUID）',
+    'organizationInvitationInvalidId': '请输入完整的 UUID 邀请编号。',
+    'organizationInvitationPreview': '查看邀请',
+    'organizationInvitationPreviewing': '正在读取邀请…',
+    'organizationInvitationAccepting': '正在提交接受请求…',
+    'organizationInvitationAccept': '确认加入',
+    'organizationInvitationEdit': '修改编号',
+    'organizationInvitationClose': '关闭',
+    'organizationInvitationRetry': '重试这次接受',
+    'organizationInvitationMembershipNotice':
+        '接受后只加入这个组织，不会自动加入项目或获得额外权限；当前项目不切换。',
+    'organizationInvitationExpiresAt': '有效期（UTC）',
+    'organizationInvitationFreshnessNotice': '预览不保留加入资格。接受时会再次检查邀请和账号状态。',
+    'organizationInvitationUnauthorized': '账号或会话已改变。已隐藏邀请内容，请关闭后重新登录并查看我的组织。',
+    'organizationInvitationUncertain': '接受可能已完成。重试仍用同一邀请；仅在此窗口保留。',
+    'organizationInvitationSuccess': '这次邀请接受已完成。当前成员状态以重新读取的组织列表为准。',
+    'organizationInvitationDiscardTitle': '停止重试？',
+    'organizationInvitationDiscardBody': '接受邀请可能已完成。关闭后请重新读取我的组织，再决定是否操作这份邀请。',
+    'organizationInvitationKeepRetry': '返回重试',
+    'organizationInvitationDiscard': '关闭窗口',
+    'organizationInvitationFailure.notConfigured': '邀请服务尚未配置，请稍后重试。',
+    'organizationInvitationFailure.invalidJson': '请求格式无效，请稍后重试。',
+    'organizationInvitationFailure.payloadTooLarge': '服务未接受该请求，请稍后重试。',
+    'organizationInvitationFailure.invalidRequest': '请求无效，请核对邀请编号后重试。',
+    'organizationInvitationFailure.forbidden': '无法查看或接受这份邀请。请核对编号，并确认使用绑定收件账号。',
+    'organizationInvitationFailure.conflict': '这份邀请与已有记录冲突。请关闭窗口后重新读取我的组织。',
+    'organizationInvitationFailure.serviceUnavailable': '服务暂时不可用，请稍后重试。',
+    'organizationInvitationFailure.networkUnavailable': '网络不可用，请检查连接后重试。',
+    'organizationInvitationFailure.invalidResponse': '未收到可验证的结果，请重试。',
     'organizationLeaveAction': '退出组织',
     'organizationLeaveTitle': '退出组织？',
     'organizationLeaveHelp':
@@ -1270,6 +1302,53 @@ const Map<String, Map<String, String>> _strings = {
     'organizationDirectoryInvalidResponse':
         'The organization list could not be verified. Refresh later.',
     'organizationCreate': 'Create organization',
+    'organizationInvitationAction': 'Accept invitation',
+    'organizationInvitationTitle': 'Accept invitation',
+    'organizationInvitationInputHelp':
+        'Enter the invitation ID you received. Only its bound recipient can view the organization name and expiry.',
+    'organizationInvitationIdentifier': 'Invitation ID (UUID)',
+    'organizationInvitationInvalidId': 'Enter the complete UUID invitation ID.',
+    'organizationInvitationPreview': 'View invitation',
+    'organizationInvitationPreviewing': 'Reading the invitation…',
+    'organizationInvitationAccepting': 'Submitting acceptance…',
+    'organizationInvitationAccept': 'Join organization',
+    'organizationInvitationEdit': 'Edit ID',
+    'organizationInvitationClose': 'Close',
+    'organizationInvitationRetry': 'Retry acceptance',
+    'organizationInvitationMembershipNotice':
+        'Acceptance only joins this organization. It does not join projects or grant extra permissions. Your current project stays unchanged.',
+    'organizationInvitationExpiresAt': 'Expires at (UTC)',
+    'organizationInvitationFreshnessNotice':
+        'Preview does not reserve eligibility. Acceptance checks the invitation and account again.',
+    'organizationInvitationUnauthorized':
+        'The account or session changed. This window has hidden the invitation. Close it, sign in again, and reload your organizations.',
+    'organizationInvitationUncertain':
+        'Acceptance may already be complete. Retry uses the same invitation, kept only in this window.',
+    'organizationInvitationSuccess':
+        'This acceptance is complete. The reloaded organization list shows your current membership.',
+    'organizationInvitationDiscardTitle': 'Stop retrying?',
+    'organizationInvitationDiscardBody':
+        'Acceptance may already be complete. After closing, reload your organizations before deciding what to do with this invitation.',
+    'organizationInvitationKeepRetry': 'Keep retrying',
+    'organizationInvitationDiscard': 'Close window',
+    'organizationInvitationFailure.notConfigured':
+        'The app has no configured invitation service. Try again later.',
+    'organizationInvitationFailure.invalidJson':
+        'The request format is invalid. Try again later.',
+    'organizationInvitationFailure.payloadTooLarge':
+        'The service did not accept the request. Try again later.',
+    'organizationInvitationFailure.invalidRequest':
+        'The request is invalid. Check the invitation ID and try again.',
+    'organizationInvitationFailure.forbidden':
+        'You cannot view or accept this invitation. Check its ID and use the bound recipient account.',
+    'organizationInvitationFailure.conflict':
+        'This invitation conflicts with an existing record. Close this window and reload your organizations.',
+    'organizationInvitationFailure.serviceUnavailable':
+        'The service is unavailable. Try again later.',
+    'organizationInvitationFailure.networkUnavailable':
+        'The network is unavailable. Check your connection and try again.',
+    'organizationInvitationFailure.invalidResponse':
+        'The app could not verify the result. Try again.',
     'organizationLeaveAction': 'Leave organization',
     'organizationLeaveTitle': 'Leave organization?',
     'organizationLeaveHelp':

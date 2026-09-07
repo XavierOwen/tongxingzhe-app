@@ -37,7 +37,7 @@ const organizationWorkspaceId = "00000000-8701-2000-0000-000000000001";
 const targetAppUserId = "00000000-8701-0000-0000-000000000011";
 const driftTargetAppUserId = "00000000-8701-0000-0000-000000000004";
 
-test("invitation runtime bridges create, accept, and replay exact receipts", async () => {
+test("invitation runtime bridges create, bound-recipient preview, accept, and replay", async () => {
   const pool = new Pool({connectionString: databaseUrl});
   const client = await pool.connect();
   try {
@@ -55,7 +55,30 @@ test("invitation runtime bridges create, accept, and replay exact receipts", asy
       organizationWorkspaceId,
       targetAppUserId,
     );
+    const preview = await store.preview(targetIdentity, invitationId);
+    assert.deepEqual(preview, {
+      organizationInvitationPreviewContractId:
+        "organization-directed-account-invitation-preview:v1",
+      invitationId,
+      organizationName: "8701 live organization",
+      expiresAtUtc: created.expiresAtUtc,
+    });
+    await client.query("SAVEPOINT wrong_preview_recipient");
+    await assertStoreError(
+      () => store.preview(ownerIdentity, invitationId),
+      "organization_invitation_forbidden",
+    );
+    await client.query("ROLLBACK TO SAVEPOINT wrong_preview_recipient");
+    await client.query("RELEASE SAVEPOINT wrong_preview_recipient");
+
     const accepted = await store.accept(targetIdentity, invitationId);
+    await client.query("SAVEPOINT accepted_preview");
+    await assertStoreError(
+      () => store.preview(targetIdentity, invitationId),
+      "organization_invitation_forbidden",
+    );
+    await client.query("ROLLBACK TO SAVEPOINT accepted_preview");
+    await client.query("RELEASE SAVEPOINT accepted_preview");
     const createReplay = await store.create(
       ownerIdentity,
       invitationId,
