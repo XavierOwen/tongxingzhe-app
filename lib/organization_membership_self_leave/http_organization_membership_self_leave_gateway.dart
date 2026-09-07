@@ -83,98 +83,133 @@ final class HttpOrganizationMembershipSelfLeaveGateway
     required String organizationWorkspaceId,
   }) async {
     StreamSubscription<IdentitySnapshot>? identitySubscription;
-    try {
-      const unauthorized = OrganizationMembershipSelfLeaveRejected(
-        OrganizationMembershipSelfLeaveFailureCode.unauthorized,
-      );
-      final subject = identitySession.current.principal?.externalSubject;
-      var identityChanged = false;
-      bool matches(IdentitySnapshot snapshot) =>
-          subject != null &&
-          snapshot.stage == IdentityStage.signedIn &&
-          snapshot.principal?.externalSubject == subject;
-      bool isCurrent() =>
-          !_closed && !identityChanged && matches(identitySession.current);
-      if (!isCurrent()) return unauthorized;
-
-      // A leave intent belongs to one uninterrupted sign-in, including 401
-      // retry. Comparing only the final subject would miss sign-out/sign-in ABA.
-      identitySubscription = identitySession.changes.listen(
-        (snapshot) {
-          if (!matches(snapshot)) identityChanged = true;
-        },
-        onError: (Object error, StackTrace stackTrace) =>
-            identityChanged = true,
-        onDone: () => identityChanged = true,
-      );
-      var access = await identitySession.accessToken();
-      if (!isCurrent()) return unauthorized;
-      if (access is! IdentitySuccess<IdentityAccessToken>) {
-        return OrganizationMembershipSelfLeaveRejected(
-          _identityFailure(access),
-        );
+    String? subject;
+    var identityChanged = false;
+    bool matches(IdentitySnapshot snapshot) =>
+        subject != null &&
+        snapshot.stage == IdentityStage.signedIn &&
+        snapshot.principal?.externalSubject == subject;
+    bool isCurrent() =>
+        !_closed && !identityChanged && matches(identitySession.current);
+    bool fenceWasBroken() {
+      if (_closed || identityChanged) return true;
+      try {
+        return !matches(identitySession.current);
+      } on Object {
+        return false;
       }
+    }
 
-      var response = await _send(
-        access.value,
-        organizationWorkspaceId: organizationWorkspaceId,
-        requestBody: requestBody,
-      );
-      if (!isCurrent()) return unauthorized;
-      var root = _jsonObject(response);
+    const unauthorized = OrganizationMembershipSelfLeaveRejected(
+      OrganizationMembershipSelfLeaveFailureCode.unauthorized,
+    );
 
-      if (response.statusCode == 401) {
-        final firstFailure = _failure(response.statusCode, root);
-        if (firstFailure !=
-            OrganizationMembershipSelfLeaveFailureCode.unauthorized) {
-          return const OrganizationMembershipSelfLeaveRejected(
-            OrganizationMembershipSelfLeaveFailureCode.invalidResponse,
-          );
-        }
+    Future<OrganizationMembershipSelfLeaveResult> performRequest() async {
+      try {
+        subject = identitySession.current.principal?.externalSubject;
+        if (!isCurrent()) return unauthorized;
 
-        access = await identitySession.accessToken(forceRefresh: true);
+        // A leave intent belongs to one uninterrupted sign-in, including 401
+        // retry. Comparing only the final subject would miss sign-out/sign-in ABA.
+        identitySubscription = identitySession.changes.listen(
+          (snapshot) {
+            if (!matches(snapshot)) identityChanged = true;
+          },
+          onError: (Object error, StackTrace stackTrace) =>
+              identityChanged = true,
+          onDone: () => identityChanged = true,
+        );
+        if (!isCurrent()) return unauthorized;
+        var access = await identitySession.accessToken();
         if (!isCurrent()) return unauthorized;
         if (access is! IdentitySuccess<IdentityAccessToken>) {
           return OrganizationMembershipSelfLeaveRejected(
             _identityFailure(access),
           );
         }
-        response = await _send(
+
+        var response = await _send(
           access.value,
           organizationWorkspaceId: organizationWorkspaceId,
           requestBody: requestBody,
         );
         if (!isCurrent()) return unauthorized;
-        root = _jsonObject(response);
-      }
+        var root = _jsonObject(response);
 
-      if (response.statusCode == 200) {
-        return OrganizationMembershipSelfLeaveSuccess(
-          _parseReceipt(root, organizationWorkspaceId),
+        if (response.statusCode == 401) {
+          final firstFailure = _failure(response.statusCode, root);
+          if (firstFailure !=
+              OrganizationMembershipSelfLeaveFailureCode.unauthorized) {
+            return const OrganizationMembershipSelfLeaveRejected(
+              OrganizationMembershipSelfLeaveFailureCode.invalidResponse,
+            );
+          }
+
+          access = await identitySession.accessToken(forceRefresh: true);
+          if (!isCurrent()) return unauthorized;
+          if (access is! IdentitySuccess<IdentityAccessToken>) {
+            return OrganizationMembershipSelfLeaveRejected(
+              _identityFailure(access),
+            );
+          }
+          response = await _send(
+            access.value,
+            organizationWorkspaceId: organizationWorkspaceId,
+            requestBody: requestBody,
+          );
+          if (!isCurrent()) return unauthorized;
+          root = _jsonObject(response);
+        }
+
+        final result = response.statusCode == 200
+            ? OrganizationMembershipSelfLeaveSuccess(
+                _parseReceipt(root, organizationWorkspaceId),
+              )
+            : OrganizationMembershipSelfLeaveRejected(
+                _failure(response.statusCode, root),
+              );
+        return isCurrent() ? result : unauthorized;
+      } on TimeoutException {
+        if (fenceWasBroken()) return unauthorized;
+        return const OrganizationMembershipSelfLeaveRejected(
+          OrganizationMembershipSelfLeaveFailureCode.networkUnavailable,
+        );
+      } on http.ClientException {
+        if (fenceWasBroken()) return unauthorized;
+        return const OrganizationMembershipSelfLeaveRejected(
+          OrganizationMembershipSelfLeaveFailureCode.networkUnavailable,
+        );
+      } on FormatException {
+        if (fenceWasBroken()) return unauthorized;
+        return const OrganizationMembershipSelfLeaveRejected(
+          OrganizationMembershipSelfLeaveFailureCode.invalidResponse,
+        );
+      } on Object {
+        if (fenceWasBroken()) return unauthorized;
+        // Do not expose provider, HTTP client, identity, or database details.
+        return const OrganizationMembershipSelfLeaveRejected(
+          OrganizationMembershipSelfLeaveFailureCode.invalidResponse,
         );
       }
-      return OrganizationMembershipSelfLeaveRejected(
-        _failure(response.statusCode, root),
-      );
-    } on TimeoutException {
-      return const OrganizationMembershipSelfLeaveRejected(
-        OrganizationMembershipSelfLeaveFailureCode.networkUnavailable,
-      );
-    } on http.ClientException {
-      return const OrganizationMembershipSelfLeaveRejected(
-        OrganizationMembershipSelfLeaveFailureCode.networkUnavailable,
-      );
-    } on FormatException {
-      return const OrganizationMembershipSelfLeaveRejected(
-        OrganizationMembershipSelfLeaveFailureCode.invalidResponse,
-      );
+    }
+
+    final result = await performRequest();
+    try {
+      // cancel() stops events before its cleanup Future completes. Awaiting it
+      // would hide identity changes before delivery. ignore() keeps errors typed.
+      identitySubscription?.cancel().ignore();
     } on Object {
-      // Do not expose provider, HTTP client, identity, or database details.
+      if (fenceWasBroken()) return unauthorized;
       return const OrganizationMembershipSelfLeaveRejected(
         OrganizationMembershipSelfLeaveFailureCode.invalidResponse,
       );
-    } finally {
-      await identitySubscription?.cancel();
+    }
+    try {
+      return isCurrent() ? result : unauthorized;
+    } on Object {
+      return const OrganizationMembershipSelfLeaveRejected(
+        OrganizationMembershipSelfLeaveFailureCode.invalidResponse,
+      );
     }
   }
 

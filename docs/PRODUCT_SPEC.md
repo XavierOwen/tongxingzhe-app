@@ -1223,6 +1223,15 @@ creation client close 改为幂等，owner transfer 保持幂等 close。等待 
 creation 已有操作页面；owner transfer 在本切片仍只有 gateway 与 composition，没有新增操作 UI。
 `TEST-077`／`MANUAL-067` 覆盖两个模块的先红后绿复现及既有 UI／composition 回归；不修改 Backend／SQL，不重复未改的本地 DB 实验，不把 synthetic 或 CI build 当生产身份与真人平台证明。
 
+#### Slice 7AC：邀请与退组的监听清理不延迟结果
+
+7AC／Issue #348 修复 7AB 复核期间确认的两个同类路径：invitation 共享请求方法和 membership self-leave。前者统一覆盖 create、preview、accept。
+旧实现在选定 typed result 后等待监听取消，期间已无法完整观察身份变化；清理错误还可能覆盖结果并直接抛出。
+修复沿用 7AB 的局部时序：保持监听直到 token／HTTP／单次 401／parser 完成，同步发起取消并吸收清理 Future 的错误，再做最后身份与 close 检查；此后不再等待。
+未完成的清理 Future 不阻塞交付。已知登录失效仍优先返回既有 `unauthorized`，包括 self-leave 的迟到失败；同步清理异常不泄露原文。
+`TEST-078`／`MANUAL-068` 覆盖清理 gate、异步清理错误及清理启动时的身份／close 漂移，保留原输入、body、UUID、401 和 strict parser 合同。
+本票不增加公共抽象、错误类别、UI、Backend、SQL、依赖或持久化，不关闭共享 identity，也不承诺撤销已发送的服务端写入。
+
 ### 5.8 分析、指标与报告
 
 #### 5.8.1 统计单位和核心口径
@@ -2735,6 +2744,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-065` | 学习文档说明 7Z 的明确选择与确认、匹配 workspace 预清、清除失败零 HTTP、其他缓存与锁保持、旧请求代次、原账号及 token／401 身份绑定、同窗口 UUID 重试与放弃确认、历史 receipt 与目录重读，以及 focused／完整 Flutter 验证命令；区分 synthetic 清除、完整组织退出与真实平台证据。 |
 | `MANUAL-066` | 学习文档说明 7AA 仅绑定收件人的入组前预览、只读和非枚举边界、固定四字段与认证顺序、预览后资格可变、未知接受结果直接同 ID 重试、历史回执后重读目录、不切项目、会话立即失效及验证命令；区分 synthetic 与生产／真机证据。 |
 | `MANUAL-067` | 学习文档说明 7AB 的请求意图与 bearer actor 区别、UI 丢弃结果的局限、token／HTTP／401 的登录连续性、同账号注销重登、close 和迟到异常；提供 focused／完整 Flutter 验证命令，说明不改变服务端权限且不重复未改的本地 DB 实验。 |
+| `MANUAL-068` | 学习文档说明 7AC 中同步停止监听与异步清理的区别、最后身份检查后不再等待，以及 invitation 三操作和 self-leave 的 typed result 边界；提供定向回归命令，不把 synthetic 清理当生产网络取消或数据库回滚。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -2990,6 +3000,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-075` | 7Z 覆盖匹配／其他 workspace／无缓存、已有锁保持、read／decode／delete 失败、旧请求与排队写入、原账号预清及清除期间换账号；覆盖明确选择／取消、busy 防重、十类拒绝、同 UUID 主动重试、放弃确认、历史 receipt 后重读不盲删、同一 App gateway、不切项目、迟到结果与 dispose 隔离，以及 token wait／401 refresh／注销再登录的身份竞态。Widget 检查中英文、小屏 200% 字号、暗色、键盘／焦点、live region 和触控目标；完整 Flutter、analyzer、format、生产边界、链接和 CI 通过，不重复未改 DB 实验，不把 synthetic 写成真机清除或生产退出。 |
 | `TEST-076` | 7AA 覆盖 preview exact identity、active 绑定收件人、当前状态、墙钟有效期、原名称、只读与 ACL；Backend 覆盖原始路径、method、认证优先、无 query／body、strict 四字段、一次 SQL 和 runtime 集成。Flutter 覆盖原登录代次与 401、严格解析、明确预览与接受、十类失败、同 ID 直接重试、编辑／放弃／忙状态、会话失效和迟到结果、目录重读及不切项目；检查中英文、窄屏 200% 字号、暗色、键盘、焦点、live region 与触控目标。完整 Flutter／Backend、Docker rebuild／checksum／restore、静态检查及 CI 通过，不据此宣称生产或真机验收。 |
 | `TEST-077` | 7AB 两个 gateway 的可控 Future 测试先复现 token 等待或 401 刷新期间旧意图使用新账号 token，以及切号／close 后迟到成功；修复后覆盖换号、同账号注销重登、current 与 stream 失效、迟到异常、幂等 close，以及不阻塞交付且不逸出异常的监听清理。正常请求、同登录 token 更新、合法单次 401、相同 body／UUID、strict parser、typed failures 及原输入优先顺序继续通过；相关 UI／composition、完整 Flutter、analyzer、format、生产边界、链接和 9 个 CI job 通过，不新增 Backend 或数据库验证结论。 |
+| `TEST-078` | 7AC 两个既有 gateway test 文件覆盖未完成 cancel Future 不阻塞结果、清理 Future 异常不逸出、清理启动时身份／close 变化及 self-leave 迟到失败；invitation create／preview／accept 均经过修复路径。原 token／HTTP／401 连续性、输入顺序、body／UUID、parser、failure 和 ownership 回归通过；完整 Flutter、analyzer、format、生产边界、链接与 9 个 CI job 通过，不重复未改 DB 实验。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3320,6 +3331,8 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 
 7AB／#346 修复 organization creation 和 owner transfer 网关的跨登录请求竞态，并补齐 close 后不再发送或交付成功的边界。
 它不新增所有权移交页面，也不改变服务端权限、账号编号展示或邀请投递方式。
+
+7AC／#348 将同一监听清理与最终检查顺序用于 invitation 三操作和 membership self-leave，消除清理等待窗口及原始清理异常。它不增加业务功能或生产验证结论。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 
