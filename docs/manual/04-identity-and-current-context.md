@@ -854,6 +854,62 @@ App 测试验证入口真实使用注入 gateway，成功后没有调用项目�
 这些 fake identity／gateway 与 synthetic UI 检查不证明生产服务已部署、真实账号可用或真人平台已验收；六平台 build 也不能替代运行时证据。
 本切片不修改 Backend／数据库，不提供邀请、组织项目、跨重启恢复或删除流程。
 
+### 3.13 读取当前账号加入的组织（Issue #332，MANUAL-061）
+
+组织创建成功后可能还没有项目。项目上下文必须包含 project 和 questionnaire，不能为了显示组织而造出一个项目或假上下文。
+因此“我的组织目录”使用独立的只读接口。它回答“我目前加入哪些未删除组织”，不回答“我可以进入哪些项目”或“我是哪些组织的 owner”。
+
+#### 从身份到目录
+
+Backend 验证 generic Bearer token，然后只把 exact issuer／subject 传给 `app_data.list_organizations_for_identity_v1(text,text)`。
+这里不检查邮箱创建资格，不 bootstrap 新账号，也不接受用户 ID、组织 ID 或项目 selector。
+reader 拒绝 NULL、ASCII-space 空身份和原值超长。未知、去关联或非 active 用户统一 forbidden；已识别的 active 账号没有组织则返回零行。
+
+0089 在一个查询快照内检验 active user、organization membership 的当前半开区间和 workspace 的未删除状态。
+一个 `clock_timestamp()` 取样用于所有成员区间，不用客户端时间，也不把 transaction 启动时间当作稍后的读取时间。
+`active_from_utc` 恰好等于取样时刻时属于有效区间，`inactive_from_utc` 恰好相等时已经无效。
+个人 workspace、其他账号的组织和恢复期组织都排除。没有项目、问卷或管理能力不会排除有效组织成员。
+
+返回只有组织 UUID 与数据库中的名称。名称按 `COLLATE "C"` 排序，UUID 作为同名时的稳定次序；不修改旧名称，不合并同名组织。
+v1 完整读取，不设任意数量截断。若单账号目录规模确实影响读取延迟，再单独定义分页；不能先返回前若干条却让用户误以为这是全部。
+函数使用既有 trusted owner、SECURITY DEFINER 与固定 search_path。迁移显式撤销 PUBLIC 函数权限；runtime 只执行 reader，不能 SELECT 身份、workspace 或 membership 底表。
+
+这只是读取时的快照。用户看到组织后可能立即被移除，后续操作仍要重新授权；列表不是可复用的权限证明，也不是组织恢复页面。
+
+#### GET 与创建 POST 如何共存
+
+`GET /v1/organizations` 读取，既有 `POST /v1/organizations` 仍按 7A 资格创建。
+GET 先匹配原始 canonical 路径，再认证，再拒绝 query（含裸 `?`）和声明 body，最后检查 store 并等待一次 reader。
+`Content-Length` 缺省或精确 `0` 且无 `Transfer-Encoding` 才按无 body 处理；GET 不解析 JSON。
+错误 method、编码、dot、重复／尾 slash 路径返回通用 404，不走认证或数据库。
+
+200 的 root 只有 `organization_directory_contract_id: "organization-directory:v1"` 和 `organizations`。
+数组每项只有 `organization_workspace_id` 与 `organization_name`，空数组是正常成功。
+store 拒绝非 canonical UUID、非法名称、错误字段／类型和重复 UUID；它不会静默丢弃坏行或输出部分目录。
+名字仅按已保存数据的最低有效性检查，不套用后来新增的创建规则，也不在客户端修剪。
+
+无效 query／声明 body 返回 400 invalid request；未认证返回 401 unauthenticated；数据库身份不可用返回 403 forbidden；缺配置、parser、数据库或未知异常返回 503 unavailable。
+完整 wire code 见 [Product Spec 7U](../PRODUCT_SPEC.md#slice-7u当前账号的只读组织目录)。响应固定 JSON UTF-8、no-store，不输出 token、身份或异常原文，也不记录目录内容。
+
+#### 验证与证据范围
+
+```bash
+npm --prefix backend/server run check
+npm --prefix backend/server run build
+node --test \
+  backend/server/dist/test/organization-directory.test.js \
+  backend/server/dist/test/organization-directory-route.test.js \
+  backend/server/dist/test/organization-directory-composition.test.js
+npm --prefix backend/server test
+bash tool/run_postgres_tests_in_docker.sh
+dart run tool/check_markdown_links.dart
+```
+
+Docker runner 运行 0089 migration、结构 check、回滚 fixture 和 runtime integration，并继续验证既有 migrations、权限、checksum 与独立 dump／restore。
+fixture 需覆盖项目为空仍可见、有效账号空列表、时间边界、身份原值、跨账号、恢复期、同名顺序和直接 SELECT 被拒绝。
+HTTP 检查覆盖认证先后、声明 body、无 query、await、精确结果和错误脱敏，并确认 POST 未受影响。
+这些 synthetic 证据不证明生产身份、部署端点、真实组织或真人平台；本切片还没有 Flutter gateway／列表、项目创建／切换、成员治理或恢复流程。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：

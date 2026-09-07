@@ -6,6 +6,7 @@ import {
   createSupabaseAuthUserLookup,
 } from "./organization-creation-identity.js";
 import { PostgresOrganizationCreationStore } from "./organization-creation.js";
+import { PostgresOrganizationDirectoryStore } from "./organization-directory.js";
 import {
   PostgresOrganizationOwnerTransferStore,
 } from "./organization-owner-transfer.js";
@@ -150,6 +151,7 @@ const managementReportReleaseStore = new PostgresManagementReportReleaseStore(
 const managementAnalysisContextStore =
   new PostgresManagementAnalysisContextStore(query);
 const organizationCreationStore = new PostgresOrganizationCreationStore(query);
+const organizationDirectoryStore = new PostgresOrganizationDirectoryStore(query);
 const organizationOwnerTransferStore =
   new PostgresOrganizationOwnerTransferStore(query);
 const organizationDirectedAccountInvitationStore =
@@ -158,6 +160,7 @@ const server = createBackendServer({
   identityVerifier,
   organizationCreationIdentityVerifier,
   organizationCreationStore,
+  organizationDirectoryStore,
   organizationOwnerTransferStore,
   organizationDirectedAccountInvitationStore,
   contextStore,
