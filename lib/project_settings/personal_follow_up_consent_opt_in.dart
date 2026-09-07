@@ -1,4 +1,4 @@
-import 'dart:math';
+import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 
 /// Backend contract for the optional personal follow-up consent ratio.
 const personalFollowUpConsentOptInMetric = 'follow_up_consent_ratio@1';
@@ -93,21 +93,8 @@ abstract interface class ConsentOptInRequestIdGenerator {
 /// Cryptographically random UUID v4 generator for opt-in mutations.
 final class SecureConsentOptInRequestIdGenerator
     implements ConsentOptInRequestIdGenerator {
-  SecureConsentOptInRequestIdGenerator() : _random = Random.secure();
-
-  final Random _random;
-
   @override
-  String next() {
-    final bytes = List<int>.generate(16, (_) => _random.nextInt(256));
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    final hex = bytes.map((value) => value.toRadixString(16).padLeft(2, '0'));
-    final text = hex.join();
-    return '${text.substring(0, 8)}-${text.substring(8, 12)}-'
-        '${text.substring(12, 16)}-${text.substring(16, 20)}-'
-        '${text.substring(20)}';
-  }
+  String next() => secureUuidV4();
 }
 
 abstract interface class PersonalFollowUpConsentOptInGateway {

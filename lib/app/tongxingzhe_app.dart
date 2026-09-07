@@ -259,6 +259,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
             :final followUpConsentRatioReportGateway,
             :final interestReportGateway,
             :final originalRegionReportGateway,
+            :final organizationCreationGateway,
             :final managementReportExportDelivery,
             :final currentRelationshipStageRepository,
             :final deviceReminderPreferenceStore,
@@ -294,6 +295,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
                   followUpConsentRatioReportGateway,
               interestReportGateway: interestReportGateway,
               originalRegionReportGateway: originalRegionReportGateway,
+              organizationCreationGateway: organizationCreationGateway,
               managementReportExportDelivery: managementReportExportDelivery,
               currentRelationshipStageRepository:
                   currentRelationshipStageRepository,
@@ -337,6 +339,7 @@ class _ReadyApp extends StatefulWidget {
     required this.followUpConsentRatioReportGateway,
     required this.interestReportGateway,
     required this.originalRegionReportGateway,
+    required this.organizationCreationGateway,
     required this.managementReportExportDelivery,
     required this.currentRelationshipStageRepository,
     required this.deviceReminderPreferenceStore,
@@ -370,6 +373,7 @@ class _ReadyApp extends StatefulWidget {
   final FollowUpConsentRatioReportGateway followUpConsentRatioReportGateway;
   final InterestReportGateway interestReportGateway;
   final OriginalRegionReportGateway originalRegionReportGateway;
+  final OrganizationCreationGateway organizationCreationGateway;
   final ManagementReportExportDelivery managementReportExportDelivery;
   final CurrentRelationshipStageRepository currentRelationshipStageRepository;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
@@ -460,6 +464,7 @@ final class _ReadyAppState extends State<_ReadyApp> {
             widget.followUpConsentRatioReportGateway,
         interestReportGateway: widget.interestReportGateway,
         originalRegionReportGateway: widget.originalRegionReportGateway,
+        organizationCreationGateway: widget.organizationCreationGateway,
         managementReportExportDelivery: widget.managementReportExportDelivery,
         currentRelationshipStageRepository:
             widget.currentRelationshipStageRepository,
