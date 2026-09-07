@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -183,6 +184,342 @@ void main() {
     expect(requests, 1);
     expect(identity.accessTokenForceRefreshValues, [false, true]);
   });
+
+  test(
+    'account change during token wait never sends the old creation intent',
+    () async {
+      final tokenRequested = Completer<void>();
+      final token = Completer<IdentityResult<IdentityAccessToken>>();
+      final identity = _RotatingTokenIdentitySession(
+        accessTokenHandler: (_) {
+          tokenRequested.complete();
+          return token.future;
+        },
+      );
+      var requests = 0;
+      final gateway = HttpOrganizationCreationGateway(
+        baseUri: Uri.parse('https://backend.example.test'),
+        identitySession: identity,
+        client: MockClient((_) async {
+          requests++;
+          return _json(_receiptJson());
+        }),
+      );
+      addTearDown(gateway.close);
+      addTearDown(identity.close);
+
+      final pending = gateway.create(
+        requestId: _requestId,
+        displayName: 'Old account intent',
+      );
+      await tokenRequested.future;
+      identity.emit(_otherIdentity);
+      token.complete(_accessToken('new-account-token'));
+
+      expect(
+        _failureCode(await pending),
+        OrganizationCreationFailureCode.unauthorized,
+      );
+      expect(requests, 0);
+    },
+  );
+
+  test(
+    'account change during 401 refresh never retries with the new token',
+    () async {
+      final refreshRequested = Completer<void>();
+      final refreshToken = Completer<IdentityResult<IdentityAccessToken>>();
+      final identity = _RotatingTokenIdentitySession(
+        accessTokenHandler: (forceRefresh) {
+          if (!forceRefresh) return Future.value(_accessToken('old-token'));
+          refreshRequested.complete();
+          return refreshToken.future;
+        },
+      );
+      final requests = <http.Request>[];
+      final gateway = HttpOrganizationCreationGateway(
+        baseUri: Uri.parse('https://backend.example.test'),
+        identitySession: identity,
+        client: MockClient((request) async {
+          requests.add(request);
+          return requests.length == 1
+              ? _error('unauthenticated', 401)
+              : _json(_receiptJson());
+        }),
+      );
+      addTearDown(gateway.close);
+      addTearDown(identity.close);
+
+      final pending = gateway.create(
+        requestId: _requestId,
+        displayName: 'Old account intent',
+      );
+      await refreshRequested.future;
+      identity.emit(_otherIdentity);
+      refreshToken.complete(_accessToken('new-account-token'));
+
+      expect(
+        _failureCode(await pending),
+        OrganizationCreationFailureCode.unauthorized,
+      );
+      expect(requests, hasLength(1));
+      expect(requests.single.headers['authorization'], 'Bearer old-token');
+      expect(identity.accessTokenForceRefreshValues, [false, true]);
+    },
+  );
+
+  test('HTTP sign-out and sign-in ABA invalidates creation', () async {
+    final sent = Completer<void>();
+    final response = Completer<http.Response>();
+    final identity = _RotatingTokenIdentitySession();
+    final gateway = HttpOrganizationCreationGateway(
+      baseUri: Uri.parse('https://backend.example.test'),
+      identitySession: identity,
+      client: MockClient((_) {
+        sent.complete();
+        return response.future;
+      }),
+    );
+    addTearDown(gateway.close);
+    addTearDown(identity.close);
+
+    final pending = gateway.create(requestId: _requestId, displayName: 'Acme');
+    await sent.future;
+    identity.emit(const IdentitySnapshot.signedOut());
+    identity.emit(_initialIdentity);
+    response.complete(_json(_receiptJson()));
+
+    expect(
+      _failureCode(await pending),
+      OrganizationCreationFailureCode.unauthorized,
+    );
+  });
+
+  test('HTTP completion checks a silently drifting current identity', () async {
+    final sent = Completer<void>();
+    final response = Completer<http.Response>();
+    final identity = _RotatingTokenIdentitySession();
+    final gateway = HttpOrganizationCreationGateway(
+      baseUri: Uri.parse('https://backend.example.test'),
+      identitySession: identity,
+      client: MockClient((_) {
+        sent.complete();
+        return response.future;
+      }),
+    );
+    addTearDown(gateway.close);
+    addTearDown(identity.close);
+
+    final pending = gateway.create(requestId: _requestId, displayName: 'Acme');
+    await sent.future;
+    identity.setCurrentWithoutEmit(_otherIdentity);
+    response.complete(_json(_receiptJson()));
+
+    expect(
+      _failureCode(await pending),
+      OrganizationCreationFailureCode.unauthorized,
+    );
+  });
+
+  test('identity stream error or completion invalidates creation', () async {
+    for (final endStream in [false, true]) {
+      final sent = Completer<void>();
+      final response = Completer<http.Response>();
+      final identity = _RotatingTokenIdentitySession();
+      final gateway = HttpOrganizationCreationGateway(
+        baseUri: Uri.parse('https://backend.example.test'),
+        identitySession: identity,
+        client: MockClient((_) {
+          sent.complete();
+          return response.future;
+        }),
+      );
+      addTearDown(gateway.close);
+      addTearDown(identity.close);
+
+      final pending = gateway.create(
+        requestId: _requestId,
+        displayName: 'Acme',
+      );
+      await sent.future;
+      if (endStream) {
+        await identity.endChanges();
+      } else {
+        identity.failChanges(StateError('test-only identity stream failure'));
+      }
+      await Future<void>.delayed(Duration.zero);
+      response.complete(_json(_receiptJson()));
+
+      expect(
+        _failureCode(await pending),
+        OrganizationCreationFailureCode.unauthorized,
+        reason: endStream ? 'stream completed' : 'stream emitted an error',
+      );
+    }
+  });
+
+  test('close during token wait prevents creation HTTP', () async {
+    final tokenRequested = Completer<void>();
+    final token = Completer<IdentityResult<IdentityAccessToken>>();
+    final identity = _RotatingTokenIdentitySession(
+      accessTokenHandler: (_) {
+        tokenRequested.complete();
+        return token.future;
+      },
+    );
+    var requests = 0;
+    final gateway = HttpOrganizationCreationGateway(
+      baseUri: Uri.parse('https://backend.example.test'),
+      identitySession: identity,
+      client: MockClient((_) async {
+        requests++;
+        return _json(_receiptJson());
+      }),
+    );
+    addTearDown(identity.close);
+
+    final pending = gateway.create(requestId: _requestId, displayName: 'Acme');
+    await tokenRequested.future;
+    await gateway.close();
+    token.complete(_accessToken('old-token'));
+
+    expect(
+      _failureCode(await pending),
+      OrganizationCreationFailureCode.unauthorized,
+    );
+    expect(requests, 0);
+  });
+
+  test('close during HTTP prevents stale creation delivery', () async {
+    final sent = Completer<void>();
+    final response = Completer<http.Response>();
+    final identity = _RotatingTokenIdentitySession();
+    final gateway = HttpOrganizationCreationGateway(
+      baseUri: Uri.parse('https://backend.example.test'),
+      identitySession: identity,
+      client: MockClient((_) {
+        sent.complete();
+        return response.future;
+      }),
+    );
+    addTearDown(identity.close);
+
+    final pending = gateway.create(requestId: _requestId, displayName: 'Acme');
+    await sent.future;
+    await gateway.close();
+    response.complete(_json(_receiptJson()));
+
+    expect(
+      _failureCode(await pending),
+      OrganizationCreationFailureCode.unauthorized,
+    );
+  });
+
+  test(
+    'broken identity fence wins over late transport or parse errors',
+    () async {
+      for (final error in <Object>[
+        http.ClientException('test-only late transport failure'),
+        const FormatException('test-only late parse failure'),
+      ]) {
+        final sent = Completer<void>();
+        final response = Completer<http.Response>();
+        final identity = _RotatingTokenIdentitySession();
+        final gateway = HttpOrganizationCreationGateway(
+          baseUri: Uri.parse('https://backend.example.test'),
+          identitySession: identity,
+          client: MockClient((_) {
+            sent.complete();
+            return response.future;
+          }),
+        );
+        addTearDown(gateway.close);
+        addTearDown(identity.close);
+
+        final pending = gateway.create(
+          requestId: _requestId,
+          displayName: 'Acme',
+        );
+        await sent.future;
+        identity.emit(_otherIdentity);
+        response.completeError(error);
+
+        expect(
+          _failureCode(await pending),
+          OrganizationCreationFailureCode.unauthorized,
+          reason: error.runtimeType.toString(),
+        );
+      }
+    },
+  );
+
+  test('cleanup start is covered by the final identity check', () async {
+    late _RotatingTokenIdentitySession identity;
+    identity = _RotatingTokenIdentitySession(
+      onChangesCancel: () {
+        identity.setCurrentWithoutEmit(_otherIdentity);
+      },
+    );
+    final gateway = HttpOrganizationCreationGateway(
+      baseUri: Uri.parse('https://backend.example.test'),
+      identitySession: identity,
+      client: MockClient((_) async => _json(_receiptJson())),
+    );
+    addTearDown(gateway.close);
+    addTearDown(identity.close);
+
+    final result = await gateway.create(
+      requestId: _requestId,
+      displayName: 'Acme',
+    );
+
+    expect(_failureCode(result), OrganizationCreationFailureCode.unauthorized);
+  });
+
+  test(
+    'cleanup gate and future errors do not delay or escape results',
+    () async {
+      for (final failCleanup in [false, true]) {
+        final cancelStarted = Completer<void>();
+        final finishCancel = Completer<void>();
+        final identity = _RotatingTokenIdentitySession(
+          onChangesCancel: () {
+            cancelStarted.complete();
+            return finishCancel.future;
+          },
+        );
+        final gateway = HttpOrganizationCreationGateway(
+          baseUri: Uri.parse('https://backend.example.test'),
+          identitySession: identity,
+          client: MockClient((_) async => _json(_receiptJson())),
+        );
+        addTearDown(gateway.close);
+        addTearDown(identity.close);
+
+        final resultDelivered = Completer<OrganizationCreationResult>();
+        gateway
+            .create(requestId: _requestId, displayName: 'Acme')
+            .then(
+              resultDelivered.complete,
+              onError: resultDelivered.completeError,
+            );
+        await cancelStarted.future;
+        await Future<void>.delayed(Duration.zero);
+
+        expect(resultDelivered.isCompleted, isTrue);
+        expect(
+          await resultDelivered.future,
+          isA<OrganizationCreationSuccess>(),
+        );
+        if (failCleanup) {
+          finishCancel.completeError(StateError('test-only cleanup failure'));
+        } else {
+          finishCancel.complete();
+        }
+        await Future<void>.delayed(Duration.zero);
+      }
+    },
+  );
 
   test('maps the six stable error envelopes', () async {
     const cases =
@@ -445,17 +782,20 @@ void main() {
     );
   });
 
-  test('close delegates to the HTTP client', () async {
+  test('close owns the HTTP client once and leaves identity open', () async {
     final client = _TrackingMockClient((_) async => _json(_receiptJson()));
+    final identity = _identity();
     final gateway = HttpOrganizationCreationGateway(
       baseUri: Uri.parse('https://backend.example.test'),
-      identitySession: _identity(),
+      identitySession: identity,
       client: client,
     );
 
     await gateway.close();
+    await gateway.close();
 
-    expect(client.closed, isTrue);
+    expect(client.closeCount, 1);
+    expect(identity.isClosed, isFalse);
   });
 }
 
@@ -512,14 +852,88 @@ const _jsonHeaders = {
   'cache-control': 'no-store',
 };
 
+OrganizationCreationFailureCode _failureCode(
+  OrganizationCreationResult result,
+) => (result as OrganizationCreationRejected).code;
+
+IdentitySuccess<IdentityAccessToken> _accessToken(String value) =>
+    IdentitySuccess(
+      IdentityAccessToken(
+        value: value,
+        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+      ),
+    );
+
 final class _TrackingMockClient extends MockClient {
   _TrackingMockClient(super.handler);
 
-  bool closed = false;
+  var closeCount = 0;
 
   @override
   void close() {
-    closed = true;
+    closeCount++;
     super.close();
   }
 }
+
+final class _RotatingTokenIdentitySession implements IdentitySession {
+  _RotatingTokenIdentitySession({
+    this.accessTokenHandler,
+    FutureOr<void> Function()? onChangesCancel,
+  }) : _changes = StreamController<IdentitySnapshot>(
+         sync: true,
+         onCancel: onChangesCancel,
+       );
+
+  final Future<IdentityResult<IdentityAccessToken>> Function(bool forceRefresh)?
+  accessTokenHandler;
+  final accessTokenForceRefreshValues = <bool>[];
+  final StreamController<IdentitySnapshot> _changes;
+  IdentitySnapshot _current = _initialIdentity;
+
+  @override
+  IdentitySnapshot get current => _current;
+
+  @override
+  Stream<IdentitySnapshot> get changes => _changes.stream;
+
+  void emit(IdentitySnapshot snapshot) {
+    _current = snapshot;
+    _changes.add(snapshot);
+  }
+
+  void setCurrentWithoutEmit(IdentitySnapshot snapshot) => _current = snapshot;
+
+  void failChanges(Object error) => _changes.addError(error);
+
+  Future<void> endChanges() => _changes.close();
+
+  @override
+  Future<void> close() => _changes.close();
+
+  @override
+  Future<IdentityResult<IdentityAccessToken>> accessToken({
+    bool forceRefresh = false,
+  }) async {
+    accessTokenForceRefreshValues.add(forceRefresh);
+    final handler = accessTokenHandler;
+    if (handler != null) return handler(forceRefresh);
+    return _accessToken(
+      forceRefresh ? 'refreshed-test-access-token' : 'stale-test-access-token',
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('unused test-only identity method');
+}
+
+const _initialIdentity = IdentitySnapshot(
+  stage: IdentityStage.signedIn,
+  principal: IdentityPrincipal(externalSubject: 'subject-1', email: null),
+);
+
+const _otherIdentity = IdentitySnapshot(
+  stage: IdentityStage.signedIn,
+  principal: IdentityPrincipal(externalSubject: 'subject-2', email: null),
+);

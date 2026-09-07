@@ -2,6 +2,7 @@
 
 - 状态：已接受
 - 日期：2026-09-04
+- 修订：2026-09-07，Slice 7AB／[#346](https://github.com/XavierOwen/tongxingzhe-app/issues/346) 补充登录连续性与错误优先级
 - Slice：7L Spec
 - Issue：[#314](https://github.com/XavierOwen/tongxingzhe-app/issues/314)
 - 依赖：[ADR-0178](./0178-organization-owner-transfer-http-contract.md)、[#309](https://github.com/XavierOwen/tongxingzhe-app/issues/309)、[#312](https://github.com/XavierOwen/tongxingzhe-app/issues/312)、[#302](https://github.com/XavierOwen/tongxingzhe-app/issues/302)
@@ -65,7 +66,11 @@ path 使用 canonical workspace UUID。headers 固定为 `Accept: application/js
 
 ### Identity failure 与一次 401
 
-gateway 从同一个 `IdentitySession` 取得 Bearer token。identity failure 映射固定为：`IdentityFailureCode.notConfigured` 到 `notConfigured`，`IdentityFailureCode.networkUnavailable` 到 `networkUnavailable`，其他 `IdentityFailureCode` 到 `unauthorized`。
+7AB 修订：有效请求绑定发起时的同一次登录。gateway 保存起始 subject，监听 identity changes，并在 token、HTTP 和一次 401 刷新后重新检查。换号、注销再登录同一账号、身份流失效或 gateway close 后，旧操作返回 `unauthorized`；不再使用随后取得的凭据继续发送，也不交付旧结果。正常同一登录内的 token 更新不使操作失效。
+
+登录连续性失效优先于下述 identity、network 和 parser 错误映射。取消本次身份监听的清理过程也不得产生未经最后检查的等待窗口，或向调用方抛出清理异常。这一修订补充原 ADR 未定义的异步边界；公共 failure enum、HTTP 和 receipt 形状不变。
+
+原登录仍有效时，gateway 从同一个 `IdentitySession` 取得 Bearer token。identity failure 映射固定为：`IdentityFailureCode.notConfigured` 到 `notConfigured`，`IdentityFailureCode.networkUnavailable` 到 `networkUnavailable`，其他 `IdentityFailureCode` 到 `unauthorized`。
 
 首次 response 只有在 headers 严格正确且 error envelope 精确为 `401 {"error":{"code":"unauthenticated"}}` 时，才强制 refresh 一次。retry 复用相同 method、canonical URL 和 body，`Authorization` 使用强制刷新取得的 token。第二个 `401` 返回 `unauthorized`，不得循环刷新；其他响应不触发 refresh。
 
@@ -75,7 +80,7 @@ gateway 从同一个 `IdentitySession` 取得 Bearer token。identity failure �
 
 成功 `200` 只接受 exact 五字段 root：固定 `organization-owner-transfer:v1`、三个 lowercase canonical UUID、与 path 相同的 `organizationWorkspaceId`，以及有效 UTC `YYYY-MM-DDTHH:mm:ss.SSSZ` 时间。adapter 将有效时间解析为 UTC `DateTime`；字段缺失、额外、错误类型或值不符合合同都返回 `invalidResponse`。
 
-稳定错误映射固定如下：
+原登录仍有效时，稳定错误映射固定如下：
 
 | HTTP response | Flutter failure |
 | --- | --- |
@@ -89,13 +94,15 @@ gateway 从同一个 `IdentitySession` 取得 Bearer token。identity failure �
 | `503 organization_owner_transfer_unavailable` | `serviceUnavailable` |
 | network、timeout 或 `http.ClientException` | `networkUnavailable` |
 
-缺少或错误 headers、非法 JSON、非 exact error envelope、unknown status／code、`404 not_found`、字段漂移、非法 UUID／时间和其他 parser／adapter 错误统一返回 `invalidResponse`。不得暴露 HTTP client、provider、数据库、身份或成员原文。
+原登录仍有效时，缺少或错误 headers、非法 JSON、非 exact error envelope、unknown status／code、`404 not_found`、字段漂移、非法 UUID／时间和其他 parser／adapter 错误统一返回 `invalidResponse`。不得暴露 HTTP client、provider、数据库、身份或成员原文。
 
 首次成功和 exact replay 在客户端都返回同一五字段 success。gateway 不判断 replay、owner、membership、组织状态或权限；这些语义由 Backend 和 0086 决定。
 
 ### 隐私、关闭与证据边界
 
 返回值和原始 response 只存在于内存。gateway 不写 PII 到 Drift、缓存、同步队列或日志，也不把未知错误原文交给调用方。调用方负责在应用生命周期中调用 `close()`；HTTP gateway 关闭自己拥有的 client，deferred gateway 的 `close()` 不触网，任何 gateway 都不关闭 `IdentitySession`。
+
+7AB 修订：HTTP gateway 的 close 幂等，并使进行中的旧操作失效。客户端关闭或丢弃结果不撤销已经发送、可能已经提交的服务端写入；Backend 仍独立检查实际 Bearer actor 的权限。
 
 本 ADR 不定义 `AppDependencies`、`AppStartupReady`、`TongxingzheApp` lifecycle、controller、ViewModel、Screen、route、导航、l10n、上下文切换、Drift、缓存、离线队列、同步、UUID generator 或 durable retry。
 
@@ -119,6 +126,8 @@ Flutter 业务层获得了可重试且不泄露 transport/provider 细节的稳�
 - identity failure、一次精确 `401 unauthenticated` refresh、相同 retry URL／body 与第二次 `401`；
 - strict JSON／`no-store`、五字段 immutable receipt、UTC `DateTime`、全部 stable mappings、unknown／404／parser／network／timeout 脱敏；
 - 首次成功与 exact replay 的相同 typed success，以及 `IdentitySession` 不被关闭。
+
+7AB／`TEST-077` 另覆盖 token wait、401 refresh、HTTP 和监听清理期间的身份／close 竞态，同账号注销重登、身份流异常、迟到异常、typed 清理失败及正常同登录 token 更新。
 
 最小命令为：
 

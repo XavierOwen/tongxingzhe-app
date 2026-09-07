@@ -44,7 +44,7 @@ final class HttpOrganizationCreationGateway
     timeout: timeout,
   );
 
-  const HttpOrganizationCreationGateway._({
+  HttpOrganizationCreationGateway._({
     required this.baseUri,
     required this.identitySession,
     required this.client,
@@ -55,6 +55,7 @@ final class HttpOrganizationCreationGateway
   final IdentitySession identitySession;
   final http.Client client;
   final Duration timeout;
+  bool _closed = false;
 
   @override
   Future<OrganizationCreationResult> create({
@@ -77,47 +78,112 @@ final class HttpOrganizationCreationGateway
   }
 
   Future<OrganizationCreationResult> _request(String body) async {
-    try {
-      var access = await identitySession.accessToken();
-      if (access is! IdentitySuccess<IdentityAccessToken>) {
-        return OrganizationCreationRejected(_identityFailure(access));
+    StreamSubscription<IdentitySnapshot>? identitySubscription;
+    String? subject;
+    var identityChanged = false;
+    bool matches(IdentitySnapshot snapshot) =>
+        subject != null &&
+        snapshot.stage == IdentityStage.signedIn &&
+        snapshot.principal?.externalSubject == subject;
+    bool isCurrent() =>
+        !_closed && !identityChanged && matches(identitySession.current);
+    bool fenceWasBroken() {
+      if (_closed || identityChanged) return true;
+      try {
+        return !matches(identitySession.current);
+      } on Object {
+        return false;
       }
+    }
 
-      var response = await _send(access.value, body);
-      var root = _jsonObject(response);
-      if (response.statusCode == 401) {
-        if (_failure(response.statusCode, root) !=
-            OrganizationCreationFailureCode.unauthorized) {
-          return const OrganizationCreationRejected(
-            OrganizationCreationFailureCode.invalidResponse,
-          );
-        }
-        access = await identitySession.accessToken(forceRefresh: true);
+    const unauthorized = OrganizationCreationRejected(
+      OrganizationCreationFailureCode.unauthorized,
+    );
+
+    Future<OrganizationCreationResult> performRequest() async {
+      try {
+        subject = identitySession.current.principal?.externalSubject;
+        if (!isCurrent()) return unauthorized;
+
+        // One creation intent belongs to one uninterrupted sign-in. Comparing
+        // only the final subject would miss sign-out/sign-in ABA during IO.
+        identitySubscription = identitySession.changes.listen(
+          (snapshot) {
+            if (!matches(snapshot)) identityChanged = true;
+          },
+          onError: (Object error, StackTrace stackTrace) =>
+              identityChanged = true,
+          onDone: () => identityChanged = true,
+        );
+        if (!isCurrent()) return unauthorized;
+        var access = await identitySession.accessToken();
+        if (!isCurrent()) return unauthorized;
         if (access is! IdentitySuccess<IdentityAccessToken>) {
           return OrganizationCreationRejected(_identityFailure(access));
         }
-        response = await _send(access.value, body);
-        root = _jsonObject(response);
-      }
 
-      if (response.statusCode == 200) {
-        return OrganizationCreationSuccess(_parseReceipt(root));
+        var response = await _send(access.value, body);
+        if (!isCurrent()) return unauthorized;
+        var root = _jsonObject(response);
+        if (response.statusCode == 401) {
+          if (_failure(response.statusCode, root) !=
+              OrganizationCreationFailureCode.unauthorized) {
+            return const OrganizationCreationRejected(
+              OrganizationCreationFailureCode.invalidResponse,
+            );
+          }
+          access = await identitySession.accessToken(forceRefresh: true);
+          if (!isCurrent()) return unauthorized;
+          if (access is! IdentitySuccess<IdentityAccessToken>) {
+            return OrganizationCreationRejected(_identityFailure(access));
+          }
+          response = await _send(access.value, body);
+          if (!isCurrent()) return unauthorized;
+          root = _jsonObject(response);
+        }
+
+        final result = response.statusCode == 200
+            ? OrganizationCreationSuccess(_parseReceipt(root))
+            : OrganizationCreationRejected(_failure(response.statusCode, root));
+        return isCurrent() ? result : unauthorized;
+      } on TimeoutException {
+        if (fenceWasBroken()) return unauthorized;
+        return const OrganizationCreationRejected(
+          OrganizationCreationFailureCode.networkUnavailable,
+        );
+      } on http.ClientException {
+        if (fenceWasBroken()) return unauthorized;
+        return const OrganizationCreationRejected(
+          OrganizationCreationFailureCode.networkUnavailable,
+        );
+      } on FormatException {
+        if (fenceWasBroken()) return unauthorized;
+        return const OrganizationCreationRejected(
+          OrganizationCreationFailureCode.invalidResponse,
+        );
+      } on Object {
+        if (fenceWasBroken()) return unauthorized;
+        // Never expose provider, HTTP client, JSON, or database details.
+        return const OrganizationCreationRejected(
+          OrganizationCreationFailureCode.invalidResponse,
+        );
       }
-      return OrganizationCreationRejected(_failure(response.statusCode, root));
-    } on TimeoutException {
-      return const OrganizationCreationRejected(
-        OrganizationCreationFailureCode.networkUnavailable,
-      );
-    } on http.ClientException {
-      return const OrganizationCreationRejected(
-        OrganizationCreationFailureCode.networkUnavailable,
-      );
-    } on FormatException {
+    }
+
+    final result = await performRequest();
+    try {
+      // cancel() stops events before its cleanup Future completes. Awaiting it
+      // would hide identity changes before delivery. ignore() keeps errors typed.
+      identitySubscription?.cancel().ignore();
+    } on Object {
+      if (fenceWasBroken()) return unauthorized;
       return const OrganizationCreationRejected(
         OrganizationCreationFailureCode.invalidResponse,
       );
+    }
+    try {
+      return isCurrent() ? result : unauthorized;
     } on Object {
-      // Never expose provider, HTTP client, JSON, or database details.
       return const OrganizationCreationRejected(
         OrganizationCreationFailureCode.invalidResponse,
       );
@@ -137,7 +203,11 @@ final class HttpOrganizationCreationGateway
       .timeout(timeout);
 
   @override
-  Future<void> close() async => client.close();
+  Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
+    client.close();
+  }
 }
 
 OrganizationCreationReceipt _parseReceipt(Map<String, Object?> root) {

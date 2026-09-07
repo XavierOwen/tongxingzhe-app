@@ -1145,6 +1145,34 @@ dart run tool/check_markdown_links.dart
 Docker 使用隔离的 synthetic 数据库，执行 migration、结构／回滚 fixture、既有并发与 runtime adapter、checksum 和 dump／restore；恢复库不重跑提交型并发脚本。
 Widget 覆盖中英文、320×568／200% 字号、暗色宽屏、键盘／焦点、live region 和 48 dp 操作目标。这些证据不证明生产身份、部署端点、真实组织或 Apple／真机行为。
 
+### 3.19 组织写入请求不能借用新登录（Issue #346，MANUAL-067）
+
+用户 A 点了创建组织，请求正在等待 token；这时设备切换到用户 B。如果网关直接使用后来取得的 B token，服务端看到的是 B 的合法请求，却无法知道这其实来自 A 的旧操作。
+所以“服务端按 token 验权”和“客户端请求仍属于发起时的登录”是两层不同的保护。UI 在切号后隐藏结果，只解决显示问题，不能阻止网关继续提交。
+
+7AB 复用 invitation 网关已有的检查方式，修复 organization creation 和 owner transfer，不建立新的通用网络层。
+每次有效调用保存起始 subject，监听整个操作期间的 identity changes，并在 token、HTTP 和一次 401 刷新后重新核对。
+即使最终又登录同一账号，中间的注销也使旧请求失效；正常同一登录内的 token 更新仍可继续。
+stream 失败或结束、current 状态改变、close 和迟到异常都不能交付旧成功；失效沿用各模块的 `unauthorized`，不返回 token 或账号资料。
+
+creation 的 close 现在只关闭 client 一次；owner transfer 保留原幂等 close。两者均不关闭共享 identity。
+本次请求的监听在交付前停止，但不等待其异步清理；最后身份检查后没有额外清理等待窗口。清理失败不会向调用方抛出原始异常。
+close 发生在 token 等待期间时，HTTP 不再发出；发生在 HTTP 之后时，迟到结果被丢弃。不能把这描述为撤销已经发送或已经提交的服务端写入。
+已有 request UUID、body、单次合法 401 重试、输入校验和 failure enum 不变；身份失效优先于迟到的网络或解析错误。此优先级已显式补入 [ADR-0179](../adr/0179-organization-owner-transfer-flutter-gateway-contract.md)。owner transfer 本次仍没有新增操作页面。
+
+```bash
+flutter test --no-pub test/organization_creation test/organization_owner_transfer \
+  test/features/organization_creation test/app
+flutter test --no-pub
+dart analyze
+dart format --output=none --set-exit-if-changed lib test integration_test test_driver tool
+dart run tool/check_production_boundary.dart
+dart run tool/check_markdown_links.dart
+```
+
+可控 Future 先复现跨号 token、401 刷新、迟到成功和 close，再验证修复；既有正常请求、parser 和 App 生命周期测试继续通过。
+本切片未改 Backend 或 SQL，不重复本地数据库实验。synthetic identity／HTTP 与 CI build 不证明生产身份、真实账号切换、平台网络取消或数据库回滚。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
