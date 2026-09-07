@@ -22,6 +22,7 @@ import '../features/contact_metrics/relationship_stage_change_summary.dart';
 import '../features/contact_metrics/relationship_stage_change_summary_panel.dart';
 import '../features/home/production_home_view_model.dart';
 import '../features/organization_creation/organization_creation_dialog.dart';
+import '../features/organization_directory/organization_directory_dialog.dart';
 import '../features/plans/personal_action_plan_panel.dart';
 import '../features/project_settings/personal_follow_up_consent_opt_in_screen.dart';
 import '../features/reminders/personal_action_reminder_panel.dart';
@@ -36,6 +37,7 @@ import '../management_reports/management_report_gateway.dart';
 import '../management_reports/management_report_export_delivery.dart';
 import '../management_reports/original_region_report_gateway.dart';
 import '../organization_creation/organization_creation.dart';
+import '../organization_directory/organization_directory.dart';
 import '../plans/personal_action_plan.dart';
 import '../project_settings/personal_follow_up_consent_opt_in.dart';
 import '../reminders/personal_action_reminder.dart';
@@ -76,6 +78,7 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.interestReportGateway,
     required this.originalRegionReportGateway,
     required this.organizationCreationGateway,
+    required this.organizationDirectoryGateway,
     required this.managementReportExportDelivery,
     required this.currentRelationshipStageRepository,
     required this.deviceReminderPreferenceStore,
@@ -112,6 +115,7 @@ final class ProductionHomeShell extends StatefulWidget {
   final InterestReportGateway interestReportGateway;
   final OriginalRegionReportGateway originalRegionReportGateway;
   final OrganizationCreationGateway organizationCreationGateway;
+  final OrganizationDirectoryGateway organizationDirectoryGateway;
   final ManagementReportExportDelivery managementReportExportDelivery;
   final CurrentRelationshipStageRepository currentRelationshipStageRepository;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
@@ -405,6 +409,17 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
             ),
           ),
           PopupMenuItem<String>(
+            key: const ValueKey('organization-directory-menu-item'),
+            value: _organizationDirectoryMenuValue,
+            child: Row(
+              children: [
+                const Icon(Icons.groups_outlined, size: 18),
+                const SizedBox(width: 8),
+                Text(strings.t('organizationDirectoryTitle')),
+              ],
+            ),
+          ),
+          PopupMenuItem<String>(
             key: const ValueKey('organization-create-menu-item'),
             value: _createOrganizationMenuValue,
             child: Row(
@@ -544,6 +559,10 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
   }
 
   Future<void> _handleProjectMenuSelection(String value) async {
+    if (value == _organizationDirectoryMenuValue) {
+      await _openOrganizationDirectory();
+      return;
+    }
     if (value == _createOrganizationMenuValue) {
       await _createOrganization();
       return;
@@ -629,6 +648,17 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
     }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(text.t('organizationCreateSuccess'))),
+    );
+  }
+
+  Future<void> _openOrganizationDirectory() async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => OrganizationDirectoryDialog(
+        text: AppStrings(widget.localeCode),
+        gateway: widget.organizationDirectoryGateway,
+        appSession: widget.appSession,
+      ),
     );
   }
 
@@ -857,6 +887,7 @@ final class _ProductionContextTitle extends StatelessWidget {
 }
 
 const _createProjectMenuValue = '__create_personal_project__';
+const _organizationDirectoryMenuValue = '__organization_directory__';
 const _createOrganizationMenuValue = '__create_organization__';
 const _manageQuestionnaireMenuValue = '__manage_questionnaire__';
 const _projectSettingsMenuValue = '__project_settings__';

@@ -25,6 +25,7 @@ import '../management_reports/management_report_gateway.dart';
 import '../management_reports/management_report_export_delivery.dart';
 import '../management_reports/original_region_report_gateway.dart';
 import '../organization_creation/organization_creation.dart';
+import '../organization_directory/organization_directory.dart';
 import '../organization_directed_account_invitation/organization_directed_account_invitation.dart';
 import '../organization_owner_transfer/organization_owner_transfer.dart';
 import '../plans/personal_action_plan.dart';
@@ -67,6 +68,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
   LocalDatabase? _database;
   IdentitySession? _identitySession;
   OrganizationCreationGateway? _organizationCreationGateway;
+  OrganizationDirectoryGateway? _organizationDirectoryGateway;
   OrganizationDirectedAccountInvitationGateway?
   _organizationDirectedAccountInvitationGateway;
   OrganizationOwnerTransferGateway? _organizationOwnerTransferGateway;
@@ -109,6 +111,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       :final database,
       :final identitySession,
       :final organizationCreationGateway,
+      :final organizationDirectoryGateway,
       :final organizationDirectedAccountInvitationGateway,
       :final organizationOwnerTransferGateway,
       :final appSession,
@@ -134,6 +137,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       _database = database;
       _identitySession = identitySession;
       _organizationCreationGateway = organizationCreationGateway;
+      _organizationDirectoryGateway = organizationDirectoryGateway;
       _organizationDirectedAccountInvitationGateway =
           organizationDirectedAccountInvitationGateway;
       _organizationOwnerTransferGateway = organizationOwnerTransferGateway;
@@ -168,6 +172,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       startup.appSession.close(),
       startup.identitySession.close(),
       startup.organizationCreationGateway.close(),
+      startup.organizationDirectoryGateway.close(),
       startup.organizationDirectedAccountInvitationGateway.close(),
       startup.organizationOwnerTransferGateway.close(),
       startup.syncEngineFactory?.close() ?? Future<void>.value(),
@@ -197,6 +202,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
     unawaited(_appSession?.close());
     unawaited(_identitySession?.close());
     unawaited(_organizationCreationGateway?.close());
+    unawaited(_organizationDirectoryGateway?.close());
     unawaited(_organizationDirectedAccountInvitationGateway?.close());
     unawaited(_organizationOwnerTransferGateway?.close());
     unawaited(_syncEngineFactory?.close());
@@ -260,6 +266,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
             :final interestReportGateway,
             :final originalRegionReportGateway,
             :final organizationCreationGateway,
+            :final organizationDirectoryGateway,
             :final managementReportExportDelivery,
             :final currentRelationshipStageRepository,
             :final deviceReminderPreferenceStore,
@@ -296,6 +303,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
               interestReportGateway: interestReportGateway,
               originalRegionReportGateway: originalRegionReportGateway,
               organizationCreationGateway: organizationCreationGateway,
+              organizationDirectoryGateway: organizationDirectoryGateway,
               managementReportExportDelivery: managementReportExportDelivery,
               currentRelationshipStageRepository:
                   currentRelationshipStageRepository,
@@ -340,6 +348,7 @@ class _ReadyApp extends StatefulWidget {
     required this.interestReportGateway,
     required this.originalRegionReportGateway,
     required this.organizationCreationGateway,
+    required this.organizationDirectoryGateway,
     required this.managementReportExportDelivery,
     required this.currentRelationshipStageRepository,
     required this.deviceReminderPreferenceStore,
@@ -374,6 +383,7 @@ class _ReadyApp extends StatefulWidget {
   final InterestReportGateway interestReportGateway;
   final OriginalRegionReportGateway originalRegionReportGateway;
   final OrganizationCreationGateway organizationCreationGateway;
+  final OrganizationDirectoryGateway organizationDirectoryGateway;
   final ManagementReportExportDelivery managementReportExportDelivery;
   final CurrentRelationshipStageRepository currentRelationshipStageRepository;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
@@ -465,6 +475,7 @@ final class _ReadyAppState extends State<_ReadyApp> {
         interestReportGateway: widget.interestReportGateway,
         originalRegionReportGateway: widget.originalRegionReportGateway,
         organizationCreationGateway: widget.organizationCreationGateway,
+        organizationDirectoryGateway: widget.organizationDirectoryGateway,
         managementReportExportDelivery: widget.managementReportExportDelivery,
         currentRelationshipStageRepository:
             widget.currentRelationshipStageRepository,

@@ -1026,6 +1026,44 @@ production composition 注入独立 Postgres store，复用 generic verifier 与
 7U 不实现 Flutter、UI、全 App 搜索、账号／成员目录、owner flag、分页、项目创建／选择、组织恢复／删除、缓存、离线或生产配置。
 本地 synthetic PostgreSQL／HTTP 和 CI 不证明 production identity、部署、真实组织或真人平台操作。
 
+#### Slice 7V：在 App 查看我的组织
+
+7V／Issue #333 消费 7U 的只读合同，增加独立 Flutter gateway、App composition 与现有项目菜单中的“我的组织”对话框。
+它复用 ADR-0182、既有 IdentitySession、pathless Backend URI validator 与 Material 3，不改变 Backend、数据库、成员关系或项目权限。
+
+`OrganizationDirectoryGateway.list()` 返回 `OrganizationDirectorySuccess(organizations)` 或 `OrganizationDirectoryRejected(code)`；`close()` 沿用既有 client ownership。
+entry 是不可变的 `OrganizationDirectoryEntry`，仅含 `organizationWorkspaceId` 与 `organizationName`；success 在构造时持有不可修改的列表。
+typed failure 固定为 notConfigured、unauthorized、invalidRequest、forbidden、serviceUnavailable、networkUnavailable、invalidResponse，不引入 POST 的 conflict、invalidJson 或 payloadTooLarge。
+
+HTTP adapter 只发送 `GET /v1/organizations`，使用 Accept JSON 与 Bearer，不发送 query、selector、body、Content-Type 或幂等键。
+响应必须具备 JSON UTF-8 与 no-store；200 必须是精确两字段 root、固定 `organization-directory:v1`、精确两字段 row、小写 canonical UUID、ASCII-space btrim 后非空的原名称，且无重复 UUID。
+顺序、同名组织和历史原名称原样保留，不 trim、不按创建 validator 重验、不排序、不合并、不截断数量。
+只有合法 headers 与 exact error shape 的 `401 unauthenticated` 才触发一次 token refresh，并向同一 URL 重发无 body GET；第二次 401 为 unauthorized。
+400／403／503 只映射 7U 的 exact code，network／timeout 为 networkUnavailable，其余 status、header、JSON、字段或未知异常为 invalidResponse，不输出原文。
+
+空 `BACKEND_BASE_URL` 使用无网络 deferred；非空非法配置同步失败，URI 验证通过后才分配 client。
+HTTP gateway 接管传入 client，重复 close 只关闭一次；不关闭 IdentitySession，不把目录或失败写入 Drift、偏好、日志、缓存、离线或同步队列。
+`AppDependencies.organizationDirectoryGatewayBuilder` 接收同一 startup IdentitySession，production 使用 factory，缺省 builder 使用 deferred。
+`AppStartupReady.organizationDirectoryGateway` 暴露同一实例，后续启动失败、启动完成前移除 App 与正常 dispose 都只关闭已创建的 gateway 一次。
+该实例经 `_ReadyApp` 传给 `ProductionHomeShell`，仍只由 composition root 关闭。
+
+所有 ready 登录账号都能从 `project-context-menu` 打开目录，不按当前 personal／organization、owner 或 capability 隐藏；未登录没有入口。
+打开时只加载一次，之后只显式刷新，不自动轮询；busy 防止重复刷新，但读取期间仍能关闭。
+每次刷新先清除旧列表，失败不显示过期数据或伪装为空结果。成功显示原名称与可选择文本形式的完整组织 UUID，同名条目仍可区分。
+组织行不是可点击的上下文选择器，不提供 owner、成员、项目、邀请或管理操作。查看、刷新、关闭均不创建／选择项目，不改变当前 context，也不刷新项目目录。
+创建成功后，下次打开“我的组织”重新读取；本切片不增加自动跳转或创建后的后台列表请求。
+
+对话框捕获开窗时的 ready appUserId，并观察 AppSession。账号不再 ready 或 appUserId 改变时清空数据、禁用再读取并忽略迟到结果。
+该失效状态在本次开窗内保持；同一对话框不能在账号恢复后复活旧列表。相同账号的项目变化不被当成目录 selector。
+关闭／移除后忽略晚到结果，不关闭共享 AppSession 或 gateway，也不声称取消已经发送的 Backend 请求。
+
+初始 loading、成功、空目录、刷新和全部失败均有中英文状态；使用 live region、键盘／Escape／焦点返回与 48 dp 控件。
+长名称和完整 UUID 必须可读，列表自然滚动，不因 320×568／200% 字号、宽屏或暗色主题裁切必要内容。
+沿用局部 Material 对话框，不增加主导航、route、视觉系统、持久化或第二套产品文档。
+
+`TEST-072` 与 `MANUAL-062` 覆盖 gateway、身份与关闭边界、真实 App 接线、UI 状态和相关回归。
+synthetic widget／视觉与六平台 build 不证明 production identity、部署、真实组织或真人平台操作。
+
 ### 5.8 分析、指标与报告
 
 #### 5.8.1 统计单位和核心口径
@@ -2532,6 +2570,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-059` | 学习文档必须说明 7S 的两操作 typed gateway、两个 immutable receipt／result、共用 failure enum、输入在 token 前校验、固定 route／body／headers、一次严格 401 刷新、相同请求重试、strict parser、UTC 毫秒与 168 小时、deferred／非法配置、client ownership、内存结果、同一 IdentitySession 与三类启动／关闭路径。提供 focused／完整 Flutter tests、配置变体、analyzer、格式与链接命令，明确不提供 UI、目录、投递或生产／真人平台证据。 |
 | `MANUAL-060` | 学习文档必须说明 7T 的项目菜单创建入口、唯一原名称输入、Backend 资格边界、隐藏 UUID-v4、同意图重试、busy 防重、不确定结果冻结／放弃确认、明确拒绝后的编辑、仅对话框内存、身份失效后清理、十种错误与成功不切换上下文。提供 focused／完整 tests、analyzer、格式、生产边界与链接检查，说明 synthetic UI／视觉、六平台 build 与真实身份／运行时的区别。 |
 | `MANUAL-061` | 学习文档必须说明 7U 的独立当前账号组织目录、projectless 与空列表、exact active identity、单次时间取样／查询快照、成员半开区间、deleted 排除、名称与 UUID 稳定顺序、只读 bridge／ACL、GET 与既有 POST 共存、认证优先与无 query／body、strict response／错误、无任意截断和读取后重新授权。提供 DB／Backend／runtime／Docker 验证命令，区分 synthetic 与生产、Flutter／UI、真实组织和真人平台。 |
+| `MANUAL-062` | 学习文档必须说明 7V 的独立 Flutter directory gateway、不可修改列表、无 body GET、strict response、七类失败与单次 401、配置与 client ownership、App 三类关闭路径、项目菜单只读入口、开窗／显式刷新、刷新先清空、身份失效与迟到结果隔离、完整 UUID 和不切换项目。提供相关测试／分析／格式／边界／链接命令，并区分 synthetic UI、六平台 build 与生产、真实组织和真人平台。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -2781,6 +2820,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-069` | 7S 的 focused Flutter tests 必须覆盖两操作 API／独立 receipt／result、输入 UUID lowercase 与 token 前 short-circuit、固定 URL／body／headers、精确 401 单次刷新与相同 retry request、全部 typed failure、strict JSON／no-store／keys／UUID／UTC 日期／请求绑定／168 小时、旧 receipt 不按设备时间拒绝、deferred 无网络、非法配置同步失败和 client close ownership。composition／widget tests 覆盖同一 identity／gateway、缺省 deferred、后续启动失败、启动完成前移除 App 与正常 dispose 的单次 close；不把本地证据写成 Backend、数据库、生产身份、UI 或真人平台验收。 |
 | `TEST-070` | 7T 的 Widget／App tests 必须覆盖个人／组织 ready 入口与未登录隐藏、原名称与 UUID-v4、首次意图与同参重试、busy 防双击、全部 failure、明确拒绝编辑新意图、不确定结果冻结与放弃确认、异常脱敏、身份失效／切换与迟到结果、成功 receipt 和保持当前 context、Keyboard／Escape／焦点返回、live region、中英文、320×568／200% 字号及宽屏。既有 creation gateway／生命周期与 consent UUID 回归继续通过；本地 synthetic 和 CI build 不证明 production identity、部署或真人平台运行。 |
 | `TEST-071` | 7U 必须用结构 check／回滚 fixture 覆盖 exact identity、原值长度、active／inactive／去关联、空目录、projectless、当前成员半开区间、恢复期／个人／跨账号排除、同名组织顺序与 owner／ACL／无写入，并确认 PUBLIC 无函数权限；用 Backend unit／real HTTP／composition／runtime integration 覆盖 GET 与 POST 共存、raw path／query、Bearer 优先、声明 body、store 缺省、一次参数化 SQL、Promise gate、strict 两字段 row／固定 root、重复 UUID、稳定错误与 JSON／no-store。既有 Docker rebuild／checksum／dump／restore 和 CI 继续通过；不把 synthetic 证据扩大为生产或真人平台验收。 |
+| `TEST-072` | 7V 的 gateway／widget／App tests 必须覆盖不可修改列表、顺序／同名保留、GET URL／headers／无 body、strict root／row／UUID／名称／重复 ID、七类失败、合法 401 单次刷新、deferred／非法配置、client ownership与三类 App close；覆盖 personal／organization ready 菜单、未登录隐藏、同一 gateway、开窗／刷新／busy、空列表与失败分离、刷新先清空、账号失效／切换／迟到结果、关闭和不改变当前项目；检查中英文、键盘／Escape／焦点、live region、48 dp、长文本／UUID、320×568／200% 字号与暗色宽屏。完整 Flutter tests、analyzer、format、生产边界和链接通过，synthetic 与 build 不等于生产或真人平台验收。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3092,6 +3132,9 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 
 7U／#332 增加当前账号的只读组织目录 DB reader 与 GET，包含尚无项目的组织，保持成员范围与项目权限分离。
 它尚不提供 Flutter 列表、项目创建／选择、成员治理或恢复期操作。
+
+7V／#333 接入同一合同的 Flutter gateway、App 生命周期与“我的组织”只读对话框。
+它在开窗和显式刷新时读取，身份失效时清空，并保持当前项目；仍不提供组织项目、成员治理、邀请 UI 或恢复期操作。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 
