@@ -286,6 +286,7 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `ORG-015` | claim 只保存 invitation、workspace、可去关联的 inviter／target internal user、issued／expiry 和可空 acceptance／membership 字段；expiry 固定为 issued 后连续 168 小时。exact identity 仍须解析 active actor；随后创建与接受 replay 先于 owner、membership、expiry 或 recovery 状态检查。漂移或 tombstone 返回 conflict，账号引用去关联后统一 forbidden；接受成功只原子建立一条 organization membership，不建立 project membership、capability 或 owner assignment。 |
 | `ORG-016` | 首次创建／接受使用 request lock、按 UUID 排序的受影响 app-user row locks、organization governance lock、按 UUID 排序的 membership locks，并在锁后重读 claim、tombstone、账号、workspace 和 membership。四个 operation-specific bridge／writer 使用 `VOLATILE SECURITY DEFINER`、`pg_catalog` search path、受控 owner 和最小 ACL；固定 result、SQLSTATE／message、Backend code 与 JSON／`no-store` 传输合同。 |
 | `ORG-017` | invitation audit 追加且不可变，只保存固定 event、contract、invitation、workspace、接受后的 membership 与数据库时间；响应、失败审计和结构化日志不得保存身份、邮箱、名称、token、请求原文或数据库原文。组织恢复期冻结新 claim，终结清除按 creation → directed invitation → owner transfer family 取锁，先留 family／UUID tombstone；本票不实现 purge writer。 |
+| `ORG-018` | 当前账号的组织目录只列出 active app user 在读取时具有有效组织成员关系、且未删除的 organization workspace 名称和标识；包含尚无项目的组织，空列表正常，同名组织不合并。目录不授予项目、owner 或 capability，不成为全 App 搜索、成员或恢复期目录。 |
 
 #### Slice 7B Spec：固定组织原子创建与首位所有者合同
 
@@ -984,6 +985,46 @@ fake identity、MockClient、analyzer 与 widget tests 只证明本地 Flutter �
 `TEST-070` 和 `MANUAL-060` 覆盖 UI 状态、请求意图、身份边界、既有 gateway／生命周期回归与证据范围。
 本切片不修改 Backend、数据库、权限、邀请 UI／目录／投递、组织项目／context discovery／selection、跨重启恢复、删除或生产配置。
 synthetic widget／视觉检查和六平台 build 不等于真实身份、部署服务、真实组织或真人平台操作已经验收。
+
+#### Slice 7U：当前账号的只读组织目录
+
+7U／Issue #332 提供“我的组织目录”的 PostgreSQL reader 与 Backend GET，决策见 [ADR-0182](./adr/0182-organization-directory-is-membership-scoped.md)。
+它只返回可信当前 active 账号具有有效 organization membership、且 `deleted_at IS NULL` 的 organization workspace。
+同一账号的个人 workspace、其他账号组织、future／ended membership 和恢复期组织不在结果内。
+目录包含尚无项目的组织，不依赖 owner、project membership、questionnaire、管理分析或其他 capability；空目录是正常结果。
+
+0089 增加 `app_data.list_organizations_for_identity_v1(trusted_issuer text, trusted_subject text)`，仅返回 `organization_workspace_id uuid` 与 `organization_name text`。
+identity 必须按原 issuer／subject 精确查找，不 trim、normalize、bootstrap 或执行 7A 创建资格检查。
+NULL、去掉 U+0020 后空值、原 issuer 超过 2048 字符或原 subject 超过 512 字符返回 `22023 invalid organization directory identity`。
+没有映射到 active app user 时统一 `42501 organization directory forbidden`，不区分未知、inactive、deletion_pending、deleted 或去关联。
+
+一次 `clock_timestamp()` 取样与同一个 SQL 查询快照同时验证 active user、organization membership 的 `[active_from_utc,inactive_from_utc)` 和 workspace 状态。
+结果按原名称 `COLLATE "C"`、workspace UUID 排序，名称原样返回，同名组织不合并；不分页，不设任意数量上限或静默截断。
+这是读取时的目录快照，不保证响应后资格仍有效；后续操作仍单独重新授权，不增加读锁协议或写入审计。
+reader 为 VOLATILE、SECURITY DEFINER、固定 `search_path=pg_catalog`，复用既有可信 owner；显式撤销 PUBLIC 的函数权限，runtime 仅获该函数 EXECUTE，不获底表 SELECT 或新的 private 权限。
+
+唯一读取入口为 `GET /v1/organizations`，与既有 POST 创建按 method 共存；它取代 7E 对该 GET 尚未实现时的 404 行为，不改变 POST 合同。
+router 只匹配 canonical raw path。wrong method、encoded／dot segment、重复／尾 slash 或 extra path 返回通用 404，不认证、不读 body、不调用 store。
+有效 GET 顺序为 strict Bearer → generic identity verifier → 拒绝任何 query（含裸 `?`）或声明 body → 检查 dedicated store → 一次参数化 reader → await → response。
+GET 不解析 body；`Content-Length` 缺省或精确 `0` 且无 `Transfer-Encoding` 才算无 body。复用既有声明检查，不引入 GET JSON reader。
+
+成功 `200` root 精确为：
+
+```json
+{"organization_directory_contract_id":"organization-directory:v1","organizations":[]}
+```
+
+数组每项精确包含 `organization_workspace_id` 与 `organization_name`。UUID 必须是小写 canonical 形状，名称是去掉两端 U+0020 后非空的原数据库字符串。
+不把 7B／0084 的新建名称上限或 Unicode validator 倒灌到旧组织的读取；不修剪、改名、合并或重新排序。
+错误字段／类型、非法 UUID／名称、重复 UUID 或未知数据库结果失败关闭。响应不附加 owner、membership、project、能力、业务时间或账号资料。
+
+错误 root 精确为 `{ "error": { "code": "stable_code" } }`：query／声明 body 为 `400 invalid_organization_directory_request`，未认证为 `401 unauthenticated`，exact DB forbidden 为 `403 organization_directory_forbidden`，缺配置、无效 trusted identity、parser 或未知异常为 `503 organization_directory_unavailable`。
+所有响应固定 JSON UTF-8 与 no-store，不回传或记录 token、身份、SQL、原始异常或目录内容。
+production composition 注入独立 Postgres store，复用 generic verifier 与 pool，不增加环境变量或数据库连接。
+
+`TEST-071` 与 `MANUAL-061` 覆盖数据库、HTTP、runtime bridge、ACL 与恢复验证。
+7U 不实现 Flutter、UI、全 App 搜索、账号／成员目录、owner flag、分页、项目创建／选择、组织恢复／删除、缓存、离线或生产配置。
+本地 synthetic PostgreSQL／HTTP 和 CI 不证明 production identity、部署、真实组织或真人平台操作。
 
 ### 5.8 分析、指标与报告
 
@@ -2490,6 +2531,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-058` | 学习文档必须说明 7R 两个 raw POST route、create 两字段／accept 空 object、认证先于 query／path／store／body、generic verifier 与 7A 分离、actual-byte inclusive 1 MiB、UUID lowercase、两个 store method 与独立五字段 receipt、一次对应 0087 bridge、Promise gate、固定错误、non-enumeration 和 JSON／no-store。提供 unit／route／composition／runtime integration 命令，并区分本地 synthetic、数据库、production identity、部署、邮件、Flutter、UI 与真人平台证据。 |
 | `MANUAL-059` | 学习文档必须说明 7S 的两操作 typed gateway、两个 immutable receipt／result、共用 failure enum、输入在 token 前校验、固定 route／body／headers、一次严格 401 刷新、相同请求重试、strict parser、UTC 毫秒与 168 小时、deferred／非法配置、client ownership、内存结果、同一 IdentitySession 与三类启动／关闭路径。提供 focused／完整 Flutter tests、配置变体、analyzer、格式与链接命令，明确不提供 UI、目录、投递或生产／真人平台证据。 |
 | `MANUAL-060` | 学习文档必须说明 7T 的项目菜单创建入口、唯一原名称输入、Backend 资格边界、隐藏 UUID-v4、同意图重试、busy 防重、不确定结果冻结／放弃确认、明确拒绝后的编辑、仅对话框内存、身份失效后清理、十种错误与成功不切换上下文。提供 focused／完整 tests、analyzer、格式、生产边界与链接检查，说明 synthetic UI／视觉、六平台 build 与真实身份／运行时的区别。 |
+| `MANUAL-061` | 学习文档必须说明 7U 的独立当前账号组织目录、projectless 与空列表、exact active identity、单次时间取样／查询快照、成员半开区间、deleted 排除、名称与 UUID 稳定顺序、只读 bridge／ACL、GET 与既有 POST 共存、认证优先与无 query／body、strict response／错误、无任意截断和读取后重新授权。提供 DB／Backend／runtime／Docker 验证命令，区分 synthetic 与生产、Flutter／UI、真实组织和真人平台。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -2738,6 +2780,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-068` | 7R 的 Backend handler／store、真实本地 HTTP、production composition 与 PostgreSQL runtime integration 必须覆盖两个 raw POST route、无认证 404、认证先于 query（含空 query）／path／store／body、generic verifier 分类、create 两字段／accept 空 object、exact keys／types／UUID canonicalization、actual-byte inclusive 1 MiB／chunked／多字节边界、一次对应 0087 bridge、两个 strict receipt 的请求绑定／有效日期／168 小时、首次与 replay 200、400／401／403／409／413／503、unknown 与 recovery non-enumeration、Promise gate、JSON／no-store 与脱敏。既有 0087 fixture／concurrency／ACL／restore 继续运行；这些 synthetic 证据不证明 production identity、部署、邮件、Flutter、UI、Apple 或真人平台。 |
 | `TEST-069` | 7S 的 focused Flutter tests 必须覆盖两操作 API／独立 receipt／result、输入 UUID lowercase 与 token 前 short-circuit、固定 URL／body／headers、精确 401 单次刷新与相同 retry request、全部 typed failure、strict JSON／no-store／keys／UUID／UTC 日期／请求绑定／168 小时、旧 receipt 不按设备时间拒绝、deferred 无网络、非法配置同步失败和 client close ownership。composition／widget tests 覆盖同一 identity／gateway、缺省 deferred、后续启动失败、启动完成前移除 App 与正常 dispose 的单次 close；不把本地证据写成 Backend、数据库、生产身份、UI 或真人平台验收。 |
 | `TEST-070` | 7T 的 Widget／App tests 必须覆盖个人／组织 ready 入口与未登录隐藏、原名称与 UUID-v4、首次意图与同参重试、busy 防双击、全部 failure、明确拒绝编辑新意图、不确定结果冻结与放弃确认、异常脱敏、身份失效／切换与迟到结果、成功 receipt 和保持当前 context、Keyboard／Escape／焦点返回、live region、中英文、320×568／200% 字号及宽屏。既有 creation gateway／生命周期与 consent UUID 回归继续通过；本地 synthetic 和 CI build 不证明 production identity、部署或真人平台运行。 |
+| `TEST-071` | 7U 必须用结构 check／回滚 fixture 覆盖 exact identity、原值长度、active／inactive／去关联、空目录、projectless、当前成员半开区间、恢复期／个人／跨账号排除、同名组织顺序与 owner／ACL／无写入，并确认 PUBLIC 无函数权限；用 Backend unit／real HTTP／composition／runtime integration 覆盖 GET 与 POST 共存、raw path／query、Bearer 优先、声明 body、store 缺省、一次参数化 SQL、Promise gate、strict 两字段 row／固定 root、重复 UUID、稳定错误与 JSON／no-store。既有 Docker rebuild／checksum／dump／restore 和 CI 继续通过；不把 synthetic 证据扩大为生产或真人平台验收。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3046,6 +3089,9 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 
 7T／#330 在现有项目菜单接通组织创建对话框，复用已交付 creation gateway，保护同意图重试并保持当前项目。
 它不提供邀请页面、组织项目或上下文发现，也不提供跨重启请求恢复；不能据此宣称组织治理闭环已经完成。
+
+7U／#332 增加当前账号的只读组织目录 DB reader 与 GET，包含尚无项目的组织，保持成员范围与项目权限分离。
+它尚不提供 Flutter 列表、项目创建／选择、成员治理或恢复期操作。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 

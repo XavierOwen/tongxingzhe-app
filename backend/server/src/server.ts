@@ -135,6 +135,10 @@ import {
   type OrganizationCreationStore,
 } from "./organization-creation.js";
 import {
+  listOrganizationDirectory,
+  type OrganizationDirectoryStore,
+} from "./organization-directory.js";
+import {
   handleOrganizationOwnerTransfer,
   matchOrganizationOwnerTransferRequestTarget,
   type OrganizationOwnerTransferStore,
@@ -196,6 +200,7 @@ export interface BackendServerDependencies
   readonly organizationCreationIdentityVerifier?:
     OrganizationCreationIdentityVerifier;
   readonly organizationCreationStore?: OrganizationCreationStore;
+  readonly organizationDirectoryStore?: OrganizationDirectoryStore;
   readonly organizationOwnerTransferStore?: OrganizationOwnerTransferStore;
   readonly organizationDirectedAccountInvitationStore?:
     OrganizationDirectedAccountInvitationStore;
@@ -268,6 +273,32 @@ export function createBackendServer(
     if (request.method === "GET" && request.url === "/healthz") {
       response.statusCode = 200;
       response.end(JSON.stringify({ status: "ok" }));
+      return;
+    }
+
+    // 上方 raw guard 已拒绝归一化别名；GET 只使用 generic identity 与独立目录 store。
+    if (
+      request.method === "GET" &&
+      requestUrl.pathname === "/v1/organizations"
+    ) {
+      const result = await listOrganizationDirectory(
+        {
+          authorization: request.headers.authorization,
+          hasQuery: (request.url ?? "").includes("?"),
+          hasBody: requestDeclaresBody(request.headers),
+        },
+        {
+          identityVerifier: dependencies.identityVerifier,
+          ...(dependencies.organizationDirectoryStore === undefined
+            ? {}
+            : {
+              organizationDirectoryStore:
+                dependencies.organizationDirectoryStore,
+            }),
+        },
+      );
+      response.statusCode = result.status;
+      response.end(JSON.stringify(result.body));
       return;
     }
 
