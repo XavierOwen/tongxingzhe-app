@@ -301,6 +301,7 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `ORG-019` | 无下游关系成员可自助结束本人当前、尚未安排结束的组织 membership。首次执行在锁后确认 active exact identity、未删除组织、无仍有效或未来有效 owner assignment、无该 membership 的任何项目成员历史、无本人在本组织未结束的对象分配；否则整体 forbidden。不级联关闭权限或清除缓存，不冒充完整组织退出。 |
 | `ORG-020` | self-leave 使用独立 `organization-membership-self-leave:v1` claim、request lock、tombstone 和 value-free audit；request → actor row → governance → membership 锁后取一次数据库时间用于授权、membership end、claim、audit 与 receipt。相同 request、active actor、workspace 精确重放旧结果，重新入组后旧请求不得结束新 membership。drift、去关联或同 family tombstone 固定 conflict；runtime 仅可执行 exact identity bridge。 |
 | `ORG-021` | 只有 active 的绑定 target，才能按已知 invitation UUID 预览未接受、未过期且组织可加入的邀请名称与有效期。预览不列出 workspace、成员、inviter、target 或权限，不修改数据，不缓存，不保留接受资格；未知、错误收件人、过期、已接受、去关联、已有当前 membership 或恢复期一律 forbidden。接受仍按 ORG-013–ORG-017 锁后重验。 |
+| `ORG-022` | 组织写入意图绑定发起时的同一次登录。token 等待、HTTP、一次 401 刷新及重试期间，换账号、注销再登录、身份流失效或 gateway close 均阻止旧请求继续发出或交付结果；不借新账号凭据延续旧意图。已发送请求不承诺撤销服务端事实，Backend 仍独立检查实际 bearer actor 的权限。 |
 
 #### Slice 7B Spec：固定组织原子创建与首位所有者合同
 
@@ -1205,6 +1206,22 @@ AppSession 在异步清除旧缓存前发布非 ready 状态，隐藏旧账号�
 界面采用既有 Material 3，对关键状态置顶并保证窄屏、大字号、键盘、焦点和 live region 可用。
 `TEST-076`／`MANUAL-066` 覆盖数据库权限与只读边界、Backend、gateway、UI、composition 及会话切换。
 本票不实现创建邀请 UI、邮件投递、未注册账号、分享链接、收件箱、revoke、审批、项目成员或 capability；本地 PostgreSQL／Flutter 和 CI 不证明生产身份、部署或真实 Apple／设备行为。
+
+#### Slice 7AB：组织写入意图不跨登录
+
+7AB／Issue #346 把已用于 invitation／self-leave 的登录连续性检查补到 organization creation 和 owner transfer 两个 HTTP gateway。
+它修复的是客户端意图与凭据不一致：UI 丢弃迟到结果，不能阻止仍在等待 token 的网关继续写入。
+
+有效请求开始时捕获登录主体，并在整个操作期间监听 identity changes。只比较最终 subject 不够，因为注销后重新登录同一账号也必须结束旧意图。
+首次 token、HTTP、合法 401 刷新及第二次 HTTP 后均复核；stream 失败／结束、current 状态变化与 close 也会使请求失效。
+身份失效优先映射各模块既有 `unauthorized`，包括迟到异常；正常同一登录内的 token 更新不视为换账号。
+最后身份检查之后不等待监听清理，避免清理等待期间再次出现身份变化窗口；清理异常不得逸出 typed result。[ADR-0179](./adr/0179-organization-owner-transfer-flutter-gateway-contract.md) 已显式补入此次优先级与生命周期修订。
+保持原始 body、request UUID、一次合法 401 重试、strict receipt 和输入校验顺序，不新增错误类别或含身份资料的日志。
+
+creation client close 改为幂等，owner transfer 保持幂等 close。等待 token 时 close 后不再发送；HTTP 已发后 close 不再交付成功；有效的 close 后调用不取 token。
+两者只关闭自有 client，不关闭共享 `IdentitySession`。已发出的写入可能完成，客户端检查不是服务端回滚，也不替代 Backend 的权限校验。
+creation 已有操作页面；owner transfer 在本切片仍只有 gateway 与 composition，没有新增操作 UI。
+`TEST-077`／`MANUAL-067` 覆盖两个模块的先红后绿复现及既有 UI／composition 回归；不修改 Backend／SQL，不重复未改的本地 DB 实验，不把 synthetic 或 CI build 当生产身份与真人平台证明。
 
 ### 5.8 分析、指标与报告
 
@@ -2717,6 +2734,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-064` | 学习文档必须说明 7X 的不可变 receipt／十类失败、输入先验、strict POST 与响应、单次 401 保留请求意图、receipt 不是当前成员状态、配置与 client ownership、同一 identity／gateway、三类 App close 及 focused／完整 Flutter 验证命令；明确没有 UI、UUID 生成、目录刷新、完整退出、缓存清除或生产证明。 |
 | `MANUAL-065` | 学习文档说明 7Z 的明确选择与确认、匹配 workspace 预清、清除失败零 HTTP、其他缓存与锁保持、旧请求代次、原账号及 token／401 身份绑定、同窗口 UUID 重试与放弃确认、历史 receipt 与目录重读，以及 focused／完整 Flutter 验证命令；区分 synthetic 清除、完整组织退出与真实平台证据。 |
 | `MANUAL-066` | 学习文档说明 7AA 仅绑定收件人的入组前预览、只读和非枚举边界、固定四字段与认证顺序、预览后资格可变、未知接受结果直接同 ID 重试、历史回执后重读目录、不切项目、会话立即失效及验证命令；区分 synthetic 与生产／真机证据。 |
+| `MANUAL-067` | 学习文档说明 7AB 的请求意图与 bearer actor 区别、UI 丢弃结果的局限、token／HTTP／401 的登录连续性、同账号注销重登、close 和迟到异常；提供 focused／完整 Flutter 验证命令，说明不改变服务端权限且不重复未改的本地 DB 实验。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -2971,6 +2989,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-074` | 7X gateway／App tests 必须覆盖四字段 receipt、十类失败、输入先于 token／网络、固定 POST／headers／body、strict keys／lowercase UUID／workspace echo／UTC 毫秒、全部 exact error code、合法 401 单次刷新且 URL／UUID／body 不变、非法 401 不刷新、网络／timeout 与未知异常、deferred／valid／invalid 配置、client 只关一次、同一 session／gateway、三类 App close。完整 Flutter tests、analyzer、format、生产边界、链接与 CI 通过，不重复执行未改变的数据库实验，也不把 synthetic 当完整退出或真人平台证明。 |
 | `TEST-075` | 7Z 覆盖匹配／其他 workspace／无缓存、已有锁保持、read／decode／delete 失败、旧请求与排队写入、原账号预清及清除期间换账号；覆盖明确选择／取消、busy 防重、十类拒绝、同 UUID 主动重试、放弃确认、历史 receipt 后重读不盲删、同一 App gateway、不切项目、迟到结果与 dispose 隔离，以及 token wait／401 refresh／注销再登录的身份竞态。Widget 检查中英文、小屏 200% 字号、暗色、键盘／焦点、live region 和触控目标；完整 Flutter、analyzer、format、生产边界、链接和 CI 通过，不重复未改 DB 实验，不把 synthetic 写成真机清除或生产退出。 |
 | `TEST-076` | 7AA 覆盖 preview exact identity、active 绑定收件人、当前状态、墙钟有效期、原名称、只读与 ACL；Backend 覆盖原始路径、method、认证优先、无 query／body、strict 四字段、一次 SQL 和 runtime 集成。Flutter 覆盖原登录代次与 401、严格解析、明确预览与接受、十类失败、同 ID 直接重试、编辑／放弃／忙状态、会话失效和迟到结果、目录重读及不切项目；检查中英文、窄屏 200% 字号、暗色、键盘、焦点、live region 与触控目标。完整 Flutter／Backend、Docker rebuild／checksum／restore、静态检查及 CI 通过，不据此宣称生产或真机验收。 |
+| `TEST-077` | 7AB 两个 gateway 的可控 Future 测试先复现 token 等待或 401 刷新期间旧意图使用新账号 token，以及切号／close 后迟到成功；修复后覆盖换号、同账号注销重登、current 与 stream 失效、迟到异常、幂等 close，以及不阻塞交付且不逸出异常的监听清理。正常请求、同登录 token 更新、合法单次 401、相同 body／UUID、strict parser、typed failures 及原输入优先顺序继续通过；相关 UI／composition、完整 Flutter、analyzer、format、生产边界、链接和 9 个 CI job 通过，不新增 Backend 或数据库验证结论。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3298,6 +3317,9 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 7AA／#344 允许绑定收件人在“我的组织”输入已知 invitation UUID，在线核对组织名称与有效期后明确接受。
 它只增加受限预览读取并复用既有接受合同；接受结果不确定时直接同 ID 重试，成功后重读目录但不切项目。
 它不提供创建邀请页面、邀请投递、公开链接、收件箱或成员权限管理，仍不构成完整组织治理闭环。
+
+7AB／#346 修复 organization creation 和 owner transfer 网关的跨登录请求竞态，并补齐 close 后不再发送或交付成功的边界。
+它不新增所有权移交页面，也不改变服务端权限、账号编号展示或邀请投递方式。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 

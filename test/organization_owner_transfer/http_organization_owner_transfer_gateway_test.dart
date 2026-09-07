@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -213,7 +214,7 @@ void main() {
   test(
     'refreshes once for an exact 401 envelope and retries the same URL/body',
     () async {
-      final identity = _RotatingTokenIdentitySession();
+      final identity = _ControllableIdentitySession();
       final requests = <http.Request>[];
       final gateway = HttpOrganizationOwnerTransferGateway(
         baseUri: Uri.parse('https://backend.example.test'),
@@ -226,6 +227,7 @@ void main() {
         }),
       );
       addTearDown(gateway.close);
+      addTearDown(identity.close);
 
       final result = await gateway.transfer(
         requestId: _requestId,
@@ -641,6 +643,321 @@ void main() {
       expect(identity.isClosed, isFalse);
     },
   );
+
+  test('account change while awaiting a token sends no HTTP request', () async {
+    final identity = _ControllableIdentitySession();
+    final token = Completer<IdentityResult<IdentityAccessToken>>();
+    identity.accessTokenHandler = (_) => token.future;
+    var requests = 0;
+    final gateway = _gateway((_) async {
+      requests++;
+      return _json(_receiptJson());
+    }, identity: identity);
+    addTearDown(gateway.close);
+    addTearDown(identity.close);
+
+    final pending = gateway.transfer(
+      requestId: _requestId,
+      organizationWorkspaceId: _workspaceId,
+      targetOrganizationMembershipId: _targetMembershipId,
+    );
+    await identity.tokenRequested.future;
+    identity.emit(_otherIdentity);
+    token.complete(_accessToken('new-account-token'));
+
+    expect(_failureCode(await pending), _Failure.unauthorized);
+    expect(requests, 0);
+  });
+
+  test('account change while refreshing a 401 does not retry', () async {
+    final identity = _ControllableIdentitySession();
+    final refreshing = Completer<void>();
+    final token = Completer<IdentityResult<IdentityAccessToken>>();
+    identity.accessTokenHandler = (forceRefresh) async {
+      if (!forceRefresh) return _accessToken('original-token');
+      refreshing.complete();
+      return token.future;
+    };
+    var requests = 0;
+    final gateway = _gateway((_) async {
+      requests++;
+      return _error('unauthenticated', 401);
+    }, identity: identity);
+    addTearDown(gateway.close);
+    addTearDown(identity.close);
+
+    final pending = gateway.transfer(
+      requestId: _requestId,
+      organizationWorkspaceId: _workspaceId,
+      targetOrganizationMembershipId: _targetMembershipId,
+    );
+    await refreshing.future;
+    identity.emit(_otherIdentity);
+    token.complete(_accessToken('new-account-token'));
+
+    expect(_failureCode(await pending), _Failure.unauthorized);
+    expect(requests, 1);
+    expect(identity.accessTokenForceRefreshValues, [false, true]);
+  });
+
+  test('HTTP sign-out and same-account sign-in ABA is unauthorized', () async {
+    final identity = _ControllableIdentitySession();
+    final sent = Completer<void>();
+    final response = Completer<http.Response>();
+    final gateway = _gateway((_) {
+      sent.complete();
+      return response.future;
+    }, identity: identity);
+    addTearDown(gateway.close);
+    addTearDown(identity.close);
+
+    final pending = gateway.transfer(
+      requestId: _requestId,
+      organizationWorkspaceId: _workspaceId,
+      targetOrganizationMembershipId: _targetMembershipId,
+    );
+    await sent.future;
+    identity.emit(const IdentitySnapshot.signedOut());
+    identity.emit(identity.initial);
+    response.complete(_json(_receiptJson()));
+
+    expect(_failureCode(await pending), _Failure.unauthorized);
+  });
+
+  test('silent current identity drift is unauthorized', () async {
+    final identity = _ControllableIdentitySession();
+    final sent = Completer<void>();
+    final response = Completer<http.Response>();
+    final gateway = _gateway((_) {
+      sent.complete();
+      return response.future;
+    }, identity: identity);
+    addTearDown(gateway.close);
+    addTearDown(identity.close);
+
+    final pending = gateway.transfer(
+      requestId: _requestId,
+      organizationWorkspaceId: _workspaceId,
+      targetOrganizationMembershipId: _targetMembershipId,
+    );
+    await sent.future;
+    identity.setCurrentWithoutEmit(_otherIdentity);
+    response.complete(_json(_receiptJson()));
+
+    expect(_failureCode(await pending), _Failure.unauthorized);
+  });
+
+  test(
+    'identity changes stream error and done invalidate the request',
+    () async {
+      for (final endChanges in [false, true]) {
+        final identity = _ControllableIdentitySession();
+        final sent = Completer<void>();
+        final response = Completer<http.Response>();
+        final gateway = _gateway((_) {
+          sent.complete();
+          return response.future;
+        }, identity: identity);
+        addTearDown(gateway.close);
+
+        final pending = gateway.transfer(
+          requestId: _requestId,
+          organizationWorkspaceId: _workspaceId,
+          targetOrganizationMembershipId: _targetMembershipId,
+        );
+        await sent.future;
+        if (endChanges) {
+          identity.finishChanges();
+        } else {
+          identity.addChangesError(StateError('identity stream failed'));
+        }
+        response.complete(_json(_receiptJson()));
+
+        expect(_failureCode(await pending), _Failure.unauthorized);
+        await identity.close();
+      }
+    },
+  );
+
+  test('close during token wait prevents HTTP delivery', () async {
+    final identity = _ControllableIdentitySession();
+    final token = Completer<IdentityResult<IdentityAccessToken>>();
+    identity.accessTokenHandler = (_) => token.future;
+    var requests = 0;
+    final gateway = _gateway((_) async {
+      requests++;
+      return _json(_receiptJson());
+    }, identity: identity);
+
+    final pending = gateway.transfer(
+      requestId: _requestId,
+      organizationWorkspaceId: _workspaceId,
+      targetOrganizationMembershipId: _targetMembershipId,
+    );
+    await identity.tokenRequested.future;
+    await gateway.close();
+    token.complete(_accessToken('closed-gateway-token'));
+
+    expect(_failureCode(await pending), _Failure.unauthorized);
+    expect(requests, 0);
+    await identity.close();
+  });
+
+  test('close during HTTP prevents late success delivery', () async {
+    final identity = _ControllableIdentitySession();
+    final sent = Completer<void>();
+    final response = Completer<http.Response>();
+    final gateway = _gateway((_) {
+      sent.complete();
+      return response.future;
+    }, identity: identity);
+
+    final pending = gateway.transfer(
+      requestId: _requestId,
+      organizationWorkspaceId: _workspaceId,
+      targetOrganizationMembershipId: _targetMembershipId,
+    );
+    await sent.future;
+    await gateway.close();
+    response.complete(_json(_receiptJson()));
+
+    expect(_failureCode(await pending), _Failure.unauthorized);
+    await identity.close();
+  });
+
+  test(
+    'late transport and parsing failures after a fence break are unauthorized',
+    () async {
+      for (final error in <Object>[
+        http.ClientException('late old-account failure'),
+        const FormatException('late old-account parse failure'),
+      ]) {
+        final identity = _ControllableIdentitySession();
+        final sent = Completer<void>();
+        final response = Completer<http.Response>();
+        final gateway = _gateway((_) {
+          sent.complete();
+          return response.future;
+        }, identity: identity);
+        addTearDown(gateway.close);
+        addTearDown(identity.close);
+
+        final pending = gateway.transfer(
+          requestId: _requestId,
+          organizationWorkspaceId: _workspaceId,
+          targetOrganizationMembershipId: _targetMembershipId,
+        );
+        await sent.future;
+        identity.emit(_otherIdentity);
+        response.completeError(error);
+
+        expect(_failureCode(await pending), _Failure.unauthorized);
+      }
+    },
+  );
+
+  test('cleanup start is covered by the final identity check', () async {
+    late _ControllableIdentitySession identity;
+    identity = _ControllableIdentitySession(
+      onChangesCancel: () {
+        identity.setCurrentWithoutEmit(_otherIdentity);
+      },
+    );
+    final gateway = _gateway(
+      (_) async => _json(_receiptJson()),
+      identity: identity,
+    );
+    addTearDown(gateway.close);
+    addTearDown(identity.close);
+
+    final result = await gateway.transfer(
+      requestId: _requestId,
+      organizationWorkspaceId: _workspaceId,
+      targetOrganizationMembershipId: _targetMembershipId,
+    );
+
+    expect(_failureCode(result), _Failure.unauthorized);
+  });
+
+  test(
+    'cleanup gate and future errors do not delay or escape results',
+    () async {
+      for (final failCleanup in [false, true]) {
+        final cancelStarted = Completer<void>();
+        final finishCancel = Completer<void>();
+        final identity = _ControllableIdentitySession(
+          onChangesCancel: () {
+            cancelStarted.complete();
+            return finishCancel.future;
+          },
+        );
+        final gateway = _gateway(
+          (_) async => _json(_receiptJson()),
+          identity: identity,
+        );
+        addTearDown(gateway.close);
+        addTearDown(identity.close);
+
+        final resultDelivered = Completer<OrganizationOwnerTransferResult>();
+        gateway
+            .transfer(
+              requestId: _requestId,
+              organizationWorkspaceId: _workspaceId,
+              targetOrganizationMembershipId: _targetMembershipId,
+            )
+            .then(
+              resultDelivered.complete,
+              onError: resultDelivered.completeError,
+            );
+        await cancelStarted.future;
+        await Future<void>.delayed(Duration.zero);
+
+        expect(resultDelivered.isCompleted, isTrue);
+        expect(
+          await resultDelivered.future,
+          isA<OrganizationOwnerTransferSuccess>(),
+        );
+        if (failCleanup) {
+          finishCancel.completeError(StateError('test-only cleanup failure'));
+        } else {
+          finishCancel.complete();
+        }
+        await Future<void>.delayed(Duration.zero);
+      }
+    },
+  );
+
+  test(
+    'same-account identity refresh does not invalidate the request',
+    () async {
+      final identity = _ControllableIdentitySession();
+      final token = Completer<IdentityResult<IdentityAccessToken>>();
+      identity.accessTokenHandler = (_) => token.future;
+      final gateway = _gateway(
+        (_) async => _json(_receiptJson()),
+        identity: identity,
+      );
+      addTearDown(gateway.close);
+      addTearDown(identity.close);
+
+      final pending = gateway.transfer(
+        requestId: _requestId,
+        organizationWorkspaceId: _workspaceId,
+        targetOrganizationMembershipId: _targetMembershipId,
+      );
+      await identity.tokenRequested.future;
+      identity.emit(
+        IdentitySnapshot(
+          stage: IdentityStage.signedIn,
+          principal: identity.initial.principal,
+          expiresAt: DateTime.utc(2031),
+        ),
+      );
+      token.complete(_accessToken('refreshed-same-account-token'));
+
+      expect(await pending, isA<OrganizationOwnerTransferSuccess>());
+    },
+  );
 }
 
 const _contractId = 'organization-owner-transfer:v1';
@@ -665,7 +982,7 @@ FakeIdentitySession _identity() => FakeIdentitySession(
 
 HttpOrganizationOwnerTransferGateway _gateway(
   Future<http.Response> Function(http.Request) handler, {
-  FakeIdentitySession? identity,
+  IdentitySession? identity,
   http.Client? client,
   Duration timeout = const Duration(seconds: 15),
 }) => HttpOrganizationOwnerTransferGateway(
@@ -674,6 +991,13 @@ HttpOrganizationOwnerTransferGateway _gateway(
   client: client ?? MockClient(handler),
   timeout: timeout,
 );
+
+typedef _Failure = OrganizationOwnerTransferFailureCode;
+
+_Failure _failureCode(Object result) => switch (result) {
+  OrganizationOwnerTransferRejected(:final code) => code,
+  _ => throw StateError('expected rejected owner transfer result'),
+};
 
 http.Response _json(
   Object value, {
@@ -719,25 +1043,86 @@ final class _TrackingMockClient extends MockClient {
   }
 }
 
-final class _RotatingTokenIdentitySession implements IdentitySession {
+final class _ControllableIdentitySession implements IdentitySession {
+  _ControllableIdentitySession({FutureOr<void> Function()? onChangesCancel})
+    : initial = const IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: IdentityPrincipal(
+          externalSubject: 'subject-1',
+          email: 'owner@example.test',
+        ),
+      ),
+      _current = const IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: IdentityPrincipal(
+          externalSubject: 'subject-1',
+          email: 'owner@example.test',
+        ),
+      ),
+      _changes = StreamController<IdentitySnapshot>(
+        sync: true,
+        onCancel: onChangesCancel,
+      );
+
+  final IdentitySnapshot initial;
+  final StreamController<IdentitySnapshot> _changes;
   final List<bool> accessTokenForceRefreshValues = [];
+  final Completer<void> tokenRequested = Completer<void>();
+  IdentitySnapshot _current;
+  Future<IdentityResult<IdentityAccessToken>> Function(bool)?
+  accessTokenHandler;
+
+  @override
+  IdentitySnapshot get current => _current;
+
+  @override
+  Stream<IdentitySnapshot> get changes => _changes.stream;
+
+  void emit(IdentitySnapshot snapshot) {
+    _current = snapshot;
+    _changes.add(snapshot);
+  }
+
+  void setCurrentWithoutEmit(IdentitySnapshot snapshot) => _current = snapshot;
+
+  void addChangesError(Object error) => _changes.addError(error);
+
+  Future<void> finishChanges() => _changes.close();
 
   @override
   Future<IdentityResult<IdentityAccessToken>> accessToken({
     bool forceRefresh = false,
-  }) async {
+  }) {
     accessTokenForceRefreshValues.add(forceRefresh);
-    return IdentitySuccess(
-      IdentityAccessToken(
-        value: forceRefresh
-            ? 'refreshed-test-access-token'
-            : 'stale-test-access-token',
-        expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
-      ),
-    );
+    if (!tokenRequested.isCompleted) tokenRequested.complete();
+    final handler = accessTokenHandler;
+    return handler?.call(forceRefresh) ??
+        Future.value(
+          IdentitySuccess(
+            IdentityAccessToken(
+              value: forceRefresh
+                  ? 'refreshed-test-access-token'
+                  : 'stale-test-access-token',
+              expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+            ),
+          ),
+        );
   }
+
+  @override
+  Future<void> close() => _changes.close();
 
   @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw UnsupportedError('unused test-only identity method');
 }
+
+IdentitySuccess<IdentityAccessToken> _accessToken(String value) =>
+    IdentitySuccess(
+      IdentityAccessToken(value: value, expiresAt: DateTime.utc(2030)),
+    );
+
+const _otherIdentity = IdentitySnapshot(
+  stage: IdentityStage.signedIn,
+  principal: IdentityPrincipal(externalSubject: 'subject-2', email: null),
+);

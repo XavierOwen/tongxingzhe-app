@@ -86,61 +86,127 @@ final class HttpOrganizationOwnerTransferGateway
     required String requestBody,
     required String organizationWorkspaceId,
   }) async {
-    try {
-      var access = await identitySession.accessToken();
-      if (access is! IdentitySuccess<IdentityAccessToken>) {
-        return OrganizationOwnerTransferRejected(_identityFailure(access));
+    StreamSubscription<IdentitySnapshot>? identitySubscription;
+    String? subject;
+    var identityChanged = false;
+    bool matches(IdentitySnapshot snapshot) =>
+        subject != null &&
+        snapshot.stage == IdentityStage.signedIn &&
+        snapshot.principal?.externalSubject == subject;
+    bool isCurrent() =>
+        !_closed && !identityChanged && matches(identitySession.current);
+    bool fenceWasBroken() {
+      if (_closed || identityChanged) return true;
+      try {
+        return !matches(identitySession.current);
+      } on Object {
+        return false;
       }
+    }
 
-      var response = await _send(
-        access.value,
-        organizationWorkspaceId: organizationWorkspaceId,
-        requestBody: requestBody,
-      );
-      var root = _jsonObject(response);
+    const unauthorized = OrganizationOwnerTransferRejected(
+      OrganizationOwnerTransferFailureCode.unauthorized,
+    );
 
-      if (response.statusCode == 401) {
-        final firstFailure = _failure(response.statusCode, root);
-        if (firstFailure != OrganizationOwnerTransferFailureCode.unauthorized) {
-          return const OrganizationOwnerTransferRejected(
-            OrganizationOwnerTransferFailureCode.invalidResponse,
-          );
-        }
+    Future<OrganizationOwnerTransferResult> performRequest() async {
+      try {
+        subject = identitySession.current.principal?.externalSubject;
+        if (!isCurrent()) return unauthorized;
 
-        access = await identitySession.accessToken(forceRefresh: true);
+        // One owner-transfer intent belongs to one uninterrupted sign-in,
+        // including a 401 retry. A final-only comparison would miss ABA.
+        identitySubscription = identitySession.changes.listen(
+          (snapshot) {
+            if (!matches(snapshot)) identityChanged = true;
+          },
+          onError: (Object error, StackTrace stackTrace) =>
+              identityChanged = true,
+          onDone: () => identityChanged = true,
+        );
+        if (!isCurrent()) return unauthorized;
+        var access = await identitySession.accessToken();
+        if (!isCurrent()) return unauthorized;
         if (access is! IdentitySuccess<IdentityAccessToken>) {
           return OrganizationOwnerTransferRejected(_identityFailure(access));
         }
-        response = await _send(
+
+        var response = await _send(
           access.value,
           organizationWorkspaceId: organizationWorkspaceId,
           requestBody: requestBody,
         );
-        root = _jsonObject(response);
-      }
+        if (!isCurrent()) return unauthorized;
+        var root = _jsonObject(response);
 
-      if (response.statusCode == 200) {
-        return OrganizationOwnerTransferSuccess(
-          _parseReceipt(root, organizationWorkspaceId),
+        if (response.statusCode == 401) {
+          final firstFailure = _failure(response.statusCode, root);
+          if (firstFailure !=
+              OrganizationOwnerTransferFailureCode.unauthorized) {
+            return const OrganizationOwnerTransferRejected(
+              OrganizationOwnerTransferFailureCode.invalidResponse,
+            );
+          }
+
+          access = await identitySession.accessToken(forceRefresh: true);
+          if (!isCurrent()) return unauthorized;
+          if (access is! IdentitySuccess<IdentityAccessToken>) {
+            return OrganizationOwnerTransferRejected(_identityFailure(access));
+          }
+          response = await _send(
+            access.value,
+            organizationWorkspaceId: organizationWorkspaceId,
+            requestBody: requestBody,
+          );
+          if (!isCurrent()) return unauthorized;
+          root = _jsonObject(response);
+        }
+
+        final result = response.statusCode == 200
+            ? OrganizationOwnerTransferSuccess(
+                _parseReceipt(root, organizationWorkspaceId),
+              )
+            : OrganizationOwnerTransferRejected(
+                _failure(response.statusCode, root),
+              );
+        return isCurrent() ? result : unauthorized;
+      } on TimeoutException {
+        if (fenceWasBroken()) return unauthorized;
+        return const OrganizationOwnerTransferRejected(
+          OrganizationOwnerTransferFailureCode.networkUnavailable,
+        );
+      } on http.ClientException {
+        if (fenceWasBroken()) return unauthorized;
+        return const OrganizationOwnerTransferRejected(
+          OrganizationOwnerTransferFailureCode.networkUnavailable,
+        );
+      } on FormatException {
+        if (fenceWasBroken()) return unauthorized;
+        return const OrganizationOwnerTransferRejected(
+          OrganizationOwnerTransferFailureCode.invalidResponse,
+        );
+      } on Object {
+        if (fenceWasBroken()) return unauthorized;
+        // Do not expose provider, HTTP client, identity, or database details.
+        return const OrganizationOwnerTransferRejected(
+          OrganizationOwnerTransferFailureCode.invalidResponse,
         );
       }
-      return OrganizationOwnerTransferRejected(
-        _failure(response.statusCode, root),
-      );
-    } on TimeoutException {
-      return const OrganizationOwnerTransferRejected(
-        OrganizationOwnerTransferFailureCode.networkUnavailable,
-      );
-    } on http.ClientException {
-      return const OrganizationOwnerTransferRejected(
-        OrganizationOwnerTransferFailureCode.networkUnavailable,
-      );
-    } on FormatException {
+    }
+
+    final result = await performRequest();
+    try {
+      // cancel() stops events before its cleanup Future completes. Awaiting it
+      // would hide identity changes before delivery. ignore() keeps errors typed.
+      identitySubscription?.cancel().ignore();
+    } on Object {
+      if (fenceWasBroken()) return unauthorized;
       return const OrganizationOwnerTransferRejected(
         OrganizationOwnerTransferFailureCode.invalidResponse,
       );
+    }
+    try {
+      return isCurrent() ? result : unauthorized;
     } on Object {
-      // Do not expose provider, HTTP client, identity, or database details.
       return const OrganizationOwnerTransferRejected(
         OrganizationOwnerTransferFailureCode.invalidResponse,
       );
