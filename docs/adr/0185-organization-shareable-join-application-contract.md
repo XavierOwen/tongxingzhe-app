@@ -123,7 +123,7 @@ approved replay 只在最后一把锁后确认调用者仍是 current active own
 
 HTTP UUID 使用 canonical lowercase，时间使用 UTC 毫秒 ISO-8601。SQL row 保留 `timestamptz` 完整精度。receipt 不含 creator、applicant、approver、profile、email、owner assignment、capability、replay flag 或自由字段。四种结果不使用含可选字段的混合 envelope。
 
-HTTP 成功和失败响应都使用精确 `Content-Type: application/json; charset=utf-8` 和 `Cache-Control: no-store`。错误 root 只能是 `{ "error": { "code": "<stable-code>" } }`。7AK 固定 link create／preview transport；application submit／approve 的 route、method、status 和 body 仍由后续 transport slice 固定。
+HTTP 成功和失败响应都使用精确 `Content-Type: application/json; charset=utf-8` 和 `Cache-Control: no-store`。错误 root 只能是 `{ "error": { "code": "<stable-code>" } }`。7AK 固定 link create／preview transport，7AL 固定 application submit／approve transport。
 
 link create 使用 `POST /v1/organizations/:organizationWorkspaceId/shareable-join-links`，body 必须精确为 `{ "link_id": "uuid" }`。link preview 使用 `GET /v1/organization-shareable-join-links/:linkId`，不接受 query 或 declared body。两个成功入口首次执行与精确重放都返回 `200`，并直接输出上表对应的五字段或四字段 snake_case receipt。
 
@@ -132,6 +132,15 @@ link create 使用 `POST /v1/organizations/:organizationWorkspaceId/shareable-jo
 命中 route 后依次处理 Bearer、通用 exact identity、query／body declaration、path UUID 和 store 可用性。create 最后才读取并严格解析 body。UUID 输出使用 canonical lowercase，时间输出使用 UTC 毫秒 ISO-8601。
 
 空 body 或非法 JSON 返回 `400 invalid_json`，超过共享 1 MiB 实际字节上限返回 `413 payload_too_large`。非法 path／body UUID、额外或缺失字段和 query 返回 `400 invalid_organization_shareable_join_request`。token 缺失或无效返回 `401 unauthenticated`；forbidden、conflict 和 unavailable 分别返回 `403`、`409` 和 `503`。handler 必须等待单次参数化 bridge query settled 后才发送成功响应。
+
+application submit 使用 `POST /v1/organization-shareable-join-links/:linkId/applications`，body 必须精确为 `{ "application_id": "uuid" }`。approval 使用 `POST /v1/organizations/:organizationWorkspaceId/shareable-join-applications/:applicationId/approve`，body 必须精确为 `{}`。两者都不接受 query；首次执行与精确重放均返回 `200`，并分别输出六字段与五字段 snake_case receipt。
+
+application route 延续同一 raw-match 与 auth-first 顺序。
+两个 path selector 在读取 body 前规范为 lowercase UUID。
+store 缺失时先返回 unavailable。
+body reader 位于 store error catch 外，保留共享 `invalid_json` 与 `payload_too_large`。
+submit 与 approve 各只执行一条对应 bridge query。
+Backend 不预读 link、application、workspace、owner 或 membership。
 
 数据库错误与 Backend code 固定为：
 

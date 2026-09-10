@@ -711,6 +711,8 @@ docker run \
   --env ORGANIZATION_DIRECTORY_FIXTURE=/source/backend/database/fixtures/0089_organization_directory.sql \
   --env ORGANIZATION_MEMBERSHIP_SELF_LEAVE_FIXTURE=/source/backend/database/fixtures/0090_organization_membership_self_leave.sql \
   --env ORGANIZATION_SHAREABLE_JOIN_LINK_FIXTURE=/source/backend/database/fixtures/0092_organization_shareable_join_link.sql \
+  --env ORGANIZATION_SHAREABLE_JOIN_APPLICATION_SUBMIT_FIXTURE=/source/backend/database/fixtures/0093_organization_shareable_join_application_submit.sql \
+  --env ORGANIZATION_SHAREABLE_JOIN_APPLICATION_APPROVAL_FIXTURE=/source/backend/database/fixtures/0094_organization_shareable_join_application_approval.sql \
   "${backend_image}" \
   bash -lc \
     'mkdir -p backend/server backend/database/fixtures &&
@@ -732,6 +734,7 @@ docker run \
        dist/test/organization-directed-account-invitations.integration.js \
        dist/test/organization-membership-self-leave.integration.js \
        dist/test/organization-shareable-join-links.integration.js \
+       dist/test/organization-shareable-join-applications.integration.js \
        dist/test/organization-owner-transfer.integration.js \
        dist/test/personal-current-relationship-stage.integration.js \
        dist/test/personal-relationship-stage-change-summary.integration.js \

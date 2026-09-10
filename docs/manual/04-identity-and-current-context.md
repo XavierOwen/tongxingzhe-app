@@ -1485,6 +1485,42 @@ git diff --check
 
 route、unit、composition 和 Docker integration 使用 synthetic identity／PostgreSQL fixture。本地通过不证明 application submit／approve、Flutter、deep link、生产 identity、部署、Apple 或真人平台。
 
+### 3.29 通过 Backend 提交和批准可分享加入申请（Issue #366，MANUAL-076）
+
+7AL 把 0093 submit 与 0094 approval 接到同一个 application-family Backend module：
+
+- `POST /v1/organization-shareable-join-links/:linkId/applications` 只接受 `{ "application_id": "uuid" }`；
+- `POST /v1/organizations/:organizationWorkspaceId/shareable-join-applications/:applicationId/approve` 只接受 `{}`。
+
+两条 route 都不接受 query，首次执行和精确重放都返回 `200`。
+submit receipt 只含 contract、application、link 和 organization workspace。
+它还包含 submitted time 与 expiry。
+approve receipt 只含 contract、application 与 requested workspace。
+它还包含普通 membership 和 approved time，不含 link。
+
+UUID 规范为小写，时间规范为 UTC 毫秒。
+submit expiry 与 submitted time 精确相差 168 小时。
+
+Backend 在 URL 归一化前匹配 raw pathname 和 method。错误 method、编码、dot segment 或 slash 形状返回 `404 not_found`。此时不认证、不读 body、不访问 store。命中后先处理 Bearer、generic exact identity、query、path UUID 和 store。之后才运行共享 body reader 和 exact body parser。
+
+共享 body reader 位于 store error catch 外。空或非法 JSON 返回 `400 invalid_json`；实际字节超过 1 MiB 返回 `413 payload_too_large`。额外／缺失字段和非法 selector 返回 `400 invalid_organization_shareable_join_request`。forbidden／conflict 分别返回 `403`／`409`；invalid trusted identity、未知数据库错误、row shape 或 adapter 异常统一返回 `503 organization_shareable_join_unavailable`。
+
+submit store 只调用一次 0093 exact-identity bridge；approve store 只调用一次 0094 bridge。Backend 不预读 application、workspace、owner 或 membership，也不调用 `app_private`。审批是否允许仍只由 0094 owner-first 锁后合同判断；不合格 actor 对 known、unknown 或 cross-workspace application 只能得到同一 forbidden。
+
+从仓库根目录运行：
+
+```bash
+cd backend/server
+npm test
+npm run check
+cd ../..
+./tool/run_postgres_tests_in_docker.sh
+dart run tool/check_markdown_links.dart
+git diff --check
+```
+
+route、unit、composition 和 Docker integration 使用 synthetic identity 与 0093／0094 fixture。本地通过不证明申请列表、通知、Flutter、deep link、production identity、部署、Apple 或真人平台。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：

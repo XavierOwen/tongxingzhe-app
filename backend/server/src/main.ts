@@ -19,6 +19,9 @@ import {
 import {
   PostgresOrganizationShareableJoinLinkStore,
 } from "./organization-shareable-join-links.js";
+import {
+  PostgresOrganizationShareableJoinApplicationStore,
+} from "./organization-shareable-join-applications.js";
 import { createBackendServer } from "./server.js";
 import { PostgresSessionContextStore } from "./session-context.js";
 import { PostgresSyncCommandStore } from "./sync-store.js";
@@ -168,6 +171,10 @@ const organizationDirectedAccountInvitationStore =
 // atomically; preview is read-only. The pool promise gates the HTTP response.
 const organizationShareableJoinLinkStore =
   new PostgresOrganizationShareableJoinLinkStore(query);
+// Submit and approve each use one runtime bridge statement. Awaiting the pool
+// promise keeps every HTTP receipt behind PostgreSQL commit acknowledgement.
+const organizationShareableJoinApplicationStore =
+  new PostgresOrganizationShareableJoinApplicationStore(query);
 const server = createBackendServer({
   identityVerifier,
   organizationCreationIdentityVerifier,
@@ -177,6 +184,7 @@ const server = createBackendServer({
   organizationMembershipSelfLeaveStore,
   organizationDirectedAccountInvitationStore,
   organizationShareableJoinLinkStore,
+  organizationShareableJoinApplicationStore,
   contextStore,
   commandStore,
   regionResolutionStore,
