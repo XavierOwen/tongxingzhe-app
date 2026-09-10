@@ -52,6 +52,20 @@ preview 只返回已知、未过期、非 recovery organization 的原名称和 
 
 只调试可丢弃的专用测试库时，先确认 `DATABASE_URL` 不是 production，再依次运行 migration、`backend/database/checks/verify_organization_shareable_join_link.sql`、`backend/database/fixtures/0092_organization_shareable_join_link.sql` 和 `tool/verify_organization_shareable_join_link_concurrency.sh`。并发脚本会提交 synthetic 行；rollback fixture 使用独立 UUID namespace。通过只证明 synthetic PostgreSQL 的 schema、事务、锁、ACL、checksum 与 restore，不证明生产身份、部署或客户端行为。
 
+## 7AI：可分享加入申请的数据库提交
+
+0093 实现 Issue #360 的 submit-only 子集。它建立 approval-ready application claim、value-free tombstone 和 append-only audit，但只提供 private submit writer 与 exact-identity submit bridge；owner approval 和 membership 写入仍未实现。
+
+首次 submit 按 link request → application request → applicant user → organization governance → applicant membership 取得锁。全部锁后重读并物化资格，再读取一次 `clock_timestamp()`。claim、submitted audit 与六字段 receipt 使用该时间，application expiry 精确晚 168 小时。
+
+exact replay 只取得 link request、application request 与 applicant user 锁。它要求同一 active、未去关联的 applicant、application 和 link。
+它不重验 link 或 application expiry，也不重验 recovery、current membership 或 approval。首次提交才校验已知未过期 link、非 recovery organization 和非 current member。
+link creator 后来的状态不参与授权。
+
+runtime 只获得 submit identity bridge 的 `EXECUTE`，不能访问 private writer 或三张关系。0093 不增加 approval stub、Backend、HTTP、Flutter、deep link、申请列表或通知。
+
+完整 runner 自动发现 0093 migration、check、rollback fixture 和并发脚本。通过只证明 synthetic PostgreSQL 的 schema、事务、锁、ACL、checksum 与 restore，不证明审批、membership 建立、生产身份、部署或客户端行为。
+
 ## 6BO：组织项目 opt-in 配置边界
 
 6BO 的组织项目 `follow_up_consent_ratio@1` opt-in 与个人 0048 配置分开。实现后的 `0073` migration 只应增加 private 配置表、private configure/read
