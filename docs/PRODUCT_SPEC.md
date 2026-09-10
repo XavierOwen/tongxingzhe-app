@@ -1367,6 +1367,22 @@ application tombstone、同 applicant／link 的另一 application ID 和同 app
 
 `TEST-084`／`MANUAL-074` 覆盖 0094 的两个函数、五字段 receipt、单一批准时间、最小 ACL、普通 membership 原子写入、精确重放、稳定分类、失败零部分写入、owner／applicant／membership／recovery／expiry 并发、checksum 和 dump／restore。synthetic PostgreSQL 证据不证明 Backend、HTTP、生产 identity、部署、Apple 或真人平台。
 
+#### Slice 7AK：接通可分享加入链接 Backend
+
+7AK／Issue #364 只接通 0092 已成立的 link create 与 preview bridge。创建使用 `POST /v1/organizations/:organizationWorkspaceId/shareable-join-links`，body 精确为 `{ "link_id": "uuid" }`；预览使用 `GET /v1/organization-shareable-join-links/:linkId`，不接受 query 或 declared body。两者首次执行和精确重放都返回 `200`。
+
+Backend 使用通用 verified exact identity，不调用组织创建专用 Auth user lookup、`SessionContext` 或 private writer。
+
+单一 link-family module 负责 raw route、handler、store、PostgreSQL adapter、strict parser 和 wire mapping。它不增加 controller、service 或共享 parser 抽象。store 每次只执行一条参数化 0092 `app_data` bridge query，handler 等待其 settled 后才响应。
+
+raw pathname 和 method 在 URL 归一化前匹配。错误 method、percent encoding、dot segment、重复或尾随 slash 在认证和 body 读取前返回 `404 not_found`。
+
+命中后顺序固定为 Bearer → identity → query／body declaration → path UUID → store → create body。create body 只接受 `link_id`，按共享 1 MiB 实际字节上限处理。preview 不读取 body。
+
+成功响应只含 ADR-0185 的五字段 create receipt 或四字段 preview receipt；UUID 为 canonical lowercase，时间为 UTC 毫秒。稳定 HTTP 映射为 `401 unauthenticated`、`400 invalid_organization_shareable_join_request`、`403 organization_shareable_join_forbidden`、`409 organization_shareable_join_conflict` 和 `503 organization_shareable_join_unavailable`；空／非法 JSON 与过大 body 仍使用共享 `invalid_json`／`payload_too_large`。所有响应为 JSON UTF-8 且 `no-store`。
+
+`TEST-085`／`MANUAL-075` 覆盖 matcher、认证顺序、exact body、1 MiB 边界、strict receipt、bridge SQL、稳定错误、commit Promise gate、production composition 和真实 PostgreSQL runtime integration。本票不接 application submit／approve、Flutter、deep link、申请列表、通知、rotation／revoke、删除／恢复／purge 或生产部署。
+
 ### 5.8 分析、指标与报告
 
 #### 5.8.1 统计单位和核心口径
@@ -3146,6 +3162,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-082` | 7AH／0092 的 structural check、rollback fixture 与独立会话脚本覆盖 link 表／约束／触发器、三个 exact functions、owner／ACL、owner-only 首次创建、一次锁后 `clock_timestamp()`、168 小时、精确重放／drift、tombstone、creator 去关联、最小只读 preview、失败无写入及治理并发。完整 Docker 还验证 migration checksum 与 dump／restore；这些 synthetic PostgreSQL 结果不证明 application／approval、Backend、HTTP、生产 identity、部署、Apple 或真人平台。 |
 | `TEST-083` | 7AI／0093 的 structural check、rollback fixture 与独立会话脚本覆盖 approval-ready application 表／约束／guard、两个 exact submit functions、owner／ACL、六字段 receipt、一次锁后 `clock_timestamp()`、独立 168 小时期限、精确重放、历史 conflict 优先、link creator 状态无关、失败零写入／零 membership 副作用，以及 link、账号、recovery 和 membership 并发。完整 Docker 还验证 migration checksum 与 dump／restore；这些 synthetic PostgreSQL 结果不证明 approval、membership 建立、Backend、HTTP、生产 identity、部署、Apple 或真人平台。 |
 | `TEST-084` | 7AJ／0094 的 structural check、rollback fixture 与独立会话脚本覆盖两个 exact approval functions、owner／ACL、五字段 receipt、一次锁后 `clock_timestamp()`、普通 organization membership 原子写入、精确重放、稳定 forbidden 分类、失败零部分写入，以及同／异 owner、同 applicant 的异 application、submit replay、expiry、recovery、账号、owner 和 membership 并发。完整 Docker 还验证 migration checksum 与 dump／restore；这些 synthetic PostgreSQL 结果不证明 Backend、HTTP、生产 identity、部署、Apple 或真人平台。 |
+| `TEST-085` | 7AK Backend route、unit、composition 与真实 PostgreSQL integration 覆盖 link create／preview 的 raw matcher、auth-first、exact body、共享 1 MiB 边界、四／五字段 receipt、UUID／UTC 规范化、0092 bridge、稳定错误、最小 runtime 权限、精确重放、drift 和 commit 后响应。它不证明 application、Flutter、deep link、生产 identity、部署、Apple 或真人平台。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3492,6 +3509,12 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 这是 spec-only 交付；migration、Backend、Flutter、分享 transport、申请目录、profile、reject、revoke 与通知仍未实现。
 
 7AH／#358 用 0092 交付 shareable link 的 DB-only 创建与预览。application、approval、Backend、HTTP、Flutter、平台 deep link 和 purge writer 仍未实现。
+
+7AI／#360 用 0093 交付 application submit 的 DB-only claim、audit、exact identity bridge 和并发边界。它不建立 membership。
+
+7AJ／#362 用 0094 交付 owner approval 的 DB-only writer。首次批准原子建立普通 organization membership；精确重放仍要求 current active owner。
+
+7AK／#364 接通 shareable link create／preview 的 Backend route、strict parser、PostgreSQL adapter 和 production composition。application submit／approve 的 Backend、Flutter、平台 deep link、申请列表、通知和 purge writer 仍未实现。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 

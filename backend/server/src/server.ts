@@ -153,6 +153,11 @@ import {
   matchOrganizationDirectedAccountInvitationRequestTarget,
   type OrganizationDirectedAccountInvitationStore,
 } from "./organization-directed-account-invitations.js";
+import {
+  handleOrganizationShareableJoinLink,
+  matchOrganizationShareableJoinLinkRequestTarget,
+  type OrganizationShareableJoinLinkStore,
+} from "./organization-shareable-join-links.js";
 import type {
   OrganizationCreationIdentityVerifier,
 } from "./organization-creation-identity.js";
@@ -211,6 +216,8 @@ export interface BackendServerDependencies
     OrganizationMembershipSelfLeaveStore;
   readonly organizationDirectedAccountInvitationStore?:
     OrganizationDirectedAccountInvitationStore;
+  readonly organizationShareableJoinLinkStore?:
+    OrganizationShareableJoinLinkStore;
 }
 
 export function createBackendServer(
@@ -219,6 +226,34 @@ export function createBackendServer(
   return createServer(async (request, response) => {
     response.setHeader("content-type", "application/json; charset=utf-8");
     response.setHeader("cache-control", "no-store");
+
+    const shareableJoinLinkMatch =
+      matchOrganizationShareableJoinLinkRequestTarget(request.url);
+    if (
+      shareableJoinLinkMatch !== null &&
+      request.method ===
+        (shareableJoinLinkMatch.operation === "preview" ? "GET" : "POST")
+    ) {
+      try {
+        const result = await handleOrganizationShareableJoinLink(
+          {
+            ...shareableJoinLinkMatch,
+            authorization: request.headers.authorization,
+            hasBody: requestDeclaresBody(request.headers),
+            readBody: async () => readJsonBody(request),
+          },
+          {
+            identityVerifier: dependencies.identityVerifier,
+            linkStore: dependencies.organizationShareableJoinLinkStore,
+          },
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
+      }
+      return;
+    }
 
     const invitationMatch = matchOrganizationDirectedAccountInvitationRequestTarget(
       request.url,
