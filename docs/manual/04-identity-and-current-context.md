@@ -1521,6 +1521,44 @@ git diff --check
 
 route、unit、composition 和 Docker integration 使用 synthetic identity 与 0093／0094 fixture。本地通过不证明申请列表、通知、Flutter、deep link、production identity、部署、Apple 或真人平台。
 
+### 3.30 通过 Flutter typed gateway 调用四种可分享加入操作（Issue #368，MANUAL-077）
+
+7AM 使用一个 `OrganizationShareableJoinGateway` 表示四种操作：
+
+- owner 创建 link；
+- applicant 预览 link；
+- applicant 提交 application；
+- owner 批准 application。
+
+四种成功结果各有独立的 immutable receipt。它们不会合并成带 optional 字段的通用 envelope。gateway 只接受调用方提供的 opaque UUID，不生成编号，也不预读 owner、membership、link 或 application。
+
+HTTP 实现调用 7AK／7AL 的固定 route。create、submit 与 approve 使用 JSON POST；preview 使用无 body GET。所有请求发送 JSON accept header，POST 额外发送 JSON UTF-8 content type。输入 UUID 先在本地校验并规范为 lowercase；非法输入不会取得 token 或发起网络请求。
+
+成功和失败响应都必须是 JSON UTF-8 且 `Cache-Control: no-store`。成功结果要求 exact keys、固定 contract、request selector 绑定、lowercase UUID 与 UTC 毫秒。create link 和 submit application 各自验证精确 168 小时，不用设备当前时间重新判定服务端已经签发的历史 receipt。
+
+Backend 的 stable code 映射为 typed failure。空或非法 JSON、过大 body、未认证、非法请求、forbidden、conflict 和 service unavailable 保持分开。未知 status／code、缺失或错误 header、额外字段、非法 UUID／时间、网络响应 shape 漂移都收敛为 invalid response；timeout 和 client network failure 使用 network unavailable。
+
+一个请求只能交付给启动它的连续登录身份。gateway 在 token、HTTP、401 refresh 和最终交付前检查同一个 signed-in subject，并监听中途注销或换号。401 只刷新一次，重试保持完全相同的 URL 与 body。close、换号、同账号注销重登和迟到结果都不能把旧 receipt 交给新会话。
+
+空 `BACKEND_BASE_URL` 返回 deferred gateway，不分配 HTTP client。非空配置必须是 pathless Backend base URI；非法配置同步失败。configured gateway 拥有并关闭自己的 client，但不关闭共享 `IdentitySession`。本切片不把 gateway 接入 `AppDependencies`，直到第一个 UI consumer 出现。
+
+从仓库根目录运行：
+
+```bash
+dart format --output=none --set-exit-if-changed \
+  lib/organization_shareable_join \
+  test/organization_shareable_join
+flutter test \
+  test/organization_shareable_join/http_organization_shareable_join_gateway_test.dart
+flutter test
+dart analyze
+dart run tool/check_production_boundary.dart
+dart run tool/check_markdown_links.dart
+git diff --check
+```
+
+focused tests 使用 fake identity 和 mock HTTP client。完整 Flutter、analyzer 与六平台 CI build 仍不证明 App composition、Backend、PostgreSQL、production identity、部署、Apple 或真人平台。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
