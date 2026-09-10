@@ -117,6 +117,11 @@ const Map<String, Map<String, String>> _strings = {
     'organizationDirectoryRefresh': '刷新',
     'organizationDirectoryClose': '关闭',
     'organizationDirectoryIdentifier': '组织标识',
+    'organizationDirectoryAppUserIdLabel': '本人账号编号',
+    'organizationDirectoryAppUserIdHelp': '不是组织或邀请编号。收件人复制后发给组织所有者，用于创建定向邀请。',
+    'organizationDirectoryAppUserIdCopy': '复制本人账号编号',
+    'organizationDirectoryAppUserIdCopySuccess': '本人账号编号已复制。',
+    'organizationDirectoryAppUserIdCopyFailure': '未能复制本人账号编号，请再试一次。',
     'organizationDirectoryNotConfigured': '组织列表服务尚未配置，请稍后重试。',
     'organizationDirectoryUnauthorized': '登录状态已失效。请关闭窗口，重新登录后再查看。',
     'organizationDirectoryInvalidRequest': '读取请求无效，请稍后重试。',
@@ -161,7 +166,7 @@ const Map<String, Map<String, String>> _strings = {
     'organizationInvitationCreateOwnerHelp':
         '仅这个组织的当前有效所有者可以创建。组织列表不判断所有者身份；服务端会在提交时检查。',
     'organizationInvitationCreateDeliveryHelp':
-        '输入已有账号的内部 UUID。这不是邀请编号；App 不搜索账号，也不显示你的编号。',
+        '让收件人在“我的组织”复制本人账号编号，再将编号粘贴到这里。',
     'organizationInvitationCreateOrganizationId': '组织标识',
     'organizationInvitationCreateTargetId': '收件人账号编号',
     'organizationInvitationCreateInvalidTarget': '请输入完整的 UUID 账号编号。',
@@ -1331,6 +1336,13 @@ const Map<String, Map<String, String>> _strings = {
     'organizationDirectoryRefresh': 'Refresh',
     'organizationDirectoryClose': 'Close',
     'organizationDirectoryIdentifier': 'Organization ID',
+    'organizationDirectoryAppUserIdLabel': 'Your account ID',
+    'organizationDirectoryAppUserIdHelp':
+        'Not an organization or invitation ID. Send it to the owner for a directed invitation.',
+    'organizationDirectoryAppUserIdCopy': 'Copy your account ID',
+    'organizationDirectoryAppUserIdCopySuccess': 'Your account ID was copied.',
+    'organizationDirectoryAppUserIdCopyFailure':
+        'Could not copy your account ID. Try again.',
     'organizationDirectoryNotConfigured':
         'The organization list service is not configured. Try again later.',
     'organizationDirectoryUnauthorized':
@@ -1402,8 +1414,7 @@ const Map<String, Map<String, String>> _strings = {
         'The organization list does not infer ownership; the server checks it '
         'when you submit.',
     'organizationInvitationCreateDeliveryHelp':
-        'Enter an existing account\'s internal UUID. This is not an invitation '
-        'ID. The app does not search accounts or display your ID.',
+        'Ask the recipient to copy their account ID from My organizations, then paste it here.',
     'organizationInvitationCreateOrganizationId': 'Organization ID',
     'organizationInvitationCreateTargetId':
         'Recipient internal account ID (UUID)',

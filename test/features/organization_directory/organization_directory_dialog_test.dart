@@ -34,6 +34,7 @@ void main() {
           .widgetList<SelectableText>(find.byType(SelectableText))
           .map((text) => text.data),
       [
+        _contextA.appUserId,
         _organizationA.organizationName,
         _organizationA.organizationWorkspaceId,
         _organizationB.organizationName,
@@ -124,10 +125,95 @@ void main() {
     await _open(tester, fixture.session, gateway);
 
     expect(find.text(text.t('organizationDirectoryEmpty')), findsOneWidget);
+    expect(find.text(_contextA.appUserId), findsOneWidget);
+    expect(
+      find.text(text.t('organizationDirectoryAppUserIdHelp')),
+      findsOneWidget,
+    );
     expect(
       find.text(text.t('organizationDirectoryInvalidResponse')),
       findsNothing,
     );
+  });
+
+  testWidgets('本人账号编号可复制，复制失败后可重试并通知辅助技术', (tester) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final clipboard = _ClipboardProbe();
+    addTearDown(clipboard.close);
+    final pending = Completer<OrganizationDirectoryResult>();
+    final gateway = _Gateway([pending]);
+    const text = AppStrings('zh');
+    final semantics = tester.ensureSemantics();
+
+    await _open(tester, fixture.session, gateway, settle: false);
+    expect(find.text(text.t('organizationDirectoryLoading')), findsOneWidget);
+    expect(
+      find.text(text.t('organizationDirectoryAppUserIdLabel')),
+      findsOneWidget,
+    );
+    expect(find.text(_contextA.appUserId), findsOneWidget);
+
+    clipboard.fail = true;
+    await tester.tap(_selfIdCopy);
+    await tester.pumpAndSettle();
+    expect(clipboard.values, [_contextA.appUserId]);
+    expect(
+      find.text(text.t('organizationDirectoryAppUserIdCopyFailure')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .getSemantics(_notice)
+          .getSemanticsData()
+          .flagsCollection
+          .isLiveRegion,
+      isTrue,
+    );
+
+    clipboard.fail = false;
+    await tester.tap(_selfIdCopy);
+    await tester.pumpAndSettle();
+    expect(clipboard.values, [_contextA.appUserId, _contextA.appUserId]);
+    expect(
+      find.text(text.t('organizationDirectoryAppUserIdCopySuccess')),
+      findsOneWidget,
+    );
+    pending.complete(OrganizationDirectorySuccess(const []));
+    await tester.pumpAndSettle();
+    semantics.dispose();
+  });
+
+  testWidgets('账号切换立即隐藏本人编号、复制按钮和旧通知', (tester) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final clipboard = _ClipboardProbe();
+    addTearDown(clipboard.close);
+    await _open(
+      tester,
+      fixture.session,
+      _Gateway([OrganizationDirectorySuccess(const [])]),
+    );
+    await tester.tap(_selfIdCopy);
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        const AppStrings('zh').t('organizationDirectoryAppUserIdCopySuccess'),
+      ),
+      findsOneWidget,
+    );
+
+    fixture.identity.emit(_signedIn('subject-b'));
+    await tester.pumpAndSettle();
+    expect(find.text(_contextA.appUserId), findsNothing);
+    expect(_selfIdCopy, findsNothing);
+    expect(
+      find.text(
+        const AppStrings('zh').t('organizationDirectoryAppUserIdCopySuccess'),
+      ),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   for (final code in OrganizationDirectoryFailureCode.values) {
@@ -139,6 +225,7 @@ void main() {
       await _open(tester, fixture.session, gateway);
 
       expect(find.text(_failureText(text, code)), findsOneWidget);
+      expect(find.text(_contextA.appUserId), findsOneWidget);
       expect(find.text(text.t('organizationDirectoryEmpty')), findsNothing);
       expect(find.byType(OrganizationDirectoryDialog), findsOneWidget);
     });
@@ -302,6 +389,9 @@ void main() {
       expect(rect.width, greaterThanOrEqualTo(48), reason: '$target width');
       expect(rect.height, greaterThanOrEqualTo(48), reason: '$target height');
     }
+    final selfIdCopyRect = tester.getSemantics(_selfIdCopy).rect;
+    expect(selfIdCopyRect.width, greaterThanOrEqualTo(48));
+    expect(selfIdCopyRect.height, greaterThanOrEqualTo(48));
     semantics.dispose();
   });
 
@@ -890,6 +980,10 @@ void _expectCriticalLeaveStateVisible(WidgetTester tester, AppStrings text) {
 final _launcher = find.byKey(const ValueKey('open-organization-directory'));
 final _refresh = find.byKey(const ValueKey('organization-directory-refresh'));
 final _close = find.byKey(const ValueKey('organization-directory-close'));
+final _selfIdCopy = find.byKey(
+  const ValueKey('organization-directory-self-app-user-id-copy'),
+);
+final _notice = find.byKey(const ValueKey('organization-directory-notice'));
 final _selfLeaveLauncher = find.byKey(
   const ValueKey('open-organization-self-leave'),
 );
@@ -1185,6 +1279,29 @@ final class _IdentitySession implements IdentitySession {
   Future<IdentityResult<IdentitySnapshot>> updateRecoveredPassword({
     required String newPassword,
   }) => throw UnimplementedError();
+}
+
+final class _ClipboardProbe {
+  _ClipboardProbe() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'Clipboard.setData') {
+            values.add(
+              (call.arguments! as Map<Object?, Object?>)['text']! as String,
+            );
+            if (fail) throw StateError('clipboard failed');
+          }
+          return null;
+        });
+  }
+
+  final values = <String>[];
+  var fail = false;
+
+  void close() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, null);
+  }
 }
 
 final class _ContextGateway implements SessionContextGateway {
