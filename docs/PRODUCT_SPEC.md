@@ -303,6 +303,12 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `ORG-021` | 只有 active 的绑定 target，才能按已知 invitation UUID 预览未接受、未过期且组织可加入的邀请名称与有效期。预览不列出 workspace、成员、inviter、target 或权限，不修改数据，不缓存，不保留接受资格；未知、错误收件人、过期、已接受、去关联、已有当前 membership 或恢复期一律 forbidden。接受仍按 ORG-013–ORG-017 锁后重验。 |
 | `ORG-022` | 组织写入意图绑定发起时的同一次登录。token 等待、HTTP、一次 401 刷新及重试期间，换账号、注销再登录、身份流失效或 gateway close 均阻止旧请求继续发出或交付结果；不借新账号凭据延续旧意图。已发送请求不承诺撤销服务端事实，Backend 仍独立检查实际 bearer actor 的权限。 |
 | `ORG-023` | 已登录用户可以从当前 trusted session context 查看并显式复制本人的内部 `app_user_id`，用于定向邀请的收件人编号交换。页面不得借此读取其他账号、external subject 或邮箱；登录失效或账号切换后须立即隐藏旧编号。该编号只是不透明 selector，不授予目录、成员或权限读取能力。 |
+| `ORG-024` | 可分享加入链接只允许组织当前 active owner 通过 exact identity 创建。`link_id` 是 opaque selector、创建幂等键和 `organization-shareable-join-link:v1` family 的 request-lock key；每条 link 从数据库签发时间起连续 168 小时有效。链接不绑定收件人、不是身份凭证，也不直接建立 membership。 |
+| `ORG-025` | 任一 active 账号只有持有已知 link UUID 时，才能在线预览尚有效、未处于恢复期的 organization 原名称与 link expiry。预览不开放搜索、列表、成员、owner、创建者或权限资料，不写 claim／audit，也不保留提交资格；link 创建者引用之后去关联不撤销仍有效 link。 |
+| `ORG-026` | 非该组织 current member 的 active exact actor 可按有效 link 提交加入申请。`application_id` 使用独立 `organization-shareable-join-application:v1` family；同 actor／link 永久只认首个 application ID，相同 ID 精确重放原 receipt，换 ID 固定 conflict。申请从提交时间起独立有效 168 小时，link 随后到期不使申请提前失效。 |
+| `ORG-027` | 组织当前 active owner 可按已知 organization 与 application UUID 批准仍待处理且未过期的申请。首次批准还须锁后确认 applicant 仍 active 且不是 current member，再原子追加一条 organization membership 并记录 approval；它不建立 project membership、owner assignment 或 capability。已批准申请只向重放时仍合格的任一 current owner 返回同一历史 receipt，不把原 approver 身份或 applicant 后来的状态当作重放授权。 |
+| `ORG-028` | 首次创建 link 使用 link request → actor row → governance → actor membership 锁；提交使用 link request → application request → applicant row → governance → applicant membership 锁；批准使用 application request → approver／applicant rows（UUID 排序）→ governance → applicant membership 锁，不反向取得 link lock。每条首次写路径在全部锁后重读事实，并以一次 `clock_timestamp()` 同时判断资格、生成时间、写 claim／membership／audit 与返回 receipt。 |
+| `ORG-029` | link 与 application claim 只保存操作所需 opaque UUID、可去关联 creator／applicant 引用和有限时间，不保存 approver；audit 追加不可变且不保存 actor、名称、身份、token、请求原文或自由文本。恢复期冻结首次创建、提交和批准，只允许合格的只读精确重放；终结清除按 creation → directed invitation → owner transfer → membership self-leave → shareable link → join application 的 family 顺序取锁并先留 tombstone。PUBLIC 不得执行或直写，runtime 只获 exact-identity bridge／preview 的最小 EXECUTE。 |
 
 #### Slice 7B Spec：固定组织原子创建与首位所有者合同
 
@@ -1256,6 +1262,70 @@ network／service unavailable、invalid response、意外异常及 conflict 按�
 
 编号在空目录或目录加载失败时仍可见。用户可以显式复制；成功和失败均更新 live region，失败后可重试。登录失效、换号或同账号注销重登会立即隐藏旧编号和复制操作。此功能不显示其他用户、不增加账号搜索或成员目录，也不改变邀请权限与服务端校验。
 `TEST-080`／`MANUAL-070` 覆盖显示、复制、失败、会话隔离和可访问性。本地 Widget 与 synthetic Clipboard 不证明真实设备、生产身份、部署或实际投递。
+
+#### Slice 7AG Spec：固定可分享加入链接与 owner 审批合同
+
+7AG／Issue #356 固定“可分享 link → authenticated application → current owner approval”的首版合同。持有 link 只允许读取最小组织预览并提交申请，不能直接进入组织。当前仓库没有组织级成员管理 capability，因此首版只允许 current active owner 创建 link 和批准申请；不把项目级报告 capability 借作组织授权。
+
+link 和 application 使用两个独立 UUID、claim／tombstone／request-lock family。
+link 连续有效 168 小时，可供多个 active 非成员分别申请；同一 actor／link 只保留首个 application ID。
+application 自提交起另有连续 168 小时生命周期，提交后不再依赖 link 是否到期。
+current member 的首次提交、未知或不可用 selector、恢复期、过期及资格失败统一 forbidden。
+
+live link claim 的 creator 不同或 live application claim 的 applicant 不同也统一 forbidden。
+同一 creator 的 workspace drift、同一 applicant 的 link drift、同 actor／link 换 application ID，以及 create／submit 遇本 family tombstone 固定 conflict。
+approval 遇 application tombstone 固定 forbidden，因为 value-free tombstone 不保存 workspace，不能据此向其他组织 owner 暴露已清除 UUID。
+
+创建 link 的 exact replay 仍要求同一 active creator identity，但不重验其当前 owner 状态。
+提交申请的 exact replay 仍要求同一 active applicant，但不重验 link expiry 或 current membership。
+
+已批准申请可以重放同一历史 approval receipt；重放者必须仍是 current active owner。
+它不要求原 approver 仍存在，也不重建 membership。
+批准后 applicant 的账号去关联、账号状态或 membership 变化不阻止该历史重放。
+link creator 引用在账号终结时去关联后，link 仍按原期限供其他合格账号使用。
+去关联的 creator 不能重放创建，pending application 的 applicant 去关联后不能获批。
+
+成功结果分为四种 exact typed row：
+
+- link create：`organization_shareable_join_link_contract_id text`、`link_id uuid`、`organization_workspace_id uuid`、`issued_at_utc timestamptz`、`expires_at_utc timestamptz`；
+- preview：`organization_shareable_join_link_preview_contract_id text`、`link_id uuid`、`organization_name text`、`expires_at_utc timestamptz`；
+- application submit：`organization_shareable_join_application_contract_id text`、`application_id uuid`、`link_id uuid`、`organization_workspace_id uuid`、`submitted_at_utc timestamptz`、`expires_at_utc timestamptz`；
+- approval：`organization_shareable_join_application_contract_id text`、`application_id uuid`、`organization_workspace_id uuid`、`organization_membership_id uuid`、`approved_at_utc timestamptz`。
+
+前三种 contract ID 依次固定为 `organization-shareable-join-link:v1`、`organization-shareable-join-link-preview:v1` 和 `organization-shareable-join-application:v1`。
+approval 与 submit 共用 application contract ID，但保持不同的 exact row shape。
+receipt 不含 actor、applicant profile、email、owner、capability、replay flag 或自由字段。未来 HTTP 只输出 canonical lowercase UUID、UTC 毫秒时间、严格 JSON UTF-8 和 `no-store`。
+
+SQL seam 固定为四个 `app_data` exact-identity 函数和三个 private writer：
+
+- `create_organization_shareable_join_link_for_identity_v1(text,text,uuid,uuid)` → `create_organization_shareable_join_link_v1(uuid,uuid,uuid)`；
+- `preview_organization_shareable_join_link_for_identity_v1(text,text,uuid)` 直接执行只读查询；
+- `submit_organization_shareable_join_application_for_identity_v1(text,text,uuid,uuid)` → `submit_organization_shareable_join_application_v1(uuid,uuid,uuid)`；
+- `approve_organization_shareable_join_application_for_identity_v1(text,text,uuid,uuid)` → `approve_organization_shareable_join_application_v1(uuid,uuid,uuid)`。
+
+每个 `app_data` 函数先接收 `trusted_issuer`、`trusted_subject`；private writer 则先接收 `trusted_actor_app_user_id`。
+create 的 UUID 顺序是 link、workspace；submit 是 application、link；approve 是 application、workspace。
+所有 selector 参数使用 `requested_` 前缀。七个函数均为 `VOLATILE SECURITY DEFINER`，并固定 `search_path = pg_catalog` 和既有非 runtime owner。
+approve identity 函数名恰为 PostgreSQL 上限 63 个 ASCII 字节，实现和结构检查不得依赖静默截断。
+
+数据库稳定错误只使用：`22023 invalid organization shareable join identity` → `organization_shareable_join_unavailable`、`22023 invalid organization shareable join request` → `invalid_organization_shareable_join_request`、`42501 organization shareable join forbidden` → `organization_shareable_join_forbidden`、`22023 organization shareable join idempotency conflict` → `organization_shareable_join_conflict`。未知 SQLSTATE、message、constraint、row shape 或内部异常统一 unavailable；后续 transport 再固定 route、status、body 顺序与 parser。
+
+approval 必须先确认调用者是 requested workspace 的 current active owner，再分类 application。
+unknown application、live claim workspace 不符和其他资格失败统一 forbidden，不得用 conflict 暴露跨组织 application 是否存在。
+application tombstone 同样返回 forbidden；它只保存 family 与 UUID，无法在清除后证明原 workspace。
+
+首次路径采用 ORG-028 的全局锁序。approve 不回头取得 link request lock，因为 application 已是独立事实；这既保留申请自己的期限，也避免 application → link 的反序。全部资格和 expiry 都在锁后按一次墙钟重读；失败不留下 claim、membership 或 audit 的部分写入。恢复期冻结新写入，精确重放保持只读；组织清除在既有 family 后追加 shareable link 与 join application，账号清除先锁完整受影响 request 集合再去关联 app-user 引用。
+
+exact replay 使用不写业务事实的缩减锁序，并在最后一把锁后重读：
+
+- link create replay：link request → creator app-user row；
+- application submit replay：link request → application request → applicant app-user row；
+- approved application replay：application request → current approver app-user row → requested organization governance lock。
+
+approval replay 不锁 applicant 或 membership，因为两者后来可能已去关联或结束。
+它不能先取 governance 再取 user row，也不能省略 governance 后直接返回历史 receipt。
+
+`TEST-081`／`MANUAL-071` 覆盖身份、资格、两个 168 小时生命周期、首申请唯一性、精确重放、锁序、并发 membership、稳定错误、最小 receipt、value-free audit、ACL、恢复与清除边界。本票只修改 Product Spec、ADR 与学习文档；不新增 migration、Backend、Flutter、deep link、列表、profile、reject、revoke、rotation、通知、项目权限或生产证明。
 
 ### 5.8 分析、指标与报告
 
@@ -2772,6 +2842,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-068` | 学习文档说明 7AC 中同步停止监听与异步清理的区别、最后身份检查后不再等待，以及 invitation 三操作和 self-leave 的 typed result 边界；提供定向回归命令，不把 synthetic 清理当生产网络取消或数据库回滚。 |
 | `MANUAL-069` | 学习文档说明 7AE 的已知内部账号 UUID 前提、目录与 owner 权限区别、固定组织与幂等意图、不确定结果及放弃、历史回执、显式复制与手工交付、会话清理和验证命令；不声称已提供账号编号获取、邮件投递、生产或真人平台证据。 |
 | `MANUAL-070` | 学习文档说明 7AF 如何从现有 trusted session context 显示并复制本人内部账号编号，以及编号、组织 UUID 与 invitation UUID 的区别。必须说明会话失效后隐藏、Clipboard 失败重试、无账号搜索或新网络接口，并区分 Widget synthetic 与真实设备、生产身份和实际投递证据。 |
+| `MANUAL-071` | 学习文档说明 7AG 的 owner-only shareable link、最小预览、authenticated application、两个独立 family 与连续 168 小时期限、同 actor／link 首申请唯一性、四种 typed result、精确重放、锁后墙钟与固定锁序、稳定错误、value-free audit、最小 ACL、账号去关联、恢复期和全局清除顺序。必须明确本票只有文档，不实现数据库、Backend、Flutter、deep link、列表、profile、reject、revoke、通知、生产身份或真人平台。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3030,6 +3101,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-078` | 7AC 两个既有 gateway test 文件覆盖未完成 cancel Future 不阻塞结果、清理 Future 异常不逸出、清理启动时身份／close 变化及 self-leave 迟到失败；invitation create／preview／accept 均经过修复路径。原 token／HTTP／401 连续性、输入顺序、body／UUID、parser、failure 和 ownership 回归通过；完整 Flutter、analyzer、format、生产边界、链接与 9 个 CI job 通过，不重复未改 DB 实验。 |
 | `TEST-079` | 7AE Widget 覆盖合法／非法 target UUID、首次有效提交生成编号、busy 防重、固定组织与 UUID、十类失败、意外异常、粘性不确定状态、关闭／放弃、原五字段回执、显式复制及失败重试；覆盖原账号、换号／ABA、迟到结果、dispose 与共享 gateway ownership、目录接线且不切项目。检查中英文、320×568 和 200% 字号、键盘／焦点、live region 与触控目标；完整 Flutter、analyzer、format、生产边界、链接和 9 个 CI job 通过，不重复未改 DB 实验。 |
 | `TEST-080` | 7AF Widget 覆盖 trusted current `app_user_id` 的显示、显式复制、失败重试、空目录与目录失败，以及登录失效／换号后隐藏旧编号。检查中英文、live region、键盘、48 dp 触控目标和 320×568／200% 字号；完整 Flutter、analyzer、format、生产边界、链接与 CI 通过，不把 synthetic Clipboard 当作真实设备或生产身份证据。 |
+| `TEST-081` | 7AG 文档验收核对 ORG-024–ORG-029 在 Product Spec、ADR-0185 与学习文档中的一致性：owner-only create／approve、最小预览、link 与 application 独立 168 小时期限、同 actor／link 首申请唯一性、current-member 拒绝、四种 typed result、exact replay／drift、三条固定锁序、锁后 `clock_timestamp()`、批准只建 organization membership、稳定错误、claim／audit／ACL、账号去关联、recovery freeze 与全局 purge family 顺序。Markdown link、no-slop 与 diff 检查通过只证明文档一致，不证明数据库、并发、HTTP、生产身份、部署、Apple 或真人平台。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3371,6 +3443,9 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 
 7AF／#354 在“我的组织”显示并复制当前 trusted session context 已有的本人内部账号编号，让收件人可以把编号交给邀请者。
 它不增加数据库、Backend、账号搜索、其他用户资料或权限；登录失效或账号切换后立即隐藏旧编号。
+
+7AG／#356 固定可分享加入链接、active actor 申请与 current owner 批准的数据库级合同。link 只开放已知 UUID 的最小预览，申请批准只建立 organization membership。
+这是 spec-only 交付；migration、Backend、Flutter、分享 transport、申请目录、profile、reject、revoke 与通知仍未实现。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 
