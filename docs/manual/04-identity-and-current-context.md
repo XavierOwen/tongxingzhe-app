@@ -1204,7 +1204,7 @@ dart run tool/check_markdown_links.dart
 
 ### 3.22 按已知账号编号创建邀请（Issue #351，MANUAL-069）
 
-此入口服务手头已有收件人内部账号 UUID 的组织所有者。账号编号不是邮箱，也不是认证商 subject；本页不查找账号、不列成员、不显示自己的编号。普通用户如何取得该编号仍是独立待确认项。
+此入口服务手头已有收件人内部账号 UUID 的组织所有者。账号编号不是邮箱，也不是认证商 subject；本页不查找账号、不列成员。收件人可按 3.23 节复制自己的编号。
 
 1. 打开“我的组织”，在目标组织行选择“创建邀请”。组织目录只证明当前成员关系，不能证明当前 owner 权限；服务端会重新检查。
 2. 核对固定的组织，填写收件人内部账号 UUID，再提交。非法格式不发请求；首次有效提交才生成 invitation UUID。
@@ -1229,6 +1229,33 @@ dart run tool/check_markdown_links.dart
 ```
 
 本票复用原 HTTP／SQL 合同，没有新增本地数据库实验。Widget、synthetic Clipboard 与渲染结果不能代替生产身份、真人投递或六平台真实运行证据。
+
+### 3.23 查看并复制本人的内部账号编号（Issue #354，MANUAL-070）
+
+“我的组织”直接使用当前 ready `AppSession` 的 trusted context。该 context 已从 Backend 响应中校验 `app_user_id` 为 UUID，因此页面不需要新请求、缓存或身份推导。
+
+页面把“本人账号编号”放在组织列表之前。即使列表为空或加载失败，用户仍可查看和选择完整编号。复制按钮只写入该编号，不读取剪贴板。写入成功或失败都会更新 live region；失败后可以再次选择复制，不会发送邀请或网络请求。
+
+编号有三种不同用途：
+
+- 本人账号编号标识当前 App 账号，可交给邀请者作为 target selector；
+- 组织编号标识目标组织，由组织目录返回；
+- invitation 编号标识一份七天有效的定向邀请，由邀请者交给绑定收件人。
+
+本人账号编号不证明 owner、membership 或 capability，也不能读取其他账号。登录失效、换号或同账号注销重登会使原目录失效，并立即隐藏旧编号和复制操作。已经写入系统剪贴板的内容无法由页面追溯删除。
+
+相关验证：
+
+```sh
+flutter test test/features/organization_directory/organization_directory_dialog_test.dart test/features/organization_directory/organization_invitation_create_dialog_test.dart
+flutter test
+dart analyze
+dart format --output=none --set-exit-if-changed lib test tool integration_test test_driver
+dart run tool/check_production_boundary.dart
+dart run tool/check_markdown_links.dart
+```
+
+Widget 测试可以验证显示、会话隔离、平台通道调用和错误提示。它不证明真实设备剪贴板、生产身份、部署或实际邀请投递。
 
 ## 4. PostgreSQL transaction 建立哪些事实
 

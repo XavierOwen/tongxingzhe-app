@@ -46,8 +46,10 @@ final class _OrganizationDirectoryDialogState
   String? _notice;
   String? _trustedAppUserId;
   var _busy = false;
+  var _copyingSelfId = false;
   var _sessionInvalidated = false;
   var _requestGeneration = 0;
+  var _copyGeneration = 0;
 
   @override
   void initState() {
@@ -61,6 +63,7 @@ final class _OrganizationDirectoryDialogState
   @override
   void dispose() {
     _requestGeneration += 1;
+    _copyGeneration += 1;
     unawaited(_sessionSubscription?.cancel());
     super.dispose();
   }
@@ -113,9 +116,17 @@ final class _OrganizationDirectoryDialogState
         ),
         const SizedBox(height: 8),
         Text(widget.text.t('organizationDirectoryHelp')),
+        if (_trustedAppUserId case final appUserId?) ...[
+          const SizedBox(height: 16),
+          _selfIdentity(context, appUserId),
+        ],
         const SizedBox(height: 16),
         if (_notice case final notice?) ...[
-          Semantics(liveRegion: true, child: Text(notice)),
+          Semantics(
+            key: const ValueKey('organization-directory-notice'),
+            liveRegion: true,
+            child: Text(notice),
+          ),
           const SizedBox(height: 12),
         ],
         Semantics(
@@ -137,6 +148,34 @@ final class _OrganizationDirectoryDialogState
       ],
     );
   }
+
+  Widget _selfIdentity(BuildContext context, String appUserId) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Text(
+        widget.text.t('organizationDirectoryAppUserIdLabel'),
+        style: Theme.of(context).textTheme.labelLarge,
+      ),
+      const SizedBox(height: 4),
+      SelectableText(
+        appUserId,
+        key: const ValueKey('organization-directory-self-app-user-id'),
+      ),
+      const SizedBox(height: 4),
+      Text(widget.text.t('organizationDirectoryAppUserIdHelp')),
+      Align(
+        alignment: AlignmentDirectional.centerEnd,
+        child: TextButton.icon(
+          key: const ValueKey('organization-directory-self-app-user-id-copy'),
+          onPressed: _copyingSelfId || _sessionInvalidated
+              ? null
+              : _copySelfAppUserId,
+          icon: const Icon(Icons.copy_outlined),
+          label: Text(widget.text.t('organizationDirectoryAppUserIdCopy')),
+        ),
+      ),
+    ],
+  );
 
   Widget _entry(BuildContext context, OrganizationDirectoryEntry entry) =>
       Padding(
@@ -272,6 +311,35 @@ final class _OrganizationDirectoryDialogState
     }
   }
 
+  Future<void> _copySelfAppUserId() async {
+    final appUserId = _trustedAppUserId;
+    if (_copyingSelfId ||
+        appUserId == null ||
+        !_hasTrustedSession(widget.appSession.current)) {
+      return;
+    }
+
+    final generation = ++_copyGeneration;
+    setState(() {
+      _copyingSelfId = true;
+      _notice = null;
+    });
+    try {
+      await Clipboard.setData(ClipboardData(text: appUserId));
+      if (!mounted || generation != _copyGeneration) return;
+      setState(() {
+        _copyingSelfId = false;
+        _notice = widget.text.t('organizationDirectoryAppUserIdCopySuccess');
+      });
+    } catch (_) {
+      if (!mounted || generation != _copyGeneration) return;
+      setState(() {
+        _copyingSelfId = false;
+        _notice = widget.text.t('organizationDirectoryAppUserIdCopyFailure');
+      });
+    }
+  }
+
   void _sessionChanged(AppSessionSnapshot snapshot) {
     if (!_hasTrustedSession(snapshot)) _invalidateSession();
   }
@@ -279,12 +347,15 @@ final class _OrganizationDirectoryDialogState
   void _invalidateSession() {
     if (_sessionInvalidated || !mounted) return;
     _requestGeneration += 1;
+    _copyGeneration += 1;
     setState(() {
       _sessionInvalidated = true;
       _busy = false;
+      _copyingSelfId = false;
       _organizations = const [];
       _notice = null;
       _failure = OrganizationDirectoryFailureCode.unauthorized;
+      _trustedAppUserId = null;
     });
   }
 

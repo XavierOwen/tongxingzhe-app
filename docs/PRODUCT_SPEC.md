@@ -302,6 +302,7 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `ORG-020` | self-leave 使用独立 `organization-membership-self-leave:v1` claim、request lock、tombstone 和 value-free audit；request → actor row → governance → membership 锁后取一次数据库时间用于授权、membership end、claim、audit 与 receipt。相同 request、active actor、workspace 精确重放旧结果，重新入组后旧请求不得结束新 membership。drift、去关联或同 family tombstone 固定 conflict；runtime 仅可执行 exact identity bridge。 |
 | `ORG-021` | 只有 active 的绑定 target，才能按已知 invitation UUID 预览未接受、未过期且组织可加入的邀请名称与有效期。预览不列出 workspace、成员、inviter、target 或权限，不修改数据，不缓存，不保留接受资格；未知、错误收件人、过期、已接受、去关联、已有当前 membership 或恢复期一律 forbidden。接受仍按 ORG-013–ORG-017 锁后重验。 |
 | `ORG-022` | 组织写入意图绑定发起时的同一次登录。token 等待、HTTP、一次 401 刷新及重试期间，换账号、注销再登录、身份流失效或 gateway close 均阻止旧请求继续发出或交付结果；不借新账号凭据延续旧意图。已发送请求不承诺撤销服务端事实，Backend 仍独立检查实际 bearer actor 的权限。 |
+| `ORG-023` | 已登录用户可以从当前 trusted session context 查看并显式复制本人的内部 `app_user_id`，用于定向邀请的收件人编号交换。页面不得借此读取其他账号、external subject 或邮箱；登录失效或账号切换后须立即隐藏旧编号。该编号只是不透明 selector，不授予目录、成员或权限读取能力。 |
 
 #### Slice 7B Spec：固定组织原子创建与首位所有者合同
 
@@ -1247,7 +1248,14 @@ network／service unavailable、invalid response、意外异常及 conflict 按�
 
 会话失效、换号、同账号注销重登和离开页面都清除输入、编号及回执，拒绝迟到结果。页面不关闭共享 gateway 或 AppSession；复制前重新核对会话，失效后不再发起复制。已经由用户交给系统剪贴板的内容不由本页追踪或撤回。
 `TEST-079`／`MANUAL-069` 覆盖交互、固定意图、错误、复制、会话与目录接线。界面沿用既有 Material 3，保证中英文、320×568、200% 字号、键盘、焦点、live region 与触控目标可用。
-本票不改 Backend／SQL／依赖，也不解决普通用户如何获得内部账号编号的问题；本地 Widget、渲染与 CI 不证明邮件投递、生产身份、部署或六平台真人行为。
+本票不改 Backend／SQL／依赖；7AF 另行补充本人编号显示。本地 Widget、渲染与 CI 不证明邮件投递、生产身份、部署或六平台真人行为。
+
+#### Slice 7AF：显示并复制本人账号编号
+
+7AF／Issue #354 在“我的组织”显示当前 ready `AppSession` 的 trusted `app_user_id`。该 UUID 已由现有 session context gateway 校验；页面不发新请求，也不从 external subject 或邮箱推导编号。
+
+编号在空目录或目录加载失败时仍可见。用户可以显式复制；成功和失败均更新 live region，失败后可重试。登录失效、换号或同账号注销重登会立即隐藏旧编号和复制操作。此功能不显示其他用户、不增加账号搜索或成员目录，也不改变邀请权限与服务端校验。
+`TEST-080`／`MANUAL-070` 覆盖显示、复制、失败、会话隔离和可访问性。本地 Widget 与 synthetic Clipboard 不证明真实设备、生产身份、部署或实际投递。
 
 ### 5.8 分析、指标与报告
 
@@ -2763,6 +2771,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-067` | 学习文档说明 7AB 的请求意图与 bearer actor 区别、UI 丢弃结果的局限、token／HTTP／401 的登录连续性、同账号注销重登、close 和迟到异常；提供 focused／完整 Flutter 验证命令，说明不改变服务端权限且不重复未改的本地 DB 实验。 |
 | `MANUAL-068` | 学习文档说明 7AC 中同步停止监听与异步清理的区别、最后身份检查后不再等待，以及 invitation 三操作和 self-leave 的 typed result 边界；提供定向回归命令，不把 synthetic 清理当生产网络取消或数据库回滚。 |
 | `MANUAL-069` | 学习文档说明 7AE 的已知内部账号 UUID 前提、目录与 owner 权限区别、固定组织与幂等意图、不确定结果及放弃、历史回执、显式复制与手工交付、会话清理和验证命令；不声称已提供账号编号获取、邮件投递、生产或真人平台证据。 |
+| `MANUAL-070` | 学习文档说明 7AF 如何从现有 trusted session context 显示并复制本人内部账号编号，以及编号、组织 UUID 与 invitation UUID 的区别。必须说明会话失效后隐藏、Clipboard 失败重试、无账号搜索或新网络接口，并区分 Widget synthetic 与真实设备、生产身份和实际投递证据。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3020,6 +3029,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-077` | 7AB 两个 gateway 的可控 Future 测试先复现 token 等待或 401 刷新期间旧意图使用新账号 token，以及切号／close 后迟到成功；修复后覆盖换号、同账号注销重登、current 与 stream 失效、迟到异常、幂等 close，以及不阻塞交付且不逸出异常的监听清理。正常请求、同登录 token 更新、合法单次 401、相同 body／UUID、strict parser、typed failures 及原输入优先顺序继续通过；相关 UI／composition、完整 Flutter、analyzer、format、生产边界、链接和 9 个 CI job 通过，不新增 Backend 或数据库验证结论。 |
 | `TEST-078` | 7AC 两个既有 gateway test 文件覆盖未完成 cancel Future 不阻塞结果、清理 Future 异常不逸出、清理启动时身份／close 变化及 self-leave 迟到失败；invitation create／preview／accept 均经过修复路径。原 token／HTTP／401 连续性、输入顺序、body／UUID、parser、failure 和 ownership 回归通过；完整 Flutter、analyzer、format、生产边界、链接与 9 个 CI job 通过，不重复未改 DB 实验。 |
 | `TEST-079` | 7AE Widget 覆盖合法／非法 target UUID、首次有效提交生成编号、busy 防重、固定组织与 UUID、十类失败、意外异常、粘性不确定状态、关闭／放弃、原五字段回执、显式复制及失败重试；覆盖原账号、换号／ABA、迟到结果、dispose 与共享 gateway ownership、目录接线且不切项目。检查中英文、320×568 和 200% 字号、键盘／焦点、live region 与触控目标；完整 Flutter、analyzer、format、生产边界、链接和 9 个 CI job 通过，不重复未改 DB 实验。 |
+| `TEST-080` | 7AF Widget 覆盖 trusted current `app_user_id` 的显示、显式复制、失败重试、空目录与目录失败，以及登录失效／换号后隐藏旧编号。检查中英文、live region、键盘、48 dp 触控目标和 320×568／200% 字号；完整 Flutter、analyzer、format、生产边界、链接与 CI 通过，不把 synthetic Clipboard 当作真实设备或生产身份证据。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3358,6 +3368,9 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 
 7AE／#351 在已有组织行接入按已知 target UUID 创建邀请的窗口，保留同窗口幂等重试，成功后由用户显式复制 invitation UUID 手工交给收件人。
 该路径不提供本人账号编号展示或账号查询，也不等于邮箱邀请或完整的普通用户编号获取流程；邀请规则和服务端权限不变。
+
+7AF／#354 在“我的组织”显示并复制当前 trusted session context 已有的本人内部账号编号，让收件人可以把编号交给邀请者。
+它不增加数据库、Backend、账号搜索、其他用户资料或权限；登录失效或账号切换后立即隐藏旧编号。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 
