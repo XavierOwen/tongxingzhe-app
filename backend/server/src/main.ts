@@ -16,6 +16,9 @@ import {
 import {
   PostgresOrganizationDirectedAccountInvitationStore,
 } from "./organization-directed-account-invitations.js";
+import {
+  PostgresOrganizationShareableJoinLinkStore,
+} from "./organization-shareable-join-links.js";
 import { createBackendServer } from "./server.js";
 import { PostgresSessionContextStore } from "./session-context.js";
 import { PostgresSyncCommandStore } from "./sync-store.js";
@@ -161,6 +164,10 @@ const organizationMembershipSelfLeaveStore =
   new PostgresOrganizationMembershipSelfLeaveStore(query);
 const organizationDirectedAccountInvitationStore =
   new PostgresOrganizationDirectedAccountInvitationStore(query);
+// Each operation is one bridge statement. Create writes claim and audit
+// atomically; preview is read-only. The pool promise gates the HTTP response.
+const organizationShareableJoinLinkStore =
+  new PostgresOrganizationShareableJoinLinkStore(query);
 const server = createBackendServer({
   identityVerifier,
   organizationCreationIdentityVerifier,
@@ -169,6 +176,7 @@ const server = createBackendServer({
   organizationOwnerTransferStore,
   organizationMembershipSelfLeaveStore,
   organizationDirectedAccountInvitationStore,
+  organizationShareableJoinLinkStore,
   contextStore,
   commandStore,
   regionResolutionStore,

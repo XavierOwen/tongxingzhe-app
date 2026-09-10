@@ -92,6 +92,27 @@ Issue #312 实现固定的 `POST /v1/organizations/:organizationWorkspaceId/owne
 
 [`organization-owner-transfer.integration.ts`](test/organization-owner-transfer.integration.ts) 显式读取 `OWNER_TRANSFER_FIXTURE`，在事务中执行 fixture、切换到 `tongxingzhe_runtime`，验证首次调用与 exact replay 返回同一五字段 receipt，最后回滚。Docker runner 注入 0086 fixture 并运行该 integration；这些检查只证明 synthetic Backend、runtime bridge 和 PostgreSQL 合同，不证明 production identity、部署端点、真实组织数据或真人平台运行时。
 
+## 可分享加入链接 Backend route 与 0092 integration
+
+Issue #364 只接通已经独立成立的 link family：
+
+| 方法与路径 | 请求与结果 |
+| --- | --- |
+| `POST /v1/organizations/:organizationWorkspaceId/shareable-join-links` | 精确 body `{ "link_id": "uuid" }`，返回五字段 create receipt |
+| `GET /v1/organization-shareable-join-links/:linkId` | 无 query 或 declared body，返回四字段 preview receipt |
+
+两个成功入口首次与精确重放都返回 `200`。Backend 使用 generic exact identity，每次只调用一条参数化 0092 `app_data` bridge query。它不调用 organization-creation eligibility verifier、Auth user lookup、`SessionContext` 或 `app_private`。
+
+raw pathname 和 method 在 WHATWG URL 归一化前匹配。错误 method、percent encoding、dot segment、重复或尾随 slash 在认证前返回 `404 not_found`。
+
+命中 route 后依次处理 Bearer、identity、query／body declaration、path UUID、store 和 create body。create 使用共享 1 MiB 实际字节上限；preview 不读取 body。
+
+成功 receipt 只含 ADR-0185 的 exact fields，并规范为 lowercase UUID 与 UTC 毫秒。数据库 invalid request、forbidden、conflict 分别映射为 `400`、`403`、`409`；invalid trusted identity、未知 SQLSTATE／message、row shape 或 adapter 异常统一返回 `503 organization_shareable_join_unavailable`。所有响应为 JSON UTF-8 且 `no-store`。
+
+unit、route 与 composition tests 检查 matcher、auth-first、strict body／row、Promise gate 和 production wiring。Docker runner 注入 0092 fixture，并用 `tongxingzhe_runtime` 运行真实 adapter integration。
+
+synthetic 通过不证明 application、Flutter、deep link、production identity、部署或真人平台。
+
 ## 个人当前关系阶段快照
 
 | 方法与路径 | 行为 |

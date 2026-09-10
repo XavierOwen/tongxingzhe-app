@@ -1454,6 +1454,37 @@ git diff --check
 
 完整 runner 自动发现 0094 migration、结构检查、rollback fixture 和独立并发脚本，并验证 checksum 与 dump／restore。fixture 与并发脚本都只使用 synthetic 数据。本地通过不证明 Backend、HTTP、生产 identity、部署、Apple 或真人平台。
 
+### 3.28 通过 Backend 创建和预览可分享 link（Issue #364，MANUAL-075）
+
+7AK 只把 0092 已有的 link create 与 preview bridge 接到 Backend：
+
+- `POST /v1/organizations/:organizationWorkspaceId/shareable-join-links` 只接受 `{ "link_id": "uuid" }`；
+- `GET /v1/organization-shareable-join-links/:linkId` 不接受 query 或 declared body。
+
+两条 route 首次执行和精确重放都返回 `200`。create receipt 只含 contract、link、organization workspace、issued time 和 expiry；preview receipt 只含 preview contract、link、组织原名称和 expiry。UUID 规范为小写，时间规范为 UTC 毫秒。所有成功和失败响应使用 JSON UTF-8 与 `Cache-Control: no-store`。
+
+Backend 在 URL 归一化前匹配 raw pathname 和 method。错误 method、percent encoding、dot segment、重复或尾随 slash 直接返回 `404 not_found`。此时不验证 token、不读 body、不访问 store。
+
+命中 route 后才按 Bearer、通用 exact identity、query／body declaration、path UUID、store 和 create body 的顺序处理。
+
+create body 必须只有 `link_id`；空或非法 JSON 返回 `invalid_json`，超过共享 1 MiB 实际字节上限返回 `payload_too_large`。非法 selector 或 body 返回 `invalid_organization_shareable_join_request`。数据库 stable forbidden／conflict 分别映射为 `403`／`409`；invalid trusted identity、store 缺失、未知数据库错误或 row shape 漂移统一 `503 organization_shareable_join_unavailable`。
+
+production composition 复用 generic JWT verifier 与单一 `pool.query`，只注入专用 link store。它不使用组织创建 eligibility verifier、Auth user lookup、`SessionContext` 或 `app_private`。handler 等待参数化 `app_data` bridge query settled 后才写成功响应。
+
+从仓库根目录运行：
+
+```bash
+cd backend/server
+npm test
+npm run check
+cd ../..
+./tool/run_postgres_tests_in_docker.sh
+dart run tool/check_markdown_links.dart
+git diff --check
+```
+
+route、unit、composition 和 Docker integration 使用 synthetic identity／PostgreSQL fixture。本地通过不证明 application submit／approve、Flutter、deep link、生产 identity、部署、Apple 或真人平台。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：

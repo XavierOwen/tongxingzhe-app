@@ -121,11 +121,19 @@ approved replay 只在最后一把锁后确认调用者仍是 current active own
 | 提交 application | `organization-shareable-join-application:v1` | `organization_shareable_join_application_contract_id`、`application_id`、`link_id`、`organization_workspace_id`、`submitted_at_utc`、`expires_at_utc` |
 | 批准 application | `organization-shareable-join-application:v1` | `organization_shareable_join_application_contract_id`、`application_id`、`organization_workspace_id`、`organization_membership_id`、`approved_at_utc` |
 
-未来 HTTP UUID 使用 canonical lowercase，时间使用 UTC 毫秒 ISO-8601。SQL row 保留 `timestamptz` 完整精度。receipt 不含 creator、applicant、approver、profile、email、owner assignment、capability、replay flag 或自由字段。四种结果不使用含可选字段的混合 envelope。
+HTTP UUID 使用 canonical lowercase，时间使用 UTC 毫秒 ISO-8601。SQL row 保留 `timestamptz` 完整精度。receipt 不含 creator、applicant、approver、profile、email、owner assignment、capability、replay flag 或自由字段。四种结果不使用含可选字段的混合 envelope。
 
-未来 HTTP 成功和失败响应都使用精确 `Content-Type: application/json; charset=utf-8` 和 `Cache-Control: no-store`。错误 root 只能是 `{ "error": { "code": "<stable-code>" } }`。route、method、status、body 顺序和 parser 由后续 transport slice 固定。
+HTTP 成功和失败响应都使用精确 `Content-Type: application/json; charset=utf-8` 和 `Cache-Control: no-store`。错误 root 只能是 `{ "error": { "code": "<stable-code>" } }`。7AK 固定 link create／preview transport；application submit／approve 的 route、method、status 和 body 仍由后续 transport slice 固定。
 
-数据库错误与未来 Backend code 固定为：
+link create 使用 `POST /v1/organizations/:organizationWorkspaceId/shareable-join-links`，body 必须精确为 `{ "link_id": "uuid" }`。link preview 使用 `GET /v1/organization-shareable-join-links/:linkId`，不接受 query 或 declared body。两个成功入口首次执行与精确重放都返回 `200`，并直接输出上表对应的五字段或四字段 snake_case receipt。
+
+服务器必须在 WHATWG URL 归一化前匹配 raw pathname 和 method。错误 method、percent encoding、dot segment、重复或尾随 slash 返回 `404 not_found`，且不认证、不读取 body、不访问 store。
+
+命中 route 后依次处理 Bearer、通用 exact identity、query／body declaration、path UUID 和 store 可用性。create 最后才读取并严格解析 body。UUID 输出使用 canonical lowercase，时间输出使用 UTC 毫秒 ISO-8601。
+
+空 body 或非法 JSON 返回 `400 invalid_json`，超过共享 1 MiB 实际字节上限返回 `413 payload_too_large`。非法 path／body UUID、额外或缺失字段和 query 返回 `400 invalid_organization_shareable_join_request`。token 缺失或无效返回 `401 unauthenticated`；forbidden、conflict 和 unavailable 分别返回 `403`、`409` 和 `503`。handler 必须等待单次参数化 bridge query settled 后才发送成功响应。
+
+数据库错误与 Backend code 固定为：
 
 | SQLSTATE 与固定 message | Backend code |
 | --- | --- |
@@ -134,7 +142,7 @@ approved replay 只在最后一把锁后确认调用者仍是 current active own
 | `42501 organization shareable join forbidden` | `organization_shareable_join_forbidden` |
 | `22023 organization shareable join idempotency conflict` | `organization_shareable_join_conflict` |
 
-unknown SQLSTATE、message、constraint、parser、result shape 或内部异常统一映射为 `organization_shareable_join_unavailable`。identity 输入为 null、去除两端 U+0020 后为空、issuer 超过 2048 字符或 subject 超过 512 字符时使用 invalid identity。typed UUID 参数为 null 时使用 invalid request。非法 UUID 文本由未来 transport 在进入 SQL 前处理。
+unknown SQLSTATE、message、constraint、parser、result shape 或内部异常统一映射为 `organization_shareable_join_unavailable`。identity 输入为 null、去除两端 U+0020 后为空、issuer 超过 2048 字符或 subject 超过 512 字符时使用 invalid identity。typed UUID 参数为 null 时使用 invalid request。非法 UUID 文本由相应 transport 在进入 SQL 前处理。
 
 未知 link／application／workspace、非 organization workspace、非 active actor、非 owner、current member 的新申请、过期、恢复期、申请人去关联或已由其他路径入组都统一 forbidden。错误不区分 `not_found`、`expired`、`already_member` 或 `recovery`。
 
