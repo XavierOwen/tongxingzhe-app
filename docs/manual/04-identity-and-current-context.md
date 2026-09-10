@@ -1369,7 +1369,7 @@ git diff --check
 
 ### 3.25 在 PostgreSQL 创建和预览可分享 link（Issue #358，MANUAL-072）
 
-7AH／0092 只实现 3.24 的 link 子集。当前 owner 可以在数据库签发 link，任一 active exact identity 可以按已知 link UUID 读取最小预览。link 不建立 membership；0093 才实现 application submit，owner approval 仍未实现。
+7AH／0092 只实现 3.24 的 link 子集。当前 owner 可以在数据库签发 link，任一 active exact identity 可以按已知 link UUID 读取最小预览。link 不建立 membership；0093 实现 application submit，0094 实现 owner approval。
 
 0092 提供三个 SQL seam：
 
@@ -1406,8 +1406,8 @@ git diff --check
 
 private schema 保存 approval-ready application claim、value-free tombstone 和 append-only audit。
 claim 只含 application、link、workspace 和可去关联 applicant。它还保存 submitted、expiry 与成对 nullable approval 字段。
-claim 不保存组织名称、external identity、profile、email、token 或 approver。runtime 只能执行 submit bridge。
-它不能执行 private writer、读写三张关系或调用尚不存在的 approval seam。
+claim 不保存组织名称、external identity、profile、email、token 或 approver。0093 本身只授予 runtime submit bridge 的 `EXECUTE`。
+0094 另授予 approval bridge 的 `EXECUTE`；runtime 仍不能执行 private writer 或读写三张关系。
 
 首次 submit 依次取得 link request、application request、applicant user、governance 和 applicant membership 锁。全部锁后重读并物化 application、link、账号、workspace 和 membership 事实，再读取一次 `clock_timestamp()`。claim、submitted audit 和六字段 receipt 使用同一个 submitted time，application expiry 精确晚 168 小时。
 
@@ -1423,7 +1423,36 @@ dart run tool/check_markdown_links.dart
 git diff --check
 ```
 
-完整 runner 自动发现 0093 migration、结构检查、rollback fixture 和独立并发脚本，并验证 checksum 与 dump／restore。fixture 与并发脚本都只使用 synthetic 数据。本地通过不证明 owner approval、membership 建立、Backend、HTTP、生产 identity、部署、Apple 或真人平台。
+完整 runner 自动发现 0093 migration、结构检查、rollback fixture 和独立并发脚本，并验证 checksum 与 dump／restore。fixture 与并发脚本都只使用 synthetic 数据。本地通过不证明 0094 approval、Backend、HTTP、生产 identity、部署、Apple 或真人平台。
+
+### 3.27 在 PostgreSQL 批准可分享加入申请（Issue #362，MANUAL-074）
+
+7AJ／0094 只实现 3.24 的 owner approval 子集。当前 active owner 可以批准一份未过期的 pending application，使申请人成为普通 organization member。批准不授予 owner、project membership 或 capability。
+
+0094 提供两个 SQL seam：
+
+- `app_private.approve_organization_shareable_join_application_v1(uuid, uuid, uuid)` 接收 trusted actor、application 和 requested organization workspace；
+- `app_data.approve_organization_shareable_join_application_for_identity_v1(text, text, uuid, uuid)` 把 exact active identity 映射到 private writer。
+
+两个函数都返回 contract、application、workspace、organization membership 和 approved time。0094 不增加表、字段、trigger 或角色，复用 0093 的 approval-ready claim、guard 与 audit。runtime 只能执行 identity bridge。
+
+函数在所有历史分类前确认 actor 是 requested organization 的 current active owner。首次 approval 依次锁 application request、按 UUID 排序去重的 approver／applicant user、requested governance 和 exact applicant membership。全部锁后重读并物化 application、账号、workspace、owner 和 membership 事实，再读取一次 `clock_timestamp()`。
+
+首次成功原子建立一条普通 organization membership，以同一时间推进 claim、追加 `application_approved` audit 并返回五字段 receipt。pending application 必须未过期，workspace 必须不是 recovery，applicant 必须仍 active、未去关联且不是 current member。约束拒绝 future-overlap membership 时，外部仍只收到稳定 forbidden，事务不保留部分写入。
+
+已批准精确重放只锁 application request、approver user 和 requested governance。它仍要求调用者是 requested organization 的 current active owner，但不重验 recovery、applicant 后来的状态或去关联、membership 是否结束或 application expiry。任何当前合格 owner 都能取得同一历史 receipt。
+
+unknown application、tombstone、workspace drift 和错误或失效 owner 都返回 forbidden。approval 没有 conflict 结果，也不透露 application 是否属于另一 organization。
+
+从仓库根目录运行完整验证：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+dart run tool/check_markdown_links.dart
+git diff --check
+```
+
+完整 runner 自动发现 0094 migration、结构检查、rollback fixture 和独立并发脚本，并验证 checksum 与 dump／restore。fixture 与并发脚本都只使用 synthetic 数据。本地通过不证明 Backend、HTTP、生产 identity、部署、Apple 或真人平台。
 
 ## 4. PostgreSQL transaction 建立哪些事实
 
