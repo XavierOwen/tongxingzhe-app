@@ -54,7 +54,7 @@ preview 只返回已知、未过期、非 recovery organization 的原名称和 
 
 ## 7AI：可分享加入申请的数据库提交
 
-0093 实现 Issue #360 的 submit-only 子集。它建立 approval-ready application claim、value-free tombstone 和 append-only audit，但只提供 private submit writer 与 exact-identity submit bridge；owner approval 和 membership 写入仍未实现。
+0093 实现 Issue #360 的 submit-only 子集。它建立 approval-ready application claim、value-free tombstone 和 append-only audit，但自身只提供 private submit writer 与 exact-identity submit bridge。0094 才提供 owner approval 和 membership 写入。
 
 首次 submit 按 link request → application request → applicant user → organization governance → applicant membership 取得锁。全部锁后重读并物化资格，再读取一次 `clock_timestamp()`。claim、submitted audit 与六字段 receipt 使用该时间，application expiry 精确晚 168 小时。
 
@@ -65,6 +65,18 @@ link creator 后来的状态不参与授权。
 runtime 只获得 submit identity bridge 的 `EXECUTE`，不能访问 private writer 或三张关系。0093 不增加 approval stub、Backend、HTTP、Flutter、deep link、申请列表或通知。
 
 完整 runner 自动发现 0093 migration、check、rollback fixture 和并发脚本。通过只证明 synthetic PostgreSQL 的 schema、事务、锁、ACL、checksum 与 restore，不证明审批、membership 建立、生产身份、部署或客户端行为。
+
+## 7AJ：可分享加入申请的数据库审批
+
+0094 实现 Issue #362 的 approval-only 子集。它复用 0093 的 application claim、guard 和 audit，只增加 private approval writer 与 exact-identity approval bridge。runtime 只获得 bridge 的 `EXECUTE`。
+
+所有分类前，actor 必须是 requested organization 的 current active owner。首次 approval 按 application request → 排序去重的 approver／applicant user → requested governance → applicant membership 取得锁。全部锁后重读并物化资格，再读取一次 `clock_timestamp()`。
+
+首次成功只建立普通 organization membership，并以同一 approved time 推进 claim、追加 audit 和返回五字段 receipt。它不建立 project membership、owner assignment 或 capability。
+
+已批准精确重放只锁 application request、approver user 和 requested governance。它仍要求 current active owner，但不重验 recovery、applicant、membership 或 application expiry。
+
+完整 runner 自动发现 0094 migration、check、rollback fixture 和并发脚本。通过只证明 synthetic PostgreSQL 的 schema、原子写入、锁、ACL、checksum 与 restore，不证明 Backend、HTTP、生产身份、部署或客户端行为。
 
 ## 6BO：组织项目 opt-in 配置边界
 
