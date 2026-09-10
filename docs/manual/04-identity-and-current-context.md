@@ -1257,6 +1257,116 @@ dart run tool/check_markdown_links.dart
 
 Widget 测试可以验证显示、会话隔离、平台通道调用和错误提示。它不证明真实设备剪贴板、生产身份、部署或实际邀请投递。
 
+### 3.24 可分享加入链接与 owner 审批（Issue #356，MANUAL-071，spec-only）
+
+7AG 固定“可分享 link → authenticated application → current owner approval”的合同，但不实现操作入口。它与定向邀请不同：链接不绑定收件人，持有者只能看到最小预览并提交待审批申请，不能直接入组。
+
+当前没有组织级成员管理 capability。首版因此只允许组织的 current active owner 创建 link 和批准 application。组织目录、项目管理员和报告 capability 都不能替代 owner 授权。申请人必须是 active exact identity，且首次提交时尚非该组织 current member。
+
+#### 后续手工流程怎样保持最小权限
+
+后续实现应按以下顺序让参与者明确发起每项操作：
+
+1. owner 选择一个已知 organization workspace，并为新 link 提供 opaque UUID。数据库在锁后重验 owner；首次成功返回 link、workspace、签发时间和到期时间。
+2. owner 把 link 交给申请人。link 从锁后数据库签发时间起连续有效 168 小时，不是成员凭证，也不包含 owner 或成员资料。
+3. active 账号用已知 link 在线预览。成功结果只有 preview contract、link、组织原名称和到期时间；预览不写 claim 或 audit，也不保留申请资格。
+4. 非 current member 用自己的登录提交 application UUID。数据库从 exact identity 绑定申请人；一个 actor 对同一 link 永久只保留首个 application ID。
+5. 申请人把 application ID 手工交给 owner。首版没有 pending list、profile、email、通知或自动投递。
+6. 任一 current active owner 用已知 organization 与 application UUID 批准。首次成功原子建立一条 organization membership，并返回 membership ID 与批准时间。
+
+批准不建立 project membership、owner assignment 或 capability，也不切换当前项目。申请人应重新读取“我的组织”确认当前成员快照；历史 approval receipt 不是持续成员资格证明。
+
+#### 两个 168 小时期限与重试
+
+link 和 application 使用两个独立 family：
+
+| 对象 | Claim family | 期限起点 |
+| --- | --- | --- |
+| Link | `organization-shareable-join-link:v1` | link 在全部锁后取得的数据库签发时间 |
+| Application | `organization-shareable-join-application:v1` | application 在全部锁后取得的数据库提交时间 |
+
+两种 expiry 都精确晚 168 小时，不受 session time zone 或 DST 影响。application 提交后不再依赖 link 的到期时间；link 随后到期不会缩短 application 自己的期限。到期时刻及之后的新预览、提交或首次批准统一 forbidden。
+
+link 创建重试必须保留同一 link、creator 和 workspace。精确重放返回原 receipt，不重新要求 creator 仍是 owner。creator 不再 active、已去关联或 live claim 属于另一 creator 时 forbidden；只有同一 active creator 改变 workspace 时 conflict。creator 后来失去 owner、结束 membership 或被去关联，不影响尚有效 link 供其他合格账号使用。
+
+application 提交重试必须保留同一 application、applicant 和 link。精确重放返回原 submission receipt，不重验 link expiry、current membership、approval 或恢复状态。live claim 属于另一 applicant、applicant 不再 active 或已去关联时 forbidden；只有同一 active applicant 改变 link 时 conflict。
+
+同一 applicant／link 更换 application ID 也固定 conflict，不能借新 UUID 生成第二份申请。
+
+审批会先验证调用者是 requested workspace 的 current active owner，再分类 live application 的 workspace。unknown application、workspace mismatch、错误或非 owner actor 全部 forbidden，不能借 application UUID 探查其他组织。
+
+application tombstone 也始终 forbidden，因为只含 family 和 request UUID 的 value-free tombstone 无法绑定 requested workspace。
+
+首次批准还要确认 applicant 仍为 active；底层 membership validator 的原始错误收敛为 shareable-join forbidden。已批准 application 的重放仍先重验调用者当前是 requested workspace 的 active owner。任何当时合格的 owner 都可取得同一 approval receipt。
+
+application claim 不保存原 approver，也不成为后续授权。重放不重建 membership 或 audit，也不依赖 applicant 后来的去关联、账号或 membership 状态。
+
+四种 typed result 彼此独立：
+
+| 操作 | 字段数 | 业务字段 |
+| --- | ---: | --- |
+| 创建 link | 5 | contract、link、workspace、issued、expires |
+| 预览 link | 4 | contract、link、organization name、expires |
+| 提交 application | 6 | contract、application、link、workspace、submitted、expires |
+| 批准 application | 5 | contract、application、workspace、membership、approved |
+
+提交和批准共用 `organization_shareable_join_application_contract_id = 'organization-shareable-join-application:v1'`。claim 中批准生成的 membership 列是 `approved_organization_membership_id`，批准结果对外列是 `organization_membership_id`。
+
+结果不含 actor、profile、email、owner、capability、replay flag 或自由字段。未来 HTTP UUID 使用 canonical lowercase，时间使用 UTC 毫秒格式；成功和失败均为严格 JSON UTF-8 并带 `Cache-Control: no-store`。
+
+#### 失败、锁和删除边界
+
+数据库只固定四类错误：
+
+| 条件 | SQLSTATE 与固定 message | Backend code |
+| --- | --- | --- |
+| trusted identity 输入非法 | `22023 invalid organization shareable join identity` | `organization_shareable_join_unavailable` |
+| typed request 参数非法 | `22023 invalid organization shareable join request` | `invalid_organization_shareable_join_request` |
+| 身份、授权、状态、对象或期限不允许 | `42501 organization shareable join forbidden` | `organization_shareable_join_forbidden` |
+| 同身份的幂等 payload 漂移、同 actor／link 换 application 或 create／submit tombstone | `22023 organization shareable join idempotency conflict` | `organization_shareable_join_conflict` |
+
+unknown、expired、current member、错误 actor、非 owner、恢复期或已由其他路径入组都不产生更细错误。create 只把同一 active creator 的 workspace drift 分为 conflict；submit 只把同一 active applicant 的 link drift 和同 applicant／link 换 application ID 分为 conflict。两者的错误 actor 都 forbidden。
+
+approve 的 unknown application、workspace mismatch 和 application tombstone 都 forbidden。这样已知 UUID 不能充当 link、application、账号或组织状态查询。未知 SQLSTATE、message、constraint、result 或 parser 错误统一 unavailable，不返回数据库原文。
+
+三条首次写入锁序固定为：
+
+```text
+create:  link request → creator user → governance → creator membership
+submit:  link request → application request → applicant user → governance → applicant membership
+approve: application request → approver/applicant users（UUID 排序）→ governance → applicant membership
+```
+
+每条路径在全部锁后重读 claim、tombstone、账号、workspace、membership 和 owner，再取一次 `clock_timestamp()` 判断资格和 expiry。submit 始终先取 link family lock；approve 使用独立 application 事实，不反向取得 link lock。批准的 membership、application approval、audit 和 receipt 在一个 transaction 中使用同一时间，失败全部回滚。
+
+只读精确重放也有固定的缩减锁序：
+
+```text
+create replay:   link request → creator user
+submit replay:   link request → application request → applicant user
+approved replay: application request → current approver user → requested organization governance
+```
+
+每条重放在取得全部列出的锁后重读资格与 claim。approved replay 在 governance lock 后重验 current owner，不锁 applicant 或 membership。这两个对象后来可能已去关联或结束，不能阻止历史重放。重放不能先取 governance 再取 user row，也不能省略 governance 而留下 owner TOCTOU。
+
+audit 只保存固定 contract、event kind、link／application／workspace、可选 membership 和数据库时间。它不保存 creator、applicant、approver、组织名称、profile、email、external identity、token、请求原文、SQL、数据库错误或自由文本。`PUBLIC` 不得执行四个 `app_data` 函数或三个 private writer，也不得直接写关系。runtime 只有四个 `app_data` 函数的最小 `EXECUTE`，不能访问 `app_private`。preview 由它的 `app_data` 函数直接执行只读查询，不增加 private preview。
+
+组织恢复期冻结预览和首次 create／submit／approve，只允许符合各自身份或 owner 条件的只读精确重放。这些重放沿用上述缩减锁序和锁后重读。终结清除在既有 creation、directed invitation、owner transfer 和 membership self-leave 后，依次锁 shareable link 与 join application family；每个 family 内按 UUID 排序。清除先写只含 family／request UUID 的 tombstone，再删 claim、audit 和组织业务数据。
+
+账号终结删除按同一全局 family 顺序锁定受影响 request，再去关联 link creator 和 application applicant。creator 去关联不撤销 link；pending application 的 applicant 去关联后不能批准。7AG 不实现账号或组织删除、恢复和 purge writer，完整合同见 [ADR-0185](../adr/0185-organization-shareable-join-application-contract.md)。
+
+#### 文档验证与证据范围
+
+```bash
+node /Users/xavieredith/.codex/skills/no-slop/slop-lint.mjs \
+   docs/adr/0185-organization-shareable-join-application-contract.md \
+  docs/manual/04-identity-and-current-context.md
+dart run tool/check_markdown_links.dart
+git diff --check
+```
+
+这些检查只证明 Product Spec、ADR 和学习文档的合同一致。它们不证明 migration、数据库原子性、并发锁、Backend、HTTP、Flutter、deep link、生产 identity、部署、Apple 或真人平台行为。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
