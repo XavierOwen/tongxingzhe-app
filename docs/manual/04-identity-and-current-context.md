@@ -1367,6 +1367,34 @@ git diff --check
 
 这些检查只证明 Product Spec、ADR 和学习文档的合同一致。它们不证明 migration、数据库原子性、并发锁、Backend、HTTP、Flutter、deep link、生产 identity、部署、Apple 或真人平台行为。
 
+### 3.25 在 PostgreSQL 创建和预览可分享 link（Issue #358，MANUAL-072）
+
+7AH／0092 只实现 3.24 的 link 子集。当前 owner 可以在数据库签发 link，任一 active exact identity 可以按已知 link UUID 读取最小预览。link 不建立 membership；application submit 和 owner approval 仍未实现。
+
+0092 提供三个 SQL seam：
+
+- `app_private.create_organization_shareable_join_link_v1(uuid, uuid, uuid)` 接收 trusted actor、link 和 organization workspace；
+- `app_data.create_organization_shareable_join_link_for_identity_v1(text, text, uuid, uuid)` 把 exact active identity 映射到 private writer；
+- `app_data.preview_organization_shareable_join_link_for_identity_v1(text, text, uuid)` 直接执行只读预览。
+
+private schema 保存 link claim、value-free tombstone 和 append-only audit。claim 只有 link、workspace、可去关联 creator、issued 与 expiry；它不保存组织名称、external identity、token、owner 或成员资料。runtime 只能执行两个 `app_data` bridge，不能执行 private writer 或直接访问关系。
+
+首次 create 依次取得 link request、creator user、governance 和 creator membership 锁。全部锁后重读 owner、账号、workspace recovery、membership、claim 与 tombstone，再读取一次 `clock_timestamp()`。claim、audit 和五字段 receipt 使用同一个 issued time，expiry 精确晚 168 小时。
+
+同一 active creator、link 和 workspace 是精确重放，只返回原 receipt。它不重验 creator 后来的 owner 或 membership；creator 不 active、引用已去关联或 live claim 属于另一 creator 时 forbidden，同一 creator 改 workspace 或命中 tombstone 时 conflict。creator 去关联不撤销 link，其他 active 账号仍可在期限内预览。
+
+preview 返回 contract、link、组织原名称和 expiry 四个字段。它在一次墙钟和同一查询快照内排除 unknown、expired、personal workspace、recovery workspace 和非 active identity。preview 不写 claim／audit，不取 advisory 或 row lock，也不能证明调用者随后有申请资格。
+
+从仓库根目录运行完整验证：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+dart run tool/check_markdown_links.dart
+git diff --check
+```
+
+完整 PostgreSQL runner 自动发现 0092 migration、结构检查、rollback fixture 和独立并发脚本，并验证 checksum 与 dump／restore。fixture 使用 synthetic 数据且回滚；并发脚本使用另一组 synthetic UUID 并提交到一次性容器。本地通过不证明 application／approval、Backend、HTTP、生产 identity、部署、客户端分享、Apple 或真人平台。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：

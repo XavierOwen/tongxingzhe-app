@@ -1327,6 +1327,20 @@ approval replay 不锁 applicant 或 membership，因为两者后来可能已去
 
 `TEST-081`／`MANUAL-071` 覆盖身份、资格、两个 168 小时生命周期、首申请唯一性、精确重放、锁序、并发 membership、稳定错误、最小 receipt、value-free audit、ACL、恢复与清除边界。本票只修改 Product Spec、ADR 与学习文档；不新增 migration、Backend、Flutter、deep link、列表、profile、reject、revoke、rotation、通知、项目权限或生产证明。
 
+#### Slice 7AH：实现可分享加入链接数据库合同
+
+7AH／Issue #358 用 0092 实现 7AG 的 link 子集。
+
+数据库增加 shareable link claim、value-free tombstone 和 append-only audit。SQL seam 只有 private create writer、exact-identity create bridge 和只读 preview bridge。
+
+application submit 与 approval 留给后续切片，0092 不建立 membership。
+
+create 首次路径采用 link request → creator app-user row → governance → creator membership 锁序。全部锁取得后重读资格，再读取一次 `clock_timestamp()`。issued、claim、audit 和 receipt 使用该时间，expiry 精确晚 168 小时。精确重放只锁 link request 与 creator row，要求同一 active creator 和 workspace，但不重新要求 owner 或 current membership。
+
+preview 只按已知 link UUID 返回 contract、link、组织原名称与 expiry。它要求 exact identity 仍映射 active 账号，并在一次只读查询中排除未知、过期、非 organization 和 recovery workspace；creator 已去关联不阻止其他 active 账号预览。preview 不取写锁、不写 claim／audit，也不保留后续申请资格。
+
+`TEST-082`／`MANUAL-072` 覆盖 0092 的结构、事务、精确重放、稳定错误、去关联、不变约束、最小 ACL、并发、checksum 和 dump／restore。synthetic PostgreSQL 证据不证明 Backend、HTTP、生产 identity、部署、客户端分享、Apple 或真人平台。
+
 ### 5.8 分析、指标与报告
 
 #### 5.8.1 统计单位和核心口径
@@ -2843,6 +2857,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-069` | 学习文档说明 7AE 的已知内部账号 UUID 前提、目录与 owner 权限区别、固定组织与幂等意图、不确定结果及放弃、历史回执、显式复制与手工交付、会话清理和验证命令；不声称已提供账号编号获取、邮件投递、生产或真人平台证据。 |
 | `MANUAL-070` | 学习文档说明 7AF 如何从现有 trusted session context 显示并复制本人内部账号编号，以及编号、组织 UUID 与 invitation UUID 的区别。必须说明会话失效后隐藏、Clipboard 失败重试、无账号搜索或新网络接口，并区分 Widget synthetic 与真实设备、生产身份和实际投递证据。 |
 | `MANUAL-071` | 学习文档说明 7AG 的 owner-only shareable link、最小预览、authenticated application、两个独立 family 与连续 168 小时期限、同 actor／link 首申请唯一性、四种 typed result、精确重放、锁后墙钟与固定锁序、稳定错误、value-free audit、最小 ACL、账号去关联、恢复期和全局清除顺序。必须明确本票只有文档，不实现数据库、Backend、Flutter、deep link、列表、profile、reject、revoke、通知、生产身份或真人平台。 |
+| `MANUAL-072` | 学习文档说明 7AH／0092 已实现的 shareable link create／preview 边界、三个 SQL seam、claim／tombstone／audit、一次锁后墙钟、168 小时、精确重放、稳定错误、creator 去关联、只读预览、最小 ACL 和验证命令。必须明确 application／approval、purge、Backend、HTTP、Flutter、deep link、生产身份与真人平台仍未实现。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3102,6 +3117,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-079` | 7AE Widget 覆盖合法／非法 target UUID、首次有效提交生成编号、busy 防重、固定组织与 UUID、十类失败、意外异常、粘性不确定状态、关闭／放弃、原五字段回执、显式复制及失败重试；覆盖原账号、换号／ABA、迟到结果、dispose 与共享 gateway ownership、目录接线且不切项目。检查中英文、320×568 和 200% 字号、键盘／焦点、live region 与触控目标；完整 Flutter、analyzer、format、生产边界、链接和 9 个 CI job 通过，不重复未改 DB 实验。 |
 | `TEST-080` | 7AF Widget 覆盖 trusted current `app_user_id` 的显示、显式复制、失败重试、空目录与目录失败，以及登录失效／换号后隐藏旧编号。检查中英文、live region、键盘、48 dp 触控目标和 320×568／200% 字号；完整 Flutter、analyzer、format、生产边界、链接与 CI 通过，不把 synthetic Clipboard 当作真实设备或生产身份证据。 |
 | `TEST-081` | 7AG 文档验收核对 ORG-024–ORG-029 在 Product Spec、ADR-0185 与学习文档中的一致性：owner-only create／approve、最小预览、link 与 application 独立 168 小时期限、同 actor／link 首申请唯一性、current-member 拒绝、四种 typed result、exact replay／drift、三条固定锁序、锁后 `clock_timestamp()`、批准只建 organization membership、稳定错误、claim／audit／ACL、账号去关联、recovery freeze 与全局 purge family 顺序。Markdown link、no-slop 与 diff 检查通过只证明文档一致，不证明数据库、并发、HTTP、生产身份、部署、Apple 或真人平台。 |
+| `TEST-082` | 7AH／0092 的 structural check、rollback fixture 与独立会话脚本覆盖 link 表／约束／触发器、三个 exact functions、owner／ACL、owner-only 首次创建、一次锁后 `clock_timestamp()`、168 小时、精确重放／drift、tombstone、creator 去关联、最小只读 preview、失败无写入及治理并发。完整 Docker 还验证 migration checksum 与 dump／restore；这些 synthetic PostgreSQL 结果不证明 application／approval、Backend、HTTP、生产 identity、部署、Apple 或真人平台。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3446,6 +3462,8 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 
 7AG／#356 固定可分享加入链接、active actor 申请与 current owner 批准的数据库级合同。link 只开放已知 UUID 的最小预览，申请批准只建立 organization membership。
 这是 spec-only 交付；migration、Backend、Flutter、分享 transport、申请目录、profile、reject、revoke 与通知仍未实现。
+
+7AH／#358 用 0092 交付 shareable link 的 DB-only 创建与预览。application、approval、Backend、HTTP、Flutter、平台 deep link 和 purge writer 仍未实现。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 

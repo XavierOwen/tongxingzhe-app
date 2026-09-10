@@ -28,6 +28,30 @@ Node 阶段要求十三条 Backend integration 入口存在：地点来源、当
 入口缺失、编译失败或断言失败都会使整套测试失败；不能把此前 SQL fixture 的通过单独写成
 Backend adapter 集成通过。
 
+## 7AH：可分享加入链接的数据库创建与预览
+
+0092 实现 Issue #358 的 link-only 子集。
+
+它增加 private link claim、value-free tombstone 和 append-only audit。SQL seam 只有 owner-only create writer、exact-identity create bridge 和只读 preview bridge。
+
+application submit、owner approval、membership 写入、Backend、HTTP、Flutter 与 deep link 不在 0092 中。
+
+首次 create 按 link request → creator user → organization governance → creator membership 取得锁。全部锁后重读资格，再读取一次 `clock_timestamp()`。
+
+claim、audit 和 receipt 使用该时间，expiry 精确晚 168 小时。exact replay 只取得 link request 与 creator user 锁，不重验后来 owner 或 membership。
+
+creator 去关联后不能重放，但不撤销其他 active 账号的 link preview。
+
+preview 只返回已知、未过期、非 recovery organization 的原名称和 expiry。它要求 exact identity 仍映射 active 账号，但不读取 creator，不写业务事实，也不取写锁。runtime 只获得两个 `app_data` bridge 的 `EXECUTE`，不能访问 private writer 或三张关系。
+
+完整验证由 runner 自动发现 0092 migration、check、rollback fixture 和并发脚本：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+只调试可丢弃的专用测试库时，先确认 `DATABASE_URL` 不是 production，再依次运行 migration、`backend/database/checks/verify_organization_shareable_join_link.sql`、`backend/database/fixtures/0092_organization_shareable_join_link.sql` 和 `tool/verify_organization_shareable_join_link_concurrency.sh`。并发脚本会提交 synthetic 行；rollback fixture 使用独立 UUID namespace。通过只证明 synthetic PostgreSQL 的 schema、事务、锁、ACL、checksum 与 restore，不证明生产身份、部署或客户端行为。
+
 ## 6BO：组织项目 opt-in 配置边界
 
 6BO 的组织项目 `follow_up_consent_ratio@1` opt-in 与个人 0048 配置分开。实现后的 `0073` migration 只应增加 private 配置表、private configure/read
