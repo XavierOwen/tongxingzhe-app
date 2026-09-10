@@ -158,6 +158,11 @@ import {
   matchOrganizationShareableJoinLinkRequestTarget,
   type OrganizationShareableJoinLinkStore,
 } from "./organization-shareable-join-links.js";
+import {
+  handleOrganizationShareableJoinApplication,
+  matchOrganizationShareableJoinApplicationRequestTarget,
+  type OrganizationShareableJoinApplicationStore,
+} from "./organization-shareable-join-applications.js";
 import type {
   OrganizationCreationIdentityVerifier,
 } from "./organization-creation-identity.js";
@@ -218,6 +223,8 @@ export interface BackendServerDependencies
     OrganizationDirectedAccountInvitationStore;
   readonly organizationShareableJoinLinkStore?:
     OrganizationShareableJoinLinkStore;
+  readonly organizationShareableJoinApplicationStore?:
+    OrganizationShareableJoinApplicationStore;
 }
 
 export function createBackendServer(
@@ -226,6 +233,33 @@ export function createBackendServer(
   return createServer(async (request, response) => {
     response.setHeader("content-type", "application/json; charset=utf-8");
     response.setHeader("cache-control", "no-store");
+
+    const shareableJoinApplicationMatch =
+      matchOrganizationShareableJoinApplicationRequestTarget(request.url);
+    if (
+      shareableJoinApplicationMatch !== null &&
+      request.method === "POST"
+    ) {
+      try {
+        const result = await handleOrganizationShareableJoinApplication(
+          {
+            ...shareableJoinApplicationMatch,
+            authorization: request.headers.authorization,
+            readBody: async () => readJsonBody(request),
+          },
+          {
+            identityVerifier: dependencies.identityVerifier,
+            applicationStore:
+              dependencies.organizationShareableJoinApplicationStore,
+          },
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
+      }
+      return;
+    }
 
     const shareableJoinLinkMatch =
       matchOrganizationShareableJoinLinkRequestTarget(request.url);

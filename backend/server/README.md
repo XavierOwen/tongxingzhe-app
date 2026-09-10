@@ -113,6 +113,38 @@ unit、route 与 composition tests 检查 matcher、auth-first、strict body／r
 
 synthetic 通过不证明 application、Flutter、deep link、production identity、部署或真人平台。
 
+## 可分享加入申请 Backend route 与 0093／0094 integration
+
+Issue #366 接通同一 application family 的 submit 与 approve：
+
+| 方法与路径 | 请求与结果 |
+| --- | --- |
+| `POST /v1/organization-shareable-join-links/:linkId/applications` | 精确 body `{ "application_id": "uuid" }`，返回六字段 submit receipt |
+| `POST /v1/organizations/:organizationWorkspaceId/shareable-join-applications/:applicationId/approve` | 精确 body `{}`，返回五字段 approval receipt |
+
+两条 route 都不接受 query，首次与精确重放都返回 `200`。Backend 使用 generic exact identity；submit 与 approve 各调用一条参数化的 0093 或 0094 `app_data` bridge query。它不预读 link、application、workspace、owner 或 membership，也不访问 `app_private`。
+
+raw pathname 与 method 在 WHATWG URL 归一化前匹配。
+错误 method、编码、dot segment 或 slash 形状在认证前返回 `404 not_found`。
+命中后依次处理 Bearer、identity、query、path UUID 和 store。
+之后才运行共享 body reader 和 exact body parser。
+body reader 位于 store error catch 外，保留共享 400／413。
+
+submit parser 绑定 request application／link。
+它验证六字段 receipt、UTC 毫秒及精确 168 小时。
+approve parser 绑定 request application／workspace。
+它验证五字段 receipt 和普通 membership UUID，不接受或返回 link。
+数据库 stable error 沿用同一 400／403／409／503 映射。
+未知 SQLSTATE／message 或 result drift 统一 unavailable。
+
+Backend 不实现额外 owner checker。0094 继续先验证 requested workspace 的 current active owner，再分类 application；因此不合格 actor 对 known、unknown 和 cross-workspace application 只看到同一 forbidden。
+
+unit、route 与 composition tests 覆盖 raw match、auth-first 和 strict body／row。
+测试还覆盖 1 MiB 与 Promise gate。
+Docker runner 注入 0093／0094 fixture。
+它以 `tongxingzhe_runtime` 运行真实 adapter integration。
+synthetic 通过不证明列表、通知、Flutter、deep link、production identity、部署或真人平台。
+
 ## 个人当前关系阶段快照
 
 | 方法与路径 | 行为 |

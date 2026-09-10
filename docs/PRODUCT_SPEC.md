@@ -1383,6 +1383,29 @@ raw pathname 和 method 在 URL 归一化前匹配。错误 method、percent enc
 
 `TEST-085`／`MANUAL-075` 覆盖 matcher、认证顺序、exact body、1 MiB 边界、strict receipt、bridge SQL、稳定错误、commit Promise gate、production composition 和真实 PostgreSQL runtime integration。本票不接 application submit／approve、Flutter、deep link、申请列表、通知、rotation／revoke、删除／恢复／purge 或生产部署。
 
+#### Slice 7AL：接通可分享加入申请与审批 Backend
+
+7AL／Issue #366 把 0093 application submit 和 0094 owner approval 一起接到 Backend。submit 使用 `POST /v1/organization-shareable-join-links/:linkId/applications`，body 精确为 `{ "application_id": "uuid" }`。approve 使用 `POST /v1/organizations/:organizationWorkspaceId/shareable-join-applications/:applicationId/approve`，body 精确为 `{}`。两者不接受 query，首次执行与精确重放都返回 `200`。
+
+单一 application-family module 负责两条 raw route、handler 和 store。
+它也负责 PostgreSQL adapter、strict parser 与 wire mapping。
+它复用 generic exact identity，不调用组织创建 verifier、`SessionContext` 或 `app_private`。
+它也不预读 link、application、workspace、owner 或 membership。
+submit 与 approve 各执行一条对应 exact-identity bridge query。
+
+raw method 与 pathname 在 URL 归一化前匹配。错误 method、编码、dot segment 或 slash 形状在认证和 body 读取前返回 `404 not_found`。命中后依次处理 Bearer、identity、query、path UUID 和 store。之后才运行共享 body reader 和 exact body parser。body reader 位于 store error catch 外，保留 `400 invalid_json` 和 `413 payload_too_large`。
+
+submit 成功只返回 application contract、application、link 和 workspace。
+它还返回 submitted time 与 expiry，并验证独立 168 小时期限。
+approve 成功只返回 application contract、application 与 requested workspace。
+它还返回普通 membership 和 approved time，不返回 link。
+
+Backend 不增加 owner checker。
+0094 仍唯一负责 owner-first 分类。
+known、unknown 和 cross-workspace application 对不合格 actor 均为同一 forbidden。
+
+`TEST-086`／`MANUAL-076` 覆盖两条 route、exact body、共享 1 MiB 边界、六／五字段 receipt、request 绑定、UTC、submit 168 小时、稳定错误、Promise gate、production composition 和 0093／0094 runtime integration。本票不增加申请列表、通知、reject、rotation／revoke、Flutter、deep link、自动 context switch、删除／恢复／purge 或生产部署。
+
 ### 5.8 分析、指标与报告
 
 #### 5.8.1 统计单位和核心口径
@@ -3163,6 +3186,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-083` | 7AI／0093 的 structural check、rollback fixture 与独立会话脚本覆盖 approval-ready application 表／约束／guard、两个 exact submit functions、owner／ACL、六字段 receipt、一次锁后 `clock_timestamp()`、独立 168 小时期限、精确重放、历史 conflict 优先、link creator 状态无关、失败零写入／零 membership 副作用，以及 link、账号、recovery 和 membership 并发。完整 Docker 还验证 migration checksum 与 dump／restore；这些 synthetic PostgreSQL 结果不证明 approval、membership 建立、Backend、HTTP、生产 identity、部署、Apple 或真人平台。 |
 | `TEST-084` | 7AJ／0094 的 structural check、rollback fixture 与独立会话脚本覆盖两个 exact approval functions、owner／ACL、五字段 receipt、一次锁后 `clock_timestamp()`、普通 organization membership 原子写入、精确重放、稳定 forbidden 分类、失败零部分写入，以及同／异 owner、同 applicant 的异 application、submit replay、expiry、recovery、账号、owner 和 membership 并发。完整 Docker 还验证 migration checksum 与 dump／restore；这些 synthetic PostgreSQL 结果不证明 Backend、HTTP、生产 identity、部署、Apple 或真人平台。 |
 | `TEST-085` | 7AK Backend route、unit、composition 与真实 PostgreSQL integration 覆盖 link create／preview 的 raw matcher、auth-first、exact body、共享 1 MiB 边界、四／五字段 receipt、UUID／UTC 规范化、0092 bridge、稳定错误、最小 runtime 权限、精确重放、drift 和 commit 后响应。它不证明 application、Flutter、deep link、生产 identity、部署、Apple 或真人平台。 |
+| `TEST-086` | 7AL Backend route、unit、composition 与真实 PostgreSQL integration 覆盖 application submit／approve 的 raw matcher、auth-first、exact body、共享 1 MiB 边界、六／五字段 receipt、request 绑定、UTC、submit 168 小时、0093／0094 bridge、稳定错误、owner-first 非枚举、最小 runtime 权限、精确重放、submit conflict 和 commit 后响应。它不证明列表、通知、Flutter、deep link、生产 identity、部署、Apple 或真人平台。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3514,7 +3538,9 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 
 7AJ／#362 用 0094 交付 owner approval 的 DB-only writer。首次批准原子建立普通 organization membership；精确重放仍要求 current active owner。
 
-7AK／#364 接通 shareable link create／preview 的 Backend route、strict parser、PostgreSQL adapter 和 production composition。application submit／approve 的 Backend、Flutter、平台 deep link、申请列表、通知和 purge writer 仍未实现。
+7AK／#364 接通 shareable link create／preview 的 Backend route、strict parser、PostgreSQL adapter 和 production composition。
+
+7AL／#366 接通 application submit／approve 的 Backend route、strict parser、PostgreSQL adapter 和 production composition。Flutter、平台 deep link、申请列表、通知和 purge writer 仍未实现。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 
