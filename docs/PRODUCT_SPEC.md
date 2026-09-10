@@ -1406,6 +1406,18 @@ known、unknown 和 cross-workspace application 对不合格 actor 均为同一 
 
 `TEST-086`／`MANUAL-076` 覆盖两条 route、exact body、共享 1 MiB 边界、六／五字段 receipt、request 绑定、UTC、submit 168 小时、稳定错误、Promise gate、production composition 和 0093／0094 runtime integration。本票不增加申请列表、通知、reject、rotation／revoke、Flutter、deep link、自动 context switch、删除／恢复／purge 或生产部署。
 
+#### Slice 7AM：接通可分享加入 Flutter typed gateway
+
+7AM／Issue #368 为 Flutter 增加单一 `OrganizationShareableJoinGateway`。它提供 link create／preview 与 application submit／approve 四个操作。每个操作使用独立 immutable receipt 和 typed result；submit 与 approve 不合并为带 optional 字段的 envelope。
+
+HTTP gateway 严格调用 7AK／7AL 已交付的四条 route。调用方提供 opaque UUID；gateway 不生成 selector，也不预读 link、application、owner 或 membership。非法输入在取得 token 或发网前返回 invalid request，合法输入规范为 lowercase。
+
+响应必须同时满足 JSON UTF-8、`Cache-Control: no-store`、exact keys、固定 contract、request selector 绑定、canonical lowercase UUID 与 UTC 毫秒。create 和 submit 分别验证自己的精确 168 小时期限。稳定 Backend 错误映射为共享 typed failure，未知 status、code、header 或 shape 统一 invalid response。
+
+一个请求只属于一个连续 signed-in subject。401 只允许一次 refresh，并以同一 URL 与 body 重试。token／HTTP／refresh 期间的换号、注销重登、close 或迟到结果不能向新会话交付旧结果。空 Backend 配置使用 deferred gateway；配置存在时严格验证 pathless base URI，close 只释放 gateway 自有 client。
+
+`TEST-087`／`MANUAL-077` 覆盖四操作、strict response、failure mapping、单次 401、身份 ABA fence、timeout／network、deferred、配置和 client ownership。本票不接 `AppDependencies`、UI、router、deep link、申请列表、通知、Drift、离线缓存或生产部署。
+
 ### 5.8 分析、指标与报告
 
 #### 5.8.1 统计单位和核心口径
@@ -2923,6 +2935,11 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-070` | 学习文档说明 7AF 如何从现有 trusted session context 显示并复制本人内部账号编号，以及编号、组织 UUID 与 invitation UUID 的区别。必须说明会话失效后隐藏、Clipboard 失败重试、无账号搜索或新网络接口，并区分 Widget synthetic 与真实设备、生产身份和实际投递证据。 |
 | `MANUAL-071` | 学习文档说明 7AG 的 owner-only shareable link、最小预览、authenticated application、两个独立 family 与连续 168 小时期限、同 actor／link 首申请唯一性、四种 typed result、精确重放、锁后墙钟与固定锁序、稳定错误、value-free audit、最小 ACL、账号去关联、恢复期和全局清除顺序。必须明确本票只有文档，不实现数据库、Backend、Flutter、deep link、列表、profile、reject、revoke、通知、生产身份或真人平台。 |
 | `MANUAL-072` | 学习文档说明 7AH／0092 已实现的 shareable link create／preview 边界、三个 SQL seam、claim／tombstone／audit、一次锁后墙钟、168 小时、精确重放、稳定错误、creator 去关联、只读预览、最小 ACL 和验证命令。必须明确 application／approval、purge、Backend、HTTP、Flutter、deep link、生产身份与真人平台仍未实现。 |
+| `MANUAL-073` | 学习文档说明 7AI／0093 已实现的 application submit schema、approval-ready guard、六字段 receipt、独立 168 小时、同 actor／link 首申请唯一性、精确重放、稳定 conflict／forbidden、最小 ACL、零 membership 副作用和并发验证。必须区分 synthetic PostgreSQL、Backend、Flutter、生产身份与真人平台证据。 |
+| `MANUAL-074` | 学习文档说明 7AJ／0094 已实现的 owner approval、五字段 receipt、普通 organization membership 原子写入、owner-first 非枚举、精确重放、申请人与恢复期边界、最小 ACL 和并发验证。必须明确没有 Backend、Flutter、申请列表、生产身份或真人平台证明。 |
+| `MANUAL-075` | 学习文档说明 7AK 的 link create／preview raw route、generic exact identity、strict request／receipt、0092 bridge、稳定错误、1 MiB 边界、Promise gate、production composition 与 runtime integration。必须区分 synthetic Backend／PostgreSQL、Flutter、deep link、部署和真人平台证据。 |
+| `MANUAL-076` | 学习文档说明 7AL 的 application submit／approve raw route、六／五字段 receipt、0093／0094 bridge、submit 168 小时、owner-first 非枚举、稳定错误、1 MiB 边界、Promise gate、production composition 与 runtime integration。必须明确没有 Flutter、申请列表、通知、部署或真人平台证明。 |
+| `MANUAL-077` | 学习文档说明 7AM 的单一四操作 Flutter typed gateway、独立 receipt／result、输入先验、strict JSON／no-store response、两个 168 小时期限、稳定 failure、一次 401、连续身份 fence、deferred／配置与 client ownership。必须明确未接 App composition、UI、router、deep link、Drift、生产身份或真人平台。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3187,6 +3204,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-084` | 7AJ／0094 的 structural check、rollback fixture 与独立会话脚本覆盖两个 exact approval functions、owner／ACL、五字段 receipt、一次锁后 `clock_timestamp()`、普通 organization membership 原子写入、精确重放、稳定 forbidden 分类、失败零部分写入，以及同／异 owner、同 applicant 的异 application、submit replay、expiry、recovery、账号、owner 和 membership 并发。完整 Docker 还验证 migration checksum 与 dump／restore；这些 synthetic PostgreSQL 结果不证明 Backend、HTTP、生产 identity、部署、Apple 或真人平台。 |
 | `TEST-085` | 7AK Backend route、unit、composition 与真实 PostgreSQL integration 覆盖 link create／preview 的 raw matcher、auth-first、exact body、共享 1 MiB 边界、四／五字段 receipt、UUID／UTC 规范化、0092 bridge、稳定错误、最小 runtime 权限、精确重放、drift 和 commit 后响应。它不证明 application、Flutter、deep link、生产 identity、部署、Apple 或真人平台。 |
 | `TEST-086` | 7AL Backend route、unit、composition 与真实 PostgreSQL integration 覆盖 application submit／approve 的 raw matcher、auth-first、exact body、共享 1 MiB 边界、六／五字段 receipt、request 绑定、UTC、submit 168 小时、0093／0094 bridge、稳定错误、owner-first 非枚举、最小 runtime 权限、精确重放、submit conflict 和 commit 后响应。它不证明列表、通知、Flutter、deep link、生产 identity、部署、Apple 或真人平台。 |
+| `TEST-087` | 7AM focused Flutter tests 覆盖四操作 API 与独立 receipt／result、输入 UUID lowercase 和 token 前 short-circuit、固定 method／URL／body／headers、strict JSON／no-store／keys／contract／selector／UUID／UTC、create 与 submit 各 168 小时、全部 typed failure、一次 401 相同请求重试、token／HTTP／refresh／close 的身份 ABA fence、timeout／network、deferred、非法配置和 client 单次 close。完整 Flutter tests、analyzer、format、生产边界、链接与 CI 通过不证明 App composition、UI、Backend、PostgreSQL、production identity、部署、Apple 或真人平台。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3541,6 +3559,8 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 7AK／#364 接通 shareable link create／preview 的 Backend route、strict parser、PostgreSQL adapter 和 production composition。
 
 7AL／#366 接通 application submit／approve 的 Backend route、strict parser、PostgreSQL adapter 和 production composition。Flutter、平台 deep link、申请列表、通知和 purge writer 仍未实现。
+
+7AM／#368 增加 shareable join 四操作 Flutter typed gateway 与身份连续性边界，暂不接 `AppDependencies`、UI 或平台 deep link。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 
