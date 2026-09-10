@@ -1341,6 +1341,20 @@ preview 只按已知 link UUID 返回 contract、link、组织原名称与 expir
 
 `TEST-082`／`MANUAL-072` 覆盖 0092 的结构、事务、精确重放、稳定错误、去关联、不变约束、最小 ACL、并发、checksum 和 dump／restore。synthetic PostgreSQL 证据不证明 Backend、HTTP、生产 identity、部署、客户端分享、Apple 或真人平台。
 
+#### Slice 7AI：实现可分享加入申请提交数据库合同
+
+7AI／Issue #360 用 0093 实现 7AG 的 application submit 子集。数据库建立完整且 approval-ready 的 application claim。
+它也建立 value-free tombstone 和 append-only audit。SQL seam 只增加 private submit writer 与 exact-identity submit bridge。
+approval、membership 写入、Backend、HTTP、Flutter 和 deep link 仍未实现。
+
+首次 submit 采用 link request → application request → applicant app-user row → governance → applicant membership 锁序。全部锁取得后重读并物化 application、link、账号、workspace 和 membership 事实，再读取一次 `clock_timestamp()`。submitted、claim、audit 和六字段 receipt 使用该时间，application expiry 独立晚 168 小时。
+
+精确重放只锁 link request、application request 和 applicant row，要求同一 active、未去关联 applicant、application 与 link。它不重验 link／application expiry、recovery、current membership 或 approval。
+
+application tombstone、同 applicant／link 的另一 application ID 和同 applicant/application 的 link drift 固定 conflict。未知或过期 link、非 organization、recovery workspace、current member 和错误 applicant 固定 forbidden。历史分类先于首次资格；link creator 后来的 owner、membership、active 或去关联状态不影响合格 applicant。
+
+`TEST-083`／`MANUAL-073` 覆盖 0093 的完整 schema、approval-ready guard、六字段 receipt、时间一致性、精确重放、稳定分类、最小 ACL、零 membership 副作用、锁后失效竞争、checksum 和 dump／restore。synthetic PostgreSQL 证据不证明 approval、membership 建立、Backend、HTTP、生产 identity、部署、Apple 或真人平台。
+
 ### 5.8 分析、指标与报告
 
 #### 5.8.1 统计单位和核心口径
@@ -3118,6 +3132,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-080` | 7AF Widget 覆盖 trusted current `app_user_id` 的显示、显式复制、失败重试、空目录与目录失败，以及登录失效／换号后隐藏旧编号。检查中英文、live region、键盘、48 dp 触控目标和 320×568／200% 字号；完整 Flutter、analyzer、format、生产边界、链接与 CI 通过，不把 synthetic Clipboard 当作真实设备或生产身份证据。 |
 | `TEST-081` | 7AG 文档验收核对 ORG-024–ORG-029 在 Product Spec、ADR-0185 与学习文档中的一致性：owner-only create／approve、最小预览、link 与 application 独立 168 小时期限、同 actor／link 首申请唯一性、current-member 拒绝、四种 typed result、exact replay／drift、三条固定锁序、锁后 `clock_timestamp()`、批准只建 organization membership、稳定错误、claim／audit／ACL、账号去关联、recovery freeze 与全局 purge family 顺序。Markdown link、no-slop 与 diff 检查通过只证明文档一致，不证明数据库、并发、HTTP、生产身份、部署、Apple 或真人平台。 |
 | `TEST-082` | 7AH／0092 的 structural check、rollback fixture 与独立会话脚本覆盖 link 表／约束／触发器、三个 exact functions、owner／ACL、owner-only 首次创建、一次锁后 `clock_timestamp()`、168 小时、精确重放／drift、tombstone、creator 去关联、最小只读 preview、失败无写入及治理并发。完整 Docker 还验证 migration checksum 与 dump／restore；这些 synthetic PostgreSQL 结果不证明 application／approval、Backend、HTTP、生产 identity、部署、Apple 或真人平台。 |
+| `TEST-083` | 7AI／0093 的 structural check、rollback fixture 与独立会话脚本覆盖 approval-ready application 表／约束／guard、两个 exact submit functions、owner／ACL、六字段 receipt、一次锁后 `clock_timestamp()`、独立 168 小时期限、精确重放、历史 conflict 优先、link creator 状态无关、失败零写入／零 membership 副作用，以及 link、账号、recovery 和 membership 并发。完整 Docker 还验证 migration checksum 与 dump／restore；这些 synthetic PostgreSQL 结果不证明 approval、membership 建立、Backend、HTTP、生产 identity、部署、Apple 或真人平台。 |
 
 ## 9. UI、视觉与可访问性
 

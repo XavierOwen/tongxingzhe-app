@@ -1369,7 +1369,7 @@ git diff --check
 
 ### 3.25 在 PostgreSQL 创建和预览可分享 link（Issue #358，MANUAL-072）
 
-7AH／0092 只实现 3.24 的 link 子集。当前 owner 可以在数据库签发 link，任一 active exact identity 可以按已知 link UUID 读取最小预览。link 不建立 membership；application submit 和 owner approval 仍未实现。
+7AH／0092 只实现 3.24 的 link 子集。当前 owner 可以在数据库签发 link，任一 active exact identity 可以按已知 link UUID 读取最小预览。link 不建立 membership；0093 才实现 application submit，owner approval 仍未实现。
 
 0092 提供三个 SQL seam：
 
@@ -1394,6 +1394,36 @@ git diff --check
 ```
 
 完整 PostgreSQL runner 自动发现 0092 migration、结构检查、rollback fixture 和独立并发脚本，并验证 checksum 与 dump／restore。fixture 使用 synthetic 数据且回滚；并发脚本使用另一组 synthetic UUID 并提交到一次性容器。本地通过不证明 application／approval、Backend、HTTP、生产 identity、部署、客户端分享、Apple 或真人平台。
+
+### 3.26 在 PostgreSQL 提交可分享加入申请（Issue #360，MANUAL-073）
+
+7AI／0093 只实现 3.24 的 application submit 子集。active exact identity 持有已知、未过期 link UUID 时，可以提交一份独立有效 168 小时的申请；提交不建立 membership，也不代表 owner 已批准。
+
+0093 提供两个 SQL seam：
+
+- `app_private.submit_organization_shareable_join_application_v1(uuid, uuid, uuid)` 接收 trusted applicant、application 和 link；
+- `app_data.submit_organization_shareable_join_application_for_identity_v1(text, text, uuid, uuid)` 把 exact active identity 映射到 private writer。
+
+private schema 保存 approval-ready application claim、value-free tombstone 和 append-only audit。
+claim 只含 application、link、workspace 和可去关联 applicant。它还保存 submitted、expiry 与成对 nullable approval 字段。
+claim 不保存组织名称、external identity、profile、email、token 或 approver。runtime 只能执行 submit bridge。
+它不能执行 private writer、读写三张关系或调用尚不存在的 approval seam。
+
+首次 submit 依次取得 link request、application request、applicant user、governance 和 applicant membership 锁。全部锁后重读并物化 application、link、账号、workspace 和 membership 事实，再读取一次 `clock_timestamp()`。claim、submitted audit 和六字段 receipt 使用同一个 submitted time，application expiry 精确晚 168 小时。
+
+同一 active、未去关联 applicant、application 和 link 是精确重放，只返回原 receipt。重放不重验 link 或 application expiry、recovery、current membership 或 approval。首次提交才拒绝 unknown／expired link、personal／recovery workspace 和 current member；link creator 后来的 owner、membership、active 或去关联状态不参与申请资格。
+
+application tombstone、同 applicant／link 已保留另一 application ID、同 applicant/application 改 link 都返回 conflict。错误 applicant 或已去关联引用返回 forbidden。历史分类先于首次资格，所以后来的 link 过期、recovery 或入组不会把 alternate application ID 的 conflict 改成 forbidden。
+
+从仓库根目录运行完整验证：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+dart run tool/check_markdown_links.dart
+git diff --check
+```
+
+完整 runner 自动发现 0093 migration、结构检查、rollback fixture 和独立并发脚本，并验证 checksum 与 dump／restore。fixture 与并发脚本都只使用 synthetic 数据。本地通过不证明 owner approval、membership 建立、Backend、HTTP、生产 identity、部署、Apple 或真人平台。
 
 ## 4. PostgreSQL transaction 建立哪些事实
 
