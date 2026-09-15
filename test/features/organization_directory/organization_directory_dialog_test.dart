@@ -9,6 +9,7 @@ import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_directory_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_invitation_create_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_membership_self_leave_dialog.dart';
+import 'package:tongxingzhe_app/features/organization_directory/organization_shareable_join_application_submit_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_shareable_join_link_create_dialog.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/l10n/app_strings.dart';
@@ -136,6 +137,80 @@ void main() {
       find.text(text.t('organizationDirectoryInvalidResponse')),
       findsNothing,
     );
+  });
+
+  testWidgets('空目录可使用加入链接，预览提交不刷新目录、不切项目或关闭网关', (tester) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final directoryGateway = _Gateway([OrganizationDirectorySuccess(const [])]);
+    final shareableJoinGateway = _ShareableJoinGateway(
+      previewReceipt: _shareableJoinPreviewReceipt,
+      submitSuccess: true,
+    );
+    final initialContext = fixture.session.current.context;
+    await _open(
+      tester,
+      fixture.session,
+      directoryGateway,
+      shareableJoinGateway: shareableJoinGateway,
+    );
+
+    final useLink = find.byKey(
+      const ValueKey('organization-directory-use-shareable-link'),
+    );
+    expect(useLink, findsOneWidget);
+    await tester.tap(useLink);
+    await tester.pumpAndSettle();
+    expect(
+      find.byType(OrganizationShareableJoinApplicationSubmitDialog),
+      findsOneWidget,
+    );
+
+    await tester.enterText(
+      find.byKey(
+        const ValueKey('organization-shareable-application-link-field'),
+      ),
+      _shareableJoinLinkId,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('organization-shareable-application-preview')),
+    );
+    await tester.pumpAndSettle();
+    expect(shareableJoinGateway.previewCalls, [_shareableJoinLinkId]);
+
+    await tester.tap(
+      find.byKey(const ValueKey('organization-shareable-application-submit')),
+    );
+    await tester.pumpAndSettle();
+    expect(shareableJoinGateway.submitCalls, hasLength(1));
+    expect(
+      shareableJoinGateway.submitCalls.single.linkId,
+      _shareableJoinLinkId,
+    );
+    expect(
+      shareableJoinGateway.submitCalls.single.applicationId,
+      matches(
+        RegExp(
+          r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+        ),
+      ),
+    );
+    expect(directoryGateway.listCalls, 1);
+    expect(fixture.session.current.context, initialContext);
+    expect(shareableJoinGateway.closed, isFalse);
+
+    await tester.tap(
+      find.byKey(const ValueKey('organization-shareable-application-close')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byType(OrganizationShareableJoinApplicationSubmitDialog),
+      findsNothing,
+    );
+    expect(find.byType(OrganizationDirectoryDialog), findsOneWidget);
+    expect(directoryGateway.listCalls, 1);
+    expect(fixture.session.current.context, initialContext);
+    expect(shareableJoinGateway.closed, isFalse);
   });
 
   testWidgets('本人账号编号可复制，复制失败后可重试并通知辅助技术', (tester) async {
@@ -349,6 +424,14 @@ void main() {
       textScaler: TextScaler.linear(2),
     );
     expect(tester.takeException(), isNull);
+    expect(
+      find.byKey(const ValueKey('organization-directory-accept-invitation')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('organization-directory-use-shareable-link')),
+      findsOneWidget,
+    );
     expect(find.text(organizations.last.organizationName), findsOneWidget);
     expect(
       find.text(organizations.last.organizationWorkspaceId),
@@ -567,13 +650,11 @@ void main() {
       directoryGateway,
       selfLeaveGateway: leaveGateway,
     );
-    await tester.tap(
-      find.byKey(
-        ValueKey(
-          'organization-leave-${_organizationA.organizationWorkspaceId}',
-        ),
-      ),
+    final leave = find.byKey(
+      ValueKey('organization-leave-${_organizationA.organizationWorkspaceId}'),
     );
+    await tester.ensureVisible(leave);
+    await tester.tap(leave);
     await tester.pumpAndSettle();
 
     await tester.tap(_leaveConfirm);
@@ -822,13 +903,11 @@ void main() {
       directoryGateway,
       selfLeaveGateway: leaveGateway,
     );
-    await tester.tap(
-      find.byKey(
-        ValueKey(
-          'organization-leave-${_organizationA.organizationWorkspaceId}',
-        ),
-      ),
+    final leave = find.byKey(
+      ValueKey('organization-leave-${_organizationA.organizationWorkspaceId}'),
     );
+    await tester.ensureVisible(leave);
+    await tester.tap(leave);
     await tester.pumpAndSettle();
     await tester.tap(_leaveConfirm);
     await tester.pump();
@@ -1462,9 +1541,16 @@ final class _InvitationGateway
 }
 
 typedef _ShareableJoinCall = ({String linkId, String organizationWorkspaceId});
+typedef _ShareableJoinSubmitCall = ({String applicationId, String linkId});
 
 final class _ShareableJoinGateway implements OrganizationShareableJoinGateway {
+  _ShareableJoinGateway({this.previewReceipt, this.submitSuccess = false});
+
+  final OrganizationShareableJoinLinkPreviewReceipt? previewReceipt;
+  final bool submitSuccess;
   final calls = <_ShareableJoinCall>[];
+  final previewCalls = <String>[];
+  final submitCalls = <_ShareableJoinSubmitCall>[];
   var closed = false;
 
   @override
@@ -1484,13 +1570,38 @@ final class _ShareableJoinGateway implements OrganizationShareableJoinGateway {
   @override
   Future<OrganizationShareableJoinLinkPreviewResult> previewLink({
     required String linkId,
-  }) => throw UnsupportedError('unused directory wiring preview');
+  }) async {
+    previewCalls.add(linkId);
+    final receipt = previewReceipt;
+    return receipt == null
+        ? const OrganizationShareableJoinLinkPreviewRejected(
+            OrganizationShareableJoinFailureCode.notConfigured,
+          )
+        : OrganizationShareableJoinLinkPreviewSuccess(receipt);
+  }
 
   @override
   Future<OrganizationShareableJoinApplicationSubmitResult> submitApplication({
     required String applicationId,
     required String linkId,
-  }) => throw UnsupportedError('unused directory wiring submit');
+  }) async {
+    submitCalls.add((applicationId: applicationId, linkId: linkId));
+    return submitSuccess
+        ? OrganizationShareableJoinApplicationSubmitSuccess(
+            OrganizationShareableJoinApplicationSubmitReceipt(
+              organizationShareableJoinApplicationContractId:
+                  'organization-shareable-join-application:v1',
+              applicationId: applicationId,
+              linkId: linkId,
+              organizationWorkspaceId: _organizationA.organizationWorkspaceId,
+              submittedAtUtc: DateTime.utc(2026, 9, 15, 18),
+              expiresAtUtc: DateTime.utc(2026, 9, 16, 18),
+            ),
+          )
+        : const OrganizationShareableJoinApplicationSubmitRejected(
+            OrganizationShareableJoinFailureCode.notConfigured,
+          );
+  }
 
   @override
   Future<OrganizationShareableJoinApplicationApproveResult> approveApplication({
@@ -1634,6 +1745,16 @@ final _longOrganization = OrganizationDirectoryEntry(
 const _requestIdA = 'c1111111-1111-4111-8111-111111111111';
 const _requestIdB = 'c2222222-2222-4222-8222-222222222222';
 const _targetAppUserId = '99999999-9999-4999-8999-999999999999';
+const _shareableJoinLinkId = 'e1111111-1111-4111-8111-111111111111';
+
+final _shareableJoinPreviewReceipt =
+    OrganizationShareableJoinLinkPreviewReceipt(
+      organizationShareableJoinLinkPreviewContractId:
+          'organization-shareable-join-link-preview:v1',
+      linkId: _shareableJoinLinkId,
+      organizationName: _organizationA.organizationName,
+      expiresAtUtc: DateTime.utc(2026, 9, 16, 18),
+    );
 
 final _receipt = OrganizationMembershipSelfLeaveReceipt(
   membershipSelfLeaveContractId: 'organization-membership-self-leave:v1',

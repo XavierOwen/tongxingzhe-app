@@ -1428,6 +1428,18 @@ builder 使用启动时打开的同一个 `IdentitySession`，`AppStartupReady` 
 
 `TEST-088`／`MANUAL-078` 覆盖选中组织、owner 服务端判权、同 UUID 重试、稳定失败、会话隔离、显式复制、窄屏高字号、production composition 和三条资源关闭路径。本票不增加 link preview、application submit／approve UI、router、deep link、申请列表、通知、Drift、离线缓存或生产证明。
 
+#### Slice 7AO：预览可分享链接并提交入组申请
+
+7AO／Issue #372 提供 shareable join 的申请人入口。已登录用户从“我的组织”顶部输入已知 link UUID；即使当前目录为空，入口仍可用。App 先读取有界预览，只显示组织原名称、link UUID 和到期时间，不搜索组织，也不把 preview 当成 membership 或授权证明。
+
+用户确认预览后，窗口首次 submit 生成一个 canonical application UUID。请求发出后，link 与 application UUID 固定；network unavailable、service unavailable、invalid response 或意外异常只允许原意图重试，放弃前需要再次确认。conflict 是稳定拒绝，不生成新 UUID；其他 typed failure 同样保留当前意图。
+
+成功页显示组织原名称、application UUID、link UUID、organization workspace UUID、提交时间和过期时间。用户必须显式复制 application UUID 并手工交给 owner；申请成功不等于入组，不刷新组织目录、不切换当前项目，也不授予项目或其他权限。
+
+窗口复用 7AN 已组合的同一个 gateway 和 `AppSession`，不新增 composition。账号失效、换号或 ABA 会清除输入、preview、UUID、receipt 和复制状态，并拒绝迟到的 preview、submit 与 Clipboard 完成结果；同账号切项目不改变申请意图。
+
+`TEST-089`／`MANUAL-079` 覆盖 link 输入与 preview、明确 submit、同意图不确定重试、稳定 conflict、成功回执、显式复制、会话隔离、空目录入口和窄屏高字号。本票不增加 router、deep link、扫码、分享 URL、申请列表、通知、approve／reject／revoke UI、Drift、离线缓存或生产证明。
+
 ### 5.8 分析、指标与报告
 
 #### 5.8.1 统计单位和核心口径
@@ -2951,6 +2963,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-076` | 学习文档说明 7AL 的 application submit／approve raw route、六／五字段 receipt、0093／0094 bridge、submit 168 小时、owner-first 非枚举、稳定错误、1 MiB 边界、Promise gate、production composition 与 runtime integration。必须明确没有 Flutter、申请列表、通知、部署或真人平台证明。 |
 | `MANUAL-077` | 学习文档说明 7AM 的单一四操作 Flutter typed gateway、独立 receipt／result、输入先验、strict JSON／no-store response、两个 168 小时期限、稳定 failure、一次 401、连续身份 fence、deferred／配置与 client ownership。必须明确未接 App composition、UI、router、deep link、Drift、生产身份或真人平台。 |
 | `MANUAL-078` | 学习文档说明 7AN 如何把 shareable join gateway 接入同一启动身份与三条关闭路径，并在“我的组织”用固定组织、客户端 UUID、同意图重试和显式复制创建 link。必须说明服务端判定 owner、历史 receipt 不是当前权限证明、只复制 opaque UUID、不拼分享 URL，并区分 Widget／Clipboard synthetic、CI、生产部署与真人平台证据。 |
+| `MANUAL-079` | 学习文档说明 7AO 如何从“我的组织”输入 link UUID、读取最小 preview、明确提交固定 application UUID，并显式复制 application UUID 给 owner。必须说明申请不是 membership、preview 不提供组织搜索、稳定 conflict 与不确定结果的差异、会话 fence，以及 Widget／Clipboard synthetic、CI、生产部署与真人平台证据边界。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3217,6 +3230,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-086` | 7AL Backend route、unit、composition 与真实 PostgreSQL integration 覆盖 application submit／approve 的 raw matcher、auth-first、exact body、共享 1 MiB 边界、六／五字段 receipt、request 绑定、UTC、submit 168 小时、0093／0094 bridge、稳定错误、owner-first 非枚举、最小 runtime 权限、精确重放、submit conflict 和 commit 后响应。它不证明列表、通知、Flutter、deep link、生产 identity、部署、Apple 或真人平台。 |
 | `TEST-087` | 7AM focused Flutter tests 覆盖四操作 API 与独立 receipt／result、输入 UUID lowercase 和 token 前 short-circuit、固定 method／URL／body／headers、strict JSON／no-store／keys／contract／selector／UUID／UTC、create 与 submit 各 168 小时、全部 typed failure、一次 401 相同请求重试、token／HTTP／refresh／close 的身份 ABA fence、timeout／network、deferred、非法配置和 client 单次 close。完整 Flutter tests、analyzer、format、生产边界、链接与 CI 通过不证明 App composition、UI、Backend、PostgreSQL、production identity、部署、Apple 或真人平台。 |
 | `TEST-088` | 7AN focused Widget 与 composition tests 覆盖组织行入口、固定 workspace、不预判 owner、canonical UUID、同意图不确定重试与放弃确认、五字段成功回执、显式 Clipboard 复制及失败重试、十类 typed failure、账号失效／换号／迟到结果、默认 deferred、同一 identity／gateway、后续启动失败、启动中移除和正常 dispose。检查中英文、live region、键盘、触控目标与 320×568／200% 字号；完整 Flutter、analyzer、format、生产边界、链接和 CI 通过不证明真实剪贴板、生产身份、部署、Apple universal link 或真人平台。 |
+| `TEST-089` | 7AO focused Widget 与目录接线 tests 覆盖 link UUID 规范化、本地拒绝、preview 后确认、单一 application UUID、同意图不确定重试、稳定 conflict、六字段成功回执、显式 Clipboard 复制及失败重试、账号失效／换号／ABA／迟到结果、空目录入口、不刷新目录与共享 gateway ownership。检查中英文、live region、键盘、触控目标与 320×568／200% 字号；完整 Flutter、analyzer、format、生产边界、链接和 CI 通过不证明真实剪贴板、生产身份、部署、Apple universal link 或真人平台。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3575,6 +3589,8 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 7AM／#368 增加 shareable join 四操作 Flutter typed gateway 与身份连续性边界，暂不接 `AppDependencies`、UI 或平台 deep link。
 
 7AN／#370 将该 gateway 接入 `AppDependencies` 和 App 启停生命周期，并在“我的组织”为选定组织创建、显示和复制 opaque link UUID。Backend 仍判定 current owner；本切片不拼分享 URL，也不提供申请、审批或 deep link UI。
+
+7AO／#372 在“我的组织”提供申请人入口：输入 link UUID 后先读取有界 preview，再用固定 application UUID 提交并显式复制给 owner。申请不会自动建立 membership、刷新目录或授予项目权限。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 

@@ -1591,6 +1591,34 @@ git diff --check
 
 Widget tests 使用 fake session、内存 gateway 和 synthetic Clipboard。它们可以证明本地显示、重试、会话隔离和参数接线，不能证明 production identity、Backend 部署、数据库权限、真实剪贴板、Apple universal link 或六平台真人运行。7AN 不增加 link preview、application submit／approve UI、申请列表、通知、Drift、离线缓存、删除恢复或 purge writer。
 
+### 3.32 预览可分享链接并提交入组申请（Issue #372，MANUAL-079）
+
+7AO 复用 3.31 已接入 App 的同一个 `OrganizationShareableJoinGateway` 和 `AppSession`。申请入口位于“我的组织”顶部，与“接受邀请”并列；即使账号尚未加入任何组织也可以打开。入口不依赖当前项目，不读取组织目录来寻找目标，也不增加 router、deep link 或扫码。
+
+用户输入收到的 link UUID。窗口先在本地 trim、lowercase 并验证 canonical UUID，再调用 `previewLink`。成功 preview 只显示组织原名称、link UUID 和数据库到期时间；它不暴露 workspace、owner、成员或 capability，也不是 membership 或当前有效性的持久证明。preview 失败不会写服务端，因此用户可以修改 link 后重新读取。
+
+用户确认 preview 后才调用 `submitApplication`。首次提交使用 `secureUuidV4` 生成一个 canonical application UUID。首次请求发出后，link 与 application UUID 都锁定；后续重试不重新 preview，也不产生新 UUID。network unavailable、service unavailable、invalid response 和意外异常可能隐藏已经提交的结果，因此关闭前必须确认放弃。Backend 返回 conflict 时已经给出稳定拒绝；窗口不把它标成结果不确定，也不改换 UUID。
+
+成功回执显示组织原名称、application UUID、link UUID、organization workspace UUID、数据库提交时间和过期时间。用户必须显式复制 application UUID，并通过可信渠道交给 owner。Clipboard 失败只重试复制，不重新 submit。提交申请不建立 membership，不刷新组织目录，不切换当前项目，也不授予项目权限；owner approval 仍是后续独立动作。
+
+窗口捕获打开时的 trusted app-user ID。账号失效、换号或注销后又登录同一账号，都会永久清除该窗口的输入、preview、application UUID、receipt 和复制状态，并忽略迟到的 preview、submit 或 Clipboard 完成结果。同一账号切换项目不改变组织级申请意图。窗口不关闭共享 gateway。
+
+从仓库根目录运行：
+
+```bash
+flutter test --no-pub \
+  test/features/organization_directory/organization_shareable_join_application_submit_dialog_test.dart \
+  test/features/organization_directory/organization_directory_dialog_test.dart
+dart format --output=none --set-exit-if-changed lib test
+dart analyze
+flutter test --no-pub
+dart run tool/check_production_boundary.dart
+dart run tool/check_markdown_links.dart
+git diff --check
+```
+
+Widget tests 使用 fake session、内存 gateway 和 synthetic Clipboard。它们可以证明本地交互、同意图重试、会话隔离和参数接线，不能证明 production identity、Backend 部署、数据库权限、真实剪贴板、Apple universal link 或六平台真人运行。7AO 不增加申请列表、通知、approve／reject／revoke UI、Drift、离线缓存、删除恢复或 purge writer。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
