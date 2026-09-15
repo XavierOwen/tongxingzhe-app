@@ -1540,7 +1540,7 @@ Backend 的 stable code 映射为 typed failure。空或非法 JSON、过大 bod
 
 一个请求只能交付给启动它的连续登录身份。gateway 在 token、HTTP、401 refresh 和最终交付前检查同一个 signed-in subject，并监听中途注销或换号。401 只刷新一次，重试保持完全相同的 URL 与 body。close、换号、同账号注销重登和迟到结果都不能把旧 receipt 交给新会话。
 
-空 `BACKEND_BASE_URL` 返回 deferred gateway，不分配 HTTP client。非空配置必须是 pathless Backend base URI；非法配置同步失败。configured gateway 拥有并关闭自己的 client，但不关闭共享 `IdentitySession`。本切片不把 gateway 接入 `AppDependencies`，直到第一个 UI consumer 出现。
+空 `BACKEND_BASE_URL` 返回 deferred gateway，不分配 HTTP client。非空配置必须是 pathless Backend base URI；非法配置同步失败。configured gateway 拥有并关闭自己的 client，但不关闭共享 `IdentitySession`。7AM 本身不把 gateway 接入 `AppDependencies`；首个 UI consumer 出现后的接线见 3.31。
 
 从仓库根目录运行：
 
@@ -1558,6 +1558,38 @@ git diff --check
 ```
 
 focused tests 使用 fake identity 和 mock HTTP client。完整 Flutter、analyzer 与六平台 CI build 仍不证明 App composition、Backend、PostgreSQL、production identity、部署、Apple 或真人平台。
+
+### 3.31 从“我的组织”创建可分享加入链接（Issue #370，MANUAL-078）
+
+7AN 提供 3.30 所等待的第一个 UI consumer，并在同一工作单元完成 production composition。用户在“我的组织”选择一个组织，打开“创建加入链接”窗口，明确提交后取得 link UUID。窗口不会读取 owner、成员或 capability，也不会把当前项目权限当成组织权限；Backend 仍按 3.24 的合同确认调用者是该组织的 current active owner。
+
+组织目录中的每个当前成员组织都显示入口，因为目录回执只有组织 UUID 和原名称，没有 owner 角色。服务端返回 forbidden 时，界面只说明当前账号或请求不符合条件，不探查 owner 或组织状态。窗口固定使用被选择的 organization workspace，不切换当前项目，也不刷新组织目录。
+
+首次提交使用 `secureUuidV4` 生成 canonical link UUID。发生 network unavailable、service unavailable、invalid response、conflict 或意外异常时，结果可能已经在服务端提交；窗口因此锁定同一组织和 UUID，只提供原请求重试。用户要停止重试时必须再次确认。其他稳定拒绝不生成新 UUID；再次提交仍使用当前窗口的同一意图。
+
+成功回执显示 link UUID、数据库签发时间和过期时间。历史回执不证明调用者目前仍是 owner，也不保证 link 仍有效。用户必须显式点击复制；复制失败只重试 Clipboard，不重新调用 create。此仓库尚未固定 share URL、App route 或 universal-link 合同，所以 7AN 只复制 opaque UUID，不自行拼 URL，也不引入分享插件。
+
+窗口捕获打开时的 trusted app-user ID，并监听 `AppSession`。账号失效、换号或注销后又登录同一账号，都会永久清除该窗口中的 UUID、回执和复制状态，并忽略迟到的网络或 Clipboard 结果。同一账号切换项目不改变组织级创建意图。
+
+`AppDependencies.production()` 使用 `productionOrganizationShareableJoinGateway`。显式 builder 接收启动时打开的同一个 `IdentitySession`，`AppStartupReady` 和 UI 参数链传递同一个 gateway。缺少 builder 时使用不触网的 deferred gateway。后续启动失败、App 在启动完成前被移除和正常 dispose 三条路径都负责关闭已创建的 gateway；gateway 只关闭自有 HTTP client，不关闭 identity。
+
+从仓库根目录运行：
+
+```bash
+flutter test --no-pub \
+  test/features/organization_directory/organization_shareable_join_link_create_dialog_test.dart \
+  test/features/organization_directory/organization_directory_dialog_test.dart \
+  test/app/app_dependencies_test.dart \
+  test/app/tongxingzhe_app_test.dart
+dart format --output=none --set-exit-if-changed lib test
+dart analyze
+flutter test --no-pub
+dart run tool/check_production_boundary.dart
+dart run tool/check_markdown_links.dart
+git diff --check
+```
+
+Widget tests 使用 fake session、内存 gateway 和 synthetic Clipboard。它们可以证明本地显示、重试、会话隔离和参数接线，不能证明 production identity、Backend 部署、数据库权限、真实剪贴板、Apple universal link 或六平台真人运行。7AN 不增加 link preview、application submit／approve UI、申请列表、通知、Drift、离线缓存、删除恢复或 purge writer。
 
 ## 4. PostgreSQL transaction 建立哪些事实
 

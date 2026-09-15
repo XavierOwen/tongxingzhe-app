@@ -47,6 +47,8 @@ import '../organization_membership_self_leave/http_organization_membership_self_
 import '../organization_membership_self_leave/organization_membership_self_leave.dart';
 import '../organization_owner_transfer/http_organization_owner_transfer_gateway.dart';
 import '../organization_owner_transfer/organization_owner_transfer.dart';
+import '../organization_shareable_join/http_organization_shareable_join_gateway.dart';
+import '../organization_shareable_join/organization_shareable_join.dart';
 import '../project_settings/http_personal_follow_up_consent_opt_in_gateway.dart';
 import '../project_settings/personal_follow_up_consent_opt_in.dart';
 import '../questionnaires/http_questionnaire_remote_source.dart';
@@ -104,6 +106,7 @@ final class AppDependencies {
     this.organizationDirectedAccountInvitationGatewayBuilder,
     this.organizationMembershipSelfLeaveGatewayBuilder,
     this.organizationOwnerTransferGatewayBuilder,
+    this.organizationShareableJoinGatewayBuilder,
     this.managementReportExportDelivery,
     this.currentRelationshipStageGatewayBuilder,
     this.reminderSchedulerBuilder = productionReminderNotificationScheduler,
@@ -153,6 +156,8 @@ final class AppDependencies {
           productionOrganizationMembershipSelfLeaveGateway,
       organizationOwnerTransferGatewayBuilder:
           productionOrganizationOwnerTransferGateway,
+      organizationShareableJoinGatewayBuilder:
+          productionOrganizationShareableJoinGateway,
       currentRelationshipStageGatewayBuilder:
           productionCurrentRelationshipStageGateway,
       offlinePiiSecureStore: secureStore,
@@ -211,6 +216,8 @@ final class AppDependencies {
   organizationMembershipSelfLeaveGatewayBuilder;
   final OrganizationOwnerTransferGateway Function(IdentitySession)?
   organizationOwnerTransferGatewayBuilder;
+  final OrganizationShareableJoinGateway Function(IdentitySession)?
+  organizationShareableJoinGatewayBuilder;
   final ManagementReportExportDelivery? managementReportExportDelivery;
   final CurrentRelationshipStageGateway Function(IdentitySession)?
   currentRelationshipStageGatewayBuilder;
@@ -248,6 +255,7 @@ final class AppDependencies {
     OrganizationMembershipSelfLeaveGateway?
     organizationMembershipSelfLeaveGateway;
     OrganizationOwnerTransferGateway? organizationOwnerTransferGateway;
+    OrganizationShareableJoinGateway? organizationShareableJoinGateway;
     CurrentRelationshipStageGateway? currentRelationshipStageGateway;
     ReminderNotificationScheduler? reminderNotificationScheduler;
     PrivateSessionDataGuard? privateSessionDataGuard;
@@ -366,6 +374,9 @@ final class AppDependencies {
       organizationOwnerTransferGateway =
           organizationOwnerTransferGatewayBuilder?.call(identitySession) ??
           const DeferredOrganizationOwnerTransferGateway();
+      organizationShareableJoinGateway =
+          organizationShareableJoinGatewayBuilder?.call(identitySession) ??
+          const DeferredOrganizationShareableJoinGateway();
       currentRelationshipStageGateway =
           currentRelationshipStageGatewayBuilder?.call(identitySession) ??
           const DeferredCurrentRelationshipStageGateway();
@@ -511,6 +522,7 @@ final class AppDependencies {
         organizationMembershipSelfLeaveGateway:
             organizationMembershipSelfLeaveGateway,
         organizationOwnerTransferGateway: organizationOwnerTransferGateway,
+        organizationShareableJoinGateway: organizationShareableJoinGateway,
         managementReportExportDelivery: exportDelivery,
         currentRelationshipStageGateway: currentRelationshipStageGateway,
         currentRelationshipStageRepository: currentRelationshipStageRepository,
@@ -543,6 +555,7 @@ final class AppDependencies {
       await organizationDirectedAccountInvitationGateway?.close();
       await organizationMembershipSelfLeaveGateway?.close();
       await organizationOwnerTransferGateway?.close();
+      await organizationShareableJoinGateway?.close();
       await currentRelationshipStageGateway?.close();
       await privateSessionDataGuard?.close();
       await reminderNotificationScheduler?.close();
@@ -600,6 +613,7 @@ final class AppStartupReady extends AppStartupResult {
     required this.organizationDirectedAccountInvitationGateway,
     required this.organizationMembershipSelfLeaveGateway,
     required this.organizationOwnerTransferGateway,
+    required this.organizationShareableJoinGateway,
     required this.managementReportExportDelivery,
     required this.currentRelationshipStageGateway,
     required this.currentRelationshipStageRepository,
@@ -644,6 +658,7 @@ final class AppStartupReady extends AppStartupResult {
   final OrganizationMembershipSelfLeaveGateway
   organizationMembershipSelfLeaveGateway;
   final OrganizationOwnerTransferGateway organizationOwnerTransferGateway;
+  final OrganizationShareableJoinGateway organizationShareableJoinGateway;
   final ManagementReportExportDelivery managementReportExportDelivery;
   final CurrentRelationshipStageGateway currentRelationshipStageGateway;
   final CurrentRelationshipStageRepository currentRelationshipStageRepository;

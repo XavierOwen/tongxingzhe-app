@@ -25,6 +25,7 @@ import 'package:tongxingzhe_app/organization_directory/organization_directory.da
 import 'package:tongxingzhe_app/organization_directed_account_invitation/organization_directed_account_invitation.dart';
 import 'package:tongxingzhe_app/organization_membership_self_leave/organization_membership_self_leave.dart';
 import 'package:tongxingzhe_app/organization_owner_transfer/organization_owner_transfer.dart';
+import 'package:tongxingzhe_app/organization_shareable_join/organization_shareable_join.dart';
 import 'package:tongxingzhe_app/privacy/drift_offline_pii_lock_store.dart';
 import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
 import 'package:tongxingzhe_app/project_settings/http_personal_follow_up_consent_opt_in_gateway.dart';
@@ -107,6 +108,10 @@ void main() {
     expect(
       ready.organizationOwnerTransferGateway,
       isA<DeferredOrganizationOwnerTransferGateway>(),
+    );
+    expect(
+      ready.organizationShareableJoinGateway,
+      isA<DeferredOrganizationShareableJoinGateway>(),
     );
   });
 
@@ -316,6 +321,38 @@ void main() {
     expect(identical(receivedIdentity, ready.identitySession), isTrue);
     expect(identical(ready.organizationOwnerTransferGateway, gateway), isTrue);
     await ready.organizationOwnerTransferGateway.close();
+    expect(gateway.closeCount, 1);
+    await ready.appSession.close();
+    await ready.identitySession.close();
+    await database.close();
+  });
+
+  test('composition root 使用启动身份装配并释放可分享加入 gateway', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession();
+    final gateway = _TrackingOrganizationShareableJoinGateway();
+    IdentitySession? receivedIdentity;
+    final dependencies = AppDependencies(
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      organizationShareableJoinGatewayBuilder: (identitySession) {
+        receivedIdentity = identitySession;
+        return gateway;
+      },
+    );
+
+    final startup = await dependencies.start();
+
+    expect(startup, isA<AppStartupReady>());
+    final ready = startup as AppStartupReady;
+    expect(identical(receivedIdentity, identity), isTrue);
+    expect(identical(receivedIdentity, ready.identitySession), isTrue);
+    expect(identical(ready.organizationShareableJoinGateway, gateway), isTrue);
+    await ready.organizationShareableJoinGateway.close();
     expect(gateway.closeCount, 1);
     await ready.appSession.close();
     await ready.identitySession.close();
@@ -616,6 +653,8 @@ void main() {
         _TrackingOrganizationMembershipSelfLeaveGateway();
     final organizationOwnerTransferGateway =
         _TrackingOrganizationOwnerTransferGateway();
+    final organizationShareableJoinGateway =
+        _TrackingOrganizationShareableJoinGateway();
     final dependencies = AppDependencies(
       databaseFactory: SingleDatabaseFactory(database),
       clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
@@ -637,6 +676,8 @@ void main() {
           organizationMembershipSelfLeaveGateway,
       organizationOwnerTransferGatewayBuilder: (_) =>
           organizationOwnerTransferGateway,
+      organizationShareableJoinGatewayBuilder: (_) =>
+          organizationShareableJoinGateway,
       reminderSchedulerBuilder: (_) => throw StateError('synthetic failure'),
     );
 
@@ -654,6 +695,7 @@ void main() {
     expect(organizationInvitationGateway.closeCount, 1);
     expect(organizationMembershipSelfLeaveGateway.closeCount, 1);
     expect(organizationOwnerTransferGateway.closeCount, 1);
+    expect(organizationShareableJoinGateway.closeCount, 1);
   });
 
   test('能力通过时 composition root 装配离线对象 gateway', () async {
@@ -1108,6 +1150,45 @@ final class _TrackingOrganizationOwnerTransferGateway
     required String targetOrganizationMembershipId,
   }) async => const OrganizationOwnerTransferRejected(
     OrganizationOwnerTransferFailureCode.notConfigured,
+  );
+
+  @override
+  Future<void> close() async => closeCount++;
+}
+
+final class _TrackingOrganizationShareableJoinGateway
+    implements OrganizationShareableJoinGateway {
+  var closeCount = 0;
+
+  @override
+  Future<OrganizationShareableJoinLinkCreateResult> createLink({
+    required String linkId,
+    required String organizationWorkspaceId,
+  }) async => const OrganizationShareableJoinLinkCreateRejected(
+    OrganizationShareableJoinFailureCode.notConfigured,
+  );
+
+  @override
+  Future<OrganizationShareableJoinLinkPreviewResult> previewLink({
+    required String linkId,
+  }) async => const OrganizationShareableJoinLinkPreviewRejected(
+    OrganizationShareableJoinFailureCode.notConfigured,
+  );
+
+  @override
+  Future<OrganizationShareableJoinApplicationSubmitResult> submitApplication({
+    required String applicationId,
+    required String linkId,
+  }) async => const OrganizationShareableJoinApplicationSubmitRejected(
+    OrganizationShareableJoinFailureCode.notConfigured,
+  );
+
+  @override
+  Future<OrganizationShareableJoinApplicationApproveResult> approveApplication({
+    required String organizationWorkspaceId,
+    required String applicationId,
+  }) async => const OrganizationShareableJoinApplicationApproveRejected(
+    OrganizationShareableJoinFailureCode.notConfigured,
   );
 
   @override

@@ -9,11 +9,13 @@ import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_directory_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_invitation_create_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_membership_self_leave_dialog.dart';
+import 'package:tongxingzhe_app/features/organization_directory/organization_shareable_join_link_create_dialog.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/l10n/app_strings.dart';
 import 'package:tongxingzhe_app/organization_directed_account_invitation/organization_directed_account_invitation.dart';
 import 'package:tongxingzhe_app/organization_directory/organization_directory.dart';
 import 'package:tongxingzhe_app/organization_membership_self_leave/organization_membership_self_leave.dart';
+import 'package:tongxingzhe_app/organization_shareable_join/organization_shareable_join.dart';
 import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
 
 import '../../support/fake_runtime_values.dart';
@@ -486,6 +488,60 @@ void main() {
     );
     expect(directoryGateway.listCalls, 1);
     expect(invitationGateway.closed, isFalse);
+  });
+
+  testWidgets('每个组织行创建加入链接固定选中组织，不刷新目录且不猜 owner', (tester) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final directoryGateway = _Gateway([
+      OrganizationDirectorySuccess(const [_organizationA, _organizationB]),
+    ]);
+    final shareableJoinGateway = _ShareableJoinGateway();
+    await _open(
+      tester,
+      fixture.session,
+      directoryGateway,
+      shareableJoinGateway: shareableJoinGateway,
+    );
+
+    final create = find.byKey(
+      ValueKey(
+        'organization-shareable-link-create-'
+        '${_organizationB.organizationWorkspaceId}',
+      ),
+    );
+    expect(create, findsOneWidget);
+    await tester.ensureVisible(create);
+    await tester.tap(create);
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(OrganizationShareableJoinLinkCreateDialog);
+    expect(dialog, findsOneWidget);
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.text(_organizationB.organizationWorkspaceId),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.text(_organizationA.organizationWorkspaceId),
+      ),
+      findsNothing,
+    );
+    expect(directoryGateway.listCalls, 1);
+    await tester.tap(
+      find.byKey(const ValueKey('organization-shareable-link-create-submit')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      shareableJoinGateway.calls.single.organizationWorkspaceId,
+      _organizationB.organizationWorkspaceId,
+    );
+    expect(directoryGateway.listCalls, 1);
+    expect(shareableJoinGateway.closed, isFalse);
   });
 
   testWidgets('成功时必须先删本地快照，再提交并以新目录为准', (tester) async {
@@ -1004,6 +1060,8 @@ Future<void> _open(
       const DeferredOrganizationMembershipSelfLeaveGateway(),
   OrganizationDirectedAccountInvitationGateway invitationGateway =
       const DeferredOrganizationDirectedAccountInvitationGateway(),
+  OrganizationShareableJoinGateway shareableJoinGateway =
+      const DeferredOrganizationShareableJoinGateway(),
 }) async {
   await _pumpLauncher(
     tester,
@@ -1014,6 +1072,7 @@ Future<void> _open(
     themeMode: themeMode,
     selfLeaveGateway: selfLeaveGateway,
     invitationGateway: invitationGateway,
+    shareableJoinGateway: shareableJoinGateway,
   );
   await tester.tap(_launcher);
   if (settle) {
@@ -1034,6 +1093,8 @@ Future<void> _pumpLauncher(
       const DeferredOrganizationMembershipSelfLeaveGateway(),
   OrganizationDirectedAccountInvitationGateway invitationGateway =
       const DeferredOrganizationDirectedAccountInvitationGateway(),
+  OrganizationShareableJoinGateway shareableJoinGateway =
+      const DeferredOrganizationShareableJoinGateway(),
 }) => tester.pumpWidget(
   MaterialApp(
     theme: ThemeData(useMaterial3: true),
@@ -1056,6 +1117,7 @@ Future<void> _pumpLauncher(
                 appSession: session,
                 selfLeaveGateway: selfLeaveGateway,
                 invitationGateway: invitationGateway,
+                shareableJoinGateway: shareableJoinGateway,
               ),
             ),
             child: const Text('Open'),
@@ -1394,6 +1456,47 @@ final class _InvitationGateway
   Future<OrganizationDirectedAccountInvitationAcceptResult> accept({
     required String invitationId,
   }) => throw UnsupportedError('unused directory wiring accept');
+
+  @override
+  Future<void> close() async => closed = true;
+}
+
+typedef _ShareableJoinCall = ({String linkId, String organizationWorkspaceId});
+
+final class _ShareableJoinGateway implements OrganizationShareableJoinGateway {
+  final calls = <_ShareableJoinCall>[];
+  var closed = false;
+
+  @override
+  Future<OrganizationShareableJoinLinkCreateResult> createLink({
+    required String linkId,
+    required String organizationWorkspaceId,
+  }) async {
+    calls.add((
+      linkId: linkId,
+      organizationWorkspaceId: organizationWorkspaceId,
+    ));
+    return const OrganizationShareableJoinLinkCreateRejected(
+      OrganizationShareableJoinFailureCode.notConfigured,
+    );
+  }
+
+  @override
+  Future<OrganizationShareableJoinLinkPreviewResult> previewLink({
+    required String linkId,
+  }) => throw UnsupportedError('unused directory wiring preview');
+
+  @override
+  Future<OrganizationShareableJoinApplicationSubmitResult> submitApplication({
+    required String applicationId,
+    required String linkId,
+  }) => throw UnsupportedError('unused directory wiring submit');
+
+  @override
+  Future<OrganizationShareableJoinApplicationApproveResult> approveApplication({
+    required String organizationWorkspaceId,
+    required String applicationId,
+  }) => throw UnsupportedError('unused directory wiring approve');
 
   @override
   Future<void> close() async => closed = true;
