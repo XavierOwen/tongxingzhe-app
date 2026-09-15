@@ -12,6 +12,7 @@ import '../../organization_shareable_join/organization_shareable_join.dart';
 import 'organization_invitation_create_dialog.dart';
 import 'organization_invitation_accept_dialog.dart';
 import 'organization_membership_self_leave_dialog.dart';
+import 'organization_shareable_join_application_submit_dialog.dart';
 import 'organization_shareable_join_link_create_dialog.dart';
 
 /// 读取当前账号的组织目录，不改变当前项目。
@@ -110,14 +111,30 @@ final class _OrganizationDirectoryDialogState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Align(
-          alignment: AlignmentDirectional.centerEnd,
-          child: TextButton.icon(
-            key: const ValueKey('organization-directory-accept-invitation'),
-            onPressed: _busy || _sessionInvalidated ? null : _acceptInvitation,
-            icon: const Icon(Icons.mark_email_read_outlined),
-            label: Text(widget.text.t('organizationInvitationAction')),
-          ),
+        Wrap(
+          alignment: WrapAlignment.end,
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            TextButton.icon(
+              key: const ValueKey('organization-directory-accept-invitation'),
+              onPressed: _busy || _sessionInvalidated
+                  ? null
+                  : _acceptInvitation,
+              icon: const Icon(Icons.mark_email_read_outlined),
+              label: Text(widget.text.t('organizationInvitationAction')),
+            ),
+            TextButton.icon(
+              key: const ValueKey('organization-directory-use-shareable-link'),
+              onPressed: _busy || _sessionInvalidated
+                  ? null
+                  : _useShareableJoinLink,
+              icon: const Icon(Icons.group_add_outlined),
+              label: Text(
+                widget.text.t('organizationShareableJoinApplicationAction'),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         Text(widget.text.t('organizationDirectoryHelp')),
@@ -414,6 +431,19 @@ final class _OrganizationDirectoryDialogState
         text: widget.text,
         organization: entry,
         gateway: widget.invitationGateway,
+        appSession: widget.appSession,
+      ),
+    );
+  }
+
+  Future<void> _useShareableJoinLink() async {
+    if (_busy || !_hasTrustedSession(widget.appSession.current)) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => OrganizationShareableJoinApplicationSubmitDialog(
+        text: widget.text,
+        gateway: widget.shareableJoinGateway,
         appSession: widget.appSession,
       ),
     );

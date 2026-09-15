@@ -254,6 +254,71 @@ const Map<String, Map<String, String>> _strings = {
         '网络不可用，无法确认创建结果。请检查连接后在此窗口重试。',
     'organizationShareableLinkCreateFailure.invalidResponse':
         '未收到可验证的创建结果，请在此窗口重试。',
+    'organizationShareableJoinApplicationAction': '使用加入链接',
+    'organizationShareableApplicationTitle': '申请加入组织',
+    'organizationShareableApplicationInputHelp':
+        '输入所收到的链接编号。App 会先显示组织名称和过期时间，不会自动提交申请。',
+    'organizationShareableApplicationLinkIdentifier': '链接编号（UUID）',
+    'organizationShareableApplicationInvalidLink': '请输入有效的链接 UUID。',
+    'organizationShareableApplicationPreviewing': '正在查看链接…',
+    'organizationShareableApplicationPreview': '查看组织',
+    'organizationShareableApplicationEdit': '更换链接',
+    'organizationShareableApplicationConfirmHelp':
+        '请核对组织名称。提交只会创建待审批申请，不会直接加入组织。',
+    'organizationShareableApplicationSubmitting': '正在提交申请…',
+    'organizationShareableApplicationSubmit': '确认并提交申请',
+    'organizationShareableApplicationRetry': '重试这次申请',
+    'organizationShareableApplicationClose': '关闭',
+    'organizationShareableApplicationUnauthorized':
+        '账号或会话已改变。已清除链接、申请编号和回执；请关闭后重新登录。',
+    'organizationShareableApplicationUncertain': '申请可能已提交。重试仍使用同一链接和申请编号。',
+    'organizationShareableApplicationSuccess': '入组申请已提交。',
+    'organizationShareableApplicationApplicationId': '申请编号（UUID）',
+    'organizationShareableApplicationLinkId': '链接编号（UUID）',
+    'organizationShareableApplicationOrganizationId': '组织标识',
+    'organizationShareableApplicationSubmittedAt': '提交时间（UTC）',
+    'organizationShareableApplicationExpiresAt': '过期时间（UTC）',
+    'organizationShareableApplicationDeliveryHelp':
+        '请显式复制申请编号，并通过可信渠道交给组织所有者。App 不会自动复制或投递。',
+    'organizationShareableApplicationFreshnessNotice':
+        '这份历史回执不证明申请现在仍待审批。批准后也不会自动加入项目、增加权限或切换当前项目。',
+    'organizationShareableApplicationCopy': '复制申请编号',
+    'organizationShareableApplicationCopySuccess': '申请编号已复制。',
+    'organizationShareableApplicationCopyFailure': '未能复制申请编号，请再试一次。',
+    'organizationShareableApplicationDiscardTitle': '停止重试这次申请？',
+    'organizationShareableApplicationDiscardBody':
+        '申请可能已提交。关闭只会放弃此窗口中的重试信息，不会撤回服务端上可能存在的申请。',
+    'organizationShareableApplicationKeepRetry': '返回重试',
+    'organizationShareableApplicationDiscard': '放弃重试并关闭',
+    'organizationShareableApplicationInvalidRequest': '未能建立申请编号，请在此窗口重试。',
+    'organizationShareableApplicationPreviewFailure.notConfigured':
+        '可分享加入服务尚未配置，请稍后重试。',
+    'organizationShareableApplicationPreviewFailure.invalidJson': '链接请求格式无效。',
+    'organizationShareableApplicationPreviewFailure.payloadTooLarge':
+        '链接请求未被接受。',
+    'organizationShareableApplicationPreviewFailure.invalidRequest': '链接编号无效。',
+    'organizationShareableApplicationPreviewFailure.forbidden': '无法查看这个链接。',
+    'organizationShareableApplicationPreviewFailure.conflict': '这个链接现在不可用。',
+    'organizationShareableApplicationPreviewFailure.serviceUnavailable':
+        '服务暂时不可用，请稍后重试。',
+    'organizationShareableApplicationPreviewFailure.networkUnavailable':
+        '网络不可用，请检查连接。',
+    'organizationShareableApplicationPreviewFailure.invalidResponse':
+        '未收到可验证的链接结果。',
+    'organizationShareableApplicationSubmitFailure.notConfigured':
+        '可分享加入服务尚未配置，请稍后重试。',
+    'organizationShareableApplicationSubmitFailure.invalidJson': '申请格式无效。',
+    'organizationShareableApplicationSubmitFailure.payloadTooLarge':
+        '申请未被服务接受。',
+    'organizationShareableApplicationSubmitFailure.invalidRequest': '申请无效。',
+    'organizationShareableApplicationSubmitFailure.forbidden': '当前账号不能提交这个申请。',
+    'organizationShareableApplicationSubmitFailure.conflict': '这个申请当前无法提交。',
+    'organizationShareableApplicationSubmitFailure.serviceUnavailable':
+        '服务暂时不可用，无法确认申请结果。',
+    'organizationShareableApplicationSubmitFailure.networkUnavailable':
+        '网络不可用，无法确认申请结果。',
+    'organizationShareableApplicationSubmitFailure.invalidResponse':
+        '未收到可验证的申请结果。',
     'organizationLeaveAction': '退出组织',
     'organizationLeaveTitle': '退出组织？',
     'organizationLeaveHelp':
@@ -1593,6 +1658,93 @@ const Map<String, Map<String, String>> _strings = {
         'Check your connection and retry in this window.',
     'organizationShareableLinkCreateFailure.invalidResponse':
         'The creation result could not be verified. Retry in this window.',
+    'organizationShareableJoinApplicationAction': 'Use join link',
+    'organizationShareableApplicationTitle': 'Apply to join an organization',
+    'organizationShareableApplicationInputHelp':
+        'Enter the link ID you received. The app shows the organization name '
+        'and expiry before it submits an application.',
+    'organizationShareableApplicationLinkIdentifier': 'Link ID (UUID)',
+    'organizationShareableApplicationInvalidLink': 'Enter a valid link UUID.',
+    'organizationShareableApplicationPreviewing': 'Checking link…',
+    'organizationShareableApplicationPreview': 'View organization',
+    'organizationShareableApplicationEdit': 'Use another link',
+    'organizationShareableApplicationConfirmHelp':
+        'Check the organization name. Submission creates a pending '
+        'application; it does not join the organization.',
+    'organizationShareableApplicationSubmitting': 'Submitting application…',
+    'organizationShareableApplicationSubmit': 'Confirm and apply',
+    'organizationShareableApplicationRetry': 'Retry this application',
+    'organizationShareableApplicationClose': 'Close',
+    'organizationShareableApplicationUnauthorized':
+        'The account or session changed. The link, application ID, and receipt '
+        'were cleared. Close this window and sign in again.',
+    'organizationShareableApplicationUncertain':
+        'The application may have been submitted. A retry uses the same link '
+        'and application ID.',
+    'organizationShareableApplicationSuccess': 'Application submitted.',
+    'organizationShareableApplicationApplicationId': 'Application ID (UUID)',
+    'organizationShareableApplicationLinkId': 'Link ID (UUID)',
+    'organizationShareableApplicationOrganizationId': 'Organization ID',
+    'organizationShareableApplicationSubmittedAt': 'Submitted at (UTC)',
+    'organizationShareableApplicationExpiresAt': 'Expires at (UTC)',
+    'organizationShareableApplicationDeliveryHelp':
+        'Explicitly copy the application ID and give it to an organization '
+        'owner through a trusted channel. The app does not copy or deliver it '
+        'automatically.',
+    'organizationShareableApplicationFreshnessNotice':
+        'This historical receipt does not prove that the application is still '
+        'pending. Approval does not join projects, grant permissions, or '
+        'switch the current project.',
+    'organizationShareableApplicationCopy': 'Copy application ID',
+    'organizationShareableApplicationCopySuccess': 'Application ID copied.',
+    'organizationShareableApplicationCopyFailure':
+        'Could not copy the application ID. Try again.',
+    'organizationShareableApplicationDiscardTitle':
+        'Stop retrying this application?',
+    'organizationShareableApplicationDiscardBody':
+        'The application may have been submitted. Closing only discards the '
+        'retry details in this window. It does not withdraw an application '
+        'that may exist on the server.',
+    'organizationShareableApplicationKeepRetry': 'Keep retrying',
+    'organizationShareableApplicationDiscard': 'Discard retry and close',
+    'organizationShareableApplicationInvalidRequest':
+        'Could not prepare an application ID. Retry in this window.',
+    'organizationShareableApplicationPreviewFailure.notConfigured':
+        'The shareable join service is not configured. Try again later.',
+    'organizationShareableApplicationPreviewFailure.invalidJson':
+        'The link request format is invalid.',
+    'organizationShareableApplicationPreviewFailure.payloadTooLarge':
+        'The link request was not accepted.',
+    'organizationShareableApplicationPreviewFailure.invalidRequest':
+        'The link ID is invalid.',
+    'organizationShareableApplicationPreviewFailure.forbidden':
+        'This link cannot be viewed.',
+    'organizationShareableApplicationPreviewFailure.conflict':
+        'This link is not available.',
+    'organizationShareableApplicationPreviewFailure.serviceUnavailable':
+        'The service is unavailable. Try again later.',
+    'organizationShareableApplicationPreviewFailure.networkUnavailable':
+        'The network is unavailable. Check your connection.',
+    'organizationShareableApplicationPreviewFailure.invalidResponse':
+        'The link result could not be verified.',
+    'organizationShareableApplicationSubmitFailure.notConfigured':
+        'The shareable join service is not configured. Try again later.',
+    'organizationShareableApplicationSubmitFailure.invalidJson':
+        'The application format is invalid.',
+    'organizationShareableApplicationSubmitFailure.payloadTooLarge':
+        'The application was not accepted.',
+    'organizationShareableApplicationSubmitFailure.invalidRequest':
+        'The application is invalid.',
+    'organizationShareableApplicationSubmitFailure.forbidden':
+        'This account cannot submit this application.',
+    'organizationShareableApplicationSubmitFailure.conflict':
+        'This application cannot be submitted.',
+    'organizationShareableApplicationSubmitFailure.serviceUnavailable':
+        'The service is unavailable, so the application result is uncertain.',
+    'organizationShareableApplicationSubmitFailure.networkUnavailable':
+        'The network is unavailable, so the application result is uncertain.',
+    'organizationShareableApplicationSubmitFailure.invalidResponse':
+        'The application result could not be verified.',
     'organizationLeaveAction': 'Leave organization',
     'organizationLeaveTitle': 'Leave organization?',
     'organizationLeaveHelp':
