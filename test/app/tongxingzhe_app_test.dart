@@ -26,6 +26,7 @@ import 'package:tongxingzhe_app/organization_directory/organization_directory.da
 import 'package:tongxingzhe_app/organization_directed_account_invitation/organization_directed_account_invitation.dart';
 import 'package:tongxingzhe_app/organization_membership_self_leave/organization_membership_self_leave.dart';
 import 'package:tongxingzhe_app/organization_owner_transfer/organization_owner_transfer.dart';
+import 'package:tongxingzhe_app/organization_shareable_join/organization_shareable_join.dart';
 import 'package:tongxingzhe_app/platform/platform_capabilities.dart';
 import 'package:tongxingzhe_app/project_settings/personal_follow_up_consent_opt_in.dart';
 import 'package:tongxingzhe_app/questionnaires/questionnaire_contract.dart';
@@ -48,6 +49,7 @@ void main() {
     final gateway = _TrackingOrganizationCreationGateway();
     final directoryGateway = _TrackingOrganizationDirectoryGateway();
     final selfLeaveGateway = _TrackingOrganizationMembershipSelfLeaveGateway();
+    final shareableJoinGateway = _TrackingOrganizationShareableJoinGateway();
     var builderCalls = 0;
     final dependencies = AppDependencies(
       databaseFactory: SingleDatabaseFactory(database),
@@ -62,6 +64,7 @@ void main() {
       },
       organizationDirectoryGatewayBuilder: (_) => directoryGateway,
       organizationMembershipSelfLeaveGatewayBuilder: (_) => selfLeaveGateway,
+      organizationShareableJoinGatewayBuilder: (_) => shareableJoinGateway,
     );
     addTearDown(database.close);
 
@@ -79,6 +82,7 @@ void main() {
     expect(gateway.closeCount, 1);
     expect(directoryGateway.closeCount, 1);
     expect(selfLeaveGateway.closeCount, 1);
+    expect(shareableJoinGateway.closeCount, 1);
   });
 
   testWidgets('移除 TongxingzheApp 后关闭组织 gateways 恰好一次', (tester) async {
@@ -86,6 +90,7 @@ void main() {
     final gateway = _TrackingOrganizationCreationGateway();
     final directoryGateway = _TrackingOrganizationDirectoryGateway();
     final selfLeaveGateway = _TrackingOrganizationMembershipSelfLeaveGateway();
+    final shareableJoinGateway = _TrackingOrganizationShareableJoinGateway();
     final dependencies = AppDependencies(
       databaseFactory: SingleDatabaseFactory(database),
       clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
@@ -96,6 +101,7 @@ void main() {
       organizationCreationGatewayBuilder: (_) => gateway,
       organizationDirectoryGatewayBuilder: (_) => directoryGateway,
       organizationMembershipSelfLeaveGatewayBuilder: (_) => selfLeaveGateway,
+      organizationShareableJoinGatewayBuilder: (_) => shareableJoinGateway,
     );
     addTearDown(database.close);
 
@@ -107,12 +113,14 @@ void main() {
     expect(gateway.closeCount, 1);
     expect(directoryGateway.closeCount, 1);
     expect(selfLeaveGateway.closeCount, 1);
+    expect(shareableJoinGateway.closeCount, 1);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
     expect(gateway.closeCount, 1);
     expect(directoryGateway.closeCount, 1);
     expect(selfLeaveGateway.closeCount, 1);
+    expect(shareableJoinGateway.closeCount, 1);
   });
 
   testWidgets('启动尚未完成时移除 App 仍关闭后来取得的 owner transfer gateway 一次', (
@@ -909,13 +917,11 @@ void main() {
     expect(contextGateway.selectedProjectIds, isEmpty);
     expect(contextGateway.createdProjectNames, isEmpty);
 
-    await tester.tap(
-      find.byKey(
-        const ValueKey(
-          'organization-leave-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-        ),
-      ),
+    final leaveButton = find.byKey(
+      const ValueKey('organization-leave-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
     );
+    await tester.ensureVisible(leaveButton);
+    await tester.tap(leaveButton);
     await tester.pumpAndSettle();
     expect(selfLeaveGateway.requests, isEmpty);
     await tester.tap(find.byKey(const ValueKey('organization-leave-confirm')));
@@ -944,9 +950,11 @@ void main() {
     expect(contextGateway.createdProjectNames, isEmpty);
     expect(selfLeaveGateway.closeCount, 0);
 
-    await tester.tap(
-      find.byKey(const ValueKey('organization-directory-accept-invitation')),
+    final acceptInvitationButton = find.byKey(
+      const ValueKey('organization-directory-accept-invitation'),
     );
+    await tester.ensureVisible(acceptInvitationButton);
+    await tester.tap(acceptInvitationButton);
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('organization-invitation-id')),
@@ -2834,6 +2842,45 @@ final class _TrackingOrganizationOwnerTransferGateway
     required String targetOrganizationMembershipId,
   }) async => const OrganizationOwnerTransferRejected(
     OrganizationOwnerTransferFailureCode.notConfigured,
+  );
+
+  @override
+  Future<void> close() async => closeCount++;
+}
+
+final class _TrackingOrganizationShareableJoinGateway
+    implements OrganizationShareableJoinGateway {
+  var closeCount = 0;
+
+  @override
+  Future<OrganizationShareableJoinLinkCreateResult> createLink({
+    required String linkId,
+    required String organizationWorkspaceId,
+  }) async => const OrganizationShareableJoinLinkCreateRejected(
+    OrganizationShareableJoinFailureCode.notConfigured,
+  );
+
+  @override
+  Future<OrganizationShareableJoinLinkPreviewResult> previewLink({
+    required String linkId,
+  }) async => const OrganizationShareableJoinLinkPreviewRejected(
+    OrganizationShareableJoinFailureCode.notConfigured,
+  );
+
+  @override
+  Future<OrganizationShareableJoinApplicationSubmitResult> submitApplication({
+    required String applicationId,
+    required String linkId,
+  }) async => const OrganizationShareableJoinApplicationSubmitRejected(
+    OrganizationShareableJoinFailureCode.notConfigured,
+  );
+
+  @override
+  Future<OrganizationShareableJoinApplicationApproveResult> approveApplication({
+    required String organizationWorkspaceId,
+    required String applicationId,
+  }) async => const OrganizationShareableJoinApplicationApproveRejected(
+    OrganizationShareableJoinFailureCode.notConfigured,
   );
 
   @override

@@ -29,6 +29,7 @@ import '../organization_directory/organization_directory.dart';
 import '../organization_directed_account_invitation/organization_directed_account_invitation.dart';
 import '../organization_membership_self_leave/organization_membership_self_leave.dart';
 import '../organization_owner_transfer/organization_owner_transfer.dart';
+import '../organization_shareable_join/organization_shareable_join.dart';
 import '../plans/personal_action_plan.dart';
 import '../project_settings/personal_follow_up_consent_opt_in.dart';
 import '../reminders/personal_action_reminder.dart';
@@ -75,6 +76,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
   OrganizationMembershipSelfLeaveGateway?
   _organizationMembershipSelfLeaveGateway;
   OrganizationOwnerTransferGateway? _organizationOwnerTransferGateway;
+  OrganizationShareableJoinGateway? _organizationShareableJoinGateway;
   AppSession? _appSession;
   SyncEngineFactory? _syncEngineFactory;
   ContactRegionResolver? _regionResolver;
@@ -118,6 +120,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       :final organizationDirectedAccountInvitationGateway,
       :final organizationMembershipSelfLeaveGateway,
       :final organizationOwnerTransferGateway,
+      :final organizationShareableJoinGateway,
       :final appSession,
       :final syncEngineFactory,
       :final regionResolver,
@@ -147,6 +150,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       _organizationMembershipSelfLeaveGateway =
           organizationMembershipSelfLeaveGateway;
       _organizationOwnerTransferGateway = organizationOwnerTransferGateway;
+      _organizationShareableJoinGateway = organizationShareableJoinGateway;
       _appSession = appSession;
       _syncEngineFactory = syncEngineFactory;
       _regionResolver = regionResolver;
@@ -182,6 +186,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       startup.organizationDirectedAccountInvitationGateway.close(),
       startup.organizationMembershipSelfLeaveGateway.close(),
       startup.organizationOwnerTransferGateway.close(),
+      startup.organizationShareableJoinGateway.close(),
       startup.syncEngineFactory?.close() ?? Future<void>.value(),
       startup.regionResolver.close(),
       startup.questionnaireCatalog.close(),
@@ -213,6 +218,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
     unawaited(_organizationDirectedAccountInvitationGateway?.close());
     unawaited(_organizationMembershipSelfLeaveGateway?.close());
     unawaited(_organizationOwnerTransferGateway?.close());
+    unawaited(_organizationShareableJoinGateway?.close());
     unawaited(_syncEngineFactory?.close());
     unawaited(_regionResolver?.close());
     unawaited(_questionnaireCatalog?.close());
@@ -277,6 +283,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
             :final organizationDirectoryGateway,
             :final organizationMembershipSelfLeaveGateway,
             :final organizationDirectedAccountInvitationGateway,
+            :final organizationShareableJoinGateway,
             :final managementReportExportDelivery,
             :final currentRelationshipStageRepository,
             :final deviceReminderPreferenceStore,
@@ -318,6 +325,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
                   organizationMembershipSelfLeaveGateway,
               organizationDirectedAccountInvitationGateway:
                   organizationDirectedAccountInvitationGateway,
+              organizationShareableJoinGateway:
+                  organizationShareableJoinGateway,
               managementReportExportDelivery: managementReportExportDelivery,
               currentRelationshipStageRepository:
                   currentRelationshipStageRepository,
@@ -365,6 +374,7 @@ class _ReadyApp extends StatefulWidget {
     required this.organizationDirectoryGateway,
     required this.organizationMembershipSelfLeaveGateway,
     required this.organizationDirectedAccountInvitationGateway,
+    required this.organizationShareableJoinGateway,
     required this.managementReportExportDelivery,
     required this.currentRelationshipStageRepository,
     required this.deviceReminderPreferenceStore,
@@ -404,6 +414,7 @@ class _ReadyApp extends StatefulWidget {
   organizationMembershipSelfLeaveGateway;
   final OrganizationDirectedAccountInvitationGateway
   organizationDirectedAccountInvitationGateway;
+  final OrganizationShareableJoinGateway organizationShareableJoinGateway;
   final ManagementReportExportDelivery managementReportExportDelivery;
   final CurrentRelationshipStageRepository currentRelationshipStageRepository;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
@@ -500,6 +511,8 @@ final class _ReadyAppState extends State<_ReadyApp> {
             widget.organizationMembershipSelfLeaveGateway,
         organizationDirectedAccountInvitationGateway:
             widget.organizationDirectedAccountInvitationGateway,
+        organizationShareableJoinGateway:
+            widget.organizationShareableJoinGateway,
         managementReportExportDelivery: widget.managementReportExportDelivery,
         currentRelationshipStageRepository:
             widget.currentRelationshipStageRepository,

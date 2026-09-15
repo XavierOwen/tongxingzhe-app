@@ -207,6 +207,53 @@ const Map<String, Map<String, String>> _strings = {
     'organizationInvitationCreateFailure.networkUnavailable': '网络不可用，请检查连接。',
     'organizationInvitationCreateFailure.invalidResponse':
         '未收到可验证的创建结果，请在此窗口重试。',
+    'organizationShareableLinkCreateAction': '创建加入链接',
+    'organizationShareableLinkCreateTitle': '创建可分享加入链接',
+    'organizationShareableLinkCreateOwnerHelp':
+        '仅这个组织的当前有效所有者可以创建。组织列表不判断所有者身份；服务端会在提交时检查。',
+    'organizationShareableLinkCreateDeliveryHelp':
+        'App 只创建并显示链接编号，不会自动发送，也不会在此拼接网址。',
+    'organizationShareableLinkCreateOrganizationId': '组织标识',
+    'organizationShareableLinkCreateInvalidRequest': '未能建立链接编号，请在此窗口重试。',
+    'organizationShareableLinkCreateSubmitting': '正在创建链接…',
+    'organizationShareableLinkCreateSubmit': '创建链接',
+    'organizationShareableLinkCreateRetry': '重试这次创建',
+    'organizationShareableLinkCreateClose': '关闭',
+    'organizationShareableLinkCreateUnauthorized':
+        '账号或会话已改变。已清除链接编号和创建回执；请关闭后重新登录。',
+    'organizationShareableLinkCreateUncertain':
+        '链接可能已创建。重试仍用同一组织和链接编号；这些信息仅保留在此窗口。',
+    'organizationShareableLinkCreateSuccess': '可分享加入链接已创建。',
+    'organizationShareableLinkCreateLinkId': '链接编号（UUID）',
+    'organizationShareableLinkCreateIssuedAt': '签发时间（UTC）',
+    'organizationShareableLinkCreateExpiresAt': '过期时间（UTC）',
+    'organizationShareableLinkCreateNoUrl':
+        '请显式复制链接编号，并通过可信渠道交给申请人。App 不会自动复制或投递。',
+    'organizationShareableLinkCreateFreshnessNotice':
+        '这份历史回执不证明你现在仍是所有者，也不保证链接现在仍有效。申请人仍须提交申请，加入不会自动获得项目或额外权限。',
+    'organizationShareableLinkCreateCopy': '复制链接编号',
+    'organizationShareableLinkCreateCopySuccess': '链接编号已复制。',
+    'organizationShareableLinkCreateCopyFailure': '未能复制链接编号，请再试一次。',
+    'organizationShareableLinkCreateDiscardTitle': '停止重试这次创建？',
+    'organizationShareableLinkCreateDiscardBody':
+        '链接可能已创建。关闭只会放弃此窗口中的重试信息，不会撤销服务端上可能已创建的链接。',
+    'organizationShareableLinkCreateKeepRetry': '返回重试',
+    'organizationShareableLinkCreateDiscard': '放弃重试并关闭',
+    'organizationShareableLinkCreateFailure.notConfigured':
+        '可分享加入服务尚未配置，没有提交创建请求。请稍后重试。',
+    'organizationShareableLinkCreateFailure.invalidJson': '创建请求格式无效，请稍后重试。',
+    'organizationShareableLinkCreateFailure.payloadTooLarge': '创建请求未被接受，请稍后重试。',
+    'organizationShareableLinkCreateFailure.invalidRequest': '创建请求无效，请稍后重试。',
+    'organizationShareableLinkCreateFailure.forbidden':
+        '当前账号无权为这个组织创建可分享加入链接，或请求不符合创建条件。',
+    'organizationShareableLinkCreateFailure.conflict':
+        '无法确认这次创建的结果。请在此窗口重试原请求。',
+    'organizationShareableLinkCreateFailure.serviceUnavailable':
+        '服务暂时不可用，无法确认创建结果。请在此窗口重试。',
+    'organizationShareableLinkCreateFailure.networkUnavailable':
+        '网络不可用，无法确认创建结果。请检查连接后在此窗口重试。',
+    'organizationShareableLinkCreateFailure.invalidResponse':
+        '未收到可验证的创建结果，请在此窗口重试。',
     'organizationLeaveAction': '退出组织',
     'organizationLeaveTitle': '退出组织？',
     'organizationLeaveHelp':
@@ -1478,6 +1525,73 @@ const Map<String, Map<String, String>> _strings = {
         'The network is unavailable, so the creation result is uncertain. '
         'Check your connection and retry in this window.',
     'organizationInvitationCreateFailure.invalidResponse':
+        'The creation result could not be verified. Retry in this window.',
+    'organizationShareableLinkCreateAction': 'Create join link',
+    'organizationShareableLinkCreateTitle': 'Create shareable join link',
+    'organizationShareableLinkCreateOwnerHelp':
+        'Only a current, active owner of this organization can create one. '
+        'The organization list does not infer ownership; the server checks it '
+        'when you submit.',
+    'organizationShareableLinkCreateDeliveryHelp':
+        'The app creates and shows only a link ID. It does not send it or '
+        'construct a URL here.',
+    'organizationShareableLinkCreateOrganizationId': 'Organization ID',
+    'organizationShareableLinkCreateInvalidRequest':
+        'Could not prepare a link ID. Retry in this window.',
+    'organizationShareableLinkCreateSubmitting': 'Creating link…',
+    'organizationShareableLinkCreateSubmit': 'Create link',
+    'organizationShareableLinkCreateRetry': 'Retry this creation',
+    'organizationShareableLinkCreateClose': 'Close',
+    'organizationShareableLinkCreateUnauthorized':
+        'The account or session changed. The link ID and receipt were cleared. '
+        'Close this window and sign in again.',
+    'organizationShareableLinkCreateUncertain':
+        'The link may already exist. A retry uses the same organization and '
+        'link ID, kept only in this window.',
+    'organizationShareableLinkCreateSuccess': 'Shareable join link created.',
+    'organizationShareableLinkCreateLinkId': 'Link ID (UUID)',
+    'organizationShareableLinkCreateIssuedAt': 'Issued at (UTC)',
+    'organizationShareableLinkCreateExpiresAt': 'Expires at (UTC)',
+    'organizationShareableLinkCreateNoUrl':
+        'Explicitly copy the link ID and give it to the applicant through a '
+        'trusted channel. The app does not copy or deliver it automatically.',
+    'organizationShareableLinkCreateFreshnessNotice':
+        'This historical receipt does not prove that you are still an owner or '
+        'that the link is still valid. The applicant must still submit an '
+        'application; joining does not grant project access or extra permissions.',
+    'organizationShareableLinkCreateCopy': 'Copy link ID',
+    'organizationShareableLinkCreateCopySuccess': 'Link ID copied.',
+    'organizationShareableLinkCreateCopyFailure':
+        'Could not copy the link ID. Try again.',
+    'organizationShareableLinkCreateDiscardTitle':
+        'Stop retrying this creation?',
+    'organizationShareableLinkCreateDiscardBody':
+        'The link may already exist. Closing only discards the retry details in '
+        'this window. It does not revoke a link that may exist on the server.',
+    'organizationShareableLinkCreateKeepRetry': 'Keep retrying',
+    'organizationShareableLinkCreateDiscard': 'Discard retry and close',
+    'organizationShareableLinkCreateFailure.notConfigured':
+        'The shareable join service is not configured. It did not submit a '
+        'create request. Try again later.',
+    'organizationShareableLinkCreateFailure.invalidJson':
+        'The create request format is invalid. Try again later.',
+    'organizationShareableLinkCreateFailure.payloadTooLarge':
+        'The service did not accept the create request. Try again later.',
+    'organizationShareableLinkCreateFailure.invalidRequest':
+        'The create request is invalid. Try again later.',
+    'organizationShareableLinkCreateFailure.forbidden':
+        'This account cannot create a shareable join link for this '
+        'organization, or the request is not eligible.',
+    'organizationShareableLinkCreateFailure.conflict':
+        'The creation result is uncertain. Retry the original request in this '
+        'window.',
+    'organizationShareableLinkCreateFailure.serviceUnavailable':
+        'The service is unavailable, so the creation result is uncertain. '
+        'Retry in this window.',
+    'organizationShareableLinkCreateFailure.networkUnavailable':
+        'The network is unavailable, so the creation result is uncertain. '
+        'Check your connection and retry in this window.',
+    'organizationShareableLinkCreateFailure.invalidResponse':
         'The creation result could not be verified. Retry in this window.',
     'organizationLeaveAction': 'Leave organization',
     'organizationLeaveTitle': 'Leave organization?',

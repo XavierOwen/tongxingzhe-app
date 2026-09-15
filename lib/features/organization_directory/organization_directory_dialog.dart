@@ -8,9 +8,11 @@ import '../../l10n/app_strings.dart';
 import '../../organization_directed_account_invitation/organization_directed_account_invitation.dart';
 import '../../organization_directory/organization_directory.dart';
 import '../../organization_membership_self_leave/organization_membership_self_leave.dart';
+import '../../organization_shareable_join/organization_shareable_join.dart';
 import 'organization_invitation_create_dialog.dart';
 import 'organization_invitation_accept_dialog.dart';
 import 'organization_membership_self_leave_dialog.dart';
+import 'organization_shareable_join_link_create_dialog.dart';
 
 /// 读取当前账号的组织目录，不改变当前项目。
 ///
@@ -25,6 +27,8 @@ final class OrganizationDirectoryDialog extends StatefulWidget {
         const DeferredOrganizationMembershipSelfLeaveGateway(),
     this.invitationGateway =
         const DeferredOrganizationDirectedAccountInvitationGateway(),
+    this.shareableJoinGateway =
+        const DeferredOrganizationShareableJoinGateway(),
   });
 
   final AppStrings text;
@@ -32,6 +36,7 @@ final class OrganizationDirectoryDialog extends StatefulWidget {
   final AppSession appSession;
   final OrganizationMembershipSelfLeaveGateway selfLeaveGateway;
   final OrganizationDirectedAccountInvitationGateway invitationGateway;
+  final OrganizationShareableJoinGateway shareableJoinGateway;
 
   @override
   State<OrganizationDirectoryDialog> createState() =>
@@ -217,6 +222,19 @@ final class _OrganizationDirectoryDialogState
                 ),
                 TextButton.icon(
                   key: ValueKey(
+                    'organization-shareable-link-create-'
+                    '${entry.organizationWorkspaceId}',
+                  ),
+                  onPressed: _busy || _sessionInvalidated
+                      ? null
+                      : () => _createShareableJoinLink(entry),
+                  icon: const Icon(Icons.link),
+                  label: Text(
+                    widget.text.t('organizationShareableLinkCreateAction'),
+                  ),
+                ),
+                TextButton.icon(
+                  key: ValueKey(
                     'organization-leave-${entry.organizationWorkspaceId}',
                   ),
                   onPressed: _busy || _sessionInvalidated
@@ -396,6 +414,26 @@ final class _OrganizationDirectoryDialogState
         text: widget.text,
         organization: entry,
         gateway: widget.invitationGateway,
+        appSession: widget.appSession,
+      ),
+    );
+  }
+
+  Future<void> _createShareableJoinLink(
+    OrganizationDirectoryEntry entry,
+  ) async {
+    if (_busy ||
+        !_organizations.contains(entry) ||
+        !_hasTrustedSession(widget.appSession.current)) {
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => OrganizationShareableJoinLinkCreateDialog(
+        text: widget.text,
+        organization: entry,
+        gateway: widget.shareableJoinGateway,
         appSession: widget.appSession,
       ),
     );
