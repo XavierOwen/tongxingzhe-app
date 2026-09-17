@@ -8,6 +8,8 @@ set -euo pipefail
 # the rollback fixture.
 : "${DATABASE_URL:?请设置 DATABASE_URL，例如 postgresql://user:password@host/database}"
 
+# Wrappers must exec the client/transport, or handle TERM by terminating and
+# waiting for their own children before exiting. Non-cooperative forks are unsupported.
 psql_command="${PSQL_COMMAND:-psql}"
 if ! command -v "${psql_command}" >/dev/null 2>&1; then
   echo '找不到 psql；请安装 PostgreSQL client 或设置 PSQL_COMMAND。' >&2
@@ -26,12 +28,12 @@ psql_base=(
 
 holder_fd=''
 run_psql() (
-  if [[ -n "${holder_fd}" ]]; then exec {holder_fd}>&-; fi
+  if [[ -n "${holder_fd}" ]]; then exec 3>&-; fi
   "${psql_base[@]}" "$@"
 )
 
 run_psql_background() {
-  if [[ -n "${holder_fd}" ]]; then exec {holder_fd}>&-; fi
+  if [[ -n "${holder_fd}" ]]; then exec 3>&-; fi
   exec "${psql_base[@]}" "$@"
 }
 
@@ -46,22 +48,23 @@ membership_holder_application="${application_prefix}-membership-holder"
 membership_waiter_application="${application_prefix}-membership-waiter"
 observed_pg_pid=''
 
-stop_psql_job() {
-  local pid="$1" child_pid
-  if ! kill -0 "${pid}" >/dev/null 2>&1; then return; fi
-  kill -STOP "${pid}" >/dev/null 2>&1 || true
-  for child_pid in $(ps -eo pid=,ppid= | awk -v parent="${pid}" '$2 == parent { print $1 }'); do
-    stop_psql_job "${child_pid}"
-  done
-  kill -TERM "${pid}" >/dev/null 2>&1 || true
-  kill -CONT "${pid}" >/dev/null 2>&1 || true
-}
-
 cleanup() {
   local pid
   # EOF closes the holder's transaction first. Children never inherit this FD.
-  if [[ -n "${holder_fd}" ]]; then exec {holder_fd}>&-; holder_fd=''; fi
-  # A PSQL_COMMAND wrapper may leave a server session after its process exits.
+  if [[ -n "${holder_fd}" ]]; then exec 3>&-; holder_fd=''; fi
+  # Each owned job is an exec client/transport or a wrapper that reaps on TERM.
+  for pid in "${child_pids[@]:-}"; do
+    if [[ -n "${pid}" ]] && kill -0 "${pid}" >/dev/null 2>&1; then
+      kill -TERM "${pid}" >/dev/null 2>&1 || true
+      kill -CONT "${pid}" >/dev/null 2>&1 || true
+    fi
+  done
+  for pid in "${child_pids[@]:-}"; do
+    if [[ -n "${pid}" ]]; then
+      wait "${pid}" >/dev/null 2>&1 || true
+    fi
+  done
+  # Scan after jobs exit, so a transport's final connection cannot evade cleanup.
   # Terminate only this invocation's uniquely named sessions in this database.
   run_psql --quiet --command="
     SELECT pg_terminate_backend(pid) FROM pg_stat_activity
@@ -70,14 +73,6 @@ cleanup() {
         '${transfer_holder_application}', '${transfer_waiter_application}',
         '${membership_holder_application}', '${membership_waiter_application}');
   " >/dev/null 2>&1 || true
-  for pid in "${child_pids[@]:-}"; do
-    if [[ -n "${pid}" ]] && kill -0 "${pid}" >/dev/null 2>&1; then
-      stop_psql_job "${pid}"
-    fi
-    if [[ -n "${pid}" ]]; then
-      wait "${pid}" >/dev/null 2>&1 || true
-    fi
-  done
   rm -f "${temporary_directory}"/*.out "${temporary_directory}"/*.fifo
   rmdir "${temporary_directory}"
 }
@@ -228,7 +223,8 @@ run_create_replay_pair() {
     <"${temporary_directory}/create-replay.fifo" >"${first_output}" 2>&1 &
   first_pid=$!
   child_pids+=("${first_pid}")
-  exec {holder_fd}>"${temporary_directory}/create-replay.fifo"
+  exec 3>"${temporary_directory}/create-replay.fifo"
+  holder_fd='3'
   printf '%s\n' "
     BEGIN;
     SET LOCAL ROLE tongxingzhe_runtime;
@@ -253,7 +249,7 @@ run_create_replay_pair() {
   waiter_pg_pid="${observed_pg_pid}"
   wait_for_advisory_waiter "${request_lock}" "${second_pid}" "${second_output}" "${replay_waiter_application}" "${waiter_pg_pid}" "${holder_pg_pid}"
   printf '%s\n' "COMMIT; SELECT pg_advisory_unlock(hashtextextended('${ready_lock}', 0));" >&"${holder_fd}"
-  exec {holder_fd}>&-
+  exec 3>&-
   holder_fd=''
   wait "${first_pid}" || first_status=$?
   wait "${second_pid}" || second_status=$?
@@ -350,7 +346,8 @@ PGAPPNAME="${transfer_holder_application}" run_psql_background --quiet \
   <"${temporary_directory}/owner-transfer.fifo" >"${transfer_output}" 2>&1 &
 transfer_pid=$!
 child_pids+=("${transfer_pid}")
-exec {holder_fd}>"${temporary_directory}/owner-transfer.fifo"
+exec 3>"${temporary_directory}/owner-transfer.fifo"
+holder_fd='3'
 printf '%s\n' "
   BEGIN;
   SELECT * FROM app_private.transfer_organization_owner_v1(
@@ -373,7 +370,7 @@ wait_for_session "${transfer_waiter_application}" "${transfer_create_pid}" "${tr
 transfer_waiter_pg_pid="${observed_pg_pid}"
 wait_for_app_user_waiter "${transfer_create_pid}" "${transfer_create_output}" "${transfer_waiter_application}" "${transfer_waiter_pg_pid}" "${transfer_holder_pg_pid}" "${transfer_owner}"
 printf '%s\n' "COMMIT; SELECT pg_advisory_unlock(hashtextextended('${transfer_ready}', 0));" >&"${holder_fd}"
-exec {holder_fd}>&-
+exec 3>&-
 holder_fd=''
 transfer_status=0
 transfer_create_status=0
@@ -399,7 +396,8 @@ PGAPPNAME="${membership_holder_application}" run_psql_background --quiet \
   <"${temporary_directory}/membership-close.fifo" >"${membership_output}" 2>&1 &
 membership_pid=$!
 child_pids+=("${membership_pid}")
-exec {holder_fd}>"${temporary_directory}/membership-close.fifo"
+exec 3>"${temporary_directory}/membership-close.fifo"
+holder_fd='3'
 printf '%s\n' "
   BEGIN;
   SELECT 1 FROM app_data.app_users
@@ -431,7 +429,7 @@ wait_for_session "${membership_waiter_application}" "${membership_create_pid}" "
 membership_waiter_pg_pid="${observed_pg_pid}"
 wait_for_app_user_waiter "${membership_create_pid}" "${membership_create_output}" "${membership_waiter_application}" "${membership_waiter_pg_pid}" "${membership_holder_pg_pid}" "${membership_owner}"
 printf '%s\n' "COMMIT; SELECT pg_advisory_unlock(hashtextextended('${membership_ready}', 0));" >&"${holder_fd}"
-exec {holder_fd}>&-
+exec 3>&-
 holder_fd=''
 membership_status=0
 membership_create_status=0
