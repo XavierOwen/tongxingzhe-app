@@ -1980,7 +1980,7 @@ Backend检查strict root/item、selector、UTC、认证顺序、GET body拒绝�
 
 关闭、系统 Back 或 Escape 返回同一类型化 receipt，原父目录随后只重新读取一次。“我的组织”以该次读取为准；历史成功和当前空目录可以同时成立。窗口内不自动复制、不切项目、不再预览或重复接受，借用的 AppSession 和 gateway 仍由 App 管理。
 
-unknown 结果仍只能重试原邀请或经过确认停止重试。重试得到 known success 后清除 uncertain，显示历史 receipt。登录失效、换号或快速 ABA 隐藏内容并隔离迟到结果；同账号换项目不改变已捕获的邀请。接受后焦点移到“关闭”，使 Escape 仍可用。
+unknown 结果仍只能重试原邀请或经过确认停止重试。重试得到 known success 后清除 uncertain，显示历史 receipt。登录失效、换号或快速 ABA 隐藏内容并隔离迟到结果；共享 AppSession 关闭事件流时也清空回执，不能返回旧成功。同账号换项目不改变已捕获的邀请。接受后焦点移到“关闭”，使 Escape 仍可用。
 
 `TEST-105` 覆盖五字段、历史 replay、各关闭路径的父目录重读次数、unknown 解消、会话与迟到结果、中英文320×568/200%字号、IME、语义和48dp操作。运行定向Widget、analyze、production boundary、链接与精确head CI。原生Android使用合成身份时，只证明该设备上的窗口显示与操作，不证明生产JWT、部署或六平台真人验收。
 

@@ -12,6 +12,53 @@ import 'package:tongxingzhe_app/l10n/app_strings.dart';
 import 'package:tongxingzhe_app/organization_directed_account_invitation/organization_directed_account_invitation.dart';
 
 void main() {
+  testWidgets(
+    'closing borrowed session hides accepted receipt and returns no stale result',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final result = _ResultBox();
+      await _open(
+        tester,
+        fixture.session,
+        _Gateway(
+          previews: [
+            OrganizationDirectedAccountInvitationPreviewSuccess(_preview),
+          ],
+          accepts: [
+            OrganizationDirectedAccountInvitationAcceptSuccess(_receipt),
+          ],
+        ),
+        result: result,
+      );
+      await _loadPreview(tester, _invitationId);
+      await tester.tap(_acceptAction);
+      await tester.pumpAndSettle();
+      expect(
+        find.text(_receipt.organizationInvitationContractId),
+        findsOneWidget,
+      );
+
+      await tester.runAsync(fixture.session.close);
+      await tester.pumpAndSettle();
+      for (final value in [
+        _receipt.organizationInvitationContractId,
+        _receipt.invitationId,
+        _receipt.organizationWorkspaceId,
+        _receipt.organizationMembershipId,
+        _receipt.acceptedAtUtc.toIso8601String(),
+      ]) {
+        expect(find.text(value), findsNothing);
+      }
+      expect(_acceptAction, findsNothing);
+      expect(_previewAction, findsNothing);
+      await tester.tap(_closeAction);
+      await tester.pumpAndSettle();
+      expect(result.receipt, isNull);
+      expect(find.byType(OrganizationInvitationAcceptDialog), findsNothing);
+    },
+  );
+
   testWidgets('accepted invitation stays open with its historical receipt', (
     tester,
   ) async {

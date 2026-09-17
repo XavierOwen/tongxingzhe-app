@@ -62,12 +62,16 @@ final class _OrganizationInvitationAcceptDialogState
     final subject =
         widget.appSession.current.identity?.principal?.externalSubject;
     if (!_hasTrustedSession()) _stage = _InvitationStage.expired;
-    _sessionSubscription = widget.appSession.changes.listen((snapshot) {
-      if (snapshot.identity?.principal?.externalSubject != subject ||
-          !_hasTrustedSession()) {
-        _invalidateSession();
-      }
-    });
+    _sessionSubscription = widget.appSession.changes.listen(
+      (snapshot) {
+        if (snapshot.identity?.principal?.externalSubject != subject ||
+            !_hasTrustedSession()) {
+          _invalidateSession();
+        }
+      },
+      onError: (Object _, StackTrace _) => _invalidateSession(),
+      onDone: _invalidateSession,
+    );
   }
 
   @override
