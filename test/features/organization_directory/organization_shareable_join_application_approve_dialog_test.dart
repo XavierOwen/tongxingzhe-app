@@ -730,6 +730,10 @@ void main() {
       expect(find.text(_receipt.organizationMembershipId), findsOneWidget);
       expect(tester.getSize(_assignProject).height, greaterThanOrEqualTo(48));
       expect(tester.getRect(_assignProject).bottom, lessThanOrEqualTo(568));
+      expect(
+        tester.widget<FilledButton>(_assignProject).style?.shape?.resolve({}),
+        isA<RoundedRectangleBorder>(),
+      );
       semantics.dispose();
     });
   }

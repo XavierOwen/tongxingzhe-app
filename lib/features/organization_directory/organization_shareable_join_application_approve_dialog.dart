@@ -290,7 +290,13 @@ final class _OrganizationShareableJoinApplicationApproveDialogState
       if (_stage == _ApprovalStage.succeeded)
         FilledButton(
           key: const ValueKey('organization-shareable-approval-assign-project'),
-          style: FilledButton.styleFrom(minimumSize: const Size(48, 48)),
+          // Keep multiline labels inside the background at large text scales.
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(48, 48),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
           onPressed: _openingAssignment ? null : _assignProject,
           child: Text(
             widget.text.t('organizationShareableApprovalAssignProject'),
