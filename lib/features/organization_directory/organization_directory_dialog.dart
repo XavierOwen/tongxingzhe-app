@@ -12,6 +12,7 @@ import '../../organization_shareable_join/organization_shareable_join.dart';
 import 'organization_invitation_create_dialog.dart';
 import 'organization_invitation_accept_dialog.dart';
 import 'organization_membership_self_leave_dialog.dart';
+import 'organization_shareable_join_application_approve_dialog.dart';
 import 'organization_shareable_join_application_submit_dialog.dart';
 import 'organization_shareable_join_link_create_dialog.dart';
 
@@ -199,72 +200,83 @@ final class _OrganizationDirectoryDialogState
     ],
   );
 
-  Widget _entry(BuildContext context, OrganizationDirectoryEntry entry) =>
-      Padding(
-        key: ValueKey(
-          'organization-directory-entry-${entry.organizationWorkspaceId}',
+  Widget _entry(
+    BuildContext context,
+    OrganizationDirectoryEntry entry,
+  ) => Padding(
+    key: ValueKey(
+      'organization-directory-entry-${entry.organizationWorkspaceId}',
+    ),
+    padding: const EdgeInsets.symmetric(vertical: 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SelectableText(
+          entry.organizationName,
+          style: Theme.of(context).textTheme.titleMedium,
         ),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        const SizedBox(height: 8),
+        Text(
+          widget.text.t('organizationDirectoryIdentifier'),
+          style: Theme.of(context).textTheme.labelMedium,
+        ),
+        const SizedBox(height: 4),
+        SelectableText(entry.organizationWorkspaceId),
+        const SizedBox(height: 8),
+        Wrap(
+          alignment: WrapAlignment.end,
+          spacing: 8,
           children: [
-            SelectableText(
-              entry.organizationName,
-              style: Theme.of(context).textTheme.titleMedium,
+            TextButton.icon(
+              key: ValueKey(
+                'organization-invitation-create-'
+                '${entry.organizationWorkspaceId}',
+              ),
+              onPressed: _busy || _sessionInvalidated
+                  ? null
+                  : () => _createInvitation(entry),
+              icon: const Icon(Icons.person_add_alt_1_outlined),
+              label: Text(widget.text.t('organizationInvitationCreateAction')),
             ),
-            const SizedBox(height: 8),
-            Text(
-              widget.text.t('organizationDirectoryIdentifier'),
-              style: Theme.of(context).textTheme.labelMedium,
+            TextButton.icon(
+              key: ValueKey(
+                'organization-shareable-link-create-'
+                '${entry.organizationWorkspaceId}',
+              ),
+              onPressed: _busy || _sessionInvalidated
+                  ? null
+                  : () => _createShareableJoinLink(entry),
+              icon: const Icon(Icons.link),
+              label: Text(
+                widget.text.t('organizationShareableLinkCreateAction'),
+              ),
             ),
-            const SizedBox(height: 4),
-            SelectableText(entry.organizationWorkspaceId),
-            const SizedBox(height: 8),
-            Wrap(
-              alignment: WrapAlignment.end,
-              spacing: 8,
-              children: [
-                TextButton.icon(
-                  key: ValueKey(
-                    'organization-invitation-create-'
-                    '${entry.organizationWorkspaceId}',
-                  ),
-                  onPressed: _busy || _sessionInvalidated
-                      ? null
-                      : () => _createInvitation(entry),
-                  icon: const Icon(Icons.person_add_alt_1_outlined),
-                  label: Text(
-                    widget.text.t('organizationInvitationCreateAction'),
-                  ),
-                ),
-                TextButton.icon(
-                  key: ValueKey(
-                    'organization-shareable-link-create-'
-                    '${entry.organizationWorkspaceId}',
-                  ),
-                  onPressed: _busy || _sessionInvalidated
-                      ? null
-                      : () => _createShareableJoinLink(entry),
-                  icon: const Icon(Icons.link),
-                  label: Text(
-                    widget.text.t('organizationShareableLinkCreateAction'),
-                  ),
-                ),
-                TextButton.icon(
-                  key: ValueKey(
-                    'organization-leave-${entry.organizationWorkspaceId}',
-                  ),
-                  onPressed: _busy || _sessionInvalidated
-                      ? null
-                      : () => _leave(entry),
-                  icon: const Icon(Icons.logout),
-                  label: Text(widget.text.t('organizationLeaveAction')),
-                ),
-              ],
+            TextButton.icon(
+              key: ValueKey(
+                'organization-shareable-application-approve-'
+                '${entry.organizationWorkspaceId}',
+              ),
+              onPressed: _busy || _sessionInvalidated
+                  ? null
+                  : () => _approveShareableJoinApplication(entry),
+              icon: const Icon(Icons.how_to_reg_outlined),
+              label: Text(widget.text.t('organizationShareableApprovalAction')),
+            ),
+            TextButton.icon(
+              key: ValueKey(
+                'organization-leave-${entry.organizationWorkspaceId}',
+              ),
+              onPressed: _busy || _sessionInvalidated
+                  ? null
+                  : () => _leave(entry),
+              icon: const Icon(Icons.logout),
+              label: Text(widget.text.t('organizationLeaveAction')),
             ),
           ],
         ),
-      );
+      ],
+    ),
+  );
 
   String? get _visibleStatus {
     if (_sessionInvalidated) {
@@ -494,6 +506,26 @@ final class _OrganizationDirectoryDialogState
     // Exact replay may describe an old membership; only a fresh directory
     // tells us whether this organization should still be shown.
     await _load();
+  }
+
+  Future<void> _approveShareableJoinApplication(
+    OrganizationDirectoryEntry entry,
+  ) async {
+    if (_busy ||
+        !_organizations.contains(entry) ||
+        !_hasTrustedSession(widget.appSession.current)) {
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => OrganizationShareableJoinApplicationApproveDialog(
+        text: widget.text,
+        organization: entry,
+        gateway: widget.shareableJoinGateway,
+        appSession: widget.appSession,
+      ),
+    );
   }
 
   bool _hasTrustedSession(AppSessionSnapshot snapshot) =>

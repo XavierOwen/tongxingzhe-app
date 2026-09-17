@@ -319,6 +319,50 @@ const Map<String, Map<String, String>> _strings = {
         '网络不可用，无法确认申请结果。',
     'organizationShareableApplicationSubmitFailure.invalidResponse':
         '未收到可验证的申请结果。',
+    'organizationShareableApprovalAction': '批准入组申请',
+    'organizationShareableApprovalTitle': '批准入组申请',
+    'organizationShareableApprovalInputHelp':
+        '输入申请人通过可信渠道提供的申请编号。App 不会读取申请人姓名、账号或其他资料。',
+    'organizationShareableApprovalApplicationIdentifier': '申请编号（UUID）',
+    'organizationShareableApprovalInvalidApplication': '请输入有效的申请 UUID。',
+    'organizationShareableApprovalReview': '核对这次批准',
+    'organizationShareableApprovalConfirmHelp':
+        '请核对组织和申请编号，并通过原渠道确认申请人。App 无法仅凭编号识别申请人；只有当前组织所有者可以批准。批准只建立普通组织成员关系。',
+    'organizationShareableApprovalApprove': '确认批准',
+    'organizationShareableApprovalEdit': '更换申请编号',
+    'organizationShareableApprovalRetry': '重试这次批准',
+    'organizationShareableApprovalSubmitting': '正在批准申请…',
+    'organizationShareableApprovalSuccess': '这次批准请求已完成。',
+    'organizationShareableApprovalUnauthorized':
+        '账号或会话已改变。已清除申请编号和回执；请关闭后重新登录。',
+    'organizationShareableApprovalUncertain': '申请可能已获批准。重试仍使用同一组织和申请编号。',
+    'organizationShareableApprovalOrganizationId': '组织标识',
+    'organizationShareableApprovalApplicationId': '申请编号（UUID）',
+    'organizationShareableApprovalMembershipId': '组织成员关系编号',
+    'organizationShareableApprovalApprovedAt': '批准时间（UTC）',
+    'organizationShareableApprovalFreshnessNotice':
+        '这份历史回执不证明申请人现在仍是成员。请让申请人重新读取“我的组织”确认；批准不会加入项目、授予所有权或额外权限，也不切换当前项目。',
+    'organizationShareableApprovalClose': '关闭',
+    'organizationShareableApprovalDiscardTitle': '停止重试这次批准？',
+    'organizationShareableApprovalDiscardBody':
+        '申请可能已获批准。关闭只会放弃此窗口中的重试信息，不会撤销服务端上可能已建立的成员关系。',
+    'organizationShareableApprovalKeepRetry': '返回重试',
+    'organizationShareableApprovalDiscard': '放弃重试并关闭',
+    'organizationShareableApprovalFailure.notConfigured':
+        '可分享加入服务尚未配置，没有提交批准请求。请稍后重试。',
+    'organizationShareableApprovalFailure.unauthorized': '登录状态已失效，请重新登录。',
+    'organizationShareableApprovalFailure.invalidJson': '批准请求格式无效。',
+    'organizationShareableApprovalFailure.payloadTooLarge': '批准请求未被服务接受。',
+    'organizationShareableApprovalFailure.invalidRequest': '批准请求无效。',
+    'organizationShareableApprovalFailure.forbidden':
+        '当前账号不能批准这个申请，或申请现在不符合批准条件。',
+    'organizationShareableApprovalFailure.conflict': '这次批准请求与已有记录冲突。',
+    'organizationShareableApprovalFailure.serviceUnavailable':
+        '服务暂时不可用，无法确认批准结果。请在此窗口重试。',
+    'organizationShareableApprovalFailure.networkUnavailable':
+        '网络不可用，无法确认批准结果。请检查连接后在此窗口重试。',
+    'organizationShareableApprovalFailure.invalidResponse':
+        '未收到可验证的批准结果，请在此窗口重试。',
     'organizationLeaveAction': '退出组织',
     'organizationLeaveTitle': '退出组织？',
     'organizationLeaveHelp':
@@ -1745,6 +1789,74 @@ const Map<String, Map<String, String>> _strings = {
         'The network is unavailable, so the application result is uncertain.',
     'organizationShareableApplicationSubmitFailure.invalidResponse':
         'The application result could not be verified.',
+    'organizationShareableApprovalAction': 'Approve join application',
+    'organizationShareableApprovalTitle': 'Approve join application',
+    'organizationShareableApprovalInputHelp':
+        'Enter the application ID received through a trusted channel. '
+        'The app does not read the applicant’s name, account, or profile.',
+    'organizationShareableApprovalApplicationIdentifier':
+        'Application ID (UUID)',
+    'organizationShareableApprovalInvalidApplication':
+        'Enter a valid application UUID.',
+    'organizationShareableApprovalReview': 'Review this approval',
+    'organizationShareableApprovalConfirmHelp':
+        'Check the organization and application ID. Confirm the applicant '
+        'through the original channel; the app cannot identify them from '
+        'the ID alone. Only a current organization owner can approve. '
+        'Approval creates an ordinary organization membership only.',
+    'organizationShareableApprovalApprove': 'Confirm approval',
+    'organizationShareableApprovalEdit': 'Use another application ID',
+    'organizationShareableApprovalRetry': 'Retry this approval',
+    'organizationShareableApprovalSubmitting': 'Approving application…',
+    'organizationShareableApprovalSuccess':
+        'This approval request is complete.',
+    'organizationShareableApprovalUnauthorized':
+        'The account or session changed. The application ID and receipt '
+        'were cleared. Close this window and sign in again.',
+    'organizationShareableApprovalUncertain':
+        'The application may have been approved. A retry uses the same '
+        'organization and application ID.',
+    'organizationShareableApprovalOrganizationId': 'Organization ID',
+    'organizationShareableApprovalApplicationId': 'Application ID (UUID)',
+    'organizationShareableApprovalMembershipId': 'Organization membership ID',
+    'organizationShareableApprovalApprovedAt': 'Approved at (UTC)',
+    'organizationShareableApprovalFreshnessNotice':
+        'This historical receipt does not prove that the applicant is still '
+        'a member. Ask them to reload My organizations to confirm. Approval '
+        'does not join projects, grant ownership or extra permissions, '
+        'or switch the current project.',
+    'organizationShareableApprovalClose': 'Close',
+    'organizationShareableApprovalDiscardTitle': 'Stop retrying this approval?',
+    'organizationShareableApprovalDiscardBody':
+        'The application may have been approved. Closing only discards '
+        'the retry details in this window. It does not revoke a membership '
+        'that may exist on the server.',
+    'organizationShareableApprovalKeepRetry': 'Keep retrying',
+    'organizationShareableApprovalDiscard': 'Discard retry and close',
+    'organizationShareableApprovalFailure.notConfigured':
+        'The shareable join service is not configured. It did not submit '
+        'an approval request. Try again later.',
+    'organizationShareableApprovalFailure.unauthorized':
+        'The session expired. Sign in again.',
+    'organizationShareableApprovalFailure.invalidJson':
+        'The approval request format is invalid.',
+    'organizationShareableApprovalFailure.payloadTooLarge':
+        'The service did not accept the approval request.',
+    'organizationShareableApprovalFailure.invalidRequest':
+        'The approval request is invalid.',
+    'organizationShareableApprovalFailure.forbidden':
+        'This account cannot approve this application, '
+        'or the application is not eligible now.',
+    'organizationShareableApprovalFailure.conflict':
+        'This approval request conflicts with an existing record.',
+    'organizationShareableApprovalFailure.serviceUnavailable':
+        'The service is unavailable, so the approval result is uncertain. '
+        'Retry in this window.',
+    'organizationShareableApprovalFailure.networkUnavailable':
+        'The network is unavailable, so the approval result is uncertain. '
+        'Check your connection and retry in this window.',
+    'organizationShareableApprovalFailure.invalidResponse':
+        'The approval result could not be verified. Retry in this window.',
     'organizationLeaveAction': 'Leave organization',
     'organizationLeaveTitle': 'Leave organization?',
     'organizationLeaveHelp':

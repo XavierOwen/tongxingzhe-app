@@ -1619,6 +1619,33 @@ git diff --check
 
 Widget tests 使用 fake session、内存 gateway 和 synthetic Clipboard。它们可以证明本地交互、同意图重试、会话隔离和参数接线，不能证明 production identity、Backend 部署、数据库权限、真实剪贴板、Apple universal link 或六平台真人运行。7AO 不增加申请列表、通知、approve／reject／revoke UI、Drift、离线缓存、删除恢复或 purge writer。
 
+### 3.33 在选定组织明确批准入组申请（Issue #374，MANUAL-080）
+
+7AP 消费 3.30 已有的 `approveApplication`，沿用 3.31 组合的同一个 gateway 和 `AppSession`。用户在“我的组织”选择目标组织的“批准入组申请”，输入申请人提供的 application UUID，再进入本地核对页。非法 UUID 不发送请求；大小写和两端空白在本地规范化。
+
+核对页显示选定组织和 application UUID，不读取申请人姓名、账号或 profile。这个编号只是 opaque selector，不能单独确认申请人身份。所有者应通过收到编号的原渠道核对申请人，再明确批准。组织目录只说明当前成员关系，Backend 仍在每次 approve 中确认 current active owner。
+
+首次 approve 发出后，organization 和 application UUID 固定。network unavailable、service unavailable、invalid response 或意外异常可能隐藏已经提交的结果；此时只能在窗口内用原意图重试，关闭须确认放弃重试信息。稳定 typed 拒绝结束不确定状态；不重新生成编号，也不把 forbidden 细分为不存在、过期或申请人已加入。
+
+成功留窗显示 application UUID、organization workspace UUID、organization membership UUID 和 UTC 批准时间。历史 receipt 可以来自精确重放，不证明申请人现在仍是成员。请让申请人重新读取“我的组织”确认当前资格。批准不建立 project membership、owner 或 capability，不切换当前项目、不刷新 owner 目录、不自动复制，也不关闭共享 gateway。
+
+窗口绑定打开时的 trusted app-user ID。账号失效、换号或 ABA 永久清除输入、固定 UUID 和 receipt，并隔离迟到网络结果；同账号切换项目不改变组织级批准意图。
+
+从仓库根目录运行：
+
+```bash
+flutter test --no-pub \
+  test/features/organization_directory/organization_shareable_join_application_approve_dialog_test.dart \
+  test/features/organization_directory/organization_directory_dialog_test.dart
+dart analyze
+flutter test --no-pub
+dart run tool/check_production_boundary.dart
+dart run tool/check_markdown_links.dart
+git diff --check
+```
+
+Widget tests 使用 fake session 和内存 gateway，只证明本地显示、同意图重试、会话隔离和参数接线。它们不证明 production identity、Backend 部署、数据库权限、通知或真人平台运行。7AP 不增加申请列表、profile、reject／revoke、通知、router、平台链接、删除恢复或 purge writer。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：

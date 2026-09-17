@@ -9,6 +9,7 @@ import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_directory_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_invitation_create_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_membership_self_leave_dialog.dart';
+import 'package:tongxingzhe_app/features/organization_directory/organization_shareable_join_application_approve_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_shareable_join_application_submit_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_shareable_join_link_create_dialog.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
@@ -432,6 +433,15 @@ void main() {
       find.byKey(const ValueKey('organization-directory-use-shareable-link')),
       findsOneWidget,
     );
+    expect(
+      find.byKey(
+        ValueKey(
+          'organization-shareable-application-approve-'
+          '${organizations.last.organizationWorkspaceId}',
+        ),
+      ),
+      findsOneWidget,
+    );
     expect(find.text(organizations.last.organizationName), findsOneWidget);
     expect(
       find.text(organizations.last.organizationWorkspaceId),
@@ -624,6 +634,106 @@ void main() {
       _organizationB.organizationWorkspaceId,
     );
     expect(directoryGateway.listCalls, 1);
+    expect(shareableJoinGateway.closed, isFalse);
+  });
+
+  testWidgets('每个组织行批准加入申请固定选中组织，成功留窗且不刷新目录', (tester) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final directoryGateway = _Gateway([
+      OrganizationDirectorySuccess(const [_organizationA, _organizationB]),
+    ]);
+    final shareableJoinGateway = _ShareableJoinGateway(approveSuccess: true);
+    final initialContext = fixture.session.current.context;
+    await _open(
+      tester,
+      fixture.session,
+      directoryGateway,
+      shareableJoinGateway: shareableJoinGateway,
+    );
+
+    final approve = find.byKey(
+      ValueKey(
+        'organization-shareable-application-approve-'
+        '${_organizationB.organizationWorkspaceId}',
+      ),
+    );
+    expect(approve, findsOneWidget);
+    await tester.ensureVisible(approve);
+    await tester.tap(approve);
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(
+      OrganizationShareableJoinApplicationApproveDialog,
+    );
+    expect(dialog, findsOneWidget);
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.text(_organizationB.organizationWorkspaceId),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.text(_organizationA.organizationWorkspaceId),
+      ),
+      findsNothing,
+    );
+    expect(directoryGateway.listCalls, 1);
+    await tester.enterText(
+      find.byKey(
+        const ValueKey('organization-shareable-approval-application-field'),
+      ),
+      _shareableJoinApplicationId,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('organization-shareable-approval-review')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('organization-shareable-approval-submit')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('organization-shareable-approval-submit')),
+    );
+    await tester.pumpAndSettle();
+    expect(shareableJoinGateway.approveCalls, hasLength(1));
+    expect(
+      shareableJoinGateway.approveCalls.single.organizationWorkspaceId,
+      _organizationB.organizationWorkspaceId,
+    );
+    expect(
+      shareableJoinGateway.approveCalls.single.applicationId,
+      _shareableJoinApplicationId,
+    );
+    expect(
+      find.byKey(const ValueKey('organization-shareable-approval-status')),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        const AppStrings('zh').t('organizationShareableApprovalSuccess'),
+      ),
+      findsOneWidget,
+    );
+    expect(shareableJoinGateway.previewCalls, isEmpty);
+    expect(shareableJoinGateway.submitCalls, isEmpty);
+    expect(directoryGateway.listCalls, 1);
+    expect(fixture.session.current.context, initialContext);
+    expect(shareableJoinGateway.closed, isFalse);
+
+    await tester.tap(
+      find.byKey(const ValueKey('organization-shareable-approval-close')),
+    );
+    await tester.pumpAndSettle();
+    expect(dialog, findsNothing);
+    expect(find.byType(OrganizationDirectoryDialog), findsOneWidget);
+    expect(directoryGateway.listCalls, 1);
+    expect(fixture.session.current.context, initialContext);
     expect(shareableJoinGateway.closed, isFalse);
   });
 
@@ -1542,15 +1652,25 @@ final class _InvitationGateway
 
 typedef _ShareableJoinCall = ({String linkId, String organizationWorkspaceId});
 typedef _ShareableJoinSubmitCall = ({String applicationId, String linkId});
+typedef _ShareableJoinApproveCall = ({
+  String organizationWorkspaceId,
+  String applicationId,
+});
 
 final class _ShareableJoinGateway implements OrganizationShareableJoinGateway {
-  _ShareableJoinGateway({this.previewReceipt, this.submitSuccess = false});
+  _ShareableJoinGateway({
+    this.previewReceipt,
+    this.submitSuccess = false,
+    this.approveSuccess = false,
+  });
 
   final OrganizationShareableJoinLinkPreviewReceipt? previewReceipt;
   final bool submitSuccess;
+  final bool approveSuccess;
   final calls = <_ShareableJoinCall>[];
   final previewCalls = <String>[];
   final submitCalls = <_ShareableJoinSubmitCall>[];
+  final approveCalls = <_ShareableJoinApproveCall>[];
   var closed = false;
 
   @override
@@ -1607,7 +1727,26 @@ final class _ShareableJoinGateway implements OrganizationShareableJoinGateway {
   Future<OrganizationShareableJoinApplicationApproveResult> approveApplication({
     required String organizationWorkspaceId,
     required String applicationId,
-  }) => throw UnsupportedError('unused directory wiring approve');
+  }) async {
+    approveCalls.add((
+      organizationWorkspaceId: organizationWorkspaceId,
+      applicationId: applicationId,
+    ));
+    return approveSuccess
+        ? OrganizationShareableJoinApplicationApproveSuccess(
+            OrganizationShareableJoinApplicationApproveReceipt(
+              organizationShareableJoinApplicationContractId:
+                  'organization-shareable-join-application:v1',
+              applicationId: applicationId,
+              organizationWorkspaceId: organizationWorkspaceId,
+              organizationMembershipId: 'f1111111-1111-4111-8111-111111111111',
+              approvedAtUtc: DateTime.utc(2026, 9, 16, 18),
+            ),
+          )
+        : const OrganizationShareableJoinApplicationApproveRejected(
+            OrganizationShareableJoinFailureCode.notConfigured,
+          );
+  }
 
   @override
   Future<void> close() async => closed = true;
@@ -1746,6 +1885,7 @@ const _requestIdA = 'c1111111-1111-4111-8111-111111111111';
 const _requestIdB = 'c2222222-2222-4222-8222-222222222222';
 const _targetAppUserId = '99999999-9999-4999-8999-999999999999';
 const _shareableJoinLinkId = 'e1111111-1111-4111-8111-111111111111';
+const _shareableJoinApplicationId = 'e2222222-2222-4222-8222-222222222222';
 
 final _shareableJoinPreviewReceipt =
     OrganizationShareableJoinLinkPreviewReceipt(
