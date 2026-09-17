@@ -564,10 +564,12 @@ void main() {
       addTearDown(fixture.close);
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(320, 568);
-      tester.view.viewInsets = const FakeViewPadding(bottom: 283);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 307);
+      tester.view.padding = const FakeViewPadding(top: 24);
       addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetViewInsets);
+      addTearDown(tester.view.resetPadding);
       await _open(
         tester,
         fixture.session,
@@ -589,7 +591,7 @@ void main() {
       );
       for (final action in [_close, _review]) {
         final rect = tester.getRect(action);
-        expect(rect.bottom, lessThanOrEqualTo(568 - 283));
+        expect(rect.bottom, lessThanOrEqualTo(568 - 307));
         expect(rect.height, greaterThanOrEqualTo(48));
       }
     });
