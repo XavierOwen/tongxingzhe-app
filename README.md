@@ -91,6 +91,8 @@ PostgreSQL 完整测试可在临时 Docker 容器中运行：
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
+普通项目成员安排另以实际本地 HTTP、runtime role 和独立数据库连接对账首次提交及精确重放；verifier 为 fake，测试库为 synthetic，不代表生产身份或部署。
+
 第一次使用 Docker 时，按[本机、Docker 与 CI 测试指南](docs/manual/09-local-docker-and-ci-testing.md)准备环境和读取结果。
 
 ## 数据边界

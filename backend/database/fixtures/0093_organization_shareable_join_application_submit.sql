@@ -238,12 +238,37 @@ GRANT ALL ON
   fixture_0093_inactive
 TO tongxingzhe_runtime;
 
+-- Live fixture namespace scope includes every organization/user selector,
+-- personal workspaces and newly generated parent/project/grant UUIDs.
+-- Unrelated committed organizations must not change these RC assertions.
+CREATE TEMP VIEW fixture_0093_scoped_organization_memberships AS
+SELECT membership.* FROM app_data.organization_memberships AS membership
+WHERE membership.organization_workspace_id::text LIKE '00000000-0093-2000-0000-%'
+  OR membership.app_user_id::text LIKE '00000000-0093-0000-0000-%';
+CREATE TEMP VIEW fixture_0093_scoped_owner_assignments AS
+SELECT owner.* FROM app_data.organization_owner_assignments AS owner
+WHERE EXISTS (SELECT 1 FROM fixture_0093_scoped_organization_memberships AS membership
+  WHERE membership.organization_membership_id = owner.organization_membership_id);
+CREATE TEMP VIEW fixture_0093_scoped_project_memberships AS
+SELECT membership.* FROM app_data.project_memberships AS membership
+WHERE EXISTS (SELECT 1 FROM fixture_0093_scoped_organization_memberships AS parent
+  WHERE parent.organization_membership_id = membership.organization_membership_id)
+  OR EXISTS (SELECT 1 FROM app_data.projects AS project
+    JOIN app_data.workspaces AS workspace ON workspace.workspace_id = project.workspace_id
+    WHERE project.project_id = membership.project_id
+      AND (project.workspace_id::text LIKE '00000000-0093-2000-0000-%'
+        OR workspace.personal_owner_app_user_id::text LIKE '00000000-0093-0000-0000-%'));
+CREATE TEMP VIEW fixture_0093_scoped_capability_grants AS
+SELECT grant_row.* FROM app_data.management_report_capability_grants AS grant_row
+WHERE EXISTS (SELECT 1 FROM fixture_0093_scoped_project_memberships AS membership
+  WHERE membership.project_membership_id = grant_row.project_membership_id);
+
 CREATE TEMP TABLE fixture_0093_business_counts_before ON COMMIT DROP AS
 SELECT
-  (SELECT count(*) FROM app_data.organization_memberships) AS membership_count,
-  (SELECT count(*) FROM app_data.organization_owner_assignments) AS owner_count,
-  (SELECT count(*) FROM app_data.project_memberships) AS project_membership_count,
-  (SELECT count(*) FROM app_data.management_report_capability_grants) AS capability_count;
+  (SELECT count(*) FROM fixture_0093_scoped_organization_memberships) AS membership_count,
+  (SELECT count(*) FROM fixture_0093_scoped_owner_assignments) AS owner_count,
+  (SELECT count(*) FROM fixture_0093_scoped_project_memberships) AS project_membership_count,
+  (SELECT count(*) FROM fixture_0093_scoped_capability_grants) AS capability_count;
 
 SET LOCAL ROLE tongxingzhe_runtime;
 
@@ -352,10 +377,10 @@ BEGIN
 
   SELECT * INTO STRICT counts_before FROM fixture_0093_business_counts_before;
   SELECT
-    (SELECT count(*) FROM app_data.organization_memberships),
-    (SELECT count(*) FROM app_data.organization_owner_assignments),
-    (SELECT count(*) FROM app_data.project_memberships),
-    (SELECT count(*) FROM app_data.management_report_capability_grants)
+    (SELECT count(*) FROM fixture_0093_scoped_organization_memberships),
+    (SELECT count(*) FROM fixture_0093_scoped_owner_assignments),
+    (SELECT count(*) FROM fixture_0093_scoped_project_memberships),
+    (SELECT count(*) FROM fixture_0093_scoped_capability_grants)
   INTO counts_after;
   IF counts_after IS DISTINCT FROM counts_before THEN
     RAISE EXCEPTION '0093 submit created membership or authorization facts';
@@ -489,7 +514,7 @@ SELECT
   (SELECT count(*)
     FROM app_private.organization_shareable_join_application_audit_events
     WHERE split_part(application_id::text, '-', 2) = '0093') AS audit_count,
-  (SELECT count(*) FROM app_data.organization_memberships) AS membership_count;
+  (SELECT count(*) FROM fixture_0093_scoped_organization_memberships) AS membership_count;
 
 CREATE TEMP TABLE fixture_0093_claims_before ON COMMIT DROP AS
 SELECT *
@@ -566,7 +591,7 @@ BEGIN
     (SELECT count(*)
       FROM app_private.organization_shareable_join_application_audit_events
       WHERE split_part(application_id::text, '-', 2) = '0093'),
-    (SELECT count(*) FROM app_data.organization_memberships)
+    (SELECT count(*) FROM fixture_0093_scoped_organization_memberships)
   INTO after_counts;
 
   IF after_counts IS DISTINCT FROM before_counts

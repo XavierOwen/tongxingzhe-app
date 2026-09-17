@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import {randomInt, randomUUID} from "node:crypto";
 import {readFileSync} from "node:fs";
 import {Pool, type PoolClient} from "pg";
 import test from "node:test";
+import {setTimeout as delay} from "node:timers/promises";
 
 import {
   OrganizationShareableJoinApplicationStoreError,
@@ -86,6 +88,101 @@ test("0093 and 0094 runtime bridges submit, approve, replay, forbid, and protect
     await client.query("RELEASE SAVEPOINT private_acl");
   } finally {
     try { await client.query("ROLLBACK"); } finally { client.release(); await pool.end(); }
+  }
+});
+
+test("0093/0094 side-effect assertions ignore unrelated commits between their before/after snapshots", {timeout: 45_000}, async (t) => {
+  const pool = new Pool({connectionString: databaseUrl, max: 2, connectionTimeoutMillis: 5_000});
+  let client: PoolClient | undefined;
+  let unrelated: PoolClient | undefined;
+  try {
+    client = await pool.connect();
+    unrelated = await pool.connect();
+    const fixturePid = (await client.query<{pid: number}>("SELECT pg_backend_pid() AS pid")).rows[0]?.pid;
+    const holderPid = (await unrelated.query<{pid: number}>("SELECT pg_backend_pid() AS pid")).rows[0]?.pid;
+    assert.ok(fixturePid && holderPid && fixturePid !== holderPid);
+    for (const scenario of [
+      {number: 93, sql: submitFixture, stage: "business", marker: "DO $success$"},
+      {number: 93, sql: submitFixture, stage: "failure", marker: "DO $failure_atomicity$"},
+      {number: 94, sql: approvalFixture, stage: "business", marker: "DO $success$"},
+      {number: 94, sql: approvalFixture, stage: "failure", marker: "DO $failure_atomicity$"},
+    ]) {
+      const fixtureClient = client;
+      const holder = unrelated;
+      await t.test(`${String(scenario.number).padStart(4, "0")} ${scenario.stage} scope`, async () => {
+        const barrierKey = randomInt(1, 2_147_483_647);
+        assert.equal(scenario.sql.split(scenario.marker).length, 2, "assertion barrier marker is unique");
+        const controlledFixture = scenario.sql.replace(scenario.marker,
+          `SELECT pg_advisory_xact_lock(${barrierKey}, ${scenario.number});\n${scenario.marker}`);
+        let fixtureResult: Promise<unknown> | undefined;
+        let settled = false;
+        try {
+          await holder.query("BEGIN");
+          await holder.query("SET LOCAL statement_timeout = '10s'");
+          await holder.query("SELECT pg_advisory_xact_lock($1::integer, $2::integer)", [barrierKey, scenario.number]);
+          await fixtureClient.query("BEGIN");
+          await fixtureClient.query("SET LOCAL statement_timeout = '10s'");
+          fixtureResult = fixtureClient.query(controlledFixture).then(
+            () => { settled = true; return undefined; },
+            (error: unknown) => { settled = true; return error; },
+          );
+          const deadline = performance.now() + 5_000;
+          let exactWait = false;
+          do {
+            exactWait = (await holder.query<{waiting: boolean}>(`SELECT EXISTS (
+              SELECT 1 FROM pg_locks AS waiting JOIN pg_locks AS held
+                USING(locktype, database, classid, objid, objsubid)
+              WHERE waiting.locktype = 'advisory' AND waiting.pid = $1::integer AND NOT waiting.granted
+                AND held.pid = $2::integer AND held.granted
+                AND waiting.classid = $3::oid AND waiting.objid = $4::oid AND waiting.objsubid = 2
+                AND $2::integer = ANY(pg_blocking_pids($1::integer))
+            ) AS waiting`, [fixturePid, holderPid, barrierKey, scenario.number])).rows[0]?.waiting === true;
+            if (exactWait) break;
+            if (settled) {
+              assert.ifError(await fixtureResult);
+              assert.fail("fixture completed before reaching the exact assertion barrier");
+            }
+            await delay(10);
+          } while (performance.now() < deadline);
+          assert.equal(exactWait, true, "exact fixture PID/advisory key must wait on the holder PID before its commit");
+
+          const appUserId = randomUUID();
+          await holder.query("INSERT INTO app_data.app_users(app_user_id, status) VALUES ($1::uuid, 'active')", [appUserId]);
+          const organization = (await holder.query<{organization_workspace_id: string; organization_membership_id: string}>(
+            "SELECT * FROM app_private.create_organization_v1($1::uuid, $2::uuid, 'unrelated scope regression')",
+            [appUserId, randomUUID()],
+          )).rows[0];
+          assert.ok(organization);
+          const projectId = randomUUID();
+          const projectMembershipId = randomUUID();
+          await holder.query("INSERT INTO app_data.projects(project_id, workspace_id, display_name) VALUES ($1::uuid, $2::uuid, 'unrelated scope project')",
+            [projectId, organization.organization_workspace_id]);
+          await holder.query(`INSERT INTO app_data.project_memberships(project_membership_id,
+            organization_membership_id, project_id, active_from_utc)
+            VALUES ($1::uuid, $2::uuid, $3::uuid, transaction_timestamp())`,
+          [projectMembershipId, organization.organization_membership_id, projectId]);
+          await holder.query(`INSERT INTO app_data.management_report_capability_grants(capability_grant_id,
+            project_membership_id, capability_id, active_from_utc)
+            VALUES ($1::uuid, $2::uuid, 'view_anonymous_analytics', transaction_timestamp())`,
+          [randomUUID(), projectMembershipId]);
+          // COMMIT both makes the unrelated four facts visible under RC and
+          // releases the exact barrier. No elapsed-time guess establishes order.
+          await holder.query("COMMIT");
+          process.stdout.write(`Application fixture scope: ${String(scenario.number).padStart(4, "0")} ${scenario.stage} fixture PID ${fixturePid} waited on holder PID ${holderPid}, advisory ${barrierKey}/${scenario.number}, before unrelated commit\n`);
+          assert.ifError(await fixtureResult);
+        } finally {
+          // Release a held barrier before joining the fixture query on failure;
+          // statement_timeout bounds that join. Business fixture facts roll back.
+          await holder.query("ROLLBACK");
+          if (fixtureResult !== undefined) await fixtureResult;
+          await fixtureClient.query("ROLLBACK");
+        }
+      });
+    }
+  } finally {
+    unrelated?.release(true);
+    client?.release(true);
+    await pool.end();
   }
 });
 
