@@ -1984,6 +1984,16 @@ unknown 结果仍只能重试原邀请或经过确认停止重试。重试得到
 
 `TEST-105` 覆盖五字段、历史 replay、各关闭路径的父目录重读次数、unknown 解消、会话与迟到结果、中英文320×568/200%字号、IME、语义和48dp操作。运行定向Widget、analyze、production boundary、链接与精确head CI。原生Android使用合成身份时，只证明该设备上的窗口显示与操作，不证明生产JWT、部署或六平台真人验收。
 
+### 3.49 从批准历史回执主动安排已知项目（Issue #415，MANUAL-096）
+
+7BJ 连接既有批准窗口和 [ADR-0186 的普通项目成员安排](../adr/0186-explicit-ordinary-project-membership-assignment.md)。批准收到已知成功回执后，所有者可以选择“安排这个成员的项目”。组织和目标 organization membership UUID 固定为该回执的值，目标只读；用户仍须输入已核对的 project UUID，再核对并单独明确安排。打开窗口和核对不会发送 assign。
+
+历史批准不证明成员现在仍有效，也不保留所有者或项目资格。安排 writer 仍按原锁顺序独立重验，只建立默认推广者项目成员，不授管理 capability 或对象分配。批准和安排使用各自的操作意图；新安排沿用原独立 request、unknown 固定重试和退出确认，不复用申请 UUID 作为 assignment request。原手工输入目标成员／项目的入口保留。
+
+手工批准和待审批目录两条路径都借用原 App-owned assignment gateway 及 AppSession。子窗关闭后保留批准历史回执，焦点返回父窗，不自动重读组织目录、复制、切项目或持久化。登录失效、换号、ABA 或共享会话事件流结束清空父子旧内容，迟到成功和子窗关闭不能恢复旧账号结果；同账号换项目不改变固定组织和目标。窗口不关闭借用资源。
+
+`TEST-106` 覆盖两条接线、固定目标、零自动操作、独立提交与固定重试、原手工入口、关闭／会话边界和中英文小屏／200%／IME／48dp。运行关联Widget、analyze、format、production boundary、文档链接与精确head CI。Android临时合成入口只证明该设备上的显示和操作，不证明生产JWT、生产入口端到端、部署或六平台真人验收。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
