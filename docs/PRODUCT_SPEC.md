@@ -1450,6 +1450,18 @@ builder 使用启动时打开的同一个 `IdentitySession`，`AppStartupReady` 
 
 账号失效、换号或 ABA 会清除输入、固定 UUID 和 receipt，并拒绝迟到结果；同账号切项目不改变组织级意图。`TEST-090`／`MANUAL-080` 覆盖明确批准、同意图重试、稳定拒绝、会话隔离、中英文和窄屏高字号。本票不增加申请列表、profile、reject／revoke、通知、router、平台链接或生产证明。
 
+#### Slice 7AQ：将组织所有权交接给已知成员
+
+7AQ／Issue #375 消费 [ADR-0177](./adr/0177-organization-owner-transfer-is-an-atomic-handoff.md) 和 [ADR-0179](./adr/0179-organization-owner-transfer-flutter-gateway-contract.md) 已固定的 owner-transfer 合同。从“我的组织”的单个组织行输入同组织有效成员的 membership UUID，规范化并进入本地核对页。membership UUID 可以从批准入组的历史回执取得，但编号和历史回执都不证明接收方现在仍有效；必须通过可信渠道核对成员。账号、申请或 owner assignment UUID 不能替代 membership UUID。
+
+明确转让前不提交，也不预查 owner 或成员资料。交接会结束调用者的当前 owner assignment，使目标成员成为 owner；其他所有者、项目成员关系和 capability 不变。Backend 在首次执行时锁后确认 current active owner、同组织 active target 和 target-not-owner；组织目录不能证明这些资格。
+
+首次转让生成一次 request UUID，之后固定 request／workspace／target。所有重试使用原意图；不确定结果关闭须确认，稳定拒绝结束不确定状态。exact replay 不要求调用者仍是 current owner，不重复交接，App 不用本地资格推断阻挡它。
+
+成功留窗显示五字段历史 receipt、已提交的目标 membership UUID 和 UTC 生效时间，不推导当前所有者。不刷新目录、不切换项目、不自动复制、不关闭共享 gateway。已组合的 gateway 从 `AppStartupReady` 经 Home、目录到窗口；默认 deferred 保持兼容。会话失效、换号或 ABA 清除输入、固定意图和回执并隔离迟到结果，同账号切项目不改变意图。
+
+`TEST-091`／`MANUAL-081` 覆盖明确转让、固定意图、全部 typed failure、会话隔离、production 接线、中英文、键盘、触控目标和窄屏高字号。本票不增加成员目录、profile、co-owner grant、恢复或手动改派、通知、router、Drift、离线重试或生产证明。
+
 ### 5.8 分析、指标与报告
 
 #### 5.8.1 统计单位和核心口径
@@ -2975,6 +2987,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-078` | 学习文档说明 7AN 如何把 shareable join gateway 接入同一启动身份与三条关闭路径，并在“我的组织”用固定组织、客户端 UUID、同意图重试和显式复制创建 link。必须说明服务端判定 owner、历史 receipt 不是当前权限证明、只复制 opaque UUID、不拼分享 URL，并区分 Widget／Clipboard synthetic、CI、生产部署与真人平台证据。 |
 | `MANUAL-079` | 学习文档说明 7AO 如何从“我的组织”输入 link UUID、读取最小 preview、明确提交固定 application UUID，并显式复制 application UUID 给 owner。必须说明申请不是 membership、preview 不提供组织搜索、稳定 conflict 与不确定结果的差异、会话 fence，以及 Widget／Clipboard synthetic、CI、生产部署与真人平台证据边界。 |
 | `MANUAL-080` | 学习文档说明 7AP 如何从选定组织输入 application UUID、本地核对后明确批准，复用固定 organization／application 重试，并区分稳定拒绝与不确定结果。必须说明不读取申请人资料、服务端判断 current owner、历史回执不证明当前 membership、不授予项目或额外权限、会话 fence 和 synthetic／CI／生产证据边界。 |
+| `MANUAL-081` | 学习文档说明 7AQ 如何用同组织成员关系 UUID 核对接收方、明确结束自己的 owner assignment，并用固定 request／workspace／target 重试。必须说明首次授权与 exact replay 的差异、历史回执不证明当前 owner、不改变其他 owner／项目权限、既有 gateway 接线与 ownership、会话 fence 和 synthetic／CI／生产证据边界。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3243,6 +3256,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-088` | 7AN focused Widget 与 composition tests 覆盖组织行入口、固定 workspace、不预判 owner、canonical UUID、同意图不确定重试与放弃确认、五字段成功回执、显式 Clipboard 复制及失败重试、十类 typed failure、账号失效／换号／迟到结果、默认 deferred、同一 identity／gateway、后续启动失败、启动中移除和正常 dispose。检查中英文、live region、键盘、触控目标与 320×568／200% 字号；完整 Flutter、analyzer、format、生产边界、链接和 CI 通过不证明真实剪贴板、生产身份、部署、Apple universal link 或真人平台。 |
 | `TEST-089` | 7AO focused Widget 与目录接线 tests 覆盖 link UUID 规范化、本地拒绝、preview 后确认、单一 application UUID、同意图不确定重试、稳定 conflict、六字段成功回执、显式 Clipboard 复制及失败重试、账号失效／换号／ABA／迟到结果、空目录入口、不刷新目录与共享 gateway ownership。检查中英文、live region、键盘、触控目标与 320×568／200% 字号；完整 Flutter、analyzer、format、生产边界、链接和 CI 通过不证明真实剪贴板、生产身份、部署、Apple universal link 或真人平台。 |
 | `TEST-090` | 7AP focused Widget 与目录接线 tests 覆盖固定组织、application UUID 规范化与本地拒绝、本地核对后明确 approve、同意图重试、不确定结果转稳定拒绝、五字段成功回执、全部 typed failure、busy 防重入、账号失效／换号／ABA／迟到结果、不刷新目录／切项目／复制／关闭 gateway。检查中英文、live region、键盘、触控目标与 320×568／200% 字号；本地 synthetic、完整 Flutter、analyzer、format、生产边界、链接和 CI 不证明 production identity、Backend 部署、数据库权限、通知或真人平台。 |
+| `TEST-091` | 7AQ focused Widget、目录和 App 接线 tests 覆盖 target membership UUID 规范化与本地拒绝、本地核对后明确 transfer、首次提交生成 request UUID、固定 request／workspace／target、全部 typed failure、不确定结果转稳定拒绝、五字段历史回执、busy 防重入、会话／ABA／迟到结果、同账号切项目、共享 gateway 与不刷新／切项目／复制。检查中英文、live region、Tab／Escape／系统返回、48px 控件和 320×568／200% 字号；完整 Flutter、analyzer、format、生产边界、链接和精确 head CI 不证明生产身份、部署端点、数据库实权或真人平台。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3605,6 +3619,8 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 7AO／#372 在“我的组织”提供申请人入口：输入 link UUID 后先读取有界 preview，再用固定 application UUID 提交并显式复制给 owner。申请不会自动建立 membership、刷新目录或授予项目权限。
 
 7AP／#374 在选定组织提供输入 application UUID、核对原渠道申请人后明确批准的入口。成功只交付历史 approval receipt；服务端仍判定 current owner，App 不添加项目权限或切换项目。
+
+7AQ／#375 将已组合的 owner-transfer gateway 接到选定组织的交接窗口。已知 membership UUID 经本地核对后明确转让；固定意图重试和历史 receipt 不推导当前 owner，不增加成员目录、co-owner grant 或项目权限。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 

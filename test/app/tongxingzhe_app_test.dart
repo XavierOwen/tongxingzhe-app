@@ -186,6 +186,130 @@ void main() {
     expect(gateway.closeCount, 1);
   });
 
+  testWidgets('我的组织交接入口复用 gateway，正常续期保留意图且不改项目', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'test-subject',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 3, 30),
+      ),
+    );
+    const workspaceId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const targetId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    final directoryGateway = _TrackingOrganizationDirectoryGateway(
+      result: OrganizationDirectorySuccess(const [
+        OrganizationDirectoryEntry(
+          organizationWorkspaceId: workspaceId,
+          organizationName: '交接组织',
+        ),
+      ]),
+    );
+    final pending = Completer<OrganizationOwnerTransferResult>();
+    final transferGateway = _TrackingOrganizationOwnerTransferGateway(
+      pending: pending,
+      result: OrganizationOwnerTransferSuccess(
+        OrganizationOwnerTransferReceipt(
+          ownerTransferContractId: 'organization-owner-transfer:v1',
+          organizationWorkspaceId: workspaceId,
+          previousOwnerAssignmentId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+          organizationOwnerAssignmentId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+          effectiveAtUtc: DateTime.utc(2030, 1, 2, 3, 4),
+        ),
+      ),
+    );
+    final contextGateway = FakeSessionContextGateway();
+    IdentitySession? transferIdentity;
+    final dependencies = AppDependencies(
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: contextGateway,
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      organizationDirectoryGatewayBuilder: (_) => directoryGateway,
+      organizationOwnerTransferGatewayBuilder: (session) {
+        transferIdentity = session;
+        return transferGateway;
+      },
+    );
+    addTearDown(database.close);
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    final contextRequests = contextGateway.receivedTokens.length;
+    await tester.tap(find.byKey(const ValueKey('project-context-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('organization-directory-menu-item')),
+    );
+    await tester.pumpAndSettle();
+    final transfer = find.byKey(
+      const ValueKey('organization-owner-transfer-$workspaceId'),
+    );
+    await tester.ensureVisible(transfer);
+    await tester.tap(transfer);
+    await tester.pumpAndSettle();
+    final target = find.byKey(
+      const ValueKey('organization-owner-transfer-target-field'),
+    );
+    await tester.ensureVisible(target);
+    await tester.enterText(target, targetId);
+    await tester.tap(
+      find.byKey(const ValueKey('organization-owner-transfer-review')),
+    );
+    await tester.pumpAndSettle();
+    expect(transferGateway.requests, isEmpty);
+    await tester.tap(
+      find.byKey(const ValueKey('organization-owner-transfer-submit')),
+    );
+    await tester.pump();
+    await identity.signIn(email: 'person@example.test', password: 'ignored');
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('organization-owner-transfer-submit')),
+      findsOneWidget,
+    );
+    pending.complete(transferGateway.result);
+    await tester.pumpAndSettle();
+
+    expect(identical(transferIdentity, identity), isTrue);
+    expect(transferGateway.requests, hasLength(1));
+    expect(
+      transferGateway.requests.single.organizationWorkspaceId,
+      workspaceId,
+    );
+    expect(
+      transferGateway.requests.single.targetOrganizationMembershipId,
+      targetId,
+    );
+    expect(
+      find.byKey(const ValueKey('organization-owner-transfer-status')),
+      findsOneWidget,
+    );
+    expect(find.text('dddddddd-dddd-4ddd-8ddd-dddddddddddd'), findsOneWidget);
+    expect(directoryGateway.listCalls, 1);
+    expect(contextGateway.receivedTokens, hasLength(contextRequests));
+    expect(contextGateway.selectedProjectIds, isEmpty);
+    expect(contextGateway.createdProjectNames, isEmpty);
+    expect(transferGateway.closeCount, 0);
+    await tester.tap(
+      find.byKey(const ValueKey('organization-owner-transfer-close')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('交接组织'), findsOneWidget);
+    expect(find.text('个人空间 → 我的推广项目'), findsOneWidget);
+    expect(directoryGateway.listCalls, 1);
+    expect(transferGateway.closeCount, 0);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+    expect(transferGateway.closeCount, 1);
+  });
+
   testWidgets('启动完成前移除 App 仍只关闭后来取得的组织邀请 gateway 一次', (tester) async {
     final database = LocalDatabase(NativeDatabase.memory());
     final startupGate = _BlockingPlatformCapabilitiesProvider();
@@ -2833,6 +2957,23 @@ final class _TrackingOrganizationDirectedAccountInvitationGateway
 
 final class _TrackingOrganizationOwnerTransferGateway
     implements OrganizationOwnerTransferGateway {
+  _TrackingOrganizationOwnerTransferGateway({
+    this.result = const OrganizationOwnerTransferRejected(
+      OrganizationOwnerTransferFailureCode.notConfigured,
+    ),
+    this.pending,
+  });
+
+  final OrganizationOwnerTransferResult result;
+  final Completer<OrganizationOwnerTransferResult>? pending;
+  final requests =
+      <
+        ({
+          String requestId,
+          String organizationWorkspaceId,
+          String targetOrganizationMembershipId,
+        })
+      >[];
   var closeCount = 0;
 
   @override
@@ -2840,9 +2981,14 @@ final class _TrackingOrganizationOwnerTransferGateway
     required String requestId,
     required String organizationWorkspaceId,
     required String targetOrganizationMembershipId,
-  }) async => const OrganizationOwnerTransferRejected(
-    OrganizationOwnerTransferFailureCode.notConfigured,
-  );
+  }) async {
+    requests.add((
+      requestId: requestId,
+      organizationWorkspaceId: organizationWorkspaceId,
+      targetOrganizationMembershipId: targetOrganizationMembershipId,
+    ));
+    return pending == null ? result : await pending!.future;
+  }
 
   @override
   Future<void> close() async => closeCount++;

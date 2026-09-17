@@ -283,6 +283,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
             :final organizationDirectoryGateway,
             :final organizationMembershipSelfLeaveGateway,
             :final organizationDirectedAccountInvitationGateway,
+            :final organizationOwnerTransferGateway,
             :final organizationShareableJoinGateway,
             :final managementReportExportDelivery,
             :final currentRelationshipStageRepository,
@@ -327,6 +328,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
                   organizationDirectedAccountInvitationGateway,
               organizationShareableJoinGateway:
                   organizationShareableJoinGateway,
+              organizationOwnerTransferGateway:
+                  organizationOwnerTransferGateway,
               managementReportExportDelivery: managementReportExportDelivery,
               currentRelationshipStageRepository:
                   currentRelationshipStageRepository,
@@ -375,6 +378,7 @@ class _ReadyApp extends StatefulWidget {
     required this.organizationMembershipSelfLeaveGateway,
     required this.organizationDirectedAccountInvitationGateway,
     required this.organizationShareableJoinGateway,
+    required this.organizationOwnerTransferGateway,
     required this.managementReportExportDelivery,
     required this.currentRelationshipStageRepository,
     required this.deviceReminderPreferenceStore,
@@ -415,6 +419,7 @@ class _ReadyApp extends StatefulWidget {
   final OrganizationDirectedAccountInvitationGateway
   organizationDirectedAccountInvitationGateway;
   final OrganizationShareableJoinGateway organizationShareableJoinGateway;
+  final OrganizationOwnerTransferGateway organizationOwnerTransferGateway;
   final ManagementReportExportDelivery managementReportExportDelivery;
   final CurrentRelationshipStageRepository currentRelationshipStageRepository;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
@@ -513,6 +518,8 @@ final class _ReadyAppState extends State<_ReadyApp> {
             widget.organizationDirectedAccountInvitationGateway,
         organizationShareableJoinGateway:
             widget.organizationShareableJoinGateway,
+        organizationOwnerTransferGateway:
+            widget.organizationOwnerTransferGateway,
         managementReportExportDelivery: widget.managementReportExportDelivery,
         currentRelationshipStageRepository:
             widget.currentRelationshipStageRepository,
