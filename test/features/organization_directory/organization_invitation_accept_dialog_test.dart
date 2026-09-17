@@ -13,6 +13,264 @@ import 'package:tongxingzhe_app/organization_directed_account_invitation/organiz
 
 void main() {
   testWidgets(
+    'closing borrowed session hides accepted receipt and returns no stale result',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final result = _ResultBox();
+      await _open(
+        tester,
+        fixture.session,
+        _Gateway(
+          previews: [
+            OrganizationDirectedAccountInvitationPreviewSuccess(_preview),
+          ],
+          accepts: [
+            OrganizationDirectedAccountInvitationAcceptSuccess(_receipt),
+          ],
+        ),
+        result: result,
+      );
+      await _loadPreview(tester, _invitationId);
+      await tester.tap(_acceptAction);
+      await tester.pumpAndSettle();
+      expect(
+        find.text(_receipt.organizationInvitationContractId),
+        findsOneWidget,
+      );
+
+      await tester.runAsync(fixture.session.close);
+      await tester.pumpAndSettle();
+      for (final value in [
+        _receipt.organizationInvitationContractId,
+        _receipt.invitationId,
+        _receipt.organizationWorkspaceId,
+        _receipt.organizationMembershipId,
+        _receipt.acceptedAtUtc.toIso8601String(),
+      ]) {
+        expect(find.text(value), findsNothing);
+      }
+      expect(_acceptAction, findsNothing);
+      expect(_previewAction, findsNothing);
+      await tester.tap(_closeAction);
+      await tester.pumpAndSettle();
+      expect(result.receipt, isNull);
+      expect(find.byType(OrganizationInvitationAcceptDialog), findsNothing);
+    },
+  );
+
+  testWidgets('accepted invitation stays open with its historical receipt', (
+    tester,
+  ) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final result = _ResultBox();
+    await _open(
+      tester,
+      fixture.session,
+      _Gateway(
+        previews: [
+          OrganizationDirectedAccountInvitationPreviewSuccess(_preview),
+        ],
+        accepts: [OrganizationDirectedAccountInvitationAcceptSuccess(_receipt)],
+      ),
+      result: result,
+    );
+    await _loadPreview(tester, _invitationId);
+    await tester.tap(_acceptAction);
+    await tester.pumpAndSettle();
+    expect(find.byType(OrganizationInvitationAcceptDialog), findsOneWidget);
+    expect(
+      find.text(_receipt.organizationInvitationContractId),
+      findsOneWidget,
+    );
+    expect(result.receipt, isNull);
+    for (final value in [
+      _receipt.invitationId,
+      _receipt.organizationWorkspaceId,
+      _receipt.organizationMembershipId,
+      _receipt.acceptedAtUtc.toIso8601String(),
+    ]) {
+      expect(find.text(value), findsOneWidget);
+    }
+    expect(
+      find.text(
+        const AppStrings('zh').t('organizationInvitationReceiptNotice'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('system back returns the same historical receipt', (
+    tester,
+  ) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final result = _ResultBox();
+    await _open(
+      tester,
+      fixture.session,
+      _Gateway(
+        previews: [
+          OrganizationDirectedAccountInvitationPreviewSuccess(_preview),
+        ],
+        accepts: [OrganizationDirectedAccountInvitationAcceptSuccess(_receipt)],
+      ),
+      result: result,
+    );
+    await _loadPreview(tester, _invitationId);
+    await tester.tap(_acceptAction);
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(result.receipt, same(_receipt));
+    expect(find.byType(OrganizationInvitationAcceptDialog), findsNothing);
+  });
+
+  testWidgets(
+    'same-user project changes preserve the fixed invitation and receipt',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final result = _ResultBox();
+      final gateway = _Gateway(
+        previews: [
+          OrganizationDirectedAccountInvitationPreviewSuccess(_preview),
+        ],
+        accepts: [OrganizationDirectedAccountInvitationAcceptSuccess(_receipt)],
+      );
+      await _open(tester, fixture.session, gateway, result: result);
+      await _loadPreview(tester, _invitationId);
+      await fixture.session.selectProject(_contextB.project.id);
+      await tester.pumpAndSettle();
+      expect(fixture.session.current.context?.project.id, _contextB.project.id);
+      expect(find.text(_preview.organizationName), findsOneWidget);
+      await tester.tap(_acceptAction);
+      await tester.pumpAndSettle();
+      await fixture.session.selectProject(_contextA.project.id);
+      await tester.pumpAndSettle();
+      expect(
+        find.text(_receipt.organizationInvitationContractId),
+        findsOneWidget,
+      );
+      expect(gateway.previewCalls, [_invitationId]);
+      expect(gateway.acceptCalls, [_invitationId]);
+      await tester.tap(_closeAction);
+      await tester.pumpAndSettle();
+      expect(result.receipt, same(_receipt));
+    },
+  );
+
+  testWidgets('rapid account ABA clears an accepted receipt permanently', (
+    tester,
+  ) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final result = _ResultBox();
+    await _open(
+      tester,
+      fixture.session,
+      _Gateway(
+        previews: [
+          OrganizationDirectedAccountInvitationPreviewSuccess(_preview),
+        ],
+        accepts: [OrganizationDirectedAccountInvitationAcceptSuccess(_receipt)],
+      ),
+      result: result,
+    );
+    await _loadPreview(tester, _invitationId);
+    await tester.tap(_acceptAction);
+    await tester.pumpAndSettle();
+    fixture.identity.emit(_signedIn('subject-b'));
+    fixture.identity.emit(_signedIn('subject-a'));
+    await tester.pumpAndSettle();
+    expect(find.text(_receipt.organizationInvitationContractId), findsNothing);
+    expect(_acceptAction, findsNothing);
+    expect(_previewAction, findsNothing);
+    await tester.tap(_closeAction);
+    await tester.pumpAndSettle();
+    expect(result.receipt, isNull);
+  });
+
+  testWidgets('late accept success cannot survive rapid account ABA', (
+    tester,
+  ) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final pending =
+        Completer<OrganizationDirectedAccountInvitationAcceptResult>();
+    await _open(
+      tester,
+      fixture.session,
+      _Gateway(
+        previews: [
+          OrganizationDirectedAccountInvitationPreviewSuccess(_preview),
+        ],
+        accepts: [pending],
+      ),
+    );
+    await _loadPreview(tester, _invitationId);
+    await tester.tap(_acceptAction);
+    await tester.pump();
+    fixture.identity.emit(_signedIn('subject-b'));
+    fixture.identity.emit(_signedIn('subject-a'));
+    await tester.pumpAndSettle();
+    pending.complete(
+      OrganizationDirectedAccountInvitationAcceptSuccess(_receipt),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text(_receipt.organizationInvitationContractId), findsNothing);
+    expect(_acceptAction, findsNothing);
+    expect(_uncertain, findsOneWidget);
+  });
+
+  for (final localeCode in ['zh', 'en']) {
+    testWidgets(
+      '$localeCode accepted receipt stays readable at 320x568, 200% and IME',
+      (tester) async {
+        final fixture = await _Fixture.create();
+        addTearDown(fixture.close);
+        _useNarrowLargeText(tester);
+        final semantics = tester.ensureSemantics();
+        await _open(
+          tester,
+          fixture.session,
+          _Gateway(
+            previews: [
+              OrganizationDirectedAccountInvitationPreviewSuccess(_preview),
+            ],
+            accepts: [
+              OrganizationDirectedAccountInvitationAcceptSuccess(_receipt),
+            ],
+          ),
+          localeCode: localeCode,
+          textScaler: TextScaler.linear(2),
+        );
+        await _loadPreview(tester, _invitationId);
+        await tester.tap(_acceptAction);
+        await tester.pumpAndSettle();
+        _expectLiveRegion(tester, _status);
+        _expectMinimumTouchTarget(tester, _closeAction);
+        tester.view.viewInsets = const FakeViewPadding(bottom: 307);
+        addTearDown(tester.view.resetViewInsets);
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(
+          find.text(_receipt.acceptedAtUtc.toIso8601String()),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        expect(
+          tester.getRect(_closeAction).bottom,
+          lessThanOrEqualTo(568 - 307),
+        );
+        _expectMinimumTouchTarget(tester, _closeAction);
+        expect(_acceptAction, findsNothing);
+        semantics.dispose();
+      },
+    );
+  }
+
+  testWidgets(
     'preview canonical invitation, then accept only after confirmation',
     (tester) async {
       final fixture = await _Fixture.create();
@@ -54,6 +312,12 @@ void main() {
 
       expect(gateway.previewCalls, [_invitationId]);
       expect(gateway.acceptCalls, [_invitationId]);
+      expect(result.receipt, isNull);
+      expect(_acceptAction, findsNothing);
+      expect(_previewAction, findsNothing);
+      expect(_editAction, findsNothing);
+      await tester.tap(_closeAction);
+      await tester.pumpAndSettle();
       expect(result.receipt, same(_receipt));
       expect(find.byType(OrganizationInvitationAcceptDialog), findsNothing);
     },
@@ -169,6 +433,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(gateway.previewCalls, [_invitationId]);
       expect(gateway.acceptCalls, [_invitationId, _invitationId]);
+      expect(_uncertain, findsNothing);
+      expect(result.receipt, isNull);
+      await tester.tap(_closeAction);
+      await tester.pumpAndSettle();
       expect(result.receipt, same(_receipt));
     },
   );
@@ -579,6 +847,9 @@ void main() {
     await _focusByTabbing(tester, _acceptAction);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
+    expect(result.receipt, isNull);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
     expect(result.receipt, same(_receipt));
     expect(_hasPrimaryFocus(_launcher), isTrue);
 
@@ -907,8 +1178,17 @@ final class _ContextGateway implements SessionContextGateway {
   Future<SessionContextResult> selectProject(
     IdentityAccessToken accessToken,
     String projectId,
-  ) async =>
-      const SessionContextRejected(SessionContextFailureCode.serverRejected);
+  ) async => SessionContextSuccess(
+    TrustedSessionContext(
+      appUserId: _contextA.appUserId,
+      workspace: _contextA.workspace,
+      project: projectId == _contextB.project.id
+          ? _contextB.project
+          : _contextA.project,
+      questionnaireVersion: _contextA.questionnaireVersion,
+      capabilities: _contextA.capabilities,
+    ),
+  );
 
   @override
   Future<SessionContextResult> createPersonalProject(
