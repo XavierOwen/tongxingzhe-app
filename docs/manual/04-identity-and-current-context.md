@@ -1838,6 +1838,33 @@ flutter test --no-pub
 
 `TEST-098` 使用 fake IdentitySession／HTTP client，不连接生产或真实账号。focused／完整 Flutter、source review、analyzer、format、边界、links 与 CI 是各自证据，不证明 App 接线、当前成员权、生产部署或真人平台。
 
+### 3.42 在组织窗口明确安排普通项目成员（Issue #390，MANUAL-089）
+
+7AY 在组织目录的每个组织行增加安排入口，固定该组织，只接受已知 project 与 target organization-membership UUID。先本地校验与 review，不调用 gateway；明确“安排”才生成一次 request UUID。它不提供成员搜索、申请列表、角色选择或个人资料，也不把 owner 变成项目管理员。
+
+输入可把 uppercase 规范为 lowercase，不 trim。确认页展示组织、项目和 target parent，并说明只建立默认推广者关系，不授管理／PII 权限、不安排对象、不改变当前项目。已加入组织不等于已加入项目；每个项目都须明确操作。
+
+503、network 或不可信 response 的结果未知，重试固定同一 request 和 selectors。任何已提交意图均不能编辑；稳定失败只结束未知状态，仍可固定重试或直接关闭，不要求放弃确认。编辑只在首次提交前可用；新窗口才开始新的意图。注销、换号、ABA、身份流失效、失去可信 session 或迟到结果不能交付旧意图；同用户正常续 token 和当前项目切换不改写原意图。没有 owner 预查，因此失去 owner 后仍可重试自己的历史结果，首次资格由 SQL 判断。
+
+成功页只展示七字段历史 receipt，UTC 毫秒及显式 null end，不宣称当前成员资格。关闭、Escape 或 back 在未知结果时先说明放弃本地重试，不承诺撤销已提交 SQL。窗口不关闭共享 gateway，关闭后不自动 reload 目录、select project 或修改 AppSession。
+
+AppDependencies 复用同一个 IdentitySession 创建 production gateway，未配置为 deferred。ready、失败与迟到 startup 的三个释放路径都关闭自有 gateway；Home 与 Directory 注入同一实例，不新增缓存、Drift、同步或日志。
+
+从仓库根目录运行：
+
+```bash
+flutter test --no-pub test/features/organization_directory
+flutter test --no-pub test/app
+flutter test --no-pub
+dart analyze
+dart format --output=none --set-exit-if-changed lib test tool
+```
+
+`TEST-099` 覆盖 review／explicit submit、fixed retry、稳定失败、session fences、历史 receipt、未知结果退出、directory entry 和 composition 生命周期。中英文 Android 原生 batch 使用 synthetic identity／gateway，检查 logical `320×568`、`200%` 字号及软键盘下的完整输入、可滚动确认／回执和 48px 动作；不缩字体或增加通用窗口框架。这些 widget／native／CI 证据不证明生产身份、部署、六平台真人辅助技术或当前权限。
+
+另一次临时 Android 测试入口使用实际 typed gateway、Node HTTP 和独立 PID PostgreSQL observer。安排提交后合法转移 owner，再模拟 store 的 post-commit unknown failure，界面显示固定重试。
+重试的六个 bridge 参数相同，原 request／membership 回执不变，membership／claim／audit 各一条。新窗口的新 request 被 former-owner gate 稳定 403 拒绝且零 claim。身份／AppSession context 仍为 synthetic fake，不是实际生产 composition 或真实 Auth；诊断入口不进入正式代码。
+
 ### 3.43 HTTP 200 之后，另一连接能看到哪些事实（Issue #392，MANUAL-090）
 
 7AZ 把 7AW 的实际 Node HTTP server、真实 PostgreSQL adapter 和 runtime role 接起来，generic verifier 仍为 fake。测试只复用 0096 fixture 的 synthetic seed，提交 setup；业务 bridge 不包显式 transaction，每条 statement 在 query Promise 和 HTTP 200 前提交。
