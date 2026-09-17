@@ -561,39 +561,39 @@ $create_failure_atomicity$;
 -- membership/owner UUID, without counting unrelated committed organizations.
 CREATE TEMP VIEW fixture_0092_scoped_organization_memberships AS
 SELECT membership.* FROM app_data.organization_memberships AS membership
-WHERE split_part(membership.organization_membership_id::text, '-', 2) = '0092'
-  OR split_part(membership.organization_workspace_id::text, '-', 2) = '0092'
-  OR split_part(membership.app_user_id::text, '-', 2) = '0092';
+WHERE membership.organization_membership_id::text LIKE '00000000-0092-3000-0000-%'
+  OR membership.organization_workspace_id::text LIKE '00000000-0092-2000-0000-%'
+  OR membership.app_user_id::text LIKE '00000000-0092-0000-0000-%';
 
 CREATE TEMP VIEW fixture_0092_preview_counts AS
 SELECT
   (SELECT count(*) FROM app_data.app_users AS app_user
-    WHERE split_part(app_user.app_user_id::text, '-', 2) = '0092'
+    WHERE app_user.app_user_id::text LIKE '00000000-0092-0000-0000-%'
       OR EXISTS (SELECT 1 FROM fixture_0092_scoped_organization_memberships AS membership
         WHERE membership.app_user_id = app_user.app_user_id)) AS app_user_count,
   (SELECT count(*) FROM app_data.external_identities AS identity_row
-    WHERE split_part(identity_row.external_identity_id::text, '-', 2) = '0092'
-      OR split_part(identity_row.app_user_id::text, '-', 2) = '0092'
+    WHERE identity_row.external_identity_id::text LIKE '00000000-0092-1000-0000-%'
+      OR identity_row.app_user_id::text LIKE '00000000-0092-0000-0000-%'
       OR identity_row.issuer = 'https://synthetic-0092.example/auth/v1') AS identity_count,
   (SELECT count(*) FROM app_data.workspaces AS workspace
-    WHERE split_part(workspace.workspace_id::text, '-', 2) = '0092'
-      OR split_part(workspace.personal_owner_app_user_id::text, '-', 2) = '0092'
+    WHERE workspace.workspace_id::text LIKE '00000000-0092-2000-0000-%'
+      OR workspace.personal_owner_app_user_id::text LIKE '00000000-0092-0000-0000-%'
       OR EXISTS (SELECT 1 FROM fixture_0092_scoped_organization_memberships AS membership
         WHERE membership.organization_workspace_id = workspace.workspace_id)) AS workspace_count,
   (SELECT count(*) FROM fixture_0092_scoped_organization_memberships) AS membership_count,
   (SELECT count(*) FROM app_data.organization_owner_assignments AS owner_row
-    WHERE split_part(owner_row.organization_owner_assignment_id::text, '-', 2) = '0092'
+    WHERE owner_row.organization_owner_assignment_id::text LIKE '00000000-0092-4000-0000-%'
       OR EXISTS (SELECT 1 FROM fixture_0092_scoped_organization_memberships AS membership
         WHERE membership.organization_membership_id = owner_row.organization_membership_id)) AS owner_count,
   (SELECT count(*) FROM app_private.organization_shareable_join_link_request_claims AS claim
     WHERE split_part(claim.link_id::text, '-', 2) = '0092'
-      OR split_part(claim.organization_workspace_id::text, '-', 2) = '0092'
-      OR split_part(claim.creator_app_user_id::text, '-', 2) = '0092') AS claim_count,
+      OR claim.organization_workspace_id::text LIKE '00000000-0092-2000-0000-%'
+      OR claim.creator_app_user_id::text LIKE '00000000-0092-0000-0000-%') AS claim_count,
   (SELECT count(*) FROM app_private.organization_shareable_join_link_request_tombstones
     WHERE split_part(link_id::text, '-', 2) = '0092') AS tombstone_count,
   (SELECT count(*) FROM app_private.organization_shareable_join_link_audit_events AS audit
     WHERE split_part(audit.link_id::text, '-', 2) = '0092'
-      OR split_part(audit.organization_workspace_id::text, '-', 2) = '0092') AS audit_count;
+      OR audit.organization_workspace_id::text LIKE '00000000-0092-2000-0000-%') AS audit_count;
 
 CREATE TEMP TABLE fixture_0092_preview_counts_before ON COMMIT DROP AS
 SELECT * FROM fixture_0092_preview_counts;
