@@ -2096,6 +2096,14 @@ runtime role 验证未配置、启用、幂等重放、冲突、停用和回滚�
 
 直接运行现有完整runner即可。快照使用pg_dump固定测试nonce与Bash内建字符串比较，不要求Linux宿主安装shasum。通过时先看到旧claim升级标志，最后还须看到完整套件通过、独立恢复与清理；合成Docker／CI不证明生产升级、生产Auth或六平台真人验收。
 
+#### 6.2.2 真实旧待审批记录升级（Issue #418，MANUAL-098）
+
+7BM在另一个独立库只应用0001至0098，核对97个版本、最大0098，以及0099 reader尚不存在。旧runtime writer真正提交分享link和pending application；另一个postgres会话从已提交旧行捕获application/link UUID及submitted/expiry的UTC六位小数原值，再只应用0099。
+
+新runtime reader必须让合法owner读到与原四字段jsonb完全相同的item，非owner收到精确42501 Forbidden。仅检查日期格式或两时间相差168小时不足以证明旧时间没有一起漂移；读取结果必须与升级前实际存储值比较。捕获预期值的测试postgres权限不会转授runtime，新reader仍没有底表权限。
+
+第二次0099部署必须验证checksum并跳过。升级、重跑及两种reader调用之后，完整app_data/app_private data-only dump字符串必须不变；固定测试nonce使比较稳定，不要求宿主shasum。运行现有完整runner，在新安装、全部既有检查／并发、checksum漂移拒绝和独立恢复一起通过后才交付。该合成旧记录升级证明不等于生产升级、生产Auth或真人验收。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。

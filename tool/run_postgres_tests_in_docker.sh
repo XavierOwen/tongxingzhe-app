@@ -13,9 +13,11 @@ test_database='tongxingzhe_test'
 restore_database='tongxingzhe_restore'
 upgrade_database='tongxingzhe_region_upgrade'
 ownerless_upgrade_database='tongxingzhe_ownerless_upgrade'
+directory_upgrade_database='tongxingzhe_application_directory_upgrade'
 database_url="postgresql://postgres:postgres@127.0.0.1:5432/${test_database}"
 upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${upgrade_database}"
 ownerless_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${ownerless_upgrade_database}"
+directory_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${directory_upgrade_database}"
 container_started=0
 restore_container_started=0
 restore_temporary_directory=''
@@ -747,6 +749,193 @@ if [[ "${owner_claim_before_replay}" != "${owner_claim_after_replay}" ]]; then
   exit 1
 fi
 echo '0096→0097／0098 旧 claim、完整 receipt、结束关系后的 replay、checksum 幂等与业务数据不变：通过。'
+
+echo '验证 0098→0099 在真实 0093 待审批记录上只新增 reader。'
+docker exec "${container_name}" createdb \
+  -U postgres \
+  "${directory_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/application-directory-upgrade-migrations && \
+   find /workspace/backend/database/migrations \
+     -maxdepth 1 -type f \
+     \( -name '000[1-9]_*.sql' \
+        -o -name '00[1-8][0-9]_*.sql' \
+        -o -name '009[0-8]_*.sql' \) \
+     -exec cp {} /tmp/application-directory-upgrade-migrations/ \; && \
+   test \"\$(find /tmp/application-directory-upgrade-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 97"
+docker exec \
+  --env DATABASE_URL="${directory_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/application-directory-upgrade-migrations \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh \
+  >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${directory_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$baseline\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 97
+        OR (SELECT max(left(version, 4)) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0098'
+        OR to_regprocedure(
+          'app_data.list_org_join_applications_for_identity_v1(text,text,uuid)'
+        ) IS NOT NULL
+      THEN
+        RAISE EXCEPTION '0098 directory upgrade baseline drift';
+      END IF;
+    END
+    \$baseline\$;
+  " \
+  >/dev/null
+docker exec \
+  --workdir /workspace \
+  "${container_name}" \
+  psql \
+  -U postgres \
+  -d "${directory_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --file /workspace/backend/database/fixtures/upgrade/0093_organization_shareable_join_application_pending.sql \
+  >/dev/null
+directory_upgrade_original_item="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${directory_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --tuples-only \
+    --no-align \
+    --command="
+      SELECT jsonb_build_object(
+        'application_id', application_id::text,
+        'link_id', link_id::text,
+        'submitted_at_utc', to_char(submitted_at_utc AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
+        'expires_at_utc', to_char(expires_at_utc AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')
+      )
+      FROM app_private.organization_shareable_join_application_request_claims
+      WHERE application_id = '00000000-0093-5000-0000-000000000001'
+        AND approved_at_utc IS NULL
+        AND approved_organization_membership_id IS NULL;
+    "
+)"
+if [[ -z "${directory_upgrade_original_item}" ]]; then
+  echo '0093 writer did not commit the old pending application.' >&2
+  exit 1
+fi
+directory_upgrade_before="$(
+  docker exec "${container_name}" pg_dump \
+    "${directory_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/application-directory-upgrade-only && \
+   cp /workspace/backend/database/migrations/0099_*.sql \
+     /tmp/application-directory-upgrade-only/ && \
+   test \"\$(find /tmp/application-directory-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${directory_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/application-directory-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+directory_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${directory_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/application-directory-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${directory_upgrade_replay}" != *'已验证 0099_organization_shareable_join_application_directory（无需重复执行）'* ]] \
+  || [[ "${directory_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0099 directory migration did not skip its checksum-verified replay.' >&2
+  printf '%s\n' "${directory_upgrade_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${directory_upgrade_replay}"
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${directory_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    SET ROLE tongxingzhe_runtime;
+    DO \$upgrade\$
+    DECLARE
+      receipt record;
+      item jsonb;
+      actual_state text;
+      actual_message text;
+    BEGIN
+      SELECT * INTO STRICT receipt
+      FROM app_data.list_org_join_applications_for_identity_v1(
+        'https://synthetic-0093.example/auth/v1',
+        'owner',
+        '00000000-0093-2000-0000-000000000001'
+      );
+      IF receipt.organization_shareable_join_application_directory_contract_id
+          IS DISTINCT FROM 'organization-shareable-join-application-directory:v1'
+        OR receipt.organization_workspace_id IS DISTINCT FROM
+          '00000000-0093-2000-0000-000000000001'::uuid
+        OR receipt.observed_at_utc IS NULL
+        OR jsonb_array_length(receipt.applications) <> 1
+      THEN
+        RAISE EXCEPTION '0098→0099 old pending application directory metadata drift';
+      END IF;
+      item := receipt.applications->0;
+      IF item IS DISTINCT FROM '${directory_upgrade_original_item}'::jsonb
+      THEN
+        RAISE EXCEPTION '0098→0099 old pending application item drift';
+      END IF;
+
+      BEGIN
+        PERFORM *
+        FROM app_data.list_org_join_applications_for_identity_v1(
+          'https://synthetic-0093.example/auth/v1',
+          'pending-applicant',
+          '00000000-0093-2000-0000-000000000001'
+        );
+        RAISE EXCEPTION '0099 non-owner directory read was accepted';
+      EXCEPTION WHEN OTHERS THEN
+        GET STACKED DIAGNOSTICS
+          actual_state = RETURNED_SQLSTATE,
+          actual_message = MESSAGE_TEXT;
+        IF actual_state IS DISTINCT FROM '42501'
+          OR actual_message IS DISTINCT FROM
+            'organization shareable join application directory forbidden'
+        THEN
+          RAISE EXCEPTION '0099 non-owner directory read drift: % / %',
+            actual_state, actual_message;
+        END IF;
+      END;
+    END
+    \$upgrade\$;
+    RESET ROLE;
+  " \
+  >/dev/null
+directory_upgrade_after="$(
+  docker exec "${container_name}" pg_dump \
+    "${directory_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+if [[ "${directory_upgrade_before}" != "${directory_upgrade_after}" ]]; then
+  echo '0098→0099 directory migration changed app_data/app_private business data.' >&2
+  exit 1
+fi
+echo '0098→0099 旧 0093 待审批记录可读、授权与业务数据不变、checksum 幂等：通过。'
 
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
