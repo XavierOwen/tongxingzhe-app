@@ -7,7 +7,7 @@
 - `migrations/`：只追加、按文件名排序的正式 SQL；已经执行的文件不得改写；
 - `runner/`：迁移历史、锁与 checksum 检查；
 - `checks/`：环境和权限不变量；
-- `fixtures/`：只含 synthetic 数据的可回滚验证资料；`fixtures/shared/` 保存 Flutter、Backend 和 PostgreSQL 共用的输入。
+- `fixtures/`：只含 synthetic 数据的验证资料；多数回滚，跨事务时间关系验证会合法提交随机 setup／handoff，专用库由 runner 清理。`fixtures/shared/` 保存 Flutter、Backend 和 PostgreSQL 共用的输入。
 
 ## Docker 中运行完整数据库测试
 
@@ -111,6 +111,22 @@ runtime 只获得 submit identity bridge 的 `EXECUTE`，不能访问 private wr
 ```
 
 十二种独立会话竞态覆盖空项目／历史成员归档双序、两种 UUID 排序、parent 结束、request replay／其他 actor 和墓碑双序。十种观察精确 advisory／PID；parent 两种按 0085 的真实 user-row-first 流程观察 transactionid 和 blocker／waiter PID。脚本会提交 synthetic 行，只用于专用可丢弃测试库。完整套件另检查旧 checksum 与独立 dump／restore，不证明生产账号、HTTP、客户端、完整撤权或实际 purge。
+
+## 7BB：owner handoff 的 target 必须没有结束点
+
+0097／Issue #396 只替换当前 0088 private transfer writer 的首次 target qualification：target membership 必须 active 且 `inactive_from_utc IS NULL`。0084 新 owner assignment 原本只能立即开始、结束点为 null，包含约束要求它完全落在 parent 内；因此 finite parent 不能接收该 grant。
+
+此前 finite target 虽当下有效，仍会在 INSERT 因包含约束失败，Backend 映射 unavailable。新 guard 在原锁后验证位置返回既有 exact 42501 forbidden，不消费 request、不关闭旧 owner、不写 claim／audit。它不复制未来结束点、不放宽 validator、不增加未来 owner-ending 政策或错误 allowlist。
+
+request replay 仍先于首次 target 验证。原 active actor 可在失去 owner、target parent 已结束后返回同一历史 receipt，不能因此恢复当前访问。双时间、锁序、grant-before-close、bridge、OID、owner、ACL 和 search path 保持。
+
+完整 runner 自动发现 migration、check 和 fixture，已有 owner-transfer Backend integration 增加 finite target 的稳定 403／零写入；运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+新 fixture 用随机 UUID 提交 synthetic setup 和两次合法跨事务 handoff，第二次先保留 successor owner，再按同一合法时间结束原 target assignment／parent。最后 exact replay 事务回滚，验证完整 receipt 相等、owner／claim／audit 无增长。无 DELETE、guard 例外或 replication role；独立 restore 可再次运行。synthetic Docker／CI 不代表生产、真实账号或实际删除。
 
 ## 6BO：组织项目 opt-in 配置边界
 

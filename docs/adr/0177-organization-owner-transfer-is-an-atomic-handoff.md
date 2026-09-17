@@ -29,6 +29,8 @@ bridge 复用 0084 的 identity 输入边界：null、空白、issuer 超过 204
 
 target 只接受同组织现有 membership UUID。首次执行锁定后，target membership 必须仍有效，对应 app user 必须为 `active`，且 target 不得已经是当前 owner。target 已是 owner，包括 target 与 actor 相同，返回专用 conflict，不创建 assignment。target 不会因此获得 project membership 或 capability。
 
+Issue #396／0097 明确首次 target membership 的结束点还必须为 null。0084 的新 owner assignment 只能立即开始且不设结束点，完整区间必须包含在 parent 内；有限 parent 不能承载它，即使 parent 此刻仍 active。该情形使用既有 forbidden，不消费 request。这是对既有 grant／containment 规则的具体化，不引入未来 owner 到期政策；历史 replay 不受 target 后来结束影响。
+
 ### Claim、重放与 drift
 
 `request_id` 使用 transfer 专用 claim 表与 `organization-owner-transfer-request:` advisory-lock 前缀。它是单列主键，不与 actor 组成联合键。creation 与 transfer 的 claim、lock 和 tombstone 都按 family 分开，因此同一 UUID 可以分别用于两种操作。
