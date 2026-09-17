@@ -388,6 +388,7 @@ const Map<String, Map<String, String>> _strings = {
     'organizationShareableApprovalFreshnessNotice':
         '这份历史回执不证明申请人现在仍是成员。请让申请人重新读取“我的组织”确认；批准不会加入项目、授予所有权或额外权限，也不切换当前项目。',
     'organizationShareableApprovalClose': '关闭',
+    'organizationShareableApprovalAssignProject': '安排这个成员的项目',
     'organizationShareableApprovalDiscardTitle': '停止重试这次批准？',
     'organizationShareableApprovalDiscardBody':
         '申请可能已获批准。关闭只会放弃此窗口中的重试信息，不会撤销服务端上可能已建立的成员关系。',
@@ -412,6 +413,8 @@ const Map<String, Map<String, String>> _strings = {
     'organizationProjectMembershipAssignmentTitle': '明确安排普通项目成员',
     'organizationProjectMembershipAssignmentInputHelp':
         '输入已核对的项目 UUID 和同组织的目标成员关系 UUID。账号、申请和所有者身份编号不能替代成员关系编号。App 不搜索项目或成员，也不读取成员资料。',
+    'organizationProjectMembershipAssignmentFixedTargetInputHelp':
+        '目标成员关系固定为批准历史回执中的 UUID。历史回执不证明现在仍有资格；安排时服务端会独立重新授权。请输入已核对的项目 UUID，核对后单独明确安排。',
     'organizationProjectMembershipAssignmentProjectIdentifier': '项目编号（UUID）',
     'organizationProjectMembershipAssignmentTargetMembershipIdentifier':
         '目标成员关系编号（UUID）',
@@ -2031,6 +2034,8 @@ const Map<String, Map<String, String>> _strings = {
         'does not join projects, grant ownership or extra permissions, '
         'or switch the current project.',
     'organizationShareableApprovalClose': 'Close',
+    'organizationShareableApprovalAssignProject':
+        'Assign this member a project',
     'organizationShareableApprovalDiscardTitle': 'Stop retrying this approval?',
     'organizationShareableApprovalDiscardBody':
         'The application may have been approved. Closing only discards '
@@ -2067,6 +2072,8 @@ const Map<String, Map<String, String>> _strings = {
         'Assign an ordinary project member',
     'organizationProjectMembershipAssignmentInputHelp':
         'Enter a verified project UUID and a target organization membership UUID in this organization. Account, application, and owner assignment IDs cannot replace the membership ID. The app does not search projects or members or read member profiles.',
+    'organizationProjectMembershipAssignmentFixedTargetInputHelp':
+        'The target membership is fixed to the UUID in the historical approval receipt. That receipt does not prove present eligibility; the server authorizes independently when assigning. Enter a verified project UUID, review, then explicitly assign.',
     'organizationProjectMembershipAssignmentProjectIdentifier':
         'Project ID (UUID)',
     'organizationProjectMembershipAssignmentTargetMembershipIdentifier':

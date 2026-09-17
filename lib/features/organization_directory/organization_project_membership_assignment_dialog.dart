@@ -18,6 +18,7 @@ final class OrganizationProjectMembershipAssignmentDialog
     required this.gateway,
     required this.appSession,
     this.requestIdGenerator = secureUuidV4,
+    this.fixedTargetOrganizationMembershipId,
   });
 
   final AppStrings text;
@@ -25,6 +26,7 @@ final class OrganizationProjectMembershipAssignmentDialog
   final OrganizationProjectMembershipAssignmentGateway gateway;
   final AppSession appSession;
   final String Function() requestIdGenerator;
+  final String? fixedTargetOrganizationMembershipId;
 
   @override
   State<OrganizationProjectMembershipAssignmentDialog> createState() =>
@@ -50,6 +52,7 @@ final class _OrganizationProjectMembershipAssignmentDialogState
   String? _appUserId;
   String? _projectId;
   String? _targetMembershipId;
+  String? _fixedTargetMembershipId;
   String? _requestId;
   OrganizationProjectMembershipAssignmentReceipt? _receipt;
   String? _failureKey;
@@ -67,12 +70,15 @@ final class _OrganizationProjectMembershipAssignmentDialogState
   void initState() {
     super.initState();
     _organizationWorkspaceId = widget.organizationWorkspaceId.toLowerCase();
+    _fixedTargetMembershipId = widget.fixedTargetOrganizationMembershipId
+        ?.toLowerCase();
     final snapshot = widget.appSession.current;
     _appUserId = snapshot.context?.appUserId;
     if (!_isTrustedSnapshot(snapshot)) {
       _stage = _AssignmentStage.sessionExpired;
       _organizationWorkspaceId = null;
       _appUserId = null;
+      _fixedTargetMembershipId = null;
     }
     _sessionSubscription = widget.appSession.changes.listen(
       (snapshot) {
@@ -204,17 +210,28 @@ final class _OrganizationProjectMembershipAssignmentDialogState
             ),
             Text(_t('FreshnessNotice')),
           ] else if (_stage == _AssignmentStage.entering) ...[
-            Text(_t('InputHelp')),
+            Text(
+              _t(
+                _fixedTargetMembershipId == null
+                    ? 'InputHelp'
+                    : 'FixedTargetInputHelp',
+              ),
+            ),
             const SizedBox(height: 16),
             _field(
               'project',
               _projectController,
               'ProjectIdentifier',
               autofocus: true,
-              textInputAction: TextInputAction.next,
+              textInputAction: _fixedTargetMembershipId == null
+                  ? TextInputAction.next
+                  : TextInputAction.done,
             ),
             const SizedBox(height: 16),
-            _field('target', _targetController, 'TargetMembershipIdentifier'),
+            if (_fixedTargetMembershipId case final target?)
+              _value('TargetMembershipId', target)
+            else
+              _field('target', _targetController, 'TargetMembershipIdentifier'),
           ] else ...[
             _value('ProjectId', _projectId!),
             _value('TargetMembershipId', _targetMembershipId!),
@@ -329,7 +346,8 @@ final class _OrganizationProjectMembershipAssignmentDialogState
       return;
     }
     final projectId = _projectController.text.toLowerCase();
-    final targetId = _targetController.text.toLowerCase();
+    final targetId =
+        _fixedTargetMembershipId ?? _targetController.text.toLowerCase();
     final failure = !_canonicalUuidPattern.hasMatch(_organizationWorkspaceId!)
         ? 'InvalidOrganization'
         : !_canonicalUuidPattern.hasMatch(projectId)
@@ -465,6 +483,7 @@ final class _OrganizationProjectMembershipAssignmentDialogState
       _projectId = null;
       _targetMembershipId = null;
       _requestId = null;
+      _fixedTargetMembershipId = null;
       _receipt = null;
       _failureKey = null;
       _submitted = false;

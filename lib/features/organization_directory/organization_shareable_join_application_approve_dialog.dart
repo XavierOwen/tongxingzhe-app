@@ -6,7 +6,9 @@ import 'package:flutter/services.dart';
 import '../../app_session/app_session.dart';
 import '../../l10n/app_strings.dart';
 import '../../organization_directory/organization_directory.dart';
+import '../../organization_project_membership_assignment/organization_project_membership_assignment.dart';
 import '../../organization_shareable_join/organization_shareable_join.dart';
+import 'organization_project_membership_assignment_dialog.dart';
 
 /// 核对已知申请 UUID 后，批准选定组织的入组申请。
 final class OrganizationShareableJoinApplicationApproveDialog
@@ -18,6 +20,8 @@ final class OrganizationShareableJoinApplicationApproveDialog
     required this.gateway,
     required this.appSession,
     this.initialApplicationId,
+    this.projectMembershipAssignmentGateway =
+        const DeferredOrganizationProjectMembershipAssignmentGateway(),
   });
 
   final AppStrings text;
@@ -25,6 +29,8 @@ final class OrganizationShareableJoinApplicationApproveDialog
   final OrganizationShareableJoinGateway gateway;
   final AppSession appSession;
   final String? initialApplicationId;
+  final OrganizationProjectMembershipAssignmentGateway
+  projectMembershipAssignmentGateway;
 
   @override
   State<OrganizationShareableJoinApplicationApproveDialog> createState() =>
@@ -55,6 +61,7 @@ final class _OrganizationShareableJoinApplicationApproveDialogState
   var _uncertain = false;
   var _confirmDiscard = false;
   var _generation = 0;
+  var _openingAssignment = false;
 
   bool get _busy => _stage == _ApprovalStage.submitting;
 
@@ -71,9 +78,13 @@ final class _OrganizationShareableJoinApplicationApproveDialogState
     } else {
       _applicationController.text = widget.initialApplicationId ?? '';
     }
-    _sessionSubscription = widget.appSession.changes.listen((snapshot) {
-      if (!_isTrustedSnapshot(snapshot)) _invalidateSession();
-    });
+    _sessionSubscription = widget.appSession.changes.listen(
+      (snapshot) {
+        if (!_isTrustedSnapshot(snapshot)) _invalidateSession();
+      },
+      onError: (Object _, StackTrace _) => _invalidateSession(),
+      onDone: _invalidateSession,
+    );
   }
 
   @override
@@ -88,7 +99,7 @@ final class _OrganizationShareableJoinApplicationApproveDialogState
 
   @override
   Widget build(BuildContext context) => PopScope<void>(
-    canPop: !_busy && !_uncertain,
+    canPop: !_busy && !_uncertain && !_openingAssignment,
     onPopInvokedWithResult: (didPop, _) {
       if (!didPop) _requestClose();
     },
@@ -272,9 +283,25 @@ final class _OrganizationShareableJoinApplicationApproveDialogState
     return [
       TextButton(
         key: const ValueKey('organization-shareable-approval-close'),
-        onPressed: _busy ? null : _requestClose,
+        style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+        onPressed: _busy || _openingAssignment ? null : _requestClose,
         child: Text(widget.text.t('organizationShareableApprovalClose')),
       ),
+      if (_stage == _ApprovalStage.succeeded)
+        FilledButton(
+          key: const ValueKey('organization-shareable-approval-assign-project'),
+          // Keep multiline labels inside the background at large text scales.
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(48, 48),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          onPressed: _openingAssignment ? null : _assignProject,
+          child: Text(
+            widget.text.t('organizationShareableApprovalAssignProject'),
+          ),
+        ),
       if (_stage == _ApprovalStage.confirming && !_submitted)
         TextButton(
           key: const ValueKey('organization-shareable-approval-edit'),
@@ -395,6 +422,32 @@ final class _OrganizationShareableJoinApplicationApproveDialogState
     _scrollToStatus();
   }
 
+  Future<void> _assignProject() async {
+    if (_stage != _ApprovalStage.succeeded ||
+        _openingAssignment ||
+        !_checkSession()) {
+      return;
+    }
+    final receipt = _receipt!;
+    final generation = _generation;
+    setState(() => _openingAssignment = true);
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => OrganizationProjectMembershipAssignmentDialog(
+        text: widget.text,
+        organizationWorkspaceId: receipt.organizationWorkspaceId,
+        fixedTargetOrganizationMembershipId: receipt.organizationMembershipId,
+        gateway: widget.projectMembershipAssignmentGateway,
+        appSession: widget.appSession,
+      ),
+    );
+    if (!_accepts(generation)) return;
+    setState(() => _openingAssignment = false);
+    _dialogFocus.requestFocus();
+    _scrollToStatus();
+  }
+
   bool _isTrustedSnapshot(AppSessionSnapshot snapshot) =>
       _stage != _ApprovalStage.sessionExpired &&
       _appUserId != null &&
@@ -427,6 +480,7 @@ final class _OrganizationShareableJoinApplicationApproveDialogState
       _submitted = false;
       _uncertain = false;
       _confirmDiscard = false;
+      _openingAssignment = false;
     });
     _scrollToStatus();
   }
@@ -444,7 +498,7 @@ final class _OrganizationShareableJoinApplicationApproveDialogState
   }
 
   void _requestClose() {
-    if (_busy) return;
+    if (_busy || _openingAssignment) return;
     if (_confirmDiscard) {
       setState(() => _confirmDiscard = false);
     } else if (_uncertain) {

@@ -573,6 +573,8 @@ final class _OrganizationDirectoryDialogState
         organization: entry,
         gateway: widget.shareableJoinGateway,
         appSession: widget.appSession,
+        projectMembershipAssignmentGateway:
+            widget.projectMembershipAssignmentGateway,
       ),
     );
   }
@@ -593,6 +595,8 @@ final class _OrganizationDirectoryDialogState
         organization: entry,
         gateway: widget.shareableJoinGateway,
         appSession: widget.appSession,
+        projectMembershipAssignmentGateway:
+            widget.projectMembershipAssignmentGateway,
       ),
     );
   }
