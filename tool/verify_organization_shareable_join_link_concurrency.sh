@@ -24,41 +24,81 @@ psql_base=(
   --set=VERBOSITY=verbose
 )
 
-run_psql() {
+holder_fd=''
+run_psql() (
+  if [[ -n "${holder_fd}" ]]; then exec {holder_fd}>&-; fi
   "${psql_base[@]}" "$@"
+)
+
+run_psql_background() {
+  if [[ -n "${holder_fd}" ]]; then exec {holder_fd}>&-; fi
+  exec "${psql_base[@]}" "$@"
 }
 
 temporary_directory="$(mktemp -d)"
 child_pids=()
+application_prefix="0092-$$-${temporary_directory##*/}"
+replay_holder_application="${application_prefix}-replay-holder"
+replay_waiter_application="${application_prefix}-replay-waiter"
+transfer_holder_application="${application_prefix}-transfer-holder"
+transfer_waiter_application="${application_prefix}-transfer-waiter"
+membership_holder_application="${application_prefix}-membership-holder"
+membership_waiter_application="${application_prefix}-membership-waiter"
+observed_pg_pid=''
+
+stop_psql_job() {
+  local pid="$1" child_pid
+  if ! kill -0 "${pid}" >/dev/null 2>&1; then return; fi
+  kill -STOP "${pid}" >/dev/null 2>&1 || true
+  for child_pid in $(ps -eo pid=,ppid= | awk -v parent="${pid}" '$2 == parent { print $1 }'); do
+    stop_psql_job "${child_pid}"
+  done
+  kill -TERM "${pid}" >/dev/null 2>&1 || true
+  kill -CONT "${pid}" >/dev/null 2>&1 || true
+}
 
 cleanup() {
   local pid
-  for pid in "${child_pids[@]}"; do
+  # EOF closes the holder's transaction first. Children never inherit this FD.
+  if [[ -n "${holder_fd}" ]]; then exec {holder_fd}>&-; holder_fd=''; fi
+  # A PSQL_COMMAND wrapper may leave a server session after its process exits.
+  # Terminate only this invocation's uniquely named sessions in this database.
+  run_psql --quiet --command="
+    SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+    WHERE datname = current_database() AND pid <> pg_backend_pid()
+      AND application_name IN ('${replay_holder_application}', '${replay_waiter_application}',
+        '${transfer_holder_application}', '${transfer_waiter_application}',
+        '${membership_holder_application}', '${membership_waiter_application}');
+  " >/dev/null 2>&1 || true
+  for pid in "${child_pids[@]:-}"; do
     if [[ -n "${pid}" ]] && kill -0 "${pid}" >/dev/null 2>&1; then
-      kill "${pid}" >/dev/null 2>&1 || true
+      stop_psql_job "${pid}"
     fi
     if [[ -n "${pid}" ]]; then
       wait "${pid}" >/dev/null 2>&1 || true
     fi
   done
-  rm -f "${temporary_directory}"/*.out
+  rm -f "${temporary_directory}"/*.out "${temporary_directory}"/*.fifo
   rmdir "${temporary_directory}"
 }
 trap cleanup EXIT
 
 wait_for_lock_holder() {
-  local lock_name="$1" holder_pid="$2" holder_output="$3" probe
+  local lock_name="$1" holder_pid="$2" holder_output="$3" application_name="$4" probe
   for _ in $(seq 1 100); do
     probe="$(run_psql --tuples-only --no-align --command="
-      WITH probe AS (
-        SELECT pg_try_advisory_lock(hashtextextended('${lock_name}', 0)) AS acquired
-      )
-      SELECT CASE WHEN acquired
-        THEN NOT pg_advisory_unlock(hashtextextended('${lock_name}', 0))
-        ELSE true END
-      FROM probe;
+      SELECT activity.pid FROM pg_stat_activity AS activity
+      JOIN pg_locks AS lock_row ON lock_row.pid = activity.pid
+      WHERE activity.datname = current_database() AND activity.application_name = '${application_name}'
+        AND lock_row.locktype = 'advisory' AND lock_row.granted
+        AND lock_row.database = (SELECT oid FROM pg_database WHERE datname = current_database())
+        AND lock_row.classid::bigint = ((hashtextextended('${lock_name}', 0) >> 32) & 4294967295)
+        AND lock_row.objid::bigint = (hashtextextended('${lock_name}', 0) & 4294967295)
+        AND lock_row.objsubid = 1;
     " | tr -d '[:space:]')"
-    if [[ "${probe}" == 't' ]]; then
+    if [[ "${probe}" =~ ^[0-9]+$ ]]; then
+      observed_pg_pid="${probe}"
+      echo "${application_name}: PostgreSQL PID ${probe}, exact ready lock ${lock_name}"
       return
     fi
     if ! kill -0 "${holder_pid}" >/dev/null 2>&1; then
@@ -73,8 +113,28 @@ wait_for_lock_holder() {
   exit 1
 }
 
+wait_for_session() {
+  local application_name="$1" process_pid="$2" output="$3" probe
+  for _ in $(seq 1 100); do
+    probe="$(run_psql --tuples-only --no-align --command="
+      SELECT pid FROM pg_stat_activity
+      WHERE datname = current_database() AND application_name = '${application_name}';
+    " | tr -d '[:space:]')"
+    if [[ "${probe}" =~ ^[0-9]+$ ]]; then observed_pg_pid="${probe}"; return; fi
+    if ! kill -0 "${process_pid}" >/dev/null 2>&1; then
+      echo "并发等待会话过早退出：${application_name}" >&2
+      sed -n '1,160p' "${output}" >&2
+      exit 1
+    fi
+    sleep 0.05
+  done
+  echo "没有观察到指定 PostgreSQL 会话：${application_name}" >&2
+  sed -n '1,160p' "${output}" >&2
+  exit 1
+}
+
 wait_for_advisory_waiter() {
-  local lock_name="$1" waiter_pid="$2" waiter_output="$3" waiting
+  local lock_name="$1" waiter_pid="$2" waiter_output="$3" application_name="$4" waiter_pg_pid="$5" holder_pg_pid="$6" waiting
   for _ in $(seq 1 100); do
     waiting="$(run_psql --tuples-only --no-align --command="
       WITH lock_key AS (
@@ -85,15 +145,23 @@ wait_for_advisory_waiter() {
       )
       SELECT EXISTS (
         SELECT 1 FROM pg_locks AS lock_row CROSS JOIN lock_key
+        JOIN pg_stat_activity AS activity ON activity.pid = lock_row.pid
         WHERE lock_row.locktype = 'advisory'
           AND NOT lock_row.granted
           AND lock_row.database = lock_key.database_id
           AND lock_row.classid::bigint = lock_key.classid
           AND lock_row.objid::bigint = lock_key.objid
           AND lock_row.objsubid = 1
+          AND activity.application_name = '${application_name}' AND activity.pid = ${waiter_pg_pid}
+          AND ${holder_pg_pid} = ANY(pg_blocking_pids(activity.pid))
+          AND EXISTS (SELECT 1 FROM pg_locks AS held
+            WHERE held.pid = ${holder_pg_pid} AND held.granted AND held.locktype = 'advisory'
+              AND held.database = lock_row.database AND held.classid = lock_row.classid
+              AND held.objid = lock_row.objid AND held.objsubid = lock_row.objsubid)
       );
     " | tr -d '[:space:]')"
     if [[ "${waiting}" == 't' ]]; then
+      echo "${application_name}: PostgreSQL PID ${waiter_pg_pid}, exact ${lock_name}, blocker PID ${holder_pg_pid}"
       return
     fi
     if ! kill -0 "${waiter_pid}" >/dev/null 2>&1; then
@@ -109,18 +177,26 @@ wait_for_advisory_waiter() {
 }
 
 wait_for_app_user_waiter() {
-  local waiter_pid="$1" waiter_output="$2" waiting
+  local waiter_pid="$1" waiter_output="$2" application_name="$3" waiter_pg_pid="$4" holder_pg_pid="$5" app_user_id="$6" waiting
   for _ in $(seq 1 100); do
     waiting="$(run_psql --tuples-only --no-align --command="
       SELECT EXISTS (
-        SELECT 1 FROM pg_locks AS lock_row
-        WHERE NOT lock_row.granted
-          AND (lock_row.locktype = 'transactionid'
-            OR (lock_row.locktype = 'tuple'
-              AND lock_row.relation = 'app_data.app_users'::regclass))
+        SELECT 1 FROM pg_locks AS waiting
+        JOIN pg_stat_activity AS waiter ON waiter.pid = waiting.pid
+        JOIN pg_stat_activity AS holder ON holder.pid = ${holder_pg_pid}
+        JOIN app_data.app_users AS locked_user ON locked_user.app_user_id = '${app_user_id}'::uuid
+        JOIN pg_locks AS held ON held.pid = holder.pid AND held.locktype = 'transactionid'
+          AND held.granted AND held.transactionid = waiting.transactionid
+        WHERE waiter.application_name = '${application_name}' AND waiter.pid = ${waiter_pg_pid}
+          AND waiter.datname = current_database() AND holder.datname = current_database()
+          AND waiting.locktype = 'transactionid' AND NOT waiting.granted
+          AND waiting.transactionid = holder.backend_xid
+          AND locked_user.xmax::text = holder.backend_xid::text
+          AND holder.pid = ANY(pg_blocking_pids(waiter.pid))
       );
     " | tr -d '[:space:]')"
     if [[ "${waiting}" == 't' ]]; then
+      echo "${application_name}: PostgreSQL PID ${waiter_pg_pid}, app-user ${app_user_id} transactionid, blocker PID ${holder_pg_pid}"
       return
     fi
     if ! kill -0 "${waiter_pid}" >/dev/null 2>&1; then
@@ -145,22 +221,26 @@ run_create_replay_pair() {
   local ready_lock='0092-ready:create-replay'
   local request_lock="organization-shareable-join-link-request:${replay_link}"
   local first_pid second_pid first_status=0 second_status=0 first_row second_row
+  local holder_pg_pid waiter_pg_pid
 
-  run_psql --quiet --tuples-only --no-align --field-separator='|' --command="
+  mkfifo "${temporary_directory}/create-replay.fifo"
+  PGAPPNAME="${replay_holder_application}" run_psql_background --quiet --tuples-only --no-align --field-separator='|' \
+    <"${temporary_directory}/create-replay.fifo" >"${first_output}" 2>&1 &
+  first_pid=$!
+  child_pids+=("${first_pid}")
+  exec {holder_fd}>"${temporary_directory}/create-replay.fifo"
+  printf '%s\n' "
     BEGIN;
     SET LOCAL ROLE tongxingzhe_runtime;
     SELECT * FROM app_data.create_organization_shareable_join_link_for_identity_v1(
       '0092-concurrency', 'replay-owner', '${replay_link}', '${replay_workspace}');
     RESET ROLE;
     SELECT pg_advisory_lock(hashtextextended('${ready_lock}', 0));
-    SELECT pg_sleep(2);
-    COMMIT;
-  " >"${first_output}" 2>&1 &
-  first_pid=$!
-  child_pids+=("${first_pid}")
-  wait_for_lock_holder "${ready_lock}" "${first_pid}" "${first_output}"
+  " >&"${holder_fd}"
+  wait_for_lock_holder "${ready_lock}" "${first_pid}" "${first_output}" "${replay_holder_application}"
+  holder_pg_pid="${observed_pg_pid}"
 
-  run_psql --quiet --tuples-only --no-align --field-separator='|' --command="
+  PGAPPNAME="${replay_waiter_application}" run_psql_background --quiet --tuples-only --no-align --field-separator='|' --command="
     BEGIN;
     SET LOCAL ROLE tongxingzhe_runtime;
     SELECT * FROM app_data.create_organization_shareable_join_link_for_identity_v1(
@@ -169,9 +249,15 @@ run_create_replay_pair() {
   " >"${second_output}" 2>&1 &
   second_pid=$!
   child_pids+=("${second_pid}")
-  wait_for_advisory_waiter "${request_lock}" "${second_pid}" "${second_output}"
+  wait_for_session "${replay_waiter_application}" "${second_pid}" "${second_output}"
+  waiter_pg_pid="${observed_pg_pid}"
+  wait_for_advisory_waiter "${request_lock}" "${second_pid}" "${second_output}" "${replay_waiter_application}" "${waiter_pg_pid}" "${holder_pg_pid}"
+  printf '%s\n' "COMMIT; SELECT pg_advisory_unlock(hashtextextended('${ready_lock}', 0));" >&"${holder_fd}"
+  exec {holder_fd}>&-
+  holder_fd=''
   wait "${first_pid}" || first_status=$?
   wait "${second_pid}" || second_status=$?
+  child_pids=()
   if [[ "${first_status}" -ne 0 || "${second_status}" -ne 0 ]]; then
     sed -n '1,160p' "${first_output}" >&2
     sed -n '1,160p' "${second_output}" >&2
@@ -259,20 +345,23 @@ run_create_replay_pair
 transfer_output="${temporary_directory}/owner-transfer.out"
 transfer_create_output="${temporary_directory}/owner-transfer-create.out"
 transfer_ready='0092-ready:owner-transfer'
-run_psql --quiet --command="
+mkfifo "${temporary_directory}/owner-transfer.fifo"
+PGAPPNAME="${transfer_holder_application}" run_psql_background --quiet \
+  <"${temporary_directory}/owner-transfer.fifo" >"${transfer_output}" 2>&1 &
+transfer_pid=$!
+child_pids+=("${transfer_pid}")
+exec {holder_fd}>"${temporary_directory}/owner-transfer.fifo"
+printf '%s\n' "
   BEGIN;
   SELECT * FROM app_private.transfer_organization_owner_v1(
     '${transfer_owner}', '${transfer_request}', '${transfer_workspace}',
     '92020000-0092-3000-8000-000000000003');
   SELECT pg_advisory_lock(hashtextextended('${transfer_ready}', 0));
-  SELECT pg_sleep(2);
-  COMMIT;
-" >"${transfer_output}" 2>&1 &
-transfer_pid=$!
-child_pids+=("${transfer_pid}")
-wait_for_lock_holder "${transfer_ready}" "${transfer_pid}" "${transfer_output}"
+" >&"${holder_fd}"
+wait_for_lock_holder "${transfer_ready}" "${transfer_pid}" "${transfer_output}" "${transfer_holder_application}"
+transfer_holder_pg_pid="${observed_pg_pid}"
 
-run_psql --quiet --command="
+PGAPPNAME="${transfer_waiter_application}" run_psql_background --quiet --command="
   BEGIN;
   SELECT * FROM app_private.create_organization_shareable_join_link_v1(
     '${transfer_owner}', '${transfer_race_link}', '${transfer_workspace}');
@@ -280,11 +369,17 @@ run_psql --quiet --command="
 " >"${transfer_create_output}" 2>&1 &
 transfer_create_pid=$!
 child_pids+=("${transfer_create_pid}")
-wait_for_app_user_waiter "${transfer_create_pid}" "${transfer_create_output}"
+wait_for_session "${transfer_waiter_application}" "${transfer_create_pid}" "${transfer_create_output}"
+transfer_waiter_pg_pid="${observed_pg_pid}"
+wait_for_app_user_waiter "${transfer_create_pid}" "${transfer_create_output}" "${transfer_waiter_application}" "${transfer_waiter_pg_pid}" "${transfer_holder_pg_pid}" "${transfer_owner}"
+printf '%s\n' "COMMIT; SELECT pg_advisory_unlock(hashtextextended('${transfer_ready}', 0));" >&"${holder_fd}"
+exec {holder_fd}>&-
+holder_fd=''
 transfer_status=0
 transfer_create_status=0
 wait "${transfer_pid}" || transfer_status=$?
 wait "${transfer_create_pid}" || transfer_create_status=$?
+child_pids=()
 if [[ "${transfer_status}" -ne 0 ]]; then
   sed -n '1,160p' "${transfer_output}" >&2
   exit 1
@@ -299,7 +394,13 @@ membership_output="${temporary_directory}/membership-close.out"
 membership_create_output="${temporary_directory}/membership-close-create.out"
 membership_ready='0092-ready:membership-close'
 membership_lock="organization-membership:${membership_workspace}:${membership_owner}"
-run_psql --quiet --command="
+mkfifo "${temporary_directory}/membership-close.fifo"
+PGAPPNAME="${membership_holder_application}" run_psql_background --quiet \
+  <"${temporary_directory}/membership-close.fifo" >"${membership_output}" 2>&1 &
+membership_pid=$!
+child_pids+=("${membership_pid}")
+exec {holder_fd}>"${temporary_directory}/membership-close.fifo"
+printf '%s\n' "
   BEGIN;
   SELECT 1 FROM app_data.app_users
   WHERE app_user_id = '${membership_owner}' FOR UPDATE;
@@ -314,14 +415,11 @@ run_psql --quiet --command="
   WHERE organization_membership_id =
     '92020000-0092-3000-8000-000000000004';
   SELECT pg_advisory_lock(hashtextextended('${membership_ready}', 0));
-  SELECT pg_sleep(2);
-  COMMIT;
-" >"${membership_output}" 2>&1 &
-membership_pid=$!
-child_pids+=("${membership_pid}")
-wait_for_lock_holder "${membership_ready}" "${membership_pid}" "${membership_output}"
+" >&"${holder_fd}"
+wait_for_lock_holder "${membership_ready}" "${membership_pid}" "${membership_output}" "${membership_holder_application}"
+membership_holder_pg_pid="${observed_pg_pid}"
 
-run_psql --quiet --command="
+PGAPPNAME="${membership_waiter_application}" run_psql_background --quiet --command="
   BEGIN;
   SELECT * FROM app_private.create_organization_shareable_join_link_v1(
     '${membership_owner}', '${membership_race_link}', '${membership_workspace}');
@@ -329,11 +427,17 @@ run_psql --quiet --command="
 " >"${membership_create_output}" 2>&1 &
 membership_create_pid=$!
 child_pids+=("${membership_create_pid}")
-wait_for_app_user_waiter "${membership_create_pid}" "${membership_create_output}"
+wait_for_session "${membership_waiter_application}" "${membership_create_pid}" "${membership_create_output}"
+membership_waiter_pg_pid="${observed_pg_pid}"
+wait_for_app_user_waiter "${membership_create_pid}" "${membership_create_output}" "${membership_waiter_application}" "${membership_waiter_pg_pid}" "${membership_holder_pg_pid}" "${membership_owner}"
+printf '%s\n' "COMMIT; SELECT pg_advisory_unlock(hashtextextended('${membership_ready}', 0));" >&"${holder_fd}"
+exec {holder_fd}>&-
+holder_fd=''
 membership_status=0
 membership_create_status=0
 wait "${membership_pid}" || membership_status=$?
 wait "${membership_create_pid}" || membership_create_status=$?
+child_pids=()
 if [[ "${membership_status}" -ne 0 ]]; then
   sed -n '1,160p' "${membership_output}" >&2
   exit 1
