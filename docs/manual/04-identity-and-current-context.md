@@ -1856,6 +1856,10 @@ runner 显式执行编译后的 `organization-project-membership-assignment-http
 
 `TEST-100` 的本地实际 HTTP／Docker 和 CI 证明合成连接间的提交可见性，不证明真实 JWT、生产部署、Flutter、App composition 或真人平台。200 是历史操作结果，不是目标当前权限凭据。
 
+7BD／Issue #400 修复这条 integration 暴露的旧 fixture 边界。0093／0094 曾用全库 before／after 总数判断副作用；并行 file 提交无关组织时，READ COMMITTED 下一条 SQL 看见它，造成假失败。现在用 live temporary views 统计本 fixture 的全部组织、用户、个人空间和动态 parent／project／grant，不降低并行或改事务模式。
+
+同一 application integration 留下四种受控回归：各 fixture 的成功与失败断言前，精确 advisory key、fixture／holder PID 和 blocking PID 证实等待，再合法提交无关 membership／owner／project／capability。旧计数四处 RED，新计数四处 GREEN；原本域零副作用、claim 内容、receipt 和 runtime ACL 检查继续保留。不改生产 writer 或旧 migration。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：

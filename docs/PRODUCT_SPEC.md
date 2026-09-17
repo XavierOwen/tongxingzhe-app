@@ -1550,11 +1550,13 @@ timeout／client network error 为 networkUnavailable，不返回 provider、tok
 
 #### Slice 7AZ：实际 HTTP 与 runtime-role 提交对账
 
-7AZ／Issue #392 只增加 integration 和 runner entry，不改变生产代码、migration 或资格政策。实际 Node HTTP server 使用真实 assignment adapter、runtime-role query 和 fake generic verifier；只提交 synthetic seed，业务 bridge 每次隐式提交一个 statement。
+7AZ／Issue #392 增加 integration 和 runner entry，不改变生产代码、migration 或资格政策。实际 Node HTTP server 使用真实 assignment adapter、runtime-role query 和 fake generic verifier；只提交 synthetic seed，业务 bridge 每次隐式提交一个 statement。
 
 有限／空 parent 的首次 HTTP 200 后，不同 PID 的 observer 对账 membership／claim／audit 各一条、相同 selectors 与完整 SQL 时间；exact replay 返回相同 wire body，计数不变。409 selectors drift、403 overlap／non-owner 和 transport 拒绝无附加业务事实；wire 毫秒投影不改变 SQL 精度。
 
 `TEST-100`／`MANUAL-090` 同时保留完整 checksum、并发与独立 restore。local HTTP／Docker／CI 是 synthetic 证据，不证明 production identity、部署、Flutter、App 接线、真人平台或当前成员权限。
+
+7BD／Issue #400 随本切片修复并行提交暴露的旧 0093／0094 fixture 全库计数假差异：live temporary views 限定全部 fixture 组织／用户／个人空间及动态 parent／project／grant，四个 exact key／PID／blocking PID barrier 受控提交无关事实，旧断言 RED、新断言 GREEN。原本域副作用、claims、receipt 和 runtime ACL 验证保留，不改 product writer、旧 migration、隔离或 file 并行。
 
 ### 5.8 分析、指标与报告
 
@@ -3747,6 +3749,8 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 7AX／#388 提供普通项目成员安排独立 Flutter gateway 与严格历史 receipt；App／UI 接线、当前访问资格与生产验证另票交付。
 
 7AZ／#392 对实际本地 HTTP 200 做独立 runtime-role 提交观察，证明首次与精确重放的 membership／claim／audit 对账；verifier 与数据库均为 synthetic，不代表生产部署。
+
+7BD／#400 同时修正 0093／0094 fixture 的并行全库计数假差异，四种受控无关提交保留本域零副作用检查；不改生产授权或隔离级别。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 
