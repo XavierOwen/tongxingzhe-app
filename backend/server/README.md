@@ -157,6 +157,19 @@ PostgreSQL 保存完整时间精度。毫秒投影可能使正的 sub-ms 区间�
 
 `organization-project-membership-assignment.integration.ts` 通过 `ORGANIZATION_PROJECT_MEMBERSHIP_ASSIGNMENT_FIXTURE` 读取 0096 fixture 的 seed 段；后面的独立隔离事务仍由 SQL fixture 自己验证。integration 在 rollback transaction 中切换 `tongxingzhe_runtime`，对账有限／空 parent 的首次及 exact replay、selectors conflict、两条 claim 和 audit。完整 Docker runner 显式注入 fixture 和执行编译后的 integration；单元 fake 不替代这个 runtime 对账，synthetic 不证明生产或部署。
 
+## 普通项目成员安排 HTTP
+
+Issue #386 接入 `POST /v1/organizations/:organizationWorkspaceId/projects/:projectId/memberships`。body 仅 `request_id` 与 `target_organization_membership_id`，均为 UUID。workspace／project 只取路径；不接受 query、actor、角色、capability 或时间。
+
+先匹配 raw 路径与 POST，再验证 Bearer、identity、query、path UUID 和 store。之后才读取 body 并等待单条 bridge。
+错误 method／编码／dot segment／slash alias 先返回 404。共享 reader 按实际 1 MiB 字节上限处理，保留 invalid_json／payload_too_large，不添加 415。
+
+first／replay 同为 200 的固定七字段，parent end 显式 null 或 UTC 毫秒。
+稳定分类为 401 unauthenticated、400 invalid request、403 forbidden、409 conflict、503 unavailable。
+本操作 code 与 [Product Spec](../../docs/PRODUCT_SPEC.md) 一致。全部响应 JSON UTF-8／no-store，历史 receipt 不是当前权限。
+
+main 复用 generic verifier 与共享 pool.query，不新增 Auth／owner／context 预查、连接池或 transaction。handler 等待 bridge Promise settled；unit／route／composition tests 是 synthetic HTTP 证据，不是部署或生产资格证明。
+
 ## 个人当前关系阶段快照
 
 | 方法与路径 | 行为 |

@@ -1,4 +1,9 @@
-import type { VerifiedIdentity } from "./identity.js";
+import { bearerToken } from "./authorization.js";
+import {
+  IdentityVerificationError,
+  type IdentityVerifier,
+  type VerifiedIdentity,
+} from "./identity.js";
 
 const contractId = "organization-project-membership-assignment:v1" as const;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -34,6 +39,129 @@ export class OrganizationProjectMembershipAssignmentStoreError extends Error {
     super(code);
     this.name = "OrganizationProjectMembershipAssignmentStoreError";
   }
+}
+
+export type OrganizationProjectMembershipAssignmentStore = Pick<
+  PostgresOrganizationProjectMembershipAssignmentStore,
+  "assign"
+>;
+
+export interface OrganizationProjectMembershipAssignmentRouteMatch {
+  readonly workspaceId: string;
+  readonly projectId: string;
+  readonly hasQuery: boolean;
+}
+
+export interface OrganizationProjectMembershipAssignmentRequest
+  extends OrganizationProjectMembershipAssignmentRouteMatch {
+  readonly authorization: string | undefined;
+  readonly readBody: () => Promise<unknown>;
+}
+
+export interface OrganizationProjectMembershipAssignmentDependencies {
+  readonly identityVerifier: IdentityVerifier | undefined;
+  readonly assignmentStore: OrganizationProjectMembershipAssignmentStore | undefined;
+}
+
+export interface OrganizationProjectMembershipAssignmentInput {
+  readonly requestId: string;
+  readonly targetOrganizationMembershipId: string;
+}
+
+export interface OrganizationProjectMembershipAssignmentHttpResult {
+  readonly status: number;
+  readonly body: Readonly<Record<string, unknown>>;
+}
+
+/** Match before WHATWG URL normalization; authentication follows raw routing. */
+export function matchOrganizationProjectMembershipAssignmentRequestTarget(
+  requestTarget: string | undefined,
+): OrganizationProjectMembershipAssignmentRouteMatch | null {
+  if (requestTarget === undefined) return null;
+  const queryIndex = requestTarget.indexOf("?");
+  const pathname = queryIndex < 0 ? requestTarget : requestTarget.slice(0, queryIndex);
+  if (pathname.includes("%")) return null;
+  const match = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/memberships$/.exec(pathname);
+  const workspaceId = match?.[1];
+  const projectId = match?.[2];
+  if (workspaceId === undefined || projectId === undefined ||
+    workspaceId === "." || workspaceId === ".." || projectId === "." || projectId === "..") return null;
+  return { workspaceId, projectId, hasQuery: queryIndex >= 0 };
+}
+
+export async function handleOrganizationProjectMembershipAssignment(
+  request: OrganizationProjectMembershipAssignmentRequest,
+  dependencies: OrganizationProjectMembershipAssignmentDependencies,
+): Promise<OrganizationProjectMembershipAssignmentHttpResult> {
+  const accessToken = bearerToken(request.authorization);
+  if (accessToken === null) return failure(401, "unauthenticated");
+  if (dependencies.identityVerifier === undefined) return unavailable();
+  let identity: VerifiedIdentity;
+  try {
+    identity = await dependencies.identityVerifier.verify(accessToken);
+  } catch (error) {
+    return error instanceof IdentityVerificationError && error.category === "unauthenticated"
+      ? failure(401, "unauthenticated") : unavailable();
+  }
+  if (request.hasQuery) return invalidRequest();
+  const workspaceId = uuid(request.workspaceId);
+  const projectId = uuid(request.projectId);
+  if (workspaceId === null || projectId === null) return invalidRequest();
+  if (dependencies.assignmentStore === undefined) return unavailable();
+  // Keep the shared reader's invalid_json / payload_too_large outside store catch.
+  const input = parseOrganizationProjectMembershipAssignmentBody(await request.readBody());
+  if (input === null) return invalidRequest();
+  try {
+    const result = await dependencies.assignmentStore.assign(identity, input.requestId,
+      workspaceId, projectId, input.targetOrganizationMembershipId);
+    return {
+      status: 200,
+      body: {
+        project_membership_assignment_contract_id: result.projectMembershipAssignmentContractId,
+        organization_workspace_id: result.organizationWorkspaceId,
+        project_id: result.projectId,
+        organization_membership_id: result.organizationMembershipId,
+        project_membership_id: result.projectMembershipId,
+        active_from_utc: result.activeFromUtc,
+        inactive_from_utc: result.inactiveFromUtc,
+      },
+    };
+  } catch (error) {
+    if (error instanceof OrganizationProjectMembershipAssignmentStoreError) {
+      switch (error.code) {
+        case "invalid_organization_project_membership_assignment_request": return invalidRequest();
+        case "organization_project_membership_assignment_forbidden": return failure(403, error.code);
+        case "organization_project_membership_assignment_conflict": return failure(409, error.code);
+        case "organization_project_membership_assignment_unavailable": return unavailable();
+      }
+    }
+    return unavailable();
+  }
+}
+
+export function parseOrganizationProjectMembershipAssignmentBody(
+  value: unknown,
+): OrganizationProjectMembershipAssignmentInput | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const body = value as Record<string, unknown>;
+  const keys = Object.keys(body).sort();
+  if (keys.length !== 2 || keys[0] !== "request_id" || keys[1] !== "target_organization_membership_id") return null;
+  const requestId = uuid(body.request_id);
+  const targetOrganizationMembershipId = uuid(body.target_organization_membership_id);
+  return requestId === null || targetOrganizationMembershipId === null
+    ? null : { requestId, targetOrganizationMembershipId };
+}
+
+function failure(status: number, code: string): OrganizationProjectMembershipAssignmentHttpResult {
+  return { status, body: { error: { code } } };
+}
+
+function unavailable(): OrganizationProjectMembershipAssignmentHttpResult {
+  return failure(503, "organization_project_membership_assignment_unavailable");
+}
+
+function invalidRequest(): OrganizationProjectMembershipAssignmentHttpResult {
+  return failure(400, "invalid_organization_project_membership_assignment_request");
 }
 
 type AssignmentQuery = (

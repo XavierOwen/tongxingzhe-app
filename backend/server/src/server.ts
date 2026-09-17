@@ -144,6 +144,11 @@ import {
   type OrganizationOwnerTransferStore,
 } from "./organization-owner-transfer.js";
 import {
+  handleOrganizationProjectMembershipAssignment,
+  matchOrganizationProjectMembershipAssignmentRequestTarget,
+  type OrganizationProjectMembershipAssignmentStore,
+} from "./organization-project-membership-assignment.js";
+import {
   handleOrganizationMembershipSelfLeave,
   matchOrganizationMembershipSelfLeaveRequestTarget,
   type OrganizationMembershipSelfLeaveStore,
@@ -217,6 +222,8 @@ export interface BackendServerDependencies
   readonly organizationCreationStore?: OrganizationCreationStore;
   readonly organizationDirectoryStore?: OrganizationDirectoryStore;
   readonly organizationOwnerTransferStore?: OrganizationOwnerTransferStore;
+  readonly organizationProjectMembershipAssignmentStore?:
+    OrganizationProjectMembershipAssignmentStore;
   readonly organizationMembershipSelfLeaveStore?:
     OrganizationMembershipSelfLeaveStore;
   readonly organizationDirectedAccountInvitationStore?:
@@ -307,6 +314,29 @@ export function createBackendServer(
           {
             identityVerifier: dependencies.identityVerifier,
             invitationStore: dependencies.organizationDirectedAccountInvitationStore,
+          },
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
+      }
+      return;
+    }
+
+    const projectMembershipAssignmentMatch =
+      matchOrganizationProjectMembershipAssignmentRequestTarget(request.url);
+    if (request.method === "POST" && projectMembershipAssignmentMatch !== null) {
+      try {
+        const result = await handleOrganizationProjectMembershipAssignment(
+          {
+            ...projectMembershipAssignmentMatch,
+            authorization: request.headers.authorization,
+            readBody: async () => readJsonBody(request),
+          },
+          {
+            identityVerifier: dependencies.identityVerifier,
+            assignmentStore: dependencies.organizationProjectMembershipAssignmentStore,
           },
         );
         response.statusCode = result.status;
