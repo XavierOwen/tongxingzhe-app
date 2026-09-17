@@ -12,6 +12,65 @@ import 'package:tongxingzhe_app/l10n/app_strings.dart';
 import 'package:tongxingzhe_app/organization_shareable_join/organization_shareable_join.dart';
 
 void main() {
+  testWidgets('borrowed session retirement fences a late application receipt', (
+    tester,
+  ) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final pending =
+        Completer<OrganizationShareableJoinApplicationSubmitResult>();
+    final gateway = _Gateway(
+      previews: [OrganizationShareableJoinLinkPreviewSuccess(_previewReceipt)],
+      submits: [pending],
+    );
+    await _open(tester, fixture.session, gateway, _Ids().next);
+    await tester.enterText(_linkField, _linkId);
+    await tester.tap(_preview);
+    await tester.pumpAndSettle();
+    await tester.tap(_submit);
+    await tester.pump();
+    await tester.runAsync(fixture.session.close);
+    await tester.pumpAndSettle();
+    expect(_submit, findsNothing);
+    pending.complete(
+      OrganizationShareableJoinApplicationSubmitSuccess(_submitReceipt),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text(_submitReceipt.applicationId), findsNothing);
+    expect(_copy, findsNothing);
+    expect(gateway.closed, isFalse);
+  });
+
+  testWidgets(
+    'borrowed session retirement hides the submitted application receipt',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final gateway = _Gateway(
+        previews: [
+          OrganizationShareableJoinLinkPreviewSuccess(_previewReceipt),
+        ],
+        submits: [
+          OrganizationShareableJoinApplicationSubmitSuccess(_submitReceipt),
+        ],
+      );
+      await _open(tester, fixture.session, gateway, _Ids().next);
+      await tester.enterText(_linkField, _linkId);
+      await tester.tap(_preview);
+      await tester.pumpAndSettle();
+      await tester.tap(_submit);
+      await tester.pumpAndSettle();
+      expect(find.text(_submitReceipt.applicationId), findsOneWidget);
+      await tester.runAsync(fixture.session.close);
+      await tester.pumpAndSettle();
+      expect(find.text(_submitReceipt.applicationId), findsNothing);
+      expect(find.text(_previewReceipt.organizationName), findsNothing);
+      expect(_submit, findsNothing);
+      expect(_copy, findsNothing);
+      expect(gateway.closed, isFalse);
+    },
+  );
+
   testWidgets('preview 后明确 submit，成功留窗并显式复制 application UUID', (tester) async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.close);
@@ -522,6 +581,7 @@ final class _Gateway implements OrganizationShareableJoinGateway {
   final Queue<Object> _submits;
   final previewCalls = <String>[];
   final submitCalls = <({String applicationId, String linkId})>[];
+  var closed = false;
 
   @override
   Future<OrganizationShareableJoinLinkPreviewResult> previewLink({
@@ -551,7 +611,7 @@ final class _Gateway implements OrganizationShareableJoinGateway {
   }
 
   @override
-  Future<void> close() async {}
+  Future<void> close() async => closed = true;
 
   @override
   dynamic noSuchMethod(Invocation invocation) =>

@@ -53,7 +53,10 @@ final class _OrganizationCreationDialogState
     super.initState();
     _trustedAppUserId = _readyAppUserId(widget.appSession.current);
     _sessionExpired = _trustedAppUserId == null;
-    _sessionSubscription = widget.appSession.changes.listen(_sessionChanged);
+    _sessionSubscription = widget.appSession.changes.listen(
+      _sessionChanged,
+      onDone: () => _sessionChanged(const AppSessionSnapshot.unavailable()),
+    );
   }
 
   @override

@@ -13,6 +13,46 @@ import 'package:tongxingzhe_app/organization_directory/organization_directory.da
 import 'package:tongxingzhe_app/organization_owner_transfer/organization_owner_transfer.dart';
 
 void main() {
+  testWidgets('borrowed session retirement hides the owner transfer receipt', (
+    tester,
+  ) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final gateway = _Gateway([OrganizationOwnerTransferSuccess(_receipt)]);
+    await _confirmAndSubmit(tester, fixture.session, gateway);
+    expect(find.text(_receipt.organizationOwnerAssignmentId), findsOneWidget);
+    await tester.runAsync(fixture.session.close);
+    await tester.pumpAndSettle();
+    expect(find.text(_receipt.organizationOwnerAssignmentId), findsNothing);
+    expect(_submit, findsNothing);
+    expect(gateway.closed, isFalse);
+  });
+
+  testWidgets(
+    'borrowed session retirement fences a late owner transfer receipt',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final pending = Completer<OrganizationOwnerTransferResult>();
+      final gateway = _Gateway([pending]);
+      await _open(tester, fixture.session, gateway);
+      await tester.enterText(_field, _targetMembershipId);
+      await tester.tap(_review);
+      await tester.pumpAndSettle();
+      await tester.tap(_submit);
+      await tester.pump();
+      await tester.runAsync(fixture.session.close);
+      await tester.pumpAndSettle();
+      expect(_submit, findsNothing);
+      pending.complete(OrganizationOwnerTransferSuccess(_receipt));
+      await tester.pumpAndSettle();
+      expect(find.text(_receipt.organizationOwnerAssignmentId), findsNothing);
+      expect(_field, findsNothing);
+      expect(find.byType(OrganizationOwnerTransferDialog), findsOneWidget);
+      expect(gateway.closed, isFalse);
+    },
+  );
+
   testWidgets('首次实际提交才生成 request，重试保留完整 tuple 且不能编辑', (tester) async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.close);

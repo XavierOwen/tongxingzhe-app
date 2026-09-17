@@ -57,7 +57,7 @@ final class _OrganizationMembershipSelfLeaveDialogState
     if (!_hasTrustedSession()) _stage = _LeaveStage.sessionExpired;
     _sessionSubscription = widget.appSession.changes.listen((_) {
       if (!_hasTrustedSession()) _invalidateSession();
-    });
+    }, onDone: _invalidateSession);
   }
 
   @override

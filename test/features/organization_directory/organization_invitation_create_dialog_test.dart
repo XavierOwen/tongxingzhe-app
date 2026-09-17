@@ -13,6 +13,53 @@ import 'package:tongxingzhe_app/organization_directed_account_invitation/organiz
 import 'package:tongxingzhe_app/organization_directory/organization_directory.dart';
 
 void main() {
+  testWidgets('borrowed session retirement fences a late invitation receipt', (
+    tester,
+  ) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final pending =
+        Completer<OrganizationDirectedAccountInvitationCreateResult>();
+    final gateway = _Gateway([pending]);
+    await _open(tester, fixture.session, gateway, _Ids().next);
+    await tester.enterText(_target, _targetAppUserId);
+    await tester.tap(_submit);
+    await tester.pump();
+    await tester.runAsync(fixture.session.close);
+    await tester.pumpAndSettle();
+    expect(_submit, findsNothing);
+    pending.complete(
+      OrganizationDirectedAccountInvitationCreateSuccess(_receipt),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text(_receipt.invitationId), findsNothing);
+    expect(_copy, findsNothing);
+    expect(gateway.closed, isFalse);
+  });
+
+  testWidgets(
+    'borrowed session retirement hides the created invitation receipt',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final gateway = _Gateway([
+        OrganizationDirectedAccountInvitationCreateSuccess(_receipt),
+      ]);
+      await _open(tester, fixture.session, gateway, _Ids().next);
+      await tester.enterText(_target, _targetAppUserId);
+      await tester.tap(_submit);
+      await tester.pumpAndSettle();
+      expect(find.text(_receipt.invitationId), findsOneWidget);
+      await tester.runAsync(fixture.session.close);
+      await tester.pumpAndSettle();
+      expect(find.text(_receipt.invitationId), findsNothing);
+      expect(find.byType(TextField), findsNothing);
+      expect(_submit, findsNothing);
+      expect(_copy, findsNothing);
+      expect(gateway.closed, isFalse);
+    },
+  );
+
   testWidgets('只接受 UUID，首次有效提交才生成 invitation UUID', (tester) async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.close);

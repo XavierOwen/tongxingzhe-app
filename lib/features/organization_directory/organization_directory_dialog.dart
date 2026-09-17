@@ -75,7 +75,10 @@ final class _OrganizationDirectoryDialogState
     super.initState();
     _trustedAppUserId = _readyAppUserId(widget.appSession.current);
     _sessionInvalidated = _trustedAppUserId == null;
-    _sessionSubscription = widget.appSession.changes.listen(_sessionChanged);
+    _sessionSubscription = widget.appSession.changes.listen(
+      _sessionChanged,
+      onDone: () => _sessionChanged(const AppSessionSnapshot.unavailable()),
+    );
     if (!_sessionInvalidated) unawaited(_load());
   }
 

@@ -29,6 +29,111 @@ import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
 import '../../support/fake_runtime_values.dart';
 
 void main() {
+  testWidgets(
+    'borrowed session retirement fences late self-leave success without directory refresh',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final directory = _Gateway([
+        OrganizationDirectorySuccess(const [_organizationA]),
+      ]);
+      final pending = Completer<OrganizationMembershipSelfLeaveResult>();
+      final gateway = _SelfLeaveGateway([pending]);
+      await _open(
+        tester,
+        fixture.session,
+        directory,
+        selfLeaveGateway: gateway,
+      );
+      final leave = find.byKey(
+        ValueKey(
+          'organization-leave-${_organizationA.organizationWorkspaceId}',
+        ),
+      );
+      await tester.ensureVisible(leave);
+      await tester.tap(leave);
+      await tester.pumpAndSettle();
+      await tester.tap(_leaveConfirm);
+      await tester.pumpAndSettle();
+      expect(gateway.calls, hasLength(1));
+      await tester.runAsync(fixture.session.close);
+      await tester.pumpAndSettle();
+      expect(_leaveConfirm, findsNothing);
+      expect(find.text(_organizationA.organizationWorkspaceId), findsNothing);
+      pending.complete(OrganizationMembershipSelfLeaveSuccess(_receipt));
+      await tester.pumpAndSettle();
+      expect(
+        find.byType(OrganizationMembershipSelfLeaveDialog),
+        findsOneWidget,
+      );
+      expect(
+        find.text(const AppStrings('zh').t('organizationLeaveUncertain')),
+        findsOneWidget,
+      );
+      await tester.tap(_leaveCancel);
+      await tester.pumpAndSettle();
+      expect(_leaveDiscard, findsOneWidget);
+      await tester.tap(_leaveDiscard);
+      await tester.pumpAndSettle();
+      expect(directory.listCalls, 1);
+      expect(directory.closed, isFalse);
+      expect(gateway.closed, isFalse);
+    },
+  );
+
+  testWidgets('borrowed session retirement hides the self-leave organization', (
+    tester,
+  ) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final gateway = _SelfLeaveGateway();
+    await _openSelfLeave(tester, fixture.session, gateway);
+    expect(find.text(_organizationA.organizationWorkspaceId), findsOneWidget);
+    await tester.runAsync(fixture.session.close);
+    await tester.pumpAndSettle();
+    expect(find.text(_organizationA.organizationWorkspaceId), findsNothing);
+    expect(_leaveConfirm, findsNothing);
+    expect(gateway.calls, isEmpty);
+    expect(gateway.closed, isFalse);
+  });
+
+  testWidgets('borrowed session retirement fences a late directory result', (
+    tester,
+  ) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final pending = Completer<OrganizationDirectoryResult>();
+    final gateway = _Gateway([pending]);
+    await _open(tester, fixture.session, gateway, settle: false);
+    await tester.runAsync(fixture.session.close);
+    await tester.pumpAndSettle();
+    pending.complete(OrganizationDirectorySuccess(const [_organizationA]));
+    await tester.pumpAndSettle();
+    expect(find.text(_organizationA.organizationWorkspaceId), findsNothing);
+    expect(_selfIdCopy, findsNothing);
+    expect(tester.widget<FilledButton>(_refresh).onPressed, isNull);
+    expect(gateway.listCalls, 1);
+    expect(gateway.closed, isFalse);
+  });
+
+  testWidgets('borrowed session retirement clears the organization directory', (
+    tester,
+  ) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final gateway = _Gateway([
+      OrganizationDirectorySuccess(const [_organizationA]),
+    ]);
+    await _open(tester, fixture.session, gateway);
+    expect(find.text(_organizationA.organizationWorkspaceId), findsOneWidget);
+    await tester.runAsync(fixture.session.close);
+    await tester.pumpAndSettle();
+    expect(find.text(_organizationA.organizationWorkspaceId), findsNothing);
+    expect(_selfIdCopy, findsNothing);
+    expect(tester.widget<FilledButton>(_refresh).onPressed, isNull);
+    expect(gateway.closed, isFalse);
+  });
+
   for (final closePath in ['close', 'back', 'escape']) {
     testWidgets('历史邀请回执经 $closePath 返回后父目录只重新读取一次', (tester) async {
       final fixture = await _Fixture.create();
@@ -2415,6 +2520,7 @@ final class _SelfLeaveGateway
 
   final Queue<Object> _results;
   final calls = <_LeaveCall>[];
+  var closed = false;
 
   @override
   Future<OrganizationMembershipSelfLeaveResult> leave({
@@ -2439,7 +2545,7 @@ final class _SelfLeaveGateway
   }
 
   @override
-  Future<void> close() async {}
+  Future<void> close() async => closed = true;
 }
 
 typedef _OwnerTransferCall = ({

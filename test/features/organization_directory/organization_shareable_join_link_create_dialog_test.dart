@@ -13,6 +13,46 @@ import 'package:tongxingzhe_app/organization_directory/organization_directory.da
 import 'package:tongxingzhe_app/organization_shareable_join/organization_shareable_join.dart';
 
 void main() {
+  testWidgets('borrowed session retirement fences a late link receipt', (
+    tester,
+  ) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final pending = Completer<OrganizationShareableJoinLinkCreateResult>();
+    final gateway = _Gateway([pending]);
+    await _open(tester, fixture.session, gateway, _Ids().next);
+    await tester.tap(_submit);
+    await tester.pump();
+    await tester.runAsync(fixture.session.close);
+    await tester.pumpAndSettle();
+    expect(_submit, findsNothing);
+    pending.complete(OrganizationShareableJoinLinkCreateSuccess(_receipt));
+    await tester.pumpAndSettle();
+    expect(find.text(_receipt.linkId), findsNothing);
+    expect(_copy, findsNothing);
+    expect(gateway.closed, isFalse);
+  });
+
+  testWidgets('borrowed session retirement hides the created link receipt', (
+    tester,
+  ) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final gateway = _Gateway([
+      OrganizationShareableJoinLinkCreateSuccess(_receipt),
+    ]);
+    await _open(tester, fixture.session, gateway, _Ids().next);
+    await tester.tap(_submit);
+    await tester.pumpAndSettle();
+    expect(find.text(_receipt.linkId), findsOneWidget);
+    await tester.runAsync(fixture.session.close);
+    await tester.pumpAndSettle();
+    expect(find.text(_receipt.linkId), findsNothing);
+    expect(_submit, findsNothing);
+    expect(_copy, findsNothing);
+    expect(gateway.closed, isFalse);
+  });
+
   testWidgets('首次提交生成 canonical UUID，成功显示五项并显式复制', (tester) async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.close);
