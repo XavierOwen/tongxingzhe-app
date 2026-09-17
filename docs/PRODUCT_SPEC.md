@@ -288,8 +288,8 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `ORG-006` | 完成邮箱验证的用户可以自助创建组织并成为首位所有者；平台可实施配额、停用和反滥用，但不把组织创建变成人工审批流程。 |
 | `ORG-007` | 组织创建必须在一个 PostgreSQL transaction 中原子建立 organization workspace、创建者 membership、首位 active owner、幂等 request claim 和不含组织名称的创建审计；失败不得留下部分组织。 |
 | `ORG-008` | owner 使用独立于项目 capability 的追加式 temporal assignment，并从同组织的有效 membership 取得归属；owner 不自动获得项目成员关系、管理报告、异常读取或 PII 权限。 |
-| `ORG-009` | 首次 owner transfer 执行只允许当前 owner 把所有权责任 handoff 给同组织已有的 active membership。actor 必须由 trusted exact identity 解析，并在锁后仍是 active app user、该组织 active member 和 current owner；不得复用 Slice 7A 的组织创建资格。target 使用同组织现有 `organization_membership_id`，且 membership 与 app user 在锁后仍 active。transfer 不隐式建立 membership、接受 invitation／application 或改变 capability；target 已是 current owner（包括 actor 等于 target）返回固定 conflict。 |
-| `ORG-010` | owner handoff 必须在同一 transaction 中使用同一数据库时间，先追加 target owner assignment，再结束 actor 当前 assignment；其他 current owners 保持不变。首次执行依次取得 request lock、按 UUID 排序的 actor／target app-user row locks、organization governance lock 和按 UUID 排序的 membership locks，并在锁后重读事实。exact replay 只继续锁定并重读 active actor row。 |
+| `ORG-009` | 首次 owner transfer 执行只允许当前 owner 把所有权责任 handoff 给同组织已有的 active membership。actor 必须由 trusted exact identity 解析，并在锁后仍是 active app user、该组织 active member 和 current owner；不得复用 Slice 7A 的组织创建资格。target 使用同组织现有 `organization_membership_id`，membership 与 app user 在锁后仍 active，parent 结束点为 null；首次新 grant 还要求 parent 开始点不晚于 handoff 写入时间。transfer 不隐式建立 membership、接受 invitation／application 或改变 capability；target 已是 current owner（包括 actor 等于 target）仍返回固定 conflict。 |
+| `ORG-010` | owner handoff 使用同一不可变 transaction timestamp 写入，锁后另用墙钟确认当前授权；实际关闭 actor owner assignment 前，其开始点必须严格早于写入时间。先追加 target owner assignment，再结束 actor 当前 assignment；其他 current owners 保持不变。首次执行依次取得 request lock、按 UUID 排序的 actor／target app-user row locks、organization governance lock 和按 UUID 排序的 membership locks，并在锁后重读事实。exact replay 只继续锁定并重读 active actor row，不重做 FIRST 区间资格。 |
 | `ORG-011` | transfer 使用独立 request UUID claim、lock 和 tombstone family。相同 request、workspace、actor 与 target 必须精确重放原 receipt，不重新要求 actor current-owner 或 target not-owner；actor、workspace 或 target 漂移、actor 去关联和 transfer tombstone 必须返回固定 idempotency conflict。终结清除保留只含 family 与 request UUID 的 tombstone。 |
 | `ORG-012` | transfer 的数据库 result row、SQLSTATE／message、Backend code、value-free audit allowlist 和 deletion boundary 必须固定。未知 SQLSTATE、constraint、parser 或 adapter 错误统一 unavailable。`deletion_pending`／`deleted` actor 或 target 不能开始新 transfer；组织删除恢复期冻结新 claim，live exact replay 只读。 |
 | `ORG-013` | 定向账号邀请只允许组织当前 active owner 发起，并且只面向已有 active 账号。target 是不可信的 opaque internal `app_user_id` selector；锁后必须确认 target 不是 inviter、不是该组织当前成员且账号仍 active。首版不新增或猜测成员管理 capability，不实现 revoke；接受者只能是绑定 target 账号。 |
@@ -1585,6 +1585,14 @@ link／submit／approve／assign 四步后，申请人的 organization membershi
 exact replay、双时间、锁序、grant-before-close、bridge、OID／owner／ACL／search path 保留。随机 synthetic fixture 以两次合法跨事务 handoff 结束原 target assignment／parent并保留 successor owner，随后 active原actor的原request返回相同receipt，计数不增。
 
 `TEST-102`／`MANUAL-092` 包含旧writer RED、新guard GREEN、runtime稳定403／unended成功和完整 checksum／并发／restore。它具体化现有无到期 owner grant，不定义未来到期、生产部署、账号终结或真实删除。
+
+#### Slice 7BE：owner handoff 的锁后写入时间资格
+
+7BE／Issue #402 追加0098，只在共享FIRST writer原锁后、实际写入前验证target parent start不晚于immutable effective time、actor owner start严格早于该时间。既有target-already-owner conflict先返回，不因无须执行的close检查改为forbidden。target相等允许，actor相等会形成零长close而拒绝；不满足用既有42501／403 forbidden，零部分assignment／claim／audit。
+
+锁后wall-clock授权、transaction timestamp写入、target无结束点、lock order、grant-before-close、exact replay和OID／owner／ACL／bridge保持。不给未知constraint增加mapper、不放宽包含或append-only、不新增到期政策。
+
+`TEST-103`／`MANUAL-093` 使用actual implicit runtime bridge，精确physical PID／advisory key／blocking PID控制target等待期间开始有效、actor等待期间经合法已提交handoff才成为owner；旧writer RED、新guard GREEN，完整snapshot不变和同request的fresh transaction成功。边界fixture检查相等起点，既有fixture继续历史replay，完整Docker保留checksum／并发／独立restore；synthetic不证明真实Auth、生产部署或真实删除。
 
 ### 5.8 分析、指标与报告
 
@@ -3123,6 +3131,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-090` | 学习文档说明 7AZ actual HTTP、fake verifier、真实 adapter／runtime role、单 statement 隐式提交和独立 PID observer；首次／replay 对账 selectors／SQL 时间及拒绝零写入，解释临时库 cleanup、不绕过 guard 和 HTTP／Docker／CI／生产边界。 |
 | `MANUAL-091` | 学习文档说明 7BA link／submit／approve／assign 是独立操作，organization `0→0→1→1`／project `0→0→0→1`，approval parent 与 assignment target 相同、不授管理 capability；对账各 family committed claim／audit、SQL 微秒及稳定拒绝，区分 actual HTTP／Docker／CI 与生产。 |
 | `MANUAL-092` | 学习文档区分 active／unended target、0084 null-ended owner grant 与包含约束、旧 containment failure／unavailable 和 0097 锁后 exact forbidden／零写入；解释 unchanged replay／双时间／锁／ACL、合法跨事务 ended-parent replay 及 Docker／CI／生产边界，不推导 owner future expiry。 |
+| `MANUAL-093` | 学习文档区分锁后墙钟授权与immutable transaction写入时间，解释target parent start≤effective time、actor owner start<effective time及相等边界；两个精确锁等待actual implicit bridge回归、完整snapshot零副作用、fresh transaction成功、历史replay与Docker／CI／生产边界。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3403,6 +3412,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-100` | 7AZ actual Node HTTP＋真实 PostgreSQL adapter／runtime role 检查有限／空 parent first 200、不同 PID observer 的 committed membership／claim／audit／selectors／SQL 时间、exact wire replay 不增写、409 drift、403 overlap／non-owner、raw aliases、auth、JSON／extra key／actual-byte 超限／verifier 503 的 query 边界。完整 Docker 继续 checksum、并发与独立 restore；synthetic 不证明真实身份、部署、Flutter、App 接线或真人平台。 |
 | `TEST-101` | 7BA actual HTTP＋runtime role＋独立 PID observer 覆盖分享 link／submit／owner approve／explicit assign、org与project逐步计数、approval parent绑定、default-promoter／capability零增加、各 family claim／submitted／approved／assignment audit 和 SQL完整时间，三次 exact replay、non-owner／overlap／drift／unknown／cross-org稳定拒绝零附加写入。完整 Docker继续checks／checksum／并发／restore；不代表真实Auth、部署、Flutter、真人平台或自动项目加入。 |
 | `TEST-102` | 7BB 旧writer实际finite containment RED，0097 structural／fixture检查首次finite／expired／future target exact forbidden和owner／claim／audit零变化、unended成功、两次合法跨事务handoff后target assignment／parent结束时原active actor exact replay receipt相同且计数不增。既有Backend runtime integration验证finite HTTP403／savepoint零写及unended first／replay；完整Docker继续旧checksum、OID／owner／ACL／search path、全部checks／fixtures／并发及独立restore，不代表生产、未来owner expiry或真实删除。 |
+| `TEST-103` | 7BE两个actual implicit runtime bridge锁等待回归，以exact advisory key／physical PID／blocking PID证明target才active或actor经另一已提交handoff才owner；旧writer containment／append-only错误映射503，新0098统一403，scoped owner／claim／audit完整snapshot不变，同request的fresh事务控制200。新fixture检查target起点相等允许、actor起点相等拒绝，既有0086冲突与0097replay继续运行；完整Docker保留checks／旧checksum／并发／独立restore，不证明真实Auth或生产部署。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3789,6 +3799,8 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 7BA／#395 从分享申请批准到明确项目安排做实际 HTTP 对账，确认入组只建 parent、安排才建默认推广者 child，不新增管理 capability；不实现自动项目加入。
 
 7BB／#396 使首次 finite-parent owner transfer 在原锁后统一 forbidden，而不落入 containment unavailable；历史 replay 与既有无到期 grant 规则保持，未新增到期政策。
+
+7BE／#402 在锁后同时检查区间能承载immutable handoff时间；等待期间才active的target或才成为owner的actor稳定forbidden，不把较早transaction time当成当前授权，也不阻断历史replay。
 
 7BD／#400 同时修正 0093／0094 fixture 的并行全库计数假差异，四种受控无关提交保留本域零副作用检查；不改生产授权或隔离级别。
 

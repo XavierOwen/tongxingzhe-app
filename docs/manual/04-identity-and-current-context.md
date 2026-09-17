@@ -1923,6 +1923,27 @@ exact replay 的提前返回位置保持。原 active actor 后来失去 owner�
 
 已有 Backend runtime-role integration 另验证 finite target 为稳定 403 后仍可合法转给 unended target。完整套件继续旧 checksum、全部 checks／fixtures／并发和独立 dump／restore；local synthetic 与 CI 不证明生产身份、部署、未来到期政策或真实删除。
 
+### 3.46 为什么锁后 active 仍可能不能完成 handoff（Issue #402，MANUAL-093）
+
+owner transfer 有两个时间。0088 在全部锁后用墙钟确认当前授权；写入时间仍是请求 transaction 的不可变开始时间。锁等待期间，target parent 可能才开始有效，或 actor 经另一合法 handoff 才成为 owner。它们在授权时 active，不表示能承载较早的 grant／close。
+
+0098 在同一共享 FIRST writer 的锁后、实际写入前增加两项检查：target parent start≤effective time，actor owner start<effective time。
+既有 target-already-owner conflict 先返回，不因无须执行的 close 检查改变稳定错误。target 起点相等可以包含新 grant；actor 起点相等会产生零长结束区间，必须拒绝。失败使用既有 42501／HTTP403 forbidden，保持旧 owner、claim 和 audit，不给底层未知错误增加 mapper。
+
+授权仍用当前墙钟；不能改回 transaction time，否则可能接受等待期间已结束的权限。包含、append-only、无结束点 target、锁序、grant-before-close 和 ACL 均保持。exact replay 仍提前返回原历史 receipt，不重做 FIRST 区间资格，也不授予当前访问。
+
+从仓库根目录运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+`TEST-103` 用 actual runtime role 的 implicit bridge、真实 typed store／handler 与 synthetic verifier。不同 physical PID、精确 request advisory key 和 blocking PID 先证实等待；第一 case 在另一合法 transaction 建立 parent 并提交，第二 case 在等待中合法提交另一次 handoff。数据库明确确认新 start 晚于等待请求的 transaction time，再释放 holder；不依赖固定未来窗口或 sleep 决定先后。
+
+两个旧 writer case 分别触发包含／append-only 错误并映射503；新 guard 为403，scoped owner／claim／audit 完整 snapshot 不变，相同 actor／target／request 的 fresh transaction 控制200。
+
+新边界 fixture 检查相等起点；既有0086 conflict、0097历史 replay fixture 在0098后继续运行。完整 Docker 保留旧 checksum、全部 checks／fixtures／并发和独立 dump／restore；本地 synthetic 和 CI 不证明真实 Auth、生产部署、真人平台或真实删除。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
