@@ -10,6 +10,7 @@ import 'package:tongxingzhe_app/features/organization_directory/organization_dir
 import 'package:tongxingzhe_app/features/organization_directory/organization_invitation_create_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_membership_self_leave_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_owner_transfer_dialog.dart';
+import 'package:tongxingzhe_app/features/organization_directory/organization_project_membership_assignment_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_shareable_join_application_approve_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_shareable_join_application_submit_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_shareable_join_link_create_dialog.dart';
@@ -19,6 +20,7 @@ import 'package:tongxingzhe_app/organization_directed_account_invitation/organiz
 import 'package:tongxingzhe_app/organization_directory/organization_directory.dart';
 import 'package:tongxingzhe_app/organization_membership_self_leave/organization_membership_self_leave.dart';
 import 'package:tongxingzhe_app/organization_owner_transfer/organization_owner_transfer.dart';
+import 'package:tongxingzhe_app/organization_project_membership_assignment/organization_project_membership_assignment.dart';
 import 'package:tongxingzhe_app/organization_shareable_join/organization_shareable_join.dart';
 import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
 
@@ -453,6 +455,15 @@ void main() {
       ),
       findsOneWidget,
     );
+    expect(
+      find.byKey(
+        ValueKey(
+          'organization-project-member-assign-'
+          '${organizations.last.organizationWorkspaceId}',
+        ),
+      ),
+      findsOneWidget,
+    );
     expect(find.text(organizations.last.organizationName), findsOneWidget);
     expect(
       find.text(organizations.last.organizationWorkspaceId),
@@ -858,6 +869,132 @@ void main() {
     expect(directoryGateway.listCalls, 1);
     expect(fixture.session.current.context, initialContext);
     expect(ownerTransferGateway.closed, isFalse);
+  });
+
+  testWidgets('每个组织行分配项目成员固定选中组织，核对后提交并显示历史回执', (tester) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final directoryGateway = _Gateway([
+      OrganizationDirectorySuccess(const [_organizationA, _organizationB]),
+    ]);
+    final assignmentGateway = _ProjectMembershipAssignmentGateway(
+      _projectMembershipAssignmentReceipt,
+    );
+    final initialContext = fixture.session.current.context;
+    await _open(
+      tester,
+      fixture.session,
+      directoryGateway,
+      projectMembershipAssignmentGateway: assignmentGateway,
+    );
+
+    final assign = find.byKey(
+      ValueKey(
+        'organization-project-member-assign-'
+        '${_organizationB.organizationWorkspaceId}',
+      ),
+    );
+    await tester.ensureVisible(assign);
+    await tester.tap(assign);
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(OrganizationProjectMembershipAssignmentDialog);
+    expect(dialog, findsOneWidget);
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.text(_organizationB.organizationWorkspaceId),
+      ),
+      findsOneWidget,
+    );
+    await tester.enterText(
+      find.byKey(
+        const ValueKey(
+          'organization-project-membership-assignment-project-field',
+        ),
+      ),
+      _assignmentProjectId.toUpperCase(),
+    );
+    await tester.enterText(
+      find.byKey(
+        const ValueKey(
+          'organization-project-membership-assignment-target-field',
+        ),
+      ),
+      _assignmentTargetMembershipId.toUpperCase(),
+    );
+    await tester.tap(
+      find.byKey(
+        const ValueKey('organization-project-membership-assignment-review'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(assignmentGateway.calls, isEmpty);
+    expect(find.text(_assignmentProjectId), findsOneWidget);
+    expect(find.text(_assignmentTargetMembershipId), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('organization-project-membership-assignment-submit'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(assignmentGateway.calls, hasLength(1));
+    final call = assignmentGateway.calls.single;
+    expect(
+      call.organizationWorkspaceId,
+      _organizationB.organizationWorkspaceId,
+    );
+    expect(call.projectId, _assignmentProjectId);
+    expect(call.targetOrganizationMembershipId, _assignmentTargetMembershipId);
+    expect(
+      call.requestId,
+      matches(
+        RegExp(
+          r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+        ),
+      ),
+    );
+    for (final value in [
+      _projectMembershipAssignmentReceipt.projectMembershipAssignmentContractId,
+      _projectMembershipAssignmentReceipt.organizationWorkspaceId,
+      _projectMembershipAssignmentReceipt.projectId,
+      _projectMembershipAssignmentReceipt.organizationMembershipId,
+      _projectMembershipAssignmentReceipt.projectMembershipId,
+      _projectMembershipAssignmentReceipt.activeFromUtc
+          .toUtc()
+          .toIso8601String(),
+      const AppStrings(
+        'zh',
+      ).t('organizationProjectMembershipAssignmentNullEnd'),
+    ]) {
+      expect(
+        find.descendant(of: dialog, matching: find.text(value)),
+        findsOneWidget,
+      );
+    }
+    expect(directoryGateway.listCalls, 1);
+    expect(fixture.session.current.context, initialContext);
+    expect(assignmentGateway.closeCalls, 0);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('organization-project-membership-assignment-close'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(dialog, findsNothing);
+    expect(find.byType(OrganizationDirectoryDialog), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(OrganizationDirectoryDialog),
+        matching: find.text(_organizationB.organizationWorkspaceId),
+      ),
+      findsOneWidget,
+    );
+    expect(directoryGateway.listCalls, 1);
+    expect(fixture.session.current.context, initialContext);
+    expect(assignmentGateway.closeCalls, 0);
   });
 
   testWidgets('成功时必须先删本地快照，再提交并以新目录为准', (tester) async {
@@ -1376,6 +1513,9 @@ Future<void> _open(
       const DeferredOrganizationShareableJoinGateway(),
   OrganizationOwnerTransferGateway ownerTransferGateway =
       const DeferredOrganizationOwnerTransferGateway(),
+  OrganizationProjectMembershipAssignmentGateway
+      projectMembershipAssignmentGateway =
+      const DeferredOrganizationProjectMembershipAssignmentGateway(),
 }) async {
   await _pumpLauncher(
     tester,
@@ -1388,6 +1528,7 @@ Future<void> _open(
     invitationGateway: invitationGateway,
     shareableJoinGateway: shareableJoinGateway,
     ownerTransferGateway: ownerTransferGateway,
+    projectMembershipAssignmentGateway: projectMembershipAssignmentGateway,
   );
   await tester.tap(_launcher);
   if (settle) {
@@ -1412,6 +1553,9 @@ Future<void> _pumpLauncher(
       const DeferredOrganizationShareableJoinGateway(),
   OrganizationOwnerTransferGateway ownerTransferGateway =
       const DeferredOrganizationOwnerTransferGateway(),
+  OrganizationProjectMembershipAssignmentGateway
+      projectMembershipAssignmentGateway =
+      const DeferredOrganizationProjectMembershipAssignmentGateway(),
 }) => tester.pumpWidget(
   MaterialApp(
     theme: ThemeData(useMaterial3: true),
@@ -1436,6 +1580,8 @@ Future<void> _pumpLauncher(
                 invitationGateway: invitationGateway,
                 shareableJoinGateway: shareableJoinGateway,
                 ownerTransferGateway: ownerTransferGateway,
+                projectMembershipAssignmentGateway:
+                    projectMembershipAssignmentGateway,
               ),
             ),
             child: const Text('Open'),
@@ -1948,6 +2094,41 @@ final class _OwnerTransferGateway implements OrganizationOwnerTransferGateway {
   Future<void> close() async => closed = true;
 }
 
+typedef _ProjectMembershipAssignmentCall = ({
+  String requestId,
+  String organizationWorkspaceId,
+  String projectId,
+  String targetOrganizationMembershipId,
+});
+
+final class _ProjectMembershipAssignmentGateway
+    implements OrganizationProjectMembershipAssignmentGateway {
+  _ProjectMembershipAssignmentGateway(this.receipt);
+
+  final OrganizationProjectMembershipAssignmentReceipt receipt;
+  final calls = <_ProjectMembershipAssignmentCall>[];
+  var closeCalls = 0;
+
+  @override
+  Future<OrganizationProjectMembershipAssignmentResult> assign({
+    required String requestId,
+    required String organizationWorkspaceId,
+    required String projectId,
+    required String targetOrganizationMembershipId,
+  }) async {
+    calls.add((
+      requestId: requestId,
+      organizationWorkspaceId: organizationWorkspaceId,
+      projectId: projectId,
+      targetOrganizationMembershipId: targetOrganizationMembershipId,
+    ));
+    return OrganizationProjectMembershipAssignmentSuccess(receipt);
+  }
+
+  @override
+  Future<void> close() async => closeCalls += 1;
+}
+
 enum _LocalFailure { read, delete }
 
 final class _LocalVault {
@@ -2047,6 +2228,8 @@ const _targetAppUserId = '99999999-9999-4999-8999-999999999999';
 const _shareableJoinLinkId = 'e1111111-1111-4111-8111-111111111111';
 const _shareableJoinApplicationId = 'e2222222-2222-4222-8222-222222222222';
 const _targetOrganizationMembershipId = 'f3333333-3333-4333-8333-333333333333';
+const _assignmentProjectId = '51111111-1111-4111-8111-111111111111';
+const _assignmentTargetMembershipId = '52222222-2222-4222-8222-222222222222';
 
 final _shareableJoinPreviewReceipt =
     OrganizationShareableJoinLinkPreviewReceipt(
@@ -2071,6 +2254,18 @@ final _organizationOwnerTransferReceipt = OrganizationOwnerTransferReceipt(
   organizationOwnerAssignmentId: 'g2222222-2222-4222-8222-222222222222',
   effectiveAtUtc: DateTime.utc(2026, 9, 16, 18),
 );
+
+final _projectMembershipAssignmentReceipt =
+    OrganizationProjectMembershipAssignmentReceipt(
+      projectMembershipAssignmentContractId:
+          'organization-project-membership-assignment:v1',
+      organizationWorkspaceId: _organizationB.organizationWorkspaceId,
+      projectId: _assignmentProjectId,
+      organizationMembershipId: _assignmentTargetMembershipId,
+      projectMembershipId: '53333333-3333-4333-8333-333333333333',
+      activeFromUtc: DateTime.utc(2026, 9, 16, 19),
+      inactiveFromUtc: null,
+    );
 
 const _organizationAContext = TrustedSessionContext(
   appUserId: '11111111-1111-4111-8111-111111111111',

@@ -26,7 +26,9 @@ import 'package:tongxingzhe_app/organization_directory/organization_directory.da
 import 'package:tongxingzhe_app/organization_directed_account_invitation/organization_directed_account_invitation.dart';
 import 'package:tongxingzhe_app/organization_membership_self_leave/organization_membership_self_leave.dart';
 import 'package:tongxingzhe_app/organization_owner_transfer/organization_owner_transfer.dart';
+import 'package:tongxingzhe_app/organization_project_membership_assignment/organization_project_membership_assignment.dart';
 import 'package:tongxingzhe_app/organization_shareable_join/organization_shareable_join.dart';
+import 'package:tongxingzhe_app/features/organization_directory/organization_project_membership_assignment_dialog.dart';
 import 'package:tongxingzhe_app/platform/platform_capabilities.dart';
 import 'package:tongxingzhe_app/project_settings/personal_follow_up_consent_opt_in.dart';
 import 'package:tongxingzhe_app/questionnaires/questionnaire_contract.dart';
@@ -184,6 +186,132 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
     expect(gateway.closeCount, 1);
+  });
+
+  testWidgets('启动尚未完成时移除 App 仍关闭后来取得的项目成员安排 gateway 一次', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final startupGate = _BlockingPlatformCapabilitiesProvider();
+    final gateway = _TrackingOrganizationProjectMembershipAssignmentGateway();
+    var builderCalls = 0;
+    final dependencies = AppDependencies(
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: startupGate,
+      organizationProjectMembershipAssignmentGatewayBuilder: (_) {
+        builderCalls++;
+        return gateway;
+      },
+    );
+    addTearDown(database.close);
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pump();
+    expect(startupGate.loadCalls, 1);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    startupGate.complete();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+
+    expect(builderCalls, 1);
+    expect(gateway.closeCount, 1);
+  });
+
+  testWidgets('移除 TongxingzheApp 后关闭项目成员安排 gateway 恰好一次', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final gateway = _TrackingOrganizationProjectMembershipAssignmentGateway();
+    final dependencies = AppDependencies(
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      organizationProjectMembershipAssignmentGatewayBuilder: (_) => gateway,
+    );
+    addTearDown(database.close);
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    expect(gateway.closeCount, 1);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    expect(gateway.closeCount, 1);
+  });
+
+  testWidgets('Ready、Home、Directory 与新窗口复用同一项目成员安排 gateway', (tester) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession(
+      initial: IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: const IdentityPrincipal(
+          externalSubject: 'test-subject',
+          email: 'person@example.test',
+        ),
+        expiresAt: DateTime.utc(2030, 1, 2, 3, 30),
+      ),
+    );
+    const workspaceId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    final directoryGateway = _TrackingOrganizationDirectoryGateway(
+      result: OrganizationDirectorySuccess([
+        OrganizationDirectoryEntry(
+          organizationWorkspaceId: workspaceId,
+          organizationName: '安排组织',
+        ),
+      ]),
+    );
+    final assignmentGateway =
+        _TrackingOrganizationProjectMembershipAssignmentGateway();
+    IdentitySession? receivedIdentity;
+    final dependencies = AppDependencies(
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      organizationDirectoryGatewayBuilder: (_) => directoryGateway,
+      organizationProjectMembershipAssignmentGatewayBuilder: (session) {
+        receivedIdentity = session;
+        return assignmentGateway;
+      },
+    );
+    addTearDown(database.close);
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('project-context-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('organization-directory-menu-item')),
+    );
+    await tester.pumpAndSettle();
+
+    final assignAction = find.byKey(
+      const ValueKey('organization-project-member-assign-$workspaceId'),
+    );
+    await tester.ensureVisible(assignAction);
+    await tester.tap(assignAction);
+    await tester.pumpAndSettle();
+
+    final dialog = tester.widget<OrganizationProjectMembershipAssignmentDialog>(
+      find.byType(OrganizationProjectMembershipAssignmentDialog),
+    );
+    expect(identical(receivedIdentity, identity), isTrue);
+    expect(identical(dialog.gateway, assignmentGateway), isTrue);
+    expect(assignmentGateway.closeCount, 0);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+    expect(assignmentGateway.closeCount, 1);
   });
 
   testWidgets('我的组织交接入口复用 gateway，正常续期保留意图且不改项目', (tester) async {
@@ -2989,6 +3117,24 @@ final class _TrackingOrganizationOwnerTransferGateway
     ));
     return pending == null ? result : await pending!.future;
   }
+
+  @override
+  Future<void> close() async => closeCount++;
+}
+
+final class _TrackingOrganizationProjectMembershipAssignmentGateway
+    implements OrganizationProjectMembershipAssignmentGateway {
+  var closeCount = 0;
+
+  @override
+  Future<OrganizationProjectMembershipAssignmentResult> assign({
+    required String requestId,
+    required String organizationWorkspaceId,
+    required String projectId,
+    required String targetOrganizationMembershipId,
+  }) async => const OrganizationProjectMembershipAssignmentRejected(
+    OrganizationProjectMembershipAssignmentFailureCode.notConfigured,
+  );
 
   @override
   Future<void> close() async => closeCount++;

@@ -363,6 +363,66 @@ const Map<String, Map<String, String>> _strings = {
         '网络不可用，无法确认批准结果。请检查连接后在此窗口重试。',
     'organizationShareableApprovalFailure.invalidResponse':
         '未收到可验证的批准结果，请在此窗口重试。',
+    'organizationProjectMembershipAssignmentAction': '安排项目成员',
+    'organizationProjectMembershipAssignmentTitle': '明确安排普通项目成员',
+    'organizationProjectMembershipAssignmentInputHelp':
+        '输入已核对的项目 UUID 和同组织的目标成员关系 UUID。账号、申请和所有者身份编号不能替代成员关系编号。App 不搜索项目或成员，也不读取成员资料。',
+    'organizationProjectMembershipAssignmentProjectIdentifier': '项目编号（UUID）',
+    'organizationProjectMembershipAssignmentTargetMembershipIdentifier':
+        '目标成员关系编号（UUID）',
+    'organizationProjectMembershipAssignmentInvalidOrganization':
+        '组织编号无效，没有发送请求。请关闭后重新打开。',
+    'organizationProjectMembershipAssignmentInvalidProject':
+        '请输入有效的项目 UUID，不要添加空格或 URL。',
+    'organizationProjectMembershipAssignmentInvalidTargetMembership':
+        '请输入有效的组织成员关系 UUID，不要添加空格或 URL。',
+    'organizationProjectMembershipAssignmentInvalidRequest':
+        '未能建立安排请求，没有发送请求。请在此窗口重试。',
+    'organizationProjectMembershipAssignmentReview': '核对',
+    'organizationProjectMembershipAssignmentConfirmHelp':
+        '请通过原渠道核对项目和目标成员。首次安排由服务端确认你仍是组织所有者及双方资格；只新增默认推广者项目成员关系，不授予管理权限或对象资料访问权。不改变当前项目。',
+    'organizationProjectMembershipAssignmentAssign': '确认安排',
+    'organizationProjectMembershipAssignmentEdit': '更换编号',
+    'organizationProjectMembershipAssignmentRetry': '重试这次安排',
+    'organizationProjectMembershipAssignmentSubmitting': '正在安排项目成员…',
+    'organizationProjectMembershipAssignmentSuccess': '这次项目成员安排请求已完成。',
+    'organizationProjectMembershipAssignmentUnauthorized':
+        '账号或会话已改变。已清除组织、项目、成员编号、请求和回执；请关闭后重新登录。',
+    'organizationProjectMembershipAssignmentUncertain':
+        '成员关系可能已建立。重试仍使用同一请求、组织、项目和目标成员；重试信息仅保留在此窗口。',
+    'organizationProjectMembershipAssignmentOrganizationId': '组织标识',
+    'organizationProjectMembershipAssignmentContractId': '回执合同',
+    'organizationProjectMembershipAssignmentProjectId': '项目编号',
+    'organizationProjectMembershipAssignmentTargetMembershipId': '目标组织成员关系编号',
+    'organizationProjectMembershipAssignmentProjectMembershipId': '新项目成员关系编号',
+    'organizationProjectMembershipAssignmentActiveFrom': '开始时间（UTC）',
+    'organizationProjectMembershipAssignmentInactiveFrom': '结束时间（UTC，可空）',
+    'organizationProjectMembershipAssignmentNullEnd': 'null（未设置结束时间）',
+    'organizationProjectMembershipAssignmentFreshnessNotice':
+        '这份七字段历史回执不是当前项目资格或访问凭据。精确重试不再次建立成员关系，也不要求你仍是所有者。没有新增管理权限或对象分配；当前项目不变。',
+    'organizationProjectMembershipAssignmentClose': '关闭',
+    'organizationProjectMembershipAssignmentDiscardTitle': '停止重试这次安排？',
+    'organizationProjectMembershipAssignmentDiscardBody':
+        '成员关系可能已建立。关闭只放弃此窗口中的重试信息，不会撤销服务端上可能已完成的安排。',
+    'organizationProjectMembershipAssignmentKeepRetry': '返回重试',
+    'organizationProjectMembershipAssignmentDiscard': '放弃重试并关闭',
+    'organizationProjectMembershipAssignmentFailure.notConfigured':
+        '项目成员安排服务尚未配置，没有提交安排请求。请稍后重试。',
+    'organizationProjectMembershipAssignmentFailure.unauthorized':
+        '登录状态已失效，请重新登录。',
+    'organizationProjectMembershipAssignmentFailure.invalidJson': '安排请求格式无效。',
+    'organizationProjectMembershipAssignmentFailure.payloadTooLarge':
+        '安排请求未被服务接受。',
+    'organizationProjectMembershipAssignmentFailure.invalidRequest': '安排请求无效。',
+    'organizationProjectMembershipAssignmentFailure.forbidden':
+        '当前账号不能执行这次安排，或组织、项目和目标成员现在不符合安排条件。',
+    'organizationProjectMembershipAssignmentFailure.conflict': '这次安排请求与已有记录冲突。',
+    'organizationProjectMembershipAssignmentFailure.serviceUnavailable':
+        '服务暂时不可用，无法确认安排结果。请在此窗口重试。',
+    'organizationProjectMembershipAssignmentFailure.networkUnavailable':
+        '网络不可用，无法确认安排结果。请检查连接后在此窗口重试。',
+    'organizationProjectMembershipAssignmentFailure.invalidResponse':
+        '未收到可验证的安排结果，请在此窗口重试。',
     'organizationOwnerTransferAction': '转让所有权',
     'organizationOwnerTransferTitle': '转让组织所有权',
     'organizationOwnerTransferInputHelp':
@@ -1906,6 +1966,77 @@ const Map<String, Map<String, String>> _strings = {
         'Check your connection and retry in this window.',
     'organizationShareableApprovalFailure.invalidResponse':
         'The approval result could not be verified. Retry in this window.',
+    'organizationProjectMembershipAssignmentAction': 'Assign project member',
+    'organizationProjectMembershipAssignmentTitle':
+        'Assign an ordinary project member',
+    'organizationProjectMembershipAssignmentInputHelp':
+        'Enter a verified project UUID and a target organization membership UUID in this organization. Account, application, and owner assignment IDs cannot replace the membership ID. The app does not search projects or members or read member profiles.',
+    'organizationProjectMembershipAssignmentProjectIdentifier':
+        'Project ID (UUID)',
+    'organizationProjectMembershipAssignmentTargetMembershipIdentifier':
+        'Target membership ID (UUID)',
+    'organizationProjectMembershipAssignmentInvalidOrganization':
+        'The organization ID is invalid. No request was sent. Close and reopen this window.',
+    'organizationProjectMembershipAssignmentInvalidProject':
+        'Enter a valid project UUID, without spaces or a URL.',
+    'organizationProjectMembershipAssignmentInvalidTargetMembership':
+        'Enter a valid organization membership UUID, without spaces or a URL.',
+    'organizationProjectMembershipAssignmentInvalidRequest':
+        'Could not prepare the assignment request. No request was sent. Retry in this window.',
+    'organizationProjectMembershipAssignmentReview': 'Review',
+    'organizationProjectMembershipAssignmentConfirmHelp':
+        'Confirm the project and target through the original channel. The server checks that you remain an organization owner and that the first assignment is eligible. This adds only a default promoter project membership, not management permissions or profile access. Your current project stays unchanged.',
+    'organizationProjectMembershipAssignmentAssign': 'Assign',
+    'organizationProjectMembershipAssignmentEdit': 'Change IDs',
+    'organizationProjectMembershipAssignmentRetry': 'Retry assignment',
+    'organizationProjectMembershipAssignmentSubmitting':
+        'Assigning project member…',
+    'organizationProjectMembershipAssignmentSuccess':
+        'This project membership assignment request is complete.',
+    'organizationProjectMembershipAssignmentUnauthorized':
+        'The account or session changed. Organization, project, member IDs, request, and receipt were cleared. Close and sign in again.',
+    'organizationProjectMembershipAssignmentUncertain':
+        'The membership may have been created. A retry uses the same request, organization, project, and target member. Retry details stay only in this window.',
+    'organizationProjectMembershipAssignmentOrganizationId': 'Organization ID',
+    'organizationProjectMembershipAssignmentContractId': 'Receipt contract',
+    'organizationProjectMembershipAssignmentProjectId': 'Project ID',
+    'organizationProjectMembershipAssignmentTargetMembershipId':
+        'Target organization membership ID',
+    'organizationProjectMembershipAssignmentProjectMembershipId':
+        'New project membership ID',
+    'organizationProjectMembershipAssignmentActiveFrom': 'Starts at (UTC)',
+    'organizationProjectMembershipAssignmentInactiveFrom':
+        'Ends at (UTC, nullable)',
+    'organizationProjectMembershipAssignmentNullEnd': 'null (no end time set)',
+    'organizationProjectMembershipAssignmentFreshnessNotice':
+        'This seven-field historical receipt is not proof of current project eligibility or access. An exact retry does not create another membership or require you to remain an owner. No management permission or target assignment is added. Your current project stays unchanged.',
+    'organizationProjectMembershipAssignmentClose': 'Close',
+    'organizationProjectMembershipAssignmentDiscardTitle':
+        'Stop retrying this assignment?',
+    'organizationProjectMembershipAssignmentDiscardBody':
+        'The membership may have been created. Closing only discards this window’s retry details. It does not reverse an assignment that may have completed on the server.',
+    'organizationProjectMembershipAssignmentKeepRetry': 'Keep retrying',
+    'organizationProjectMembershipAssignmentDiscard': 'Discard and close',
+    'organizationProjectMembershipAssignmentFailure.notConfigured':
+        'The project membership assignment service is not configured. It did not submit a request. Try again later.',
+    'organizationProjectMembershipAssignmentFailure.unauthorized':
+        'The session expired. Sign in again.',
+    'organizationProjectMembershipAssignmentFailure.invalidJson':
+        'The assignment request format is invalid.',
+    'organizationProjectMembershipAssignmentFailure.payloadTooLarge':
+        'The service did not accept the assignment request.',
+    'organizationProjectMembershipAssignmentFailure.invalidRequest':
+        'The assignment request is invalid.',
+    'organizationProjectMembershipAssignmentFailure.forbidden':
+        'This account cannot perform the assignment, or the organization, project, and target member are not eligible now.',
+    'organizationProjectMembershipAssignmentFailure.conflict':
+        'This assignment request conflicts with an existing record.',
+    'organizationProjectMembershipAssignmentFailure.serviceUnavailable':
+        'The service is unavailable, so the assignment result is uncertain. Retry in this window.',
+    'organizationProjectMembershipAssignmentFailure.networkUnavailable':
+        'The network is unavailable, so the assignment result is uncertain. Check your connection and retry in this window.',
+    'organizationProjectMembershipAssignmentFailure.invalidResponse':
+        'The assignment result could not be verified. Retry in this window.',
     'organizationOwnerTransferAction': 'Transfer ownership',
     'organizationOwnerTransferTitle': 'Transfer organization ownership',
     'organizationOwnerTransferInputHelp':

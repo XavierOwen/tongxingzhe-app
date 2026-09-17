@@ -9,11 +9,13 @@ import '../../organization_directed_account_invitation/organization_directed_acc
 import '../../organization_directory/organization_directory.dart';
 import '../../organization_membership_self_leave/organization_membership_self_leave.dart';
 import '../../organization_owner_transfer/organization_owner_transfer.dart';
+import '../../organization_project_membership_assignment/organization_project_membership_assignment.dart';
 import '../../organization_shareable_join/organization_shareable_join.dart';
 import 'organization_invitation_create_dialog.dart';
 import 'organization_invitation_accept_dialog.dart';
 import 'organization_membership_self_leave_dialog.dart';
 import 'organization_owner_transfer_dialog.dart';
+import 'organization_project_membership_assignment_dialog.dart';
 import 'organization_shareable_join_application_approve_dialog.dart';
 import 'organization_shareable_join_application_submit_dialog.dart';
 import 'organization_shareable_join_link_create_dialog.dart';
@@ -35,6 +37,8 @@ final class OrganizationDirectoryDialog extends StatefulWidget {
         const DeferredOrganizationShareableJoinGateway(),
     this.ownerTransferGateway =
         const DeferredOrganizationOwnerTransferGateway(),
+    this.projectMembershipAssignmentGateway =
+        const DeferredOrganizationProjectMembershipAssignmentGateway(),
   });
 
   final AppStrings text;
@@ -44,6 +48,8 @@ final class OrganizationDirectoryDialog extends StatefulWidget {
   final OrganizationDirectedAccountInvitationGateway invitationGateway;
   final OrganizationShareableJoinGateway shareableJoinGateway;
   final OrganizationOwnerTransferGateway ownerTransferGateway;
+  final OrganizationProjectMembershipAssignmentGateway
+  projectMembershipAssignmentGateway;
 
   @override
   State<OrganizationDirectoryDialog> createState() =>
@@ -276,6 +282,18 @@ final class _OrganizationDirectoryDialogState
                   : () => _transferOwnership(entry),
               icon: const Icon(Icons.swap_horiz),
               label: Text(widget.text.t('organizationOwnerTransferAction')),
+            ),
+            TextButton.icon(
+              key: ValueKey(
+                'organization-project-member-assign-${entry.organizationWorkspaceId}',
+              ),
+              onPressed: _busy || _sessionInvalidated
+                  ? null
+                  : () => _assignProjectMember(entry),
+              icon: const Icon(Icons.person_add_outlined),
+              label: Text(
+                widget.text.t('organizationProjectMembershipAssignmentAction'),
+              ),
             ),
             TextButton.icon(
               key: ValueKey(
@@ -563,6 +581,24 @@ final class _OrganizationDirectoryDialogState
         text: widget.text,
         organization: entry,
         gateway: widget.ownerTransferGateway,
+        appSession: widget.appSession,
+      ),
+    );
+  }
+
+  Future<void> _assignProjectMember(OrganizationDirectoryEntry entry) async {
+    if (_busy ||
+        !_organizations.contains(entry) ||
+        !_hasTrustedSession(widget.appSession.current)) {
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => OrganizationProjectMembershipAssignmentDialog(
+        text: widget.text,
+        organizationWorkspaceId: entry.organizationWorkspaceId,
+        gateway: widget.projectMembershipAssignmentGateway,
         appSession: widget.appSession,
       ),
     );

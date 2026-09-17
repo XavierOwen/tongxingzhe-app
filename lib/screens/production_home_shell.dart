@@ -41,6 +41,7 @@ import '../organization_directed_account_invitation/organization_directed_accoun
 import '../organization_directory/organization_directory.dart';
 import '../organization_membership_self_leave/organization_membership_self_leave.dart';
 import '../organization_owner_transfer/organization_owner_transfer.dart';
+import '../organization_project_membership_assignment/organization_project_membership_assignment.dart';
 import '../organization_shareable_join/organization_shareable_join.dart';
 import '../plans/personal_action_plan.dart';
 import '../project_settings/personal_follow_up_consent_opt_in.dart';
@@ -88,6 +89,8 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.organizationShareableJoinGateway,
     this.organizationOwnerTransferGateway =
         const DeferredOrganizationOwnerTransferGateway(),
+    this.organizationProjectMembershipAssignmentGateway =
+        const DeferredOrganizationProjectMembershipAssignmentGateway(),
     required this.managementReportExportDelivery,
     required this.currentRelationshipStageRepository,
     required this.deviceReminderPreferenceStore,
@@ -131,6 +134,8 @@ final class ProductionHomeShell extends StatefulWidget {
   organizationDirectedAccountInvitationGateway;
   final OrganizationShareableJoinGateway organizationShareableJoinGateway;
   final OrganizationOwnerTransferGateway organizationOwnerTransferGateway;
+  final OrganizationProjectMembershipAssignmentGateway
+  organizationProjectMembershipAssignmentGateway;
   final ManagementReportExportDelivery managementReportExportDelivery;
   final CurrentRelationshipStageRepository currentRelationshipStageRepository;
   final DeviceReminderPreferenceStore deviceReminderPreferenceStore;
@@ -676,6 +681,8 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
         invitationGateway: widget.organizationDirectedAccountInvitationGateway,
         shareableJoinGateway: widget.organizationShareableJoinGateway,
         ownerTransferGateway: widget.organizationOwnerTransferGateway,
+        projectMembershipAssignmentGateway:
+            widget.organizationProjectMembershipAssignmentGateway,
         appSession: widget.appSession,
       ),
     );
