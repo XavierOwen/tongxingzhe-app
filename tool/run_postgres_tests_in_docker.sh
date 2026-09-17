@@ -739,6 +739,7 @@ docker run \
        dist/test/organization-owner-transfer.integration.js \
        dist/test/organization-project-membership-assignment.integration.js \
        dist/test/organization-project-membership-assignment-http.integration.js \
+       dist/test/organization-join-project-assignment-http.integration.js \
        dist/test/personal-current-relationship-stage.integration.js \
        dist/test/personal-relationship-stage-change-summary.integration.js \
        dist/test/personal-follow-up-consent-ratio.integration.js \
