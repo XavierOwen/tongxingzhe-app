@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import {randomUUID} from "node:crypto";
+import {randomInt, randomUUID} from "node:crypto";
 import {readFileSync} from "node:fs";
 import {Pool} from "pg";
 import test from "node:test";
+import {setTimeout as delay} from "node:timers/promises";
 
 import {
   handleOrganizationOwnerTransfer,
@@ -147,6 +148,163 @@ const ownerTransferFactsQuery = `SELECT jsonb_build_object(
   'audits', (SELECT coalesce(jsonb_agg(to_jsonb(e) ORDER BY e.organization_owner_transfer_audit_event_id), '[]')
     FROM app_private.organization_owner_transfer_audit_events e WHERE e.organization_workspace_id = $1::uuid)
 ) AS facts`;
+
+test("0086 side-effect scope still detects fixture-related generated facts", async (t) => {
+  const pool = new Pool({connectionString: databaseUrl});
+  const client = await pool.connect();
+  const marker = "DO $failure_counts$";
+  try {
+    assert.equal(fixture.split(marker).length, 2);
+    for (const [fact, statement] of [
+      ["owner", `INSERT INTO app_data.organization_owner_assignments VALUES
+        (gen_random_uuid(), '00000000-0086-2100-0000-000000000006', transaction_timestamp(), NULL);`],
+      ["claim actor selector", `INSERT INTO app_private.organization_owner_transfer_request_claims
+        SELECT gen_random_uuid(), '00000000-0086-0000-0000-000000000006', gen_random_uuid(),
+          gen_random_uuid(), previous_owner_assignment_id, organization_owner_assignment_id, effective_at_utc
+        FROM app_private.organization_owner_transfer_request_claims
+        WHERE request_id = '00000000-0086-3000-0000-000000000001';`],
+      ["tombstone request selector", `INSERT INTO app_private.organization_owner_transfer_request_tombstones VALUES
+        ('organization-owner-transfer:v1', '00000000-0086-3000-0000-000000000099');`],
+      ["audit owner lineage", `INSERT INTO app_private.organization_owner_transfer_audit_events
+        SELECT gen_random_uuid(), owner_transfer_contract_id, gen_random_uuid(), gen_random_uuid(),
+          previous_owner_assignment_id, organization_owner_assignment_id, effective_at_utc
+        FROM app_private.organization_owner_transfer_audit_events
+        WHERE request_id = '00000000-0086-3000-0000-000000000001';`],
+      ["membership", `INSERT INTO app_data.organization_memberships VALUES
+        (gen_random_uuid(), '00000000-0086-2000-0000-000000000004',
+          '00000000-0086-0000-0000-000000000001', transaction_timestamp(), NULL);`],
+      ["project membership", `INSERT INTO app_data.project_memberships VALUES
+        (gen_random_uuid(), '00000000-0086-2100-0000-000000000005',
+          '00000000-0086-2300-0000-000000000002', transaction_timestamp(), NULL);`],
+      ["capability", `INSERT INTO app_data.management_report_capability_grants VALUES
+        (gen_random_uuid(), '00000000-0086-2400-0000-000000000003',
+          'release_management_reports', transaction_timestamp(), NULL);`],
+    ]) {
+      await t.test(fact!, async () => {
+        assert.ok(statement);
+        await client.query("BEGIN");
+        try {
+          await assert.rejects(client.query(fixture.replace(marker, `${statement}\n${marker}`)),
+            (error: unknown) => error instanceof Error
+              && (error as Error & {code?: string}).code === "P0001"
+              && error.message.startsWith("0086 failed transfer wrote partial facts:"));
+        } finally {
+          await client.query("ROLLBACK");
+        }
+      });
+    }
+  } finally {
+    client.release();
+    await pool.end();
+  }
+});
+
+test("0086 side-effect assertions ignore unrelated commits between their before/after snapshots", {timeout: 45_000}, async (t) => {
+  const pool = new Pool({connectionString: databaseUrl, max: 2, connectionTimeoutMillis: 5_000});
+  const client = await pool.connect();
+  const holder = await pool.connect();
+  try {
+    const fixturePid = (await client.query<{pid: number}>("SELECT pg_backend_pid() AS pid")).rows[0]?.pid;
+    const holderPid = (await holder.query<{pid: number}>("SELECT pg_backend_pid() AS pid")).rows[0]?.pid;
+    assert.ok(fixturePid && holderPid && fixturePid !== holderPid);
+    for (const [stage, marker] of [
+      ["exact replay", "DO $first_transfer$"],
+      ["failure", "DO $failure_counts$"],
+      ["detached replay", "DO $detached_replay_counts$"],
+    ]) {
+      await t.test(`${stage} scope`, async () => {
+        assert.ok(marker);
+        const barrierKey = randomInt(1, 2_147_483_647);
+        assert.equal(fixture.split(marker).length, 2, "assertion barrier marker is unique");
+        const controlledFixture = fixture.replace(marker,
+          `SELECT pg_advisory_xact_lock(${barrierKey}, 86);\n${marker}`);
+        let fixtureResult: Promise<unknown> | undefined;
+        let settled = false;
+        try {
+          // Establish an older owner before the later transfer transaction.
+          const ownerId = randomUUID();
+          const targetId = randomUUID();
+          const targetMembershipId = randomUUID();
+          await holder.query("BEGIN");
+          await holder.query("INSERT INTO app_data.app_users(app_user_id, status) VALUES ($1::uuid, 'active'), ($2::uuid, 'active')", [ownerId, targetId]);
+          const organization = (await holder.query<{organization_workspace_id: string; organization_membership_id: string}>(
+            "SELECT * FROM app_private.create_organization_v1($1::uuid, $2::uuid, 'unrelated transfer scope regression')",
+            [ownerId, randomUUID()],
+          )).rows[0];
+          assert.ok(organization);
+          await holder.query(`INSERT INTO app_data.organization_memberships(organization_membership_id,
+            organization_workspace_id, app_user_id, active_from_utc)
+            VALUES ($1::uuid, $2::uuid, $3::uuid, transaction_timestamp())`,
+          [targetMembershipId, organization.organization_workspace_id, targetId]);
+          await holder.query("COMMIT");
+          await holder.query("BEGIN");
+          await holder.query("SET LOCAL statement_timeout = '10s'");
+          await holder.query("SELECT pg_advisory_xact_lock($1::integer, 86)", [barrierKey]);
+          await client.query("BEGIN");
+          await client.query("SET LOCAL statement_timeout = '10s'");
+          fixtureResult = client.query(controlledFixture).then(
+            () => { settled = true; return undefined; },
+            (error: unknown) => { settled = true; return error; },
+          );
+          const deadline = performance.now() + 5_000;
+          let exactWait = false;
+          do {
+            exactWait = (await holder.query<{waiting: boolean}>(`SELECT EXISTS (
+              SELECT 1 FROM pg_locks AS waiting JOIN pg_locks AS held
+                USING(locktype, database, classid, objid, objsubid)
+              WHERE waiting.locktype = 'advisory' AND waiting.pid = $1::integer AND NOT waiting.granted
+                AND held.pid = $2::integer AND held.granted
+                AND waiting.classid = $3::oid AND waiting.objid = 86 AND waiting.objsubid = 2
+                AND $2::integer = ANY(pg_blocking_pids($1::integer))
+            ) AS waiting`, [fixturePid, holderPid, barrierKey])).rows[0]?.waiting === true;
+            if (exactWait) break;
+            if (settled) {
+              assert.ifError(await fixtureResult);
+              assert.fail("fixture completed before reaching the exact assertion barrier");
+            }
+            await delay(10);
+          } while (performance.now() < deadline);
+          assert.equal(exactWait, true, "exact fixture PID/advisory key must wait on the holder PID before its commit");
+
+          await holder.query("SELECT * FROM app_private.transfer_organization_owner_v1($1::uuid, $2::uuid, $3::uuid, $4::uuid)",
+            [ownerId, randomUUID(), organization.organization_workspace_id, targetMembershipId]);
+          await holder.query("INSERT INTO app_private.organization_owner_transfer_request_tombstones(claim_family, request_id) VALUES ('organization-owner-transfer:v1', $1::uuid)", [randomUUID()]);
+          const extraUserId = randomUUID();
+          await holder.query("INSERT INTO app_data.app_users(app_user_id, status) VALUES ($1::uuid, 'active')", [extraUserId]);
+          await holder.query(`INSERT INTO app_data.organization_memberships(organization_membership_id,
+            organization_workspace_id, app_user_id, active_from_utc)
+            VALUES ($1::uuid, $2::uuid, $3::uuid, transaction_timestamp())`,
+          [randomUUID(), organization.organization_workspace_id, extraUserId]);
+          const projectId = randomUUID();
+          const projectMembershipId = randomUUID();
+          await holder.query("INSERT INTO app_data.projects(project_id, workspace_id, display_name) VALUES ($1::uuid, $2::uuid, 'unrelated transfer scope project')",
+            [projectId, organization.organization_workspace_id]);
+          await holder.query(`INSERT INTO app_data.project_memberships(project_membership_id,
+            organization_membership_id, project_id, active_from_utc)
+            VALUES ($1::uuid, $2::uuid, $3::uuid, transaction_timestamp())`,
+          [projectMembershipId, organization.organization_membership_id, projectId]);
+          await holder.query(`INSERT INTO app_data.management_report_capability_grants(capability_grant_id,
+            project_membership_id, capability_id, active_from_utc)
+            VALUES ($1::uuid, $2::uuid, 'view_anonymous_analytics', transaction_timestamp())`,
+          [randomUUID(), projectMembershipId]);
+          // The commit makes all seven unrelated fact sets visible under RC
+          // and releases the exact barrier, rather than guessing elapsed time.
+          await holder.query("COMMIT");
+          process.stdout.write(`Owner transfer fixture scope: ${stage} fixture PID ${fixturePid} waited on holder PID ${holderPid}, advisory ${barrierKey}/86, before unrelated commit\n`);
+          assert.ifError(await fixtureResult);
+        } finally {
+          await holder.query("ROLLBACK");
+          if (fixtureResult !== undefined) await fixtureResult;
+          await client.query("ROLLBACK");
+        }
+      });
+    }
+  } finally {
+    holder.release(true);
+    client.release(true);
+    await pool.end();
+  }
+});
 
 for (const scenario of ["target parent starts", "actor becomes owner"] as const) {
   test(`owner transfer effective-time qualification: ${scenario} during implicit bridge lock wait`, async () => {
