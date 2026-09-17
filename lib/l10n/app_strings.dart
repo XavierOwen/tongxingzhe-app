@@ -1798,14 +1798,14 @@ const Map<String, Map<String, String>> _strings = {
         'Application ID (UUID)',
     'organizationShareableApprovalInvalidApplication':
         'Enter a valid application UUID.',
-    'organizationShareableApprovalReview': 'Review this approval',
+    'organizationShareableApprovalReview': 'Review',
     'organizationShareableApprovalConfirmHelp':
         'Check the organization and application ID. Confirm the applicant '
         'through the original channel; the app cannot identify them from '
         'the ID alone. Only a current organization owner can approve. '
         'Approval creates an ordinary organization membership only.',
-    'organizationShareableApprovalApprove': 'Confirm approval',
-    'organizationShareableApprovalEdit': 'Use another application ID',
+    'organizationShareableApprovalApprove': 'Approve',
+    'organizationShareableApprovalEdit': 'Change ID',
     'organizationShareableApprovalRetry': 'Retry this approval',
     'organizationShareableApprovalSubmitting': 'Approving application…',
     'organizationShareableApprovalSuccess':

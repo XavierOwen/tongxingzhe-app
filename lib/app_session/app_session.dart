@@ -228,7 +228,11 @@ final class AppSession {
             _publish(
               AppSessionSnapshot(
                 stage: AppSessionStage.ready,
-                identity: identity,
+                identity:
+                    _current.identity?.principal?.externalSubject ==
+                        identity.principal?.externalSubject
+                    ? _current.identity
+                    : identity,
                 context: context,
                 availableContexts: _withCurrent(context, availableContexts),
               ),
@@ -267,7 +271,11 @@ final class AppSession {
         _publish(
           AppSessionSnapshot(
             stage: AppSessionStage.ready,
-            identity: identity,
+            identity:
+                _current.identity?.principal?.externalSubject ==
+                    identity.principal?.externalSubject
+                ? _current.identity
+                : identity,
             context: context,
             availableContexts: _withCurrent(context, availableContexts),
           ),
@@ -287,6 +295,24 @@ final class AppSession {
       return _lastIdentityWork;
     }
     _lastIdentityKey = identityKey;
+    final subject = identity.principal?.externalSubject;
+    if (_current.stage == AppSessionStage.ready &&
+        !_current.fromOfflineCache &&
+        _current.identity?.stage == IdentityStage.signedIn &&
+        identity.stage == IdentityStage.signedIn &&
+        subject != null &&
+        _current.identity?.principal?.externalSubject == subject) {
+      // 同次登录的 token 元数据更新不是新登录，也不延长离线 PII 授权。
+      _publish(
+        AppSessionSnapshot(
+          stage: AppSessionStage.ready,
+          identity: identity,
+          context: _current.context,
+          availableContexts: _current.availableContexts,
+        ),
+      );
+      return;
+    }
     final work = _resolveIdentity(identity);
     _lastIdentityWork = work;
     return work;

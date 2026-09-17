@@ -279,6 +279,44 @@ void main() {
     expect(find.text('另一个组织'), findsNothing);
   });
 
+  testWidgets('同一登录 token 刷新保留进行中的批准意图与回执', (tester) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final pending =
+        Completer<OrganizationShareableJoinApplicationApproveResult>();
+    final gateway = _Gateway([pending]);
+    await _open(tester, fixture.session, gateway);
+    await tester.enterText(_field, _applicationId);
+    await tester.tap(_review);
+    await tester.pumpAndSettle();
+    await tester.tap(_submit);
+    await tester.pump();
+
+    final identity = fixture.identity.current;
+    fixture.identity.emit(
+      IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: identity.principal,
+        expiresAt: identity.expiresAt!.add(const Duration(hours: 1)),
+      ),
+    );
+    await tester.pump();
+    expect(find.text(_applicationId), findsOneWidget);
+    expect(_submit, findsOneWidget);
+    expect(tester.widget<FilledButton>(_submit).onPressed, isNull);
+    pending.complete(
+      OrganizationShareableJoinApplicationApproveSuccess(_receipt),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text(_receipt.organizationMembershipId), findsOneWidget);
+    expect(gateway.calls, [
+      (applicationId: _applicationId, organizationWorkspaceId: _organizationId),
+    ]);
+    expect(fixture.context.selectCalls, 0);
+    expect(gateway.closed, isFalse);
+  });
+
   for (final aba in [false, true]) {
     testWidgets('${aba ? 'ABA' : '切账号'} 清空敏感状态并隔离迟到审批回执', (tester) async {
       final fixture = await _Fixture.create();
@@ -364,6 +402,43 @@ void main() {
       expect(size.height, greaterThanOrEqualTo(48));
     }
   });
+
+  for (final locale in ['zh', 'en']) {
+    testWidgets('$locale 软键盘与 200% 字号保留完整输入区', (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 283);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetViewInsets);
+      await _open(
+        tester,
+        fixture.session,
+        _Gateway([]),
+        locale: locale,
+        textScaler: const TextScaler.linear(2),
+      );
+      await tester.enterText(_field, _applicationId);
+      await tester.ensureVisible(_field);
+      await tester.pumpAndSettle();
+      final viewport = find.ancestor(
+        of: _field,
+        matching: find.byType(SingleChildScrollView),
+      );
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.getSize(viewport).height,
+        greaterThanOrEqualTo(tester.getSize(_field).height),
+      );
+      for (final action in [_close, _review]) {
+        final rect = tester.getRect(action);
+        expect(rect.bottom, lessThanOrEqualTo(568 - 283));
+        expect(rect.height, greaterThanOrEqualTo(48));
+      }
+    });
+  }
 
   for (final locale in ['zh', 'en']) {
     testWidgets('$locale 320x568 / 200% 全阶段无溢出且状态可达', (tester) async {
