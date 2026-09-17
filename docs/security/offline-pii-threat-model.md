@@ -1,6 +1,6 @@
 # 离线推广对象资料威胁模型
 
-状态：截至 2026-09-07，包含 Slice 7Y 的请求作用域保护与 7Z 的成员退出前条件清除。
+状态：截至 2026-09-17，包含 Slice 7Y 的请求作用域保护、7Z 的成员退出前条件清除，以及 Android 模拟器预检的证据边界。
 
 适用需求：`PII-002`、`PII-003`、`AUTHZ-006`、`TEST-006`
 
@@ -81,3 +81,5 @@ AppSession 在在线上下文失去 PII 查看能力时持久锁定旧快照，�
 [`drift_offline_pii_lock_store_test.dart`](../../test/privacy/drift_offline_pii_lock_store_test.dart) 直接检查普通 Drift 中没有身份 subject、姓名、电话或邮箱。[`secure_value_store_capability_probe_test.dart`](../../test/privacy/secure_value_store_capability_probe_test.dart) 固定安全存储探针的写、读、删合同。
 
 这些自动测试使用可控存储接缝，不是六平台运行时证据。各平台的真实结果和未验证项以[六平台能力证据矩阵](../spikes/six-platform-capability-matrix.md)为准。人工验证矩阵由 [Issue #161](https://github.com/XavierOwen/tongxingzhe-app/issues/161) 跟踪。
+
+2026-09-17，现有 synthetic 探针在 Android 16／API 36 模拟器中实际使用生产 Vault、平台安全存储和 Drift，三个独立进程完成九种 scenario，结果全部为 `simulated`。跨进程恢复保留首次授权／到期时间；模拟删除失败后的持久锁在新进程中仍阻止读取，重试删除后仍锁定。原始脱敏 JSON、环境与限制见[证据矩阵](../spikes/six-platform-capability-matrix.md#2026-09-17-android-模拟器离线-pii-预检)。期限使用 synthetic 授权时间，撤权由探针模拟，删除失败为一次受控注入；没有真实账号、服务器撤权、硬件安全性、备份或实际七十二小时运行证明，不改变 #161 的人工验收状态。

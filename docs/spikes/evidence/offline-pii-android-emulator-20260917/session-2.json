@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "platform": "android",
+  "osVersion": "Android 16 API36",
+  "flutterVersion": "3.44.2",
+  "commit": "f98d07452b598e364d055c2d41940b13d82f8252",
+  "runId": "probe-20260917-android-01",
+  "environment": "android-emulator",
+  "signing": "simulator",
+  "evidenceClass": "simulated",
+  "events": [
+    {
+      "recordedAtUtc": "2026-09-17T16:39:37.269456Z",
+      "scenario": "platformGate",
+      "outcome": "pass",
+      "evidenceClass": "simulated",
+      "reason": "secureStorageAndDatabaseAvailable"
+    },
+    {
+      "recordedAtUtc": "2026-09-17T16:39:46.237977Z",
+      "scenario": "crossProcessRecovery",
+      "outcome": "pass",
+      "evidenceClass": "simulated",
+      "reason": "recoveredWithoutRenewal",
+      "authorizedAtUtc": "2026-09-17T16:38:34.299228Z",
+      "expiresAtUtc": "2026-09-20T16:38:34.299228Z"
+    },
+    {
+      "recordedAtUtc": "2026-09-17T16:40:35.622096Z",
+      "scenario": "nearExpiry",
+      "outcome": "pass",
+      "evidenceClass": "simulated",
+      "reason": "readableBeforeExpiry",
+      "authorizedAtUtc": "2026-09-14T16:41:35.426397Z",
+      "expiresAtUtc": "2026-09-17T16:41:35.426397Z"
+    },
+    {
+      "recordedAtUtc": "2026-09-17T16:41:30.871497Z",
+      "scenario": "expiry",
+      "outcome": "pass",
+      "evidenceClass": "simulated",
+      "reason": "expiredAndLocked",
+      "lockReason": "expired"
+    },
+    {
+      "recordedAtUtc": "2026-09-17T16:42:03.703679Z",
+      "scenario": "authorizationRevocation",
+      "outcome": "pass",
+      "evidenceClass": "simulated",
+      "reason": "authorizationRevokedAndDeleted",
+      "lockReason": "unauthorized",
+      "deletionResult": "deleted"
+    },
+    {
+      "recordedAtUtc": "2026-09-17T16:42:42.868239Z",
+      "scenario": "revocationDeleteFailure",
+      "outcome": "pass",
+      "evidenceClass": "simulated",
+      "reason": "deletionPendingAndLocked",
+      "lockReason": "signedOut",
+      "deletionResult": "pending"
+    }
+  ]
+}

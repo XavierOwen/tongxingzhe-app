@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "platform": "android",
+  "osVersion": "Android 16 API36",
+  "flutterVersion": "3.44.2",
+  "commit": "f98d07452b598e364d055c2d41940b13d82f8252",
+  "runId": "probe-20260917-android-01",
+  "environment": "android-emulator",
+  "signing": "simulator",
+  "evidenceClass": "simulated",
+  "events": [
+    {
+      "recordedAtUtc": "2026-09-17T16:36:52.099024Z",
+      "scenario": "platformGate",
+      "outcome": "pass",
+      "evidenceClass": "simulated",
+      "reason": "secureStorageAndDatabaseAvailable"
+    },
+    {
+      "recordedAtUtc": "2026-09-17T16:38:34.783475Z",
+      "scenario": "writeRead",
+      "outcome": "pass",
+      "evidenceClass": "simulated",
+      "reason": "savedAndReadable",
+      "authorizedAtUtc": "2026-09-17T16:38:34.299228Z",
+      "expiresAtUtc": "2026-09-20T16:38:34.299228Z"
+    }
+  ]
+}
