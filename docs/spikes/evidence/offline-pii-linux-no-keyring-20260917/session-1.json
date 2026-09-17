@@ -1,0 +1,20 @@
+{
+  "commit": "567c613b2e90f9f56a8e7e697c521b565ca75c36",
+  "environment": "native-host",
+  "events": [
+    {
+      "evidenceClass": "unsupported",
+      "outcome": "unsupported",
+      "reason": "sensitiveStorageDisabled",
+      "recordedAtUtc": "2026-09-17T17:40:32.760306Z",
+      "scenario": "platformGate"
+    }
+  ],
+  "evidenceClass": "unsupported",
+  "flutterVersion": "3.44.2",
+  "osVersion": "Linux 6.17.0-1022-azure",
+  "platform": "linux",
+  "runId": "7bs-linux-no-keyring-567c613b2e90",
+  "schemaVersion": 1,
+  "signing": "not-applicable"
+}

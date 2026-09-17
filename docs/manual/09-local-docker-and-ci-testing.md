@@ -23,10 +23,12 @@
 
 GitHub Actions
 ├── 重复 Flutter、Backend 和 PostgreSQL 检查
-└── 分别在 Linux、macOS 和 Windows runner 构建六个平台
+└── 分别在 Linux、macOS 和 Windows runner 构建六个平台；Linux 另运行隔离的无 keyring GTK 探针
 ```
 
 Flutter 的设备数据库是 Drift／SQLite。它随 `flutter test` 在测试进程中运行。PostgreSQL 是 Backend 的共享事务数据库。两者不是同一个数据库，也不能用一边的测试代替另一边。
+
+Linux 的额外检查复用现有 platform job，不增加长期 runner。真实 GTK UI 复制的 JSON 必须证明缺少 Secret Service 时敏感存储保持禁用，且本轮 Documents 未生成数据库。它不使用 fake-store，也不验证可用 keyring 的成功路径；隔离方法和验收边界见[第 8 章](08-promotion-target-directory-and-pii.md#用模拟器预检离线-pii)。
 
 ### 2.1 Docker 中的三个基本名词
 

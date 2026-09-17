@@ -1,6 +1,6 @@
 # 六平台能力证据矩阵
 
-状态：**持续更新；截至 2026-09-17，保留六平台 build 和已有 iOS／Web／macOS／Windows 认证运行时证据，新增 Android 模拟器离线 PII 预检与 Web 独立探针禁用观察。离线 PII 尚无平台运行时通过结论。**
+状态：**持续更新；截至 2026-09-17，保留六平台 build 和已有 iOS／Web／macOS／Windows 认证运行时证据，新增 Android 模拟器预检、Web 独立探针禁用观察与 Linux CI 无 keyring 禁用检查。离线 PII 尚无支持路径运行时通过结论。**
 
 适用需求：`GOAL-006`、`AUTH-004`、`PLATFORM-001` 至 `PLATFORM-007`、`TEST-006`
 
@@ -24,7 +24,7 @@
 | Web | CI／release build pass | pass；localhost 安全存储、OTP、刷新、跨浏览器进程恢复均有证据 | Web 持久化、刷新、崩溃和双标签待测 | 共享自动测试通过；浏览器持久化恢复待测 | 当前禁用；独立探针四阶段观察为 `unsupported`，durable database 仍为 `runtimeProbeRequired` | 未验收 | auth runtime pass；PII disabled probe observed |
 | macOS | CI pass；签名 debug pass | pass；Keychain、OTP、刷新、跨进程恢复均有证据 | 只有共享 migration 自动测试，平台持久化待测 | 共享自动测试通过；设备重启恢复待测 | 实现和启动探针已接线；离线 PII 专用流程待测 | 未验收 | auth runtime pass |
 | Windows | CI pass；Windows 11 25H2／Flutter 3.44.9 本机 debug pass | pass；Windows 安全存储、注册／恢复 OTP、刷新、改密码、跨独立进程 session 恢复和登出均有证据 | 只有共享 migration 自动测试，平台持久化待测 | 共享自动测试通过；设备重启恢复待测 | 实现和启动探针已接线；Windows 安全存储基础运行时 pass，离线 PII 专用流程待测 | 未验收 | auth runtime pass |
-| Linux | CI pass | 待测；libsecret／keyring 待测 | 只有共享 migration 自动测试，平台持久化待测 | 共享自动测试通过；设备重启恢复待测 | 实现和启动探针已接线；libsecret／keyring 运行时待测 | 未验收 | build only |
+| Linux | CI pass | 待测；libsecret／keyring 待测 | 只有共享 migration 自动测试，平台持久化待测 | 共享自动测试通过；设备重启恢复待测 | 受控 CI 无 keyring 门禁为 `unsupported`；可用 keyring 与专用流程待测 | 未验收 | build pass；PII disabled path observed without keyring |
 
 认证逐步证据和测试环境见 [Supabase Auth 六平台 Spike](./supabase-auth-six-platform.md)。离线对象资料的信任边界和残余风险见[威胁模型](../security/offline-pii-threat-model.md)。共享 Drift schema 和 migration 测试证明代码路径可重建旧库，但在每个平台完成关闭进程、重新打开和持久化探针前，不能把“测试通过”扩大为平台 runtime 通过。
 
@@ -50,13 +50,25 @@
 
 ### 2026-09-17 Web 独立探针禁用观察
 
-现有独立探针以 release-web 编译，在 macOS 26.6.2／Headless Chrome 150.0.7871.187 中运行；代码为 `fceff0d8dbd51a8222a170cd91dd55e5d2a336ba`，轮次为 `probe-20260917-web-01`。该入口及两个能力／记录模块与合并后的 `049c3ba` 内容相同。使用新建、无账号的临时 browser profile，仅访问本地测试 origin `http://127.0.0.1:53937`，不操作用户已登录浏览器或系统 Clipboard。
+现有独立探针以 release-web 编译，在 macOS 26.6.2／Headless Chrome 150.0.7871.187 中运行；代码为 `fceff0d8dbd51a8222a170cd91dd55e5d2a336ba`，轮次为 `probe-20260917-web-01`。该入口及两个能力／记录模块与合并后的 `049c3ba` 内容相同。
+
+使用新建、无账号的临时 browser profile，仅访问本地测试 origin `http://127.0.0.1:53937`，不操作用户已登录浏览器或系统 Clipboard。
 
 首次打开、在线刷新、同 profile 的独立浏览器进程重开，以及已加载页面断网后，都实际显示 `unsupported`／`sensitiveStorageDisabled`，七个阶段按钮禁用。旧浏览器 PID 24017 完全退出后，新进程 PID 25027 才重新访问同一 origin。四次观察中的 localStorage、sessionStorage、IndexedDB、Cache Storage 和 Service Worker 列表均为空；断网同时确认 `navigator.onLine=false` 和禁止缓存的真实 fetch 失败。
 
 [浏览器观察快照](./evidence/offline-pii-web-disabled-20260917/observations.json) 保留时间、版本、进程和上述存储状态。这是浏览器 Accessibility／Storage API 的指定时刻观察，不是探针 recorder 的原始事件导出，也不是全 profile 文件扫描。截图与原始观察日志在本轮隔离验证目录留存；没有读取 Clipboard 来导出资料。
 
 这个入口不连接 Backend，没有真实身份或 PII 输入。原生写读、期限、撤权和删除重试在当前 Web 门禁下为 `not_applicable`。本次不能证明整款产品所有页面均无持久 PII，也没有证明断网刷新时应用资源可加载、Web durable database 已通过、支持路径或真人可访问性。#161 的完整产品验收保持待测。
+
+### 2026-09-17 Linux CI 无 keyring 禁用检查
+
+现有 Linux platform job 保留正常 App build 后，再编译并启动同一独立 GTK 探针。环境为 GitHub-hosted Ubuntu 24.04 x64、Linux `6.17.0-1022-azure`、Flutter 3.44.2、debug bundle；环境与签名分类分别为 `native-host`／`not-applicable`。实际 checkout 为 PR 的生成合并 commit `567c613b2e90f9f56a8e7e697c521b565ca75c36`，轮次为 `7bs-linux-no-keyring-567c613b2e90`，不是把本机 macOS 或 PR branch SHA 冒充 Linux 执行环境。
+
+[`run_linux_offline_pii_disabled_probe.sh`](../../tool/run_linux_offline_pii_disabled_probe.sh) 新建 Xvfb 和禁止服务激活的独立 D-Bus session。启动前后都要求 `org.freedesktop.secrets` 无 owner，且 StartServiceByName 返回 ServiceUnknown。真实安全存储 capability probe 因此不可用；既有入口记录唯一 `platformGate=unsupported`／`sensitiveStorageDisabled`，在打开 Drift 和 Vault 前返回。
+
+脚本等待自己的可见 GTK 窗口，以键盘触发现有 UI 复制按钮，只读取这个新 DISPLAY 的 Clipboard。严格字段、实际 SHA、版本与近期 UTC 检查通过之后才输出[原始 allowlist JSON](./evidence/offline-pii-linux-no-keyring-20260917/session-1.json)。本轮还确认 `xdg-user-dir DOCUMENTS` 精确指向独立任务目录，且 `tongxingzhe_local.sqlite` 和 WAL／SHM／journal 均未生成；不更改 HOME，不扫描用户文件。
+
+[真实 Linux job](https://github.com/XavierOwen/tongxingzhe-app/actions/runs/35253881571/job/105312801857) 的 native 步骤于 17:40:34 UTC 完成，exit 0。该结果只证明受控 CI session 中这个入口的无 keyring 禁用路径，不证明可用 keyring、PII 成功存储、真实 Auth、整个产品、硬件安全、视觉／真人可访问性或 Linux 发布验收。首次脚本运行曾因 D-Bus 参数错误 exit 127，修正新 head 后才取得本次结果；不把首次失败改写为成功。#161 和 #6 保持开放。
 
 ## 公开发布前必须补齐
 

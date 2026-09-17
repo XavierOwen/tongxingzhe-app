@@ -350,6 +350,10 @@ flutter run \
   --dart-define=OFFLINE_PII_PROBE_SIGNING=not-applicable
 ```
 
+CI 的 Linux job 在保留原 App build 后，执行 [`run_linux_offline_pii_disabled_probe.sh`](../../tool/run_linux_offline_pii_disabled_probe.sh) 的无 keyring 检查。它启动独立 Xvfb 与禁止服务激活的 D-Bus session，不操作用户显示或 Clipboard，不更改 HOME。新 XDG 配置把 Documents 指向本轮目录。
+
+检查必须取得真实 GTK 窗口，通过现有复制按钮读取原始 allowlist JSON，严格匹配实际 checkout SHA、Flutter 3.44.2 和唯一的 `unsupported`／`sensitiveStorageDisabled` 门禁事件。启动前后确认 Secret Service 无 owner 且不能激活，同时检查精确的 `Documents/tongxingzhe_local.sqlite` 及 sidecar 均未生成。只有这些检查通过，才登记这个受控环境的禁用路径；不能登记 Linux 支持路径、真实 Auth 或 #161 发布验收通过。
+
 ### 按阶段操作
 
 1. 点击“写入并读回 synthetic 快照”。
