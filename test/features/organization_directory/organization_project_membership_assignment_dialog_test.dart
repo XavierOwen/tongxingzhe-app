@@ -12,6 +12,150 @@ import 'package:tongxingzhe_app/l10n/app_strings.dart';
 import 'package:tongxingzhe_app/organization_project_membership_assignment/organization_project_membership_assignment.dart';
 
 void main() {
+  for (final locale in ['zh', 'en']) {
+    testWidgets(
+      '$locale fixed target 320x568 / 200% safe IME keeps input outline and 48dp actions reachable',
+      (tester) async {
+        final fixture = await _Fixture.create();
+        addTearDown(fixture.close);
+        _smallViewport(tester, ime: true);
+        final gateway = _Gateway([]);
+        await _open(
+          tester,
+          fixture.session,
+          gateway,
+          locale: locale,
+          fixedTargetMembershipId: _targetId,
+          textScaler: const TextScaler.linear(2),
+        );
+        expect(_targetField, findsNothing);
+        await tester.enterText(_projectField, _projectId);
+        await tester.ensureVisible(_projectField);
+        await tester.pumpAndSettle();
+        final viewport = find.ancestor(
+          of: _projectField,
+          matching: find.byType(SingleChildScrollView),
+        );
+        expect(
+          tester.getSize(viewport).height,
+          greaterThanOrEqualTo(tester.getSize(_projectField).height),
+        );
+        for (final action in [_close, _review]) {
+          _expectTarget(tester, action);
+          expect(tester.getRect(action).bottom, lessThanOrEqualTo(568 - 307));
+        }
+        await tester.tap(_review);
+        await tester.pumpAndSettle();
+        expect(gateway.calls, isEmpty);
+        expect(find.text(_targetId), findsOneWidget);
+        expect(find.text(_projectId), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'fixed receipt target is readonly, survives edit and creates one fixed retry intent',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      var generated = 0;
+      final gateway = _Gateway([
+        const OrganizationProjectMembershipAssignmentRejected(
+          OrganizationProjectMembershipAssignmentFailureCode.networkUnavailable,
+        ),
+        OrganizationProjectMembershipAssignmentSuccess(_receipt()),
+      ]);
+      await _open(
+        tester,
+        fixture.session,
+        gateway,
+        fixedTargetMembershipId: _targetId.toUpperCase(),
+        requestIdGenerator: () {
+          generated++;
+          return _requestId;
+        },
+      );
+      expect(_targetField, findsNothing);
+      expect(find.text(_targetId), findsOneWidget);
+      expect(gateway.calls, isEmpty);
+      await tester.enterText(_projectField, _projectId.toUpperCase());
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(gateway.calls, isEmpty);
+      expect(generated, 0);
+      await tester.tap(_edit);
+      await tester.pumpAndSettle();
+      expect(_targetField, findsNothing);
+      expect(find.text(_targetId), findsOneWidget);
+      await tester.tap(_review);
+      await tester.pumpAndSettle();
+      await tester.tap(_submit);
+      await tester.pumpAndSettle();
+      expect(_uncertain, findsOneWidget);
+      await tester.tap(_submit);
+      await tester.pumpAndSettle();
+      expect(generated, 1);
+      expect(gateway.calls, [_intent, _intent]);
+      expect(gateway.closed, isFalse);
+    },
+  );
+
+  testWidgets(
+    'fixed target snapshot ignores widget replacement and same-account project changes',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final organization = ValueNotifier(_organizationId);
+      final target = ValueNotifier(_targetId);
+      addTearDown(organization.dispose);
+      addTearDown(target.dispose);
+      final gateway = _Gateway([
+        OrganizationProjectMembershipAssignmentSuccess(_receipt()),
+      ]);
+      await _open(
+        tester,
+        fixture.session,
+        gateway,
+        organizations: organization,
+        fixedTargets: target,
+      );
+      target.value = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+      organization.value = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+      await fixture.session.selectProject('project-b');
+      await tester.pumpAndSettle();
+      expect(find.text(_targetId), findsOneWidget);
+      expect(find.text(target.value), findsNothing);
+      await tester.enterText(_projectField, _projectId);
+      await tester.tap(_review);
+      await tester.pumpAndSettle();
+      await tester.tap(_submit);
+      await tester.pumpAndSettle();
+      expect(gateway.calls, [_intent]);
+    },
+  );
+
+  testWidgets(
+    'invalid fixed target fails local review without token or assign',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final gateway = _Gateway([]);
+      await _open(
+        tester,
+        fixture.session,
+        gateway,
+        fixedTargetMembershipId: ' $_targetId',
+      );
+      await tester.enterText(_projectField, _projectId);
+      await tester.tap(_review);
+      await tester.pumpAndSettle();
+      expect(find.text(_text('InvalidTargetMembership')), findsOneWidget);
+      expect(gateway.calls, isEmpty);
+      expect(_targetField, findsNothing);
+    },
+  );
+
   testWidgets(
     'review/edit never creates request; explicit assign and retry retain exact four-selector intent',
     (tester) async {
@@ -728,6 +872,8 @@ Future<void> _open(
   ValueNotifier<String>? organizations,
   TextScaler textScaler = TextScaler.noScaling,
   String Function()? requestIdGenerator,
+  String? fixedTargetMembershipId,
+  ValueNotifier<String>? fixedTargets,
 }) async {
   Widget dialog(String organization) =>
       OrganizationProjectMembershipAssignmentDialog(
@@ -736,6 +882,8 @@ Future<void> _open(
         gateway: gateway,
         appSession: session,
         requestIdGenerator: requestIdGenerator ?? () => _requestId,
+        fixedTargetOrganizationMembershipId:
+            fixedTargets?.value ?? fixedTargetMembershipId,
       );
   await tester.pumpWidget(
     MaterialApp(

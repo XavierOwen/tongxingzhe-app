@@ -95,6 +95,191 @@ void main() {
     });
   }
 
+  for (final pendingDirectory in [false, true]) {
+    testWidgets(
+      '${pendingDirectory ? '待审批目录' : '手工批准'}沿同一借用gateway进入固定成员项目安排，零自动操作',
+      (tester) async {
+        final fixture = await _Fixture.create();
+        addTearDown(fixture.close);
+        final directory = _Gateway([
+          OrganizationDirectorySuccess(const [_organizationA, _organizationB]),
+        ]);
+        final join = _ShareableJoinGateway(
+          directorySuccess: true,
+          approveSuccess: true,
+        );
+        const approvedMember = 'f1111111-1111-4111-8111-111111111111';
+        final assignment = _ProjectMembershipAssignmentGateway(
+          OrganizationProjectMembershipAssignmentReceipt(
+            projectMembershipAssignmentContractId:
+                _projectMembershipAssignmentReceipt
+                    .projectMembershipAssignmentContractId,
+            organizationWorkspaceId: _organizationB.organizationWorkspaceId,
+            projectId: _projectMembershipAssignmentReceipt.projectId,
+            organizationMembershipId: approvedMember,
+            projectMembershipId:
+                _projectMembershipAssignmentReceipt.projectMembershipId,
+            activeFromUtc: _projectMembershipAssignmentReceipt.activeFromUtc,
+            inactiveFromUtc: null,
+          ),
+        );
+        final initialContext = fixture.session.current.context;
+        await _open(
+          tester,
+          fixture.session,
+          directory,
+          shareableJoinGateway: join,
+          projectMembershipAssignmentGateway: assignment,
+        );
+        final entry = find.byKey(
+          ValueKey(
+            'organization-shareable-application-${pendingDirectory ? 'directory' : 'approve'}-${_organizationB.organizationWorkspaceId}',
+          ),
+        );
+        await tester.ensureVisible(entry);
+        await tester.tap(entry);
+        await tester.pumpAndSettle();
+        if (pendingDirectory) {
+          expect(
+            tester
+                .widget<OrganizationShareableJoinApplicationDirectoryDialog>(
+                  find.byType(
+                    OrganizationShareableJoinApplicationDirectoryDialog,
+                  ),
+                )
+                .projectMembershipAssignmentGateway,
+            same(assignment),
+          );
+          final select = find.byKey(
+            const ValueKey(
+              'organization-shareable-application-directory-review-$_shareableJoinApplicationId',
+            ),
+          );
+          await tester.ensureVisible(select);
+          await tester.tap(select);
+          await tester.pumpAndSettle();
+        }
+        final approval = find.byType(
+          OrganizationShareableJoinApplicationApproveDialog,
+        );
+        expect(
+          tester
+              .widget<OrganizationShareableJoinApplicationApproveDialog>(
+                approval,
+              )
+              .projectMembershipAssignmentGateway,
+          same(assignment),
+        );
+        final field = find.byKey(
+          const ValueKey('organization-shareable-approval-application-field'),
+        );
+        if (pendingDirectory) {
+          expect(
+            tester.widget<TextField>(field).controller!.text,
+            _shareableJoinApplicationId,
+          );
+        } else {
+          await tester.enterText(field, _shareableJoinApplicationId);
+        }
+        await tester.tap(
+          find.byKey(const ValueKey('organization-shareable-approval-review')),
+        );
+        await tester.pumpAndSettle();
+        expect(join.approveCalls, isEmpty);
+        await tester.tap(
+          find.byKey(const ValueKey('organization-shareable-approval-submit')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(
+            const ValueKey('organization-shareable-approval-assign-project'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final child = find.byType(
+          OrganizationProjectMembershipAssignmentDialog,
+        );
+        final childWidget = tester
+            .widget<OrganizationProjectMembershipAssignmentDialog>(child);
+        expect(childWidget.gateway, same(assignment));
+        expect(childWidget.fixedTargetOrganizationMembershipId, approvedMember);
+        expect(
+          childWidget.organizationWorkspaceId,
+          _organizationB.organizationWorkspaceId,
+        );
+        expect(assignment.calls, isEmpty);
+        expect(
+          find.byKey(
+            const ValueKey(
+              'organization-project-membership-assignment-target-field',
+            ),
+          ),
+          findsNothing,
+        );
+        await tester.enterText(
+          find.byKey(
+            const ValueKey(
+              'organization-project-membership-assignment-project-field',
+            ),
+          ),
+          _projectMembershipAssignmentReceipt.projectId,
+        );
+        await tester.tap(
+          find.byKey(
+            const ValueKey('organization-project-membership-assignment-review'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(assignment.calls, isEmpty);
+        await tester.tap(
+          find.byKey(
+            const ValueKey('organization-project-membership-assignment-submit'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(assignment.calls, hasLength(1));
+        expect(
+          assignment.calls.single.organizationWorkspaceId,
+          _organizationB.organizationWorkspaceId,
+        );
+        expect(
+          assignment.calls.single.targetOrganizationMembershipId,
+          approvedMember,
+        );
+        expect(
+          assignment.calls.single.projectId,
+          _projectMembershipAssignmentReceipt.projectId,
+        );
+        expect(
+          assignment.calls.single.requestId,
+          isNot(_shareableJoinApplicationId),
+        );
+        await tester.tap(
+          find.byKey(
+            const ValueKey('organization-project-membership-assignment-close'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.descendant(of: approval, matching: find.text(approvedMember)),
+          findsOneWidget,
+        );
+        await tester.tap(
+          find.byKey(const ValueKey('organization-shareable-approval-close')),
+        );
+        await tester.pumpAndSettle();
+        expect(directory.listCalls, 1);
+        expect(join.directoryCalls.length, pendingDirectory ? 1 : 0);
+        expect(join.approveCalls, hasLength(1));
+        expect(join.submitCalls, isEmpty);
+        expect(join.previewCalls, isEmpty);
+        expect(join.closed, isFalse);
+        expect(assignment.closeCalls, 0);
+        expect(fixture.session.current.context, initialContext);
+      },
+    );
+  }
+
   testWidgets('打开只读一次，按原顺序显示可选名称与完整 UUID', (tester) async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.close);

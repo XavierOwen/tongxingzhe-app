@@ -10,9 +10,235 @@ import 'package:tongxingzhe_app/features/organization_directory/organization_sha
 import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/l10n/app_strings.dart';
 import 'package:tongxingzhe_app/organization_directory/organization_directory.dart';
+import 'package:tongxingzhe_app/organization_project_membership_assignment/organization_project_membership_assignment.dart';
 import 'package:tongxingzhe_app/organization_shareable_join/organization_shareable_join.dart';
 
 void main() {
+  testWidgets(
+    'borrowed session closing clears parent history and child fixed selectors immediately',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final gateway = _Gateway([
+        OrganizationShareableJoinApplicationApproveSuccess(_receipt),
+      ]);
+      final assignment = _AssignmentGateway([]);
+      await _open(
+        tester,
+        fixture.session,
+        gateway,
+        assignmentGateway: assignment,
+      );
+      await tester.enterText(_field, _applicationId);
+      await tester.tap(_review);
+      await tester.pumpAndSettle();
+      await tester.tap(_submit);
+      await tester.pumpAndSettle();
+      await tester.tap(_assignProject);
+      await tester.pumpAndSettle();
+      await tester.runAsync(fixture.session.close);
+      await tester.pumpAndSettle();
+      expect(find.text(_receipt.organizationMembershipId), findsNothing);
+      expect(find.text(_organizationId), findsNothing);
+      expect(_assignProject, findsNothing);
+      await tester.tap(_assignmentClose);
+      await tester.pumpAndSettle();
+      expect(_dialog, findsOneWidget);
+      expect(_assignProject, findsNothing);
+      expect(assignment.closed, isFalse);
+    },
+  );
+
+  testWidgets('历史批准入口只带入固定target；项目核对与安排独立，子关闭保留回执和焦点', (tester) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final gateway = _Gateway([
+      OrganizationShareableJoinApplicationApproveSuccess(_receipt),
+    ]);
+    final assignment = _AssignmentGateway([]);
+    await _open(
+      tester,
+      fixture.session,
+      gateway,
+      assignmentGateway: assignment,
+    );
+    expect(_assignProject, findsNothing);
+    await tester.enterText(_field, _applicationId);
+    await tester.tap(_review);
+    await tester.pumpAndSettle();
+    expect(_assignProject, findsNothing);
+    await tester.tap(_submit);
+    await tester.pumpAndSettle();
+    final openAssignment = tester
+        .widget<FilledButton>(_assignProject)
+        .onPressed!;
+    openAssignment();
+    openAssignment();
+    await tester.pumpAndSettle();
+    expect(_assignmentDialog, findsOneWidget);
+    expect(assignment.calls, isEmpty);
+    expect(
+      find.byKey(
+        const ValueKey(
+          'organization-project-membership-assignment-target-field',
+        ),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: _assignmentDialog,
+        matching: find.text(_receipt.organizationMembershipId),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.widget<TextButton>(_close).onPressed, isNull);
+    expect(tester.widget<FilledButton>(_assignProject).onPressed, isNull);
+    final parentPop = find
+        .ancestor(of: _dialog, matching: find.byType(PopScope<void>))
+        .first;
+    expect(tester.widget<PopScope<void>>(parentPop).canPop, isFalse);
+    await tester.tap(_assignmentClose);
+    await tester.pumpAndSettle();
+    expect(find.text(_receipt.organizationMembershipId), findsOneWidget);
+    expect(tester.widget<TextButton>(_close).onPressed, isNotNull);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(_dialog, findsNothing);
+    expect(gateway.calls, hasLength(1));
+    expect(assignment.closed, isFalse);
+    expect(fixture.context.selectCalls, 0);
+  });
+
+  for (final transition in ['logout', 'switch', 'ABA']) {
+    testWidgets(
+      '$transition during assignment clears parent history and fences late child/close',
+      (tester) async {
+        final fixture = await _Fixture.create();
+        addTearDown(fixture.close);
+        final gateway = _Gateway([
+          OrganizationShareableJoinApplicationApproveSuccess(_receipt),
+        ]);
+        final pending =
+            Completer<OrganizationProjectMembershipAssignmentResult>();
+        final assignment = _AssignmentGateway([pending]);
+        await _open(
+          tester,
+          fixture.session,
+          gateway,
+          assignmentGateway: assignment,
+        );
+        await tester.enterText(_field, _applicationId);
+        await tester.tap(_review);
+        await tester.pumpAndSettle();
+        await tester.tap(_submit);
+        await tester.pumpAndSettle();
+        await tester.tap(_assignProject);
+        await tester.pumpAndSettle();
+        await tester.enterText(_assignmentProject, _knownProject);
+        await tester.tap(_assignmentReview);
+        await tester.pumpAndSettle();
+        await tester.tap(_assignmentSubmit);
+        await tester.pump();
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(_assignmentDialog, findsOneWidget);
+        expect(_dialog, findsOneWidget);
+        expect(assignment.calls, hasLength(1));
+        fixture.identity.emit(
+          transition == 'switch'
+              ? _signedIn('subject-b')
+              : const IdentitySnapshot.signedOut(),
+        );
+        await tester.pumpAndSettle();
+        if (transition == 'ABA') {
+          fixture.identity.emit(_signedIn('subject-a'));
+          await tester.pumpAndSettle();
+        }
+        pending.complete(_assignmentReceipt());
+        await tester.pumpAndSettle();
+        expect(find.text(_receipt.organizationMembershipId), findsNothing);
+        expect(find.text(_organizationId), findsNothing);
+        expect(find.text(_knownProject), findsNothing);
+        expect(_assignProject, findsNothing);
+        await tester.tap(_assignmentClose);
+        await tester.pumpAndSettle();
+        expect(_dialog, findsOneWidget);
+        expect(find.text(_receipt.organizationMembershipId), findsNothing);
+        expect(_assignProject, findsNothing);
+        expect(assignment.closed, isFalse);
+        expect(gateway.calls, hasLength(1));
+      },
+    );
+  }
+
+  testWidgets(
+    'same user project switch keeps receipt selectors and independent fixed uncertain retry',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final gateway = _Gateway([
+        OrganizationShareableJoinApplicationApproveSuccess(_receipt),
+      ]);
+      final assignment = _AssignmentGateway([
+        const OrganizationProjectMembershipAssignmentRejected(
+          OrganizationProjectMembershipAssignmentFailureCode.networkUnavailable,
+        ),
+        _assignmentReceipt(),
+      ]);
+      await _open(
+        tester,
+        fixture.session,
+        gateway,
+        assignmentGateway: assignment,
+      );
+      await tester.enterText(_field, _applicationId);
+      await tester.tap(_review);
+      await tester.pumpAndSettle();
+      await tester.tap(_submit);
+      await tester.pumpAndSettle();
+      await tester.tap(_assignProject);
+      await tester.pumpAndSettle();
+      await fixture.session.selectProject('project-b');
+      await tester.pumpAndSettle();
+      await tester.enterText(_assignmentProject, _knownProject);
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(assignment.calls, isEmpty);
+      await tester.tap(_assignmentSubmit);
+      await tester.pumpAndSettle();
+      await tester.tap(_assignmentSubmit);
+      await tester.pumpAndSettle();
+      expect(assignment.calls, hasLength(2));
+      expect(assignment.calls[0], assignment.calls[1]);
+      expect(assignment.calls.first.target, _receipt.organizationMembershipId);
+      expect(assignment.calls.first.workspace, _organizationId);
+      expect(assignment.calls.first.project, _knownProject);
+      await tester.tap(_assignmentClose);
+      await tester.pumpAndSettle();
+      expect(find.text(_receipt.organizationMembershipId), findsOneWidget);
+      expect(gateway.calls, hasLength(1));
+      expect(assignment.closed, isFalse);
+    },
+  );
+
+  testWidgets('批准成功历史回执提供主动安排项目入口', (tester) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final gateway = _Gateway([
+      OrganizationShareableJoinApplicationApproveSuccess(_receipt),
+    ]);
+    await _confirmAndSubmit(tester, fixture.session, gateway);
+    expect(
+      find.byKey(
+        const ValueKey('organization-shareable-approval-assign-project'),
+      ),
+      findsOneWidget,
+    );
+    expect(gateway.calls, hasLength(1));
+  });
+
   testWidgets('本地规范 UUID 后单独确认，成功留窗显示完整审批回执', (tester) async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.close);
@@ -502,6 +728,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(find.text(_receipt.organizationMembershipId), findsOneWidget);
+      expect(tester.getSize(_assignProject).height, greaterThanOrEqualTo(48));
+      expect(tester.getRect(_assignProject).bottom, lessThanOrEqualTo(568));
       semantics.dispose();
     });
   }
@@ -510,6 +738,25 @@ void main() {
 final _dialog = find.byKey(
   const ValueKey('organization-shareable-approval-dialog'),
 );
+final _assignProject = find.byKey(
+  const ValueKey('organization-shareable-approval-assign-project'),
+);
+final _assignmentDialog = find.byKey(
+  const ValueKey('organization-project-membership-assignment-dialog'),
+);
+final _assignmentClose = find.byKey(
+  const ValueKey('organization-project-membership-assignment-close'),
+);
+final _assignmentProject = find.byKey(
+  const ValueKey('organization-project-membership-assignment-project-field'),
+);
+final _assignmentReview = find.byKey(
+  const ValueKey('organization-project-membership-assignment-review'),
+);
+final _assignmentSubmit = find.byKey(
+  const ValueKey('organization-project-membership-assignment-submit'),
+);
+const _knownProject = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 final _field = find.byKey(
   const ValueKey('organization-shareable-approval-application-field'),
 );
@@ -574,6 +821,8 @@ Future<void> _open(
   String locale = 'zh',
   TextScaler textScaler = TextScaler.noScaling,
   ValueNotifier<OrganizationDirectoryEntry>? organizations,
+  OrganizationProjectMembershipAssignmentGateway assignmentGateway =
+      const DeferredOrganizationProjectMembershipAssignmentGateway(),
 }) async {
   Widget dialog(OrganizationDirectoryEntry organization) =>
       OrganizationShareableJoinApplicationApproveDialog(
@@ -581,6 +830,7 @@ Future<void> _open(
         organization: organization,
         gateway: gateway,
         appSession: session,
+        projectMembershipAssignmentGateway: assignmentGateway,
       );
   await tester.pumpWidget(
     MaterialApp(
@@ -645,6 +895,53 @@ final class _Gateway implements OrganizationShareableJoinGateway {
   dynamic noSuchMethod(Invocation invocation) =>
       throw UnsupportedError('unused shareable join operation');
 }
+
+final class _AssignmentGateway
+    implements OrganizationProjectMembershipAssignmentGateway {
+  _AssignmentGateway(Iterable<Object> results) : results = Queue.of(results);
+  final Queue<Object> results;
+  final calls =
+      <({String request, String workspace, String project, String target})>[];
+  var closed = false;
+  @override
+  Future<OrganizationProjectMembershipAssignmentResult> assign({
+    required String requestId,
+    required String organizationWorkspaceId,
+    required String projectId,
+    required String targetOrganizationMembershipId,
+  }) async {
+    calls.add((
+      request: requestId,
+      workspace: organizationWorkspaceId,
+      project: projectId,
+      target: targetOrganizationMembershipId,
+    ));
+    final result = results.removeFirst();
+    if (result is Completer<OrganizationProjectMembershipAssignmentResult>) {
+      return result.future;
+    }
+    return result as OrganizationProjectMembershipAssignmentResult;
+  }
+
+  @override
+  Future<void> close() async {
+    closed = true;
+  }
+}
+
+OrganizationProjectMembershipAssignmentSuccess _assignmentReceipt() =>
+    OrganizationProjectMembershipAssignmentSuccess(
+      OrganizationProjectMembershipAssignmentReceipt(
+        projectMembershipAssignmentContractId:
+            'organization-project-membership-assignment:v1',
+        organizationWorkspaceId: _organizationId,
+        projectId: _knownProject,
+        organizationMembershipId: _receipt.organizationMembershipId,
+        projectMembershipId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+        activeFromUtc: DateTime.utc(2026, 9, 17),
+        inactiveFromUtc: null,
+      ),
+    );
 
 final class _Fixture {
   _Fixture(this.identity, this.session, this.context);

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../app_session/app_session.dart';
 import '../../l10n/app_strings.dart';
 import '../../organization_directory/organization_directory.dart';
+import '../../organization_project_membership_assignment/organization_project_membership_assignment.dart';
 import '../../organization_shareable_join/organization_shareable_join.dart';
 import 'organization_shareable_join_application_approve_dialog.dart';
 
@@ -18,12 +19,16 @@ final class OrganizationShareableJoinApplicationDirectoryDialog
     required this.organization,
     required this.gateway,
     required this.appSession,
+    this.projectMembershipAssignmentGateway =
+        const DeferredOrganizationProjectMembershipAssignmentGateway(),
   });
 
   final AppStrings text;
   final OrganizationDirectoryEntry organization;
   final OrganizationShareableJoinGateway gateway;
   final AppSession appSession;
+  final OrganizationProjectMembershipAssignmentGateway
+  projectMembershipAssignmentGateway;
 
   @override
   State<OrganizationShareableJoinApplicationDirectoryDialog> createState() =>
@@ -169,6 +174,8 @@ final class _OrganizationShareableJoinApplicationDirectoryDialogState
         gateway: widget.gateway,
         appSession: widget.appSession,
         initialApplicationId: record.applicationId,
+        projectMembershipAssignmentGateway:
+            widget.projectMembershipAssignmentGateway,
       ),
     );
     if (!_accepts(generation)) return;
