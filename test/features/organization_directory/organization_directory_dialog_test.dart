@@ -9,6 +9,7 @@ import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_directory_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_invitation_create_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_membership_self_leave_dialog.dart';
+import 'package:tongxingzhe_app/features/organization_directory/organization_owner_transfer_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_shareable_join_application_approve_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_shareable_join_application_submit_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_shareable_join_link_create_dialog.dart';
@@ -17,6 +18,7 @@ import 'package:tongxingzhe_app/l10n/app_strings.dart';
 import 'package:tongxingzhe_app/organization_directed_account_invitation/organization_directed_account_invitation.dart';
 import 'package:tongxingzhe_app/organization_directory/organization_directory.dart';
 import 'package:tongxingzhe_app/organization_membership_self_leave/organization_membership_self_leave.dart';
+import 'package:tongxingzhe_app/organization_owner_transfer/organization_owner_transfer.dart';
 import 'package:tongxingzhe_app/organization_shareable_join/organization_shareable_join.dart';
 import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
 
@@ -442,6 +444,15 @@ void main() {
       ),
       findsOneWidget,
     );
+    expect(
+      find.byKey(
+        ValueKey(
+          'organization-owner-transfer-'
+          '${organizations.last.organizationWorkspaceId}',
+        ),
+      ),
+      findsOneWidget,
+    );
     expect(find.text(organizations.last.organizationName), findsOneWidget);
     expect(
       find.text(organizations.last.organizationWorkspaceId),
@@ -735,6 +746,118 @@ void main() {
     expect(directoryGateway.listCalls, 1);
     expect(fixture.session.current.context, initialContext);
     expect(shareableJoinGateway.closed, isFalse);
+  });
+
+  testWidgets('每个组织行交接所有权固定选中组织，核对后提交并显示回执', (tester) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final directoryGateway = _Gateway([
+      OrganizationDirectorySuccess(const [_organizationA, _organizationB]),
+    ]);
+    final ownerTransferGateway = _OwnerTransferGateway(
+      _organizationOwnerTransferReceipt,
+    );
+    final initialContext = fixture.session.current.context;
+    await _open(
+      tester,
+      fixture.session,
+      directoryGateway,
+      ownerTransferGateway: ownerTransferGateway,
+    );
+
+    final transfer = find.byKey(
+      ValueKey(
+        'organization-owner-transfer-${_organizationB.organizationWorkspaceId}',
+      ),
+    );
+    await tester.ensureVisible(transfer);
+    await tester.tap(transfer);
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(OrganizationOwnerTransferDialog);
+    expect(dialog, findsOneWidget);
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.text(_organizationB.organizationWorkspaceId),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.text(_organizationA.organizationWorkspaceId),
+      ),
+      findsNothing,
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('organization-owner-transfer-target-field')),
+      '  ${_targetOrganizationMembershipId.toUpperCase()}  ',
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('organization-owner-transfer-review')),
+    );
+    await tester.pumpAndSettle();
+    expect(ownerTransferGateway.calls, isEmpty);
+    expect(find.text(_targetOrganizationMembershipId), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('organization-owner-transfer-submit')),
+    );
+    await tester.pumpAndSettle();
+    expect(ownerTransferGateway.calls, hasLength(1));
+    final call = ownerTransferGateway.calls.single;
+    expect(
+      call.organizationWorkspaceId,
+      _organizationB.organizationWorkspaceId,
+    );
+    expect(
+      call.targetOrganizationMembershipId,
+      _targetOrganizationMembershipId,
+    );
+    expect(
+      call.requestId,
+      matches(
+        RegExp(
+          r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+        ),
+      ),
+    );
+    for (final value in [
+      _organizationOwnerTransferReceipt.organizationWorkspaceId,
+      _organizationOwnerTransferReceipt.ownerTransferContractId,
+      _organizationOwnerTransferReceipt.previousOwnerAssignmentId,
+      _organizationOwnerTransferReceipt.organizationOwnerAssignmentId,
+      _organizationOwnerTransferReceipt.effectiveAtUtc
+          .toUtc()
+          .toIso8601String(),
+    ]) {
+      expect(
+        find.descendant(of: dialog, matching: find.text(value)),
+        findsOneWidget,
+      );
+    }
+    expect(directoryGateway.listCalls, 1);
+    expect(fixture.session.current.context, initialContext);
+    expect(ownerTransferGateway.closed, isFalse);
+
+    await tester.tap(
+      find.byKey(const ValueKey('organization-owner-transfer-close')),
+    );
+    await tester.pumpAndSettle();
+    expect(dialog, findsNothing);
+    expect(find.byType(OrganizationDirectoryDialog), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(OrganizationDirectoryDialog),
+        matching: find.text(_organizationB.organizationWorkspaceId),
+      ),
+      findsOneWidget,
+    );
+    expect(directoryGateway.listCalls, 1);
+    expect(fixture.session.current.context, initialContext);
+    expect(ownerTransferGateway.closed, isFalse);
   });
 
   testWidgets('成功时必须先删本地快照，再提交并以新目录为准', (tester) async {
@@ -1251,6 +1374,8 @@ Future<void> _open(
       const DeferredOrganizationDirectedAccountInvitationGateway(),
   OrganizationShareableJoinGateway shareableJoinGateway =
       const DeferredOrganizationShareableJoinGateway(),
+  OrganizationOwnerTransferGateway ownerTransferGateway =
+      const DeferredOrganizationOwnerTransferGateway(),
 }) async {
   await _pumpLauncher(
     tester,
@@ -1262,6 +1387,7 @@ Future<void> _open(
     selfLeaveGateway: selfLeaveGateway,
     invitationGateway: invitationGateway,
     shareableJoinGateway: shareableJoinGateway,
+    ownerTransferGateway: ownerTransferGateway,
   );
   await tester.tap(_launcher);
   if (settle) {
@@ -1284,6 +1410,8 @@ Future<void> _pumpLauncher(
       const DeferredOrganizationDirectedAccountInvitationGateway(),
   OrganizationShareableJoinGateway shareableJoinGateway =
       const DeferredOrganizationShareableJoinGateway(),
+  OrganizationOwnerTransferGateway ownerTransferGateway =
+      const DeferredOrganizationOwnerTransferGateway(),
 }) => tester.pumpWidget(
   MaterialApp(
     theme: ThemeData(useMaterial3: true),
@@ -1307,6 +1435,7 @@ Future<void> _pumpLauncher(
                 selfLeaveGateway: selfLeaveGateway,
                 invitationGateway: invitationGateway,
                 shareableJoinGateway: shareableJoinGateway,
+                ownerTransferGateway: ownerTransferGateway,
               ),
             ),
             child: const Text('Open'),
@@ -1788,6 +1917,37 @@ final class _SelfLeaveGateway
   Future<void> close() async {}
 }
 
+typedef _OwnerTransferCall = ({
+  String requestId,
+  String organizationWorkspaceId,
+  String targetOrganizationMembershipId,
+});
+
+final class _OwnerTransferGateway implements OrganizationOwnerTransferGateway {
+  _OwnerTransferGateway(this.receipt);
+
+  final OrganizationOwnerTransferReceipt receipt;
+  final calls = <_OwnerTransferCall>[];
+  var closed = false;
+
+  @override
+  Future<OrganizationOwnerTransferResult> transfer({
+    required String requestId,
+    required String organizationWorkspaceId,
+    required String targetOrganizationMembershipId,
+  }) async {
+    calls.add((
+      requestId: requestId,
+      organizationWorkspaceId: organizationWorkspaceId,
+      targetOrganizationMembershipId: targetOrganizationMembershipId,
+    ));
+    return OrganizationOwnerTransferSuccess(receipt);
+  }
+
+  @override
+  Future<void> close() async => closed = true;
+}
+
 enum _LocalFailure { read, delete }
 
 final class _LocalVault {
@@ -1886,6 +2046,7 @@ const _requestIdB = 'c2222222-2222-4222-8222-222222222222';
 const _targetAppUserId = '99999999-9999-4999-8999-999999999999';
 const _shareableJoinLinkId = 'e1111111-1111-4111-8111-111111111111';
 const _shareableJoinApplicationId = 'e2222222-2222-4222-8222-222222222222';
+const _targetOrganizationMembershipId = 'f3333333-3333-4333-8333-333333333333';
 
 final _shareableJoinPreviewReceipt =
     OrganizationShareableJoinLinkPreviewReceipt(
@@ -1901,6 +2062,14 @@ final _receipt = OrganizationMembershipSelfLeaveReceipt(
   organizationWorkspaceId: _organizationA.organizationWorkspaceId,
   organizationMembershipId: 'd1111111-1111-4111-8111-111111111111',
   effectiveAtUtc: DateTime.utc(2026, 9, 7, 12),
+);
+
+final _organizationOwnerTransferReceipt = OrganizationOwnerTransferReceipt(
+  ownerTransferContractId: 'organization-owner-transfer:v1',
+  organizationWorkspaceId: _organizationB.organizationWorkspaceId,
+  previousOwnerAssignmentId: 'g1111111-1111-4111-8111-111111111111',
+  organizationOwnerAssignmentId: 'g2222222-2222-4222-8222-222222222222',
+  effectiveAtUtc: DateTime.utc(2026, 9, 16, 18),
 );
 
 const _organizationAContext = TrustedSessionContext(

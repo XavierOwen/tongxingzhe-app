@@ -363,6 +363,55 @@ const Map<String, Map<String, String>> _strings = {
         '网络不可用，无法确认批准结果。请检查连接后在此窗口重试。',
     'organizationShareableApprovalFailure.invalidResponse':
         '未收到可验证的批准结果，请在此窗口重试。',
+    'organizationOwnerTransferAction': '转让所有权',
+    'organizationOwnerTransferTitle': '转让组织所有权',
+    'organizationOwnerTransferInputHelp':
+        '输入已核对的目标组织成员关系编号，例如批准入组后的回执编号。账号、申请或所有者身份编号不能替代成员关系编号。App 不读取成员资料。',
+    'organizationOwnerTransferTargetMembershipIdentifier': '目标成员关系编号（UUID）',
+    'organizationOwnerTransferInvalidTargetMembership': '请输入有效的组织成员关系 UUID。',
+    'organizationOwnerTransferInvalidRequest': '未能建立转让请求，没有发送请求。请在此窗口重试。',
+    'organizationOwnerTransferReview': '核对',
+    'organizationOwnerTransferConfirmHelp':
+        '请通过原渠道核对目标成员。你的当前所有者身份将结束，目标成员取得所有权，其他所有者保持不变。App 无法仅凭编号识别成员；服务端仍判断首次转让资格。项目身份和额外权限不变。',
+    'organizationOwnerTransferTransfer': '确认转让',
+    'organizationOwnerTransferEdit': '更换成员',
+    'organizationOwnerTransferRetry': '重试这次转让',
+    'organizationOwnerTransferSubmitting': '正在转让所有权…',
+    'organizationOwnerTransferSuccess': '这次所有权转让请求已完成。',
+    'organizationOwnerTransferUnauthorized':
+        '账号或会话已改变。已清除组织、成员编号、请求和回执；请关闭后重新登录。',
+    'organizationOwnerTransferUncertain':
+        '所有权可能已转让。重试仍使用同一请求、组织和目标成员；重试信息仅保留在此窗口。',
+    'organizationOwnerTransferOrganizationId': '组织标识',
+    'organizationOwnerTransferTargetMembershipId': '本次目标成员关系编号',
+    'organizationOwnerTransferContractId': '回执合同',
+    'organizationOwnerTransferPreviousOwnerAssignmentId': '已结束的所有者身份编号',
+    'organizationOwnerTransferOwnerAssignmentId': '新所有者身份编号',
+    'organizationOwnerTransferEffectiveAt': '生效时间（UTC）',
+    'organizationOwnerTransferFreshnessNotice':
+        '这份历史回执不证明你或目标成员现在仍是所有者。精确重试不会再次转让，也不会要求你仍是所有者。当前项目、项目成员和额外权限不变。',
+    'organizationOwnerTransferClose': '关闭',
+    'organizationOwnerTransferDiscardTitle': '停止重试这次转让？',
+    'organizationOwnerTransferDiscardBody':
+        '所有权可能已转让。关闭只会放弃此窗口中的重试信息，不会撤销服务端上可能已完成的交接。',
+    'organizationOwnerTransferKeepRetry': '返回重试',
+    'organizationOwnerTransferDiscard': '放弃重试并关闭',
+    'organizationOwnerTransferFailure.notConfigured':
+        '所有权转让服务尚未配置，没有提交转让请求。请稍后重试。',
+    'organizationOwnerTransferFailure.unauthorized': '登录状态已失效，请重新登录。',
+    'organizationOwnerTransferFailure.invalidJson': '转让请求格式无效。',
+    'organizationOwnerTransferFailure.payloadTooLarge': '转让请求未被服务接受。',
+    'organizationOwnerTransferFailure.invalidRequest': '转让请求无效。',
+    'organizationOwnerTransferFailure.forbidden':
+        '当前账号不能执行这次转让，或目标成员和组织现在不符合转让条件。',
+    'organizationOwnerTransferFailure.conflict': '这次转让请求与已有记录冲突。',
+    'organizationOwnerTransferFailure.targetAlreadyOwner':
+        '目标成员已经是当前所有者，没有建立新的转让。',
+    'organizationOwnerTransferFailure.serviceUnavailable':
+        '服务暂时不可用，无法确认转让结果。请在此窗口重试。',
+    'organizationOwnerTransferFailure.networkUnavailable':
+        '网络不可用，无法确认转让结果。请检查连接后在此窗口重试。',
+    'organizationOwnerTransferFailure.invalidResponse': '未收到可验证的转让结果，请在此窗口重试。',
     'organizationLeaveAction': '退出组织',
     'organizationLeaveTitle': '退出组织？',
     'organizationLeaveHelp':
@@ -1857,6 +1906,85 @@ const Map<String, Map<String, String>> _strings = {
         'Check your connection and retry in this window.',
     'organizationShareableApprovalFailure.invalidResponse':
         'The approval result could not be verified. Retry in this window.',
+    'organizationOwnerTransferAction': 'Transfer ownership',
+    'organizationOwnerTransferTitle': 'Transfer organization ownership',
+    'organizationOwnerTransferInputHelp':
+        'Enter a verified organization membership ID, such as the ID '
+        'in an approval receipt. Account, application, and owner assignment '
+        'IDs cannot replace it. The app does not read member profiles.',
+    'organizationOwnerTransferTargetMembershipIdentifier':
+        'Target membership ID (UUID)',
+    'organizationOwnerTransferInvalidTargetMembership':
+        'Enter a valid organization membership UUID.',
+    'organizationOwnerTransferInvalidRequest':
+        'Could not prepare the transfer request. No request was sent. '
+        'Retry in this window.',
+    'organizationOwnerTransferReview': 'Review',
+    'organizationOwnerTransferConfirmHelp':
+        'Confirm the target member through the original channel. Your current '
+        'owner assignment will end, the target will become an owner, '
+        'and other owners stay unchanged. The app cannot identify the member '
+        'from the ID alone. The server checks first-transfer eligibility. '
+        'Project memberships and extra permissions stay unchanged.',
+    'organizationOwnerTransferTransfer': 'Transfer',
+    'organizationOwnerTransferEdit': 'Change member',
+    'organizationOwnerTransferRetry': 'Retry this transfer',
+    'organizationOwnerTransferSubmitting': 'Transferring ownership…',
+    'organizationOwnerTransferSuccess':
+        'This ownership transfer request is complete.',
+    'organizationOwnerTransferUnauthorized':
+        'The account or session changed. The organization, member ID, '
+        'request, and receipt were cleared. Close this window and sign in again.',
+    'organizationOwnerTransferUncertain':
+        'Ownership may have been transferred. A retry uses the same request, '
+        'organization, and target member. Retry details stay only in this window.',
+    'organizationOwnerTransferOrganizationId': 'Organization ID',
+    'organizationOwnerTransferTargetMembershipId':
+        'Target membership for this request',
+    'organizationOwnerTransferContractId': 'Receipt contract',
+    'organizationOwnerTransferPreviousOwnerAssignmentId':
+        'Ended owner assignment ID',
+    'organizationOwnerTransferOwnerAssignmentId': 'New owner assignment ID',
+    'organizationOwnerTransferEffectiveAt': 'Effective at (UTC)',
+    'organizationOwnerTransferFreshnessNotice':
+        'This historical receipt does not prove that you or the target are '
+        'still owners. An exact retry does not transfer again or require '
+        'you to remain an owner. The current project, project memberships, '
+        'and extra permissions stay unchanged.',
+    'organizationOwnerTransferClose': 'Close',
+    'organizationOwnerTransferDiscardTitle': 'Stop retrying this transfer?',
+    'organizationOwnerTransferDiscardBody':
+        'Ownership may have been transferred. Closing only discards the retry '
+        'details in this window. It does not reverse a handoff that may '
+        'have completed on the server.',
+    'organizationOwnerTransferKeepRetry': 'Keep retrying',
+    'organizationOwnerTransferDiscard': 'Discard retry and close',
+    'organizationOwnerTransferFailure.notConfigured':
+        'The ownership transfer service is not configured. It did not '
+        'submit a transfer request. Try again later.',
+    'organizationOwnerTransferFailure.unauthorized':
+        'The session expired. Sign in again.',
+    'organizationOwnerTransferFailure.invalidJson':
+        'The transfer request format is invalid.',
+    'organizationOwnerTransferFailure.payloadTooLarge':
+        'The service did not accept the transfer request.',
+    'organizationOwnerTransferFailure.invalidRequest':
+        'The transfer request is invalid.',
+    'organizationOwnerTransferFailure.forbidden':
+        'This account cannot perform this transfer, or the target member '
+        'and organization are not eligible now.',
+    'organizationOwnerTransferFailure.conflict':
+        'This transfer request conflicts with an existing record.',
+    'organizationOwnerTransferFailure.targetAlreadyOwner':
+        'The target is already a current owner. No new transfer was created.',
+    'organizationOwnerTransferFailure.serviceUnavailable':
+        'The service is unavailable, so the transfer result is uncertain. '
+        'Retry in this window.',
+    'organizationOwnerTransferFailure.networkUnavailable':
+        'The network is unavailable, so the transfer result is uncertain. '
+        'Check your connection and retry in this window.',
+    'organizationOwnerTransferFailure.invalidResponse':
+        'The transfer result could not be verified. Retry in this window.',
     'organizationLeaveAction': 'Leave organization',
     'organizationLeaveTitle': 'Leave organization?',
     'organizationLeaveHelp':

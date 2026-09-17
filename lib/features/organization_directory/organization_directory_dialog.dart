@@ -8,10 +8,12 @@ import '../../l10n/app_strings.dart';
 import '../../organization_directed_account_invitation/organization_directed_account_invitation.dart';
 import '../../organization_directory/organization_directory.dart';
 import '../../organization_membership_self_leave/organization_membership_self_leave.dart';
+import '../../organization_owner_transfer/organization_owner_transfer.dart';
 import '../../organization_shareable_join/organization_shareable_join.dart';
 import 'organization_invitation_create_dialog.dart';
 import 'organization_invitation_accept_dialog.dart';
 import 'organization_membership_self_leave_dialog.dart';
+import 'organization_owner_transfer_dialog.dart';
 import 'organization_shareable_join_application_approve_dialog.dart';
 import 'organization_shareable_join_application_submit_dialog.dart';
 import 'organization_shareable_join_link_create_dialog.dart';
@@ -31,6 +33,8 @@ final class OrganizationDirectoryDialog extends StatefulWidget {
         const DeferredOrganizationDirectedAccountInvitationGateway(),
     this.shareableJoinGateway =
         const DeferredOrganizationShareableJoinGateway(),
+    this.ownerTransferGateway =
+        const DeferredOrganizationOwnerTransferGateway(),
   });
 
   final AppStrings text;
@@ -39,6 +43,7 @@ final class OrganizationDirectoryDialog extends StatefulWidget {
   final OrganizationMembershipSelfLeaveGateway selfLeaveGateway;
   final OrganizationDirectedAccountInvitationGateway invitationGateway;
   final OrganizationShareableJoinGateway shareableJoinGateway;
+  final OrganizationOwnerTransferGateway ownerTransferGateway;
 
   @override
   State<OrganizationDirectoryDialog> createState() =>
@@ -261,6 +266,16 @@ final class _OrganizationDirectoryDialogState
                   : () => _approveShareableJoinApplication(entry),
               icon: const Icon(Icons.how_to_reg_outlined),
               label: Text(widget.text.t('organizationShareableApprovalAction')),
+            ),
+            TextButton.icon(
+              key: ValueKey(
+                'organization-owner-transfer-${entry.organizationWorkspaceId}',
+              ),
+              onPressed: _busy || _sessionInvalidated
+                  ? null
+                  : () => _transferOwnership(entry),
+              icon: const Icon(Icons.swap_horiz),
+              label: Text(widget.text.t('organizationOwnerTransferAction')),
             ),
             TextButton.icon(
               key: ValueKey(
@@ -534,6 +549,24 @@ final class _OrganizationDirectoryDialogState
       snapshot.context?.appUserId == _trustedAppUserId &&
       _trustedAppUserId != null &&
       widget.appSession.isCurrentUser(_trustedAppUserId!);
+
+  Future<void> _transferOwnership(OrganizationDirectoryEntry entry) async {
+    if (_busy ||
+        !_organizations.contains(entry) ||
+        !_hasTrustedSession(widget.appSession.current)) {
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => OrganizationOwnerTransferDialog(
+        text: widget.text,
+        organization: entry,
+        gateway: widget.ownerTransferGateway,
+        appSession: widget.appSession,
+      ),
+    );
+  }
 
   static String? _readyAppUserId(AppSessionSnapshot snapshot) =>
       snapshot.stage == AppSessionStage.ready

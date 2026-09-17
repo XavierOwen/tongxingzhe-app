@@ -1646,6 +1646,36 @@ git diff --check
 
 Widget tests 使用 fake session 和内存 gateway，只证明本地显示、同意图重试、会话隔离和参数接线。它们不证明 production identity、Backend 部署、数据库权限、通知或真人平台运行。7AP 不增加申请列表、profile、reject／revoke、通知、router、平台链接、删除恢复或 purge writer。
 
+### 3.34 将组织所有权交接给已知成员（Issue #375，MANUAL-081）
+
+7AQ 把已有 `OrganizationOwnerTransferGateway` 从 App startup 经 Home、组织目录传到交接窗口。用户从目标组织行打开“转让所有权”，输入同组织的有效成员关系 UUID，再进入本地核对页。只有明确转让才发送请求；无 Backend 配置时仍使用 deferred gateway，不触网。
+
+目标是 organization membership UUID，不是账号、入组申请或 owner assignment UUID。7AP 的批准回执可提供这个编号，但历史回执不保证成员现在仍有效，也不能仅凭编号识别人。用户应通过可信渠道核对接收方；窗口不新增成员搜索、profile 或资格预查。
+
+转让是原子交接，不是增加 co-owner：目标成为 owner，调用者的当前 owner assignment 结束，其他 owner 不变。它不建立 project membership 或 capability，也不切换项目。Backend 在首次执行时确认 current active owner、同组织 active target 和 target-not-owner；“我的组织”仅是成员目录，不是这些权限的证明。
+
+首次提交生成一个 request UUID。请求发出后，request、organization workspace 和 target membership 固定，所有重试都复用它们。网络、服务、无效响应或异常可能隐藏已提交的结果，此时关闭须确认放弃窗口内重试信息；稳定拒绝结束不确定状态，不替换意图。exact replay 只要求原 actor 仍 active，不要求其仍是 current owner，也不重复转让。窗口不根据本地 owner 推断阻挡重试。
+
+成功留窗显示合同、组织、前后 owner assignment UUID 和 UTC 生效时间，并标明已提交的 target membership UUID。receipt 只记录那次交接，不能证明接收方现在仍是 owner。不刷新目录、不复制、不切项目，关闭窗口也不关闭共享 gateway；App 生命周期负责释放它。
+
+窗口绑定打开时的 trusted app-user ID。会话失效、换号或 ABA 清除输入、固定意图和回执并拒绝迟到结果；同账号切项目不改变组织级交接意图。已在线 ready 的正常 token 续期只更新共享会话的身份元数据，不丢弃原意图、不新增 capability 或延长离线 PII 授权期；failed 和 offline 恢复仍须重新读取 Backend 上下文。
+
+从仓库根目录运行：
+
+```bash
+flutter test --no-pub \
+  test/features/organization_directory/organization_owner_transfer_dialog_test.dart \
+  test/features/organization_directory/organization_directory_dialog_test.dart \
+  test/app/tongxingzhe_app_test.dart
+dart analyze
+flutter test --no-pub
+dart run tool/check_production_boundary.dart
+dart run tool/check_markdown_links.dart
+git diff --check
+```
+
+Widget 和 App tests 使用 fake identity、内存 gateway 与 synthetic receipt，只证明交互、固定意图、会话隔离和接线。它们不证明 production identity、部署端点、数据库实权、真实辅助技术或真人平台运行。7AQ 不增加成员目录、co-owner grant、恢复或手动改派、通知、router、Drift、离线重试、删除恢复或 purge writer。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
