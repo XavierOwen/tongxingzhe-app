@@ -2069,24 +2069,17 @@ Node 24 容器使用与 PostgreSQL 容器相同的 network namespace。它通过
 4. 把数据库目录和全部正式并发脚本复制到容器；
 5. 从空库执行全部 migration，再执行一次 checksum 重放；
 6. 运行全部 schema／权限 check 和可回滚 synthetic fixture；
-7. 建立一次性的 Node 24 容器，编译 Backend，并运行十三条 PostgreSQL adapter integration test：地点来源、当前关系阶段、个人阶段变更汇总、个人同意占比读取、个人同意占比开关、current-city 快照读取、current-city 快照目录、兴趣快照 runtime 读取、兴趣快照目录、original-region 快照读取、original-region 快照目录、后续联系同意占比快照 runtime 读取和后续联系同意占比快照目录；
+7. 建立一次性的 Node 24 容器，编译 Backend，执行正式 runner 明确列出的全部 PostgreSQL adapter integration 入口；
 8. 按文件名运行全部正式并发脚本，用独立数据库会话检查锁、撤权和唯一性合同；
 9. 修改 migration 的临时副本，确认 runner 拒绝 checksum 漂移；
 10. 执行 `pg_dump`，启动没有源 cluster roles 的第二个 PostgreSQL 容器；
 11. 用 `postgres_prepare_restore_roles.sh` 建立 archive 所需的无登录角色，恢复后再运行全部 check 和 fixture；
 12. 成功后删除两个 PostgreSQL 容器、Node 容器、临时 work volume 和本机临时 dump。
 
-这组步骤同时验证新安装、重复部署、Backend→PostgreSQL 结果分类、并发、最小权限和备份恢复。fixture 内使用 `BEGIN` 与 `ROLLBACK`，不会把合成业务资料留在测试库。并发脚本会提交自己的 synthetic 行，这些行会随 dump 进入恢复库；它们不是 production 数据。
+这组步骤同时验证新安装、重复部署、Backend→PostgreSQL 结果分类、并发、最小权限和备份恢复。多数 fixture 使用 `BEGIN` 与 `ROLLBACK`；跨事务时间验证可合法提交随机 synthetic setup／handoff，由临时库清理。并发脚本也会提交 synthetic 行，这些行会随 dump 进入恢复库；它们不是 production 数据。
 
-Node 阶段编译并运行 `backend/server/test/contact-location-evidence.integration.ts`、
-`backend/server/test/personal-current-relationship-stage.integration.ts`、
-`backend/server/test/personal-follow-up-consent-opt-in.integration.ts`、
-`backend/server/test/personal-follow-up-consent-ratio.integration.ts`、
-`backend/server/test/personal-relationship-stage-change-summary.integration.ts`、
-`backend/server/test/management-current-city-report-snapshots.integration.ts`、
-`backend/server/test/management-current-city-report-snapshot-directory.integration.ts`、
-`backend/server/test/management-interest-report-snapshots.integration.ts` 和
-`backend/server/test/management-interest-report-snapshot-directory.integration.ts`。开关测试用
+Node 阶段按[正式 runner](../../tool/run_postgres_tests_in_docker.sh)中的必选入口编译并运行，不按历史文档数量推断覆盖。
+当前包含地点来源、组织治理及项目安排、个人关系阶段／同意和匿名管理报告读取。开关测试用
 runtime role 验证未配置、启用、幂等重放、冲突、停用和回滚；比例测试再对账 `not_enabled` 与
 启用后的 `ready 0 / 0`；阶段变更 integration 对账 `5 / 4 / 3 / 2` 和空期间，SQL fixture 与独立
 并发脚本分别覆盖匿名化历史和当前项目锁。
@@ -2312,7 +2305,7 @@ CI 会在临时目录重新生成 v19 snapshot 和 migration helper，并与仓�
 | Backend identity, context, and sync | TypeScript check 和全部 Backend tests |
 | Build Android／Web／Linux／iOS／macOS／Windows | 六个平台独立 build |
 
-CI 的 PostgreSQL job 在 Linux runner 上执行同一个 Docker runner。默认会拉取 `postgres:16` 和 `node:24-bookworm`，在临时容器中运行 `psql`、Backend build 和十三条 Backend integration；它不需要 runner 上的 PostgreSQL service，也不占用本机端口。两条路径执行相同的 migration、check、fixture、Backend 对账和并发脚本。
+CI 的 PostgreSQL job 在 Linux runner 上执行同一个 Docker runner。默认会拉取 `postgres:16` 和 `node:24-bookworm`，在临时容器中运行 `psql`、Backend build 和 runner 明确列出的全部 Backend integration；它不需要 runner 上的 PostgreSQL service，也不占用本机端口。两条路径执行相同的 migration、check、fixture、Backend 对账和并发脚本。
 
 本机通过是提交前证据。远端 CI 通过是干净环境证据。合并前应同时检查两者，不能根据本机结果推断 GitHub 已通过。
 
@@ -2371,6 +2364,27 @@ CI 的 PostgreSQL job 在 Linux runner 上执行同一个 Docker runner。默认
 自建 runner 可以分担 hosted runner 容量或镜像问题，但不能消除所有 GitHub 依赖。Actions 控制面、action 下载和 GitHub API 故障仍可能阻断自建 runner。不要因为一次官方事故就引入长期的自建 runner 运维负担。
 
 本项目曾遇到 [GitHub Actions 官方事故 qcvjkzcs7j74](https://www.githubstatus.com/incidents/qcvjkzcs7j74)。多次 workflow run 最终取得真实通过结果，但只有实际完成的成功 run 才能记为 CI 通过。事故后的成功不能反向证明先前失败来自项目代码。
+
+### 11.3 并发检查是否真的观察到了指定锁等待
+
+“没有观察到等待”不一定是产品锁错误。先检查 holder 是否用固定 sleep 决定 COMMIT，以及探针是否只寻找全库任意 waiter。保存指定 application_name、physical PID、精确 key、blocking PID 与提交／启动顺序；正确业务结果不能代替实际等待证据。
+
+Issue #405 在加入链接脚本的 create replay、owner transfer、membership close 三处串行延迟 waiter 启动3秒。旧 holder 两秒后先提交；迟到请求正确重放或 forbidden，但检查脚本三处 RED。并行诊断出现跨轮任意 waiter 误认，已弃用该 GREEN，只采用隔离串行证据。
+
+新版复用已有 FIFO 控制：holder 保持事务，controller 观察指定 waiter 在精确 request key 或对应 app-user 的 transactionid 上等待，再 COMMIT。holder／waiter 与 blocker 必须匹配；轮询间隔不是释放 deadline。失败时先关闭 FIFO，再终止并回收本次客户端，最后清理本轮唯一 application_name 对应的残余数据库会话。
+
+`PSQL_COMMAND` wrapper 必须 `exec` 实际客户端；需要创建子进程时，必须在 TERM trap 中终止并 `wait` 回收实际客户端及子进程后退出，退出后不得再启动客户端或连接。远端 transport 与任意非协作 fork 不受支持；仅 `exec docker exec` 不保证远端客户端终止，它的 Bash 3 baseline 只能证明功能与兼容。本脚本不递归杀死 wrapper 的后代。在 PostgreSQL 作为容器 PID 1 的环境，杀子进程后立即杀其父可能让 postmaster 收养异常退出的孤儿，引发数据库恢复；本地强制失败曾观察到这一问题，不能把“拥有的 PID 已消失”单独记为清理通过。
+
+强制 timeout 与 SQL error 清理验证还应确认：本轮客户端／会话／FIFO 已清空，postmaster PID 和启动时间未变，测试窗口日志没有 recovery，无关会话未中断。Linux 进程回收探针和合成数据库验证不证明生产故障发生率。
+
+从仓库根目录运行：
+
+```bash
+bash -n tool/verify_organization_shareable_join_link_concurrency.sh
+./tool/run_postgres_tests_in_docker.sh
+```
+
+三处受控 delayed-launch 回归与 forced-waiter-failure cleanup 是本地测试调度证据。完整 Docker 和精确 head CI 另保留 checksum、业务断言及独立 restore；不改 product writer、migration、fixture 或权限，不证明生产身份、部署或真实故障发生率。
 
 ## 12. 提交前复制清单
 
