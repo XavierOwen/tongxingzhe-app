@@ -1,6 +1,6 @@
 # 离线推广对象资料威胁模型
 
-状态：截至 2026-09-17，包含 Slice 7Y 的请求作用域保护、7Z 的成员退出前条件清除，以及 Android 模拟器预检的证据边界。
+状态：截至 2026-09-17，包含 Slice 7Y 的请求作用域保护、7Z 的成员退出前条件清除，以及 Android 模拟器、Web 禁用观察和 Linux 无 keyring 检查的证据边界。
 
 适用需求：`PII-002`、`PII-003`、`AUTHZ-006`、`TEST-006`
 
@@ -85,3 +85,5 @@ AppSession 在在线上下文失去 PII 查看能力时持久锁定旧快照，�
 2026-09-17，现有 synthetic 探针在 Android 16／API 36 模拟器中实际使用生产 Vault、平台安全存储和 Drift，三个独立进程完成九种 scenario，结果全部为 `simulated`。跨进程恢复保留首次授权／到期时间；模拟删除失败后的持久锁在新进程中仍阻止读取，重试删除后仍锁定。原始脱敏 JSON、环境与限制见[证据矩阵](../spikes/six-platform-capability-matrix.md#2026-09-17-android-模拟器离线-pii-预检)。期限使用 synthetic 授权时间，撤权由探针模拟，删除失败为一次受控注入；没有真实账号、服务器撤权、硬件安全性、备份或实际七十二小时运行证明，不改变 #161 的人工验收状态。
 
 同日，release-web 独立探针在无账号临时 Chrome profile 中，首次打开、刷新、独立进程重开和已加载页面断网后均保持 `unsupported`，七个阶段按钮禁用，测试 origin 的五类存储列表为空。断网同时观察到 navigator 离线与实际请求失败。[浏览器观察快照](../spikes/evidence/offline-pii-web-disabled-20260917/observations.json) 只覆盖这个入口和指定时刻，不证明整个产品、全 profile 文件、断网资源重载或 durable database 支持路径，不能替代 #161 的完整 Web 验收。
+
+Linux CI 在新 Xvfb 和无 Secret Service 的独立 D-Bus session 中实际启动 GTK 探针。现有 UI 导出的[原始 allowlist JSON](../spikes/evidence/offline-pii-linux-no-keyring-20260917/session-1.json) 为唯一 `unsupported`／`sensitiveStorageDisabled` 门禁事件；独立 Documents 未生成数据库或 sidecar。此证据覆盖受控无 keyring 禁用路径，不验证可用 keyring 的存储、整个产品、真实授权或硬件安全。实际 commit、环境和 job 见[证据矩阵](../spikes/six-platform-capability-matrix.md#2026-09-17-linux-ci-无-keyring-禁用检查)，#161 仍开放。
