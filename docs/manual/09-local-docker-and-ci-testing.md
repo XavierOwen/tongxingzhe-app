@@ -2377,6 +2377,8 @@ Issue #405 在加入链接脚本的 create replay、owner transfer、membership 
 
 强制 timeout 与 SQL error 清理验证还应确认：本轮客户端／会话／FIFO 已清空，postmaster PID 和启动时间未变，测试窗口日志没有 recovery，无关会话未中断。Linux 进程回收探针和合成数据库验证不证明生产故障发生率。
 
+Issue #408 将[报表替换并发脚本](../../tool/verify_management_report_snapshot_replacements_concurrency.sh)的同源递归清理改为相同客户端契约：EOF、全部 TERM／CONT、全部 wait。它保留已有精确锁协议、三组 job wait／reset 和全部业务断言；原生 baseline 与独立强制失败验证分别留证，不借用加入链接的延迟测试结论，也不改变其他并发脚本。
+
 从仓库根目录运行：
 
 ```bash
