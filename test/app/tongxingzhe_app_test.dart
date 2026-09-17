@@ -1047,7 +1047,7 @@ void main() {
     expect(find.text('问卷版本 2'), findsOneWidget);
   });
 
-  testWidgets('项目菜单复用组织 gateway，退出与接受邀请后重读且不切换项目', (tester) async {
+  testWidgets('项目菜单复用组织 gateway，退出或关闭邀请回执后重读且不切换项目', (tester) async {
     final database = LocalDatabase(NativeDatabase.memory());
     final identity = FakeIdentitySession(
       initial: IdentitySnapshot(
@@ -1226,6 +1226,23 @@ void main() {
     expect(identical(invitationIdentity, identity), isTrue);
     expect(invitationGateway.previewIds, [invitationId]);
     expect(invitationGateway.acceptIds, [invitationId]);
+    expect(directoryGateway.listCalls, 3);
+    expect(
+      find.byKey(const ValueKey('organization-invitation-accept-dialog')),
+      findsOneWidget,
+    );
+    expect(
+      find.text('organization-directed-account-invitation:v1'),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('organization-invitation-close')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('organization-invitation-accept-dialog')),
+      findsNothing,
+    );
     expect(directoryGateway.listCalls, 4);
     expect(find.text('同行者组织'), findsOneWidget);
     expect(find.text('受邀组织'), findsNothing);
