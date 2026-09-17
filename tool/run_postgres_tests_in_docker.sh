@@ -666,6 +666,92 @@ docker exec "${container_name}" psql \
   >/dev/null
 echo '0085 无 owner 升级失败且事务完整回滚：通过。'
 
+echo '验证 0096→0097／0098 保留旧 writer 的已提交 owner-transfer claim。'
+docker exec "${container_name}" createdb -U postgres tongxingzhe_owner_claim_upgrade
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/owner-claim-baseline-migrations /tmp/owner-claim-upgrade-only && \
+   find /workspace/backend/database/migrations -maxdepth 1 -type f \
+     \( -name '000[1-9]_*.sql' -o -name '00[1-8][0-9]_*.sql' -o -name '009[0-6]_*.sql' \) \
+     -exec cp {} /tmp/owner-claim-baseline-migrations/ \; && \
+   test \"\$(find /tmp/owner-claim-baseline-migrations -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 95 && \
+   cp /workspace/backend/database/migrations/009[78]_*.sql /tmp/owner-claim-upgrade-only/ && \
+   test \"\$(find /tmp/owner-claim-upgrade-only -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 2"
+docker exec \
+  --env DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_owner_claim_upgrade \
+  --env MIGRATION_DIR=/tmp/owner-claim-baseline-migrations \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh >/dev/null
+owner_claim_legacy_receipt="$(
+  docker exec "${container_name}" psql -U postgres -d tongxingzhe_owner_claim_upgrade \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --file /workspace/backend/database/fixtures/upgrade/0096_organization_owner_transfer_claim.sql
+)"
+if [[ "${owner_claim_legacy_receipt}" != organization-owner-transfer:v1\|* ]] \
+  || [[ "$(printf '%s\n' "${owner_claim_legacy_receipt}" | awk -F '|' 'NF == 5 { count++ } END { print count+0 }')" -ne 1 ]]; then
+  echo '0096 旧 writer 没有返回单行完整五字段 receipt。' >&2
+  exit 1
+fi
+owner_claim_before_upgrade="$(
+  docker exec "${container_name}" pg_dump \
+    postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_owner_claim_upgrade \
+    --data-only --schema=app_data --schema=app_private --no-owner --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b \
+    | shasum -a 256 | awk '{print $1}'
+)"
+docker exec \
+  --env DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_owner_claim_upgrade \
+  --env MIGRATION_DIR=/tmp/owner-claim-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+owner_claim_after_upgrade="$(
+  docker exec "${container_name}" pg_dump \
+    postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_owner_claim_upgrade \
+    --data-only --schema=app_data --schema=app_private --no-owner --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b \
+    | shasum -a 256 | awk '{print $1}'
+)"
+if [[ "${owner_claim_before_upgrade}" != "${owner_claim_after_upgrade}" ]]; then
+  echo '0097／0098 升级改变旧 claim 或其他 app_data／app_private 业务数据。' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql -U postgres -d tongxingzhe_owner_claim_upgrade \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file /workspace/backend/database/fixtures/upgrade/0098_organization_owner_transfer_end_relationships.sql >/dev/null
+owner_claim_before_replay="$(
+  docker exec "${container_name}" pg_dump \
+    postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_owner_claim_upgrade \
+    --data-only --schema=app_data --schema=app_private --no-owner --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b \
+    | shasum -a 256 | awk '{print $1}'
+)"
+owner_claim_replayed_receipt="$(
+  docker exec "${container_name}" psql -U postgres -d tongxingzhe_owner_claim_upgrade \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --file /workspace/backend/database/fixtures/upgrade/0098_organization_owner_transfer_legacy_replay.sql
+)"
+if [[ "${owner_claim_legacy_receipt}" != "${owner_claim_replayed_receipt}" ]]; then
+  echo '0097／0098 旧 request 的 historical replay 改变原五字段 receipt。' >&2
+  exit 1
+fi
+docker exec \
+  --env DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_owner_claim_upgrade \
+  --env MIGRATION_DIR=/tmp/owner-claim-baseline-migrations \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh >/dev/null
+docker exec \
+  --env DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_owner_claim_upgrade \
+  --env MIGRATION_DIR=/tmp/owner-claim-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+owner_claim_after_replay="$(
+  docker exec "${container_name}" pg_dump \
+    postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_owner_claim_upgrade \
+    --data-only --schema=app_data --schema=app_private --no-owner --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b \
+    | shasum -a 256 | awk '{print $1}'
+)"
+if [[ "${owner_claim_before_replay}" != "${owner_claim_after_replay}" ]]; then
+  echo '历史 replay 或重复 migration 改变 owner／membership／claim／audit 等业务行。' >&2
+  exit 1
+fi
+echo '0096→0097／0098 旧 claim、完整 receipt、结束关系后的 replay、checksum 幂等与业务数据不变：通过。'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 
