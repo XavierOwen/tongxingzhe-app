@@ -8,8 +8,9 @@ set -euo pipefail
 # the rollback fixture.
 : "${DATABASE_URL:?请设置 DATABASE_URL，例如 postgresql://user:password@host/database}"
 
-# Wrappers must exec the client/transport, or handle TERM by terminating and
-# waiting for their own children before exiting. Non-cooperative forks are unsupported.
+# Wrappers must exec the actual client, or handle TERM by terminating and waiting
+# for that client and their children. After exit they must not start clients or
+# connections. Non-cooperative forks and remote transports are unsupported.
 psql_command="${PSQL_COMMAND:-psql}"
 if ! command -v "${psql_command}" >/dev/null 2>&1; then
   echo '找不到 psql；请安装 PostgreSQL client 或设置 PSQL_COMMAND。' >&2
@@ -52,7 +53,7 @@ cleanup() {
   local pid
   # EOF closes the holder's transaction first. Children never inherit this FD.
   if [[ -n "${holder_fd}" ]]; then exec 3>&-; holder_fd=''; fi
-  # Each owned job is an exec client/transport or a wrapper that reaps on TERM.
+  # Each owned job is an actual client or a wrapper that terminates/reaps on TERM.
   for pid in "${child_pids[@]:-}"; do
     if [[ -n "${pid}" ]] && kill -0 "${pid}" >/dev/null 2>&1; then
       kill -TERM "${pid}" >/dev/null 2>&1 || true
@@ -64,7 +65,7 @@ cleanup() {
       wait "${pid}" >/dev/null 2>&1 || true
     fi
   done
-  # Scan after jobs exit, so a transport's final connection cannot evade cleanup.
+  # Scan after client jobs exit; wrappers must not start clients after exit.
   # Terminate only this invocation's uniquely named sessions in this database.
   run_psql --quiet --command="
     SELECT pg_terminate_backend(pid) FROM pg_stat_activity
