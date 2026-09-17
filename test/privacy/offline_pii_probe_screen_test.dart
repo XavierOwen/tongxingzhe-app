@@ -6,6 +6,38 @@ import 'package:tongxingzhe_app/privacy/offline_pii_probe.dart';
 import '../../tool/offline_pii_runtime_probe.dart';
 
 void main() {
+  testWidgets('实际探针App的小屏高字号多行阶段按钮使用完整小圆角底色', (tester) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+      tester.platformDispatcher.clearTextScaleFactorTestValue();
+    });
+
+    await tester.pumpWidget(OfflinePiiProbeApp(configuration: _configuration));
+    await tester.pumpAndSettle();
+
+    for (final (type, label) in <(Type, String)>[
+      (FilledButton, '1. 写入并读回 synthetic 快照'),
+      (OutlinedButton, '2. 完全结束 App 后重新启动，再检查恢复'),
+    ]) {
+      final finder = find.widgetWithText(type, label);
+      await tester.scrollUntilVisible(finder, 150);
+      final context = tester.element(finder);
+      final theme = Theme.of(context);
+      final style = type == FilledButton
+          ? theme.filledButtonTheme.style
+          : theme.outlinedButtonTheme.style;
+      expect(MediaQuery.textScalerOf(context).scale(14), 28);
+      expect(style?.shape?.resolve({}), isA<RoundedRectangleBorder>());
+      expect(style?.minimumSize?.resolve({})?.height, greaterThanOrEqualTo(48));
+      expect(tester.getSize(finder).height, greaterThanOrEqualTo(48));
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets('支持的平台可以运行阶段并复制脱敏证据', (tester) async {
     final recorder = _recorder();
     recorder.record(_gateEvent(OfflinePiiProbeOutcome.pass));

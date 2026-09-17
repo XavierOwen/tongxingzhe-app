@@ -64,6 +64,14 @@ final class _ProbeConfigurationErrorApp extends StatelessWidget {
   );
 }
 
+// 多行阶段标签需要完整底色，避免高字号首尾行落在胶囊弧边外。
+const _probeActionStyle = ButtonStyle(
+  minimumSize: WidgetStatePropertyAll(Size(64, 48)),
+  shape: WidgetStatePropertyAll(
+    RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(8))),
+  ),
+);
+
 final class OfflinePiiProbeApp extends StatelessWidget {
   const OfflinePiiProbeApp({super.key, required this.configuration});
 
@@ -72,6 +80,12 @@ final class OfflinePiiProbeApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner: false,
+    theme: ThemeData(
+      filledButtonTheme: const FilledButtonThemeData(style: _probeActionStyle),
+      outlinedButtonTheme: const OutlinedButtonThemeData(
+        style: _probeActionStyle,
+      ),
+    ),
     home: OfflinePiiProbeScreen(configuration: configuration),
   );
 }
