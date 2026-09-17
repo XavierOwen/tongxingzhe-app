@@ -557,16 +557,46 @@ BEGIN
 END
 $create_failure_atomicity$;
 
-CREATE TEMP TABLE fixture_0092_preview_counts_before ON COMMIT DROP AS
+-- Live selectors retain every fixture user/workspace and related generated
+-- membership/owner UUID, without counting unrelated committed organizations.
+CREATE TEMP VIEW fixture_0092_scoped_organization_memberships AS
+SELECT membership.* FROM app_data.organization_memberships AS membership
+WHERE split_part(membership.organization_membership_id::text, '-', 2) = '0092'
+  OR split_part(membership.organization_workspace_id::text, '-', 2) = '0092'
+  OR split_part(membership.app_user_id::text, '-', 2) = '0092';
+
+CREATE TEMP VIEW fixture_0092_preview_counts AS
 SELECT
-  (SELECT count(*) FROM app_data.app_users) AS app_user_count,
-  (SELECT count(*) FROM app_data.external_identities) AS identity_count,
-  (SELECT count(*) FROM app_data.workspaces) AS workspace_count,
-  (SELECT count(*) FROM app_data.organization_memberships) AS membership_count,
-  (SELECT count(*) FROM app_data.organization_owner_assignments) AS owner_count,
-  (SELECT count(*) FROM app_private.organization_shareable_join_link_request_claims) AS claim_count,
-  (SELECT count(*) FROM app_private.organization_shareable_join_link_request_tombstones) AS tombstone_count,
-  (SELECT count(*) FROM app_private.organization_shareable_join_link_audit_events) AS audit_count;
+  (SELECT count(*) FROM app_data.app_users AS app_user
+    WHERE split_part(app_user.app_user_id::text, '-', 2) = '0092'
+      OR EXISTS (SELECT 1 FROM fixture_0092_scoped_organization_memberships AS membership
+        WHERE membership.app_user_id = app_user.app_user_id)) AS app_user_count,
+  (SELECT count(*) FROM app_data.external_identities AS identity_row
+    WHERE split_part(identity_row.external_identity_id::text, '-', 2) = '0092'
+      OR split_part(identity_row.app_user_id::text, '-', 2) = '0092'
+      OR identity_row.issuer = 'https://synthetic-0092.example/auth/v1') AS identity_count,
+  (SELECT count(*) FROM app_data.workspaces AS workspace
+    WHERE split_part(workspace.workspace_id::text, '-', 2) = '0092'
+      OR split_part(workspace.personal_owner_app_user_id::text, '-', 2) = '0092'
+      OR EXISTS (SELECT 1 FROM fixture_0092_scoped_organization_memberships AS membership
+        WHERE membership.organization_workspace_id = workspace.workspace_id)) AS workspace_count,
+  (SELECT count(*) FROM fixture_0092_scoped_organization_memberships) AS membership_count,
+  (SELECT count(*) FROM app_data.organization_owner_assignments AS owner_row
+    WHERE split_part(owner_row.organization_owner_assignment_id::text, '-', 2) = '0092'
+      OR EXISTS (SELECT 1 FROM fixture_0092_scoped_organization_memberships AS membership
+        WHERE membership.organization_membership_id = owner_row.organization_membership_id)) AS owner_count,
+  (SELECT count(*) FROM app_private.organization_shareable_join_link_request_claims AS claim
+    WHERE split_part(claim.link_id::text, '-', 2) = '0092'
+      OR split_part(claim.organization_workspace_id::text, '-', 2) = '0092'
+      OR split_part(claim.creator_app_user_id::text, '-', 2) = '0092') AS claim_count,
+  (SELECT count(*) FROM app_private.organization_shareable_join_link_request_tombstones
+    WHERE split_part(link_id::text, '-', 2) = '0092') AS tombstone_count,
+  (SELECT count(*) FROM app_private.organization_shareable_join_link_audit_events AS audit
+    WHERE split_part(audit.link_id::text, '-', 2) = '0092'
+      OR split_part(audit.organization_workspace_id::text, '-', 2) = '0092') AS audit_count;
+
+CREATE TEMP TABLE fixture_0092_preview_counts_before ON COMMIT DROP AS
+SELECT * FROM fixture_0092_preview_counts;
 
 SET LOCAL ROLE tongxingzhe_runtime;
 
@@ -655,16 +685,7 @@ BEGIN
   END IF;
 
   SELECT * INTO STRICT counts_before FROM fixture_0092_preview_counts_before;
-  SELECT
-    (SELECT count(*) FROM app_data.app_users),
-    (SELECT count(*) FROM app_data.external_identities),
-    (SELECT count(*) FROM app_data.workspaces),
-    (SELECT count(*) FROM app_data.organization_memberships),
-    (SELECT count(*) FROM app_data.organization_owner_assignments),
-    (SELECT count(*) FROM app_private.organization_shareable_join_link_request_claims),
-    (SELECT count(*) FROM app_private.organization_shareable_join_link_request_tombstones),
-    (SELECT count(*) FROM app_private.organization_shareable_join_link_audit_events)
-  INTO counts_after;
+  SELECT * INTO STRICT counts_after FROM fixture_0092_preview_counts;
   IF counts_after IS DISTINCT FROM counts_before THEN
     RAISE EXCEPTION '0092 preview wrote facts: before %, after %',
       counts_before, counts_after;

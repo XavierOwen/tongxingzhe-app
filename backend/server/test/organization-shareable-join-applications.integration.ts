@@ -11,6 +11,7 @@ import {
 } from "../src/organization-shareable-join-applications.js";
 
 const databaseUrl = required("DATABASE_URL");
+const linkFixture = fixture(required("ORGANIZATION_SHAREABLE_JOIN_LINK_FIXTURE"));
 const submitFixture = fixture(required(
   "ORGANIZATION_SHAREABLE_JOIN_APPLICATION_SUBMIT_FIXTURE",
 ));
@@ -91,7 +92,7 @@ test("0093 and 0094 runtime bridges submit, approve, replay, forbid, and protect
   }
 });
 
-test("0093/0094 side-effect assertions ignore unrelated commits between their before/after snapshots", {timeout: 45_000}, async (t) => {
+test("0092/0093/0094 side-effect assertions ignore unrelated commits between their before/after snapshots", {timeout: 45_000}, async (t) => {
   const pool = new Pool({connectionString: databaseUrl, max: 2, connectionTimeoutMillis: 5_000});
   let client: PoolClient | undefined;
   let unrelated: PoolClient | undefined;
@@ -102,6 +103,7 @@ test("0093/0094 side-effect assertions ignore unrelated commits between their be
     const holderPid = (await unrelated.query<{pid: number}>("SELECT pg_backend_pid() AS pid")).rows[0]?.pid;
     assert.ok(fixturePid && holderPid && fixturePid !== holderPid);
     for (const scenario of [
+      {number: 92, sql: linkFixture, stage: "preview", marker: "DO $preview_results$"},
       {number: 93, sql: submitFixture, stage: "business", marker: "DO $success$"},
       {number: 93, sql: submitFixture, stage: "failure", marker: "DO $failure_atomicity$"},
       {number: 94, sql: approvalFixture, stage: "business", marker: "DO $success$"},
