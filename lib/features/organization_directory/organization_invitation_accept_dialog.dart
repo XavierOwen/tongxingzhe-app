@@ -83,24 +83,38 @@ final class _OrganizationInvitationAcceptDialogState
           },
           child: AlertDialog(
             key: const ValueKey('organization-invitation-accept-dialog'),
-            insetPadding: const EdgeInsets.symmetric(
+            insetPadding: EdgeInsets.symmetric(
               horizontal: 16,
-              vertical: 24,
+              vertical: MediaQuery.viewInsetsOf(context).bottom > 0 ? 8 : 24,
             ),
+            contentPadding: MediaQuery.viewInsetsOf(context).bottom > 0
+                ? const EdgeInsets.symmetric(horizontal: 16, vertical: 12)
+                : null,
             constraints: const BoxConstraints(maxWidth: 560),
-            title: Text(
-              widget.text.t(
-                _confirmDiscard
-                    ? 'organizationInvitationDiscardTitle'
-                    : 'organizationInvitationTitle',
-              ),
-            ),
             content: Scrollbar(
               controller: _scrollController,
               thumbVisibility: true,
               child: SingleChildScrollView(
                 controller: _scrollController,
-                child: _content(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Semantics(
+                      header: true,
+                      namesRoute: true,
+                      child: Text(
+                        widget.text.t(
+                          _confirmDiscard
+                              ? 'organizationInvitationDiscardTitle'
+                              : 'organizationInvitationTitle',
+                        ),
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _content(),
+                  ],
+                ),
               ),
             ),
             actions: _actions(),

@@ -381,6 +381,50 @@ void main() {
     }
     semantics.dispose();
   });
+
+  for (final localeCode in ['zh', 'en']) {
+    testWidgets('$localeCode 软键盘与 200% 字号保留完整输入区', (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 307);
+      tester.view.padding = const FakeViewPadding(top: 24);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetViewInsets);
+      addTearDown(tester.view.resetPadding);
+
+      await _open(
+        tester,
+        fixture.session,
+        _Gateway(),
+        _Ids().next,
+        localeCode: localeCode,
+        textScaler: TextScaler.linear(2),
+      );
+      await tester.enterText(_linkField, _linkId);
+      await tester.ensureVisible(_linkField);
+      await tester.pumpAndSettle();
+
+      final viewport = find.ancestor(
+        of: _linkField,
+        matching: find.byType(SingleChildScrollView),
+      );
+      expect(viewport, findsOneWidget);
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.getSize(viewport).height,
+        greaterThanOrEqualTo(tester.getSize(_linkField).height),
+      );
+      for (final action in [_close, _preview]) {
+        final rect = tester.getRect(action);
+        expect(rect.bottom, lessThanOrEqualTo(568 - 307));
+        expect(rect.height, greaterThanOrEqualTo(48));
+        expect(rect.width, greaterThanOrEqualTo(48));
+      }
+    });
+  }
 }
 
 final _launcher = find.byKey(
@@ -433,6 +477,7 @@ Future<void> _open(
   AppSession session,
   OrganizationShareableJoinGateway gateway,
   String Function() idGenerator, {
+  String localeCode = 'zh',
   TextScaler textScaler = TextScaler.noScaling,
 }) async {
   await tester.pumpWidget(
@@ -450,7 +495,7 @@ Future<void> _open(
               context: context,
               barrierDismissible: false,
               builder: (_) => OrganizationShareableJoinApplicationSubmitDialog(
-                text: const AppStrings('zh'),
+                text: AppStrings(localeCode),
                 gateway: gateway,
                 appSession: session,
                 applicationIdGenerator: idGenerator,

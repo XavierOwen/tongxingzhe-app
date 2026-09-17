@@ -1470,6 +1470,14 @@ builder 使用启动时打开的同一个 `IdentitySession`，`AppStartupReady` 
 
 `TEST-092`／`MANUAL-082` 覆盖值域、immutable guard、ACL、首次／live replay／墓碑并存的冲突优先级、family 隔离和双序 request-lock 等待。synthetic 墓碑只模拟终结事实，不证明组织已实际清除。本票不实现 deletion／restore／purge eligibility 或 runner，也不删除 live claim、审计或任何组织业务记录。
 
+#### Slice 7AS：修复组织输入窗口的软键盘裁切
+
+7AS／Issue #379 根据 Android 原生审批复核发现的同类问题，检查创建组织、创建定向邀请、接受定向邀请和提交分享链接申请四个既有窗口。320×568、200% 字号、307px 键盘与 24px 顶部安全区下，新回归在修复前实际复现七条裁切或 overflow；中文创建组织原本通过。
+
+只在键盘打开时收紧 dialog inset／content 留白，不缩小字体或 48px 触控目标。三个原固定标题进入既有正文滚动区，并保留 headlineSmall、heading 和 route semantics；创建组织沿用已有 scrollable AlertDialog。非 IME 保留默认 M3 留白。创建操作使用既有简短“创建／Create”，两个英文 preview 使用“View”；对象、编号和风险仍由标题、字段和正文说明。
+
+`TEST-093`／`MANUAL-083` 覆盖四窗口的中英文完整输入、键盘以上动作、viewport 和触控目标，保留既有 fixed-intent、会话、未知结果、receipt、复制和 gateway ownership tests。本票不改变 UUID、请求、身份、Backend、数据库、权限或返回语义，不添加共享窗口抽象或依赖；synthetic emulator 与 Widget 检查不证明生产或真人辅助技术。
+
 ### 5.8 分析、指标与报告
 
 #### 5.8.1 统计单位和核心口径
@@ -2997,6 +3005,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-080` | 学习文档说明 7AP 如何从选定组织输入 application UUID、本地核对后明确批准，复用固定 organization／application 重试，并区分稳定拒绝与不确定结果。必须说明不读取申请人资料、服务端判断 current owner、历史回执不证明当前 membership、不授予项目或额外权限、会话 fence 和 synthetic／CI／生产证据边界。 |
 | `MANUAL-081` | 学习文档说明 7AQ 如何用同组织成员关系 UUID 核对接收方、明确结束自己的 owner assignment，并用固定 request／workspace／target 重试。必须说明首次授权与 exact replay 的差异、历史回执不证明当前 owner、不改变其他 owner／项目权限、既有 gateway 接线与 ownership、会话 fence 和 synthetic／CI／生产证据边界。 |
 | `MANUAL-082` | 学习文档说明 7AR 的独立 creation family、两字段 value-free immutable tombstone、同 request lock 下的冲突优先级、原 writer／identity bridge 保留及完整 Docker 验证命令。必须区分防重放存储与实际组织清除，不定义 deleted_at 的申请时间或期限，不新增 runtime 写入口或授权受控删除例外。 |
+| `MANUAL-083` | 学习文档说明 7AS 四个既有组织窗口在高字号软键盘下的裁切机制、IME-only 留白和标题共用滚动区，保留字号／48px 触控目标及原请求语义。说明 307px 键盘／24px 安全区的中英文回归、原生 synthetic batch 和本地／CI／生产边界，不把截图当几何或真人辅助技术证明。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3267,6 +3276,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-090` | 7AP focused Widget 与目录接线 tests 覆盖固定组织、application UUID 规范化与本地拒绝、本地核对后明确 approve、同意图重试、不确定结果转稳定拒绝、五字段成功回执、全部 typed failure、busy 防重入、账号失效／换号／ABA／迟到结果、不刷新目录／切项目／复制／关闭 gateway。检查中英文、live region、键盘、触控目标与 320×568／200% 字号；本地 synthetic、完整 Flutter、analyzer、format、生产边界、链接和 CI 不证明 production identity、Backend 部署、数据库权限、通知或真人平台。 |
 | `TEST-091` | 7AQ focused Widget、目录和 App 接线 tests 覆盖 target membership UUID 规范化与本地拒绝、本地核对后明确 transfer、首次提交生成 request UUID、固定 request／workspace／target、全部 typed failure、不确定结果转稳定拒绝、五字段历史回执、busy 防重入、会话／ABA／迟到结果、同账号切项目、共享 gateway 与不刷新／切项目／复制。检查中英文、live region、Tab／Escape／系统返回、48px 控件和 320×568／200% 字号；完整 Flutter、analyzer、format、生产边界、链接和精确 head CI 不证明生产身份、部署端点、数据库实权或真人平台。 |
 | `TEST-092` | 7AR structural check、rollback fixture 和独立会话并发覆盖 creation tombstone 两字段、固定 family、immutable guard、owner／PUBLIC／runtime ACL、首次创建、精确 replay、墓碑与 live claim 并存时优先 conflict、不同 family 相同 UUID 隔离、旧 writer OID／owner／ACL／参数保留，以及墓碑先行和 create 先行的真实 request-lock 持有／等待。完整 Docker 验证旧 checksum、rebuild 和 dump／restore；synthetic 通过不证明实际 purge、生产删除或恢复。 |
+| `TEST-093` | 7AS 为四个组织窗口各增加中英文 IME regression：320×568／200% 字号、bottom 307px／top 24px，输入完整可滚动露出，scroll viewport 可容纳输入框，动作全部位于键盘以上且至少 48px。八条新回归保留全部既有请求／会话／receipt tests；完整 Flutter、analyzer、format、边界、链接、原生 Android synthetic batch 和精确 head CI 不证明生产权限、真人 TalkBack／VoiceOver 或六平台运行。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3633,6 +3643,8 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 7AQ／#375 将已组合的 owner-transfer gateway 接到选定组织的交接窗口。已知 membership UUID 经本地核对后明确转让；固定意图重试和历史 receipt 不推导当前 owner，不增加成员目录、co-owner grant 或项目权限。
 
 7AR／#377 在 0095 为创建请求补 value-free tombstone 和同 request lock 防重放检查。它保留全部 live 业务事实，不代表组织删除、恢复或终结清除已实现。
+
+7AS／#379 修复四个既有组织窗口在窄屏高字号软键盘下的输入裁切，仅调整留白、标题滚动和简短动作，不改变请求或权限。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 

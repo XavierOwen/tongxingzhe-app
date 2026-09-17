@@ -388,6 +388,53 @@ void main() {
     );
   });
 
+  for (final localeCode in ['zh', 'en']) {
+    testWidgets('$localeCode 软键盘与 200% 字号保留完整输入区', (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 307);
+      tester.view.padding = const FakeViewPadding(top: 24);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetViewInsets);
+      addTearDown(tester.view.resetPadding);
+
+      await _open(
+        tester,
+        fixture.session,
+        _Gateway(),
+        _Ids().next,
+        localeCode: localeCode,
+        textScaler: TextScaler.linear(2),
+      );
+      await tester.enterText(_name, '组织名称');
+      await tester.ensureVisible(_name);
+      await tester.pumpAndSettle();
+
+      final viewport = find.ancestor(
+        of: _name,
+        matching: find.byType(SingleChildScrollView),
+      );
+      expect(viewport, findsOneWidget);
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.getSize(viewport).height,
+        greaterThanOrEqualTo(tester.getSize(_name).height),
+      );
+      for (final action in [
+        find.byKey(const ValueKey('organization-create-cancel')),
+        _submit,
+      ]) {
+        final rect = tester.getRect(action);
+        expect(rect.bottom, lessThanOrEqualTo(568 - 307));
+        expect(rect.height, greaterThanOrEqualTo(48));
+        expect(rect.width, greaterThanOrEqualTo(48));
+      }
+    });
+  }
+
   testWidgets('主要触控目标至少为 48 logical pixels', (tester) async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.close);

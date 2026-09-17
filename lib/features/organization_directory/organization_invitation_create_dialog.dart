@@ -96,21 +96,38 @@ final class _OrganizationInvitationCreateDialogState
       },
       child: AlertDialog(
         key: const ValueKey('organization-invitation-create-dialog'),
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        constraints: const BoxConstraints(maxWidth: 560),
-        title: Text(
-          widget.text.t(
-            _confirmDiscard
-                ? 'organizationInvitationCreateDiscardTitle'
-                : 'organizationInvitationCreateTitle',
-          ),
+        insetPadding: EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: MediaQuery.viewInsetsOf(context).bottom > 0 ? 8 : 24,
         ),
+        contentPadding: MediaQuery.viewInsetsOf(context).bottom > 0
+            ? const EdgeInsets.symmetric(horizontal: 16, vertical: 12)
+            : null,
+        constraints: const BoxConstraints(maxWidth: 560),
         content: Scrollbar(
           controller: _scrollController,
           thumbVisibility: true,
           child: SingleChildScrollView(
             controller: _scrollController,
-            child: _content(context),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Semantics(
+                  header: true,
+                  namesRoute: true,
+                  child: Text(
+                    widget.text.t(
+                      _confirmDiscard
+                          ? 'organizationInvitationCreateDiscardTitle'
+                          : 'organizationInvitationCreateTitle',
+                    ),
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _content(context),
+              ],
+            ),
           ),
         ),
         actions: _actions(),
@@ -256,9 +273,7 @@ final class _OrganizationInvitationCreateDialogState
           onPressed: _busy ? null : _submit,
           child: Text(
             widget.text.t(
-              _uncertain
-                  ? 'organizationInvitationCreateRetry'
-                  : 'organizationInvitationCreateSubmit',
+              _uncertain ? 'organizationInvitationCreateRetry' : 'create',
             ),
           ),
         ),

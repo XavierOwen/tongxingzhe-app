@@ -81,7 +81,13 @@ final class _OrganizationCreationDialogState
         return KeyEventResult.ignored;
       },
       child: AlertDialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        insetPadding: EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: MediaQuery.viewInsetsOf(context).bottom > 0 ? 8 : 24,
+        ),
+        contentPadding: MediaQuery.viewInsetsOf(context).bottom > 0
+            ? const EdgeInsets.symmetric(horizontal: 16, vertical: 12)
+            : null,
         constraints: const BoxConstraints(maxWidth: 560),
         scrollable: true,
         title: Text(
@@ -185,9 +191,7 @@ final class _OrganizationCreationDialogState
           key: const ValueKey('organization-create-submit'),
           onPressed: _busy ? null : _submit,
           child: Text(
-            _uncertain
-                ? widget.text.t('retry')
-                : widget.text.t('organizationCreate'),
+            _uncertain ? widget.text.t('retry') : widget.text.t('create'),
           ),
         ),
     ];
