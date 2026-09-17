@@ -1814,6 +1814,30 @@ npm --prefix backend/server test
 
 `TEST-097` 的真实 Node HTTP server 使用 fake verifier／store；Promise gate 使用真实 adapter 与 fake query，composition 检查实际 source 接线。它们不替代 §3.39 的 runtime-role 对账，也不证明生产部署、真实身份、Flutter 或真人平台。
 
+### 3.41 普通项目成员的 Flutter typed gateway（Issue #388，MANUAL-088）
+
+7AX 的 assign API 接受 request、organization、project、target parent 四个 UUID，输出七字段 immutable 历史 receipt 或 typed rejection。本票不接 UI、startup、目录或 Drift；无 owner／资料／current context 预查。
+
+四个输入在取得 token 前验证，可把 uppercase 规范为 lowercase，但不 trim。无效输入不读取身份或网络。HTTP 固定 POST 7AW 路径，body 只有 request_id 和 target_organization_membership_id，不提交 actor、角色、时间或 capability。
+
+receipt 要求 JSON UTF-8／no-store、exact 七字段、固定 family、canonical UUID／UTC 毫秒与 submitted selectors。parent end 必须明确 null 或时间，不把 missing 当无结束。end 早于 start 拒绝；相等毫秒端点可来自合法 SQL 微秒区间，不重判完整精度资格，也不证明当前访问。
+
+401 只强制刷新一次，并重发相同路径、body 与 request。gateway 观察同一次登录的身份流：注销、换号、ABA、流 error／done、close 或迟到结果均不能交付旧意图。正常同账号续 token 不破坏意图；已经发送的请求不承诺撤销数据库事实。
+
+不等待 subscription cancel 返回的 cleanup Future，以免阻塞结果交付。cleanup error 不外泄，交付前再次检查当前身份。该做法沿用既有 owner-transfer gateway，不引入共享状态框架。typed result 不包含 token、provider、SQL、自由文本或 raw error。
+
+HTTP stable code 必须与 status 配对；格式、header、unknown code、receipt 漂移统一 invalidResponse。timeout／network 为 networkUnavailable；unauthorized、forbidden 与 unavailable 不混为一类。deferred gateway 无网络，非法 Backend 配置在创建 client 前失败，close 只结束自己 client，不关闭共享 identity。
+
+从仓库根目录运行：
+
+```bash
+flutter test --no-pub test/organization_project_membership_assignment
+dart analyze
+flutter test --no-pub
+```
+
+`TEST-098` 使用 fake IdentitySession／HTTP client，不连接生产或真实账号。focused／完整 Flutter、source review、analyzer、format、边界、links 与 CI 是各自证据，不证明 App 接线、当前成员权、生产部署或真人平台。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
