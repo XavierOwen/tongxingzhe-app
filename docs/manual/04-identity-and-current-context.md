@@ -1766,6 +1766,31 @@ parent 结束的两种竞态先经过 0085 target app-user row lock；测试观�
 
 局部 structural／fixture／并发通过不等于完整套件通过。完整 runner 另检查旧 checksum、全部 rebuild／fixtures、既有 Backend 对账与独立 dump／restore；恢复库只重跑 check／fixture，不重跑会提交 synthetic 行的并发。源库和恢复库都是合成 Docker，不证明生产身份、HTTP、客户端或真人平台。
 
+### 3.39 普通项目成员的 Backend typed adapter（Issue #385，MANUAL-086）
+
+7AV 只把 0096 identity bridge 的结果变成固定 Backend 类型，不开放 HTTP route。store 每次一条参数化 query，按 issuer、subject、request、organization、project、target parent 传参；identity 不 trim，不另读 owner、资料或 current context。
+
+result parser 要求单行、固定 family 和 exact 七字段，并核对提交的 workspace、project、target parent。其他行数、extra／missing keys、actor／owner 字段、合同漂移或 selectors 不符统一 unavailable，不交付不可信 receipt。
+
+四个 UUID 规范为 lowercase。active time 与非空 parent end 必须是有限 Date 或严格合法日历／时区字符串，规范到 UTC 毫秒；结束必须显式 null 或合法时间，undefined／缺失不是无限结束。
+
+SQL 保留完整精度且验证正区间，node-postgres Date 与 wire receipt 只保留毫秒。例如 `.123456` 到 `.123789` 的正区间可投影为两个 `.123`。adapter 拒绝投影 end 早于 start，但允许相等，不重造微秒资格判断；历史 receipt 从来不是当前访问凭据。
+
+只有 ADR-0186 五组固定 SQLSTATE／message 映射四个稳定 Backend code；未知错误、constraint 或 parser 失败统一本功能 unavailable。typed error 不携带数据库原文、cause、identity、token、SQL 或原始 stack，也不添加日志。
+
+从仓库根目录运行：
+
+```bash
+cd backend/server
+npm test
+cd ../..
+./tool/run_postgres_tests_in_docker.sh
+```
+
+`TEST-096` 的单元 fake 检查参数、row、时间和脱敏。真实 integration 通过 `ORGANIZATION_PROJECT_MEMBERSHIP_ASSIGNMENT_FIXTURE` 只复用 0096 seed 段，后续隔离事务仍由 SQL fixture 验证；在 rollback transaction 切换 runtime role，对账有限／空 parent first／replay、selectors conflict 和两条 claim／audit。
+
+Docker runner 显式注入 fixture 并运行编译后的 integration，之后继续 checksum／并发／独立 dump／restore。unit 通过不能替代 runtime 对账，合成 Docker 也不证明 production composition、HTTP、生产身份或真人平台。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：

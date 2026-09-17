@@ -1505,6 +1505,14 @@ exact active-actor replay 只取 request 与 actor row locks，返回原历史 r
 
 `TEST-095`／`MANUAL-085` 覆盖 schema／ACL、稳定错误、有限／空 parent、历史 replay、overlap、恢复与墓碑，以及十二种真实双会话等待。完整 Docker 检查 checksum、重建与独立 dump／restore；合成通过不证明生产身份、Backend transport、客户端、管理授权、完整撤权或实际 purge。
 
+#### Slice 7AV：普通项目成员安排的 Backend typed adapter
+
+7AV／Issue #385 新增 0096 exact-identity bridge 的 PostgreSQL adapter，每次单条参数化 query，不实现 HTTP route 或 production composition。identity 原值传入，不预查 owner、资料或 current context；parser 只接受固定 family 的单行七字段，并核对 submitted workspace／project／target parent。
+
+UUID 规范为 lowercase，有限日历时间投影为 UTC 毫秒。parent end 必须显式 null 或合法时间，不能把缺失／undefined 当无结束。正的 SQL sub-ms 区间可投影为相等两端；adapter 不重判完整精度资格，也不把历史 receipt 当访问凭据。
+
+五组固定 SQLSTATE／message 只映射四个脱敏 code，未知数据库、constraint、parser、行数或结果漂移统一 unavailable。`TEST-096`／`MANUAL-086` 区分单元 fake 与真实 runtime-role rollback integration；完整 Docker 显式执行后者，不扩大为 HTTP、生产或真人平台证明。
+
 ### 5.8 分析、指标与报告
 
 #### 5.8.1 统计单位和核心口径
@@ -3035,6 +3043,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-083` | 学习文档说明 7AS 四个既有组织窗口在高字号软键盘下的裁切机制、IME-only 留白和标题共用滚动区，保留字号／48px 触控目标及原请求语义。说明 307px 键盘／24px 安全区的中英文回归、原生 synthetic batch 和本地／CI／生产边界，不把截图当几何或真人辅助技术证明。 |
 | `MANUAL-084` | 学习文档说明 7AT 的 owner 普通项目成员安排与管理权限提升的区别、exact identity 与不可信 selectors、nullable parent bound、历史 replay、七字段 row、原子 audit／claim、READ COMMITTED 和复用 0073 status fence。解释 value-free UUID 不是不可反查匿名数据、恢复／purge 尚未实现，以及文档验证的证据边界。 |
 | `MANUAL-085` | 学习文档说明 7AU 的真实 writer／bridge、单一墙钟、nullable parent、overlap、历史 replay、RC-only、immutable／去关联和 runtime 最小 ACL；提供完整 Docker 命令并解释十二种独立会话的 advisory／PID 与 user-row-first transactionid 证据，区分局部 fixture、完整套件、CI 与生产。 |
+| `MANUAL-086` | 学习文档说明 7AV 单次参数化 bridge、exact 七字段与 submitted selectors、identity 原值、canonical UUID／UTC 毫秒和显式 null parent end；解释 SQL 微秒区间的投影 ceiling、稳定脱敏错误与无 Auth／context 预查。给出 unit 与完整 Docker 命令，区分 fake、runtime integration、CI 与生产。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3308,6 +3317,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-093` | 7AS 为四个组织窗口各增加中英文 IME regression：320×568／200% 字号、bottom 307px／top 24px，输入完整可滚动露出，scroll viewport 可容纳输入框，动作全部位于键盘以上且至少 48px。八条新回归保留全部既有请求／会话／receipt tests；完整 Flutter、analyzer、format、边界、链接、原生 Android synthetic batch 和精确 head CI 不证明生产权限、真人 TalkBack／VoiceOver 或六平台运行。 |
 | `TEST-094` | 7AT 文档检查核对 ORG-030–034 与 ADR-0033／0034／0186 的 owner／default-promoter 方向、exact identity、输入与七字段 row、parent interval、claim／replay／tombstone、原子时间／审计、锁序与 isolation、ACL、稳定错误和终结边界，运行链接、no-slop、diff；文档和静态推演不证明实际数据库、归档并发、生产身份或平台运行。 |
 | `TEST-095` | 7AU structural、rollback fixture 与十二种独立会话竞态覆盖 exact 七字段、schema／guard／owner／PUBLIC／runtime ACL、RC-only 两 seam 的拒绝与零 advisory lock、nullable／有限 parent、history／active／future overlap、self assignment、recovery、exact／other-actor／drift／去关联 replay 和 tombstone 优先级。空项目与两种 UUID 顺序历史成员归档双序、request／tombstone 用精确 advisory／PID；parent 双序用真实 transactionid／blocking PID。完整 Docker 检查旧 checksum、重建与独立 dump／restore；synthetic 不证明生产、HTTP、客户端、完整撤权或 purge。 |
+| `TEST-096` | 7AV unit tests 覆盖单次 query 的六参数／identity 原值、exact 一行七字段、family／selectors／UUID／时间漂移、显式 null／undefined、日历／时区和合法毫秒相等投影、五组固定错误及未知失败脱敏。真实 runtime-role rollback integration 对账有限／空 parent 的 first／exact replay、selectors conflict 和仅两条 claim／audit；完整 Docker 显式接入 fixture env 与 integration entry，再检查 checksum／并发／restore，不声称 HTTP、production composition 或生产验证。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3680,6 +3690,8 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 7AT／#381 固定 owner 明确安排普通项目成员的技术合同，仅默认推广者，不附带管理或 PII 权限；数据库与 transport 实现仍须独立验证。
 
 7AU／#383 提供普通项目成员安排的 DB-only writer 与最小 runtime bridge，覆盖历史重放及真实归档／parent 竞态；Backend／HTTP／Flutter 另票交付。
+
+7AV／#385 提供 strict Backend PostgreSQL adapter 与真实 runtime-role 对账；HTTP route 和 production composition 尚未接入。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 
