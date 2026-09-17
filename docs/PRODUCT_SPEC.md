@@ -3143,6 +3143,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-096` | 学习文档说明批准历史回执主动进入固定成员的普通项目安排、已知项目UUID与独立核对／提交、原手工目标入口、同一借用gateway、子窗关闭保留批准回执及无自动刷新／切项目；区分历史批准与安排时独立授权，说明request／unknown／会话边界和Widget／原生／CI证据等级。 |
 | `MANUAL-097` | 学习文档说明共享 AppSession.close 结束事件流而不发送 invalid snapshot、七个组织窗口的原失效路径复用、旧目录／回执清理及迟到隔离；保留 unknown 与借用资源所有权，并区分真实 stream-close Widget、合成原生操作及生产身份／真人验收。 |
 | `MANUAL-099` | 学习文档说明真实0096基线用旧writer提交成功负责人交接，再仅升级0097/0098，保存五字段原receipt与完整业务快照；合法后续交接并结束旧parent后的精确replay、checksum幂等及零事实改写，与新建库fixture／当前schema恢复和生产升级证据区分。 |
+| `MANUAL-100` | 学习文档说明真实App/Home经手工批准和待审批目录两路进入固定成员安排，逐层借用同一App-owned gateway/session、明确批准与安排的独立意图、子窗关闭保留父回执及App级资源所有权；区分生产UI的合成组合测试与生产Auth/RPC/数据库。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3429,6 +3430,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-106` | 7BJ Widget验证入口仅known success出现、手工／待审批两路同一App-owned gateway、组织与目标固定且无可编辑target、开窗／review零assign、独立一次提交／固定unknown重试、原手工目标、关闭子窗仍见原批准回执且目录不重读、会话关闭／ABA／迟到隔离与不关闭借用资源；中英文320×568/200%／IME、焦点／语义与48dp。关联analyze、format、production boundary、链接及精确head CI；合成Android原生不代表生产身份、部署或六平台真人验收。 |
 | `TEST-107` | 7BL 对七个组织窗口实际关闭借用 AppSession 而非注入失效 snapshot，先RED再GREEN；验证旧目录／选择／历史回执清空、请求中与迟到结果隔离、父目录不旧重读、不返回旧成功及不关闭借用 gateway。完整关联Widget、analyze、format、production boundary、链接与精确head CI继续运行；合成Android抽查目录和邀请回执的真实 stream-close，不代表生产Auth、部署或六平台真人验收。 |
 | `TEST-109` | 7BN 正式Docker从真实0001至0096建立独立旧库，runtime旧writer分事务提交创建／成功交接，保存原五字段receipt与完整app_data/app_private快照；仅0097/0098升级本身零事实改写，合法交接给active successor再结束原actor/target父关系，原active actor exact request replay返回原receipt。重复baseline／upgrade走checksum跳过，业务快照逐字节不变；不依赖宿主shasum。完整既有空库／checks／fixtures／runtime integration／并发／漂移拒绝／独立恢复及精确head CI继续运行，不代表生产升级或Auth。 |
+| `TEST-110` | 7BO 两条回归实际挂载TongxingzheApp，经Home菜单、组织目录、手工批准或待审批选择进入项目安排；逐层核对同一gateway/session，核对阶段零写入、明确批准与安排各一次、固定组织/成员与手工项目、新UUIDv4意图，关闭子窗保留同一批准State及全部回执值，不自动读目录/切context。借用窗口不关闭gateway，移除App才各关闭一次；完整App测试、analyze/format/边界/链接和精确head CI继续运行，不代表真实Auth、RPC、数据库或真人验收。 |
 
 ## 9. UI、视觉与可访问性
 
