@@ -2373,7 +2373,7 @@ Issue #405 在加入链接脚本的 create replay、owner transfer、membership 
 
 新版复用已有 FIFO 控制：holder 保持事务，controller 观察指定 waiter 在精确 request key 或对应 app-user 的 transactionid 上等待，再 COMMIT。holder／waiter 与 blocker 必须匹配；轮询间隔不是释放 deadline。失败时先关闭 FIFO，再终止并回收本次客户端，最后清理本轮唯一 application_name 对应的残余数据库会话。
 
-`PSQL_COMMAND` wrapper 必须 `exec` 实际客户端；需要创建子进程时，必须在 TERM trap 中终止并 `wait` 回收实际客户端及子进程后退出。远端 transport wrapper 还须保证退出后不会有远端客户端继续建连；仅 `exec docker exec` 不提供这一终止保证，它的 Bash 3 baseline 只能证明功能与兼容。本脚本不负责回收任意非协作 wrapper 的后代，也不递归杀死它们。在 PostgreSQL 作为容器 PID 1 的环境，杀子进程后立即杀其父可能让 postmaster 收养异常退出的孤儿，引发数据库恢复；本地强制失败曾观察到这一问题，不能把“拥有的 PID 已消失”单独记为清理通过。
+`PSQL_COMMAND` wrapper 必须 `exec` 实际客户端；需要创建子进程时，必须在 TERM trap 中终止并 `wait` 回收实际客户端及子进程后退出，退出后不得再启动客户端或连接。远端 transport 与任意非协作 fork 不受支持；仅 `exec docker exec` 不保证远端客户端终止，它的 Bash 3 baseline 只能证明功能与兼容。本脚本不递归杀死 wrapper 的后代。在 PostgreSQL 作为容器 PID 1 的环境，杀子进程后立即杀其父可能让 postmaster 收养异常退出的孤儿，引发数据库恢复；本地强制失败曾观察到这一问题，不能把“拥有的 PID 已消失”单独记为清理通过。
 
 强制 timeout 与 SQL error 清理验证还应确认：本轮客户端／会话／FIFO 已清空，postmaster PID 和启动时间未变，测试窗口日志没有 recovery，无关会话未中断。Linux 进程回收探针和合成数据库验证不证明生产故障发生率。
 
