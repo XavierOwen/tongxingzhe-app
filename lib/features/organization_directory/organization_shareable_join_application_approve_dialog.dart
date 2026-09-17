@@ -17,12 +17,14 @@ final class OrganizationShareableJoinApplicationApproveDialog
     required this.organization,
     required this.gateway,
     required this.appSession,
+    this.initialApplicationId,
   });
 
   final AppStrings text;
   final OrganizationDirectoryEntry organization;
   final OrganizationShareableJoinGateway gateway;
   final AppSession appSession;
+  final String? initialApplicationId;
 
   @override
   State<OrganizationShareableJoinApplicationApproveDialog> createState() =>
@@ -66,6 +68,8 @@ final class _OrganizationShareableJoinApplicationApproveDialogState
       _stage = _ApprovalStage.sessionExpired;
       _organization = null;
       _appUserId = null;
+    } else {
+      _applicationController.text = widget.initialApplicationId ?? '';
     }
     _sessionSubscription = widget.appSession.changes.listen((snapshot) {
       if (!_isTrustedSnapshot(snapshot)) _invalidateSession();

@@ -29,6 +29,14 @@ const approveResult = {
   organizationMembershipId: membershipId,
   approvedAtUtc: "2030-01-02T00:00:00.000Z",
 };
+const directoryResult = {
+  organizationShareableJoinApplicationDirectoryContractId:
+    "organization-shareable-join-application-directory:v1" as const,
+  organizationWorkspaceId: workspaceId,
+  observedAtUtc: "2030-01-02T00:00:00.000Z",
+  applications: [{applicationId, linkId, submittedAtUtc: submitResult.submittedAtUtc,
+    expiresAtUtc: submitResult.expiresAtUtc}],
+};
 
 test("application routes return exact receipts and bound store arguments", async () => {
   let submitArgs: unknown;
@@ -90,6 +98,7 @@ test("raw aliases and wrong methods are 404 before auth", async () => {
 test("routes enforce auth-first validation, exact bodies, and stable errors", async () => {
   let storeCalls = 0;
   const store: OrganizationShareableJoinApplicationStore = {
+    listPending: async () => directoryResult,
     submit: async (_identity, selectedApplicationId) => {
       storeCalls += 1;
       if (selectedApplicationId === applicationId) return submitResult;
@@ -179,12 +188,14 @@ function approvePath(workspace = workspaceId, application = applicationId): stri
   return `/v1/organizations/${workspace}/shareable-join-applications/${application}/approve`;
 }
 function okStore(): OrganizationShareableJoinApplicationStore {
-  return {submit: async () => submitResult, approve: async () => approveResult};
+  return {listPending: async () => directoryResult,
+    submit: async () => submitResult, approve: async () => approveResult};
 }
-function makeServer(store: OrganizationShareableJoinApplicationStore): Server {
+function makeServer(store: Omit<OrganizationShareableJoinApplicationStore, "listPending"> &
+  Partial<Pick<OrganizationShareableJoinApplicationStore, "listPending">>): Server {
   return createBackendServer({
     ...baseDependencies({verify: async () => identity}),
-    organizationShareableJoinApplicationStore: store,
+    organizationShareableJoinApplicationStore: {...okStore(), ...store},
   });
 }
 function baseDependencies(identityVerifier: {verify(token: string): Promise<VerifiedIdentity>}) {
@@ -204,7 +215,8 @@ function request(port: number, method: string, path: string,
   headers: Readonly<Record<string, string>>, body: string): Promise<Response> {
   return new Promise((resolve, reject) => {
     const req = httpRequest({host: "127.0.0.1", port, method, path,
-      headers: {...headers, "content-length": String(Buffer.byteLength(body))}}, (res) => {
+      headers: {...(headers["transfer-encoding"] === undefined && headers["content-length"] === undefined
+        ? {"content-length": String(Buffer.byteLength(body))} : {}), ...headers}}, (res) => {
       const chunks: Buffer[] = [];
       res.on("data", (chunk: Buffer) => chunks.push(chunk));
       res.on("end", () => {
@@ -227,3 +239,121 @@ async function close(server: Server): Promise<void> {
   await new Promise<void>((resolve, reject) => server.close((error) =>
     error === undefined ? resolve() : reject(error)));
 }
+
+function directoryPath(workspace = workspaceId): string {
+  return `/v1/organizations/${workspace}/shareable-join-applications`;
+}
+
+test("pending directory GET returns exact safe metadata with canonical selector and no-store", async () => {
+  let args: unknown;
+  const server = makeServer({...okStore(), listPending: async (...values) => {
+    args = values; return directoryResult;
+  }});
+  const address = await listen(server);
+  test.after(() => close(server));
+  assertResponse(await request(address.port, "GET", directoryPath(workspaceId.toUpperCase()),
+    {authorization: "Bearer token"}, ""), 200, {
+    organization_shareable_join_application_directory_contract_id:
+      "organization-shareable-join-application-directory:v1",
+    organization_workspace_id: workspaceId, observed_at_utc: directoryResult.observedAtUtc,
+    applications: [{application_id: applicationId, link_id: linkId,
+      submitted_at_utc: submitResult.submittedAtUtc, expires_at_utc: submitResult.expiresAtUtc}],
+  });
+  assert.deepEqual(args, [identity, workspaceId]);
+});
+
+test("directory raw method and path aliases are 404 without identity or store", async () => {
+  let calls = 0;
+  const server = createBackendServer({...baseDependencies({verify: async () => {calls++; return identity;}}),
+    organizationShareableJoinApplicationStore: {...okStore(), listPending: async () => {calls++; return directoryResult;}}});
+  const address = await listen(server);
+  test.after(() => close(server));
+  for (const [method, path] of [
+    ["POST", directoryPath()], ["PUT", directoryPath()], ["HEAD", directoryPath()],
+    ["GET", directoryPath() + "/"], ["GET", directoryPath().replace(workspaceId, "%31" + workspaceId.slice(1))],
+    ["GET", directoryPath(".")], ["GET", directoryPath("..")],
+    ["GET", directoryPath().replace("/organizations/", "/organizations//")],
+  ]) {
+    const response = await request(address.port, method!, path!, {authorization: "Bearer token"}, "not-json");
+    if (method === "HEAD") {
+      assert.equal(response.status, 404);
+      assert.equal(response.body, undefined);
+      assert.equal(response.headers["cache-control"], "no-store");
+    } else {
+      assertResponse(response, 404, {error: {code: "not_found"}});
+    }
+  }
+  assert.equal(calls, 0);
+});
+
+test("directory authenticates before query, body declarations, UUID, and missing store", async () => {
+  let calls = 0;
+  const server = createBackendServer(baseDependencies({verify: async () => {calls++; return identity;}}));
+  const address = await listen(server);
+  test.after(() => close(server));
+  for (const [path, headers, body] of [
+    [directoryPath() + "?", {}, "not-json"],
+    [directoryPath("bad"), {}, "not-json"],
+  ] as const) {
+    assertResponse(await request(address.port, "GET", path, headers, body), 401,
+      {error: {code: "unauthenticated"}});
+  }
+  for (const [path, headers, body] of [
+    [directoryPath() + "?", {}, ""], [directoryPath() + "?x=1", {}, ""],
+    [directoryPath("bad"), {}, ""], [directoryPath(), {"content-length": "8"}, "not-json"],
+    [directoryPath(), {"transfer-encoding": "chunked"}, ""],
+    [directoryPath(), {"transfer-encoding": "chunked"}, "not-json"],
+  ] as const) {
+    assertResponse(await request(address.port, "GET", path, {authorization: "Bearer token", ...headers}, body),
+      400, {error: {code: "invalid_organization_shareable_join_request"}});
+  }
+  assertResponse(await request(address.port, "GET", directoryPath(), {authorization: "Bearer token"}, ""),
+    503, {error: {code: "organization_shareable_join_unavailable"}});
+  assert.equal(calls, 7);
+});
+
+test("directory empty results and stable errors share the existing family", async () => {
+  for (const [code, status] of [
+    [undefined, 200], ["invalid_organization_shareable_join_request", 400],
+    ["organization_shareable_join_forbidden", 403], ["organization_shareable_join_unavailable", 503],
+    ["unexpected", 503],
+  ] as const) {
+    const server = makeServer({...okStore(), listPending: async () => {
+      if (code === "unexpected") throw new Error("sensitive");
+      if (code !== undefined) throw new OrganizationShareableJoinApplicationStoreError(code);
+      return {...directoryResult, applications: []};
+    }});
+    const address = await listen(server);
+    const response = await request(address.port, "GET", directoryPath(), {authorization: "Bearer token"}, "");
+    assertResponse(response, status, code === undefined ? {
+      organization_shareable_join_application_directory_contract_id: "organization-shareable-join-application-directory:v1",
+      organization_workspace_id: workspaceId, observed_at_utc: directoryResult.observedAtUtc, applications: [],
+    } : {error: {code: code === "unexpected" ? "organization_shareable_join_unavailable" : code}});
+    await close(server);
+  }
+});
+
+test("directory GET waits for the store to settle before success or error", async () => {
+  for (const rejects of [false, true]) {
+    let release!: () => void;
+    let started!: () => void;
+    const gate = new Promise<void>((resolve) => {release = resolve;});
+    const began = new Promise<void>((resolve) => {started = resolve;});
+    const server = makeServer({...okStore(), listPending: async () => {
+      started(); await gate;
+      if (rejects) throw new Error("sensitive");
+      return directoryResult;
+    }});
+    const address = await listen(server);
+    let settled = false;
+    const pending = request(address.port, "GET", directoryPath(), {authorization: "Bearer token"}, "")
+      .then((result) => {settled = true; return result;});
+    await began;
+    assert.equal(settled, false);
+    release();
+    const response = await pending;
+    assert.equal(response.status, rejects ? 503 : 200);
+    assert.equal(response.headers["cache-control"], "no-store");
+    await close(server);
+  }
+});

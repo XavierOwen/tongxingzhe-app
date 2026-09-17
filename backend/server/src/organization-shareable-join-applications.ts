@@ -7,14 +7,18 @@ import {
 
 const applicationContractId =
   "organization-shareable-join-application:v1" as const;
+const applicationDirectoryContractId =
+  "organization-shareable-join-application-directory:v1" as const;
 const applicationLifetimeSeconds = 168 * 60 * 60;
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const timestampPattern =
   /^(\d{4})-(\d{2})-(\d{2})[Tt](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?([Zz]|[+-]\d{2}:\d{2})$/;
+const directoryItemTimestampPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
 
 interface OrganizationShareableJoinApplicationRequestBase {
   readonly authorization: string | undefined;
+  readonly hasBody?: boolean;
   readonly readBody: () => Promise<unknown>;
 }
 
@@ -31,9 +35,16 @@ export interface OrganizationShareableJoinApplicationApproveRouteMatch {
   readonly hasQuery: boolean;
 }
 
+export interface OrganizationShareableJoinApplicationDirectoryRouteMatch {
+  readonly operation: "listPending";
+  readonly workspaceId: string;
+  readonly hasQuery: boolean;
+}
+
 export type OrganizationShareableJoinApplicationRouteMatch =
   | OrganizationShareableJoinApplicationSubmitRouteMatch
-  | OrganizationShareableJoinApplicationApproveRouteMatch;
+  | OrganizationShareableJoinApplicationApproveRouteMatch
+  | OrganizationShareableJoinApplicationDirectoryRouteMatch;
 
 export type OrganizationShareableJoinApplicationRequest =
   OrganizationShareableJoinApplicationRequestBase &
@@ -73,8 +84,28 @@ export interface OrganizationShareableJoinApplicationApproveResult {
   readonly approvedAtUtc: string;
 }
 
-/** Store 只接收已验证的 exact identity，并只调用 0093/0094 runtime bridge。 */
+export interface OrganizationShareableJoinApplicationDirectoryItem {
+  readonly applicationId: string;
+  readonly linkId: string;
+  readonly submittedAtUtc: string;
+  readonly expiresAtUtc: string;
+}
+
+export interface OrganizationShareableJoinApplicationDirectoryResult {
+  readonly organizationShareableJoinApplicationDirectoryContractId:
+    typeof applicationDirectoryContractId;
+  readonly organizationWorkspaceId: string;
+  readonly observedAtUtc: string;
+  readonly applications: readonly OrganizationShareableJoinApplicationDirectoryItem[];
+}
+
+/** Store 只接收已验证的 exact identity，并只调用 operation-specific runtime bridge。 */
 export interface OrganizationShareableJoinApplicationStore {
+  listPending(
+    identity: VerifiedIdentity,
+    organizationWorkspaceId: string,
+  ): Promise<OrganizationShareableJoinApplicationDirectoryResult>;
+
   submit(
     identity: VerifiedIdentity,
     applicationId: string,
@@ -127,6 +158,17 @@ export function matchOrganizationShareableJoinApplicationRequestTarget(
     : requestTarget.slice(0, queryIndex);
   if (pathname.includes("%")) {
     return null;
+  }
+
+  const directoryMatch =
+    /^\/v1\/organizations\/([^/]+)\/shareable-join-applications$/
+      .exec(pathname);
+  const directoryWorkspaceId = directoryMatch?.[1];
+  if (directoryWorkspaceId !== undefined) {
+    return directoryWorkspaceId === "." || directoryWorkspaceId === ".."
+      ? null
+      : {operation: "listPending", workspaceId: directoryWorkspaceId,
+        hasQuery: queryIndex >= 0};
   }
 
   const submitMatch =
@@ -186,8 +228,24 @@ export async function handleOrganizationShareableJoinApplication(
     return failure(503, "organization_shareable_join_unavailable");
   }
 
-  if (request.hasQuery) {
+  if (request.hasQuery || (request.operation === "listPending" && request.hasBody)) {
     return failure(400, "invalid_organization_shareable_join_request");
+  }
+  if (request.operation === "listPending") {
+    const workspaceId = uuid(request.workspaceId);
+    if (workspaceId === null) {
+      return failure(400, "invalid_organization_shareable_join_request");
+    }
+    if (dependencies.applicationStore === undefined) {
+      return failure(503, "organization_shareable_join_unavailable");
+    }
+    try {
+      return directorySuccess(await dependencies.applicationStore.listPending(
+        identity, workspaceId,
+      ));
+    } catch (error) {
+      return storeFailure(error);
+    }
   }
   const selectedId = uuid(
     request.operation === "submit" ? request.linkId : request.applicationId,
@@ -258,6 +316,33 @@ export class PostgresOrganizationShareableJoinApplicationStore
   implements OrganizationShareableJoinApplicationStore
 {
   constructor(private readonly query: OrganizationShareableJoinApplicationQuery) {}
+
+  async listPending(
+    identity: VerifiedIdentity,
+    organizationWorkspaceId: string,
+  ): Promise<OrganizationShareableJoinApplicationDirectoryResult> {
+    try {
+      const result = await this.query(
+        `SELECT
+           organization_shareable_join_application_directory_contract_id,
+           organization_workspace_id,
+           observed_at_utc,
+           applications
+         FROM app_data.list_org_join_applications_for_identity_v1(
+           $1::text, $2::text, $3::uuid
+         )`,
+        [identity.issuer, identity.subject, organizationWorkspaceId],
+      );
+      if (result.rows.length !== 1) {
+        throw invalidDirectoryResult();
+      }
+      return parseOrganizationShareableJoinApplicationDirectoryResult(
+        result.rows[0], organizationWorkspaceId,
+      );
+    } catch (error) {
+      throw mapStoreError(error);
+    }
+  }
 
   async submit(
     identity: VerifiedIdentity,
@@ -332,6 +417,69 @@ export class PostgresOrganizationShareableJoinApplicationStore
       throw mapStoreError(error);
     }
   }
+}
+
+export function parseOrganizationShareableJoinApplicationDirectoryResult(
+  value: unknown,
+  expectedWorkspaceId: string,
+): OrganizationShareableJoinApplicationDirectoryResult {
+  const row = object(value);
+  if (row === null || !hasExactKeys(row, [
+    "organization_shareable_join_application_directory_contract_id",
+    "organization_workspace_id", "observed_at_utc", "applications",
+  ]) || row.organization_shareable_join_application_directory_contract_id !==
+    applicationDirectoryContractId) {
+    throw invalidDirectoryResult();
+  }
+  const workspaceId = uuid(row.organization_workspace_id);
+  const observedAt = utcTimestamp(row.observed_at_utc);
+  if (workspaceId === null || workspaceId !== row.organization_workspace_id ||
+    workspaceId !== uuid(expectedWorkspaceId) ||
+    observedAt === null || !Array.isArray(row.applications) ||
+    row.applications.length > 20) {
+    throw invalidDirectoryResult();
+  }
+  const applicationIds = new Set<string>();
+  // Check SQL microsecond order before projecting distinct instants to HTTP milliseconds.
+  let previous: {epochSecond: number; fraction: string; applicationId: string} | undefined;
+  const applications = row.applications.map((value: unknown) => {
+    const item = object(value);
+    if (item === null || !hasExactKeys(item, [
+      "application_id", "link_id", "submitted_at_utc", "expires_at_utc",
+    ]) || typeof item.submitted_at_utc !== "string" ||
+      typeof item.expires_at_utc !== "string" ||
+      !directoryItemTimestampPattern.test(item.submitted_at_utc) ||
+      !directoryItemTimestampPattern.test(item.expires_at_utc)) {
+      throw invalidDirectoryResult();
+    }
+    const applicationId = uuid(item.application_id);
+    const linkId = uuid(item.link_id);
+    const submittedAt = utcTimestamp(item.submitted_at_utc);
+    const expiresAt = utcTimestamp(item.expires_at_utc);
+    if (applicationId === null || applicationId !== item.application_id ||
+      linkId === null || linkId !== item.link_id || submittedAt === null ||
+      expiresAt === null || applicationIds.has(applicationId) ||
+      expiresAt.epochSecond - submittedAt.epochSecond !== applicationLifetimeSeconds ||
+      expiresAt.fraction !== submittedAt.fraction ||
+      Date.parse(expiresAt.wire) < Date.parse(observedAt.wire) ||
+      (previous !== undefined && (
+        submittedAt.epochSecond < previous.epochSecond ||
+        (submittedAt.epochSecond === previous.epochSecond && (
+          submittedAt.fraction.padEnd(6, "0") < previous.fraction.padEnd(6, "0") ||
+          (submittedAt.fraction === previous.fraction && applicationId < previous.applicationId)
+        ))
+      ))) {
+      throw invalidDirectoryResult();
+    }
+    applicationIds.add(applicationId);
+    previous = {...submittedAt, applicationId};
+    return {applicationId, linkId, submittedAtUtc: submittedAt.wire,
+      expiresAtUtc: expiresAt.wire};
+  });
+  return {
+    organizationShareableJoinApplicationDirectoryContractId: applicationDirectoryContractId,
+    organizationWorkspaceId: workspaceId, observedAtUtc: observedAt.wire, applications,
+  };
 }
 
 export function parseOrganizationShareableJoinApplicationSubmitResult(
@@ -437,7 +585,8 @@ function mapStoreError(error: unknown): Error {
   const message = propertyString(error, "message");
   if (
     code === "22023" &&
-    message === "invalid organization shareable join identity"
+    (message === "invalid organization shareable join identity" ||
+      message === "invalid organization shareable join application directory identity")
   ) {
     return new OrganizationShareableJoinApplicationStoreError(
       "organization_shareable_join_unavailable",
@@ -445,7 +594,8 @@ function mapStoreError(error: unknown): Error {
   }
   if (
     code === "22023" &&
-    message === "invalid organization shareable join request"
+    (message === "invalid organization shareable join request" ||
+      message === "invalid organization shareable join application directory request")
   ) {
     return new OrganizationShareableJoinApplicationStoreError(
       "invalid_organization_shareable_join_request",
@@ -453,7 +603,8 @@ function mapStoreError(error: unknown): Error {
   }
   if (
     code === "42501" &&
-    message === "organization shareable join forbidden"
+    (message === "organization shareable join forbidden" ||
+      message === "organization shareable join application directory forbidden")
   ) {
     return new OrganizationShareableJoinApplicationStoreError(
       "organization_shareable_join_forbidden",
@@ -503,6 +654,21 @@ function submitSuccess(
       expires_at_utc: result.expiresAtUtc,
     },
   };
+}
+
+function directorySuccess(
+  result: OrganizationShareableJoinApplicationDirectoryResult,
+): OrganizationShareableJoinApplicationHttpResult {
+  return {status: 200, body: {
+    organization_shareable_join_application_directory_contract_id:
+      result.organizationShareableJoinApplicationDirectoryContractId,
+    organization_workspace_id: result.organizationWorkspaceId,
+    observed_at_utc: result.observedAtUtc,
+    applications: result.applications.map((application) => ({
+      application_id: application.applicationId, link_id: application.linkId,
+      submitted_at_utc: application.submittedAtUtc, expires_at_utc: application.expiresAtUtc,
+    })),
+  }};
 }
 
 function approveSuccess(
@@ -626,4 +792,8 @@ function invalidSubmitResult(): Error {
 
 function invalidApproveResult(): Error {
   return new Error("invalid organization shareable join application approve result");
+}
+
+function invalidDirectoryResult(): Error {
+  return new Error("invalid organization shareable join application directory result");
 }

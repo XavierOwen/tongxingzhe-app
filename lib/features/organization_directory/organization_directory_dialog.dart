@@ -17,6 +17,7 @@ import 'organization_membership_self_leave_dialog.dart';
 import 'organization_owner_transfer_dialog.dart';
 import 'organization_project_membership_assignment_dialog.dart';
 import 'organization_shareable_join_application_approve_dialog.dart';
+import 'organization_shareable_join_application_directory_dialog.dart';
 import 'organization_shareable_join_application_submit_dialog.dart';
 import 'organization_shareable_join_link_create_dialog.dart';
 
@@ -260,6 +261,21 @@ final class _OrganizationDirectoryDialogState
               icon: const Icon(Icons.link),
               label: Text(
                 widget.text.t('organizationShareableLinkCreateAction'),
+              ),
+            ),
+            TextButton.icon(
+              key: ValueKey(
+                'organization-shareable-application-directory-${entry.organizationWorkspaceId}',
+              ),
+              style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+              onPressed: _busy || _sessionInvalidated
+                  ? null
+                  : () => _listPendingShareableJoinApplications(entry),
+              icon: const Icon(Icons.inbox_outlined),
+              label: Text(
+                widget.text.t(
+                  'organizationShareableApplicationDirectoryAction',
+                ),
               ),
             ),
             TextButton.icon(
@@ -539,6 +555,26 @@ final class _OrganizationDirectoryDialogState
     // Exact replay may describe an old membership; only a fresh directory
     // tells us whether this organization should still be shown.
     await _load();
+  }
+
+  Future<void> _listPendingShareableJoinApplications(
+    OrganizationDirectoryEntry entry,
+  ) async {
+    if (_busy ||
+        !_organizations.contains(entry) ||
+        !_hasTrustedSession(widget.appSession.current)) {
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => OrganizationShareableJoinApplicationDirectoryDialog(
+        text: widget.text,
+        organization: entry,
+        gateway: widget.shareableJoinGateway,
+        appSession: widget.appSession,
+      ),
+    );
   }
 
   Future<void> _approveShareableJoinApplication(

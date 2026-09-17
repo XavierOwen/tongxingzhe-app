@@ -11,6 +11,8 @@ const _backendBaseUrl = String.fromEnvironment('BACKEND_BASE_URL');
 const _linkContractId = 'organization-shareable-join-link:v1';
 const _linkPreviewContractId = 'organization-shareable-join-link-preview:v1';
 const _applicationContractId = 'organization-shareable-join-application:v1';
+const _directoryContractId =
+    'organization-shareable-join-application-directory:v1';
 const _lifetime = Duration(hours: 168);
 
 /// 使用既有 Backend 配置创建网关；空配置不分配 HTTP client。
@@ -157,6 +159,28 @@ final class HttpOrganizationShareableJoinGateway
         _parseApplicationApproveReceipt(root, application, workspace),
       ),
       rejected: OrganizationShareableJoinApplicationApproveRejected.new,
+    );
+  }
+
+  @override
+  Future<OrganizationShareableJoinApplicationDirectoryResult>
+  listPendingApplications({required String organizationWorkspaceId}) {
+    final workspace = _canonicalInputUuid(organizationWorkspaceId);
+    if (workspace == null) {
+      return Future.value(
+        const OrganizationShareableJoinApplicationDirectoryRejected(
+          OrganizationShareableJoinFailureCode.invalidRequest,
+        ),
+      );
+    }
+    return _request(
+      uri: baseUri.resolve(
+        '/v1/organizations/$workspace/shareable-join-applications',
+      ),
+      success: (root) => OrganizationShareableJoinApplicationDirectorySuccess(
+        _parseApplicationDirectoryReceipt(root, workspace),
+      ),
+      rejected: OrganizationShareableJoinApplicationDirectoryRejected.new,
     );
   }
 
@@ -430,6 +454,78 @@ _parseApplicationApproveReceipt(
       root['organization_membership_id'],
     ),
     approvedAtUtc: _canonicalUtcTimestamp(root['approved_at_utc']),
+  );
+}
+
+OrganizationShareableJoinApplicationDirectoryReceipt
+_parseApplicationDirectoryReceipt(
+  Map<String, Object?> root,
+  String expectedWorkspaceId,
+) {
+  _requireExactKeys(root, const [
+    'organization_shareable_join_application_directory_contract_id',
+    'organization_workspace_id',
+    'observed_at_utc',
+    'applications',
+  ]);
+  _requireContract(
+    root,
+    'organization_shareable_join_application_directory_contract_id',
+    _directoryContractId,
+  );
+  final workspace = _canonicalResponseUuid(root['organization_workspace_id']);
+  final observed = _canonicalUtcTimestamp(root['observed_at_utc']);
+  final items = root['applications'];
+  if (workspace != expectedWorkspaceId || items is! List || items.length > 20) {
+    throw const FormatException(
+      'invalid organization shareable join directory',
+    );
+  }
+  final records = <OrganizationShareableJoinApplicationDirectoryRecord>[];
+  final applicationIds = <String>{};
+  for (final item in items) {
+    final entry = _object(item);
+    _requireExactKeys(entry, const [
+      'application_id',
+      'link_id',
+      'submitted_at_utc',
+      'expires_at_utc',
+    ]);
+    final application = _canonicalResponseUuid(entry['application_id']);
+    final link = _canonicalResponseUuid(entry['link_id']);
+    final submitted = _canonicalUtcTimestamp(entry['submitted_at_utc']);
+    final expires = _canonicalUtcTimestamp(entry['expires_at_utc']);
+    _requireLifetime(submitted, expires);
+    if (!applicationIds.add(application) || expires.isBefore(observed)) {
+      throw const FormatException(
+        'invalid organization shareable join directory record',
+      );
+    }
+    if (records.isNotEmpty) {
+      final previous = records.last;
+      // Millisecond projection cannot distinguish distinct SQL microseconds
+      // from a true timestamp tie. Preserve the server's record order.
+      if (submitted.isBefore(previous.submittedAtUtc)) {
+        throw const FormatException(
+          'unordered organization shareable join directory',
+        );
+      }
+    }
+    records.add(
+      OrganizationShareableJoinApplicationDirectoryRecord(
+        applicationId: application,
+        linkId: link,
+        submittedAtUtc: submitted,
+        expiresAtUtc: expires,
+      ),
+    );
+  }
+  return OrganizationShareableJoinApplicationDirectoryReceipt(
+    organizationShareableJoinApplicationDirectoryContractId:
+        _directoryContractId,
+    organizationWorkspaceId: workspace,
+    observedAtUtc: observed,
+    applications: records,
   );
 }
 

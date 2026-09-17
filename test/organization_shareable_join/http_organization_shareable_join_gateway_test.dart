@@ -13,9 +13,163 @@ import '../support/fake_identity_session.dart';
 
 void main() {
   test(
-    'four operations send exact canonical routes, headers, and bodies',
+    'directory preserves descending UUIDs within one projected millisecond',
+    () async {
+      final gateway = _gateway(
+        (_) async => _json({
+          ..._applicationDirectoryReceiptJson(),
+          'applications': [
+            {..._directoryRecordJson(), 'application_id': _otherId},
+            _directoryRecordJson(),
+          ],
+        }),
+      );
+      final result = await gateway.listPendingApplications(
+        organizationWorkspaceId: _workspaceId,
+      );
+      expect(
+        (result as OrganizationShareableJoinApplicationDirectorySuccess)
+            .receipt
+            .applications
+            .map((record) => record.applicationId),
+        [_otherId, _applicationId],
+      );
+      await gateway.close();
+    },
+  );
+
+  test(
+    'directory binds workspace, preserves UTC records and freezes its list',
+    () async {
+      for (final count in [0, 1, 20]) {
+        final records = List.generate(
+          count,
+          (index) => {
+            ..._directoryRecordJson(),
+            'application_id':
+                '00000000-0000-0000-0000-${index.toString().padLeft(12, '0')}',
+          },
+        );
+        final gateway = _gateway(
+          (_) async => _json({
+            ..._applicationDirectoryReceiptJson(),
+            'observed_at_utc': '2000-01-08T00:00:00.000Z',
+            'applications': records,
+          }),
+        );
+        final result = await gateway.listPendingApplications(
+          organizationWorkspaceId: _workspaceId,
+        );
+        final receipt =
+            (result as OrganizationShareableJoinApplicationDirectorySuccess)
+                .receipt;
+        expect(receipt.organizationWorkspaceId, _workspaceId);
+        expect(receipt.observedAtUtc, DateTime.utc(2000, 1, 8));
+        expect(receipt.applications.length, count);
+        expect(() => receipt.applications.clear(), throwsUnsupportedError);
+        if (count > 0) {
+          expect(receipt.applications.first.linkId, _linkId);
+          expect(receipt.applications.first.submittedAtUtc, DateTime.utc(2000));
+          expect(
+            receipt.applications.first.expiresAtUtc,
+            DateTime.utc(2000, 1, 8),
+          );
+        }
+        await gateway.close();
+      }
+    },
+  );
+
+  test(
+    'directory rejects shape, family, binding, ordering, duplicates and time drift',
+    () async {
+      final invalid = <Map<String, Object?>>[
+        {..._applicationDirectoryReceiptJson(), 'actor_id': _otherId},
+        {..._applicationDirectoryReceiptJson()}..remove('observed_at_utc'),
+        {
+          ..._applicationDirectoryReceiptJson(),
+          'organization_workspace_id': _otherId,
+        },
+        {
+          ..._applicationDirectoryReceiptJson(),
+          'organization_shareable_join_application_directory_contract_id':
+              _applicationContract,
+        },
+        {
+          ..._applicationDirectoryReceiptJson(),
+          'observed_at_utc': '2000-01-08T00:00:00.001Z',
+        },
+        {
+          ..._applicationDirectoryReceiptJson(),
+          'observed_at_utc': '2000-01-02T00:00:00Z',
+        },
+        {..._applicationDirectoryReceiptJson(), 'applications': null},
+        {
+          ..._applicationDirectoryReceiptJson(),
+          'applications': List.filled(21, _directoryRecordJson()),
+        },
+        {
+          ..._applicationDirectoryReceiptJson(),
+          'applications': [_directoryRecordJson(), _directoryRecordJson()],
+        },
+        {
+          ..._applicationDirectoryReceiptJson(),
+          'applications': [
+            {
+              ..._directoryRecordJson(),
+              'application_id': _otherId,
+              'submitted_at_utc': '2000-01-02T00:00:00.000Z',
+              'expires_at_utc': '2000-01-09T00:00:00.000Z',
+            },
+            _directoryRecordJson(),
+          ],
+        },
+        for (final mutation in <Map<String, Object?>>[
+          {'applicant_user_id': _otherId},
+          {'link_id': _linkId.toUpperCase()},
+          {'application_id': 'not-a-uuid'},
+          {'submitted_at_utc': '2000-01-01T00:00:00.000+00:00'},
+          {'expires_at_utc': '2000-01-08T00:00:00.001Z'},
+        ])
+          {
+            ..._applicationDirectoryReceiptJson(),
+            'applications': [
+              {..._directoryRecordJson(), ...mutation},
+            ],
+          },
+        {
+          ..._applicationDirectoryReceiptJson(),
+          'applications': [
+            {..._directoryRecordJson()}..remove('link_id'),
+          ],
+        },
+      ];
+      for (final value in invalid) {
+        final gateway = _gateway((_) async => _json(value));
+        expect(
+          _failureCode(
+            await gateway.listPendingApplications(
+              organizationWorkspaceId: _workspaceId,
+            ),
+          ),
+          _Failure.invalidResponse,
+          reason: value.toString(),
+        );
+        await gateway.close();
+      }
+    },
+  );
+
+  test(
+    'five operations send exact canonical routes, headers, and bodies',
     () async {
       const cases = [
+        (
+          operation: _Operation.listPendingApplications,
+          method: 'GET',
+          path: '/v1/organizations/$_workspaceId/shareable-join-applications',
+          body: '',
+        ),
         (
           operation: _Operation.createLink,
           method: 'POST',
@@ -165,6 +319,9 @@ void main() {
   test('every input UUID fails before token or network access', () async {
     final invocations =
         <Future<Object> Function(OrganizationShareableJoinGateway)>[
+          (gateway) => gateway.listPendingApplications(
+            organizationWorkspaceId: ' $_workspaceId',
+          ),
           (gateway) => gateway.createLink(
             linkId: 'not-a-uuid',
             organizationWorkspaceId: _workspaceId,
@@ -899,6 +1056,7 @@ void main() {
 typedef _Failure = OrganizationShareableJoinFailureCode;
 
 enum _Operation {
+  listPendingApplications,
   createLink,
   previewLink,
   submitApplication,
@@ -938,6 +1096,9 @@ Future<Object> _invokeOperation(
 }) {
   String value(String input) => uppercase ? input.toUpperCase() : input;
   return switch (operation) {
+    _Operation.listPendingApplications => gateway.listPendingApplications(
+      organizationWorkspaceId: value(_workspaceId),
+    ),
     _Operation.createLink => gateway.createLink(
       linkId: value(_linkId),
       organizationWorkspaceId: value(_workspaceId),
@@ -956,6 +1117,8 @@ Future<Object> _invokeOperation(
 
 OrganizationShareableJoinFailureCode _failureCode(Object result) =>
     switch (result) {
+      OrganizationShareableJoinApplicationDirectoryRejected(:final code) =>
+        code,
       OrganizationShareableJoinLinkCreateRejected(:final code) => code,
       OrganizationShareableJoinLinkPreviewRejected(:final code) => code,
       OrganizationShareableJoinApplicationSubmitRejected(:final code) => code,
@@ -965,6 +1128,8 @@ OrganizationShareableJoinFailureCode _failureCode(Object result) =>
 
 void _expectSuccess(Object result, _Operation operation) {
   expect(result, switch (operation) {
+    _Operation.listPendingApplications =>
+      isA<OrganizationShareableJoinApplicationDirectorySuccess>(),
     _Operation.createLink => isA<OrganizationShareableJoinLinkCreateSuccess>(),
     _Operation.previewLink =>
       isA<OrganizationShareableJoinLinkPreviewSuccess>(),
@@ -976,10 +1141,26 @@ void _expectSuccess(Object result, _Operation operation) {
 }
 
 Map<String, Object?> _successJson(_Operation operation) => switch (operation) {
+  _Operation.listPendingApplications => _applicationDirectoryReceiptJson(),
   _Operation.createLink => _linkCreateReceiptJson(),
   _Operation.previewLink => _linkPreviewReceiptJson(),
   _Operation.submitApplication => _applicationSubmitReceiptJson(),
   _Operation.approveApplication => _applicationApproveReceiptJson(),
+};
+
+Map<String, Object?> _applicationDirectoryReceiptJson() => {
+  'organization_shareable_join_application_directory_contract_id':
+      'organization-shareable-join-application-directory:v1',
+  'organization_workspace_id': _workspaceId,
+  'observed_at_utc': '2000-01-02T00:00:00.000Z',
+  'applications': [_directoryRecordJson()],
+};
+
+Map<String, Object?> _directoryRecordJson() => {
+  'application_id': _applicationId,
+  'link_id': _linkId,
+  'submitted_at_utc': '2000-01-01T00:00:00.000Z',
+  'expires_at_utc': '2000-01-08T00:00:00.000Z',
 };
 
 Map<String, Object?> _linkCreateReceiptJson() => {

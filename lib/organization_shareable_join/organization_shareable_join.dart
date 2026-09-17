@@ -66,6 +66,52 @@ final class OrganizationShareableJoinApplicationApproveReceipt {
   final DateTime approvedAtUtc;
 }
 
+/// 一次待审批目录读取的历史观察；不证明申请人身份或现在可批准。
+final class OrganizationShareableJoinApplicationDirectoryReceipt {
+  OrganizationShareableJoinApplicationDirectoryReceipt({
+    required this.organizationShareableJoinApplicationDirectoryContractId,
+    required this.organizationWorkspaceId,
+    required this.observedAtUtc,
+    required List<OrganizationShareableJoinApplicationDirectoryRecord>
+    applications,
+  }) : applications = List.unmodifiable(applications);
+
+  final String organizationShareableJoinApplicationDirectoryContractId;
+  final String organizationWorkspaceId;
+  final DateTime observedAtUtc;
+  final List<OrganizationShareableJoinApplicationDirectoryRecord> applications;
+}
+
+final class OrganizationShareableJoinApplicationDirectoryRecord {
+  const OrganizationShareableJoinApplicationDirectoryRecord({
+    required this.applicationId,
+    required this.linkId,
+    required this.submittedAtUtc,
+    required this.expiresAtUtc,
+  });
+
+  final String applicationId;
+  final String linkId;
+  final DateTime submittedAtUtc;
+  final DateTime expiresAtUtc;
+}
+
+sealed class OrganizationShareableJoinApplicationDirectoryResult {
+  const OrganizationShareableJoinApplicationDirectoryResult();
+}
+
+final class OrganizationShareableJoinApplicationDirectorySuccess
+    extends OrganizationShareableJoinApplicationDirectoryResult {
+  const OrganizationShareableJoinApplicationDirectorySuccess(this.receipt);
+  final OrganizationShareableJoinApplicationDirectoryReceipt receipt;
+}
+
+final class OrganizationShareableJoinApplicationDirectoryRejected
+    extends OrganizationShareableJoinApplicationDirectoryResult {
+  const OrganizationShareableJoinApplicationDirectoryRejected(this.code);
+  final OrganizationShareableJoinFailureCode code;
+}
+
 /// 可分享加入操作失败时使用的稳定分类。
 enum OrganizationShareableJoinFailureCode {
   notConfigured,
@@ -154,6 +200,9 @@ final class OrganizationShareableJoinApplicationApproveRejected
 
 /// 可分享加入链接和申请的单一客户端网关。
 abstract interface class OrganizationShareableJoinGateway {
+  Future<OrganizationShareableJoinApplicationDirectoryResult>
+  listPendingApplications({required String organizationWorkspaceId});
+
   Future<OrganizationShareableJoinLinkCreateResult> createLink({
     required String linkId,
     required String organizationWorkspaceId,
@@ -181,6 +230,13 @@ abstract interface class OrganizationShareableJoinGateway {
 final class DeferredOrganizationShareableJoinGateway
     implements OrganizationShareableJoinGateway {
   const DeferredOrganizationShareableJoinGateway();
+
+  @override
+  Future<OrganizationShareableJoinApplicationDirectoryResult>
+  listPendingApplications({required String organizationWorkspaceId}) async =>
+      const OrganizationShareableJoinApplicationDirectoryRejected(
+        OrganizationShareableJoinFailureCode.notConfigured,
+      );
 
   @override
   Future<OrganizationShareableJoinLinkCreateResult> createLink({
