@@ -2004,6 +2004,14 @@ unknown 结果仍只能重试原邀请或经过确认停止重试。重试得到
 
 `TEST-107` 使用真实借用会话 close，而非手工发送 invalid snapshot，验证可见状态、请求中／迟到结果及父目录边界。运行关联Widget、analyze、format、production boundary、链接及精确head CI；临时合成 Android 抽查目录与邀请回执的真实 stream-close。该证据不证明生产身份、部署或六平台真人验收。
 
+### 3.51 真实 App/Home 怎样连接两条批准后安排路径（Issue #422，MANUAL-100）
+
+7BJ 的窗口测试已覆盖手工批准和待审批选择。7BO 再实际挂载 `TongxingzheApp`，从 Home 菜单进入“我的组织”，经过原目录和批准窗口打开项目安排；不以单独挂载子窗口替代 App 接线。两路逐层借用同一 App-owned gateway 与 AppSession。
+
+本地核对和打开子窗都不写入。用户明确批准后才收到历史组织成员回执，再手工输入已核对的项目 UUID、核对并单独明确安排。目标组织和成员固定为原回执，安排生成自己的 UUIDv4 request，不复用 application UUID。子窗关闭保留同一个批准 State 和全部原回执值，不自动读取目录、切 context 或安排项目。
+
+`TEST-110` 记录真实 UI 触发的调用与参数，并验证资源所有权：关闭借用窗口不关闭 gateway，移除 App 才各关闭一次。复用原 fake 的可配置结果，默认仍是 notConfigured；不修改生产行为、业务授权或接口。运行整份 App 测试、analyze、format、production boundary、链接和精确 head CI。这是生产 UI 接线的 synthetic 证据，不证明真实 Auth、RPC、数据库、当前成员资格或真人平台验收。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
