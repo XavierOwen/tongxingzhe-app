@@ -2067,14 +2067,15 @@ Node 24 容器使用与 PostgreSQL 容器相同的 network namespace。它通过
 2. 建立名称含当前进程号的临时 PostgreSQL 容器；
 3. 等待 PostgreSQL 健康检查通过；
 4. 把数据库目录和全部正式并发脚本复制到容器；
-5. 从空库执行全部 migration，再执行一次 checksum 重放；
-6. 运行全部 schema／权限 check 和可回滚 synthetic fixture；
-7. 建立一次性的 Node 24 容器，编译 Backend，执行正式 runner 明确列出的全部 PostgreSQL adapter integration 入口；
-8. 按文件名运行全部正式并发脚本，用独立数据库会话检查锁、撤权和唯一性合同；
-9. 修改 migration 的临时副本，确认 runner 拒绝 checksum 漂移；
-10. 执行 `pg_dump`，启动没有源 cluster roles 的第二个 PostgreSQL 容器；
-11. 用 `postgres_prepare_restore_roles.sh` 建立 archive 所需的无登录角色，恢复后再运行全部 check 和 fixture；
-12. 成功后删除两个 PostgreSQL 容器、Node 容器、临时 work volume 和本机临时 dump。
+5. 在独立数据库运行真实旧版本 fixture 升级阶段；
+6. 从空库执行全部 migration，再执行一次 checksum 重放；
+7. 运行全部 schema／权限 check 和可回滚 synthetic fixture；
+8. 建立一次性的 Node 24 容器，编译 Backend，执行正式 runner 明确列出的全部 PostgreSQL adapter integration 入口；
+9. 按文件名运行全部正式并发脚本，用独立数据库会话检查锁、撤权和唯一性合同；
+10. 修改 migration 的临时副本，确认 runner 拒绝 checksum 漂移；
+11. 执行 `pg_dump`，启动没有源 cluster roles 的第二个 PostgreSQL 容器；
+12. 用 `postgres_prepare_restore_roles.sh` 建立 archive 所需的无登录角色，恢复后再运行全部 check 和 fixture；
+13. 成功后删除两个 PostgreSQL 容器、Node 容器、临时 work volume 和本机临时 dump。
 
 这组步骤同时验证新安装、重复部署、Backend→PostgreSQL 结果分类、并发、最小权限和备份恢复。多数 fixture 使用 `BEGIN` 与 `ROLLBACK`；跨事务时间验证可合法提交随机 synthetic setup／handoff，由临时库清理。并发脚本也会提交 synthetic 行，这些行会随 dump 进入恢复库；它们不是 production 数据。
 
@@ -2086,6 +2087,14 @@ runtime role 验证未配置、启用、幂等重放、冲突、停用和回滚�
 如果入口缺失、编译失败或真实 Backend 到 PostgreSQL 的任一断言失败，脚本会在这一步停止；设置
 `KEEP_POSTGRES_TEST_CONTAINER=1` 后，PostgreSQL 容器会保留供检查。不能把前面的 SQL 通过单独
 记为 Backend 集成通过。
+
+#### 6.2.1 真实旧负责人交接 claim 升级（Issue #420，MANUAL-099）
+
+新建库先应用全部 migrations 再运行0097 fixture，只证明当前 writer 的首次交接和历史重试；当前schema的dump／restore也不等于旧成功claim升级。7BN在同一临时容器的独立库建立真实0001至0096，使用当时有效的runtime writer，分事务提交组织创建和成功交接。原五字段receipt及完整app_data／app_private业务快照随后保留供比较。
+
+该旧库仅应用0097和0098，升级本身不改变业务行。再合法交接给后继所有者，结束原actor和target的组织成员关系；原actor账号和后继关系仍active。原actor重放原request时，五字段receipt必须逐字段相同，不能重新要求已结束的首次执行资格或重写owner、membership、claim、audit等事实。重复baseline及upgrade migrations验证checksum后跳过，完整业务快照仍相同。
+
+直接运行现有完整runner即可。快照使用pg_dump固定测试nonce与Bash内建字符串比较，不要求Linux宿主安装shasum。通过时先看到旧claim升级标志，最后还须看到完整套件通过、独立恢复与清理；合成Docker／CI不证明生产升级、生产Auth或六平台真人验收。
 
 ### 6.3 怎样读输出
 
