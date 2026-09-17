@@ -1,6 +1,6 @@
 # 六平台能力证据矩阵
 
-状态：**持续更新；截至 2026-09-17，保留六平台 build 和已有 iOS／Web／macOS／Windows 认证运行时证据，新增 Android 模拟器预检、Web 独立探针禁用观察与 Linux CI 无 keyring 禁用检查。离线 PII 尚无支持路径运行时通过结论。**
+状态：**持续更新；截至 2026-09-17，保留六平台 build 和已有 iOS／Web／macOS／Windows 认证运行时证据。新增 Android 模拟器预检、Web 独立探针禁用观察与 Linux CI 双向基础门禁检查。离线 PII 完整支持流程仍未验收。**
 
 适用需求：`GOAL-006`、`AUTH-004`、`PLATFORM-001` 至 `PLATFORM-007`、`TEST-006`
 
@@ -24,7 +24,7 @@
 | Web | CI／release build pass | pass；localhost 安全存储、OTP、刷新、跨浏览器进程恢复均有证据 | Web 持久化、刷新、崩溃和双标签待测 | 共享自动测试通过；浏览器持久化恢复待测 | 当前禁用；独立探针四阶段观察为 `unsupported`，durable database 仍为 `runtimeProbeRequired` | 未验收 | auth runtime pass；PII disabled probe observed |
 | macOS | CI pass；签名 debug pass | pass；Keychain、OTP、刷新、跨进程恢复均有证据 | 只有共享 migration 自动测试，平台持久化待测 | 共享自动测试通过；设备重启恢复待测 | 实现和启动探针已接线；离线 PII 专用流程待测 | 未验收 | auth runtime pass |
 | Windows | CI pass；Windows 11 25H2／Flutter 3.44.9 本机 debug pass | pass；Windows 安全存储、注册／恢复 OTP、刷新、改密码、跨独立进程 session 恢复和登出均有证据 | 只有共享 migration 自动测试，平台持久化待测 | 共享自动测试通过；设备重启恢复待测 | 实现和启动探针已接线；Windows 安全存储基础运行时 pass，离线 PII 专用流程待测 | 未验收 | auth runtime pass |
-| Linux | CI pass | 待测；libsecret／keyring 待测 | 只有共享 migration 自动测试，平台持久化待测 | 共享自动测试通过；设备重启恢复待测 | 受控 CI 无 keyring 门禁为 `unsupported`；可用 keyring 与专用流程待测 | 未验收 | build pass；PII disabled path observed without keyring |
+| Linux | CI pass | Auth 待测；临时 keyring nonce 基础操作 CI pass | 共享 migration 自动测试；CI 单进程初始化 v19／device settings pass，持久化待测 | 共享自动测试通过；设备重启恢复待测 | 无 keyring 门禁 `unsupported`；临时 keyring 基础门禁 `pass/simulated`，PII 专用流程待测 | 未验收 | build pass；isolated basic gate preflight |
 
 认证逐步证据和测试环境见 [Supabase Auth 六平台 Spike](./supabase-auth-six-platform.md)。离线对象资料的信任边界和残余风险见[威胁模型](../security/offline-pii-threat-model.md)。共享 Drift schema 和 migration 测试证明代码路径可重建旧库，但在每个平台完成关闭进程、重新打开和持久化探针前，不能把“测试通过”扩大为平台 runtime 通过。
 
@@ -69,6 +69,20 @@
 脚本等待自己的可见 GTK 窗口，以键盘触发现有 UI 复制按钮，只读取这个新 DISPLAY 的 Clipboard。严格字段、实际 SHA、版本与近期 UTC 检查通过之后才输出[原始 allowlist JSON](./evidence/offline-pii-linux-no-keyring-20260917/session-1.json)。本轮还确认 `xdg-user-dir DOCUMENTS` 精确指向独立任务目录，且 `tongxingzhe_local.sqlite` 和 WAL／SHM／journal 均未生成；不更改 HOME，不扫描用户文件。
 
 [真实 Linux job](https://github.com/XavierOwen/tongxingzhe-app/actions/runs/35253881571/job/105312801857) 的 native 步骤于 17:40:34 UTC 完成，exit 0。该结果只证明受控 CI session 中这个入口的无 keyring 禁用路径，不证明可用 keyring、PII 成功存储、真实 Auth、整个产品、硬件安全、视觉／真人可访问性或 Linux 发布验收。首次脚本运行曾因 D-Bus 参数错误 exit 127，修正新 head 后才取得本次结果；不把首次失败改写为成功。#161 和 #6 保持开放。
+
+### 2026-09-17 Linux CI 可用 keyring 基础预检
+
+同一 Linux job 另建 Xvfb、D-Bus、XDG、Documents 和权限为 `0700` 的 control directory。仅启动本轮持有的临时 secrets daemon，用固定 synthetic 密码解锁；不连接用户 keyring、显示、Clipboard 或 Backend。
+
+运行前后均检查 Secret Service owner、default alias 指向 login collection，且 `Locked=false`。现有入口实际完成安全存储 nonce 写入、精确读回与删除，随后初始化 Drift 和 device ID。脚本只读检查精确 SQLite 的 `user_version=19` 与 `modern.device_id.v1` 设置行，不输出设置值。
+
+只执行一次反向焦点移动，等待 0.2 秒后激活现有 Copy。校验只接受唯一 `platformGate=pass`／`simulated`／`secureStorageAndDatabaseAvailable` 事件；没有运行写入、恢复、期限、撤权或清理等 PII 阶段。
+
+[原始 allowlist JSON](./evidence/offline-pii-linux-capability-20260917/session-1.json) 的实际编译 checkout 为 `5c005ee953680e2040933e4641707c2ca449256e`，不是 PR branch SHA。环境为 Ubuntu 24.04 x64、Linux `6.17.0-1022-azure`、Flutter 3.44.2、debug bundle、`native-host`／`not-applicable`。[真实 Linux job](https://github.com/XavierOwen/tongxingzhe-app/actions/runs/35256518735/job/105321718438) 的正向步骤于 18:07:15 UTC 完成，exit 0；同轮无 keyring 检查也通过。
+
+首次正向运行通过 keyring 和数据库就绪检查，但 UI Copy 校验失败。新 head 修正目录权限，并将焦点移动与激活分开后，才取得本次通过；不把时序假设写成已确认根因，也不把首次失败改写为通过。
+
+本次只证明受控 CI session 的 nonce 基础操作和单进程数据库初始化。不证明完整 PII 存储、跨进程恢复、真实 Auth／授权、硬件安全、备份、真人可访问性或 Linux 发布验收。#161 和 #6 保持开放。
 
 ## 公开发布前必须补齐
 
