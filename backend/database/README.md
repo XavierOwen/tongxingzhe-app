@@ -19,12 +19,9 @@
 
 脚本建立隔离的 PostgreSQL 16 容器，运行 migration、check、fixture、Backend→PostgreSQL 对账、并发和 dump／restore，最后自动删除容器。Backend 对账阶段使用 Node 24 容器和仓库锁定的 npm 依赖；它不连接 production，也不使用真实用户资料。第一次使用 Docker、需要保留失败容器或理解输出时，阅读[本机、Docker 与 CI 测试指南](../../docs/manual/09-local-docker-and-ci-testing.md)。
 
-Node 阶段要求十三条 Backend integration 入口存在：地点来源、当前关系阶段、个人阶段变更汇总、个人同意占比读取、个人同意占比开关、current-city
-快照读取、current-city 快照目录、兴趣快照 runtime 读取、兴趣快照目录、original-region 快照读取、original-region 快照目录、后续联系同意占比快照读取和后续联系同意占比快照目录读取。
-脚本先在 Node 24 中运行 `npm ci --ignore-scripts` 和 `npm run build`，再执行编译产物。6BU 是 SQL-only，不增加 Backend integration；6BV 增加一条目录 integration。
-开关测试覆盖未配置、启用、幂等重放、冲突和停用；比例测试再读取 `not_enabled` 和启用后的
-`ready 0 / 0`；阶段变更 integration 对账 `5 / 4 / 3 / 2` 和空期间。SQL fixture 另证实匿名化
-历史，独立并发脚本证实 current-project 锁。
+Node 阶段按[正式 runner](../../tool/run_postgres_tests_in_docker.sh)中明确列出的 Backend integration 入口执行，不按本文中的历史数量推断覆盖。
+脚本先在 Node 24 中运行 `npm ci --ignore-scripts` 和 `npm run build`，再执行编译产物；当前入口覆盖地点来源、组织创建／目录／加入／退出／owner handoff／项目安排、个人关系阶段／同意和匿名管理报告读取。
+各入口对账真实 adapter 与 runtime role；SQL fixture 与独立并发脚本另验证历史、锁和权限。新增正式入口必须同步 runner，不能只运行独立测试文件。
 入口缺失、编译失败或断言失败都会使整套测试失败；不能把此前 SQL fixture 的通过单独写成
 Backend adapter 集成通过。
 
@@ -127,6 +124,20 @@ request replay 仍先于首次 target 验证。原 active actor 可在失去 own
 ```
 
 新 fixture 用随机 UUID 提交 synthetic setup 和两次合法跨事务 handoff，第二次先保留 successor owner，再按同一合法时间结束原 target assignment／parent。最后 exact replay 事务回滚，验证完整 receipt 相等、owner／claim／audit 无增长。无 DELETE、guard 例外或 replication role；独立 restore 可再次运行。synthetic Docker／CI 不代表生产、真实账号或实际删除。
+
+## 7BE：owner handoff 的授权时间与写入时间
+
+0098／Issue #402 只给共享 FIRST transfer writer 增加两项锁后资格检查：target parent start 不晚于 immutable effective time，actor owner start 严格早于该时间。授权仍看锁后墙钟，写入仍用 transaction timestamp；锁等待后才开始有效的 parent／owner 不能承载更早的 grant／close，返回既有 exact 42501 forbidden。
+
+target 起点等于写入时间允许；actor 起点相等会产生零长区间，拒绝。新 guard 在既有 target-already-owner conflict 后、实际写入前执行，保持稳定拒绝优先级。无结束点 target、grant-before-close、锁序、bridge、OID／owner／ACL、historical replay 和底层包含／append-only 约束保持，不新增到期政策或错误 allowlist。
+
+完整 runner 自动发现 migration、check 和 fixture。既有 owner-transfer integration 用不同物理 PID、精确 advisory key 与 blocking PID，覆盖 target 等待期间开始有效、actor 等待期间经合法 handoff 才成为 owner。稳定拒绝后 scoped owner／claim／audit 完整 snapshot 不变，新事务控制可以成功。运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+检查继续保留旧 checksum、全部并发与独立 restore；synthetic 数据、typed handler、Docker 和 CI 不证明生产身份、部署或真实删除。
 
 ## 6BO：组织项目 opt-in 配置边界
 

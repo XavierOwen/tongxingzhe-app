@@ -31,6 +31,8 @@ target 只接受同组织现有 membership UUID。首次执行锁定后，target
 
 Issue #396／0097 明确首次 target membership 的结束点还必须为 null。0084 的新 owner assignment 只能立即开始且不设结束点，完整区间必须包含在 parent 内；有限 parent 不能承载它，即使 parent 此刻仍 active。该情形使用既有 forbidden，不消费 request。这是对既有 grant／containment 规则的具体化，不引入未来 owner 到期政策；历史 replay 不受 target 后来结束影响。
 
+Issue #402／0098 进一步检查首次实际写入的时间边界。target membership 的开始点必须不晚于不可变 `effective_time`；actor 当前 owner assignment 的开始点必须严格早于该时间，才能合法结束。锁等待期间才生效的 parent 或新 owner 可能满足当前授权，却无法承载较早的写入时间；此时返回既有 forbidden，不消费 request。target 起点相等允许，actor 起点相等会产生零长区间，必须拒绝。既有 target-already-owner conflict 先返回；exact replay 不重新执行这些 FIRST 检查。
+
 ### Claim、重放与 drift
 
 `request_id` 使用 transfer 专用 claim 表与 `organization-owner-transfer-request:` advisory-lock 前缀。它是单列主键，不与 actor 组成联合键。creation 与 transfer 的 claim、lock 和 tombstone 都按 family 分开，因此同一 UUID 可以分别用于两种操作。
@@ -63,7 +65,9 @@ drift／tombstone 在 request lock 下结束。exact replay 再锁定并重读 a
 
 membership end、account deletion 和 organization purge 不得使用相反顺序。
 
-writer 在同一 transaction 中只使用一个数据库 `transaction_timestamp()`。它先追加 target 的 owner assignment，再结束 actor 的当前 assignment。这个语句顺序只保证 transaction 末的 owner invariant，不向外暴露 co-owner 状态。sole owner handoff 结束后必须仍有至少一名 active owner；multi-owner handoff 只结束 actor 的 assignment，其他 owner 保持不变。assignment history 只能追加和合法结束，不能删除或改写。
+writer 在同一 transaction 中使用一个不可变的 `transaction_timestamp()` 作为 handoff 写入时间。
+0088 已把当前授权独立为锁后的 `clock_timestamp()`；0098 同时验证两个待写区间能承载 handoff 时间，不把较早的 transaction time 当成当前授权。
+它先追加 target 的 owner assignment，再结束 actor 的当前 assignment。这个语句顺序只保证 transaction 末的 owner invariant，不向外暴露 co-owner 状态。sole owner handoff 结束后必须仍有至少一名 active owner；multi-owner handoff 只结束 actor 的 assignment，其他 owner 保持不变。assignment history 只能追加和合法结束，不能删除或改写。
 
 ### Result、错误与审计
 
