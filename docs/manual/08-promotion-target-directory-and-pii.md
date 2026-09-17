@@ -354,6 +354,10 @@ CI 的 Linux job 在保留原 App build 后，执行 [`run_linux_offline_pii_dis
 
 检查必须取得真实 GTK 窗口，通过现有复制按钮读取原始 allowlist JSON，严格匹配实际 checkout SHA、Flutter 3.44.2 和唯一的 `unsupported`／`sensitiveStorageDisabled` 门禁事件。启动前后确认 Secret Service 无 owner 且不能激活，同时检查精确的 `Documents/tongxingzhe_local.sqlite` 及 sidecar 均未生成。只有这些检查通过，才登记这个受控环境的禁用路径；不能登记 Linux 支持路径、真实 Auth 或 #161 发布验收通过。
 
+基础正向预检另建独立 Xvfb、D-Bus、XDG 与 Documents，只启动属于本轮的临时 secrets daemon，用固定 synthetic 密码解锁。真实安全存储 nonce 写入、精确读回、删除全部成功，随后 Drift 初始化与 device ID 事务完成，才接受唯一 `platformGate=pass`／`simulated`／`secureStorageAndDatabaseAvailable`。只读检查 SQLite 的 `user_version=19` 与 device settings 非空，不输出设置值。
+
+正向检查只允许现有 Copy 动作，不遍历或点击任何 synthetic PII 阶段；任何额外事件都会被拒绝。临时 keyring 的基础操作不能替代完整离线 PII、真实授权、硬件安全或真人 UI 验收，#161 和 #6 仍保持开放。
+
 ### 按阶段操作
 
 1. 点击“写入并读回 synthetic 快照”。
