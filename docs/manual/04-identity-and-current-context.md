@@ -1972,6 +1972,18 @@ SQL fixture 检查空目录、21项截断、同时间UUID排序、expiry/approve
 
 Backend检查strict root/item、selector、UTC、认证顺序、GET body拒绝和Promise gate；Dart检查一次401、身份/close隔离；Widget检查明确选择、刷新、原审批路径、中英文、小屏高字号和语义。运行正式Backend、Flutter及完整PostgreSQL runner，完整Docker仍包含checksum与独立restore。原生Android复核使用合成身份或临时入口时，不得写成生产JWT、生产入口端到端、部署或六平台真人验收。
 
+### 3.48 读取定向邀请的历史接受回执（Issue #413，MANUAL-095）
+
+7BK 沿用 [ADR-0180 的定向邀请接受合同](../adr/0180-organization-directed-account-invitation-contract.md)。绑定收件人先输入邀请 UUID，在线预览组织与期限，再明确接受。成功后窗口不立即关闭，而显示原合同、邀请 UUID、组织 UUID、组织 membership UUID 与接受 UTC。
+
+这是历史接受记录。精确重放可能返回多年前的原 receipt，成员关系可能已经结束；回执不保证现在仍在组织，不自动加入项目或授予项目能力。不会为显示回执新增成员 reader 或读取账号资料。
+
+关闭、系统 Back 或 Escape 返回同一类型化 receipt，原父目录随后只重新读取一次。“我的组织”以该次读取为准；历史成功和当前空目录可以同时成立。窗口内不自动复制、不切项目、不再预览或重复接受，借用的 AppSession 和 gateway 仍由 App 管理。
+
+unknown 结果仍只能重试原邀请或经过确认停止重试。重试得到 known success 后清除 uncertain，显示历史 receipt。登录失效、换号或快速 ABA 隐藏内容并隔离迟到结果；同账号换项目不改变已捕获的邀请。接受后焦点移到“关闭”，使 Escape 仍可用。
+
+`TEST-105` 覆盖五字段、历史 replay、各关闭路径的父目录重读次数、unknown 解消、会话与迟到结果、中英文320×568/200%字号、IME、语义和48dp操作。运行定向Widget、analyze、production boundary、链接与精确head CI。原生Android使用合成身份时，只证明该设备上的窗口显示与操作，不证明生产JWT、部署或六平台真人验收。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：

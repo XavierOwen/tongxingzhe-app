@@ -317,6 +317,7 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `ORG-035` | 组织待审批申请目录只向读取快照中的 current active owner 开放，以 exact identity、active user、有效组织 membership/owner 与未删除 workspace 在同一 query snapshot 授权。只调用一次数据库墙钟；未知、错误组织、恢复期或不合格 actor 统一 forbidden，合法 owner 空目录正常。目录不保留批准资格。 |
 | `ORG-036` | 目录 pending 只按 approval 两字段为空及 observation 严格早于 application expiry 推导；不额外过滤 inactive、去关联或已入组 applicant，不重验 link/creator。只列最早 20 项，submitted/application UUID 升序，无 cursor/total，不宣称完整队列或有界扫描成本。root/item 与时间精度按 ADR-0187 固定，不返回申请人、资料、成员或批准字段。 |
 | `ORG-037` | 目录只开放 operation-specific identity reader，runtime 仅获 EXECUTE，不新增 writer/audit/fence 或底表权限。选择记录只预填既有审批窗口，仍须原渠道核对与明确批准；0094 的锁后判权、固定重试及历史 receipt 不变。会话失效或 ABA 清空并隔离迟到结果，结果不持久化、不自动复制/批准/切项目。 |
+| `ORG-038` | 定向账号邀请接受成功后保留窗口，显示既有五字段历史 receipt，含组织 membership UUID 与接受 UTC。历史记录不证明当前 membership，不自动加入项目或授予项目能力；关闭、Back 或 Escape 返回同一 receipt，使原父目录只重新读取一次。换号、会话失效或 ABA 清空并隔离迟到结果；保留原固定邀请重试与 uncertain 退出确认，不新增 reader、资料、缓存或共享资源所有权。 |
 
 #### Slice 7B Spec：固定组织原子创建与首位所有者合同
 
@@ -3136,6 +3137,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-092` | 学习文档区分 active／unended target、0084 null-ended owner grant 与包含约束、旧 containment failure／unavailable 和 0097 锁后 exact forbidden／零写入；解释 unchanged replay／双时间／锁／ACL、合法跨事务 ended-parent replay 及 Docker／CI／生产边界，不推导 owner future expiry。 |
 | `MANUAL-093` | 学习文档区分锁后墙钟授权与immutable transaction写入时间，解释target parent start≤effective time、actor owner start<effective time及相等边界；两个精确锁等待actual implicit bridge回归、完整snapshot零副作用、fresh transaction成功、历史replay与Docker／CI／生产边界。 |
 | `MANUAL-094` | 学习文档说明 owner 申请目录的单query授权、原pending定义、最早20项非完整队列、metadata-only root/item、SQL微秒与HTTP毫秒边界、读取零写入、shared gateway及选择后仍原渠道核对/明确批准；给出runtime/HTTP/Dart/Widget/Docker/restore检查与合成身份、生产和真人证据边界。 |
+| `MANUAL-095` | 学习文档说明定向邀请接受后的五字段历史回执、membership UUID 与 UTC，区分历史接受和重新读取的当前组织状态；说明各关闭路径返回原 receipt、父目录重读一次、无重复接受、unknown 解消、账号隔离及小屏检查，不把合成原生截图写成生产身份或当前授权。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3418,6 +3420,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-102` | 7BB 旧writer实际finite containment RED，0097 structural／fixture检查首次finite／expired／future target exact forbidden和owner／claim／audit零变化、unended成功、两次合法跨事务handoff后target assignment／parent结束时原active actor exact replay receipt相同且计数不增。既有Backend runtime integration验证finite HTTP403／savepoint零写及unended first／replay；完整Docker继续旧checksum、OID／owner／ACL／search path、全部checks／fixtures／并发及独立restore，不代表生产、未来owner expiry或真实删除。 |
 | `TEST-103` | 7BE两个actual implicit runtime bridge锁等待回归，以exact advisory key／physical PID／blocking PID证明target才active或actor经另一已提交handoff才owner；旧writer containment／append-only错误映射503，新0098统一403，scoped owner／claim／audit完整snapshot不变，同request的fresh事务控制200。新fixture检查target起点相等允许、actor起点相等拒绝，既有0086冲突与0097replay继续运行；完整Docker保留checks／旧checksum／并发／独立restore，不证明真实Auth或生产部署。 |
 | `TEST-104` | 7BI验证current-owner/empty/forbidden、20项与UUID tie-break、expiry与approved排除、invalid/unlinked/member applicant仍pending、过期link不影响、授权半开区间、fixture scoped零副作用/ACL/同session复验；runtime-role与实际HTTP严格合同、认证顺序/GETbody/Promisegate，Dart单次401/ABA/close，Widget明确选择/刷新/审批复用与320×568/200%字号；完整Docker/checksum/restore和精确head CI不等于生产或六平台真人验收。 |
+| `TEST-105` | 7BK Widget检查五字段历史UTC、接受后不再preview/accept、unknown到known清除uncertain、关闭/Back/Escape返回同receipt且父目录各重读一次、历史replay后当前目录仍空、快速ABA/迟到响应/同账号换项目、借用gateway不关闭、中英文320×568/200%/IME、heading/live status及48dp。定向analyze、链接、production boundary与精确head CI继续运行；合成Android原生复核不证明生产JWT、部署或六平台真人验收。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3810,6 +3813,8 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 7BD／#400 同时修正 0093／0094 fixture 的并行全库计数假差异，四种受控无关提交保留本域零副作用检查；不改生产授权或隔离级别。
 
 7BI／#412 接通 owner 的有界待审批申请目录与既有明确批准窗口，只列最早20条原pending记录，不识别申请人或保留批准资格；完整队列、资料、通知与生命周期政策不在此票。
+
+7BK／#413 使定向邀请接受成功后能读取原五字段历史回执，并在关闭时沿用父目录的一次在线重读；不把历史 membership UUID 解释成当前成员资格或自动项目加入。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 
