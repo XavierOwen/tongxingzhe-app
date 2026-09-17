@@ -2377,6 +2377,10 @@ Issue #405 在加入链接脚本的 create replay、owner transfer、membership 
 
 强制 timeout 与 SQL error 清理验证还应确认：本轮客户端／会话／FIFO 已清空，postmaster PID 和启动时间未变，测试窗口日志没有 recovery，无关会话未中断。Linux 进程回收探针和合成数据库验证不证明生产故障发生率。
 
+Issue #408 将[报表替换并发脚本](../../tool/verify_management_report_snapshot_replacements_concurrency.sh)的同源递归清理改为相同客户端契约：EOF、全部 TERM／CONT、全部 wait。它保留已有精确锁协议、三组 job wait／reset 和全部业务断言；原生 baseline 与独立强制失败验证分别留证，不借用加入链接的延迟测试结论，也不改变其他并发脚本。
+
+Issue #410 的完整运行发现另一类误报：0092 预览前后使用八项全库计数，其他 runtime 测试合法提交 owner 后，断言报“preview wrote facts”。新版前后读取同一个 live fixture 计数视图，覆盖本例用户／身份／空间／成员、关联生成的 owner UUID，以及 claim／tombstone／audit；不把无关组织计入，也不写死基准数字。受控回归在指定 fixture PID、精确锁 key 与 blocker 匹配后提交无关组织：旧全库断言 RED，新作用域 GREEN；原 receipt、错误、replay、ACL 和四个申请隔离用例保留。这是测试隔离证据，不是生产预览写入或真实身份的证据。
+
 从仓库根目录运行：
 
 ```bash
