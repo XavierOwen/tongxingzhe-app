@@ -145,6 +145,18 @@ Docker runner 注入 0093／0094 fixture。
 它以 `tongxingzhe_runtime` 运行真实 adapter integration。
 synthetic 通过不证明列表、通知、Flutter、deep link、production identity、部署或真人平台。
 
+## 普通项目成员安排 typed adapter 与 0096 integration
+
+Issue #385 只交付 PostgreSQL typed adapter，不开放 HTTP route 或新增 production composition。`PostgresOrganizationProjectMembershipAssignmentStore.assign` 保留 trusted identity 原值，每次只调用一条参数化 `app_data.assign_organization_project_member_for_identity_v1`，按 issuer、subject、request、workspace、project、target parent 顺序传入。
+
+parser 要求单行、exact 七字段和固定 `organization-project-membership-assignment:v1`，核对 workspace／project／target parent 三个 submitted selectors。UUID 规范为 lowercase；有限合法日历时间规范为 UTC 毫秒。parent end 必须显式为 null 或合法时间，缺失／undefined 不表示无限结束。
+
+PostgreSQL 保存完整时间精度。毫秒投影可能使正的 sub-ms 区间两端相等；adapter 拒绝投影结束早于起点，但不把相等误判为 SQL 空区间。历史 receipt 不能证明当前 membership、管理或 PII 权限。
+
+五组 SQLSTATE／message 只映射 ADR-0186 的四个稳定 code；未知数据库、constraint、parser、行数或 selector 漂移统一 unavailable，不保存原始 error／cause。adapter 不预读 owner、target、资料或 current context，也不调用 Auth lookup。
+
+`organization-project-membership-assignment.integration.ts` 通过 `ORGANIZATION_PROJECT_MEMBERSHIP_ASSIGNMENT_FIXTURE` 读取 0096 fixture 的 seed 段；后面的独立隔离事务仍由 SQL fixture 自己验证。integration 在 rollback transaction 中切换 `tongxingzhe_runtime`，对账有限／空 parent 的首次及 exact replay、selectors conflict、两条 claim 和 audit。完整 Docker runner 显式注入 fixture 和执行编译后的 integration；单元 fake 不替代这个 runtime 对账，synthetic 不证明生产或部署。
+
 ## 个人当前关系阶段快照
 
 | 方法与路径 | 行为 |
