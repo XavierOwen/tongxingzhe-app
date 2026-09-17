@@ -1,0 +1,90 @@
+{
+  "evidenceScope": "independent-probe-only",
+  "source": {
+    "commit": "fceff0d8dbd51a8222a170cd91dd55e5d2a336ba",
+    "runId": "probe-20260917-web-01",
+    "flutterVersion": "3.44.2",
+    "osVersion": "macOS 26.6.2",
+    "browserVersion": "Headless Chrome 150.0.7871.187",
+    "buildFlavor": "release-web",
+    "probeUiEvidenceClass": "unsupported",
+    "probeUiReason": "sensitiveStorageDisabled",
+    "lockfileDependencies": {
+      "flutter_secure_storage": "10.3.1",
+      "flutter_secure_storage_web": "2.1.1",
+      "drift": "2.34.0",
+      "sqlite3": "3.3.3"
+    }
+  },
+  "browserProcesses": {
+    "initial": 24017,
+    "reopened": 25027
+  },
+  "observations": [
+    {
+      "recordedAtUtc": "2026-09-17T17:08:58.515Z",
+      "phase": "initial",
+      "storage": {
+        "origin": "http://127.0.0.1:53937",
+        "online": true,
+        "localStorage": [],
+        "sessionStorage": [],
+        "indexedDB": [],
+        "cacheStorage": [],
+        "serviceWorkers": []
+      },
+      "disabledStageCount": 7,
+      "allStageButtonsDisabled": true,
+      "status": "当前平台保持失败关闭。请查看证据中的 platformGate 状态。"
+    },
+    {
+      "recordedAtUtc": "2026-09-17T17:11:37.616Z",
+      "phase": "reload",
+      "storage": {
+        "origin": "http://127.0.0.1:53937",
+        "online": true,
+        "localStorage": [],
+        "sessionStorage": [],
+        "indexedDB": [],
+        "cacheStorage": [],
+        "serviceWorkers": []
+      },
+      "disabledStageCount": 7,
+      "allStageButtonsDisabled": true,
+      "status": "当前平台保持失败关闭。请查看证据中的 platformGate 状态。"
+    },
+    {
+      "recordedAtUtc": "2026-09-17T17:12:44.972Z",
+      "phase": "reopened",
+      "storage": {
+        "origin": "http://127.0.0.1:53937",
+        "online": true,
+        "localStorage": [],
+        "sessionStorage": [],
+        "indexedDB": [],
+        "cacheStorage": [],
+        "serviceWorkers": []
+      },
+      "disabledStageCount": 7,
+      "allStageButtonsDisabled": true,
+      "status": "当前平台保持失败关闭。请查看证据中的 platformGate 状态。"
+    },
+    {
+      "recordedAtUtc": "2026-09-17T17:13:05.416Z",
+      "phase": "offline-loaded-page",
+      "storage": {
+        "origin": "http://127.0.0.1:53937",
+        "online": false,
+        "localStorage": [],
+        "sessionStorage": [],
+        "indexedDB": [],
+        "cacheStorage": [],
+        "serviceWorkers": []
+      },
+      "disabledStageCount": 7,
+      "allStageButtonsDisabled": true,
+      "offlineRequestBlocked": true,
+      "status": "当前平台保持失败关闭。请查看证据中的 platformGate 状态。"
+    }
+  ]
+}

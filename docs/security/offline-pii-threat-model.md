@@ -83,3 +83,5 @@ AppSession 在在线上下文失去 PII 查看能力时持久锁定旧快照，�
 这些自动测试使用可控存储接缝，不是六平台运行时证据。各平台的真实结果和未验证项以[六平台能力证据矩阵](../spikes/six-platform-capability-matrix.md)为准。人工验证矩阵由 [Issue #161](https://github.com/XavierOwen/tongxingzhe-app/issues/161) 跟踪。
 
 2026-09-17，现有 synthetic 探针在 Android 16／API 36 模拟器中实际使用生产 Vault、平台安全存储和 Drift，三个独立进程完成九种 scenario，结果全部为 `simulated`。跨进程恢复保留首次授权／到期时间；模拟删除失败后的持久锁在新进程中仍阻止读取，重试删除后仍锁定。原始脱敏 JSON、环境与限制见[证据矩阵](../spikes/six-platform-capability-matrix.md#2026-09-17-android-模拟器离线-pii-预检)。期限使用 synthetic 授权时间，撤权由探针模拟，删除失败为一次受控注入；没有真实账号、服务器撤权、硬件安全性、备份或实际七十二小时运行证明，不改变 #161 的人工验收状态。
+
+同日，release-web 独立探针在无账号临时 Chrome profile 中，首次打开、刷新、独立进程重开和已加载页面断网后均保持 `unsupported`，七个阶段按钮禁用，测试 origin 的五类存储列表为空。断网同时观察到 navigator 离线与实际请求失败。[浏览器观察快照](../spikes/evidence/offline-pii-web-disabled-20260917/observations.json) 只覆盖这个入口和指定时刻，不证明整个产品、全 profile 文件、断网资源重载或 durable database 支持路径，不能替代 #161 的完整 Web 验收。
