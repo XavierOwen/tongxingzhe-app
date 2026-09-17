@@ -1558,6 +1558,14 @@ timeout／client network error 为 networkUnavailable，不返回 provider、tok
 
 7BD／Issue #400 随本切片修复并行提交暴露的旧 0093／0094 fixture 全库计数假差异：live temporary views 限定全部 fixture 组织／用户／个人空间及动态 parent／project／grant，四个 exact key／PID／blocking PID barrier 受控提交无关事实，旧断言 RED、新断言 GREEN。原本域副作用、claims、receipt 和 runtime ACL 验证保留，不改 product writer、旧 migration、隔离或 file 并行。
 
+#### Slice 7BA：从申请批准到明确项目安排的实际 HTTP 对账
+
+7BA／Issue #395 只新增跨操作 integration 与 runner entry。actual HTTP 使用真实 link／application／assignment stores、runtime role、单 statement 隐式提交和 fake verifier，独立 PID observer 逐次核对 committed facts。
+
+link／submit／approve／assign 四步后，申请人的 organization membership 为 `0→0→1→1`，project membership 为 `0→0→0→1`，management capabilities 不增加。approval 返回的 parent 正是 assignment 提交的 target；SQL 文本／等值比较保留微秒，wire receipt 只保留毫秒。
+
+精确重放不增加各 family claim／audit／membership，non-owner、overlap、drift 和 unknown／cross-organization approval 稳定拒绝且不增写。`TEST-101`／`MANUAL-091` 保留完整 checksum、并发与独立 restore；synthetic 合同证据不代表生产、客户端、真人平台或自动授管理权限。
+
 ### 5.8 分析、指标与报告
 
 #### 5.8.1 统计单位和核心口径
@@ -3092,6 +3100,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-087` | 学习文档说明 7AW raw route 与 POST、认证／query／path／store／body 顺序、exact 两字段、共享实际字节上限和无新增 415、exact 七字段及显式 null、稳定 HTTP 分类、no-store、共享 pool 与单 statement 等待。区分 HTTP fake、composition、runtime 对账、CI 与生产。 |
 | `MANUAL-088` | 学习文档说明 7AX 独立 assign API、七字段历史 receipt／nullable end、四 UUID 的本地 short-circuit、固定 HTTP path／body、严格 JSON／no-store／status／code、单次 401 同意图重试与身份 ABA／cleanup fence、deferred／配置／client ownership；给出 Flutter 命令并区分 fake、CI、生产与真人平台。 |
 | `MANUAL-090` | 学习文档说明 7AZ actual HTTP、fake verifier、真实 adapter／runtime role、单 statement 隐式提交和独立 PID observer；首次／replay 对账 selectors／SQL 时间及拒绝零写入，解释临时库 cleanup、不绕过 guard 和 HTTP／Docker／CI／生产边界。 |
+| `MANUAL-091` | 学习文档说明 7BA link／submit／approve／assign 是独立操作，organization `0→0→1→1`／project `0→0→0→1`，approval parent 与 assignment target 相同、不授管理 capability；对账各 family committed claim／audit、SQL 微秒及稳定拒绝，区分 actual HTTP／Docker／CI 与生产。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3369,6 +3378,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-097` | 7AW handler／真实 HTTP route／composition tests 覆盖两个 selectors 的 raw alias、method、auth-first、query／UUID／store 在 body 前、exact 两字段、共享 1 MiB inclusive／chunked／JSON 分类、无新增 Content-Type gate、七字段有限／空 end、稳定 status／code、no-store、共享 verifier／pool 与 bridge Promise settled 后响应。合成测试不证明生产身份、部署、Flutter、真人平台或当前成员资格。 |
 | `TEST-098` | 7AX focused tests 覆盖四 UUID 本地拒绝／lowercase、固定 method／path／两字段 body／headers、exact 七字段／family／selectors／UTC／null／相等毫秒端点、全部 typed failure 与 status 配对、一次 401 同请求重试、token／HTTP／refresh／cleanup 的 identity／logout／switch／ABA／error／done／late／close fence、timeout／network、deferred、非法配置和 client 单次 close。完整 Flutter／analyzer／format／boundary／links／source review／CI 不证明 UI 接线、Backend 部署、production identity 或真人平台。 |
 | `TEST-100` | 7AZ actual Node HTTP＋真实 PostgreSQL adapter／runtime role 检查有限／空 parent first 200、不同 PID observer 的 committed membership／claim／audit／selectors／SQL 时间、exact wire replay 不增写、409 drift、403 overlap／non-owner、raw aliases、auth、JSON／extra key／actual-byte 超限／verifier 503 的 query 边界。完整 Docker 继续 checksum、并发与独立 restore；synthetic 不证明真实身份、部署、Flutter、App 接线或真人平台。 |
+| `TEST-101` | 7BA actual HTTP＋runtime role＋独立 PID observer 覆盖分享 link／submit／owner approve／explicit assign、org与project逐步计数、approval parent绑定、default-promoter／capability零增加、各 family claim／submitted／approved／assignment audit 和 SQL完整时间，三次 exact replay、non-owner／overlap／drift／unknown／cross-org稳定拒绝零附加写入。完整 Docker继续checks／checksum／并发／restore；不代表真实Auth、部署、Flutter、真人平台或自动项目加入。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3749,6 +3759,8 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 7AX／#388 提供普通项目成员安排独立 Flutter gateway 与严格历史 receipt；App／UI 接线、当前访问资格与生产验证另票交付。
 
 7AZ／#392 对实际本地 HTTP 200 做独立 runtime-role 提交观察，证明首次与精确重放的 membership／claim／audit 对账；verifier 与数据库均为 synthetic，不代表生产部署。
+
+7BA／#395 从分享申请批准到明确项目安排做实际 HTTP 对账，确认入组只建 parent、安排才建默认推广者 child，不新增管理 capability；不实现自动项目加入。
 
 7BD／#400 同时修正 0093／0094 fixture 的并行全库计数假差异，四种受控无关提交保留本域零副作用检查；不改生产授权或隔离级别。
 

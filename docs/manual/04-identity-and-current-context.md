@@ -1860,6 +1860,24 @@ runner 显式执行编译后的 `organization-project-membership-assignment-http
 
 同一 application integration 留下四种受控回归：各 fixture 的成功与失败断言前，精确 advisory key、fixture／holder PID 和 blocking PID 证实等待，再合法提交无关 membership／owner／project／capability。旧计数四处 RED，新计数四处 GREEN；原本域零副作用、claim 内容、receipt 和 runtime ACL 检查继续保留。不改生产 writer 或旧 migration。
 
+### 3.44 批准入组与安排项目是两次独立写入（Issue #395，MANUAL-091）
+
+7BA 使用 actual Node HTTP、真实 link／application／assignment adapters、runtime role 和 fake verifier，依次建立分享链接、提交申请、owner 明确批准，再明确安排到项目。每个业务 bridge 都是单 statement 隐式提交，不同 PID 的 observer 只在 HTTP 响应后读已提交事实。
+
+申请人 organization membership 依次为 `0→0→1→1`，project membership 为 `0→0→0→1`。批准 receipt 的 membership UUID 必须等于随后 assignment 的 target parent；只有安排项目那一步建立默认推广者 child，所有步骤都不新增 management capability。
+
+observer 分别对账 link claim／audit、application claim／submitted／approved audit 和 assignment claim／audit。精确重放三次已成功操作不增加记录；non-owner 安排和已安排后的 overlap 为 403，drift 为 409，未知／cross-organization approval 统一拒绝。SQL 时间用数据库文本／等值比较，不拿 node-postgres 毫秒 Date 去等同 SQL 微秒。
+
+从仓库根目录运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 显式执行 `organization-join-project-assignment-http.integration.js`，不替代既有各 family 的并发、checksum 或恢复检查。每次只提交随机 synthetic setup 和合法业务事实；连接销毁后由 runner 删除专用临时库，不关闭 guard 或 DELETE 已提交行。
+
+`TEST-101` 证明本地跨操作合同，不实现自动项目加入、角色提升、申请列表、通知或新政策。fake verifier、Docker、CI 和 SQL 事实都不是生产身份、部署、Flutter 或真人平台证明。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
