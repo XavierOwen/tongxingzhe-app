@@ -57,6 +57,8 @@ flutter run \
 
 Flutter 中禁止出现 Supabase secret/service-role key、PostgreSQL 密码或 warehouse 凭据。
 
+Android 正式版的网络权限在 main manifest 声明。release 编译使用 `flutter build apk --release`；权限、插件生成和既有 debug signing 的证据边界见[本机测试指南](docs/manual/09-local-docker-and-ci-testing.md)。CI 的 Android debug build 不等于生产签名或真实认证通过。
+
 macOS 真实运行需要 Apple Development 签名。复制本地签名示例并填写自己的 Team ID；目标文件已被 Git 忽略：
 
 ```bash

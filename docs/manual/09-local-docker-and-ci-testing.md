@@ -116,6 +116,25 @@ PostgreSQL migration、bridge、索引、授权、fixture 或 Backend store 发�
 
 `--no-pub` 表示测试使用已经解析的 Flutter 依赖。首次检出仓库或 `pubspec.lock` 变化后，应先运行 `flutter pub get`。
 
+### Android release 的网络权限与插件生成（Issue #399）
+
+Android main manifest 必须声明 normal `INTERNET` permission；debug／profile 的声明不会进入 release。它允许既有 HTTPS identity／Backend transport 使用网络，不增加 dangerous permission、权限弹窗或 cleartext policy。`test/tool/android_release_network_permission_test.dart` 检查 main 声明，删除该声明实际 RED、补回后 GREEN。
+
+检查正式 main entry 的 release 编译与 APK 权限：
+
+```bash
+flutter build apk --release
+"$ANDROID_SDK_ROOT/build-tools/36.0.0/aapt" dump permissions \
+  build/app/outputs/flutter-apk/app-release.apk
+```
+
+aapt 路径须按本机 build-tools 版本调整；权限输出应包含 `android.permission.INTERNET`。不要用 debug APK 代替 release permission 证据。
+
+本地 Flutter 3.44.2 在先跑 tests／独立 pub get 后执行 `build apk --release --no-pub`，可能复用含 integration_test 的非 release Java registrant。Gradle release classpath 排除该 dev plugin，导致 `IntegrationTestPlugin` 找不到。
+SDK code 明确显示 `--no-pub` 也跳过 release tooling 重生成。正常 `flutter build apk --release` 实际恢复成功，不需改 Java、SDK、依赖、接受 license 或清 host cache。
+
+本次新 release APK 经 aapt 确认有 INTERNET，但仍用仓库既有 Android Debug signing。编译、permission 和本地回归不是上架签名、真实 Auth、网络服务可用性或生产部署证明。CI Android job 当前编译 debug；精确 head 的九项绿灯不能替代上述本地 release 核验。
+
 ## 5. 怎样选择较小的目标测试
 
 开发时先运行最接近改动的测试。目标测试通过后，提交前仍要运行完整检查。
