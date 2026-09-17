@@ -1,6 +1,6 @@
 # 离线推广对象资料威胁模型
 
-状态：截至 2026-09-17，包含 Slice 7Y 的请求作用域保护、7Z 的成员退出前条件清除，以及 Android 模拟器、Web 禁用观察和 Linux 无 keyring 检查的证据边界。
+状态：截至 2026-09-17，包含 Slice 7Y 的请求作用域保护、7Z 的成员退出前条件清除，以及 Android 模拟器、Web 禁用观察和 Linux 双向基础门禁检查的证据边界。
 
 适用需求：`PII-002`、`PII-003`、`AUTHZ-006`、`TEST-006`
 
@@ -87,3 +87,5 @@ AppSession 在在线上下文失去 PII 查看能力时持久锁定旧快照，�
 同日，release-web 独立探针在无账号临时 Chrome profile 中，首次打开、刷新、独立进程重开和已加载页面断网后均保持 `unsupported`，七个阶段按钮禁用，测试 origin 的五类存储列表为空。断网同时观察到 navigator 离线与实际请求失败。[浏览器观察快照](../spikes/evidence/offline-pii-web-disabled-20260917/observations.json) 只覆盖这个入口和指定时刻，不证明整个产品、全 profile 文件、断网资源重载或 durable database 支持路径，不能替代 #161 的完整 Web 验收。
 
 Linux CI 在新 Xvfb 和无 Secret Service 的独立 D-Bus session 中实际启动 GTK 探针。现有 UI 导出的[原始 allowlist JSON](../spikes/evidence/offline-pii-linux-no-keyring-20260917/session-1.json) 为唯一 `unsupported`／`sensitiveStorageDisabled` 门禁事件；独立 Documents 未生成数据库或 sidecar。此证据覆盖受控无 keyring 禁用路径，不验证可用 keyring 的存储、整个产品、真实授权或硬件安全。实际 commit、环境和 job 见[证据矩阵](../spikes/six-platform-capability-matrix.md#2026-09-17-linux-ci-无-keyring-禁用检查)，#161 仍开放。
+
+同一 Linux job 另建隔离 session，启动本轮临时 secrets daemon，实际完成安全存储 nonce 写入／精确读回／删除和 Drift v19／device settings 初始化。现有 Copy 导出的[原始 allowlist JSON](../spikes/evidence/offline-pii-linux-capability-20260917/session-1.json) 只有一个 `pass`／`simulated` 基础门禁事件；没有激活任何 PII 阶段。这不证明完整缓存、跨进程恢复、真实授权、硬件安全、备份或真人 UI 验收。环境、首次失败与通过范围见[证据矩阵](../spikes/six-platform-capability-matrix.md#2026-09-17-linux-ci-可用-keyring-基础预检)，不改变 #161 的人工验收状态。
