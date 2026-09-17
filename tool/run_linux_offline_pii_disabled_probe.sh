@@ -59,7 +59,7 @@ if [[ "${1:-}" != '--session' ]]; then
     GDK_BACKEND=x11 GSETTINGS_BACKEND=memory GTK_USE_PORTAL=0 \
     NO_AT_BRIDGE=1 LIBGL_ALWAYS_SOFTWARE=1 \
     xvfb-run --auto-servernum --server-args='-screen 0 1280x1200x24 -nolisten tcp' \
-    dbus-run-session --config="${script_dir}/fixtures/linux_no_keyring_probe.conf" -- \
+    dbus-run-session --config-file="${script_dir}/fixtures/linux_no_keyring_probe.conf" -- \
     bash "${BASH_SOURCE[0]}" --session "${probe_directory}" \
       "${repository_root}/${bundle}/tongxingzhe_app" \
       "${commit}" "${run_id}" "${flutter_version}" "${os_version}"
