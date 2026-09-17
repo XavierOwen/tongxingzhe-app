@@ -1716,6 +1716,28 @@ dart format --output=none --set-exit-if-changed lib test tool
 
 Widget 检查证明完整输入可滚动露出、viewport 能容纳输入框、动作位于键盘以上，以及最小 48px 触控目标。原生 Android batch 使用 synthetic identity 与内存 gateway，观察中英文键盘输入及代表性预览／确认／回执；截图不能独立证明几何尺寸、真人辅助技术、实际账号或生产权限。
 
+### 3.37 普通项目成员安排，不是管理权限提升（Issue #381，MANUAL-084）
+
+7AT／[ADR-0186](../adr/0186-explicit-ordinary-project-membership-assignment.md) 具体化既有 owner 项目治理职责。组织加入只建立 organization membership；项目须逐一明确安排，新 project membership 默认推广者。项目管理员等更高能力仍须另有明确授予，owner 不因此自动成为项目管理员或看到个人资料。
+
+首次安排的输入只有 request、organization、project 和 target organization-membership UUID。actor 由 exact identity bridge 解析；这些编号只选择对象，不证明 owner、成员或项目现在有效。writer 锁后重验 current active owner、同组织 active target 与 active project，不提供账号或成员搜索。owner 安排自己也须明确操作。
+
+新 project membership 在单一锁后墙钟立即生效，结束点复制 parent bound，可为空，不延长父关系。结束历史不复活，当前或未来重叠区间整体拒绝。结束点原为空只能设置一次；插入时已非空则不能再改，有限 parent 下的 child 没有提前结束能力。完整撤权与改期不是这个合同。
+
+首次写入遵循 request→sorted user rows→governance→sorted organization-membership locks→target project-membership lock→project status fence。最后一把锁复用 0073 的 `management-follow-up-consent-opt-in:<project>` key；仅复用状态串行化资源，不调用配置、不取得 release capability，也不新增 trigger 或 project row lock。
+
+private writer 首先校验 exact READ COMMITTED；否则固定 0A000，未来 transport 统一 unavailable，函数内不改变事务模式。REPEATABLE READ 的旧事务快照不会被 advisory lock 刷新；锁后新 SQL 必须真的取得新快照。归档先提交则安排拒绝，安排先提交则 membership 先建立、项目随后归档。
+
+membership、claim、audit 与 receipt 原子提交并使用同一时间。七字段历史 receipt 包括 contract、workspace、project、target parent、新 project membership、active_from 和可空 inactive_from。它不含 actor、资料、capability 或 replay flag。
+
+精确重放只允许原 active actor 读取相同 request／selectors 的旧结果，不重新要求 current owner，也不恢复访问权。
+
+其他 actor 或 actor 去关联统一 forbidden；同 actor 的 selectors drift 或本 family tombstone 为 conflict。audit 只存最小 opaque lineage 与时间，不存 actor／target user、名称、资料、identity、token、原始请求或数据库消息；value-free 不等于不可反查匿名数据。
+
+恢复期冻结首次安排，只允许合格的只读 historical replay。assignment family 在六个既有治理 family 后追加；具体 deletion、restore、purge eligibility／runner 与受控 DELETE 例外仍另票交付，不关闭 immutable guard。
+
+7AT 当前只交付文档，未实现上述 writer、bridge、数据库竞态或客户端。链接、no-slop、diff 与独立合同审查仅证明材料一致性；后续 DB 需实际验证归档双序等待、隔离模式拒绝零写入、parent／overlap、ACL、checksum 和 dump／restore，不把静态推演当作生产证明。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：

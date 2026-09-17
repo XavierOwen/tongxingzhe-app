@@ -106,6 +106,8 @@ approved replay 只在最后一把锁后确认调用者仍是 current active own
 
 `organization creation → directed invitation → owner transfer → membership self-leave → shareable join link → shareable join application`
 
+上述六个 family 的相对顺序保持。[ADR-0186](./0186-explicit-ordinary-project-membership-assignment.md) 在末尾追加 project membership assignment；当前终结治理的全局顺序以后者为准。
+
 清除随后按 UUID 排序取得受影响 app-user rows，再取 governance 和 membership locks。治理锁后必须重读 recovery 和两个新 family 的 claim 集合；集合变化时回滚并按完整集合重试。它先为每个 claim 写入只含固定 family 与 request UUID 的 value-free tombstone，再按依赖顺序清除 claim、audit 和组织业务数据。具体 deletion、recovery 和 purge writer 不属于本决定。
 
 账号终结删除先按上述 family 和各 family 内 UUID 顺序取得完整的受影响 link／application request locks，再取 app-user、governance 和 membership locks。治理锁后重读 claim 集合；出现未锁定的新 claim 时回滚重试。它只去关联 creator 和 applicant 引用，不改绑、删除或缩短 link／application。creator 去关联不影响 link 供其他合格账号使用；pending application 的 applicant 去关联后不能批准。
