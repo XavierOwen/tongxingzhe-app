@@ -1462,6 +1462,14 @@ builder 使用启动时打开的同一个 `IdentitySession`，`AppStartupReady` 
 
 `TEST-091`／`MANUAL-081` 覆盖明确转让、固定意图、全部 typed failure、会话隔离、production 接线、中英文、键盘、触控目标和窄屏高字号。本票不增加成员目录、profile、co-owner grant、恢复或手动改派、通知、router、Drift、离线重试或生产证明。
 
+#### Slice 7AR：保留组织创建请求的防重放墓碑
+
+7AR／Issue #377 用追加的 0095 migration 补齐 [ADR-0175](./adr/0175-organization-creation-is-atomic-with-first-active-owner.md) 已固定的 creation tombstone。0084 的 live claim 和审计仍保留；新 private 表只有固定 `organization-creation:v1` family 和 request UUID，无 actor、组织、名称、时间或业务内容，禁止 UPDATE／DELETE，PUBLIC 和 runtime 无直接访问权。
+
+现有 private create writer 在同一 creation request lock 内先检查本 family tombstone，再检查 live claim 和 actor。命中墓碑稳定返回既有 idempotency conflict，不创建组织，也不交付 live replay；其他 family 的相同 UUID 不影响 creation。现有函数 OID、owner、ACL、exact-identity bridge、名称验证、原子首位 owner、五字段 receipt 和审计语义不变。
+
+`TEST-092`／`MANUAL-082` 覆盖值域、immutable guard、ACL、首次／live replay／墓碑并存的冲突优先级、family 隔离和双序 request-lock 等待。synthetic 墓碑只模拟终结事实，不证明组织已实际清除。本票不实现 deletion／restore／purge eligibility 或 runner，也不删除 live claim、审计或任何组织业务记录。
+
 ### 5.8 分析、指标与报告
 
 #### 5.8.1 统计单位和核心口径
@@ -2988,6 +2996,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-079` | 学习文档说明 7AO 如何从“我的组织”输入 link UUID、读取最小 preview、明确提交固定 application UUID，并显式复制 application UUID 给 owner。必须说明申请不是 membership、preview 不提供组织搜索、稳定 conflict 与不确定结果的差异、会话 fence，以及 Widget／Clipboard synthetic、CI、生产部署与真人平台证据边界。 |
 | `MANUAL-080` | 学习文档说明 7AP 如何从选定组织输入 application UUID、本地核对后明确批准，复用固定 organization／application 重试，并区分稳定拒绝与不确定结果。必须说明不读取申请人资料、服务端判断 current owner、历史回执不证明当前 membership、不授予项目或额外权限、会话 fence 和 synthetic／CI／生产证据边界。 |
 | `MANUAL-081` | 学习文档说明 7AQ 如何用同组织成员关系 UUID 核对接收方、明确结束自己的 owner assignment，并用固定 request／workspace／target 重试。必须说明首次授权与 exact replay 的差异、历史回执不证明当前 owner、不改变其他 owner／项目权限、既有 gateway 接线与 ownership、会话 fence 和 synthetic／CI／生产证据边界。 |
+| `MANUAL-082` | 学习文档说明 7AR 的独立 creation family、两字段 value-free immutable tombstone、同 request lock 下的冲突优先级、原 writer／identity bridge 保留及完整 Docker 验证命令。必须区分防重放存储与实际组织清除，不定义 deleted_at 的申请时间或期限，不新增 runtime 写入口或授权受控删除例外。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3257,6 +3266,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-089` | 7AO focused Widget 与目录接线 tests 覆盖 link UUID 规范化、本地拒绝、preview 后确认、单一 application UUID、同意图不确定重试、稳定 conflict、六字段成功回执、显式 Clipboard 复制及失败重试、账号失效／换号／ABA／迟到结果、空目录入口、不刷新目录与共享 gateway ownership。检查中英文、live region、键盘、触控目标与 320×568／200% 字号；完整 Flutter、analyzer、format、生产边界、链接和 CI 通过不证明真实剪贴板、生产身份、部署、Apple universal link 或真人平台。 |
 | `TEST-090` | 7AP focused Widget 与目录接线 tests 覆盖固定组织、application UUID 规范化与本地拒绝、本地核对后明确 approve、同意图重试、不确定结果转稳定拒绝、五字段成功回执、全部 typed failure、busy 防重入、账号失效／换号／ABA／迟到结果、不刷新目录／切项目／复制／关闭 gateway。检查中英文、live region、键盘、触控目标与 320×568／200% 字号；本地 synthetic、完整 Flutter、analyzer、format、生产边界、链接和 CI 不证明 production identity、Backend 部署、数据库权限、通知或真人平台。 |
 | `TEST-091` | 7AQ focused Widget、目录和 App 接线 tests 覆盖 target membership UUID 规范化与本地拒绝、本地核对后明确 transfer、首次提交生成 request UUID、固定 request／workspace／target、全部 typed failure、不确定结果转稳定拒绝、五字段历史回执、busy 防重入、会话／ABA／迟到结果、同账号切项目、共享 gateway 与不刷新／切项目／复制。检查中英文、live region、Tab／Escape／系统返回、48px 控件和 320×568／200% 字号；完整 Flutter、analyzer、format、生产边界、链接和精确 head CI 不证明生产身份、部署端点、数据库实权或真人平台。 |
+| `TEST-092` | 7AR structural check、rollback fixture 和独立会话并发覆盖 creation tombstone 两字段、固定 family、immutable guard、owner／PUBLIC／runtime ACL、首次创建、精确 replay、墓碑与 live claim 并存时优先 conflict、不同 family 相同 UUID 隔离、旧 writer OID／owner／ACL／参数保留，以及墓碑先行和 create 先行的真实 request-lock 持有／等待。完整 Docker 验证旧 checksum、rebuild 和 dump／restore；synthetic 通过不证明实际 purge、生产删除或恢复。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3621,6 +3631,8 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 7AP／#374 在选定组织提供输入 application UUID、核对原渠道申请人后明确批准的入口。成功只交付历史 approval receipt；服务端仍判定 current owner，App 不添加项目权限或切换项目。
 
 7AQ／#375 将已组合的 owner-transfer gateway 接到选定组织的交接窗口。已知 membership UUID 经本地核对后明确转让；固定意图重试和历史 receipt 不推导当前 owner，不增加成员目录、co-owner grant 或项目权限。
+
+7AR／#377 在 0095 为创建请求补 value-free tombstone 和同 request lock 防重放检查。它保留全部 live 业务事实，不代表组织删除、恢复或终结清除已实现。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 

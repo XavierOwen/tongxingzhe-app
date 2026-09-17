@@ -78,6 +78,20 @@ runtime 只获得 submit identity bridge 的 `EXECUTE`，不能访问 private wr
 
 完整 runner 自动发现 0094 migration、check、rollback fixture 和并发脚本。通过只证明 synthetic PostgreSQL 的 schema、原子写入、锁、ACL、checksum 与 restore，不证明 Backend、HTTP、生产身份、部署或客户端行为。
 
+## 7AR：组织创建请求的防重放墓碑
+
+0095 为 Issue #377 补齐 creation family 的 value-free tombstone，不改写 0084。新 private 表只保存固定 `organization-creation:v1` 和 request UUID；immutable guard 拒绝 UPDATE／DELETE，PUBLIC 和 runtime 无直接访问权。
+
+原 private create writer 在 creation request lock 内先检查本 family 墓碑，再检查 live claim 和 actor。墓碑使首次创建和 live replay 稳定返回既有 idempotency conflict；其他 family 的相同 UUID 不影响 creation。函数 OID、owner、ACL、参数、identity bridge、五字段 receipt、首位 owner 和审计保持不变。
+
+完整 runner 自动发现新 migration、check、rollback fixture 和 request-lock 并发脚本：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+双序并发观察真实锁等待，完整套件检查 checksum 和 dump／restore。synthetic 插入墓碑不删除 live 数据，也不证明实际 purge。0095 不增加 deletion／restore／purge writer、删除资格、受控 immutable-delete exception、Backend、HTTP 或 Flutter。
+
 ## 6BO：组织项目 opt-in 配置边界
 
 6BO 的组织项目 `follow_up_consent_ratio@1` opt-in 与个人 0048 配置分开。实现后的 `0073` migration 只应增加 private 配置表、private configure/read

@@ -1676,6 +1676,26 @@ git diff --check
 
 Widget 和 App tests 使用 fake identity、内存 gateway 与 synthetic receipt，只证明交互、固定意图、会话隔离和接线。它们不证明 production identity、部署端点、数据库实权、真实辅助技术或真人平台运行。7AQ 不增加成员目录、co-owner grant、恢复或手动改派、通知、router、Drift、离线重试、删除恢复或 purge writer。
 
+### 3.35 保留组织创建请求的防重放墓碑（Issue #377，MANUAL-082）
+
+0084 已交付创建请求的 live claim；0095 补齐 ADR-0175 的 terminal fence，不改写旧 migration。新 private tombstone 只保存 `organization-creation:v1` 和 request UUID，不保存 actor、组织、名称、时间或业务内容。UPDATE／DELETE 被 immutable guard 拒绝，PUBLIC 和 runtime 没有直接访问权。
+
+已有 create writer 先取得 creation request advisory lock，再检查本 family tombstone、live claim 和 actor。命中墓碑返回既有 `22023 organization creation idempotency conflict`，首次创建和 live exact replay 都被拒绝；不同 family 相同 UUID 不影响创建。
+
+替换 writer 保留函数 OID、owner、ACL 和参数，runtime 仍只调用原 exact-identity bridge。名称验证、active actor、原子首位 owner、五字段 receipt、精确重放和审计不变。
+
+从仓库根目录运行完整隔离套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+dart run tool/check_markdown_links.dart
+git diff --check
+```
+
+runner 自动发现 0095 migration、structural check、rollback fixture 和专用并发脚本。并发分别让墓碑事务先持 request lock、让 create 先持锁，再观察另一个会话真实等待；两种提交顺序之后，已保留的墓碑都阻止后续创建或重放。完整套件还检查旧 checksum、Backend 对账和独立恢复库的 check／fixture。
+
+测试只向可丢弃 synthetic 数据库插入模拟墓碑，不删除 live claim、owner history、审计或组织业务行。通过证明防重放边界，不证明组织已实际清除。0095 不提供 deletion／restore／purge eligibility、runner、最小删除审计或 runtime 写入口；实际清除还必须固定完整生命周期、受控 immutable-delete exception 和全部 family 锁序，不能关闭约束或以局部删除冒充。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
