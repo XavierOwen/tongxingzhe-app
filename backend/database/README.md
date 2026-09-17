@@ -92,6 +92,26 @@ runtime 只获得 submit identity bridge 的 `EXECUTE`，不能访问 private wr
 
 双序并发观察真实锁等待，完整套件检查 checksum 和 dump／restore。synthetic 插入墓碑不删除 live 数据，也不证明实际 purge。0095 不增加 deletion／restore／purge writer、删除资格、受控 immutable-delete exception、Backend、HTTP 或 Flutter。
 
+## 7AU：明确安排普通项目成员
+
+0096 实现 Issue #383／[ADR-0186](../../docs/adr/0186-explicit-ordinary-project-membership-assignment.md) 的 DB-only 子集。current active owner 可以按同组织已有 target membership 和 active project UUID 建立默认推广者关系；不建立管理 grant、owner assignment、对象分配或 PII 权限。
+
+两个 operation-specific seam 使用 exact identity、固定 `pg_catalog` search path、可信 owner 和最小 ACL。runtime 只能执行 identity bridge，不能访问 private writer、claim、tombstone、audit 或业务表。两 seam 首先要求 READ COMMITTED，其他模式固定 0A000，且不取得 advisory lock 或写入事实。
+
+首次写入按 request → sorted user rows → governance → sorted organization hierarchy → target project hierarchy → 0073 status fence 取锁。
+
+没有新增 project row lock、状态 trigger 或配置调用。全部锁后只取一次墙钟，再重验资格、parent interval 和跨 parent 的同 user／project overlap，原子追加 membership、claim、audit 和七字段 receipt。
+
+新 child end 复制 parent bound，可为空；有限结束点插入后不可提前改写。exact replay 只向原 active actor 返回历史结果，不重验当前 owner、target、project 或 recovery，不授予访问权。tombstone 在 request lock 下优先 conflict；claim 只有 actor 非空→空的终结去关联例外，其余更新／删除均拒绝。
+
+完整 runner 自动发现 migration、structural check、rollback fixture 与并发脚本：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+十二种独立会话竞态覆盖空项目／历史成员归档双序、两种 UUID 排序、parent 结束、request replay／其他 actor 和墓碑双序。十种观察精确 advisory／PID；parent 两种按 0085 的真实 user-row-first 流程观察 transactionid 和 blocker／waiter PID。脚本会提交 synthetic 行，只用于专用可丢弃测试库。完整套件另检查旧 checksum 与独立 dump／restore，不证明生产账号、HTTP、客户端、完整撤权或实际 purge。
+
 ## 6BO：组织项目 opt-in 配置边界
 
 6BO 的组织项目 `follow_up_consent_ratio@1` opt-in 与个人 0048 配置分开。实现后的 `0073` migration 只应增加 private 配置表、private configure/read
