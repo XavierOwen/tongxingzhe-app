@@ -29,6 +29,9 @@ import 'package:tongxingzhe_app/organization_owner_transfer/organization_owner_t
 import 'package:tongxingzhe_app/organization_project_membership_assignment/organization_project_membership_assignment.dart';
 import 'package:tongxingzhe_app/organization_shareable_join/organization_shareable_join.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_project_membership_assignment_dialog.dart';
+import 'package:tongxingzhe_app/features/organization_directory/organization_directory_dialog.dart';
+import 'package:tongxingzhe_app/features/organization_directory/organization_shareable_join_application_approve_dialog.dart';
+import 'package:tongxingzhe_app/features/organization_directory/organization_shareable_join_application_directory_dialog.dart';
 import 'package:tongxingzhe_app/platform/platform_capabilities.dart';
 import 'package:tongxingzhe_app/project_settings/personal_follow_up_consent_opt_in.dart';
 import 'package:tongxingzhe_app/questionnaires/questionnaire_contract.dart';
@@ -36,6 +39,7 @@ import 'package:tongxingzhe_app/regions/contact_region_resolver.dart';
 import 'package:tongxingzhe_app/regions/region_catalog.dart';
 import 'package:tongxingzhe_app/regions/region_models.dart';
 import 'package:tongxingzhe_app/services/location_service.dart';
+import 'package:tongxingzhe_app/screens/production_home_shell.dart';
 import 'package:tongxingzhe_app/sync/sync_models.dart';
 import 'package:tongxingzhe_app/sync/sync_transport.dart';
 
@@ -313,6 +317,362 @@ void main() {
     await tester.pumpAndSettle();
     expect(assignmentGateway.closeCount, 1);
   });
+
+  for (final pendingDirectory in [false, true]) {
+    testWidgets(
+      'App/Home ${pendingDirectory ? '待审批目录' : '手工批准'}复用固定成员安排 gateway，只有明确提交才安排',
+      (tester) async {
+        final database = LocalDatabase(NativeDatabase.memory());
+        final identity = FakeIdentitySession(
+          initial: IdentitySnapshot(
+            stage: IdentityStage.signedIn,
+            principal: const IdentityPrincipal(
+              externalSubject: 'test-subject',
+              email: 'person@example.test',
+            ),
+            expiresAt: DateTime.utc(2030, 1, 2, 3, 30),
+          ),
+        );
+        const workspaceId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+        const applicationId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+        const membershipId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+        const projectId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+        final approvalReceipt =
+            OrganizationShareableJoinApplicationApproveReceipt(
+              organizationShareableJoinApplicationContractId:
+                  'organization-shareable-join-application:v1',
+              applicationId: applicationId,
+              organizationWorkspaceId: workspaceId,
+              organizationMembershipId: membershipId,
+              approvedAtUtc: DateTime.utc(2020, 1, 2, 3, 4),
+            );
+        final directoryGateway = _TrackingOrganizationDirectoryGateway(
+          result: OrganizationDirectorySuccess(const [
+            OrganizationDirectoryEntry(
+              organizationWorkspaceId: workspaceId,
+              organizationName: '安排组织',
+            ),
+          ]),
+        );
+        final joinGateway = _TrackingOrganizationShareableJoinGateway(
+          pendingResult: OrganizationShareableJoinApplicationDirectorySuccess(
+            OrganizationShareableJoinApplicationDirectoryReceipt(
+              organizationShareableJoinApplicationDirectoryContractId:
+                  'organization-shareable-join-application-directory:v1',
+              organizationWorkspaceId: workspaceId,
+              observedAtUtc: DateTime.utc(2020, 1, 2, 3),
+              applications: [
+                OrganizationShareableJoinApplicationDirectoryRecord(
+                  applicationId: applicationId,
+                  linkId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+                  submittedAtUtc: DateTime.utc(2020, 1, 1),
+                  expiresAtUtc: DateTime.utc(2020, 1, 8),
+                ),
+              ],
+            ),
+          ),
+          approveResult: OrganizationShareableJoinApplicationApproveSuccess(
+            approvalReceipt,
+          ),
+        );
+        final assignmentGateway =
+            _TrackingOrganizationProjectMembershipAssignmentGateway(
+              result: OrganizationProjectMembershipAssignmentSuccess(
+                OrganizationProjectMembershipAssignmentReceipt(
+                  projectMembershipAssignmentContractId:
+                      'organization-project-membership-assignment:v1',
+                  organizationWorkspaceId: workspaceId,
+                  projectId: projectId,
+                  organizationMembershipId: membershipId,
+                  projectMembershipId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+                  activeFromUtc: DateTime.utc(2020, 1, 2, 3, 5),
+                  inactiveFromUtc: null,
+                ),
+              ),
+            );
+        final contextGateway = FakeSessionContextGateway();
+        final assignmentIdentities = <IdentitySession>[];
+        final joinIdentities = <IdentitySession>[];
+        final dependencies = AppDependencies(
+          databaseFactory: SingleDatabaseFactory(database),
+          clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+          idGenerator: CountingIdGenerator(),
+          identitySessionFactory: FakeIdentitySessionFactory(identity),
+          sessionContextGateway: contextGateway,
+          platformCapabilitiesProvider:
+              const FakePlatformCapabilitiesProvider(),
+          organizationDirectoryGatewayBuilder: (_) => directoryGateway,
+          organizationShareableJoinGatewayBuilder: (session) {
+            joinIdentities.add(session);
+            return joinGateway;
+          },
+          organizationProjectMembershipAssignmentGatewayBuilder: (session) {
+            assignmentIdentities.add(session);
+            return assignmentGateway;
+          },
+        );
+        addTearDown(database.close);
+
+        await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+        await tester.pumpAndSettle();
+        final home = tester.widget<ProductionHomeShell>(
+          find.byType(ProductionHomeShell),
+        );
+        final session = home.appSession;
+        final initialContext = session.current.context;
+        final contextRequests = contextGateway.receivedTokens.length;
+        expect(assignmentIdentities, [identity]);
+        expect(joinIdentities, [identity]);
+        expect(
+          home.organizationProjectMembershipAssignmentGateway,
+          same(assignmentGateway),
+        );
+        await tester.tap(find.byKey(const ValueKey('project-context-menu')));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const ValueKey('organization-directory-menu-item')),
+        );
+        await tester.pumpAndSettle();
+        final directory = tester.widget<OrganizationDirectoryDialog>(
+          find.byType(OrganizationDirectoryDialog),
+        );
+        expect(directory.appSession, same(session));
+        expect(directory.shareableJoinGateway, same(joinGateway));
+        expect(
+          directory.projectMembershipAssignmentGateway,
+          same(assignmentGateway),
+        );
+        expect(directoryGateway.listCalls, 1);
+        final entry = find.byKey(
+          ValueKey(
+            'organization-shareable-application-${pendingDirectory ? 'directory' : 'approve'}-$workspaceId',
+          ),
+        );
+        await tester.ensureVisible(entry);
+        await tester.tap(entry);
+        await tester.pumpAndSettle();
+        if (pendingDirectory) {
+          final pending = tester
+              .widget<OrganizationShareableJoinApplicationDirectoryDialog>(
+                find.byType(
+                  OrganizationShareableJoinApplicationDirectoryDialog,
+                ),
+              );
+          expect(pending.appSession, same(session));
+          expect(pending.gateway, same(joinGateway));
+          expect(
+            pending.projectMembershipAssignmentGateway,
+            same(assignmentGateway),
+          );
+          expect(joinGateway.pendingRequests, [workspaceId]);
+          expect(joinGateway.approveRequests, isEmpty);
+          final select = find.byKey(
+            const ValueKey(
+              'organization-shareable-application-directory-review-$applicationId',
+            ),
+          );
+          await tester.ensureVisible(select);
+          await tester.tap(select);
+          await tester.pumpAndSettle();
+        }
+        final approval = find.byType(
+          OrganizationShareableJoinApplicationApproveDialog,
+        );
+        final approvalWidget = tester
+            .widget<OrganizationShareableJoinApplicationApproveDialog>(
+              approval,
+            );
+        final approvalState = tester.state<State>(approval);
+        expect(approvalWidget.appSession, same(session));
+        expect(approvalWidget.gateway, same(joinGateway));
+        expect(
+          approvalWidget.projectMembershipAssignmentGateway,
+          same(assignmentGateway),
+        );
+        final application = find.byKey(
+          const ValueKey('organization-shareable-approval-application-field'),
+        );
+        if (pendingDirectory) {
+          expect(
+            tester.widget<TextField>(application).controller!.text,
+            applicationId,
+          );
+        } else {
+          await tester.enterText(application, applicationId);
+        }
+        expect(
+          find.byKey(
+            const ValueKey('organization-shareable-approval-assign-project'),
+          ),
+          findsNothing,
+        );
+        await tester.tap(
+          find.byKey(const ValueKey('organization-shareable-approval-review')),
+        );
+        await tester.pumpAndSettle();
+        expect(joinGateway.approveRequests, isEmpty);
+        expect(assignmentGateway.requests, isEmpty);
+        await tester.tap(
+          find.byKey(const ValueKey('organization-shareable-approval-submit')),
+        );
+        await tester.pumpAndSettle();
+        expect(joinGateway.approveRequests, [
+          (organizationWorkspaceId: workspaceId, applicationId: applicationId),
+        ]);
+        expect(assignmentGateway.requests, isEmpty);
+        expect(directoryGateway.listCalls, 1);
+        expect(joinGateway.pendingRequests.length, pendingDirectory ? 1 : 0);
+        expect(contextGateway.receivedTokens, hasLength(contextRequests));
+        expect(contextGateway.selectedProjectIds, isEmpty);
+        expect(session.current.context, same(initialContext));
+        for (final value in [
+          workspaceId,
+          applicationId,
+          membershipId,
+          approvalReceipt.approvedAtUtc.toIso8601String(),
+        ]) {
+          expect(
+            find.descendant(of: approval, matching: find.text(value)),
+            findsOneWidget,
+          );
+        }
+        final receiptValues = tester
+            .widgetList<SelectableText>(
+              find.descendant(
+                of: approval,
+                matching: find.byType(SelectableText),
+              ),
+            )
+            .map((text) => text.data)
+            .toList();
+        await tester.tap(
+          find.byKey(
+            const ValueKey('organization-shareable-approval-assign-project'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final child = find.byType(
+          OrganizationProjectMembershipAssignmentDialog,
+        );
+        final childWidget = tester
+            .widget<OrganizationProjectMembershipAssignmentDialog>(child);
+        expect(childWidget.gateway, same(assignmentGateway));
+        expect(childWidget.appSession, same(session));
+        expect(childWidget.organizationWorkspaceId, workspaceId);
+        expect(childWidget.fixedTargetOrganizationMembershipId, membershipId);
+        expect(
+          find.byKey(
+            const ValueKey(
+              'organization-project-membership-assignment-target-field',
+            ),
+          ),
+          findsNothing,
+        );
+        expect(
+          find.descendant(of: child, matching: find.text(workspaceId)),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: child, matching: find.text(membershipId)),
+          findsOneWidget,
+        );
+        expect(assignmentGateway.requests, isEmpty);
+        await tester.enterText(
+          find.byKey(
+            const ValueKey(
+              'organization-project-membership-assignment-project-field',
+            ),
+          ),
+          projectId,
+        );
+        await tester.tap(
+          find.byKey(
+            const ValueKey('organization-project-membership-assignment-review'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(assignmentGateway.requests, isEmpty);
+        await tester.tap(
+          find.byKey(
+            const ValueKey('organization-project-membership-assignment-submit'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(assignmentGateway.requests, hasLength(1));
+        final request = assignmentGateway.requests.single;
+        expect(request.organizationWorkspaceId, workspaceId);
+        expect(request.targetOrganizationMembershipId, membershipId);
+        expect(request.projectId, projectId);
+        expect(
+          request.requestId,
+          matches(
+            r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+          ),
+        );
+        expect(request.requestId, isNot(applicationId));
+        expect(
+          find.descendant(
+            of: child,
+            matching: find.text('ffffffff-ffff-4fff-8fff-ffffffffffff'),
+          ),
+          findsOneWidget,
+        );
+        await tester.tap(
+          find.byKey(
+            const ValueKey('organization-project-membership-assignment-close'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(child, findsNothing);
+        expect(tester.state<State>(approval), same(approvalState));
+        expect(
+          tester
+              .widgetList<SelectableText>(
+                find.descendant(
+                  of: approval,
+                  matching: find.byType(SelectableText),
+                ),
+              )
+              .map((text) => text.data)
+              .toList(),
+          receiptValues,
+        );
+        await tester.tap(
+          find.byKey(const ValueKey('organization-shareable-approval-close')),
+        );
+        await tester.pumpAndSettle();
+        if (pendingDirectory) {
+          await tester.tap(
+            find.byKey(
+              const ValueKey(
+                'organization-shareable-application-directory-close',
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(
+          find.byKey(const ValueKey('organization-directory-close')),
+        );
+        await tester.pumpAndSettle();
+        expect(directoryGateway.listCalls, 1);
+        expect(joinGateway.pendingRequests.length, pendingDirectory ? 1 : 0);
+        expect(joinGateway.approveRequests, hasLength(1));
+        expect(assignmentGateway.requests, hasLength(1));
+        expect(contextGateway.receivedTokens, hasLength(contextRequests));
+        expect(contextGateway.selectedProjectIds, isEmpty);
+        expect(session.current.context, same(initialContext));
+        expect(directoryGateway.closeCount, 0);
+        expect(joinGateway.closeCount, 0);
+        expect(assignmentGateway.closeCount, 0);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpAndSettle();
+        expect(directoryGateway.closeCount, 1);
+        expect(joinGateway.closeCount, 1);
+        expect(assignmentGateway.closeCount, 1);
+      },
+    );
+  }
 
   testWidgets('我的组织交接入口复用 gateway，正常续期保留意图且不改项目', (tester) async {
     final database = LocalDatabase(NativeDatabase.memory());
@@ -3141,6 +3501,22 @@ final class _TrackingOrganizationOwnerTransferGateway
 
 final class _TrackingOrganizationProjectMembershipAssignmentGateway
     implements OrganizationProjectMembershipAssignmentGateway {
+  _TrackingOrganizationProjectMembershipAssignmentGateway({
+    this.result = const OrganizationProjectMembershipAssignmentRejected(
+      OrganizationProjectMembershipAssignmentFailureCode.notConfigured,
+    ),
+  });
+
+  final OrganizationProjectMembershipAssignmentResult result;
+  final requests =
+      <
+        ({
+          String requestId,
+          String organizationWorkspaceId,
+          String projectId,
+          String targetOrganizationMembershipId,
+        })
+      >[];
   var closeCount = 0;
 
   @override
@@ -3149,9 +3525,15 @@ final class _TrackingOrganizationProjectMembershipAssignmentGateway
     required String organizationWorkspaceId,
     required String projectId,
     required String targetOrganizationMembershipId,
-  }) async => const OrganizationProjectMembershipAssignmentRejected(
-    OrganizationProjectMembershipAssignmentFailureCode.notConfigured,
-  );
+  }) async {
+    requests.add((
+      requestId: requestId,
+      organizationWorkspaceId: organizationWorkspaceId,
+      projectId: projectId,
+      targetOrganizationMembershipId: targetOrganizationMembershipId,
+    ));
+    return result;
+  }
 
   @override
   Future<void> close() async => closeCount++;
@@ -3159,14 +3541,30 @@ final class _TrackingOrganizationProjectMembershipAssignmentGateway
 
 final class _TrackingOrganizationShareableJoinGateway
     implements OrganizationShareableJoinGateway {
+  _TrackingOrganizationShareableJoinGateway({
+    this.pendingResult =
+        const OrganizationShareableJoinApplicationDirectoryRejected(
+          OrganizationShareableJoinFailureCode.notConfigured,
+        ),
+    this.approveResult =
+        const OrganizationShareableJoinApplicationApproveRejected(
+          OrganizationShareableJoinFailureCode.notConfigured,
+        ),
+  });
+
+  final OrganizationShareableJoinApplicationDirectoryResult pendingResult;
+  final OrganizationShareableJoinApplicationApproveResult approveResult;
+  final pendingRequests = <String>[];
+  final approveRequests =
+      <({String organizationWorkspaceId, String applicationId})>[];
   var closeCount = 0;
 
   @override
   Future<OrganizationShareableJoinApplicationDirectoryResult>
-  listPendingApplications({required String organizationWorkspaceId}) async =>
-      const OrganizationShareableJoinApplicationDirectoryRejected(
-        OrganizationShareableJoinFailureCode.notConfigured,
-      );
+  listPendingApplications({required String organizationWorkspaceId}) async {
+    pendingRequests.add(organizationWorkspaceId);
+    return pendingResult;
+  }
 
   @override
   Future<OrganizationShareableJoinLinkCreateResult> createLink({
@@ -3195,9 +3593,13 @@ final class _TrackingOrganizationShareableJoinGateway
   Future<OrganizationShareableJoinApplicationApproveResult> approveApplication({
     required String organizationWorkspaceId,
     required String applicationId,
-  }) async => const OrganizationShareableJoinApplicationApproveRejected(
-    OrganizationShareableJoinFailureCode.notConfigured,
-  );
+  }) async {
+    approveRequests.add((
+      organizationWorkspaceId: organizationWorkspaceId,
+      applicationId: applicationId,
+    ));
+    return approveResult;
+  }
 
   @override
   Future<void> close() async => closeCount++;
