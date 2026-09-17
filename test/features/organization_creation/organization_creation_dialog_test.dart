@@ -12,6 +12,52 @@ import 'package:tongxingzhe_app/l10n/app_strings.dart';
 import 'package:tongxingzhe_app/organization_creation/organization_creation.dart';
 
 void main() {
+  testWidgets(
+    'borrowed session retirement hides the organization creation form',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final gateway = _Gateway([]);
+      await _open(tester, fixture.session, gateway, _Ids().next);
+      await tester.enterText(_name, '合成组织名称');
+      await tester.runAsync(fixture.session.close);
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsNothing);
+      expect(_submit, findsNothing);
+      expect(gateway.calls, isEmpty);
+      expect(gateway.closed, isFalse);
+    },
+  );
+
+  testWidgets(
+    'borrowed session retirement fences a late organization receipt',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final pending = Completer<OrganizationCreationResult>();
+      final gateway = _Gateway([pending]);
+      final result = _ResultBox();
+      await _open(
+        tester,
+        fixture.session,
+        gateway,
+        _Ids().next,
+        result: result,
+      );
+      await tester.enterText(_name, '合成组织名称');
+      await tester.tap(_submit);
+      await tester.pump();
+      await tester.runAsync(fixture.session.close);
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsNothing);
+      pending.complete(OrganizationCreationSuccess(_receipt));
+      await tester.pumpAndSettle();
+      expect(result.receipt, isNull);
+      expect(find.byType(OrganizationCreationDialog), findsOneWidget);
+      expect(gateway.closed, isFalse);
+    },
+  );
+
   testWidgets('名称本地检查保留有效原文本，首次有效提交才生成请求 ID', (tester) async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.close);

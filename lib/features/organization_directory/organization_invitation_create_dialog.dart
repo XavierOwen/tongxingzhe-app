@@ -66,7 +66,7 @@ final class _OrganizationInvitationCreateDialogState
     }
     _sessionSubscription = widget.appSession.changes.listen((_) {
       if (!_hasTrustedSession()) _invalidateSession();
-    });
+    }, onDone: _invalidateSession);
   }
 
   @override

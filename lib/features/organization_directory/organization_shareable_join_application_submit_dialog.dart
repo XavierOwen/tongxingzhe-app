@@ -72,7 +72,7 @@ final class _OrganizationShareableJoinApplicationSubmitDialogState
     }
     _sessionSubscription = widget.appSession.changes.listen((snapshot) {
       if (!_isTrustedSnapshot(snapshot)) _invalidateSession();
-    });
+    }, onDone: _invalidateSession);
   }
 
   @override
