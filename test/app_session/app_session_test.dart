@@ -174,6 +174,59 @@ void main() {
     expect(gateway.receivedTokens.single.value, 'test-only-access-token');
   });
 
+  test('同次登录 token 更新保留 ready 上下文与离线 PII 授权时间', () async {
+    final identity = FakeIdentitySession(
+      initial: _signedInIdentity(
+        externalSubject: 'test-subject',
+        expiresAt: DateTime.utc(2029),
+      ),
+    );
+    final vault = await _vaultWithEmptySnapshot();
+    final context = _withPii(syntheticSessionContext);
+    final gateway = FakeSessionContextGateway(
+      context: context,
+      availableContexts: [context, _secondProject],
+    );
+    final session = AppSession(
+      identitySession: identity,
+      contextGateway: gateway,
+      offlinePiiVault: vault,
+    );
+    addTearDown(session.close);
+    addTearDown(identity.close);
+    await session.start();
+    final authorizedAt = DateTime.utc(2026, 8, 6, 12);
+    await vault.replace(
+      externalSubject: 'test-subject',
+      context: context,
+      assignedTargets: const [],
+      authorizedAtUtc: authorizedAt,
+    );
+    final published = <AppSessionSnapshot>[];
+    final subscription = session.changes.listen(published.add);
+    addTearDown(subscription.cancel);
+
+    await identity.signIn(email: 'synthetic@example.test', password: 'ignored');
+    await Future<void>.delayed(Duration.zero);
+
+    expect(published, isNotEmpty);
+    expect(
+      published.every((snapshot) => snapshot.stage == AppSessionStage.ready),
+      isTrue,
+    );
+    expect(session.isCurrentUser(context.appUserId), isTrue);
+    expect(session.current.identity?.expiresAt, DateTime.utc(2030, 1, 2, 4, 4));
+    expect(session.current.context, same(context));
+    expect(session.current.availableContexts, [context, _secondProject]);
+    expect(session.current.fromOfflineCache, isFalse);
+    final cached = await vault.read('test-subject');
+    expect(cached, isA<OfflinePiiAvailable>());
+    expect(
+      (cached as OfflinePiiAvailable).snapshot.authorizedAtUtc,
+      authorizedAt,
+    );
+  });
+
   test('未登录时不请求 access token 或内部上下文', () async {
     final identity = FakeIdentitySession();
     final gateway = FakeSessionContextGateway();
@@ -349,21 +402,26 @@ void main() {
     });
   }
 
-  test('同身份在线重新解析到另一个项目先锁定旧快照', () async {
+  test('同身份离线恢复后在线重新解析到另一个项目先锁定旧快照', () async {
     final identity = FakeIdentitySession(
-      initial: IdentitySnapshot(
-        stage: IdentityStage.signedIn,
-        principal: const IdentityPrincipal(
-          externalSubject: 'test-subject',
-          email: 'synthetic@example.test',
-        ),
+      initial: _signedInIdentity(
+        externalSubject: 'test-subject',
         expiresAt: DateTime.utc(2029),
       ),
     );
     final vault = await _vaultWithEmptySnapshot();
     final original = _withPii(syntheticSessionContext);
     final next = _withPii(_secondProject);
-    final gateway = FakeSessionContextGateway(context: original);
+    await vault.replace(
+      externalSubject: 'test-subject',
+      context: original,
+      assignedTargets: const [],
+      authorizedAtUtc: DateTime.utc(2026, 8, 6, 12),
+    );
+    final gateway = FakeSessionContextGateway(
+      context: original,
+      rejectWith: SessionContextFailureCode.networkUnavailable,
+    );
     final session = AppSession(
       identitySession: identity,
       contextGateway: gateway,
@@ -372,18 +430,15 @@ void main() {
     addTearDown(session.close);
     addTearDown(identity.close);
     await session.start();
-    await vault.replace(
-      externalSubject: 'test-subject',
-      context: original,
-      assignedTargets: const [],
-      authorizedAtUtc: DateTime.utc(2026, 8, 6, 12),
-    );
+    expect(session.current.fromOfflineCache, isTrue);
+    gateway.rejectWith = null;
     gateway.context = next;
     final resolved = session.changes.firstWhere(
       (snapshot) => identical(snapshot.context, next),
     );
     await identity.signIn(email: 'synthetic@example.test', password: 'ignored');
     await resolved;
+    expect(session.current.fromOfflineCache, isFalse);
     final cached = await vault.read('test-subject');
     expect(cached, isA<OfflinePiiLocked>());
     expect(
@@ -391,6 +446,62 @@ void main() {
       OfflinePiiLockReason.contextChanged,
     );
   });
+
+  for (final useOfflineCache in [false, true]) {
+    test(
+      'failed 或 offline ready 的新 token 仍须授权 useOfflineCache=$useOfflineCache',
+      () async {
+        final identity = FakeIdentitySession(
+          initial: _signedInIdentity(
+            externalSubject: 'test-subject',
+            expiresAt: DateTime.utc(2029),
+          ),
+        );
+        final vault = useOfflineCache ? await _vaultWithEmptySnapshot() : null;
+        if (vault != null) {
+          await vault.replace(
+            externalSubject: 'test-subject',
+            context: _withPii(syntheticSessionContext),
+            assignedTargets: const [],
+            authorizedAtUtc: DateTime.utc(2026, 8, 6, 12),
+          );
+        }
+        final gateway = FakeSessionContextGateway(
+          rejectWith: SessionContextFailureCode.networkUnavailable,
+        );
+        final session = AppSession(
+          identitySession: identity,
+          contextGateway: gateway,
+          offlinePiiVault: vault,
+        );
+        addTearDown(session.close);
+        addTearDown(identity.close);
+        await session.start();
+        expect(
+          session.current.stage,
+          useOfflineCache ? AppSessionStage.ready : AppSessionStage.failed,
+        );
+        gateway.rejectWith = SessionContextFailureCode.unauthorized;
+        final rejected = session.changes.firstWhere(
+          (snapshot) =>
+              snapshot.contextFailure == SessionContextFailureCode.unauthorized,
+        );
+
+        await identity.signIn(
+          email: 'synthetic@example.test',
+          password: 'ignored',
+        );
+        await rejected;
+
+        expect(session.current.stage, AppSessionStage.failed);
+        expect(session.current.context, isNull);
+        expect(session.current.fromOfflineCache, isFalse);
+        if (vault != null) {
+          expect(await vault.read('test-subject'), isA<OfflinePiiLocked>());
+        }
+      },
+    );
+  }
 
   for (final sameProject in [false, true]) {
     test('全新会话在线解析时比较磁盘快照项目 sameProject=$sameProject', () async {
@@ -898,6 +1009,58 @@ void main() {
     expect(session.current.context, same(_secondProject));
     expect(gateway.createdProjectNames, ['校园推广']);
   });
+
+  for (final operation in ['select', 'create']) {
+    test('$operation 已启动时同次登录 token 更新不使操作失效', () async {
+      final identity = FakeIdentitySession(
+        initial: _signedInIdentity(
+          externalSubject: 'test-subject',
+          expiresAt: DateTime.utc(2029),
+        ),
+      );
+      final secureStore = _MemorySecureValueStore();
+      final session = AppSession(
+        identitySession: identity,
+        contextGateway: FakeSessionContextGateway(
+          context: _withPii(syntheticSessionContext),
+          selectedContexts: {
+            _secondProject.project.id: _withPii(_secondProject),
+          },
+          createdContexts: {'校园推广': _withPii(_secondProject)},
+        ),
+        offlinePiiVault: OfflinePiiVault(
+          secureStore: secureStore,
+          lockStore: _MemoryOfflinePiiLockStore(),
+          clock: FixedClock(DateTime.utc(2026, 8, 6, 13)),
+          installationId: 'installation-1',
+        ),
+      );
+      addTearDown(session.close);
+      addTearDown(identity.close);
+      await session.start();
+      secureStore.deleteRequested = Completer<void>();
+      secureStore.releaseDelete = Completer<void>();
+
+      final pending = operation == 'select'
+          ? session.selectProject(_secondProject.project.id)
+          : session.createPersonalProject('校园推广');
+      await secureStore.deleteRequested!.future;
+      await identity.signIn(
+        email: 'synthetic@example.test',
+        password: 'ignored',
+      );
+      await Future<void>.delayed(Duration.zero);
+      secureStore.releaseDelete!.complete();
+
+      expect(await pending, isA<SessionContextSuccess>());
+      expect(session.current.stage, AppSessionStage.ready);
+      expect(session.current.context?.project.id, _secondProject.project.id);
+      expect(
+        session.current.identity?.expiresAt,
+        DateTime.utc(2030, 1, 2, 4, 4),
+      );
+    });
+  }
 }
 
 const _secondProject = TrustedSessionContext(
@@ -945,14 +1108,17 @@ TrustedSessionContext _withPii(TrustedSessionContext context) =>
       capabilities: {...context.capabilities, 'view_assigned_target_pii'},
     );
 
-IdentitySnapshot _signedInIdentity() {
+IdentitySnapshot _signedInIdentity({
+  String externalSubject = 'external-subject-not-an-app-user-id',
+  DateTime? expiresAt,
+}) {
   return IdentitySnapshot(
     stage: IdentityStage.signedIn,
-    principal: const IdentityPrincipal(
-      externalSubject: 'external-subject-not-an-app-user-id',
+    principal: IdentityPrincipal(
+      externalSubject: externalSubject,
       email: 'synthetic@example.test',
     ),
-    expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+    expiresAt: expiresAt ?? DateTime.utc(2030, 1, 2, 4, 4),
   );
 }
 
