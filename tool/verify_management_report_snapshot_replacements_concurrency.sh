@@ -29,8 +29,32 @@ replacement_first_pid=''
 replacement_revoke_pid=''
 revoke_first_pid=''
 revoke_replacement_pid=''
+holder_fd=''
+
+run_psql_background() {
+  if [[ -n "${holder_fd}" ]]; then
+    exec {holder_fd}>&-
+  fi
+  exec "${psql_command}" "${DATABASE_URL}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 "$@"
+}
+
+stop_psql_job() {
+  local pid="$1" child_pid
+  if ! kill -0 "${pid}" >/dev/null 2>&1; then return; fi
+  # Freeze only this owned job while collecting a wrapper's children.
+  kill -STOP "${pid}" >/dev/null 2>&1 || true
+  for child_pid in $(ps -eo pid=,ppid= | awk -v parent="${pid}" '$2 == parent { print $1 }'); do
+    stop_psql_job "${child_pid}"
+  done
+  kill -TERM "${pid}" >/dev/null 2>&1 || true
+  kill -CONT "${pid}" >/dev/null 2>&1 || true
+}
 
 cleanup() {
+  if [[ -n "${holder_fd}" ]]; then
+    exec {holder_fd}>&-
+  fi
   for pid in \
     "${race_first_pid}" \
     "${race_second_pid}" \
@@ -39,13 +63,13 @@ cleanup() {
     "${revoke_first_pid}" \
     "${revoke_replacement_pid}"; do
     if [[ -n "${pid}" ]] && kill -0 "${pid}" >/dev/null 2>&1; then
-      kill "${pid}" >/dev/null 2>&1 || true
+      stop_psql_job "${pid}"
     fi
     if [[ -n "${pid}" ]]; then
       wait "${pid}" >/dev/null 2>&1 || true
     fi
   done
-  rm -f "${temporary_directory}"/*.out
+  rm -f "${temporary_directory}"/*.out "${temporary_directory}"/*.fifo
   rmdir "${temporary_directory}"
 }
 trap cleanup EXIT
@@ -54,31 +78,36 @@ wait_for_lock_holder() {
   local lock_name="$1"
   local first_pid="$2"
   local first_output="$3"
+  local application_name="$4"
   local probe
 
   for _ in $(seq 1 100); do
-    probe="$(run_psql --tuples-only --no-align --command="
-      WITH lock_probe AS (
-        SELECT pg_try_advisory_lock(
-          hashtextextended('${lock_name}', 0)
-        ) AS acquired
-      )
-      SELECT CASE
-        WHEN acquired THEN NOT pg_advisory_unlock(
-          hashtextextended('${lock_name}', 0)
-        )
-        ELSE true
-      END
-      FROM lock_probe;
+    probe="$(
+      if [[ -n "${holder_fd}" ]]; then exec {holder_fd}>&-; fi
+      run_psql --tuples-only --no-align --command="
+      WITH lock_key AS (SELECT hashtextextended('${lock_name}', 0) AS value)
+      SELECT activity.pid
+      FROM pg_stat_activity AS activity
+      JOIN pg_locks AS lock_row ON lock_row.pid = activity.pid
+      CROSS JOIN lock_key
+      WHERE activity.application_name = '${application_name}'
+        AND lock_row.locktype = 'advisory' AND lock_row.granted
+        AND lock_row.classid::bigint = ((lock_key.value >> 32) & 4294967295)
+        AND lock_row.objid::bigint = (lock_key.value & 4294967295)
+        AND lock_row.objsubid = 1;
     " | tr -d '[:space:]')"
-    if [[ "${probe}" == 't' ]]; then
+    if [[ "${probe}" =~ ^[0-9]+$ ]]; then
+      echo "${application_name}: PostgreSQL PID ${probe}, exact ready lock"
       return
+    fi
+    if ! kill -0 "${first_pid}" >/dev/null 2>&1; then
+      echo '并发持锁会话过早退出。' >&2
+      sed -n '1,160p' "${first_output}" >&2
+      exit 1
     fi
     sleep 0.1
   done
 
-  kill "${first_pid}" >/dev/null 2>&1 || true
-  wait "${first_pid}" >/dev/null 2>&1 || true
   echo "没有观察到并发 ready lock：${lock_name}" >&2
   sed -n '1,160p' "${first_output}" >&2
   exit 1
@@ -88,10 +117,13 @@ wait_for_lock_waiter() {
   local lock_name="$1"
   local waiting_pid="$2"
   local waiting_output="$3"
+  local application_name="$4"
   local waiting
 
   for _ in $(seq 1 100); do
-    waiting="$(run_psql --tuples-only --no-align --command="
+    waiting="$(
+      if [[ -n "${holder_fd}" ]]; then exec {holder_fd}>&-; fi
+      run_psql --tuples-only --no-align --command="
       WITH lock_key AS (
         SELECT
           ((hashtextextended('${lock_name}', 0) >> 32)
@@ -99,17 +131,19 @@ wait_for_lock_waiter() {
           (hashtextextended('${lock_name}', 0)
             & 4294967295)::bigint AS objid
       )
-      SELECT EXISTS (
-        SELECT 1
-        FROM pg_locks AS lock_row
+      SELECT activity.pid
+        FROM pg_stat_activity AS activity
+        JOIN pg_locks AS lock_row ON lock_row.pid = activity.pid
         CROSS JOIN lock_key
-        WHERE lock_row.locktype = 'advisory'
+        WHERE activity.application_name = '${application_name}'
+          AND lock_row.locktype = 'advisory'
           AND NOT lock_row.granted
           AND lock_row.classid::bigint = lock_key.classid
           AND lock_row.objid::bigint = lock_key.objid
-      );
+          AND lock_row.objsubid = 1;
     " | tr -d '[:space:]')"
-    if [[ "${waiting}" == 't' ]]; then
+    if [[ "${waiting}" =~ ^[0-9]+$ ]]; then
+      echo "${application_name}: PostgreSQL PID ${waiting}, exact advisory waiter"
       return
     fi
     if ! kill -0 "${waiting_pid}" >/dev/null 2>&1; then
@@ -117,11 +151,10 @@ wait_for_lock_waiter() {
       sed -n '1,160p' "${waiting_output}" >&2
       exit 1
     fi
+    # Polling only; the holder commits after this exact session/key is observed.
     sleep 0.1
   done
 
-  kill "${waiting_pid}" >/dev/null 2>&1 || true
-  wait "${waiting_pid}" >/dev/null 2>&1 || true
   echo "没有观察到并发等待 lock：${lock_name}" >&2
   sed -n '1,160p' "${waiting_output}" >&2
   exit 1
@@ -703,8 +736,15 @@ echo '验证同一 active head 的两个 replacement 请求只提交一个。'
 race_first_output="${temporary_directory}/race-first.out"
 race_second_output="${temporary_directory}/race-second.out"
 race_ready_lock='6be-concurrency-race-ready'
+race_holder_application="6be-$$-race-holder"
+race_waiter_application="6be-$$-race-waiter"
 
-run_psql --quiet --command="
+mkfifo "${temporary_directory}/race-first.fifo"
+PGAPPNAME="${race_holder_application}" run_psql_background --quiet \
+  <"${temporary_directory}/race-first.fifo" >"${race_first_output}" 2>&1 &
+race_first_pid=$!
+exec {holder_fd}>"${temporary_directory}/race-first.fifo"
+printf '%s\n' "
   SET statement_timeout = '20s';
   BEGIN;
   SELECT pg_advisory_lock(hashtextextended('${lineage_lock_name}', 0));
@@ -717,15 +757,10 @@ run_psql --quiet --command="
     'contact_revision'
   );
   SELECT pg_advisory_lock(hashtextextended('${race_ready_lock}', 0));
-  SELECT pg_sleep(3);
-  COMMIT;
-  SELECT pg_advisory_unlock(hashtextextended('${lineage_lock_name}', 0));
-  SELECT pg_advisory_unlock(hashtextextended('${race_ready_lock}', 0));
-" >"${race_first_output}" 2>&1 &
-race_first_pid=$!
-wait_for_lock_holder "${race_ready_lock}" "${race_first_pid}" "${race_first_output}"
+" >&"${holder_fd}"
+wait_for_lock_holder "${race_ready_lock}" "${race_first_pid}" "${race_first_output}" "${race_holder_application}"
 
-run_psql --quiet --command="
+PGAPPNAME="${race_waiter_application}" run_psql_background --quiet --command="
   SET statement_timeout = '20s';
   SELECT app_private.declare_management_report_snapshot_replacement_v1(
     '6bec7000-0000-4000-8000-000000000002'::uuid,
@@ -737,12 +772,21 @@ run_psql --quiet --command="
   );
 " >"${race_second_output}" 2>&1 &
 race_second_pid=$!
-wait_for_lock_waiter "${organization_lock_one}" "${race_second_pid}" "${race_second_output}"
+wait_for_lock_waiter "${organization_lock_one}" "${race_second_pid}" "${race_second_output}" "${race_waiter_application}"
+printf '%s\n' "
+  COMMIT;
+  SELECT pg_advisory_unlock(hashtextextended('${lineage_lock_name}', 0));
+  SELECT pg_advisory_unlock(hashtextextended('${race_ready_lock}', 0));
+" >&"${holder_fd}"
+exec {holder_fd}>&-
+holder_fd=''
 
 race_first_status=0
 race_second_status=0
 wait "${race_first_pid}" || race_first_status=$?
 wait "${race_second_pid}" || race_second_status=$?
+race_first_pid=''
+race_second_pid=''
 if [[ "${race_first_status}" -ne 0 || "${race_second_status}" -eq 0 ]]; then
   echo "同一 active head 并发 replacement 结果错误：first=${race_first_status}, second=${race_second_status}" >&2
   sed -n '1,160p' "${race_first_output}" >&2
@@ -784,8 +828,15 @@ echo '验证 replacement-first：登记完成后撤权仍能按同一锁顺序�
 replacement_first_output="${temporary_directory}/replacement-first.out"
 replacement_revoke_output="${temporary_directory}/replacement-revoke.out"
 replacement_ready_lock='6be-concurrency-replacement-first-ready'
+replacement_holder_application="6be-$$-replacement-holder"
+replacement_waiter_application="6be-$$-replacement-waiter"
 
-run_psql --quiet --command="
+mkfifo "${temporary_directory}/replacement-first.fifo"
+PGAPPNAME="${replacement_holder_application}" run_psql_background --quiet \
+  <"${temporary_directory}/replacement-first.fifo" >"${replacement_first_output}" 2>&1 &
+replacement_first_pid=$!
+exec {holder_fd}>"${temporary_directory}/replacement-first.fifo"
+printf '%s\n' "
   SET statement_timeout = '20s';
   BEGIN;
   SELECT app_private.declare_management_report_snapshot_replacement_v1(
@@ -797,14 +848,10 @@ run_psql --quiet --command="
     'contact_revision'
   );
   SELECT pg_advisory_lock(hashtextextended('${replacement_ready_lock}', 0));
-  SELECT pg_sleep(3);
-  COMMIT;
-  SELECT pg_advisory_unlock(hashtextextended('${replacement_ready_lock}', 0));
-" >"${replacement_first_output}" 2>&1 &
-replacement_first_pid=$!
-wait_for_lock_holder "${replacement_ready_lock}" "${replacement_first_pid}" "${replacement_first_output}"
+" >&"${holder_fd}"
+wait_for_lock_holder "${replacement_ready_lock}" "${replacement_first_pid}" "${replacement_first_output}" "${replacement_holder_application}"
 
-run_psql --quiet --command="
+PGAPPNAME="${replacement_waiter_application}" run_psql_background --quiet --command="
   SET statement_timeout = '20s';
   BEGIN;
   UPDATE app_data.management_report_capability_grants
@@ -813,12 +860,20 @@ run_psql --quiet --command="
   COMMIT;
 " >"${replacement_revoke_output}" 2>&1 &
 replacement_revoke_pid=$!
-wait_for_lock_waiter "${organization_lock_one}" "${replacement_revoke_pid}" "${replacement_revoke_output}"
+wait_for_lock_waiter "${organization_lock_one}" "${replacement_revoke_pid}" "${replacement_revoke_output}" "${replacement_waiter_application}"
+printf '%s\n' "
+  COMMIT;
+  SELECT pg_advisory_unlock(hashtextextended('${replacement_ready_lock}', 0));
+" >&"${holder_fd}"
+exec {holder_fd}>&-
+holder_fd=''
 
 replacement_first_status=0
 replacement_revoke_status=0
 wait "${replacement_first_pid}" || replacement_first_status=$?
 wait "${replacement_revoke_pid}" || replacement_revoke_status=$?
+replacement_first_pid=''
+replacement_revoke_pid=''
 if [[ "${replacement_first_status}" -ne 0 || "${replacement_revoke_status}" -ne 0 ]]; then
   echo "replacement-first 锁顺序失败：replacement=${replacement_first_status}, revoke=${replacement_revoke_status}" >&2
   sed -n '1,160p' "${replacement_first_output}" >&2
@@ -844,8 +899,15 @@ echo '验证 revoke-first：提交撤权后 replacement 必须 fail closed。'
 revoke_first_output="${temporary_directory}/revoke-first.out"
 revoke_replacement_output="${temporary_directory}/revoke-replacement.out"
 revoke_ready_lock='6be-concurrency-revoke-first-ready'
+revoke_holder_application="6be-$$-revoke-holder"
+revoke_waiter_application="6be-$$-revoke-waiter"
 
-run_psql --quiet --command="
+mkfifo "${temporary_directory}/revoke-first.fifo"
+PGAPPNAME="${revoke_holder_application}" run_psql_background --quiet \
+  <"${temporary_directory}/revoke-first.fifo" >"${revoke_first_output}" 2>&1 &
+revoke_first_pid=$!
+exec {holder_fd}>"${temporary_directory}/revoke-first.fifo"
+printf '%s\n' "
   SET statement_timeout = '20s';
   BEGIN;
   SELECT pg_advisory_xact_lock(hashtextextended('${organization_lock_two}', 0));
@@ -855,14 +917,10 @@ run_psql --quiet --command="
   SET inactive_from_utc = clock_timestamp()
   WHERE capability_grant_id = '${replacement_capability_two}'::uuid;
   SELECT pg_advisory_lock(hashtextextended('${revoke_ready_lock}', 0));
-  SELECT pg_sleep(3);
-  COMMIT;
-  SELECT pg_advisory_unlock(hashtextextended('${revoke_ready_lock}', 0));
-" >"${revoke_first_output}" 2>&1 &
-revoke_first_pid=$!
-wait_for_lock_holder "${revoke_ready_lock}" "${revoke_first_pid}" "${revoke_first_output}"
+" >&"${holder_fd}"
+wait_for_lock_holder "${revoke_ready_lock}" "${revoke_first_pid}" "${revoke_first_output}" "${revoke_holder_application}"
 
-run_psql --quiet --command="
+PGAPPNAME="${revoke_waiter_application}" run_psql_background --quiet --command="
   SET statement_timeout = '20s';
   SELECT app_private.declare_management_report_snapshot_replacement_v1(
     '6bec7000-0000-4000-8000-000000000006'::uuid,
@@ -874,12 +932,20 @@ run_psql --quiet --command="
   );
 " >"${revoke_replacement_output}" 2>&1 &
 revoke_replacement_pid=$!
-wait_for_lock_waiter "${organization_lock_two}" "${revoke_replacement_pid}" "${revoke_replacement_output}"
+wait_for_lock_waiter "${organization_lock_two}" "${revoke_replacement_pid}" "${revoke_replacement_output}" "${revoke_waiter_application}"
+printf '%s\n' "
+  COMMIT;
+  SELECT pg_advisory_unlock(hashtextextended('${revoke_ready_lock}', 0));
+" >&"${holder_fd}"
+exec {holder_fd}>&-
+holder_fd=''
 
 revoke_first_status=0
 revoke_replacement_status=0
 wait "${revoke_first_pid}" || revoke_first_status=$?
 wait "${revoke_replacement_pid}" || revoke_replacement_status=$?
+revoke_first_pid=''
+revoke_replacement_pid=''
 if [[ "${revoke_first_status}" -ne 0 || "${revoke_replacement_status}" -eq 0 ]]; then
   echo "revoke-first 锁顺序失败：revoke=${revoke_first_status}, replacement=${revoke_replacement_status}" >&2
   sed -n '1,160p' "${revoke_first_output}" >&2
