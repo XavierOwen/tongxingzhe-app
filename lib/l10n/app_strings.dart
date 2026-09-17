@@ -325,7 +325,7 @@ const Map<String, Map<String, String>> _strings = {
         '输入申请人通过可信渠道提供的申请编号。App 不会读取申请人姓名、账号或其他资料。',
     'organizationShareableApprovalApplicationIdentifier': '申请编号（UUID）',
     'organizationShareableApprovalInvalidApplication': '请输入有效的申请 UUID。',
-    'organizationShareableApprovalReview': '核对这次批准',
+    'organizationShareableApprovalReview': '核对批准',
     'organizationShareableApprovalConfirmHelp':
         '请核对组织和申请编号，并通过原渠道确认申请人。App 无法仅凭编号识别申请人；只有当前组织所有者可以批准。批准只建立普通组织成员关系。',
     'organizationShareableApprovalApprove': '确认批准',

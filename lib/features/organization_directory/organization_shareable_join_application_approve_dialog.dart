@@ -101,7 +101,13 @@ final class _OrganizationShareableJoinApplicationApproveDialogState
       },
       child: AlertDialog(
         key: const ValueKey('organization-shareable-approval-dialog'),
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        insetPadding: EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: MediaQuery.viewInsetsOf(context).bottom > 0 ? 8 : 24,
+        ),
+        contentPadding: MediaQuery.viewInsetsOf(context).bottom > 0
+            ? const EdgeInsets.symmetric(horizontal: 16, vertical: 12)
+            : null,
         constraints: const BoxConstraints(maxWidth: 560),
         content: Scrollbar(
           controller: _scrollController,
