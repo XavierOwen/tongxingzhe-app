@@ -694,8 +694,7 @@ owner_claim_before_upgrade="$(
   docker exec "${container_name}" pg_dump \
     postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_owner_claim_upgrade \
     --data-only --schema=app_data --schema=app_private --no-owner --no-privileges \
-    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b \
-    | shasum -a 256 | awk '{print $1}'
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
 )"
 docker exec \
   --env DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_owner_claim_upgrade \
@@ -705,8 +704,7 @@ owner_claim_after_upgrade="$(
   docker exec "${container_name}" pg_dump \
     postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_owner_claim_upgrade \
     --data-only --schema=app_data --schema=app_private --no-owner --no-privileges \
-    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b \
-    | shasum -a 256 | awk '{print $1}'
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
 )"
 if [[ "${owner_claim_before_upgrade}" != "${owner_claim_after_upgrade}" ]]; then
   echo '0097／0098 升级改变旧 claim 或其他 app_data／app_private 业务数据。' >&2
@@ -719,8 +717,7 @@ owner_claim_before_replay="$(
   docker exec "${container_name}" pg_dump \
     postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_owner_claim_upgrade \
     --data-only --schema=app_data --schema=app_private --no-owner --no-privileges \
-    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b \
-    | shasum -a 256 | awk '{print $1}'
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
 )"
 owner_claim_replayed_receipt="$(
   docker exec "${container_name}" psql -U postgres -d tongxingzhe_owner_claim_upgrade \
@@ -743,8 +740,7 @@ owner_claim_after_replay="$(
   docker exec "${container_name}" pg_dump \
     postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_owner_claim_upgrade \
     --data-only --schema=app_data --schema=app_private --no-owner --no-privileges \
-    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b \
-    | shasum -a 256 | awk '{print $1}'
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
 )"
 if [[ "${owner_claim_before_replay}" != "${owner_claim_after_replay}" ]]; then
   echo '历史 replay 或重复 migration 改变 owner／membership／claim／audit 等业务行。' >&2
