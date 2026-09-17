@@ -1738,6 +1738,34 @@ membership、claim、audit 与 receipt 原子提交并使用同一时间。七�
 
 7AT 当前只交付文档，未实现上述 writer、bridge、数据库竞态或客户端。链接、no-slop、diff 与独立合同审查仅证明材料一致性；后续 DB 需实际验证归档双序等待、隔离模式拒绝零写入、parent／overlap、ACL、checksum 和 dump／restore，不把静态推演当作生产证明。
 
+### 3.38 普通项目成员的数据库安排（Issue #383，MANUAL-085）
+
+7AU 的 0096 migration 实现 [ADR-0186](../adr/0186-explicit-ordinary-project-membership-assignment.md)，不是新角色授予系统。current active owner 明确选择同组织有效 target membership 和 active project；一次成功只追加默认推广者 membership，不写管理 grant、owner、对象分配或 PII 权限。
+
+runtime 只调用 `app_data.assign_organization_project_member_for_identity_v1(text,text,uuid,uuid,uuid,uuid)`。bridge 原值匹配既有 active identity，再调用 private writer；不 bootstrap、修复身份或允许表直读写。两函数均先要求 READ COMMITTED，其他模式固定 0A000，零 advisory lock／业务写入；不能在函数内刷新 REPEATABLE READ 旧快照。
+
+首次写入按 request→sorted actor／target user rows→governance→sorted org hierarchy→target project hierarchy→0073 status fence 取锁。
+
+状态 fence 只是既有串行化资源，不读取配置或授予 release capability。没有 project row lock 或新增状态 trigger；锁后新的 SQL 重读 active project，归档和安排因此有明确先后。
+
+全部锁后只读取一次墙钟，用于资格判断、membership、claim、audit 和 receipt。child end 复制 parent bound，可为空；当前或未来同 user／project overlap 整体拒绝，结束历史不复活。有限结束点插入后不可提前改写，完整撤权仍须另票实现。
+
+七字段 receipt 是原安排的历史结果，含 target parent 和新 membership，但不含 actor、资料或 capability。exact replay 只锁 request 和原 active actor row，不重验后来 owner、target、project 或 recovery。失去 owner 后仍可读自己的历史 receipt，不代表当前项目资格。
+
+tombstone 在同一 request lock 下优先 conflict。claim 不可改绑，只有终结治理可把 actor 非空引用去关联为空；tombstone 与最小 audit 的更新／删除均由 immutable guard 拒绝。value-free UUID 仍可有关联 lineage，不是匿名保证，也未实现 purge 或受控删除例外。
+
+从仓库根目录运行完整套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+`TEST-095` 包括 structural、rollback fixture 和十二种真实双会话竞态。空项目／历史成员的归档双序覆盖 actor 在 target UUID 前后两种顺序；request replay、其他 actor 和墓碑也检查锁等待。十种先观察精确 advisory key 与 PostgreSQL PID，再允许 holder commit，不以 sleep 推测先后。
+
+parent 结束的两种竞态先经过 0085 target app-user row lock；测试观察精确 transactionid、holder／waiter PID 和 `pg_blocking_pids`。parent 先结束则安排拒绝且零事实；child 先建立则裸 parent 结束被包含约束拒绝，不偷偷结束 child。
+
+局部 structural／fixture／并发通过不等于完整套件通过。完整 runner 另检查旧 checksum、全部 rebuild／fixtures、既有 Backend 对账与独立 dump／restore；恢复库只重跑 check／fixture，不重跑会提交 synthetic 行的并发。源库和恢复库都是合成 Docker，不证明生产身份、HTTP、客户端或真人平台。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：

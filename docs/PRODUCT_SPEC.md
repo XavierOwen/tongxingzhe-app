@@ -1493,6 +1493,18 @@ builder 使用启动时打开的同一个 `IdentitySession`，`AppStartupReady` 
 
 `TEST-094`／`MANUAL-084` 只检查 Spec、ADR、术语与学习材料的一致性。该切片不包含 migration、SQL 实现、Backend、HTTP、Flutter、成员目录、权限提升、完整撤权、项目创建、删除／恢复或 purge writer；文档和静态锁序推演不证明数据库、生产或平台运行。
 
+#### Slice 7AU：普通项目成员安排的数据库入口
+
+7AU／Issue #383 用追加的 0096 migration 实现 [ADR-0186](./adr/0186-explicit-ordinary-project-membership-assignment.md) 的 writer、exact-identity bridge、claim、两字段 tombstone 和最小 audit。成功只建立默认推广者 project membership；current active owner 的组织治理权不因此变成项目管理或 PII 权限。
+
+两 seam 首先要求 READ COMMITTED，首次写入按固定 request／user／governance／hierarchy／status fence 顺序锁后重验。复用 0073 既有 project-wide key，不新增 project row lock、trigger 或配置能力。
+
+单一墙钟用于新 membership、claim、audit 和七字段 receipt，child end 复制 nullable parent bound，当前／未来 overlap 整体 forbidden。
+
+exact active-actor replay 只取 request 与 actor row locks，返回原历史 receipt，不重验后来 owner、target、project 或恢复状态。tombstone 优先 conflict；immutable guards 只允许 claim actor 终结去关联。runtime 只有 identity bridge EXECUTE，不能直读写 private 或业务表。
+
+`TEST-095`／`MANUAL-085` 覆盖 schema／ACL、稳定错误、有限／空 parent、历史 replay、overlap、恢复与墓碑，以及十二种真实双会话等待。完整 Docker 检查 checksum、重建与独立 dump／restore；合成通过不证明生产身份、Backend transport、客户端、管理授权、完整撤权或实际 purge。
+
 ### 5.8 分析、指标与报告
 
 #### 5.8.1 统计单位和核心口径
@@ -3022,6 +3034,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-082` | 学习文档说明 7AR 的独立 creation family、两字段 value-free immutable tombstone、同 request lock 下的冲突优先级、原 writer／identity bridge 保留及完整 Docker 验证命令。必须区分防重放存储与实际组织清除，不定义 deleted_at 的申请时间或期限，不新增 runtime 写入口或授权受控删除例外。 |
 | `MANUAL-083` | 学习文档说明 7AS 四个既有组织窗口在高字号软键盘下的裁切机制、IME-only 留白和标题共用滚动区，保留字号／48px 触控目标及原请求语义。说明 307px 键盘／24px 安全区的中英文回归、原生 synthetic batch 和本地／CI／生产边界，不把截图当几何或真人辅助技术证明。 |
 | `MANUAL-084` | 学习文档说明 7AT 的 owner 普通项目成员安排与管理权限提升的区别、exact identity 与不可信 selectors、nullable parent bound、历史 replay、七字段 row、原子 audit／claim、READ COMMITTED 和复用 0073 status fence。解释 value-free UUID 不是不可反查匿名数据、恢复／purge 尚未实现，以及文档验证的证据边界。 |
+| `MANUAL-085` | 学习文档说明 7AU 的真实 writer／bridge、单一墙钟、nullable parent、overlap、历史 replay、RC-only、immutable／去关联和 runtime 最小 ACL；提供完整 Docker 命令并解释十二种独立会话的 advisory／PID 与 user-row-first transactionid 证据，区分局部 fixture、完整套件、CI 与生产。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3294,6 +3307,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-092` | 7AR structural check、rollback fixture 和独立会话并发覆盖 creation tombstone 两字段、固定 family、immutable guard、owner／PUBLIC／runtime ACL、首次创建、精确 replay、墓碑与 live claim 并存时优先 conflict、不同 family 相同 UUID 隔离、旧 writer OID／owner／ACL／参数保留，以及墓碑先行和 create 先行的真实 request-lock 持有／等待。完整 Docker 验证旧 checksum、rebuild 和 dump／restore；synthetic 通过不证明实际 purge、生产删除或恢复。 |
 | `TEST-093` | 7AS 为四个组织窗口各增加中英文 IME regression：320×568／200% 字号、bottom 307px／top 24px，输入完整可滚动露出，scroll viewport 可容纳输入框，动作全部位于键盘以上且至少 48px。八条新回归保留全部既有请求／会话／receipt tests；完整 Flutter、analyzer、format、边界、链接、原生 Android synthetic batch 和精确 head CI 不证明生产权限、真人 TalkBack／VoiceOver 或六平台运行。 |
 | `TEST-094` | 7AT 文档检查核对 ORG-030–034 与 ADR-0033／0034／0186 的 owner／default-promoter 方向、exact identity、输入与七字段 row、parent interval、claim／replay／tombstone、原子时间／审计、锁序与 isolation、ACL、稳定错误和终结边界，运行链接、no-slop、diff；文档和静态推演不证明实际数据库、归档并发、生产身份或平台运行。 |
+| `TEST-095` | 7AU structural、rollback fixture 与十二种独立会话竞态覆盖 exact 七字段、schema／guard／owner／PUBLIC／runtime ACL、RC-only 两 seam 的拒绝与零 advisory lock、nullable／有限 parent、history／active／future overlap、self assignment、recovery、exact／other-actor／drift／去关联 replay 和 tombstone 优先级。空项目与两种 UUID 顺序历史成员归档双序、request／tombstone 用精确 advisory／PID；parent 双序用真实 transactionid／blocking PID。完整 Docker 检查旧 checksum、重建与独立 dump／restore；synthetic 不证明生产、HTTP、客户端、完整撤权或 purge。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3664,6 +3678,8 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 7AS／#379 修复四个既有组织窗口在窄屏高字号软键盘下的输入裁切，仅调整留白、标题滚动和简短动作，不改变请求或权限。
 
 7AT／#381 固定 owner 明确安排普通项目成员的技术合同，仅默认推广者，不附带管理或 PII 权限；数据库与 transport 实现仍须独立验证。
+
+7AU／#383 提供普通项目成员安排的 DB-only writer 与最小 runtime bridge，覆盖历史重放及真实归档／parent 竞态；Backend／HTTP／Flutter 另票交付。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 
