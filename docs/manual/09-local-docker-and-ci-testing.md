@@ -2264,6 +2264,16 @@ fixture：0035_management_report_snapshot_directory.sql
 
 并发脚本不能直接在没有准备的空数据库中运行。只有在完整套件失败并保留了容器时，才按 6.4 节的方法进入该测试库单独调查。目录并发测试使用 `pg_locks` 等待实际锁，不用固定休眠猜测请求先后；若它偶尔失败，应先检查锁合同和 synthetic UUID 是否冲突，不要只增加等待秒数。
 
+### 7.3 为什么旧交接 fixture 会把无关提交判成重放写入（Issue #424，MANUAL-101）
+
+main CI run35245849666实际出现 `0086 detached replay wrote transfer facts`。旧fixture在READ COMMITTED下分别读取全库count，并给detached replay复用更早的failure基准；其他integration从另一个连接合法提交交接或成员事实，也能使after变化。这条错误本身不能证明重放writer写入，必须先确定比较的记录与提交来源。
+
+7BP只把三组断言限定到本fixture的live namespace和parent lineage，包含生成UUID的后代及拒绝请求selectors；detached从当前状态独立取before。临时views留在测试事务，不改变产品表、writer、runtime ACL或整套并行方式。原五字段receipt、精确错误、immutable及授权检查继续执行。
+
+原owner-transfer integration加入真实强制回归：两个不同physical PID使用精确两整数advisory key，先从pg_locks和blocking PID证明fixture已经在before之后等待，再由holder提交七类无关事实并释放锁。旧版三条RED包含原CI的detached错误，新版同一检查GREEN；不靠固定sleep或重复rerun碰运气。另七种自身相关写入仍必须触发精确P0001，防止缩小作用域同时漏掉生成UUID或selector漂移。
+
+`TEST-111`随现有完整runner执行。最终owner integration包含全部正反向检查；完整套件还须通过原并发、checksum与独立恢复。scoped零副作用只表示本fixture关联事实，不能替代新业务路径的独立observer对账；合成Node24／Docker／CI不证明生产身份或部署。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：

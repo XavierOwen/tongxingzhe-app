@@ -431,14 +431,68 @@ FROM app_data.transfer_organization_owner_for_identity_v1(
 
 RESET ROLE;
 
+-- Live namespace scopes retain generated UUID descendants and rejected-request
+-- selectors without attributing unrelated READ COMMITTED commits to this fixture.
+CREATE TEMP VIEW fixture_0086_scoped_memberships AS
+SELECT membership.* FROM app_data.organization_memberships AS membership
+WHERE membership.organization_workspace_id::text LIKE '00000000-0086-2000-0000-%'
+  OR membership.app_user_id::text LIKE '00000000-0086-0000-0000-%'
+  OR membership.organization_membership_id::text LIKE '00000000-0086-2100-0000-%';
+CREATE TEMP VIEW fixture_0086_scoped_owners AS
+SELECT owner.* FROM app_data.organization_owner_assignments AS owner
+WHERE owner.organization_owner_assignment_id::text LIKE '00000000-0086-2200-0000-%'
+  OR EXISTS (SELECT 1 FROM fixture_0086_scoped_memberships AS membership
+    WHERE membership.organization_membership_id = owner.organization_membership_id);
+CREATE TEMP VIEW fixture_0086_scoped_claims AS
+SELECT claim.* FROM app_private.organization_owner_transfer_request_claims AS claim
+WHERE claim.request_id::text LIKE '00000000-0086-3000-0000-%'
+  OR claim.organization_workspace_id::text LIKE '00000000-0086-2000-0000-%'
+  OR claim.actor_app_user_id::text LIKE '00000000-0086-0000-0000-%'
+  OR EXISTS (SELECT 1 FROM fixture_0086_scoped_memberships AS membership
+    WHERE membership.organization_membership_id = claim.target_organization_membership_id);
+CREATE TEMP VIEW fixture_0086_scoped_tombstones AS
+SELECT tombstone.* FROM app_private.organization_owner_transfer_request_tombstones AS tombstone
+WHERE tombstone.request_id::text LIKE '00000000-0086-3000-0000-%';
+CREATE TEMP VIEW fixture_0086_scoped_audits AS
+SELECT audit.* FROM app_private.organization_owner_transfer_audit_events AS audit
+WHERE audit.request_id::text LIKE '00000000-0086-3000-0000-%'
+  OR audit.organization_workspace_id::text LIKE '00000000-0086-2000-0000-%'
+  OR EXISTS (SELECT 1 FROM fixture_0086_scoped_owners AS owner
+    WHERE owner.organization_owner_assignment_id IN (
+      audit.previous_owner_assignment_id, audit.organization_owner_assignment_id));
+CREATE TEMP VIEW fixture_0086_scoped_project_memberships AS
+SELECT membership.* FROM app_data.project_memberships AS membership
+WHERE membership.project_membership_id::text LIKE '00000000-0086-2400-0000-%'
+  OR EXISTS (SELECT 1 FROM fixture_0086_scoped_memberships AS parent
+    WHERE parent.organization_membership_id = membership.organization_membership_id)
+  OR EXISTS (SELECT 1 FROM app_data.projects AS project
+    JOIN app_data.workspaces AS workspace ON workspace.workspace_id = project.workspace_id
+    WHERE project.project_id = membership.project_id
+      AND (project.workspace_id::text LIKE '00000000-0086-2000-0000-%'
+        OR workspace.personal_owner_app_user_id::text LIKE '00000000-0086-0000-0000-%'));
+CREATE TEMP VIEW fixture_0086_scoped_capabilities AS
+SELECT grant_row.* FROM app_data.management_report_capability_grants AS grant_row
+WHERE grant_row.capability_grant_id::text LIKE '00000000-0086-2500-0000-%'
+  OR EXISTS (SELECT 1 FROM fixture_0086_scoped_project_memberships AS membership
+    WHERE membership.project_membership_id = grant_row.project_membership_id);
+CREATE TEMP VIEW fixture_0086_live_counts AS
+SELECT
+  (SELECT count(*) FROM fixture_0086_scoped_owners) AS owner_assignment_count,
+  (SELECT count(*) FROM fixture_0086_scoped_claims) AS claim_count,
+  (SELECT count(*) FROM fixture_0086_scoped_tombstones) AS tombstone_count,
+  (SELECT count(*) FROM fixture_0086_scoped_audits) AS audit_count,
+  (SELECT count(*) FROM fixture_0086_scoped_memberships) AS membership_count,
+  (SELECT count(*) FROM fixture_0086_scoped_project_memberships) AS project_membership_count,
+  (SELECT count(*) FROM fixture_0086_scoped_capabilities) AS capability_count;
+
 CREATE TEMP TABLE fixture_0086_before_replay ON COMMIT DROP AS
 SELECT
-  (SELECT count(*) FROM app_data.organization_owner_assignments)
+  (SELECT count(*) FROM fixture_0086_scoped_owners)
     AS owner_assignment_count,
   (SELECT count(*)
-   FROM app_private.organization_owner_transfer_request_claims)
+   FROM fixture_0086_scoped_claims)
     AS claim_count,
-  (SELECT count(*) FROM app_private.organization_owner_transfer_audit_events)
+  (SELECT count(*) FROM fixture_0086_scoped_audits)
     AS audit_count;
 
 SET LOCAL ROLE tongxingzhe_runtime;
@@ -514,11 +568,11 @@ BEGIN
 
   SELECT * INTO STRICT before_replay FROM fixture_0086_before_replay;
   SELECT count(*) INTO after_owner_assignment_count
-  FROM app_data.organization_owner_assignments;
+  FROM fixture_0086_scoped_owners;
   SELECT count(*) INTO after_claim_count
-  FROM app_private.organization_owner_transfer_request_claims;
+  FROM fixture_0086_scoped_claims;
   SELECT count(*) INTO after_audit_count
-  FROM app_private.organization_owner_transfer_audit_events;
+  FROM fixture_0086_scoped_audits;
   IF after_owner_assignment_count <> before_replay.owner_assignment_count
     OR after_claim_count <> before_replay.claim_count
     OR after_audit_count <> before_replay.audit_count
@@ -803,23 +857,7 @@ VALUES (
 
 -- All rejected requests below must leave every transfer fact set unchanged.
 CREATE TEMP TABLE fixture_0086_failure_counts AS
-SELECT
-  (SELECT count(*) FROM app_data.organization_owner_assignments)
-    AS owner_assignment_count,
-  (SELECT count(*)
-   FROM app_private.organization_owner_transfer_request_claims)
-    AS claim_count,
-  (SELECT count(*)
-   FROM app_private.organization_owner_transfer_request_tombstones)
-    AS tombstone_count,
-  (SELECT count(*) FROM app_private.organization_owner_transfer_audit_events)
-    AS audit_count,
-  (SELECT count(*) FROM app_data.organization_memberships)
-    AS membership_count,
-  (SELECT count(*) FROM app_data.project_memberships)
-    AS project_membership_count,
-  (SELECT count(*) FROM app_data.management_report_capability_grants)
-    AS capability_count;
+SELECT * FROM fixture_0086_live_counts;
 
 SELECT pg_temp.expect_0086_failure(
   'actor drift',
@@ -1044,17 +1082,7 @@ DECLARE
   after_counts fixture_0086_failure_counts%ROWTYPE;
 BEGIN
   SELECT * INTO STRICT before_counts FROM fixture_0086_failure_counts;
-  SELECT
-    (SELECT count(*) FROM app_data.organization_owner_assignments),
-    (SELECT count(*)
-     FROM app_private.organization_owner_transfer_request_claims),
-    (SELECT count(*)
-     FROM app_private.organization_owner_transfer_request_tombstones),
-    (SELECT count(*) FROM app_private.organization_owner_transfer_audit_events),
-    (SELECT count(*) FROM app_data.organization_memberships),
-    (SELECT count(*) FROM app_data.project_memberships),
-    (SELECT count(*) FROM app_data.management_report_capability_grants)
-  INTO after_counts;
+  SELECT * INTO STRICT after_counts FROM fixture_0086_live_counts;
 
   IF after_counts IS DISTINCT FROM before_counts THEN
     RAISE EXCEPTION
@@ -1072,7 +1100,7 @@ SET actor_app_user_id = NULL
 WHERE request_id = '00000000-0086-3000-0000-000000000001'::uuid;
 
 CREATE TEMP TABLE fixture_0086_detached_replay_counts AS
-SELECT * FROM fixture_0086_failure_counts;
+SELECT * FROM fixture_0086_live_counts;
 
 SELECT pg_temp.expect_0086_failure(
   'detached claim replay',
@@ -1091,17 +1119,7 @@ DECLARE
   after_counts fixture_0086_failure_counts%ROWTYPE;
 BEGIN
   SELECT * INTO STRICT before_counts FROM fixture_0086_detached_replay_counts;
-  SELECT
-    (SELECT count(*) FROM app_data.organization_owner_assignments),
-    (SELECT count(*)
-     FROM app_private.organization_owner_transfer_request_claims),
-    (SELECT count(*)
-     FROM app_private.organization_owner_transfer_request_tombstones),
-    (SELECT count(*) FROM app_private.organization_owner_transfer_audit_events),
-    (SELECT count(*) FROM app_data.organization_memberships),
-    (SELECT count(*) FROM app_data.project_memberships),
-    (SELECT count(*) FROM app_data.management_report_capability_grants)
-  INTO after_counts;
+  SELECT * INTO STRICT after_counts FROM fixture_0086_live_counts;
 
   IF after_counts IS DISTINCT FROM before_counts THEN
     RAISE EXCEPTION '0086 detached replay wrote transfer facts';
