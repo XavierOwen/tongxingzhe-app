@@ -118,6 +118,7 @@ require_keyring() {
 }
 if [[ "${with_keyring}" == 1 ]]; then
   mkdir -p "${probe_directory}/runtime/keyring"
+  chmod 700 "${probe_directory}/runtime/keyring"
   printf '%s' 'synthetic-7bt-keyring-password' | gnome-keyring-daemon --foreground --components=secrets --unlock \
     --control-directory="${probe_directory}/runtime/keyring" >"${probe_directory}/keyring.log" 2>&1 &
   keyring_pid=$!
@@ -156,7 +157,9 @@ PY
   done
   [[ "${database_ready}" == 1 ]] || { echo 'Private Drift initialization did not complete.' >&2; exit 1; }
   sleep 0.2
-  xdotool key shift+Tab space
+  xdotool key shift+Tab
+  sleep 0.2
+  xdotool key space
 fi
 copied=0
 for _ in {1..30}; do
