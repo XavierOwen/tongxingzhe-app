@@ -296,7 +296,7 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `ORG-014` | 邀请创建和接受分别通过 exact `(issuer, subject)` identity bridge 解析当前 actor，不 trim、normalize、bootstrap 或复用 Slice 7A 创建资格。`invitation_id` 是 invitation selector、创建幂等键和 request-lock key；claim、advisory lock 与 tombstone 使用独立的 `organization-directed-account-invitation:v1` family。 |
 | `ORG-015` | claim 只保存 invitation、workspace、可去关联的 inviter／target internal user、issued／expiry 和可空 acceptance／membership 字段；expiry 固定为 issued 后连续 168 小时。exact identity 仍须解析 active actor；随后创建与接受 replay 先于 owner、membership、expiry 或 recovery 状态检查。漂移或 tombstone 返回 conflict，账号引用去关联后统一 forbidden；接受成功只原子建立一条 organization membership，不建立 project membership、capability 或 owner assignment。 |
 | `ORG-016` | 首次创建／接受使用 request lock、按 UUID 排序的受影响 app-user row locks、organization governance lock、按 UUID 排序的 membership locks，并在锁后重读 claim、tombstone、账号、workspace 和 membership。四个 operation-specific bridge／writer 使用 `VOLATILE SECURITY DEFINER`、`pg_catalog` search path、受控 owner 和最小 ACL；固定 result、SQLSTATE／message、Backend code 与 JSON／`no-store` 传输合同。 |
-| `ORG-017` | invitation audit 追加且不可变，只保存固定 event、contract、invitation、workspace、接受后的 membership 与数据库时间；创建／接受回执、全部失败响应、失败审计和结构化日志不得保存身份、邮箱、名称、token、请求原文或数据库原文。绑定收件人的组织名称预览仅按 ORG-021 例外开放。组织恢复期冻结新 claim，终结清除按 ADR-0183 的当前全局 family 顺序取锁，先留 family／UUID tombstone；本票不实现 purge writer。 |
+| `ORG-017` | invitation audit 追加且不可变，只保存固定 event、contract、invitation、workspace、接受后的 membership 与数据库时间；创建／接受回执、全部失败响应、失败审计和结构化日志不得保存身份、邮箱、名称、token、请求原文或数据库原文。绑定收件人的组织名称预览仅按 ORG-021 例外开放。组织恢复期冻结新 claim，终结清除按 ADR-0186 的当前全局 family 顺序取锁，先留 family／UUID tombstone；本票不实现 purge writer。 |
 | `ORG-018` | 当前账号的组织目录只列出 active app user 在读取时具有有效组织成员关系、且未删除的 organization workspace 名称和标识；包含尚无项目的组织，空列表正常，同名组织不合并。目录不授予项目、owner 或 capability，不成为全 App 搜索、成员或恢复期目录。 |
 | `ORG-019` | 无下游关系成员可自助结束本人当前、尚未安排结束的组织 membership。首次执行在锁后确认 active exact identity、未删除组织、无仍有效或未来有效 owner assignment、无该 membership 的任何项目成员历史、无本人在本组织未结束的对象分配；否则整体 forbidden。不级联关闭权限或清除缓存，不冒充完整组织退出。 |
 | `ORG-020` | self-leave 使用独立 `organization-membership-self-leave:v1` claim、request lock、tombstone 和 value-free audit；request → actor row → governance → membership 锁后取一次数据库时间用于授权、membership end、claim、audit 与 receipt。相同 request、active actor、workspace 精确重放旧结果，重新入组后旧请求不得结束新 membership。drift、去关联或同 family tombstone 固定 conflict；runtime 仅可执行 exact identity bridge。 |
@@ -308,7 +308,12 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `ORG-026` | 非该组织 current member 的 active exact actor 可按有效 link 提交加入申请。`application_id` 使用独立 `organization-shareable-join-application:v1` family；同 actor／link 永久只认首个 application ID，相同 ID 精确重放原 receipt，换 ID 固定 conflict。申请从提交时间起独立有效 168 小时，link 随后到期不使申请提前失效。 |
 | `ORG-027` | 组织当前 active owner 可按已知 organization 与 application UUID 批准仍待处理且未过期的申请。首次批准还须锁后确认 applicant 仍 active 且不是 current member，再原子追加一条 organization membership 并记录 approval；它不建立 project membership、owner assignment 或 capability。已批准申请只向重放时仍合格的任一 current owner 返回同一历史 receipt，不把原 approver 身份或 applicant 后来的状态当作重放授权。 |
 | `ORG-028` | 首次创建 link 使用 link request → actor row → governance → actor membership 锁；提交使用 link request → application request → applicant row → governance → applicant membership 锁；批准使用 application request → approver／applicant rows（UUID 排序）→ governance → applicant membership 锁，不反向取得 link lock。每条首次写路径在全部锁后重读事实，并以一次 `clock_timestamp()` 同时判断资格、生成时间、写 claim／membership／audit 与返回 receipt。 |
-| `ORG-029` | link 与 application claim 只保存操作所需 opaque UUID、可去关联 creator／applicant 引用和有限时间，不保存 approver；audit 追加不可变且不保存 actor、名称、身份、token、请求原文或自由文本。恢复期冻结首次创建、提交和批准，只允许合格的只读精确重放；终结清除按 creation → directed invitation → owner transfer → membership self-leave → shareable link → join application 的 family 顺序取锁并先留 tombstone。PUBLIC 不得执行或直写，runtime 只获 exact-identity bridge／preview 的最小 EXECUTE。 |
+| `ORG-029` | link 与 application claim 只保存操作所需 opaque UUID、可去关联 creator／applicant 引用和有限时间，不保存 approver；audit 追加不可变且不保存 actor、名称、身份、token、请求原文或自由文本。恢复期冻结首次创建、提交和批准，只允许合格的只读精确重放；终结清除按 ADR-0186 的当前全局 family 顺序取锁并先留 tombstone，既有六个 family 的相对顺序不变。PUBLIC 不得执行或直写，runtime 只获 exact-identity bridge／preview 的最小 EXECUTE。 |
+| `ORG-030` | 组织 current active owner 可以明确把同组织已有 active membership 安排到同组织 active project，仅追加默认推广者 project membership。owner 可明确安排自己，但所有权不自动建立项目成员关系；不建立组织成员、owner assignment、管理 capability、推广对象分配或 PII 权限。 |
+| `ORG-031` | 普通项目安排的 actor 来自 trusted exact identity；workspace、project、target membership 是不可信 UUID selectors，锁后重验。客户端不提交 actor、target app user、角色、capability 或时间，不提供账号／成员搜索。新 membership 用单一锁后墙钟立即生效，结束点沿用 parent bound；不延长父关系、不复活历史，当前或未来重叠区间统一 forbidden。 |
+| `ORG-032` | 安排使用独立 `organization-project-membership-assignment:v1` request／claim／tombstone family。相同 active actor／request／workspace／project／target 精确重放原七字段历史 receipt，不重新要求 current owner，不重复写入；其他 actor 或 actor 去关联 forbidden，同 actor selectors drift 或 tombstone conflict。claim 不可改绑，tombstone 只有固定 family 与 UUID。 |
+| `ORG-033` | 首次安排依 request → sorted actor／target user rows → governance → sorted org-membership locks → target project-membership lock → 0073 既有 project status fence 取锁，并重读全部事实后原子写 membership／claim／audit。private writer 首先验证 READ COMMITTED；其他隔离模式以固定 0A000 失败关闭。不取额外 project row lock、不新增 status trigger 或配置写入，归档与安排必须线性化。 |
+| `ORG-034` | 安排只开放 operation-specific exact-identity bridge；runtime 无 private writer／schema 或表直读写权。SQL 七字段 row、稳定错误、value-free audit 和 active-actor historical replay 按 ADR-0186 固定。恢复期禁止首次安排，终结治理在六个既有 family 后追加 assignment family 并先留 tombstone；具体删除／恢复／purge 与受控 DELETE 例外另票交付。 |
 
 #### Slice 7B Spec：固定组织原子创建与首位所有者合同
 
@@ -1477,6 +1482,16 @@ builder 使用启动时打开的同一个 `IdentitySession`，`AppStartupReady` 
 只在键盘打开时收紧 dialog inset／content 留白，不缩小字体或 48px 触控目标。三个原固定标题进入既有正文滚动区，并保留 headlineSmall、heading 和 route semantics；创建组织沿用已有 scrollable AlertDialog。非 IME 保留默认 M3 留白。创建操作使用既有简短“创建／Create”，两个英文 preview 使用“View”；对象、编号和风险仍由标题、字段和正文说明。
 
 `TEST-093`／`MANUAL-083` 覆盖四窗口的中英文完整输入、键盘以上动作、viewport 和触控目标，保留既有 fixed-intent、会话、未知结果、receipt、复制和 gateway ownership tests。本票不改变 UUID、请求、身份、Backend、数据库、权限或返回语义，不添加共享窗口抽象或依赖；synthetic emulator 与 Widget 检查不证明生产或真人辅助技术。
+
+#### Slice 7AT：固定普通项目成员安排合同
+
+7AT／Issue #381 用 [ADR-0186](./adr/0186-explicit-ordinary-project-membership-assignment.md) 具体化 owner 的既有成员／项目治理职责。current active owner 只能明确把同组织现有 active membership 安排到一个 active project，默认推广者；不推导管理角色、报告 capability、对象分配或个人资料访问权。
+
+合同固定 exact-identity bridge／private writer、独立 request family、七字段历史 receipt、nullable parent bound 和原子 membership／claim／audit。stable errors 与恢复／清除边界也保持一致。
+
+写入复用 0030 hierarchy 与 0073 项目状态 fence，private seam 验证 READ COMMITTED，不新增 project row lock、状态 trigger 或角色分配能力。
+
+`TEST-094`／`MANUAL-084` 只检查 Spec、ADR、术语与学习材料的一致性。该切片不包含 migration、SQL 实现、Backend、HTTP、Flutter、成员目录、权限提升、完整撤权、项目创建、删除／恢复或 purge writer；文档和静态锁序推演不证明数据库、生产或平台运行。
 
 ### 5.8 分析、指标与报告
 
@@ -3006,6 +3021,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-081` | 学习文档说明 7AQ 如何用同组织成员关系 UUID 核对接收方、明确结束自己的 owner assignment，并用固定 request／workspace／target 重试。必须说明首次授权与 exact replay 的差异、历史回执不证明当前 owner、不改变其他 owner／项目权限、既有 gateway 接线与 ownership、会话 fence 和 synthetic／CI／生产证据边界。 |
 | `MANUAL-082` | 学习文档说明 7AR 的独立 creation family、两字段 value-free immutable tombstone、同 request lock 下的冲突优先级、原 writer／identity bridge 保留及完整 Docker 验证命令。必须区分防重放存储与实际组织清除，不定义 deleted_at 的申请时间或期限，不新增 runtime 写入口或授权受控删除例外。 |
 | `MANUAL-083` | 学习文档说明 7AS 四个既有组织窗口在高字号软键盘下的裁切机制、IME-only 留白和标题共用滚动区，保留字号／48px 触控目标及原请求语义。说明 307px 键盘／24px 安全区的中英文回归、原生 synthetic batch 和本地／CI／生产边界，不把截图当几何或真人辅助技术证明。 |
+| `MANUAL-084` | 学习文档说明 7AT 的 owner 普通项目成员安排与管理权限提升的区别、exact identity 与不可信 selectors、nullable parent bound、历史 replay、七字段 row、原子 audit／claim、READ COMMITTED 和复用 0073 status fence。解释 value-free UUID 不是不可反查匿名数据、恢复／purge 尚未实现，以及文档验证的证据边界。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3277,6 +3293,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-091` | 7AQ focused Widget、目录和 App 接线 tests 覆盖 target membership UUID 规范化与本地拒绝、本地核对后明确 transfer、首次提交生成 request UUID、固定 request／workspace／target、全部 typed failure、不确定结果转稳定拒绝、五字段历史回执、busy 防重入、会话／ABA／迟到结果、同账号切项目、共享 gateway 与不刷新／切项目／复制。检查中英文、live region、Tab／Escape／系统返回、48px 控件和 320×568／200% 字号；完整 Flutter、analyzer、format、生产边界、链接和精确 head CI 不证明生产身份、部署端点、数据库实权或真人平台。 |
 | `TEST-092` | 7AR structural check、rollback fixture 和独立会话并发覆盖 creation tombstone 两字段、固定 family、immutable guard、owner／PUBLIC／runtime ACL、首次创建、精确 replay、墓碑与 live claim 并存时优先 conflict、不同 family 相同 UUID 隔离、旧 writer OID／owner／ACL／参数保留，以及墓碑先行和 create 先行的真实 request-lock 持有／等待。完整 Docker 验证旧 checksum、rebuild 和 dump／restore；synthetic 通过不证明实际 purge、生产删除或恢复。 |
 | `TEST-093` | 7AS 为四个组织窗口各增加中英文 IME regression：320×568／200% 字号、bottom 307px／top 24px，输入完整可滚动露出，scroll viewport 可容纳输入框，动作全部位于键盘以上且至少 48px。八条新回归保留全部既有请求／会话／receipt tests；完整 Flutter、analyzer、format、边界、链接、原生 Android synthetic batch 和精确 head CI 不证明生产权限、真人 TalkBack／VoiceOver 或六平台运行。 |
+| `TEST-094` | 7AT 文档检查核对 ORG-030–034 与 ADR-0033／0034／0186 的 owner／default-promoter 方向、exact identity、输入与七字段 row、parent interval、claim／replay／tombstone、原子时间／审计、锁序与 isolation、ACL、稳定错误和终结边界，运行链接、no-slop、diff；文档和静态推演不证明实际数据库、归档并发、生产身份或平台运行。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3645,6 +3662,8 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 7AR／#377 在 0095 为创建请求补 value-free tombstone 和同 request lock 防重放检查。它保留全部 live 业务事实，不代表组织删除、恢复或终结清除已实现。
 
 7AS／#379 修复四个既有组织窗口在窄屏高字号软键盘下的输入裁切，仅调整留白、标题滚动和简短动作，不改变请求或权限。
+
+7AT／#381 固定 owner 明确安排普通项目成员的技术合同，仅默认推广者，不附带管理或 PII 权限；数据库与 transport 实现仍须独立验证。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 
