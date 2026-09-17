@@ -1513,6 +1513,28 @@ UUID 规范为 lowercase，有限日历时间投影为 UTC 毫秒。parent end �
 
 五组固定 SQLSTATE／message 只映射四个脱敏 code，未知数据库、constraint、parser、行数或结果漂移统一 unavailable。`TEST-096`／`MANUAL-086` 区分单元 fake 与真实 runtime-role rollback integration；完整 Docker 显式执行后者，不扩大为 HTTP、生产或真人平台证明。
 
+#### Slice 7AW：普通项目成员安排的 HTTP 接线
+
+7AW／Issue #386 开放 `POST /v1/organizations/:organizationWorkspaceId/projects/:projectId/memberships`。body 精确为 `{ "request_id": "uuid", "target_organization_membership_id": "uuid" }`；workspace／project 只取路径，不接受 query、actor、target user、角色、capability 或时间。
+
+raw method／pathname 先于 URL 归一化匹配。错误 method、percent encoding、dot segment、重复／尾随／额外 slash 在认证和 body 读取前返回 `404 not_found`。命中后依次验证 Bearer、generic exact identity、query 是否存在、两个 path UUID、store，然后读取 body。裸 `?` 也属于 query；输入 UUID 可为 uppercase，规范到 lowercase，不 trim。
+
+复用共享 JSON reader，按实际字节限制为 1 MiB，等于上限可接受。空／非法 JSON 为 `400 invalid_json`，超过上限为 `413 payload_too_large`；不新增 Content-Type 检查，缺失或 `text/plain` 不单独产生 415。非 object、extra／missing keys、错误类型或无效 UUID 为本操作 invalid request。body reader 在 store catch 外，保留其稳定分类。
+
+首次执行与 exact replay 都返回 `200`，只含 ADR-0186 同名七字段，UUID canonical lowercase，时间 UTC 毫秒，`inactive_from_utc` 显式 null 或时间。receipt 不含 replay flag、actor、owner、姓名、角色或新权限；历史 receipt 不是当前访问凭据。
+
+| 来源 | HTTP 结果 |
+| --- | --- |
+| Bearer 缺失／无效，或 verifier 明确认定未认证 | `401 unauthenticated` |
+| query、path UUID 或 exact body 无效；固定 SQL request 错误 | `400 invalid_organization_project_membership_assignment_request` |
+| 固定 SQL forbidden | `403 organization_project_membership_assignment_forbidden` |
+| 固定 SQL conflict | `409 organization_project_membership_assignment_conflict` |
+| verifier／store 缺失、固定 SQL identity／isolation 错误、其他未知失败 | `503 organization_project_membership_assignment_unavailable` |
+
+成功和错误响应均为 JSON UTF-8／`Cache-Control: no-store`；错误仅含 `{ "error": { "code": "stable_code" } }`。unknown／cross-organization／non-owner／overlap 的首次资格沿用 SQL 统一 forbidden，不新增 owner 或对象枚举结果。
+
+production composition 注入既有 generic JWT verifier，并用同一个 pool 的 `query` 构造 store。每次一条隐式提交的 bridge statement，等待 Promise settled 后才响应；不新增连接池、transaction、隔离模式设置、Auth lookup、current context 或授权预查。`TEST-097`／`MANUAL-087` 验证合成 HTTP 与接线，不证明部署、production identity、Flutter 或真人平台。
+
 ### 5.8 分析、指标与报告
 
 #### 5.8.1 统计单位和核心口径
@@ -3044,6 +3066,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-084` | 学习文档说明 7AT 的 owner 普通项目成员安排与管理权限提升的区别、exact identity 与不可信 selectors、nullable parent bound、历史 replay、七字段 row、原子 audit／claim、READ COMMITTED 和复用 0073 status fence。解释 value-free UUID 不是不可反查匿名数据、恢复／purge 尚未实现，以及文档验证的证据边界。 |
 | `MANUAL-085` | 学习文档说明 7AU 的真实 writer／bridge、单一墙钟、nullable parent、overlap、历史 replay、RC-only、immutable／去关联和 runtime 最小 ACL；提供完整 Docker 命令并解释十二种独立会话的 advisory／PID 与 user-row-first transactionid 证据，区分局部 fixture、完整套件、CI 与生产。 |
 | `MANUAL-086` | 学习文档说明 7AV 单次参数化 bridge、exact 七字段与 submitted selectors、identity 原值、canonical UUID／UTC 毫秒和显式 null parent end；解释 SQL 微秒区间的投影 ceiling、稳定脱敏错误与无 Auth／context 预查。给出 unit 与完整 Docker 命令，区分 fake、runtime integration、CI 与生产。 |
+| `MANUAL-087` | 学习文档说明 7AW raw route 与 POST、认证／query／path／store／body 顺序、exact 两字段、共享实际字节上限和无新增 415、exact 七字段及显式 null、稳定 HTTP 分类、no-store、共享 pool 与单 statement 等待。区分 HTTP fake、composition、runtime 对账、CI 与生产。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3318,6 +3341,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-094` | 7AT 文档检查核对 ORG-030–034 与 ADR-0033／0034／0186 的 owner／default-promoter 方向、exact identity、输入与七字段 row、parent interval、claim／replay／tombstone、原子时间／审计、锁序与 isolation、ACL、稳定错误和终结边界，运行链接、no-slop、diff；文档和静态推演不证明实际数据库、归档并发、生产身份或平台运行。 |
 | `TEST-095` | 7AU structural、rollback fixture 与十二种独立会话竞态覆盖 exact 七字段、schema／guard／owner／PUBLIC／runtime ACL、RC-only 两 seam 的拒绝与零 advisory lock、nullable／有限 parent、history／active／future overlap、self assignment、recovery、exact／other-actor／drift／去关联 replay 和 tombstone 优先级。空项目与两种 UUID 顺序历史成员归档双序、request／tombstone 用精确 advisory／PID；parent 双序用真实 transactionid／blocking PID。完整 Docker 检查旧 checksum、重建与独立 dump／restore；synthetic 不证明生产、HTTP、客户端、完整撤权或 purge。 |
 | `TEST-096` | 7AV unit tests 覆盖单次 query 的六参数／identity 原值、exact 一行七字段、family／selectors／UUID／时间漂移、显式 null／undefined、日历／时区和合法毫秒相等投影、五组固定错误及未知失败脱敏。真实 runtime-role rollback integration 对账有限／空 parent 的 first／exact replay、selectors conflict 和仅两条 claim／audit；完整 Docker 显式接入 fixture env 与 integration entry，再检查 checksum／并发／restore，不声称 HTTP、production composition 或生产验证。 |
+| `TEST-097` | 7AW handler／真实 HTTP route／composition tests 覆盖两个 selectors 的 raw alias、method、auth-first、query／UUID／store 在 body 前、exact 两字段、共享 1 MiB inclusive／chunked／JSON 分类、无新增 Content-Type gate、七字段有限／空 end、稳定 status／code、no-store、共享 verifier／pool 与 bridge Promise settled 后响应。合成测试不证明生产身份、部署、Flutter、真人平台或当前成员资格。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3692,6 +3716,8 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 7AU／#383 提供普通项目成员安排的 DB-only writer 与最小 runtime bridge，覆盖历史重放及真实归档／parent 竞态；Backend／HTTP／Flutter 另票交付。
 
 7AV／#385 提供 strict Backend PostgreSQL adapter 与真实 runtime-role 对账；HTTP route 和 production composition 尚未接入。
+
+7AW／#386 接入普通项目成员安排 HTTP 与共享 production composition，沿用 SQL 授权和历史 replay；Flutter 与生产部署另票交付。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 

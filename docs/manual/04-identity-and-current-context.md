@@ -1791,6 +1791,29 @@ cd ../..
 
 Docker runner 显式注入 fixture 并运行编译后的 integration，之后继续 checksum／并发／独立 dump／restore。unit 通过不能替代 runtime 对账，合成 Docker 也不证明 production composition、HTTP、生产身份或真人平台。
 
+### 3.40 普通项目成员的 HTTP 接线（Issue #386，MANUAL-087）
+
+7AW 使用 `POST /v1/organizations/:organizationWorkspaceId/projects/:projectId/memberships`。body 只有 `request_id` 和 `target_organization_membership_id` 两个 UUID；组织和项目来自路径。不提交 actor、target user、角色、权限或时间。
+
+server 在 URL 归一化前匹配 raw path／POST，路径别名和错误 method 在认证前 404。命中后按 Bearer、generic identity、query presence、两个 path UUID、store、body 顺序处理；query 包括裸 `?`。无效 path 不读取 body，missing store 也先 unavailable。
+
+共享 reader 按实际字节限制为 1 MiB，等于上限可接受，包括 chunked 请求。空／非法 JSON 400 invalid_json，超过上限 413 payload_too_large；不新增 Content-Type gate，因此缺失或 text/plain 不单独产生 415。exact body 不合格使用本操作 invalid request。
+
+first 与 exact replay 都为 200，响应只含 ADR-0186 七字段，parent end 明确 null 或 UTC 毫秒。不添加 replay flag、当前成员或权限承诺；微秒投影相等与 SQL 完整精度的区别沿用 §3.39。
+
+401 表示未认证，400 表示无效请求，403 表示统一资格拒绝，409 表示固定幂等冲突。verifier／store 缺失、identity／isolation 错误和未知失败为 503。本操作完整 code 见 [Product Spec](../PRODUCT_SPEC.md)；错误不带 SQL、stack、identity 或 provider 原文。所有响应 JSON UTF-8／no-store。
+
+main 将已有 generic verifier 和同一个 pool.query 注入 store；handler 等待单条 bridge statement settled 后才响应。不新增 transaction、连接池、隔离设置、owner checker、Auth lookup 或 SessionContext，避免在 HTTP 层破坏历史 replay。
+
+从仓库根目录运行：
+
+```bash
+npm --prefix backend/server run check
+npm --prefix backend/server test
+```
+
+`TEST-097` 的真实 Node HTTP server 使用 fake verifier／store；Promise gate 使用真实 adapter 与 fake query，composition 检查实际 source 接线。它们不替代 §3.39 的 runtime-role 对账，也不证明生产部署、真实身份、Flutter 或真人平台。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
