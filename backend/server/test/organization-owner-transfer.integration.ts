@@ -185,18 +185,15 @@ for (const scenario of ["target parent starts", "actor becomes owner"] as const)
           "INSERT INTO app_data.organization_memberships VALUES ($1::uuid, $2::uuid, $3::uuid, transaction_timestamp(), NULL)",
           [actorMembershipId, workspaceId, actorId],
         );
+        await observer.query(
+          "INSERT INTO app_data.organization_memberships VALUES ($1::uuid, $2::uuid, $3::uuid, transaction_timestamp(), NULL)",
+          [targetMembershipId, workspaceId, targetId],
+        );
       }
-      await observer.query(
-        `INSERT INTO app_data.organization_memberships VALUES ($1::uuid, $2::uuid, $3::uuid,
-         CASE WHEN $4::boolean THEN clock_timestamp() + interval '2 seconds' ELSE transaction_timestamp() END, NULL)`,
-        [targetMembershipId, workspaceId, targetId, scenario === "target parent starts"],
-      );
       await observer.query("COMMIT");
       await writer.query("SET ROLE tongxingzhe_runtime");
       await later.query("SET ROLE tongxingzhe_runtime");
-      const lockName = scenario === "target parent starts"
-        ? `organization-governance:${workspaceId}`
-        : `organization-owner-transfer-request:${blockedRequestId}`;
+      const lockName = `organization-owner-transfer-request:${blockedRequestId}`;
       const key = (await holder.query("SELECT hashtextextended($1::text, 0)::text AS key", [lockName])).rows[0].key as string;
       await holder.query("BEGIN");
       await holder.query("SELECT pg_advisory_xact_lock($1::bigint)", [key]);
@@ -236,19 +233,21 @@ for (const scenario of ["target parent starts", "actor becomes owner"] as const)
       };
       await waitForExactLock();
       if (scenario === "target parent starts") {
-        let active = false;
-        for (let attempt = 0; attempt < 1000; attempt += 1) {
-          const times = (await observer.query(
-            `SELECT a.xact_start < m.active_from_utc AS transaction_precedes_parent,
-                    clock_timestamp() >= m.active_from_utc AS parent_now_active
-             FROM pg_stat_activity a CROSS JOIN app_data.organization_memberships m
-             WHERE a.pid = $1 AND m.organization_membership_id = $2::uuid`, [writerPid, targetMembershipId],
-          )).rows[0];
-          assert.equal(times.transaction_precedes_parent, true);
-          if (times.parent_now_active) { active = true; break; }
-          await new Promise((resolve) => setTimeout(resolve, 10));
-        }
-        assert.equal(active, true, "database wall clock must confirm parent activation before unlock");
+        // Establish the parent only after the bridge's implicit transaction is blocked.
+        await observer.query("BEGIN");
+        await observer.query(
+          "INSERT INTO app_data.organization_memberships VALUES ($1::uuid, $2::uuid, $3::uuid, transaction_timestamp(), NULL)",
+          [targetMembershipId, workspaceId, targetId],
+        );
+        await observer.query("COMMIT");
+        const times = (await observer.query(
+          `SELECT a.xact_start < m.active_from_utc AS transaction_precedes_parent,
+                  clock_timestamp() >= m.active_from_utc AS parent_now_active
+           FROM pg_stat_activity a CROSS JOIN app_data.organization_memberships m
+           WHERE a.pid = $1 AND m.organization_membership_id = $2::uuid`, [writerPid, targetMembershipId],
+        )).rows[0];
+        assert.equal(times.transaction_precedes_parent, true);
+        assert.equal(times.parent_now_active, true);
       } else {
         const handoff = (await later.query(
           "SELECT * FROM app_data.transfer_organization_owner_for_identity_v1($1::text, $2::text, $3::uuid, $4::uuid, $5::uuid)",
