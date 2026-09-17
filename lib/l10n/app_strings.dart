@@ -320,6 +320,44 @@ const Map<String, Map<String, String>> _strings = {
     'organizationShareableApplicationSubmitFailure.invalidResponse':
         '未收到可验证的申请结果。',
     'organizationShareableApprovalAction': '批准入组申请',
+    'organizationShareableApplicationDirectoryAction': '待审批记录',
+    'organizationShareableApplicationDirectoryTitle': '待审批记录',
+    'organizationShareableApplicationDirectoryHelp':
+        '仅显示读取时最早的最多 20 条未到期、未批准记录，不是完整队列。记录不证明申请人身份或现在可批准；请通过原渠道核对身份，批准时服务端会重新授权。',
+    'organizationShareableApplicationDirectoryLoading': '正在读取待审批记录…',
+    'organizationShareableApplicationDirectoryLoaded': '已读取待审批记录。',
+    'organizationShareableApplicationDirectoryEmpty': '读取时没有待审批记录。',
+    'organizationShareableApplicationDirectorySessionExpired':
+        '账号会话已变化。请关闭窗口后重新打开。',
+    'organizationShareableApplicationDirectoryApprovalClosed':
+        '批准窗口已关闭。请显式刷新以重新读取目录。',
+    'organizationShareableApplicationDirectoryObservedAt': '读取时间（UTC）',
+    'organizationShareableApplicationDirectoryDetails': '来源与时间',
+    'organizationShareableApplicationDirectoryLinkId': '来源链接 UUID',
+    'organizationShareableApplicationDirectorySubmittedAt': '提交时间（UTC）',
+    'organizationShareableApplicationDirectoryExpiresAt': '申请到期时间（UTC）',
+    'organizationShareableApplicationDirectoryLinkNotice':
+        '链接 UUID 仅表示来源，不证明链接仍有效或申请现在符合资格。',
+    'organizationShareableApplicationDirectoryReview': '核对',
+    'organizationShareableApplicationDirectoryFailure.notConfigured':
+        '待审批目录服务未配置。',
+    'organizationShareableApplicationDirectoryFailure.unauthorized':
+        '会话不可用。请重新打开窗口。',
+    'organizationShareableApplicationDirectoryFailure.invalidJson': '读取请求被拒绝。',
+    'organizationShareableApplicationDirectoryFailure.payloadTooLarge':
+        '读取请求被拒绝。',
+    'organizationShareableApplicationDirectoryFailure.invalidRequest':
+        '读取请求被拒绝。',
+    'organizationShareableApplicationDirectoryFailure.forbidden':
+        '无法读取此组织的待审批记录。',
+    'organizationShareableApplicationDirectoryFailure.conflict':
+        '无法读取此组织的待审批记录。',
+    'organizationShareableApplicationDirectoryFailure.serviceUnavailable':
+        '服务暂不可用，请稍后刷新。',
+    'organizationShareableApplicationDirectoryFailure.networkUnavailable':
+        '网络暂不可用，请稍后刷新。',
+    'organizationShareableApplicationDirectoryFailure.invalidResponse':
+        '无法核验待审批记录，请稍后刷新。',
     'organizationShareableApprovalTitle': '批准入组申请',
     'organizationShareableApprovalInputHelp':
         '输入申请人通过可信渠道提供的申请编号。App 不会读取申请人姓名、账号或其他资料。',
@@ -1899,6 +1937,50 @@ const Map<String, Map<String, String>> _strings = {
     'organizationShareableApplicationSubmitFailure.invalidResponse':
         'The application result could not be verified.',
     'organizationShareableApprovalAction': 'Approve join application',
+    'organizationShareableApplicationDirectoryAction': 'Pending records',
+    'organizationShareableApplicationDirectoryTitle': 'Pending records',
+    'organizationShareableApplicationDirectoryHelp':
+        'Shows at most 20 earliest unexpired, unapproved records at the read time. This is not the complete queue. Records do not prove applicant identity or present eligibility. Verify identity through the original channel; the server authorizes again when approving.',
+    'organizationShareableApplicationDirectoryLoading':
+        'Reading pending records…',
+    'organizationShareableApplicationDirectoryLoaded':
+        'Pending records loaded.',
+    'organizationShareableApplicationDirectoryEmpty':
+        'No pending records at the read time.',
+    'organizationShareableApplicationDirectorySessionExpired':
+        'The account session changed. Close and reopen this window.',
+    'organizationShareableApplicationDirectoryApprovalClosed':
+        'Approval window closed. Refresh explicitly to read the directory again.',
+    'organizationShareableApplicationDirectoryObservedAt': 'Read time (UTC)',
+    'organizationShareableApplicationDirectoryDetails': 'Source and times',
+    'organizationShareableApplicationDirectoryLinkId': 'Source link UUID',
+    'organizationShareableApplicationDirectorySubmittedAt':
+        'Submitted at (UTC)',
+    'organizationShareableApplicationDirectoryExpiresAt':
+        'Application expires at (UTC)',
+    'organizationShareableApplicationDirectoryLinkNotice':
+        'The link UUID identifies only the source. It does not prove the link is still valid or the application is currently eligible.',
+    'organizationShareableApplicationDirectoryReview': 'Review',
+    'organizationShareableApplicationDirectoryFailure.notConfigured':
+        'The pending records service is not configured.',
+    'organizationShareableApplicationDirectoryFailure.unauthorized':
+        'The session is unavailable. Reopen this window.',
+    'organizationShareableApplicationDirectoryFailure.invalidJson':
+        'The read request was rejected.',
+    'organizationShareableApplicationDirectoryFailure.payloadTooLarge':
+        'The read request was rejected.',
+    'organizationShareableApplicationDirectoryFailure.invalidRequest':
+        'The read request was rejected.',
+    'organizationShareableApplicationDirectoryFailure.forbidden':
+        'Cannot read pending records for this organization.',
+    'organizationShareableApplicationDirectoryFailure.conflict':
+        'Cannot read pending records for this organization.',
+    'organizationShareableApplicationDirectoryFailure.serviceUnavailable':
+        'The service is unavailable. Refresh later.',
+    'organizationShareableApplicationDirectoryFailure.networkUnavailable':
+        'The network is unavailable. Refresh later.',
+    'organizationShareableApplicationDirectoryFailure.invalidResponse':
+        'The pending records could not be verified. Refresh later.',
     'organizationShareableApprovalTitle': 'Approve join application',
     'organizationShareableApprovalInputHelp':
         'Enter the application ID received through a trusted channel. '

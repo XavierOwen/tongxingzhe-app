@@ -23,6 +23,8 @@ test("production wires applications through generic identity and pool query", ()
     /app_data\.submit_organization_shareable_join_application_for_identity_v1/);
   assert.match(applicationModule,
     /app_data\.approve_organization_shareable_join_application_for_identity_v1/);
+  assert.match(applicationModule, /app_data\.list_org_join_applications_for_identity_v1/);
+  assert.match(applicationModule, /async listPending\(/);
   assert.doesNotMatch(applicationModule,
     /OrganizationCreation|AuthUser|SessionContext|app_private|SUPABASE_PUBLISHABLE_KEY/);
 });
@@ -35,6 +37,15 @@ test("raw application targets are matched before WHATWG normalization", () => {
   assert.ok(raw >= 0);
   assert.ok(normalized > raw);
   assert.match(server.slice(raw, normalized), /request\.method === "POST"/);
+  assert.match(server.slice(raw, normalized), /operation === "listPending" \? "GET" : "POST"/);
+  assert.match(server.slice(raw, normalized), /hasBody: requestDeclaresBody\(request\.headers\)/);
+});
+
+test("Docker directory integration receives only its new fixture", () => {
+  assert.match(runner,
+    /ORGANIZATION_SHAREABLE_JOIN_APPLICATION_DIRECTORY_FIXTURE=\/source\/backend\/database\/fixtures\/0099_organization_shareable_join_application_directory\.sql/);
+  assert.match(runner,
+    /dist\/test\/organization-shareable-join-application-directory\.integration\.js/);
 });
 
 test("Docker runtime integration receives both application fixtures", () => {

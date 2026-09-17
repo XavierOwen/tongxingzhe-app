@@ -12,6 +12,7 @@ import 'package:tongxingzhe_app/features/organization_directory/organization_mem
 import 'package:tongxingzhe_app/features/organization_directory/organization_owner_transfer_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_project_membership_assignment_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_shareable_join_application_approve_dialog.dart';
+import 'package:tongxingzhe_app/features/organization_directory/organization_shareable_join_application_directory_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_shareable_join_application_submit_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_shareable_join_link_create_dialog.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
@@ -657,6 +658,82 @@ void main() {
     );
     expect(directoryGateway.listCalls, 1);
     expect(shareableJoinGateway.closed, isFalse);
+  });
+
+  testWidgets('待审批入口固定所选组织；只预填批准表单且不自动读写或切项目', (tester) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final directory = _Gateway([
+      OrganizationDirectorySuccess(const [_organizationA, _organizationB]),
+    ]);
+    final gateway = _ShareableJoinGateway(directorySuccess: true);
+    final initialContext = fixture.session.current.context;
+    await _open(
+      tester,
+      fixture.session,
+      directory,
+      shareableJoinGateway: gateway,
+    );
+    final entry = find.byKey(
+      ValueKey(
+        'organization-shareable-application-directory-${_organizationB.organizationWorkspaceId}',
+      ),
+    );
+    await tester.ensureVisible(entry);
+    await tester.tap(entry);
+    await tester.pumpAndSettle();
+    expect(gateway.directoryCalls, [_organizationB.organizationWorkspaceId]);
+    final dialog = find.byType(
+      OrganizationShareableJoinApplicationDirectoryDialog,
+    );
+    expect(dialog, findsOneWidget);
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.text(_organizationB.organizationWorkspaceId),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.text(_organizationA.organizationWorkspaceId),
+      ),
+      findsNothing,
+    );
+    final review = find.byKey(
+      const ValueKey(
+        'organization-shareable-application-directory-review-$_shareableJoinApplicationId',
+      ),
+    );
+    await tester.ensureVisible(review);
+    await tester.tap(review);
+    await tester.pumpAndSettle();
+    final field = find.byKey(
+      const ValueKey('organization-shareable-approval-application-field'),
+    );
+    expect(
+      tester.widget<TextField>(field).controller!.text,
+      _shareableJoinApplicationId,
+    );
+    expect(gateway.approveCalls, isEmpty);
+    await tester.tap(
+      find.byKey(const ValueKey('organization-shareable-approval-close')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(
+        const ValueKey('organization-shareable-application-directory-close'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(directory.listCalls, 1);
+    expect(gateway.directoryCalls, [_organizationB.organizationWorkspaceId]);
+    expect(gateway.previewCalls, isEmpty);
+    expect(gateway.submitCalls, isEmpty);
+    expect(gateway.approveCalls, isEmpty);
+    expect(gateway.closed, isFalse);
+    expect(fixture.session.current.context, initialContext);
   });
 
   testWidgets('每个组织行批准加入申请固定选中组织，成功留窗且不刷新目录', (tester) async {
@@ -1937,16 +2014,45 @@ final class _ShareableJoinGateway implements OrganizationShareableJoinGateway {
     this.previewReceipt,
     this.submitSuccess = false,
     this.approveSuccess = false,
+    this.directorySuccess = false,
   });
 
   final OrganizationShareableJoinLinkPreviewReceipt? previewReceipt;
   final bool submitSuccess;
   final bool approveSuccess;
+  final bool directorySuccess;
+  final directoryCalls = <String>[];
   final calls = <_ShareableJoinCall>[];
   final previewCalls = <String>[];
   final submitCalls = <_ShareableJoinSubmitCall>[];
   final approveCalls = <_ShareableJoinApproveCall>[];
   var closed = false;
+
+  @override
+  Future<OrganizationShareableJoinApplicationDirectoryResult>
+  listPendingApplications({required String organizationWorkspaceId}) async {
+    directoryCalls.add(organizationWorkspaceId);
+    return directorySuccess
+        ? OrganizationShareableJoinApplicationDirectorySuccess(
+            OrganizationShareableJoinApplicationDirectoryReceipt(
+              organizationShareableJoinApplicationDirectoryContractId:
+                  'organization-shareable-join-application-directory:v1',
+              organizationWorkspaceId: organizationWorkspaceId,
+              observedAtUtc: DateTime.utc(2026, 9, 18),
+              applications: [
+                OrganizationShareableJoinApplicationDirectoryRecord(
+                  applicationId: _shareableJoinApplicationId,
+                  linkId: _shareableJoinLinkId,
+                  submittedAtUtc: DateTime.utc(2026, 9, 17),
+                  expiresAtUtc: DateTime.utc(2026, 9, 24),
+                ),
+              ],
+            ),
+          )
+        : const OrganizationShareableJoinApplicationDirectoryRejected(
+            OrganizationShareableJoinFailureCode.notConfigured,
+          );
+  }
 
   @override
   Future<OrganizationShareableJoinLinkCreateResult> createLink({

@@ -245,13 +245,15 @@ export function createBackendServer(
       matchOrganizationShareableJoinApplicationRequestTarget(request.url);
     if (
       shareableJoinApplicationMatch !== null &&
-      request.method === "POST"
+      request.method ===
+        (shareableJoinApplicationMatch.operation === "listPending" ? "GET" : "POST")
     ) {
       try {
         const result = await handleOrganizationShareableJoinApplication(
           {
             ...shareableJoinApplicationMatch,
             authorization: request.headers.authorization,
+            hasBody: requestDeclaresBody(request.headers),
             readBody: async () => readJsonBody(request),
           },
           {

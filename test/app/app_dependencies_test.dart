@@ -1224,6 +1224,13 @@ final class _TrackingOrganizationShareableJoinGateway
   var closeCount = 0;
 
   @override
+  Future<OrganizationShareableJoinApplicationDirectoryResult>
+  listPendingApplications({required String organizationWorkspaceId}) async =>
+      const OrganizationShareableJoinApplicationDirectoryRejected(
+        OrganizationShareableJoinFailureCode.notConfigured,
+      );
+
+  @override
   Future<OrganizationShareableJoinLinkCreateResult> createLink({
     required String linkId,
     required String organizationWorkspaceId,

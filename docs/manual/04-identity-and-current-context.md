@@ -1944,6 +1944,34 @@ owner transfer 有两个时间。0088 在全部锁后用墙钟确认当前授权
 
 新边界 fixture 检查相等起点；既有0086 conflict、0097历史 replay fixture 在0098后继续运行。完整 Docker 保留旧 checksum、全部 checks／fixtures／并发和独立 dump／restore；本地 synthetic 和 CI 不证明真实 Auth、生产部署、真人平台或真实删除。
 
+### 3.47 从待审批目录选择记录，再明确批准（Issue #412，MANUAL-094）
+
+7BI 的[目录合同](../adr/0187-organization-shareable-join-application-directory-is-owner-scoped.md)沿用 current-owner 审批边界。用户从“我的组织”的固定组织打开“待审批记录”，读取最早20项并可以显式刷新。目录不是完整队列，也不证明申请人身份；原手工输入 UUID 的批准入口仍保留。
+
+pending 只表示未批准且数据库读取时未过期。申请人可能后来失去账号资格、去关联或通过其他路径入组；这些记录不会被目录暗中删除。link 已过期或 creator 不再是 owner，也不改变已提交 application 的独立期限。选中后仍须通过原渠道核对申请人，进入既有本地确认页，再明确批准。
+
+#### 一次查询怎样避免资格和记录来自不同读取
+
+`list_org_join_applications_for_identity_v1` 在一个 SQL query snapshot 中匹配 exact identity、active user、未删除组织及当前 membership/owner，同时取该组织的 pending claims。materialized observation 只读取一次数据库墙钟。合法 owner 没有记录时返回空数组；不合格 actor 固定 forbidden，不先查询 owner 再独立读取 claims。
+
+读取不写 claim、membership 或 audit，不取新治理锁，不给 runtime 底表权限。它只说明读取快照，不能保留下一次批准资格；0094 继续在原锁后重新授权并原子写入普通组织成员。列表不建立项目成员或管理能力。
+
+返回四项 root：固定 directory contract、组织 UUID、读取 UTC 时间和 applications。每项只有 application/link UUID 与 submitted/expiry。SQL JSON 时间为 UTC 六位小数，HTTP 为三位毫秒；未截断 SQL 仍严格排除到期记录。两个时间截断到同一毫秒不表示 SQL 违反期限，也不保证收到响应时还能批准。
+
+Backend 检查完整微秒的提交时间及真实并列时的 UUID 顺序。Flutter 保留服务器顺序，只检查提交毫秒非递减；同一显示毫秒可能来自不同微秒，不能据此重建 UUID 并列排序。
+
+#### 客户端复用已有资源和审批意图
+
+Backend 的 `listPending` 只执行一条参数化 identity bridge query。GET 不接受 query 或声明 body，命中 raw route 后先认证，所有响应 JSON UTF-8/no-store。Flutter `listPendingApplications` 复用同一个 gateway、一次401刷新与 ABA/close fence；目录只在内存，不进本地缓存或离线队列。
+
+选择记录只预填既有7AP窗口，不自动发送approve。该窗口的固定重试与历史 receipt 不变。目录、子窗口与 App 借用同一gateway，不额外打开identity或关闭共享资源。登录失效、换号或 ABA 清空旧状态；同账号切项目不会改变固定组织。
+
+#### 验证与证据边界
+
+SQL fixture 检查空目录、21项截断、同时间UUID排序、expiry/approved、原pending语义、owner/parent半开区间、读取零副作用与最小ACL。前后业务快照只覆盖本fixture，不采用会被其他runtime提交污染的全库基准；同session反复运行必须清掉自己的TEMP对象。
+
+Backend检查strict root/item、selector、UTC、认证顺序、GET body拒绝和Promise gate；Dart检查一次401、身份/close隔离；Widget检查明确选择、刷新、原审批路径、中英文、小屏高字号和语义。运行正式Backend、Flutter及完整PostgreSQL runner，完整Docker仍包含checksum与独立restore。原生Android复核使用合成身份或临时入口时，不得写成生产JWT、生产入口端到端、部署或六平台真人验收。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
