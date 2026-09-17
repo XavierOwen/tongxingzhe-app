@@ -494,6 +494,8 @@ organization workspace 和 target UUID 都是待校验的请求输入，不能�
 
 首次执行时，target membership 与对应 app user 必须在锁后仍为 active。target 不得属于其他组织。target 不得是 `deletion_pending` 或 `deleted` account。target 已是 current owner 时返回固定 conflict；actor 与 target 相同也属于该 conflict。
 
+0097／Issue #396 具体化首次 target 的既有包含规则：membership 结束点必须为 null，finite parent 即使当前 active 也统一 forbidden。新 owner grant 固定没有结束点，不能超出 parent；不引入 future owner-ending 政策，也不改变 target 后来结束时的历史 replay。
+
 正常 transfer 是 handoff，不是新增 co-owner。已有其他 current owners 不受影响。transfer 不隐式创建 membership、接受 directed invitation、批准 join application、改变 project membership 或增加 capability。
 
 transfer 使用独立于 organization creation 的 request UUID claim 表和 advisory-lock 前缀 `organization-owner-transfer-request:`。transfer claim 的单列主键是 `request_id`；与 creation 使用相同 UUID 不冲突，也不共享 claim 或 lock。
@@ -1575,6 +1577,14 @@ unknown 结果重试固定原 request 与 selectors。首次提交后禁止编�
 link／submit／approve／assign 四步后，申请人的 organization membership 为 `0→0→1→1`，project membership 为 `0→0→0→1`，management capabilities 不增加。approval 返回的 parent 正是 assignment 提交的 target；SQL 文本／等值比较保留微秒，wire receipt 只保留毫秒。
 
 精确重放不增加各 family claim／audit／membership，non-owner、overlap、drift 和 unknown／cross-organization approval 稳定拒绝且不增写。`TEST-101`／`MANUAL-091` 保留完整 checksum、并发与独立 restore；synthetic 合同证据不代表生产、客户端、真人平台或自动授管理权限。
+
+#### Slice 7BB：首次 owner transfer 的 unended parent qualification
+
+7BB／Issue #396 以追加 0097 migration 替换当前 0088 private writer，仅在原锁后首次 target guard 拒绝 finite end。原本 null-ended owner grant 违反 0084 parent containment 的情形，现在使用既有 exact forbidden／HTTP403，零 request／claim／audit／旧owner变化；不改旧 migration、validator 或 Backend 错误映射。
+
+exact replay、双时间、锁序、grant-before-close、bridge、OID／owner／ACL／search path 保留。随机 synthetic fixture 以两次合法跨事务 handoff 结束原 target assignment／parent并保留 successor owner，随后 active原actor的原request返回相同receipt，计数不增。
+
+`TEST-102`／`MANUAL-092` 包含旧writer RED、新guard GREEN、runtime稳定403／unended成功和完整 checksum／并发／restore。它具体化现有无到期 owner grant，不定义未来到期、生产部署、账号终结或真实删除。
 
 ### 5.8 分析、指标与报告
 
@@ -3112,6 +3122,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-089` | 学习文档说明 7AY 固定组织／已知项目及 target parent、本地 review 与明确 submit、一次 request／unknown fixed retry、稳定失败与 session fences、历史七字段回执、未知退出和无 owner 预查；解释 shared composition close、目录不 reload／不切 current project、IME 留白／滚动及 widget／synthetic native／CI／生产边界。 |
 | `MANUAL-090` | 学习文档说明 7AZ actual HTTP、fake verifier、真实 adapter／runtime role、单 statement 隐式提交和独立 PID observer；首次／replay 对账 selectors／SQL 时间及拒绝零写入，解释临时库 cleanup、不绕过 guard 和 HTTP／Docker／CI／生产边界。 |
 | `MANUAL-091` | 学习文档说明 7BA link／submit／approve／assign 是独立操作，organization `0→0→1→1`／project `0→0→0→1`，approval parent 与 assignment target 相同、不授管理 capability；对账各 family committed claim／audit、SQL 微秒及稳定拒绝，区分 actual HTTP／Docker／CI 与生产。 |
+| `MANUAL-092` | 学习文档区分 active／unended target、0084 null-ended owner grant 与包含约束、旧 containment failure／unavailable 和 0097 锁后 exact forbidden／零写入；解释 unchanged replay／双时间／锁／ACL、合法跨事务 ended-parent replay 及 Docker／CI／生产边界，不推导 owner future expiry。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3391,6 +3402,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-099` | 7AY dialog／directory／App tests 覆盖四 UUID、本地 review 零调用、明确一次 submit、unknown 固定 request／selectors 重试、稳定失败／编辑、正常 renewal／project switch 与 logout／switch／ABA／stream失效／session loss／late／dispose、七字段历史 receipt／null、unknown Close／Escape／back、无 owner gate／自动 reload／context change，factory identity 与自有 gateway 三种 close 路径。中英文 native `320×568`／200%／IME 检查输入、滚动内容和动作；完整 Flutter／analyzer／format／boundary／links／source review／CI 不代表真实 Auth、部署、六平台真人或当前访问权。 |
 | `TEST-100` | 7AZ actual Node HTTP＋真实 PostgreSQL adapter／runtime role 检查有限／空 parent first 200、不同 PID observer 的 committed membership／claim／audit／selectors／SQL 时间、exact wire replay 不增写、409 drift、403 overlap／non-owner、raw aliases、auth、JSON／extra key／actual-byte 超限／verifier 503 的 query 边界。完整 Docker 继续 checksum、并发与独立 restore；synthetic 不证明真实身份、部署、Flutter、App 接线或真人平台。 |
 | `TEST-101` | 7BA actual HTTP＋runtime role＋独立 PID observer 覆盖分享 link／submit／owner approve／explicit assign、org与project逐步计数、approval parent绑定、default-promoter／capability零增加、各 family claim／submitted／approved／assignment audit 和 SQL完整时间，三次 exact replay、non-owner／overlap／drift／unknown／cross-org稳定拒绝零附加写入。完整 Docker继续checks／checksum／并发／restore；不代表真实Auth、部署、Flutter、真人平台或自动项目加入。 |
+| `TEST-102` | 7BB 旧writer实际finite containment RED，0097 structural／fixture检查首次finite／expired／future target exact forbidden和owner／claim／audit零变化、unended成功、两次合法跨事务handoff后target assignment／parent结束时原active actor exact replay receipt相同且计数不增。既有Backend runtime integration验证finite HTTP403／savepoint零写及unended first／replay；完整Docker继续旧checksum、OID／owner／ACL／search path、全部checks／fixtures／并发及独立restore，不代表生产、未来owner expiry或真实删除。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3775,6 +3787,8 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 7AZ／#392 对实际本地 HTTP 200 做独立 runtime-role 提交观察，证明首次与精确重放的 membership／claim／audit 对账；verifier 与数据库均为 synthetic，不代表生产部署。
 
 7BA／#395 从分享申请批准到明确项目安排做实际 HTTP 对账，确认入组只建 parent、安排才建默认推广者 child，不新增管理 capability；不实现自动项目加入。
+
+7BB／#396 使首次 finite-parent owner transfer 在原锁后统一 forbidden，而不落入 containment unavailable；历史 replay 与既有无到期 grant 规则保持，未新增到期政策。
 
 7BD／#400 同时修正 0093／0094 fixture 的并行全库计数假差异，四种受控无关提交保留本域零副作用检查；不改生产授权或隔离级别。
 

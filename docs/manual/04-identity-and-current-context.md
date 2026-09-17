@@ -1905,6 +1905,24 @@ runner 显式执行 `organization-join-project-assignment-http.integration.js`�
 
 `TEST-101` 证明本地跨操作合同，不实现自动项目加入、角色提升、申请列表、通知或新政策。fake verifier、Docker、CI 和 SQL 事实都不是生产身份、部署、Flutter 或真人平台证明。
 
+### 3.45 为什么有效的 finite member 不能接收 owner（Issue #396，MANUAL-092）
+
+active 是“现在处于区间内”，不等于没有结束点。0097 修复当前 0088 transfer writer：首次 target 必须 active 且结束点为 null。0084 新 owner assignment 的结束点固定 null；若 parent 有未来结束点，child 会超出 parent，旧 writer 因包含约束失败并被 Backend 映射成 unavailable，重试也不能完成。
+
+修复只在原锁后 target guard 增加 finite-end 拒绝，返回既有 42501／HTTP 403 forbidden。request、claim、audit 和旧 owner 均不变化。不能把 parent 的未来结束点复制给 owner：那会另行引入 owner 到期、最后所有者失效和 validator 政策，本次不实现。
+
+exact replay 的提前返回位置保持。原 active actor 后来失去 owner，target membership 已结束或账号状态改变，仍可读同一历史五字段回执；这不是当前权限凭据。授权用 0088 的锁后墙钟，immutable handoff 时间仍用原 transaction timestamp；锁序、grant-before-close、bridge 和 ACL 没有改变。
+
+从仓库根目录运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+`TEST-102` 先以旧 writer 运行新 finite fixture 得到实际 containment failure，再在 0097 后检查 exact forbidden／零写入和 unended 成功。新 fixture 合法提交随机 setup 和两次跨事务 handoff；先保留 successor owner，再结束原 target assignment／parent，最后新事务 exact replay 并回滚临时账号状态，对账 receipt 不变和 owner／claim／audit 无增长。不绕过 guard 或 DELETE。
+
+已有 Backend runtime-role integration 另验证 finite target 为稳定 403 后仍可合法转给 unended target。完整套件继续旧 checksum、全部 checks／fixtures／并发和独立 dump／restore；local synthetic 与 CI 不证明生产身份、部署、未来到期政策或真实删除。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
