@@ -784,6 +784,10 @@ runner 会按 migration 顺序发现 0067 migration、structural check、fixture
 跨项目和跨 report family 拒绝、legacy／blocked／未知 provenance、stale head、自链接、分叉、循环、倒序时间、旧快照字节不变、value-free 结果、
 追加不可变、最小 ACL、竞争登记和撤权锁顺序。命令退出码必须为 `0`。
 
+6BE 的三个并发 holder 通过 FIFO 保持事务，只有观察到指定 PostgreSQL 会话在精确 advisory key 上等待后才提交。轮询间隔不是授权窗口，不用固定 sleep 猜测先后；失败时关闭 FIFO 并停止本次客户端及包装器子进程。
+
+Issue #389 的受控复现把 revoke-first waiter 启动延迟 4 秒：旧 3 秒 holder 提前提交并使检查误报，新脚本仍先观察等待再提交。最终 forbidden 和零 replacement 不变量不变；这证明测试调度修复，不是生产授权故障或权限改动。
+
 #### 只调试专用 PostgreSQL 测试库
 
 先确认 `DATABASE_URL` 指向专用测试库，不要指向 production。并发脚本会写入 synthetic 行，因此每次运行使用新的空测试库。
