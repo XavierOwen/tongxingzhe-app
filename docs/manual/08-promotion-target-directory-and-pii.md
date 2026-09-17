@@ -370,6 +370,12 @@ flutter run \
 
 探针阶段按钮的文字在 320dp 小屏／高字号下会换行。默认胶囊弧边不能完整承托首尾行，因此现有 Filled／Outlined 阶段按钮共用 8dp 小圆角和至少 48dp 高度；不缩小字体，不改阶段动作、门禁或证据分类。Widget 回归挂载实际 `OfflinePiiProbeApp`，而不是另造一份主题。Android 系统字号使用原生缩放，不能把 `font_scale=2.0` 写成所有文字都线性放大两倍。
 
+### Web 禁用路径的观察方法与限制
+
+2026-09-17 使用同一独立入口的 release-web 构建，分别检查首次打开、刷新、完全退出测试浏览器后用同一临时 profile 重开，以及已加载页面断网。每次都确认失败关闭状态与七个阶段按钮禁用，再按测试 origin 检查 localStorage、sessionStorage、IndexedDB、Cache Storage 和 Service Worker 列表。本次五类列表均为空；没有清空现有用户 profile，也没有读取系统 Clipboard。
+
+断网不能只看 UI 标志：本次同时确认 `navigator.onLine=false` 与禁止缓存的实际 fetch 失败。完整版本、独立 PID 和观察 JSON 见[六平台能力证据矩阵](../spikes/six-platform-capability-matrix.md#2026-09-17-web-独立探针禁用观察)。快照不是 recorder 原始事件导出；`unsupported` 不等于支持路径 runtime pass，也不证明断网刷新可加载或整款产品无持久 PII。不要据此关闭 #161 或 #6。
+
 ## 当前边界
 
 当前实现完成对象目录、个人或机构资料建立、初始分配、当前分配读取、接触关联、对象当次反应、项目关系阶段、独立生命周期、共享备注历史、显式冲突、阶段显示别名、个人与机构的六类历史关系、十二个月上限的保留复核、明确续期、不可逆匿名化，以及当前分配对象的七十二小时加密只读快照。组织切片仍需把组织角色和较短保留期的管理界面接入已经存在的策略表。
