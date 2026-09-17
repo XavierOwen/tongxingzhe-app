@@ -148,6 +148,13 @@ const Map<String, Map<String, String>> _strings = {
     'organizationInvitationUnauthorized': '账号或会话已改变。已隐藏邀请内容，请关闭后重新登录并查看我的组织。',
     'organizationInvitationUncertain': '接受可能已完成。重试仍用同一邀请；仅在此窗口保留。',
     'organizationInvitationSuccess': '这次邀请接受已完成。当前成员状态以重新读取的组织列表为准。',
+    'organizationInvitationReceiptTitle': '邀请接受回执',
+    'organizationInvitationReceiptNotice':
+        '这是历史接受记录，不保证当前仍为组织成员。接受不会自动加入项目或授予项目能力。关闭后会重新读取我的组织。',
+    'organizationInvitationReceiptContractId': '回执合同',
+    'organizationInvitationReceiptOrganizationId': '组织编号（UUID）',
+    'organizationInvitationReceiptMembershipId': '成员关系编号（UUID）',
+    'organizationInvitationReceiptAcceptedAt': '接受时间（UTC）',
     'organizationInvitationDiscardTitle': '停止重试？',
     'organizationInvitationDiscardBody': '接受邀请可能已完成。关闭后请重新读取我的组织，再决定是否操作这份邀请。',
     'organizationInvitationKeepRetry': '返回重试',
@@ -1687,6 +1694,13 @@ const Map<String, Map<String, String>> _strings = {
         'Acceptance may already be complete. Retry uses the same invitation, kept only in this window.',
     'organizationInvitationSuccess':
         'This acceptance is complete. The reloaded organization list shows your current membership.',
+    'organizationInvitationReceiptTitle': 'Invitation acceptance receipt',
+    'organizationInvitationReceiptNotice':
+        'This historical acceptance record does not confirm current membership. Acceptance does not add project membership or project capabilities. Closing refreshes My organizations.',
+    'organizationInvitationReceiptContractId': 'Receipt contract',
+    'organizationInvitationReceiptOrganizationId': 'Organization ID (UUID)',
+    'organizationInvitationReceiptMembershipId': 'Membership ID (UUID)',
+    'organizationInvitationReceiptAcceptedAt': 'Accepted at (UTC)',
     'organizationInvitationDiscardTitle': 'Stop retrying?',
     'organizationInvitationDiscardBody':
         'Acceptance may already be complete. After closing, reload your organizations before deciding what to do with this invitation.',

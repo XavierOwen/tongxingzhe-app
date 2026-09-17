@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/app_session/app_session.dart';
 import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_directory_dialog.dart';
+import 'package:tongxingzhe_app/features/organization_directory/organization_invitation_accept_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_invitation_create_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_membership_self_leave_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_owner_transfer_dialog.dart';
@@ -28,6 +29,72 @@ import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
 import '../../support/fake_runtime_values.dart';
 
 void main() {
+  for (final closePath in ['close', 'back', 'escape']) {
+    testWidgets('历史邀请回执经 $closePath 返回后父目录只重新读取一次', (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final directoryGateway = _Gateway([
+        OrganizationDirectorySuccess(const []),
+        OrganizationDirectorySuccess(const []),
+      ]);
+      final receipt = OrganizationDirectedAccountInvitationAcceptReceipt(
+        organizationInvitationContractId:
+            'organization-directed-account-invitation:v1',
+        invitationId: 'abcdefab-cdef-0abc-0def-abcdefabcdef',
+        organizationWorkspaceId: _organizationA.organizationWorkspaceId,
+        organizationMembershipId: 'abcdefab-cdef-0abc-0def-abcdefabcdec',
+        acceptedAtUtc: DateTime.utc(2020, 1, 2, 4, 5, 6),
+      );
+      final invitationGateway = _InvitationGateway(acceptReceipt: receipt);
+      await _open(
+        tester,
+        fixture.session,
+        directoryGateway,
+        invitationGateway: invitationGateway,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('organization-directory-accept-invitation')),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('organization-invitation-id')),
+        receipt.invitationId,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('organization-invitation-preview')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('organization-invitation-accept')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(OrganizationInvitationAcceptDialog), findsOneWidget);
+      expect(
+        find.text(receipt.acceptedAtUtc.toIso8601String()),
+        findsOneWidget,
+      );
+      expect(directoryGateway.listCalls, 1);
+      if (closePath == 'close') {
+        await tester.tap(
+          find.byKey(const ValueKey('organization-invitation-close')),
+        );
+      } else if (closePath == 'back') {
+        await tester.binding.handlePopRoute();
+      } else {
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      }
+      await tester.pumpAndSettle();
+      expect(find.byType(OrganizationInvitationAcceptDialog), findsNothing);
+      expect(directoryGateway.listCalls, 2);
+      expect(find.text(_organizationA.organizationWorkspaceId), findsNothing);
+      expect(
+        find.text(const AppStrings('zh').t('organizationInvitationSuccess')),
+        findsOneWidget,
+      );
+      expect(invitationGateway.closed, isFalse);
+    });
+  }
+
   testWidgets('打开只读一次，按原顺序显示可选名称与完整 UUID', (tester) async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.close);
@@ -1969,6 +2036,9 @@ typedef _InvitationCall = ({
 
 final class _InvitationGateway
     implements OrganizationDirectedAccountInvitationGateway {
+  _InvitationGateway({this.acceptReceipt});
+
+  final OrganizationDirectedAccountInvitationAcceptReceipt? acceptReceipt;
   final calls = <_InvitationCall>[];
   var closed = false;
 
@@ -1991,12 +2061,30 @@ final class _InvitationGateway
   @override
   Future<OrganizationDirectedAccountInvitationPreviewResult> preview({
     required String invitationId,
-  }) => throw UnsupportedError('unused directory wiring preview');
+  }) async {
+    if (acceptReceipt == null) {
+      throw UnsupportedError('unused directory wiring preview');
+    }
+    return OrganizationDirectedAccountInvitationPreviewSuccess(
+      OrganizationDirectedAccountInvitationPreview(
+        organizationInvitationPreviewContractId:
+            'organization-directed-account-invitation-preview:v1',
+        invitationId: invitationId,
+        organizationName: '组织',
+        expiresAtUtc: DateTime.utc(2030, 1, 8),
+      ),
+    );
+  }
 
   @override
   Future<OrganizationDirectedAccountInvitationAcceptResult> accept({
     required String invitationId,
-  }) => throw UnsupportedError('unused directory wiring accept');
+  }) async {
+    if (acceptReceipt case final receipt?) {
+      return OrganizationDirectedAccountInvitationAcceptSuccess(receipt);
+    }
+    throw UnsupportedError('unused directory wiring accept');
+  }
 
   @override
   Future<void> close() async => closed = true;

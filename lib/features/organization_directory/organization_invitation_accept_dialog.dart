@@ -26,14 +26,23 @@ final class OrganizationInvitationAcceptDialog extends StatefulWidget {
       _OrganizationInvitationAcceptDialogState();
 }
 
-enum _InvitationStage { entering, previewing, confirming, accepting, expired }
+enum _InvitationStage {
+  entering,
+  previewing,
+  confirming,
+  accepting,
+  accepted,
+  expired,
+}
 
 final class _OrganizationInvitationAcceptDialogState
     extends State<OrganizationInvitationAcceptDialog> {
   final _idController = TextEditingController();
   final _scrollController = ScrollController();
+  final _closeFocusNode = FocusNode();
   StreamSubscription<AppSessionSnapshot>? _sessionSubscription;
   OrganizationDirectedAccountInvitationPreview? _preview;
+  OrganizationDirectedAccountInvitationAcceptReceipt? _receipt;
   String? _appUserId;
   String? _invitationId;
   String? _failureKey;
@@ -50,9 +59,14 @@ final class _OrganizationInvitationAcceptDialogState
   void initState() {
     super.initState();
     _appUserId = widget.appSession.current.context?.appUserId;
+    final subject =
+        widget.appSession.current.identity?.principal?.externalSubject;
     if (!_hasTrustedSession()) _stage = _InvitationStage.expired;
-    _sessionSubscription = widget.appSession.changes.listen((_) {
-      if (!_hasTrustedSession()) _invalidateSession();
+    _sessionSubscription = widget.appSession.changes.listen((snapshot) {
+      if (snapshot.identity?.principal?.externalSubject != subject ||
+          !_hasTrustedSession()) {
+        _invalidateSession();
+      }
     });
   }
 
@@ -62,13 +76,14 @@ final class _OrganizationInvitationAcceptDialogState
     unawaited(_sessionSubscription?.cancel());
     _idController.dispose();
     _scrollController.dispose();
+    _closeFocusNode.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) =>
       PopScope<OrganizationDirectedAccountInvitationAcceptReceipt>(
-        canPop: !_busy && !_uncertain,
+        canPop: !_busy && !_uncertain && _receipt == null,
         onPopInvokedWithResult: (didPop, _) {
           if (!didPop) _requestClose();
         },
@@ -106,6 +121,8 @@ final class _OrganizationInvitationAcceptDialogState
                         widget.text.t(
                           _confirmDiscard
                               ? 'organizationInvitationDiscardTitle'
+                              : _receipt != null
+                              ? 'organizationInvitationReceiptTitle'
                               : 'organizationInvitationTitle',
                         ),
                         style: Theme.of(context).textTheme.headlineSmall,
@@ -129,6 +146,7 @@ final class _OrganizationInvitationAcceptDialogState
     final statusKey = switch (_stage) {
       _InvitationStage.previewing => 'organizationInvitationPreviewing',
       _InvitationStage.accepting => 'organizationInvitationAccepting',
+      _InvitationStage.accepted => 'organizationInvitationSuccess',
       _InvitationStage.expired => 'organizationInvitationUnauthorized',
       _ => _failureKey,
     };
@@ -151,7 +169,30 @@ final class _OrganizationInvitationAcceptDialogState
           ),
           const SizedBox(height: 16),
         ],
-        if (_stage != _InvitationStage.expired)
+        if (_receipt case final receipt?) ...[
+          Text(widget.text.t('organizationInvitationReceiptNotice')),
+          const SizedBox(height: 16),
+          _receiptField(
+            'organizationInvitationReceiptContractId',
+            receipt.organizationInvitationContractId,
+          ),
+          _receiptField(
+            'organizationInvitationIdentifier',
+            receipt.invitationId,
+          ),
+          _receiptField(
+            'organizationInvitationReceiptOrganizationId',
+            receipt.organizationWorkspaceId,
+          ),
+          _receiptField(
+            'organizationInvitationReceiptMembershipId',
+            receipt.organizationMembershipId,
+          ),
+          _receiptField(
+            'organizationInvitationReceiptAcceptedAt',
+            receipt.acceptedAtUtc.toUtc().toIso8601String(),
+          ),
+        ] else if (_stage != _InvitationStage.expired)
           if (_preview case final preview?) ...[
             Text(widget.text.t('organizationInvitationExpiresAt')),
             SelectableText(preview.expiresAtUtc.toUtc().toIso8601String()),
@@ -192,6 +233,21 @@ final class _OrganizationInvitationAcceptDialogState
     );
   }
 
+  Widget _receiptField(String labelKey, String value) => Padding(
+    padding: const EdgeInsets.only(bottom: 16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          widget.text.t(labelKey),
+          style: Theme.of(context).textTheme.labelLarge,
+        ),
+        const SizedBox(height: 4),
+        SelectableText(value),
+      ],
+    ),
+  );
+
   List<Widget> _actions() {
     if (_confirmDiscard) {
       return [
@@ -210,16 +266,17 @@ final class _OrganizationInvitationAcceptDialogState
     return [
       TextButton(
         key: const ValueKey('organization-invitation-close'),
+        focusNode: _closeFocusNode,
         onPressed: _busy ? null : _requestClose,
         child: Text(widget.text.t('organizationInvitationClose')),
       ),
-      if (_preview != null && !_uncertain)
+      if (_receipt == null && _preview != null && !_uncertain)
         TextButton(
           key: const ValueKey('organization-invitation-edit'),
           onPressed: _busy ? null : _editInvitation,
           child: Text(widget.text.t('organizationInvitationEdit')),
         ),
-      if (_stage != _InvitationStage.expired)
+      if (_receipt == null && _stage != _InvitationStage.expired)
         FilledButton(
           key: ValueKey(
             _preview == null
@@ -245,7 +302,7 @@ final class _OrganizationInvitationAcceptDialogState
   }
 
   Future<void> _loadPreview() async {
-    if (_busy || !_checkSession()) return;
+    if (_busy || _receipt != null || !_checkSession()) return;
     final invitationId = _idController.text.trim().toLowerCase();
     if (!_uuidPattern.hasMatch(invitationId)) {
       setState(() => _failureKey = 'organizationInvitationInvalidId');
@@ -283,7 +340,9 @@ final class _OrganizationInvitationAcceptDialogState
   }
 
   Future<void> _acceptInvitation() async {
-    if (_busy || _preview == null || !_checkSession()) return;
+    if (_busy || _receipt != null || _preview == null || !_checkSession()) {
+      return;
+    }
     final generation = ++_generation;
     setState(() {
       _failureKey = null;
@@ -301,8 +360,20 @@ final class _OrganizationInvitationAcceptDialogState
     if (!_accepts(generation)) return;
     switch (result) {
       case OrganizationDirectedAccountInvitationAcceptSuccess(:final receipt):
-        if (!mounted) return;
-        Navigator.of(context).pop(receipt);
+        setState(() {
+          _receipt = receipt;
+          _preview = null;
+          _stage = _InvitationStage.accepted;
+          _uncertain = false;
+          _confirmDiscard = false;
+          _failureKey = null;
+        });
+        _scrollToStatus();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _receipt != null && _checkSession()) {
+            _closeFocusNode.requestFocus();
+          }
+        });
       case OrganizationDirectedAccountInvitationAcceptRejected(:final code):
         _reject(code, accepting: true);
         _scrollToStatus();
@@ -337,7 +408,7 @@ final class _OrganizationInvitationAcceptDialogState
   }
 
   void _editInvitation() {
-    if (_busy || _uncertain || !_checkSession()) return;
+    if (_busy || _receipt != null || _uncertain || !_checkSession()) return;
     setState(() {
       _preview = null;
       _invitationId = null;
@@ -368,6 +439,7 @@ final class _OrganizationInvitationAcceptDialogState
       _uncertain |= _stage == _InvitationStage.accepting;
       _stage = _InvitationStage.expired;
       _preview = null;
+      _receipt = null;
       _invitationId = null;
       _failureKey = null;
       _confirmDiscard = false;
@@ -382,11 +454,12 @@ final class _OrganizationInvitationAcceptDialogState
 
   void _requestClose() {
     if (_busy) return;
+    _checkSession();
     if (_uncertain) {
       setState(() => _confirmDiscard = true);
       _scrollToStatus();
     } else {
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(_receipt);
     }
   }
 }
