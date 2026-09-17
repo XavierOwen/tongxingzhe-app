@@ -1571,7 +1571,7 @@ const Map<String, Map<String, String>> _strings = {
         'Enter the invitation ID you received. Only its bound recipient can view the organization name and expiry.',
     'organizationInvitationIdentifier': 'Invitation ID (UUID)',
     'organizationInvitationInvalidId': 'Enter the complete UUID invitation ID.',
-    'organizationInvitationPreview': 'View invitation',
+    'organizationInvitationPreview': 'View',
     'organizationInvitationPreviewing': 'Reading the invitation…',
     'organizationInvitationAccepting': 'Submitting acceptance…',
     'organizationInvitationAccept': 'Join organization',
@@ -1759,7 +1759,7 @@ const Map<String, Map<String, String>> _strings = {
     'organizationShareableApplicationLinkIdentifier': 'Link ID (UUID)',
     'organizationShareableApplicationInvalidLink': 'Enter a valid link UUID.',
     'organizationShareableApplicationPreviewing': 'Checking link…',
-    'organizationShareableApplicationPreview': 'View organization',
+    'organizationShareableApplicationPreview': 'View',
     'organizationShareableApplicationEdit': 'Use another link',
     'organizationShareableApplicationConfirmHelp':
         'Check the organization name. Submission creates a pending '

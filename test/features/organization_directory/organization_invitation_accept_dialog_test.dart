@@ -513,6 +513,49 @@ void main() {
     semantics.dispose();
   });
 
+  for (final localeCode in ['zh', 'en']) {
+    testWidgets('$localeCode 软键盘与 200% 字号保留完整输入区', (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 307);
+      tester.view.padding = const FakeViewPadding(top: 24);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetViewInsets);
+      addTearDown(tester.view.resetPadding);
+
+      await _open(
+        tester,
+        fixture.session,
+        _Gateway(),
+        localeCode: localeCode,
+        textScaler: TextScaler.linear(2),
+      );
+      await tester.enterText(_invitationIdField, _invitationId);
+      await tester.ensureVisible(_invitationIdField);
+      await tester.pumpAndSettle();
+
+      final viewport = find.ancestor(
+        of: _invitationIdField,
+        matching: find.byType(SingleChildScrollView),
+      );
+      expect(viewport, findsOneWidget);
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.getSize(viewport).height,
+        greaterThanOrEqualTo(tester.getSize(_invitationIdField).height),
+      );
+      for (final action in [_closeAction, _previewAction]) {
+        final rect = tester.getRect(action);
+        expect(rect.bottom, lessThanOrEqualTo(568 - 307));
+        expect(rect.height, greaterThanOrEqualTo(48));
+        expect(rect.width, greaterThanOrEqualTo(48));
+      }
+    });
+  }
+
   testWidgets('Tab, Enter, and Escape keep native dialog paths', (
     tester,
   ) async {
