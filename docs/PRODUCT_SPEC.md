@@ -319,6 +319,7 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `ORG-037` | 目录只开放 operation-specific identity reader，runtime 仅获 EXECUTE，不新增 writer/audit/fence 或底表权限。选择记录只预填既有审批窗口，仍须原渠道核对与明确批准；0094 的锁后判权、固定重试及历史 receipt 不变。会话失效或 ABA 清空并隔离迟到结果，结果不持久化、不自动复制/批准/切项目。 |
 | `ORG-038` | 定向账号邀请接受成功后保留窗口，显示既有五字段历史 receipt，含组织 membership UUID 与接受 UTC。历史记录不证明当前 membership，不自动加入项目或授予项目能力；关闭、Back 或 Escape 返回同一 receipt，使原父目录只重新读取一次。换号、会话失效或 ABA 清空并隔离迟到结果；保留原固定邀请重试与 uncertain 退出确认，不新增 reader、资料、缓存或共享资源所有权。 |
 | `ORG-039` | 批准成功历史回执可主动进入既有普通项目安排窗口，固定回执中的组织及 organization membership UUID，目标只读；用户仍输入已知 project UUID、本地核对并独立明确提交。手工批准与待审批目录两条入口借用同一 App-owned assignment gateway，不自动安排、复制、重读或切项目。历史批准不保留安排资格，既有 writer 独立锁后重验；子窗关闭保留原批准回执，父子会话失效／ABA及迟到结果不能复活旧内容。原手工目标入口、独立 request／unknown fixed retry及借用资源所有权不变。 |
+| `ORG-040` | 组织创建、我的组织目录、定向邀请创建、分享链接创建、加入申请提交、负责人交接及退出组织窗口在借用 AppSession 的事件流结束时，沿原会话失效路径退役：清除旧目录、选择与历史回执，隔离迟到成功，不返回旧账号成功或触发旧父目录重读。流结束不等于业务失败；既有 unknown／停止重试确认与同账号换项目语义保留。窗口仍不关闭借用会话或 gateway。 |
 
 #### Slice 7B Spec：固定组织原子创建与首位所有者合同
 
@@ -3140,6 +3141,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-094` | 学习文档说明 owner 申请目录的单query授权、原pending定义、最早20项非完整队列、metadata-only root/item、SQL微秒与HTTP毫秒边界、读取零写入、shared gateway及选择后仍原渠道核对/明确批准；给出runtime/HTTP/Dart/Widget/Docker/restore检查与合成身份、生产和真人证据边界。 |
 | `MANUAL-095` | 学习文档说明定向邀请接受后的五字段历史回执、membership UUID 与 UTC，区分历史接受和重新读取的当前组织状态；说明各关闭路径返回原 receipt、父目录重读一次、无重复接受、unknown 解消、账号隔离及小屏检查，不把合成原生截图写成生产身份或当前授权。 |
 | `MANUAL-096` | 学习文档说明批准历史回执主动进入固定成员的普通项目安排、已知项目UUID与独立核对／提交、原手工目标入口、同一借用gateway、子窗关闭保留批准回执及无自动刷新／切项目；区分历史批准与安排时独立授权，说明request／unknown／会话边界和Widget／原生／CI证据等级。 |
+| `MANUAL-097` | 学习文档说明共享 AppSession.close 结束事件流而不发送 invalid snapshot、七个组织窗口的原失效路径复用、旧目录／回执清理及迟到隔离；保留 unknown 与借用资源所有权，并区分真实 stream-close Widget、合成原生操作及生产身份／真人验收。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3424,6 +3426,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-104` | 7BI验证current-owner/empty/forbidden、20项与UUID tie-break、expiry与approved排除、invalid/unlinked/member applicant仍pending、过期link不影响、授权半开区间、fixture scoped零副作用/ACL/同session复验；runtime-role与实际HTTP严格合同、认证顺序/GETbody/Promisegate，Dart单次401/ABA/close，Widget明确选择/刷新/审批复用与320×568/200%字号；完整Docker/checksum/restore和精确head CI不等于生产或六平台真人验收。 |
 | `TEST-105` | 7BK Widget检查五字段历史UTC、接受后不再preview/accept、unknown到known清除uncertain、关闭/Back/Escape返回同receipt且父目录各重读一次、历史replay后当前目录仍空、快速ABA/迟到响应/同账号换项目、借用gateway不关闭、共享AppSession关闭后隐藏回执且不返回旧receipt、中英文320×568/200%/IME、heading/live status及48dp。定向analyze、链接、production boundary与精确head CI继续运行；合成Android原生复核不证明生产JWT、部署或六平台真人验收。 |
 | `TEST-106` | 7BJ Widget验证入口仅known success出现、手工／待审批两路同一App-owned gateway、组织与目标固定且无可编辑target、开窗／review零assign、独立一次提交／固定unknown重试、原手工目标、关闭子窗仍见原批准回执且目录不重读、会话关闭／ABA／迟到隔离与不关闭借用资源；中英文320×568/200%／IME、焦点／语义与48dp。关联analyze、format、production boundary、链接及精确head CI；合成Android原生不代表生产身份、部署或六平台真人验收。 |
+| `TEST-107` | 7BL 对七个组织窗口实际关闭借用 AppSession 而非注入失效 snapshot，先RED再GREEN；验证旧目录／选择／历史回执清空、请求中与迟到结果隔离、父目录不旧重读、不返回旧成功及不关闭借用 gateway。完整关联Widget、analyze、format、production boundary、链接与精确head CI继续运行；合成Android抽查目录和邀请回执的真实 stream-close，不代表生产Auth、部署或六平台真人验收。 |
 
 ## 9. UI、视觉与可访问性
 

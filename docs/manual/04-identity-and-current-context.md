@@ -1994,6 +1994,16 @@ unknown 结果仍只能重试原邀请或经过确认停止重试。重试得到
 
 `TEST-106` 覆盖两条接线、固定目标、零自动操作、独立提交与固定重试、原手工入口、关闭／会话边界和中英文小屏／200%／IME／48dp。运行关联Widget、analyze、format、production boundary、文档链接与精确head CI。Android临时合成入口只证明该设备上的显示和操作，不证明生产JWT、生产入口端到端、部署或六平台真人验收。
 
+### 3.50 借用会话事件流结束时退役旧窗口（Issue #417，MANUAL-097）
+
+`AppSession.close()` 先标记关闭并推进 generation，停止身份监听，关闭自己管理的 context gateway，最后结束 `changes` 事件流；它不发送一个新的 invalid snapshot。只监听 onData 的窗口因此可能仍显示旧组织或历史成功回执。7BL 为剩余七个组织窗口补上 onDone，复用各自已有的失效路径，不改变 AppSession、gateway 或业务授权。
+
+覆盖组织创建、我的组织目录、定向邀请创建、分享链接创建、加入申请提交、负责人交接及退出组织。流结束清除旧目录、选择和回执，推进原窗口的 generation；迟到成功不能重新显示旧账号内容，关闭时也不能返回旧成功或让旧父目录重读。邀请接受、批准、待审批目录和项目安排已具有对应处理，本次不重复改动。
+
+会话退役不证明服务器上的操作失败。已有 unknown、固定重试和停止重试确认仍按原规则处理；同账号换项目语义不变。窗口只是借用 AppSession 和 gateway，不替 App 关闭它们。
+
+`TEST-107` 使用真实借用会话 close，而非手工发送 invalid snapshot，验证可见状态、请求中／迟到结果及父目录边界。运行关联Widget、analyze、format、production boundary、链接及精确head CI；临时合成 Android 抽查目录与邀请回执的真实 stream-close。该证据不证明生产身份、部署或六平台真人验收。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
