@@ -1696,6 +1696,26 @@ runner 自动发现 0095 migration、structural check、rollback fixture 和专�
 
 测试只向可丢弃 synthetic 数据库插入模拟墓碑，不删除 live claim、owner history、审计或组织业务行。通过证明防重放边界，不证明组织已实际清除。0095 不提供 deletion／restore／purge eligibility、runner、最小删除审计或 runtime 写入口；实际清除还必须固定完整生命周期、受控 immutable-delete exception 和全部 family 锁序，不能关闭约束或以局部删除冒充。
 
+### 3.36 高字号软键盘下的组织输入窗口（Issue #379，MANUAL-083）
+
+7AS 修复创建组织、创建定向邀请、接受定向邀请和提交分享链接申请四个既有窗口。Android 原生审批复核暴露同类输入裁切后，以 `320×568`、`200%` 字号、底部键盘 `307px` 和顶部安全区 `24px` 检查旧窗口，新增八条回归；修复前其中七条实际失败，中文创建组织原本通过。
+
+固定标题、过长动作和默认留白共同压缩正文 viewport。键盘打开时只缩减外部／正文留白；三个固定标题移入已有正文滚动区，保留 heading、route semantics 和原 headlineSmall。创建组织继续用已有 scrollable AlertDialog。默认 M3 留白在非 IME 场景保持，不缩小字体或触控目标，不添加统一窗口框架。
+
+创建动作复用“创建／Create”，接受邀请与申请的英文 preview 使用“View”。这些是当前字段对象的操作，不表示提交或加入；标题、编号标签、预览、明确确认和风险正文继续区分对象与动作。UUID、fixed request、会话 fence、未知结果退出、历史 receipt、显式复制和共享 gateway 生命周期均未改变。
+
+```bash
+flutter test --no-pub \
+  test/features/organization_creation/organization_creation_dialog_test.dart \
+  test/features/organization_directory/organization_invitation_create_dialog_test.dart \
+  test/features/organization_directory/organization_invitation_accept_dialog_test.dart \
+  test/features/organization_directory/organization_shareable_join_application_submit_dialog_test.dart
+flutter analyze --no-pub
+dart format --output=none --set-exit-if-changed lib test tool
+```
+
+Widget 检查证明完整输入可滚动露出、viewport 能容纳输入框、动作位于键盘以上，以及最小 48px 触控目标。原生 Android batch 使用 synthetic identity 与内存 gateway，观察中英文键盘输入及代表性预览／确认／回执；截图不能独立证明几何尺寸、真人辅助技术、实际账号或生产权限。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
