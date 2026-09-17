@@ -1838,6 +1838,24 @@ flutter test --no-pub
 
 `TEST-098` 使用 fake IdentitySession／HTTP client，不连接生产或真实账号。focused／完整 Flutter、source review、analyzer、format、边界、links 与 CI 是各自证据，不证明 App 接线、当前成员权、生产部署或真人平台。
 
+### 3.43 HTTP 200 之后，另一连接能看到哪些事实（Issue #392，MANUAL-090）
+
+7AZ 把 7AW 的实际 Node HTTP server、真实 PostgreSQL adapter 和 runtime role 接起来，generic verifier 仍为 fake。测试只复用 0096 fixture 的 synthetic seed，提交 setup；业务 bridge 不包显式 transaction，每条 statement 在 query Promise 和 HTTP 200 前提交。
+
+runtime 和 observer 使用两个不同 PostgreSQL PID。有限／空 parent 的首次 HTTP 200 后，observer 逐项对账 membership、claim、audit 的 selectors 与完整 SQL 时间，确认各一条；精确重放返回同一 wire body，计数不增加。wire 毫秒仍不替代 SQL 微秒。
+
+同 request 改 selectors 为 409，overlap 和 non-owner 为 403，均无 claim／audit。raw alias、认证、JSON、extra key、actual-byte 超限和 verifier unavailable 也经过真实 HTTP，且 transport 拒绝不调用业务 query。整个测试只新增两条成员关系，既有 fixture seed 历史保留。
+
+从仓库根目录运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+runner 显式执行编译后的 `organization-project-membership-assignment-http.integration.js`，随后继续全部 checksum、checks、fixtures、并发和独立 dump／restore。连接释放时销毁带 runtime role 的 client，不删除已提交事实或绕过 immutable guard；临时数据库由 runner 清理。
+
+`TEST-100` 的本地实际 HTTP／Docker 和 CI 证明合成连接间的提交可见性，不证明真实 JWT、生产部署、Flutter、App composition 或真人平台。200 是历史操作结果，不是目标当前权限凭据。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
