@@ -13,6 +13,7 @@ test_database='tongxingzhe_test'
 restore_database='tongxingzhe_restore'
 upgrade_database='tongxingzhe_region_upgrade'
 ownerless_upgrade_database='tongxingzhe_ownerless_upgrade'
+owner_transfer_upgrade_database='tongxingzhe_owner_transfer_upgrade'
 directed_invitation_upgrade_database='tongxingzhe_directed_invitation_upgrade'
 owner_authorization_upgrade_database='tongxingzhe_owner_authorization_upgrade'
 organization_directory_upgrade_database='tongxingzhe_organization_directory_upgrade'
@@ -26,6 +27,7 @@ directory_upgrade_database='tongxingzhe_application_directory_upgrade'
 database_url="postgresql://postgres:postgres@127.0.0.1:5432/${test_database}"
 upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${upgrade_database}"
 ownerless_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${ownerless_upgrade_database}"
+owner_transfer_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${owner_transfer_upgrade_database}"
 directed_invitation_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${directed_invitation_upgrade_database}"
 owner_authorization_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${owner_authorization_upgrade_database}"
 organization_directory_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${organization_directory_upgrade_database}"
@@ -685,6 +687,431 @@ docker exec "${container_name}" psql \
   " \
   >/dev/null
 echo '0085 无 owner 升级失败且事务完整回滚：通过。'
+
+echo '验证 0085→0086 升级后旧组织可交接负责人。'
+docker exec "${container_name}" createdb \
+  -U postgres \
+  "${owner_transfer_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/owner-transfer-baseline-migrations \
+      /tmp/owner-transfer-upgrade-only && \
+   find /workspace/backend/database/migrations \
+     -maxdepth 1 -type f \
+     \( -name '000[1-9]_*.sql' \
+        -o -name '00[1-7][0-9]_*.sql' \
+        -o -name '008[0-5]_*.sql' \) \
+     -exec cp {} /tmp/owner-transfer-baseline-migrations/ \; && \
+   test \"\$(find /tmp/owner-transfer-baseline-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 84 && \
+   cp /workspace/backend/database/migrations/0086_*.sql \
+     /tmp/owner-transfer-upgrade-only/ && \
+   test \"\$(find /tmp/owner-transfer-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${owner_transfer_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/owner-transfer-baseline-migrations \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh \
+  >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${owner_transfer_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$baseline\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 84
+        OR (SELECT max(version) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0085_organization_owner_invariant'
+        OR to_regclass(
+          'app_private.organization_owner_transfer_request_claims'
+        ) IS NOT NULL
+        OR to_regclass(
+          'app_private.organization_owner_transfer_request_tombstones'
+        ) IS NOT NULL
+        OR to_regclass(
+          'app_private.organization_owner_transfer_audit_events'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.protect_organization_owner_transfer_request_claim_v1()'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.protect_organization_owner_transfer_request_tombstone_v1()'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.protect_organization_owner_transfer_audit_event_v1()'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.transfer_organization_owner_v1(uuid,uuid,uuid,uuid)'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_data.transfer_organization_owner_for_identity_v1(text,text,uuid,uuid,uuid)'
+        ) IS NOT NULL
+      THEN
+        RAISE EXCEPTION '0085 owner-transfer upgrade baseline drift';
+      END IF;
+    END
+    \$baseline\$;
+  " \
+  >/dev/null
+owner_transfer_creation_receipt="$(
+  docker exec \
+    --workdir /workspace \
+    "${container_name}" \
+    psql \
+    -U postgres \
+    -d "${owner_transfer_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --file /workspace/backend/database/fixtures/upgrade/0085_organization_owner_transfer_live.sql
+)"
+if [[ "${owner_transfer_creation_receipt}" != organization-creation:v1\|* ]] \
+  || [[ "$(printf '%s\n' "${owner_transfer_creation_receipt}" \
+    | awk -F '|' 'NF == 5 { count++ } END { print count+0 }')" -ne 1 ]]; then
+  echo '0085 旧 writer 没有返回单行完整五字段 creation receipt。' >&2
+  exit 1
+fi
+owner_transfer_before_upgrade="$(
+  docker exec "${container_name}" pg_dump \
+    "${owner_transfer_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --exclude-table-data=app_private.organization_owner_transfer_request_claims \
+    --exclude-table-data=app_private.organization_owner_transfer_request_tombstones \
+    --exclude-table-data=app_private.organization_owner_transfer_audit_events \
+    --restrict-key=8585858585858585858585858585858585858585858585858585858585858585
+)"
+docker exec \
+  --env DATABASE_URL="${owner_transfer_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/owner-transfer-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+owner_transfer_after_upgrade="$(
+  docker exec "${container_name}" pg_dump \
+    "${owner_transfer_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --exclude-table-data=app_private.organization_owner_transfer_request_claims \
+    --exclude-table-data=app_private.organization_owner_transfer_request_tombstones \
+    --exclude-table-data=app_private.organization_owner_transfer_audit_events \
+    --restrict-key=8585858585858585858585858585858585858585858585858585858585858585
+)"
+if [[ "${owner_transfer_before_upgrade}" != \
+  "${owner_transfer_after_upgrade}" ]]; then
+  echo '0086 升级改变了旧组织、owner 或其他业务数据。' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${owner_transfer_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$empty\$
+    BEGIN
+      IF (SELECT count(*)
+          FROM app_private.organization_owner_transfer_request_claims) <> 0
+        OR (SELECT count(*)
+            FROM app_private.organization_owner_transfer_request_tombstones) <> 0
+        OR (SELECT count(*)
+            FROM app_private.organization_owner_transfer_audit_events) <> 0
+      THEN
+        RAISE EXCEPTION '0086 owner-transfer tables are not empty after upgrade';
+      END IF;
+    END
+    \$empty\$;
+  " \
+  >/dev/null
+owner_transfer_first_write="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${owner_transfer_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      SET TIME ZONE 'UTC';
+      CREATE TEMP TABLE owner_transfer_receipt (
+        owner_transfer_contract_id text,
+        organization_workspace_id uuid,
+        previous_owner_assignment_id uuid,
+        organization_owner_assignment_id uuid,
+        effective_at_utc timestamptz
+      );
+      CREATE TEMP TABLE owner_transfer_input AS
+      SELECT organization_workspace_id,
+        '00000000-0085-3000-0000-000000000502'::uuid
+          AS target_organization_membership_id
+      FROM app_private.organization_creation_request_claims
+      WHERE request_id =
+        '00000000-0085-5000-0000-000000000501'::uuid;
+      GRANT ALL ON owner_transfer_receipt TO tongxingzhe_runtime;
+      GRANT SELECT ON owner_transfer_input TO tongxingzhe_runtime;
+    " \
+    --command="
+      CREATE TEMP TABLE owner_transfer_clock_bounds AS
+      SELECT clock_timestamp() AS observed_before,
+        NULL::timestamptz AS observed_after;
+    " \
+    --command="
+      SET ROLE tongxingzhe_runtime;
+      INSERT INTO owner_transfer_receipt
+      SELECT *
+      FROM app_data.transfer_organization_owner_for_identity_v1(
+        'https://synthetic-owner-transfer-upgrade.example/auth/v1',
+        'owner',
+        '00000000-0086-6000-0000-000000000501',
+        (SELECT organization_workspace_id FROM owner_transfer_input),
+        (SELECT target_organization_membership_id FROM owner_transfer_input)
+      );
+      RESET ROLE;
+      UPDATE owner_transfer_clock_bounds
+      SET observed_after = clock_timestamp();
+      TABLE owner_transfer_receipt;
+      DO \$written\$
+      DECLARE
+        receipt owner_transfer_receipt%ROWTYPE;
+        bounds owner_transfer_clock_bounds%ROWTYPE;
+        creation app_private.organization_creation_request_claims%ROWTYPE;
+        transfer app_private.organization_owner_transfer_request_claims%ROWTYPE;
+      BEGIN
+        SELECT * INTO STRICT receipt FROM owner_transfer_receipt;
+        SELECT * INTO STRICT bounds FROM owner_transfer_clock_bounds;
+        SELECT * INTO STRICT creation
+        FROM app_private.organization_creation_request_claims
+        WHERE request_id =
+          '00000000-0085-5000-0000-000000000501'::uuid;
+        SELECT * INTO STRICT transfer
+        FROM app_private.organization_owner_transfer_request_claims
+        WHERE request_id =
+          '00000000-0086-6000-0000-000000000501'::uuid;
+
+        IF (SELECT count(*) FROM owner_transfer_receipt) <> 1
+          OR receipt.owner_transfer_contract_id IS DISTINCT FROM
+            'organization-owner-transfer:v1'
+          OR receipt.organization_workspace_id IS DISTINCT FROM
+            creation.organization_workspace_id
+          OR receipt.previous_owner_assignment_id IS DISTINCT FROM
+            creation.organization_owner_assignment_id
+          OR receipt.organization_owner_assignment_id IS NULL
+          OR receipt.organization_owner_assignment_id =
+            receipt.previous_owner_assignment_id
+          OR receipt.effective_at_utc IS NULL
+          OR NOT isfinite(receipt.effective_at_utc)
+          OR receipt.effective_at_utc < bounds.observed_before
+          OR receipt.effective_at_utc > bounds.observed_after
+          OR transfer.actor_app_user_id IS DISTINCT FROM
+            '00000000-0085-0000-0000-000000000501'::uuid
+          OR transfer.organization_workspace_id IS DISTINCT FROM
+            receipt.organization_workspace_id
+          OR transfer.target_organization_membership_id IS DISTINCT FROM
+            '00000000-0085-3000-0000-000000000502'::uuid
+          OR transfer.previous_owner_assignment_id IS DISTINCT FROM
+            receipt.previous_owner_assignment_id
+          OR transfer.organization_owner_assignment_id IS DISTINCT FROM
+            receipt.organization_owner_assignment_id
+          OR transfer.effective_at_utc IS DISTINCT FROM
+            receipt.effective_at_utc
+          OR (SELECT count(*)
+              FROM app_private.organization_owner_transfer_request_claims) <> 1
+          OR (SELECT count(*)
+              FROM app_private.organization_owner_transfer_request_tombstones) <> 0
+          OR (SELECT count(*)
+              FROM app_private.organization_owner_transfer_audit_events) <> 1
+          OR (SELECT count(*)
+              FROM app_private.organization_owner_transfer_audit_events
+              WHERE owner_transfer_contract_id =
+                  receipt.owner_transfer_contract_id
+                AND request_id =
+                  '00000000-0086-6000-0000-000000000501'::uuid
+                AND organization_workspace_id =
+                  receipt.organization_workspace_id
+                AND previous_owner_assignment_id =
+                  receipt.previous_owner_assignment_id
+                AND organization_owner_assignment_id =
+                  receipt.organization_owner_assignment_id
+                AND effective_at_utc = receipt.effective_at_utc) <> 1
+          OR (SELECT count(*)
+              FROM app_data.organization_owner_assignments
+              WHERE organization_owner_assignment_id =
+                  receipt.previous_owner_assignment_id
+                AND organization_membership_id =
+                  creation.organization_membership_id
+                AND active_from_utc = creation.created_at_utc
+                AND inactive_from_utc = receipt.effective_at_utc) <> 1
+          OR (SELECT count(*)
+              FROM app_data.organization_owner_assignments
+              WHERE organization_owner_assignment_id =
+                  receipt.organization_owner_assignment_id
+                AND organization_membership_id =
+                  '00000000-0085-3000-0000-000000000502'::uuid
+                AND active_from_utc = receipt.effective_at_utc
+                AND inactive_from_utc IS NULL) <> 1
+          OR (SELECT count(*)
+              FROM app_data.organization_owner_assignments) <> 2
+          OR (SELECT count(*)
+              FROM app_data.organization_owner_assignments
+              WHERE inactive_from_utc IS NULL) <> 1
+          OR EXISTS (
+            SELECT 1
+            FROM app_data.organization_owner_assignments
+            WHERE organization_membership_id =
+                creation.organization_membership_id
+              AND inactive_from_utc IS NULL
+          )
+          OR (SELECT count(*)
+              FROM app_data.organization_memberships
+              WHERE organization_workspace_id =
+                  receipt.organization_workspace_id
+                AND inactive_from_utc IS NULL) <> 2
+          OR (SELECT count(*) FROM app_data.organization_memberships) <> 2
+          OR (SELECT count(*)
+              FROM app_private.organization_creation_request_claims) <> 1
+          OR (SELECT count(*)
+              FROM app_private.organization_creation_audit_events) <> 1
+          OR (SELECT count(*) FROM app_data.projects) <> 0
+          OR (SELECT count(*) FROM app_data.project_memberships) <> 0
+          OR (SELECT count(*)
+              FROM app_data.management_report_capability_grants) <> 0
+          OR (SELECT count(*)
+              FROM app_data.promotion_target_assignments) <> 0
+        THEN
+          RAISE EXCEPTION '0086 owner-transfer receipt drift';
+        END IF;
+      END
+      \$written\$;
+    "
+)"
+if [[ "${owner_transfer_first_write}" != organization-owner-transfer:v1\|* ]] \
+  || [[ "$(printf '%s\n' "${owner_transfer_first_write}" \
+    | awk -F '|' 'NF == 5 { count++ } END { print count+0 }')" -ne 1 ]]; then
+  echo '0086 owner-transfer writer 没有返回单行完整五字段 receipt。' >&2
+  exit 1
+fi
+owner_transfer_after_first_write="$(
+  docker exec "${container_name}" pg_dump \
+    "${owner_transfer_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=8585858585858585858585858585858585858585858585858585858585858585
+)"
+owner_transfer_exact_replay="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${owner_transfer_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      SET TIME ZONE 'UTC';
+      CREATE TEMP TABLE owner_transfer_replay_input AS
+      SELECT organization_workspace_id
+      FROM app_private.organization_creation_request_claims
+      WHERE request_id =
+        '00000000-0085-5000-0000-000000000501'::uuid;
+      GRANT SELECT ON owner_transfer_replay_input TO tongxingzhe_runtime;
+    " \
+    --command="
+      SET ROLE tongxingzhe_runtime;
+      SELECT *
+      FROM app_data.transfer_organization_owner_for_identity_v1(
+        'https://synthetic-owner-transfer-upgrade.example/auth/v1',
+        'owner',
+        '00000000-0086-6000-0000-000000000501',
+        (SELECT organization_workspace_id
+         FROM owner_transfer_replay_input),
+        '00000000-0085-3000-0000-000000000502'
+      );
+      RESET ROLE;
+    "
+)"
+if [[ "${owner_transfer_exact_replay}" != \
+  "${owner_transfer_first_write}" ]]; then
+  echo '原 actor 失去 owner 身份后 exact replay 未返回原 receipt。' >&2
+  exit 1
+fi
+owner_transfer_after_exact_replay="$(
+  docker exec "${container_name}" pg_dump \
+    "${owner_transfer_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=8585858585858585858585858585858585858585858585858585858585858585
+)"
+if [[ "${owner_transfer_after_first_write}" != \
+  "${owner_transfer_after_exact_replay}" ]]; then
+  echo '0086 owner-transfer exact replay 改变了业务数据。' >&2
+  exit 1
+fi
+owner_transfer_baseline_replay="$(
+  docker exec \
+    --env DATABASE_URL="${owner_transfer_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/owner-transfer-baseline-migrations \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh \
+    2>&1
+)"
+owner_transfer_baseline_verified_count="$(
+  printf '%s\n' "${owner_transfer_baseline_replay}" \
+    | awk '/^已验证 .*（无需重复执行）$/ { count++ } END { print count+0 }'
+)"
+if [[ "${owner_transfer_baseline_verified_count}" -ne 84 ]] \
+  || [[ "${owner_transfer_baseline_replay}" == *'已执行 '* ]]; then
+  echo '0001..0085 重复 migrations 没有全部命中 checksum skip。' >&2
+  printf '%s\n' "${owner_transfer_baseline_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${owner_transfer_baseline_replay}"
+owner_transfer_migration_replay="$(
+  docker exec \
+    --env DATABASE_URL="${owner_transfer_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/owner-transfer-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${owner_transfer_migration_replay}" != \
+  *'已验证 0086_organization_owner_transfer（无需重复执行）'* ]] \
+  || [[ "${owner_transfer_migration_replay}" == *'已执行 '* ]]; then
+  echo '0086 重复 migration 没有命中 checksum skip。' >&2
+  printf '%s\n' "${owner_transfer_migration_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${owner_transfer_migration_replay}"
+owner_transfer_after_migration_replay="$(
+  docker exec "${container_name}" pg_dump \
+    "${owner_transfer_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=8585858585858585858585858585858585858585858585858585858585858585
+)"
+if [[ "${owner_transfer_after_exact_replay}" != \
+  "${owner_transfer_after_migration_replay}" ]]; then
+  echo '重复 0086 migration 改变 owner-transfer 业务快照。' >&2
+  exit 1
+fi
+echo '0085→0086 旧组织、五字段 owner-transfer、exact replay 与 checksum 幂等：通过。'
 
 echo '验证 0086→0087 升级后旧组织可签发并接受定向邀请。'
 docker exec "${container_name}" createdb \

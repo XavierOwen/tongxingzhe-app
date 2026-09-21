@@ -2224,6 +2224,24 @@ claim的owner、target、workspace、issued／expiry、accepted time和accepted 
 
 现有0087 fixture继续覆盖当前schema的wrong-target、过期、恢复期、ACL、unlink和并发矩阵。7CD不重复这些检查。该合成Docker／CI证据不等于生产升级或真实Auth。
 
+#### 6.2.13 真实旧组织负责人交接升级（Issue #456，MANUAL-113）
+
+7CE在独立库只应用0001至0085。runner核对精确84个migration和最大版本0085。此时0086的三张owner-transfer表和五个相关函数均不存在。
+
+upgrade fixture用真实0084 runtime writer创建组织。五字段creation receipt必须与canonical workspace、actor active membership、原owner assignment、creation claim和唯一audit逐字段一致。
+
+0085基线没有成员准入writer。fixture因此只为ORG-009的active same-organization target前置条件，直接建立一个固定target organization membership。它不需要target external identity，也不代表生产准入、Auth、HTTP、邀请或批准证据。升级前membership总数为2，owner assignment总数和current owner均为1，target不是owner。项目、project membership、capability grant和全历史promotion-target assignment均为零。
+
+runner只应用0086。排除三张新表后，升级前后的app_data／app_private数据快照必须逐字不变；三张新表也必须保持0／0／0。
+
+原owner用固定request、workspace和target membership调用runtime bridge。唯一五字段receipt必须返回固定contract、原workspace、旧owner assignment、新owner assignment和有限数据库effective time。时间下界在调用前的独立已提交数据库事务中取得，避免用同一transaction timestamp建立错误边界。
+
+claim和唯一audit必须与receipt逐字段对齐；claim／tombstone／audit总数为1／0／1。旧0084 owner assignment必须是receipt返回的previous assignment，并精确结束于effective time。新assignment绑定target membership，在同一effective time开始且保持active。assignment总数为2，current owner总数为1，两个organization memberships保持active。creation claim和audit保持1／1，项目和授权事实仍为零。
+
+原actor已不再是owner，但相同request的exact replay必须逐字段返回原receipt，且完整业务快照不变。重复0001至0085部署必须精确命中84个checksum skip，不得出现新执行；重复0086也只允许checksum skip，最终快照保持不变。
+
+现有0086 fixture继续覆盖当前schema负例、ACL、恢复期、不可变性和并发；#441已覆盖0087→0088 writer替换。7CE不重复这些检查。该合成Docker／CI证据不等于生产升级或真实Auth。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。
