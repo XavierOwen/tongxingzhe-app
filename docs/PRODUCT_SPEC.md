@@ -3153,6 +3153,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-106` | 学习文档说明真实0087基线使用0084创建writer与原0086交接writer提交负责人交接，再仅升级0088；保存原五字段receipt、private function身份与完整业务快照，验证已失去owner身份的原actor仍可精确重放。说明它与0096→0098升级证明的差异，并区分合成Docker证据与生产升级。 |
 | `MANUAL-107` | 学习文档说明真实0090基线用旧0087 runtime writer签发pending定向邀请，再仅升级0091；绑定target可预览原组织名称和expiry，升级、预览与checksum重跑均不改写业务事实。 |
 | `MANUAL-108` | 学习文档说明真实0088基线用0084 runtime writer创建projectless组织，再仅升级0089；原actor目录返回旧workspace和canonical组织名，升级、读取与checksum重跑均不改写业务事实或增加项目授权。 |
+| `MANUAL-109` | 学习文档说明真实0089基线用0084创建writer与0087定向邀请create／accept writers建立普通成员，再仅升级0090；升级不改旧业务事实，普通成员可取得四字段self-leave receipt并结束原membership。说明邀请与owner lineage保留、exact replay／checksum幂等、无下游关系前提，以及合成Docker证据不等于生产升级或Auth。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3449,6 +3450,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-116` | 7BX 正式Docker从真实0001至0087建立独立旧库，使用0084创建writer与原0086交接writer提交负责人交接并保存五字段receipt。仅0088替换private writer，保留function OID／owner／ACL且不改app_data/app_private业务行；已失去owner身份的原active actor精确重放原receipt，不增加owner assignment、claim、audit或其他业务行。重复0088命中checksum并保持快照不变；完整既有套件及精确head CI继续运行，不代表生产升级或Auth。 |
 | `TEST-117` | 7BY 正式Docker从真实0001至0090建立独立旧库，用旧0087 runtime writer签发pending定向邀请并保存原五字段receipt。claim、tombstone、invitation_issued audit总数为1／0／1，签发者、target、workspace、同一签发时间及168小时expiry与receipt一致，target仍无组织membership。仅0091升级不改app_data/app_private业务行；绑定target调用新reader时返回原invitation UUID、组织原名和expiry的单行四字段preview。preview与重复0091 checksum都不改写业务快照；完整既有套件及精确head CI继续运行，不代表生产升级或Auth。 |
 | `TEST-118` | 7BZ 正式Docker从真实0001至0088建立独立旧库，用0084 runtime writer创建projectless组织并保存五字段receipt。writer把带首尾空格的输入转为canonical组织名；active owner membership／assignment与receipt一致，且无project membership或capability。仅0089升级不改app_data/app_private业务行；原actor目录返回旧workspace和canonical组织名的单行两字段结果。读取与重复0089 checksum都不改写业务快照；完整既有套件及精确head CI继续运行，不代表生产升级或Auth。 |
+| `TEST-119` | 7CA 正式Docker从真实0001至0089建立独立旧库，用0084 runtime writer创建组织，再用0087 runtime create／accept writers建立普通成员并保存五字段accept receipt。claim、issued／accepted audit、active membership与receipt一致，target无owner、project、capability或对象分配。仅0090升级；排除三张新增空表后的旧业务快照不变，且新表分别为空。target调用runtime self-leave取得原workspace／membership的四字段receipt；membership end、claim和唯一audit共用数据库effective time，claim／tombstone／audit为1／0／1。旧invitation与owner不变，exact replay及重复0090 checksum不改最终数据；完整既有套件及精确head CI继续运行，不代表生产升级或Auth。 |
 
 ## 9. UI、视觉与可访问性
 
