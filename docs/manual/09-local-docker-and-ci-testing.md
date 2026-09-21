@@ -2242,6 +2242,24 @@ claim和唯一audit必须与receipt逐字段对齐；claim／tombstone／audit�
 
 现有0086 fixture继续覆盖当前schema负例、ACL、恢复期、不可变性和并发；#441已覆盖0087→0088 writer替换。7CE不重复这些检查。该合成Docker／CI证据不等于生产升级或真实Auth。
 
+#### 6.2.14 真实旧同意占比快照替代升级（Issue #458，MANUAL-114）
+
+7CF在独立库只应用0001至0082。runner核对精确81个migration和最大版本0082。此时0083的consent-ratio replacement表与provenance、trust、validation、replacement和lifecycle五个函数均不存在。
+
+upgrade fixture只直接建立一个固定active actor、organization／project memberships、`release_management_reports` capability和UTC reporting-time-zone前置。这些关系逐项绑定同一固定project，只为真实writers提供授权上下文，不代表生产Auth、HTTP、组织准入或真人平台证据。
+
+fixture通过既有0073 configuration writer启用`follow_up_consent_ratio@1`。同一psql session先调用真实0075 release writer建立`approved_baseline`，提交后等待至少10 ms，再在新事务建立`approved`，以确保第二个cutoff严格较晚且可见已提交的first snapshot。两份17字段release receipts不包含report values；first的compared pointer为null，second指回first，两者同lineage／report／version、递增cutoff、snapshot previous pointer、唯一released snapshot、attempt和release-family claim均逐字段对齐。
+
+在升级前，fixture通过同一configuration writer将opt-in设为`not_enabled`。snapshot、release attempt和原release-family claim的完整JSON字节保持不变。runner随后只应用0083；排除新replacement表后，升级前后旧app_data／app_private数据快照必须逐字不变，新表初始为空。
+
+授权actor以固定request将first登记为由second替代。唯一十一字段receipt必须只包含contract、request、project、lineage、report、version、superseded snapshot、replacement snapshot、`late_accepted_data`原因、declared time和`completed`状态。replacement row的actor、workspace、organization／project memberships、capability grant、authorization time和result document必须与receipt对齐；replacement-family claim与row均为1。
+
+first lifecycle必须是`superseded`并指向second，second必须是`active`且replacement snapshot为null；两份输出均精确五字段且不包含report values。replacement前后原两份snapshot、attempt和release-family claim的完整字节不变，且不产生新snapshot或release attempt。
+
+相同actor、request、project、snapshot pair和reason的exact replay必须逐字段返回原receipt，且完整业务快照不变。重复0001至0082部署必须精确命中81个checksum skip；重复0083也只允许checksum skip，最终快照保持不变。
+
+现有0083 fixture继续覆盖当前schema的原因allowlist、跨project／lineage、stale head、分叉／循环、ACL、不可变性和并发矩阵。7CF不重复这些检查，也不声称生成、更新或泄露受保护报告。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。
