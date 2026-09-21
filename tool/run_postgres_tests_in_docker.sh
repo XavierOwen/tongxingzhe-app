@@ -17,6 +17,7 @@ owner_authorization_upgrade_database='tongxingzhe_owner_authorization_upgrade'
 organization_directory_upgrade_database='tongxingzhe_organization_directory_upgrade'
 membership_leave_upgrade_database='tongxingzhe_membership_leave_upgrade'
 invitation_preview_upgrade_database='tongxingzhe_invitation_preview_upgrade'
+shareable_link_creation_upgrade_database='tongxingzhe_shareable_link_creation_upgrade'
 link_submit_upgrade_database='tongxingzhe_link_submit_upgrade'
 application_approval_upgrade_database='tongxingzhe_application_approval_upgrade'
 project_assignment_upgrade_database='tongxingzhe_project_assignment_upgrade'
@@ -28,6 +29,7 @@ owner_authorization_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/$
 organization_directory_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${organization_directory_upgrade_database}"
 membership_leave_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${membership_leave_upgrade_database}"
 invitation_preview_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${invitation_preview_upgrade_database}"
+shareable_link_creation_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${shareable_link_creation_upgrade_database}"
 link_submit_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${link_submit_upgrade_database}"
 application_approval_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${application_approval_upgrade_database}"
 project_assignment_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${project_assignment_upgrade_database}"
@@ -1691,6 +1693,431 @@ if [[ "${invitation_preview_upgrade_after_preview}" != \
   exit 1
 fi
 echo '0090→0091 旧 invitation、四字段 preview、checksum 幂等与业务数据不变：通过。'
+
+echo '验证 0091→0092 升级后旧组织可创建并预览分享链接。'
+docker exec "${container_name}" createdb \
+  -U postgres \
+  "${shareable_link_creation_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/shareable-link-creation-baseline-migrations \
+      /tmp/shareable-link-creation-upgrade-only && \
+   find /workspace/backend/database/migrations \
+     -maxdepth 1 -type f \
+     \( -name '000[1-9]_*.sql' \
+        -o -name '00[1-8][0-9]_*.sql' \
+        -o -name '009[0-1]_*.sql' \) \
+     -exec cp {} /tmp/shareable-link-creation-baseline-migrations/ \; && \
+   test \"\$(find /tmp/shareable-link-creation-baseline-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 90 && \
+   cp /workspace/backend/database/migrations/0092_*.sql \
+     /tmp/shareable-link-creation-upgrade-only/ && \
+   test \"\$(find /tmp/shareable-link-creation-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${shareable_link_creation_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/shareable-link-creation-baseline-migrations \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh \
+  >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${shareable_link_creation_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$baseline\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 90
+        OR (SELECT max(version) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM
+            '0091_organization_directed_account_invitation_preview'
+        OR to_regclass(
+          'app_private.organization_shareable_join_link_request_claims'
+        ) IS NOT NULL
+        OR to_regclass(
+          'app_private.organization_shareable_join_link_request_tombstones'
+        ) IS NOT NULL
+        OR to_regclass(
+          'app_private.organization_shareable_join_link_audit_events'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.protect_organization_shareable_join_link_claim_v1()'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.protect_organization_shareable_join_link_tombstone_v1()'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.protect_organization_shareable_join_link_audit_event_v1()'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.create_organization_shareable_join_link_v1(uuid,uuid,uuid)'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_data.create_organization_shareable_join_link_for_identity_v1(text,text,uuid,uuid)'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_data.preview_organization_shareable_join_link_for_identity_v1(text,text,uuid)'
+        ) IS NOT NULL
+      THEN
+        RAISE EXCEPTION '0091 shareable-link creation upgrade baseline drift';
+      END IF;
+    END
+    \$baseline\$;
+  " \
+  >/dev/null
+shareable_link_creation_receipt="$(
+  docker exec \
+    --workdir /workspace \
+    "${container_name}" \
+    psql \
+    -U postgres \
+    -d "${shareable_link_creation_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --file /workspace/backend/database/fixtures/upgrade/0091_organization_shareable_join_link_creation.sql
+)"
+if [[ "${shareable_link_creation_receipt}" != organization-creation:v1\|* ]] \
+  || [[ "$(printf '%s\n' "${shareable_link_creation_receipt}" \
+    | awk -F '|' 'NF == 5 { count++ } END { print count+0 }')" -ne 1 ]]; then
+  echo '0091 旧 writer 没有返回单行完整五字段 creation receipt。' >&2
+  exit 1
+fi
+shareable_link_creation_before_upgrade="$(
+  docker exec "${container_name}" pg_dump \
+    "${shareable_link_creation_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --exclude-table-data=app_private.organization_shareable_join_link_request_claims \
+    --exclude-table-data=app_private.organization_shareable_join_link_request_tombstones \
+    --exclude-table-data=app_private.organization_shareable_join_link_audit_events \
+    --restrict-key=7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c
+)"
+docker exec \
+  --env DATABASE_URL="${shareable_link_creation_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/shareable-link-creation-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+shareable_link_creation_after_upgrade="$(
+  docker exec "${container_name}" pg_dump \
+    "${shareable_link_creation_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --exclude-table-data=app_private.organization_shareable_join_link_request_claims \
+    --exclude-table-data=app_private.organization_shareable_join_link_request_tombstones \
+    --exclude-table-data=app_private.organization_shareable_join_link_audit_events \
+    --restrict-key=7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c
+)"
+if [[ "${shareable_link_creation_before_upgrade}" != \
+  "${shareable_link_creation_after_upgrade}" ]]; then
+  echo '0092 升级改变了旧组织、owner 或其他业务数据。' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${shareable_link_creation_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$empty\$
+    BEGIN
+      IF (SELECT count(*)
+          FROM app_private.organization_shareable_join_link_request_claims)
+            <> 0
+        OR (SELECT count(*)
+            FROM app_private.organization_shareable_join_link_request_tombstones)
+              <> 0
+        OR (SELECT count(*)
+            FROM app_private.organization_shareable_join_link_audit_events)
+              <> 0
+      THEN
+        RAISE EXCEPTION '0092 link tables are not empty after upgrade';
+      END IF;
+    END
+    \$empty\$;
+  " \
+  >/dev/null
+shareable_link_receipt="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${shareable_link_creation_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      SET TIME ZONE 'UTC';
+      CREATE TEMP TABLE shareable_link_receipt (
+        organization_shareable_join_link_contract_id text,
+        link_id uuid,
+        organization_workspace_id uuid,
+        issued_at_utc timestamptz,
+        expires_at_utc timestamptz
+      );
+      CREATE TEMP TABLE shareable_link_clock_bounds AS
+      SELECT clock_timestamp() AS observed_before,
+        NULL::timestamptz AS observed_after;
+      CREATE TEMP TABLE shareable_link_creation_input AS
+      SELECT organization_workspace_id
+      FROM app_private.organization_creation_request_claims
+      WHERE request_id = '00000000-0091-5000-0000-000000000901'::uuid;
+      GRANT ALL ON shareable_link_receipt TO tongxingzhe_runtime;
+      GRANT SELECT ON shareable_link_creation_input TO tongxingzhe_runtime;
+      SET ROLE tongxingzhe_runtime;
+      INSERT INTO shareable_link_receipt
+      SELECT *
+      FROM app_data.create_organization_shareable_join_link_for_identity_v1(
+        'https://synthetic-shareable-link-upgrade.example/auth/v1',
+        'owner',
+        '00000000-0092-6000-0000-000000000901',
+        (SELECT organization_workspace_id
+         FROM shareable_link_creation_input)
+      );
+      RESET ROLE;
+      UPDATE shareable_link_clock_bounds
+      SET observed_after = clock_timestamp();
+      TABLE shareable_link_receipt;
+      DO \$created\$
+      DECLARE
+        receipt shareable_link_receipt%ROWTYPE;
+        bounds shareable_link_clock_bounds%ROWTYPE;
+        creation app_private.organization_creation_request_claims%ROWTYPE;
+      BEGIN
+        SELECT * INTO STRICT receipt FROM shareable_link_receipt;
+        SELECT * INTO STRICT bounds FROM shareable_link_clock_bounds;
+        SELECT * INTO STRICT creation
+        FROM app_private.organization_creation_request_claims
+        WHERE request_id =
+          '00000000-0091-5000-0000-000000000901'::uuid;
+
+        IF (SELECT count(*) FROM shareable_link_receipt) <> 1
+          OR receipt.organization_shareable_join_link_contract_id
+            IS DISTINCT FROM 'organization-shareable-join-link:v1'
+          OR receipt.link_id IS DISTINCT FROM
+            '00000000-0092-6000-0000-000000000901'::uuid
+          OR receipt.organization_workspace_id IS DISTINCT FROM
+            creation.organization_workspace_id
+          OR receipt.issued_at_utc IS NULL
+          OR NOT isfinite(receipt.issued_at_utc)
+          OR receipt.issued_at_utc < bounds.observed_before
+          OR receipt.issued_at_utc > bounds.observed_after
+          OR receipt.expires_at_utc IS DISTINCT FROM
+            receipt.issued_at_utc + interval '168 hours'
+          OR (SELECT count(*)
+              FROM app_private.organization_shareable_join_link_request_claims
+              WHERE link_id = receipt.link_id
+                AND organization_workspace_id =
+                  receipt.organization_workspace_id
+                AND creator_app_user_id =
+                  '00000000-0091-0000-0000-000000000901'::uuid
+                AND issued_at_utc = receipt.issued_at_utc
+                AND expires_at_utc = receipt.expires_at_utc) <> 1
+          OR (SELECT count(*)
+              FROM app_private.organization_shareable_join_link_audit_events
+              WHERE organization_shareable_join_link_audit_event_id
+                  IS NOT NULL
+                AND organization_shareable_join_link_contract_id =
+                  receipt.organization_shareable_join_link_contract_id
+                AND link_id = receipt.link_id
+                AND organization_workspace_id =
+                  receipt.organization_workspace_id
+                AND event_kind = 'link_created'
+                AND issued_at_utc = receipt.issued_at_utc
+                AND expires_at_utc = receipt.expires_at_utc) <> 1
+          OR (SELECT count(*)
+              FROM app_private.organization_shareable_join_link_request_claims)
+            <> 1
+          OR (SELECT count(*)
+              FROM app_private.organization_shareable_join_link_request_tombstones)
+            <> 0
+          OR (SELECT count(*)
+              FROM app_private.organization_shareable_join_link_audit_events)
+            <> 1
+          OR (SELECT count(*) FROM app_data.organization_memberships) <> 1
+          OR (SELECT count(*)
+              FROM app_data.organization_owner_assignments) <> 1
+          OR (SELECT count(*) FROM app_data.projects) <> 0
+          OR (SELECT count(*) FROM app_data.project_memberships) <> 0
+          OR (SELECT count(*)
+              FROM app_data.management_report_capability_grants) <> 0
+          OR (SELECT count(*)
+              FROM app_data.promotion_target_assignments) <> 0
+        THEN
+          RAISE EXCEPTION '0092 shareable-link receipt drift';
+        END IF;
+      END
+      \$created\$;
+    "
+)"
+if [[ "${shareable_link_receipt}" != \
+  organization-shareable-join-link:v1\|00000000-0092-6000-0000-000000000901\|* ]] \
+  || [[ "$(printf '%s\n' "${shareable_link_receipt}" \
+    | awk -F '|' 'NF == 5 { count++ } END { print count+0 }')" -ne 1 ]]; then
+  echo '0092 runtime writer 没有返回单行完整五字段 link receipt。' >&2
+  exit 1
+fi
+shareable_link_legacy_after_create="$(
+  docker exec "${container_name}" pg_dump \
+    "${shareable_link_creation_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --exclude-table-data=app_private.organization_shareable_join_link_request_claims \
+    --exclude-table-data=app_private.organization_shareable_join_link_request_tombstones \
+    --exclude-table-data=app_private.organization_shareable_join_link_audit_events \
+    --restrict-key=7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c
+)"
+if [[ "${shareable_link_creation_after_upgrade}" != \
+  "${shareable_link_legacy_after_create}" ]]; then
+  echo '0092 link create 改变了旧组织、owner 或其他既有业务数据。' >&2
+  exit 1
+fi
+shareable_link_expires_at="$(
+  printf '%s\n' "${shareable_link_receipt}" | awk -F '|' '{ print $5 }'
+)"
+shareable_link_after_create="$(
+  docker exec "${container_name}" pg_dump \
+    "${shareable_link_creation_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c
+)"
+shareable_link_preview="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${shareable_link_creation_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      SET TIME ZONE 'UTC';
+      SET ROLE tongxingzhe_runtime;
+      SELECT *
+      FROM app_data.preview_organization_shareable_join_link_for_identity_v1(
+        'https://synthetic-shareable-link-upgrade.example/auth/v1',
+        'owner',
+        '00000000-0092-6000-0000-000000000901'
+      );
+      RESET ROLE;
+    "
+)"
+if [[ "${shareable_link_preview}" != \
+  "organization-shareable-join-link-preview:v1|00000000-0092-6000-0000-000000000901|0091 Shareable link upgrade organization|${shareable_link_expires_at}" ]] \
+  || [[ "$(printf '%s\n' "${shareable_link_preview}" \
+    | awk -F '|' 'NF == 4 { count++ } END { print count+0 }')" -ne 1 ]]; then
+  echo '0092 preview 没有返回原组织名称与 link expiry 的单行四字段结果。' >&2
+  exit 1
+fi
+shareable_link_after_preview="$(
+  docker exec "${container_name}" pg_dump \
+    "${shareable_link_creation_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c
+)"
+if [[ "${shareable_link_after_create}" != \
+  "${shareable_link_after_preview}" ]]; then
+  echo '0092 preview 改变了分享链接或其他业务数据。' >&2
+  exit 1
+fi
+shareable_link_replay="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${shareable_link_creation_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      SET TIME ZONE 'UTC';
+      CREATE TEMP TABLE shareable_link_replay_input AS
+      SELECT organization_workspace_id
+      FROM app_private.organization_creation_request_claims
+      WHERE request_id =
+        '00000000-0091-5000-0000-000000000901'::uuid;
+      GRANT SELECT ON shareable_link_replay_input TO tongxingzhe_runtime;
+      SET ROLE tongxingzhe_runtime;
+      SELECT *
+      FROM app_data.create_organization_shareable_join_link_for_identity_v1(
+        'https://synthetic-shareable-link-upgrade.example/auth/v1',
+        'owner',
+        '00000000-0092-6000-0000-000000000901',
+        (SELECT organization_workspace_id
+         FROM shareable_link_replay_input)
+      );
+      RESET ROLE;
+    "
+)"
+if [[ "${shareable_link_receipt}" != "${shareable_link_replay}" ]]; then
+  echo '0092 exact replay 没有返回原五字段 link receipt。' >&2
+  exit 1
+fi
+shareable_link_after_exact_replay="$(
+  docker exec "${container_name}" pg_dump \
+    "${shareable_link_creation_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c
+)"
+if [[ "${shareable_link_after_preview}" != \
+  "${shareable_link_after_exact_replay}" ]]; then
+  echo '0092 exact replay 改变了分享链接或其他业务数据。' >&2
+  exit 1
+fi
+shareable_link_migration_replay="$(
+  docker exec \
+    --env DATABASE_URL="${shareable_link_creation_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/shareable-link-creation-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${shareable_link_migration_replay}" != \
+  *'已验证 0092_organization_shareable_join_link（无需重复执行）'* ]] \
+  || [[ "${shareable_link_migration_replay}" == *'已执行 '* ]]; then
+  echo '0092 重复 migration 没有命中 checksum skip。' >&2
+  printf '%s\n' "${shareable_link_migration_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${shareable_link_migration_replay}"
+shareable_link_after_migration_replay="$(
+  docker exec "${container_name}" pg_dump \
+    "${shareable_link_creation_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c
+)"
+if [[ "${shareable_link_after_exact_replay}" != \
+  "${shareable_link_after_migration_replay}" ]]; then
+  echo '重复 0092 migration 改变分享链接业务快照。' >&2
+  exit 1
+fi
+echo '0091→0092 旧组织、五字段 create、四字段 preview、exact replay 与 checksum 幂等：通过。'
 
 echo '验证 0092→0093 保留旧 link，并可通过新 submit writer 提交申请。'
 docker exec "${container_name}" createdb \
