@@ -13,11 +13,13 @@ test_database='tongxingzhe_test'
 restore_database='tongxingzhe_restore'
 upgrade_database='tongxingzhe_region_upgrade'
 ownerless_upgrade_database='tongxingzhe_ownerless_upgrade'
+link_submit_upgrade_database='tongxingzhe_link_submit_upgrade'
 application_approval_upgrade_database='tongxingzhe_application_approval_upgrade'
 directory_upgrade_database='tongxingzhe_application_directory_upgrade'
 database_url="postgresql://postgres:postgres@127.0.0.1:5432/${test_database}"
 upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${upgrade_database}"
 ownerless_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${ownerless_upgrade_database}"
+link_submit_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${link_submit_upgrade_database}"
 application_approval_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${application_approval_upgrade_database}"
 directory_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${directory_upgrade_database}"
 container_started=0
@@ -669,6 +671,441 @@ docker exec "${container_name}" psql \
   " \
   >/dev/null
 echo '0085 无 owner 升级失败且事务完整回滚：通过。'
+
+echo '验证 0092→0093 保留旧 link，并可通过新 submit writer 提交申请。'
+docker exec "${container_name}" createdb \
+  -U postgres \
+  "${link_submit_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/link-submit-upgrade-baseline-migrations \
+      /tmp/link-submit-upgrade-only && \
+   find /workspace/backend/database/migrations \
+     -maxdepth 1 -type f \
+     \( -name '000[1-9]_*.sql' \
+        -o -name '00[1-8][0-9]_*.sql' \
+        -o -name '009[0-2]_*.sql' \) \
+     -exec cp {} /tmp/link-submit-upgrade-baseline-migrations/ \; && \
+   test \"\$(find /tmp/link-submit-upgrade-baseline-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 91 && \
+   cp /workspace/backend/database/migrations/0093_*.sql \
+     /tmp/link-submit-upgrade-only/ && \
+   test \"\$(find /tmp/link-submit-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${link_submit_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/link-submit-upgrade-baseline-migrations \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh \
+  >/dev/null
+link_submit_upgrade_link_receipt="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${link_submit_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --file /workspace/backend/database/fixtures/upgrade/0092_organization_shareable_join_link_live.sql
+)"
+if [[ "${link_submit_upgrade_link_receipt}" != \
+  organization-shareable-join-link:v1\|00000000-0092-6000-0000-000000000701\|00000000-0092-2000-0000-000000000701\|* ]] \
+  || [[ "$(printf '%s\n' "${link_submit_upgrade_link_receipt}" \
+    | awk -F '|' 'NF == 5 { count++ } END { print count+0 }')" -ne 1 ]]; then
+  echo '0092 runtime writer 没有返回单行完整五字段 link receipt。' >&2
+  exit 1
+fi
+link_submit_upgrade_link_state_before="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${link_submit_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      SELECT jsonb_build_object(
+        'claim', (
+          SELECT jsonb_build_object(
+            'link_id', link_id,
+            'organization_workspace_id', organization_workspace_id,
+            'creator_app_user_id', creator_app_user_id,
+            'issued_at_utc', issued_at_utc,
+            'expires_at_utc', expires_at_utc
+          )
+          FROM app_private.organization_shareable_join_link_request_claims
+          WHERE link_id = '00000000-0092-6000-0000-000000000701'
+        ),
+        'audit', (
+          SELECT jsonb_agg(to_jsonb(audit_row))
+          FROM app_private.organization_shareable_join_link_audit_events AS audit_row
+          WHERE link_id = '00000000-0092-6000-0000-000000000701'
+        )
+      )
+      WHERE (SELECT count(*)
+             FROM app_private.organization_shareable_join_link_request_claims
+             WHERE link_id = '00000000-0092-6000-0000-000000000701') = 1
+        AND (SELECT count(*)
+             FROM app_private.organization_shareable_join_link_audit_events
+             WHERE link_id = '00000000-0092-6000-0000-000000000701'
+               AND event_kind = 'link_created') = 1;
+    "
+)"
+if [[ -z "${link_submit_upgrade_link_state_before}" ]]; then
+  echo '0092 live link 的 claim 或唯一 link_created audit 缺失。' >&2
+  exit 1
+fi
+link_submit_upgrade_relationship_counts_before="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${link_submit_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      SELECT concat_ws('|',
+        (SELECT count(*) FROM app_data.organization_memberships),
+        (SELECT count(*) FROM app_data.organization_owner_assignments),
+        (SELECT count(*) FROM app_data.project_memberships),
+        (SELECT count(*) FROM app_data.management_report_capability_grants)
+      );
+    "
+)"
+if [[ "${link_submit_upgrade_relationship_counts_before}" != '1|1|0|0' ]]; then
+  echo '0092 link-submit 基线关系计数漂移。' >&2
+  exit 1
+fi
+link_submit_upgrade_before_migration="$(
+  docker exec "${container_name}" pg_dump \
+    "${link_submit_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --exclude-table=app_private.organization_shareable_join_application_request_claims \
+    --exclude-table=app_private.organization_shareable_join_application_request_tombstones \
+    --exclude-table=app_private.organization_shareable_join_application_audit_events \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a
+)"
+docker exec \
+  --env DATABASE_URL="${link_submit_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/link-submit-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+link_submit_upgrade_after_migration="$(
+  docker exec "${container_name}" pg_dump \
+    "${link_submit_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --exclude-table=app_private.organization_shareable_join_application_request_claims \
+    --exclude-table=app_private.organization_shareable_join_application_request_tombstones \
+    --exclude-table=app_private.organization_shareable_join_application_audit_events \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a
+)"
+if [[ "${link_submit_upgrade_before_migration}" != \
+  "${link_submit_upgrade_after_migration}" ]]; then
+  echo '0093 升级改变了 0092 已有业务表。' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${link_submit_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$empty\$
+    BEGIN
+      IF (SELECT count(*)
+          FROM app_private.organization_shareable_join_application_request_claims) <> 0
+        OR (SELECT count(*)
+            FROM app_private.organization_shareable_join_application_request_tombstones) <> 0
+        OR (SELECT count(*)
+            FROM app_private.organization_shareable_join_application_audit_events) <> 0
+      THEN
+        RAISE EXCEPTION '0093 upgrade did not create empty application tables';
+      END IF;
+    END
+    \$empty\$;
+  " \
+  >/dev/null
+link_submit_upgrade_link_state_after="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${link_submit_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      SELECT jsonb_build_object(
+        'claim', (
+          SELECT jsonb_build_object(
+            'link_id', link_id,
+            'organization_workspace_id', organization_workspace_id,
+            'creator_app_user_id', creator_app_user_id,
+            'issued_at_utc', issued_at_utc,
+            'expires_at_utc', expires_at_utc
+          )
+          FROM app_private.organization_shareable_join_link_request_claims
+          WHERE link_id = '00000000-0092-6000-0000-000000000701'
+        ),
+        'audit', (
+          SELECT jsonb_agg(to_jsonb(audit_row))
+          FROM app_private.organization_shareable_join_link_audit_events AS audit_row
+          WHERE link_id = '00000000-0092-6000-0000-000000000701'
+        )
+      );
+    "
+)"
+if [[ "${link_submit_upgrade_link_state_before}" != \
+  "${link_submit_upgrade_link_state_after}" ]]; then
+  echo '0093 升级改变了旧 link claim 或 link_created audit 字段。' >&2
+  exit 1
+fi
+link_submit_upgrade_replayed_link_receipt="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${link_submit_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      SET ROLE tongxingzhe_runtime;
+      SELECT *
+      FROM app_data.create_organization_shareable_join_link_for_identity_v1(
+        'https://synthetic-link-submit-upgrade.example/auth/v1',
+        'owner',
+        '00000000-0092-6000-0000-000000000701',
+        '00000000-0092-2000-0000-000000000701'
+      );
+      RESET ROLE;
+    "
+)"
+if [[ "${link_submit_upgrade_link_receipt}" != \
+  "${link_submit_upgrade_replayed_link_receipt}" ]]; then
+  echo '0093 升级后旧 link replay 改变原五字段 receipt。' >&2
+  exit 1
+fi
+link_submit_upgrade_application_receipt="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${link_submit_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      CREATE TEMP TABLE link_submit_upgrade_application_receipt (
+        organization_shareable_join_application_contract_id text,
+        application_id uuid,
+        link_id uuid,
+        organization_workspace_id uuid,
+        submitted_at_utc timestamptz,
+        expires_at_utc timestamptz
+      );
+      CREATE TEMP TABLE link_submit_upgrade_clock_bounds AS
+      SELECT clock_timestamp() AS observed_before,
+        NULL::timestamptz AS observed_after;
+      GRANT ALL ON link_submit_upgrade_application_receipt
+        TO tongxingzhe_runtime;
+      SET ROLE tongxingzhe_runtime;
+      INSERT INTO link_submit_upgrade_application_receipt
+      SELECT *
+      FROM app_data.submit_organization_shareable_join_application_for_identity_v1(
+        'https://synthetic-link-submit-upgrade.example/auth/v1',
+        'applicant',
+        '00000000-0092-5000-0000-000000000702',
+        '00000000-0092-6000-0000-000000000701'
+      );
+      RESET ROLE;
+      UPDATE link_submit_upgrade_clock_bounds
+      SET observed_after = clock_timestamp();
+      TABLE link_submit_upgrade_application_receipt;
+      DO \$submitted\$
+      DECLARE
+        receipt link_submit_upgrade_application_receipt%ROWTYPE;
+        claim
+          app_private.organization_shareable_join_application_request_claims%ROWTYPE;
+        bounds link_submit_upgrade_clock_bounds%ROWTYPE;
+      BEGIN
+        SELECT * INTO STRICT receipt
+        FROM link_submit_upgrade_application_receipt;
+        SELECT * INTO STRICT claim
+        FROM app_private.organization_shareable_join_application_request_claims
+        WHERE application_id =
+          '00000000-0092-5000-0000-000000000702'::uuid;
+        SELECT * INTO STRICT bounds FROM link_submit_upgrade_clock_bounds;
+
+        IF receipt.organization_shareable_join_application_contract_id
+              IS DISTINCT FROM 'organization-shareable-join-application:v1'
+          OR receipt.application_id IS DISTINCT FROM
+            '00000000-0092-5000-0000-000000000702'::uuid
+          OR receipt.link_id IS DISTINCT FROM
+            '00000000-0092-6000-0000-000000000701'::uuid
+          OR receipt.organization_workspace_id IS DISTINCT FROM
+            '00000000-0092-2000-0000-000000000701'::uuid
+          OR receipt.submitted_at_utc IS NULL
+          OR receipt.expires_at_utc IS NULL
+          OR receipt.submitted_at_utc < bounds.observed_before
+          OR receipt.submitted_at_utc > bounds.observed_after
+          OR receipt.expires_at_utc IS DISTINCT FROM
+            receipt.submitted_at_utc + interval '168 hours'
+          OR claim.link_id IS DISTINCT FROM receipt.link_id
+          OR claim.organization_workspace_id IS DISTINCT FROM
+            receipt.organization_workspace_id
+          OR claim.applicant_app_user_id IS DISTINCT FROM
+            '00000000-0092-0000-0000-000000000702'::uuid
+          OR claim.submitted_at_utc IS DISTINCT FROM receipt.submitted_at_utc
+          OR claim.expires_at_utc IS DISTINCT FROM receipt.expires_at_utc
+          OR claim.approved_at_utc IS NOT NULL
+          OR claim.approved_organization_membership_id IS NOT NULL
+          OR (SELECT count(*)
+              FROM app_private.organization_shareable_join_application_request_claims) <> 1
+          OR (SELECT count(*)
+              FROM app_private.organization_shareable_join_application_request_tombstones) <> 0
+          OR (SELECT count(*)
+              FROM app_private.organization_shareable_join_application_audit_events) <> 1
+          OR (SELECT count(*)
+              FROM app_private.organization_shareable_join_application_audit_events
+              WHERE organization_shareable_join_application_contract_id =
+                  'organization-shareable-join-application:v1'
+                AND application_id = receipt.application_id
+                AND link_id = receipt.link_id
+                AND organization_workspace_id =
+                  receipt.organization_workspace_id
+                AND event_kind = 'application_submitted'
+                AND organization_membership_id IS NULL
+                AND occurred_at_utc = receipt.submitted_at_utc) <> 1
+        THEN
+          RAISE EXCEPTION '0092→0093 application submit drift';
+        END IF;
+      END
+      \$submitted\$;
+    "
+)"
+if [[ "${link_submit_upgrade_application_receipt}" != \
+  organization-shareable-join-application:v1\|00000000-0092-5000-0000-000000000702\|00000000-0092-6000-0000-000000000701\|00000000-0092-2000-0000-000000000701\|* ]] \
+  || [[ "$(printf '%s\n' "${link_submit_upgrade_application_receipt}" \
+    | awk -F '|' 'NF == 6 { count++ } END { print count+0 }')" -ne 1 ]]; then
+  echo '0093 runtime bridge 没有返回单行完整六字段 receipt。' >&2
+  exit 1
+fi
+link_submit_upgrade_relationship_counts_after="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${link_submit_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      SELECT concat_ws('|',
+        (SELECT count(*) FROM app_data.organization_memberships),
+        (SELECT count(*) FROM app_data.organization_owner_assignments),
+        (SELECT count(*) FROM app_data.project_memberships),
+        (SELECT count(*) FROM app_data.management_report_capability_grants)
+      );
+    "
+)"
+if [[ "${link_submit_upgrade_relationship_counts_before}" != \
+  "${link_submit_upgrade_relationship_counts_after}" ]]; then
+  echo '0093 submit 改变了 organization/owner/project membership 或 capability 数量。' >&2
+  exit 1
+fi
+link_submit_upgrade_after_first_write="$(
+  docker exec "${container_name}" pg_dump \
+    "${link_submit_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a
+)"
+link_submit_upgrade_replayed_application_receipt="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${link_submit_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      SET ROLE tongxingzhe_runtime;
+      SELECT *
+      FROM app_data.submit_organization_shareable_join_application_for_identity_v1(
+        'https://synthetic-link-submit-upgrade.example/auth/v1',
+        'applicant',
+        '00000000-0092-5000-0000-000000000702',
+        '00000000-0092-6000-0000-000000000701'
+      );
+      RESET ROLE;
+    "
+)"
+if [[ "${link_submit_upgrade_application_receipt}" != \
+  "${link_submit_upgrade_replayed_application_receipt}" ]]; then
+  echo '0093 exact replay 改变原六字段 receipt。' >&2
+  exit 1
+fi
+link_submit_upgrade_after_exact_replay="$(
+  docker exec "${container_name}" pg_dump \
+    "${link_submit_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a
+)"
+if [[ "${link_submit_upgrade_after_first_write}" != \
+  "${link_submit_upgrade_after_exact_replay}" ]]; then
+  echo '0093 exact replay 增加 claim 或 audit。' >&2
+  exit 1
+fi
+link_submit_upgrade_migration_replay="$(
+  docker exec \
+    --env DATABASE_URL="${link_submit_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/link-submit-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${link_submit_upgrade_migration_replay}" != \
+  *'已验证 0093_organization_shareable_join_application_submit（无需重复执行）'* ]] \
+  || [[ "${link_submit_upgrade_migration_replay}" == *'已执行 '* ]]; then
+  echo '0093 重复 migration 没有命中 checksum skip。' >&2
+  printf '%s\n' "${link_submit_upgrade_migration_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${link_submit_upgrade_migration_replay}"
+link_submit_upgrade_after_migration_replay="$(
+  docker exec "${container_name}" pg_dump \
+    "${link_submit_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a
+)"
+if [[ "${link_submit_upgrade_after_exact_replay}" != \
+  "${link_submit_upgrade_after_migration_replay}" ]]; then
+  echo '重复 0093 migration 改变申请提交后的业务快照。' >&2
+  exit 1
+fi
+echo '0092→0093 旧 link、submit receipt、关系计数、exact replay、checksum 幂等与业务数据不变：通过。'
 
 echo '验证 0093→0094 升级后可批准旧 writer 已提交的待审申请。'
 docker exec "${container_name}" createdb \

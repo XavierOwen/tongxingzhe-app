@@ -2122,6 +2122,14 @@ runtime role 验证未配置、启用、幂等重放、冲突、停用和回滚�
 
 同一申请的exact replay必须逐字段返回原receipt，且不增加membership或audit。第二次0094部署验证checksum并跳过，已批准业务快照仍不变。直接运行完整runner，在空库重建、既有检查／并发、checksum漂移拒绝和独立恢复一起通过后才交付。该合成升级证明不等于生产升级或生产Auth。
 
+#### 6.2.5 真实旧分享链接提交升级（Issue #439，MANUAL-105）
+
+7BW在独立库只应用0001至0092，并确认0093 application表和submit bridge尚不存在。旧runtime writer提交一个live分享链接，保留五字段receipt、claim及唯一created audit；随后只应用0093。升级必须保留原link lineage，新增的application表在提交前保持为空。
+
+active non-member applicant通过旧link提交固定application UUID。六字段receipt中的application和link UUID必须各自保留，organization沿用原link。application使用数据库提交时间，并建立独立的submitted加168小时期限；approval字段保持为空。唯一submitted audit保留contract、application、link、workspace和提交时间，不引用membership。
+
+提交与exact replay不能新增organization membership、owner assignment、project membership或capability grant。同一application和link的exact replay逐字段返回原receipt，且不增加claim或audit。第二次0093部署验证checksum并跳过，业务快照仍不变。完整runner还须通过空库重建、既有检查／并发、checksum漂移拒绝和独立恢复。该合成升级证明不等于生产升级或生产Auth。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。
