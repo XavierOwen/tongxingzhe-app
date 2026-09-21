@@ -14,6 +14,7 @@ restore_database='tongxingzhe_restore'
 upgrade_database='tongxingzhe_region_upgrade'
 ownerless_upgrade_database='tongxingzhe_ownerless_upgrade'
 consent_replacement_upgrade_database='tongxingzhe_consent_replacement_upgrade'
+current_city_replacement_upgrade_database='tongxingzhe_current_city_replacement_upgrade'
 interest_replacement_upgrade_database='tongxingzhe_interest_replacement_upgrade'
 owner_transfer_upgrade_database='tongxingzhe_owner_transfer_upgrade'
 directed_invitation_upgrade_database='tongxingzhe_directed_invitation_upgrade'
@@ -30,6 +31,7 @@ database_url="postgresql://postgres:postgres@127.0.0.1:5432/${test_database}"
 upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${upgrade_database}"
 ownerless_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${ownerless_upgrade_database}"
 consent_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${consent_replacement_upgrade_database}"
+current_city_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${current_city_replacement_upgrade_database}"
 interest_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${interest_replacement_upgrade_database}"
 owner_transfer_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${owner_transfer_upgrade_database}"
 directed_invitation_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${directed_invitation_upgrade_database}"
@@ -533,6 +535,522 @@ docker exec "${container_name}" psql \
   >/dev/null
 echo '0038→0039 历史 resolved provenance 回填：通过。'
 echo '已有区域树升级为冻结发布版本：通过。'
+
+echo '验证 0079→0080 升级保留旧批准 current-city 快照，并可登记替代。'
+docker exec "${container_name}" createdb \
+  -U postgres \
+  "${current_city_replacement_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/current-city-replacement-baseline-migrations \
+      /tmp/current-city-replacement-upgrade-only && \
+   find /workspace/backend/database/migrations \
+     -maxdepth 1 -type f \
+     \( -name '000[1-9]_*.sql' \
+        -o -name '00[1-7][0-9]_*.sql' \) \
+     -exec cp {} /tmp/current-city-replacement-baseline-migrations/ \; && \
+   test \"\$(find /tmp/current-city-replacement-baseline-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 78 && \
+   cp /workspace/backend/database/migrations/0080_*.sql \
+     /tmp/current-city-replacement-upgrade-only/ && \
+   test \"\$(find /tmp/current-city-replacement-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${current_city_replacement_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/current-city-replacement-baseline-migrations \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh \
+  >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${current_city_replacement_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$baseline\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 78
+        OR (SELECT max(version) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM
+            '0079_runtime_authorized_management_follow_up_consent_ratio_snapshot_directory'
+        OR to_regclass(
+          'app_private.management_current_city_report_snapshot_replacements'
+        ) IS NOT NULL
+        OR EXISTS (
+          SELECT 1
+          FROM pg_catalog.pg_policies
+          WHERE schemaname = 'app_private'
+            AND tablename = 'management_report_snapshots'
+            AND policyname =
+              'management_current_city_snapshot_replacement_read_scope'
+        )
+        OR to_regprocedure(
+          'app_private.current_city_snapshot_replacement_provenance_v1(uuid,uuid)'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.management_current_city_snapshot_has_trusted_provenance_v1(uuid,uuid)'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.validate_management_current_city_snapshot_replacement_v1()'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.declare_management_current_city_snapshot_replacement_v1(uuid,uuid,uuid,uuid,uuid,text)'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.read_management_current_city_report_snapshot_lifecycle_v1(uuid,uuid)'
+        ) IS NOT NULL
+        OR EXISTS (
+          SELECT 1
+          FROM pg_catalog.pg_constraint AS constraint_row
+          WHERE constraint_row.conrelid =
+            'app_private.management_report_release_request_claims'::regclass
+            AND constraint_row.contype = 'c'
+            AND pg_catalog.pg_get_constraintdef(constraint_row.oid) LIKE
+              '%current_city_management_report_snapshot_replacement%'
+        )
+      THEN
+        RAISE EXCEPTION '0079 current-city replacement upgrade baseline drift';
+      END IF;
+    END
+    \$baseline\$;
+  " \
+  >/dev/null
+current_city_replacement_release_receipts="$(
+  docker exec \
+    --workdir /workspace \
+    "${container_name}" \
+    psql \
+    -U postgres \
+    -d "${current_city_replacement_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --file /workspace/backend/database/fixtures/upgrade/0079_management_current_city_report_snapshot_replacement_live.sql
+)"
+if [[ "$(printf '%s\n' "${current_city_replacement_release_receipts}" \
+  | awk '/^\{.*\}$/ { count++ } END { print count+0 }')" -ne 2 ]] \
+  || [[ "${current_city_replacement_release_receipts}" != \
+    *'"result_status": "approved_baseline"'* ]] \
+  || [[ "${current_city_replacement_release_receipts}" != \
+    *'"result_status": "approved"'* ]]; then
+  echo '0079 旧 writer 没有返回两份 approved value-free release receipts。' >&2
+  printf '%s\n' "${current_city_replacement_release_receipts}" >&2
+  exit 1
+fi
+current_city_replacement_before_upgrade="$(
+  docker exec "${container_name}" pg_dump \
+    "${current_city_replacement_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --exclude-table-data=app_private.management_current_city_report_snapshot_replacements \
+    --restrict-key=7979797979797979797979797979797979797979797979797979797979797979
+)"
+docker exec \
+  --env DATABASE_URL="${current_city_replacement_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/current-city-replacement-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+current_city_replacement_after_upgrade="$(
+  docker exec "${container_name}" pg_dump \
+    "${current_city_replacement_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --exclude-table-data=app_private.management_current_city_report_snapshot_replacements \
+    --restrict-key=7979797979797979797979797979797979797979797979797979797979797979
+)"
+if [[ "${current_city_replacement_before_upgrade}" != \
+  "${current_city_replacement_after_upgrade}" ]]; then
+  echo '0080 升级改写了旧 current-city 发布历史或其他业务数据。' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${current_city_replacement_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$empty\$
+    BEGIN
+      IF (SELECT count(*)
+          FROM app_private.management_current_city_report_snapshot_replacements) <> 0
+      THEN
+        RAISE EXCEPTION '0080 replacement table is not empty after upgrade';
+      END IF;
+    END
+    \$empty\$;
+  " \
+  >/dev/null
+current_city_replacement_first_write="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${current_city_replacement_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      SET TIME ZONE 'UTC';
+      CREATE TEMP TABLE current_city_replacement_input AS
+      SELECT
+        (SELECT released_snapshot_id
+         FROM app_private.management_current_city_report_release_attempts
+         WHERE release_request_id =
+           '79d90000-0000-4000-8000-000000000001'::uuid)
+          AS first_snapshot_id,
+        (SELECT released_snapshot_id
+         FROM app_private.management_current_city_report_release_attempts
+         WHERE release_request_id =
+           '79d90000-0000-4000-8000-000000000002'::uuid)
+          AS second_snapshot_id;
+      CREATE TEMP TABLE current_city_replacement_history_bytes AS
+      SELECT 'snapshot'::text AS entity_kind,
+        snapshot_id AS entity_id,
+        to_jsonb(snapshot.*) AS entity_bytes
+      FROM app_private.management_report_snapshots AS snapshot
+      WHERE snapshot_id IN (
+        SELECT first_snapshot_id FROM current_city_replacement_input
+        UNION ALL
+        SELECT second_snapshot_id FROM current_city_replacement_input
+      )
+      UNION ALL
+      SELECT 'attempt', release_request_id, to_jsonb(attempt.*)
+      FROM app_private.management_current_city_report_release_attempts
+        AS attempt
+      WHERE release_request_id IN (
+        '79d90000-0000-4000-8000-000000000001',
+        '79d90000-0000-4000-8000-000000000002'
+      )
+      UNION ALL
+      SELECT 'claim', release_request_id, to_jsonb(claim.*)
+      FROM app_private.management_report_release_request_claims AS claim
+      WHERE release_request_id IN (
+        '79d90000-0000-4000-8000-000000000001',
+        '79d90000-0000-4000-8000-000000000002'
+      );
+      CREATE TEMP TABLE current_city_replacement_receipt (receipt jsonb NOT NULL);
+      GRANT SELECT ON current_city_replacement_input
+        TO tongxingzhe_management_report_snapshot_lifecycle_writer;
+      GRANT ALL ON current_city_replacement_receipt
+        TO tongxingzhe_management_report_snapshot_lifecycle_writer;
+    " \
+    --command="
+      SET ROLE tongxingzhe_management_report_snapshot_lifecycle_writer;
+      INSERT INTO current_city_replacement_receipt
+      SELECT app_private.declare_management_current_city_snapshot_replacement_v1(
+        '79da0000-0000-4000-8000-000000000001',
+        '79d10000-0000-4000-8000-000000000001',
+        '79d30000-0000-4000-8000-000000000001',
+        first_snapshot_id,
+        second_snapshot_id,
+        'late_accepted_data'
+      )
+      FROM current_city_replacement_input;
+      RESET ROLE;
+      DO \$written\$
+      DECLARE
+        receipt jsonb := (
+          SELECT current_city_replacement_receipt.receipt
+          FROM current_city_replacement_receipt
+        );
+        replacement_row
+          app_private.management_current_city_report_snapshot_replacements%ROWTYPE;
+        first_lifecycle jsonb;
+        second_lifecycle jsonb;
+      BEGIN
+        SELECT * INTO STRICT replacement_row
+        FROM app_private.management_current_city_report_snapshot_replacements
+        WHERE replacement_request_id =
+          '79da0000-0000-4000-8000-000000000001'::uuid;
+        first_lifecycle :=
+          app_private.read_management_current_city_report_snapshot_lifecycle_v1(
+            '79d30000-0000-4000-8000-000000000001',
+            replacement_row.superseded_snapshot_id
+          );
+        second_lifecycle :=
+          app_private.read_management_current_city_report_snapshot_lifecycle_v1(
+            '79d30000-0000-4000-8000-000000000001',
+            replacement_row.replacement_snapshot_id
+          );
+
+        IF (SELECT count(*) FROM current_city_replacement_receipt) <> 1
+          OR receipt - ARRAY[
+            'replacement_contract_id', 'replacement_request_id',
+            'project_id', 'release_lineage_id', 'report_id', 'report_version',
+            'superseded_snapshot_id', 'replacement_snapshot_id',
+            'replacement_reason_code', 'declared_at_utc', 'result_status'
+          ] <> '{}'::jsonb
+          OR NOT receipt ?& ARRAY[
+            'replacement_contract_id', 'replacement_request_id',
+            'project_id', 'release_lineage_id', 'report_id', 'report_version',
+            'superseded_snapshot_id', 'replacement_snapshot_id',
+            'replacement_reason_code', 'declared_at_utc', 'result_status'
+          ]
+          OR receipt->>'replacement_contract_id' IS DISTINCT FROM
+            'current_city_management_report_snapshot_replacement_v1'
+          OR receipt->>'replacement_request_id' IS DISTINCT FROM
+            '79da0000-0000-4000-8000-000000000001'
+          OR receipt->>'project_id' IS DISTINCT FROM
+            '79d30000-0000-4000-8000-000000000001'
+          OR receipt->>'release_lineage_id' IS DISTINCT FROM
+            'management-region-report:contact_sessions_by_current_city_two_periods'
+          OR receipt->>'report_id' IS DISTINCT FROM
+            'contact_sessions_by_current_city_two_periods'
+          OR receipt->>'report_version' IS DISTINCT FROM '1'
+          OR receipt->>'replacement_reason_code' IS DISTINCT FROM
+            'late_accepted_data'
+          OR receipt->>'result_status' IS DISTINCT FROM 'completed'
+          OR receipt->>'superseded_snapshot_id' IS DISTINCT FROM (
+            SELECT first_snapshot_id::text FROM current_city_replacement_input
+          )
+          OR receipt->>'replacement_snapshot_id' IS DISTINCT FROM (
+            SELECT second_snapshot_id::text FROM current_city_replacement_input
+          )
+          OR receipt::text ~*
+            '\"(protected_report|period_results|cells|value_count|contact_id|contributor|phone|email|raw_answer)\"[[:space:]]*:'
+          OR replacement_row.requested_by_app_user_id IS DISTINCT FROM
+            '79d10000-0000-4000-8000-000000000001'::uuid
+          OR replacement_row.organization_workspace_id IS DISTINCT FROM
+            '79d20000-0000-4000-8000-000000000001'::uuid
+          OR replacement_row.organization_membership_id IS DISTINCT FROM
+            '79d40000-0000-4000-8000-000000000001'::uuid
+          OR replacement_row.project_membership_id IS DISTINCT FROM
+            '79d50000-0000-4000-8000-000000000001'::uuid
+          OR replacement_row.capability_grant_id IS DISTINCT FROM
+            '79d60000-0000-4000-8000-000000000001'::uuid
+          OR replacement_row.capability_id IS DISTINCT FROM
+            'release_management_reports'
+          OR replacement_row.project_id::text IS DISTINCT FROM
+            receipt->>'project_id'
+          OR replacement_row.release_lineage_id IS DISTINCT FROM
+            receipt->>'release_lineage_id'
+          OR replacement_row.report_id IS DISTINCT FROM receipt->>'report_id'
+          OR replacement_row.report_version::text IS DISTINCT FROM
+            receipt->>'report_version'
+          OR replacement_row.superseded_snapshot_id::text IS DISTINCT FROM
+            receipt->>'superseded_snapshot_id'
+          OR replacement_row.replacement_snapshot_id::text IS DISTINCT FROM
+            receipt->>'replacement_snapshot_id'
+          OR replacement_row.replacement_reason_code IS DISTINCT FROM
+            receipt->>'replacement_reason_code'
+          OR to_char(
+            replacement_row.declared_at_utc AT TIME ZONE 'UTC',
+            'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'
+          ) IS DISTINCT FROM receipt->>'declared_at_utc'
+          OR replacement_row.authorization_reference_at_utc IS DISTINCT FROM
+            replacement_row.declared_at_utc
+          OR NOT isfinite(replacement_row.declared_at_utc)
+          OR replacement_row.result_document IS DISTINCT FROM receipt
+          OR (SELECT count(*)
+              FROM app_private.management_report_release_request_claims
+              WHERE release_request_id =
+                  '79da0000-0000-4000-8000-000000000001'::uuid
+                AND release_family_id =
+                  'current_city_management_report_snapshot_replacement') <> 1
+          OR (SELECT count(*)
+              FROM app_private.management_current_city_report_snapshot_replacements) <> 1
+          OR first_lifecycle - ARRAY[
+            'lifecycle_contract_id', 'project_id', 'snapshot_id',
+            'lifecycle_status', 'replacement_snapshot_id'
+          ] <> '{}'::jsonb
+          OR second_lifecycle - ARRAY[
+            'lifecycle_contract_id', 'project_id', 'snapshot_id',
+            'lifecycle_status', 'replacement_snapshot_id'
+          ] <> '{}'::jsonb
+          OR NOT first_lifecycle ?& ARRAY[
+            'lifecycle_contract_id', 'project_id', 'snapshot_id',
+            'lifecycle_status', 'replacement_snapshot_id'
+          ]
+          OR NOT second_lifecycle ?& ARRAY[
+            'lifecycle_contract_id', 'project_id', 'snapshot_id',
+            'lifecycle_status', 'replacement_snapshot_id'
+          ]
+          OR first_lifecycle->>'lifecycle_contract_id' IS DISTINCT FROM
+            'current_city_management_report_snapshot_lifecycle_v1'
+          OR second_lifecycle->>'lifecycle_contract_id' IS DISTINCT FROM
+            first_lifecycle->>'lifecycle_contract_id'
+          OR first_lifecycle->>'project_id' IS DISTINCT FROM
+            '79d30000-0000-4000-8000-000000000001'
+          OR second_lifecycle->>'project_id' IS DISTINCT FROM
+            first_lifecycle->>'project_id'
+          OR first_lifecycle->>'snapshot_id' IS DISTINCT FROM
+            replacement_row.superseded_snapshot_id::text
+          OR second_lifecycle->>'snapshot_id' IS DISTINCT FROM
+            replacement_row.replacement_snapshot_id::text
+          OR first_lifecycle->>'lifecycle_status' IS DISTINCT FROM 'superseded'
+          OR first_lifecycle->>'replacement_snapshot_id' IS DISTINCT FROM
+            replacement_row.replacement_snapshot_id::text
+          OR second_lifecycle->>'lifecycle_status' IS DISTINCT FROM 'active'
+          OR second_lifecycle->'replacement_snapshot_id' <> 'null'::jsonb
+          OR (first_lifecycle::text || second_lifecycle::text) ~*
+            '\"(protected_report|period_results|cells|value_count|contact_id|contributor|phone|email|raw_answer)\"[[:space:]]*:'
+          OR (SELECT count(*) FROM app_private.management_report_snapshots) <> 2
+          OR (SELECT count(*)
+              FROM app_private.management_current_city_report_release_attempts) <> 2
+          OR (SELECT count(*) FROM current_city_replacement_history_bytes) <> 6
+          OR EXISTS (
+            SELECT 1
+            FROM current_city_replacement_history_bytes AS saved
+            LEFT JOIN LATERAL (
+              SELECT to_jsonb(snapshot.*) AS current_bytes
+              FROM app_private.management_report_snapshots AS snapshot
+              WHERE saved.entity_kind = 'snapshot'
+                AND snapshot.snapshot_id = saved.entity_id
+              UNION ALL
+              SELECT to_jsonb(attempt.*)
+              FROM app_private.management_current_city_report_release_attempts
+                AS attempt
+              WHERE saved.entity_kind = 'attempt'
+                AND attempt.release_request_id = saved.entity_id
+              UNION ALL
+              SELECT to_jsonb(claim.*)
+              FROM app_private.management_report_release_request_claims AS claim
+              WHERE saved.entity_kind = 'claim'
+                AND claim.release_request_id = saved.entity_id
+            ) AS current_row ON true
+            WHERE current_row.current_bytes IS DISTINCT FROM saved.entity_bytes
+          )
+        THEN
+          RAISE EXCEPTION '0080 current-city replacement receipt drift';
+        END IF;
+      END
+      \$written\$;
+      SELECT receipt::text FROM current_city_replacement_receipt;
+    "
+)"
+if [[ "$(printf '%s\n' "${current_city_replacement_first_write}" \
+  | awk '/^\{.*\}$/ { count++ } END { print count+0 }')" -ne 1 ]] \
+  || [[ "${current_city_replacement_first_write}" != \
+    *'"result_status": "completed"'* ]]; then
+  echo '0080 replacement writer 没有返回唯一完整十一字段 receipt。' >&2
+  printf '%s\n' "${current_city_replacement_first_write}" >&2
+  exit 1
+fi
+current_city_replacement_after_first_write="$(
+  docker exec "${container_name}" pg_dump \
+    "${current_city_replacement_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7979797979797979797979797979797979797979797979797979797979797979
+)"
+current_city_replacement_exact_replay="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${current_city_replacement_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      CREATE TEMP TABLE current_city_replacement_replay_input AS
+      SELECT
+        (SELECT released_snapshot_id
+         FROM app_private.management_current_city_report_release_attempts
+         WHERE release_request_id =
+           '79d90000-0000-4000-8000-000000000001'::uuid)
+          AS first_snapshot_id,
+        (SELECT released_snapshot_id
+         FROM app_private.management_current_city_report_release_attempts
+         WHERE release_request_id =
+           '79d90000-0000-4000-8000-000000000002'::uuid)
+          AS second_snapshot_id;
+      GRANT SELECT ON current_city_replacement_replay_input
+        TO tongxingzhe_management_report_snapshot_lifecycle_writer;
+      SET ROLE tongxingzhe_management_report_snapshot_lifecycle_writer;
+      SELECT app_private.declare_management_current_city_snapshot_replacement_v1(
+        '79da0000-0000-4000-8000-000000000001',
+        '79d10000-0000-4000-8000-000000000001',
+        '79d30000-0000-4000-8000-000000000001',
+        first_snapshot_id,
+        second_snapshot_id,
+        'late_accepted_data'
+      )::text
+      FROM current_city_replacement_replay_input;
+      RESET ROLE;
+    "
+)"
+if [[ "${current_city_replacement_exact_replay}" != \
+  "${current_city_replacement_first_write}" ]]; then
+  echo '0080 current-city replacement exact replay 未返回原 receipt。' >&2
+  exit 1
+fi
+current_city_replacement_after_exact_replay="$(
+  docker exec "${container_name}" pg_dump \
+    "${current_city_replacement_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7979797979797979797979797979797979797979797979797979797979797979
+)"
+if [[ "${current_city_replacement_after_first_write}" != \
+  "${current_city_replacement_after_exact_replay}" ]]; then
+  echo '0080 current-city replacement exact replay 改写了业务数据。' >&2
+  exit 1
+fi
+current_city_replacement_baseline_replay="$(
+  docker exec \
+    --env DATABASE_URL="${current_city_replacement_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/current-city-replacement-baseline-migrations \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh \
+    2>&1
+)"
+current_city_replacement_baseline_verified_count="$(
+  printf '%s\n' "${current_city_replacement_baseline_replay}" \
+    | awk '/^已验证 .*（无需重复执行）$/ { count++ } END { print count+0 }'
+)"
+if [[ "${current_city_replacement_baseline_verified_count}" -ne 78 ]] \
+  || [[ "${current_city_replacement_baseline_replay}" == *'已执行 '* ]]; then
+  echo '0001..0079 重复 migrations 没有全部命中 checksum skip。' >&2
+  printf '%s\n' "${current_city_replacement_baseline_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${current_city_replacement_baseline_replay}"
+current_city_replacement_migration_replay="$(
+  docker exec \
+    --env DATABASE_URL="${current_city_replacement_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/current-city-replacement-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${current_city_replacement_migration_replay}" != \
+  *'已验证 0080_management_current_city_report_snapshot_replacements（无需重复执行）'* ]] \
+  || [[ "${current_city_replacement_migration_replay}" == *'已执行 '* ]]; then
+  echo '0080 重复 migration 没有命中 checksum skip。' >&2
+  printf '%s\n' "${current_city_replacement_migration_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${current_city_replacement_migration_replay}"
+current_city_replacement_after_migration_replay="$(
+  docker exec "${container_name}" pg_dump \
+    "${current_city_replacement_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7979797979797979797979797979797979797979797979797979797979797979
+)"
+if [[ "${current_city_replacement_after_exact_replay}" != \
+  "${current_city_replacement_after_migration_replay}" ]]; then
+  echo '重复 0080 migration 改写 current-city replacement 业务快照。' >&2
+  exit 1
+fi
+echo '0079→0080 旧 current-city 快照替代、exact replay 与 checksum 幂等：通过。'
+
 
 echo '验证 0081→0082 升级保留旧批准 interest 快照，并可登记替代。'
 docker exec "${container_name}" createdb \
