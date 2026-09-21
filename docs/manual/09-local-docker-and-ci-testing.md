@@ -2260,6 +2260,24 @@ first lifecycle必须是`superseded`并指向second，second必须是`active`且
 
 现有0083 fixture继续覆盖当前schema的原因allowlist、跨project／lineage、stale head、分叉／循环、ACL、不可变性和并发矩阵。7CF不重复这些检查，也不声称生成、更新或泄露受保护报告。
 
+#### 6.2.15 真实旧兴趣快照替代升级（Issue #460，MANUAL-115）
+
+7CG在独立库只应用0001至0081。runner核对精确80个migration和最大版本0081。此时0082的interest replacement表、snapshot read policy、provenance／trust／validation／replacement／lifecycle五个函数都不存在，共享request-family check也尚未接受interest replacement family。
+
+upgrade fixture只直接建立固定active actor、organization／project memberships和`release_management_reports` capability。这些关系逐项绑定同一固定project，只为真实timezone、0062 release和0082 replacement writers提供授权上下文，不代表生产Auth、HTTP、组织准入或真人平台证据。fixture调用真实timezone writer建立UTC version 1。
+
+同一psql session先调用真实0062 interest release writer建立`approved_baseline`，提交后等待至少10 ms，再在新事务建立`approved`。两份receipt都精确为17字段且不包含report values：first的compared pointer为null、shared／assessed为0／0，second指回first、shared／assessed为2／10；两者reason为空且source sequence为0。
+
+fixture逐字段核对receipt、snapshot、interest release attempt和release-family claim。second cutoff必须严格较晚，previous pointer指向first，authorization、attempt cutoff、snapshot cutoff和released time一致。两份protected report的privacy policy、source scope和除data cutoff外的periods相同，source watermark不回退。升级前保存两份snapshot、两份attempt和两份release-family claim的完整JSON字节；runner另以固定restrict key取得app_data／app_private dump。
+
+runner随后只应用0082。排除新replacement表后，升级前后旧业务dump必须逐字不变，新表初始为空。授权actor以固定request将first登记为由second替代；唯一十一字段receipt只含contract、request、project、lineage、report、version、superseded snapshot、replacement snapshot、`late_accepted_data` reason、declared time和`completed`状态。
+
+replacement row的actor、workspace、organization／project memberships、capability grant、authorization time和result document必须与receipt对齐，replacement-family claim与row均为1。first lifecycle必须为`superseded`并指向second，second必须为`active`且replacement snapshot为null；两份输出都精确五字段，不含report values或PII。
+
+替代前后原六行历史字节不变，snapshot和attempt仍各为2，不生成新release事实。相同actor、request、project、snapshot pair和reason的exact replay必须返回原receipt，完整业务dump不变。重复0001至0081部署精确命中80个checksum skip；重复0082只允许一个checksum skip，最终dump保持不变。
+
+现有0082 fixture继续覆盖当前schema的负例、ACL、不可变性、多段chain和并发矩阵。7CG不重复这些检查，也不声称生成、更新或泄露受保护报告。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。
