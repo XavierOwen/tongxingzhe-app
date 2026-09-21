@@ -13,6 +13,7 @@ test_database='tongxingzhe_test'
 restore_database='tongxingzhe_restore'
 upgrade_database='tongxingzhe_region_upgrade'
 ownerless_upgrade_database='tongxingzhe_ownerless_upgrade'
+directed_invitation_upgrade_database='tongxingzhe_directed_invitation_upgrade'
 owner_authorization_upgrade_database='tongxingzhe_owner_authorization_upgrade'
 organization_directory_upgrade_database='tongxingzhe_organization_directory_upgrade'
 membership_leave_upgrade_database='tongxingzhe_membership_leave_upgrade'
@@ -25,6 +26,7 @@ directory_upgrade_database='tongxingzhe_application_directory_upgrade'
 database_url="postgresql://postgres:postgres@127.0.0.1:5432/${test_database}"
 upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${upgrade_database}"
 ownerless_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${ownerless_upgrade_database}"
+directed_invitation_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${directed_invitation_upgrade_database}"
 owner_authorization_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${owner_authorization_upgrade_database}"
 organization_directory_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${organization_directory_upgrade_database}"
 membership_leave_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${membership_leave_upgrade_database}"
@@ -683,6 +685,486 @@ docker exec "${container_name}" psql \
   " \
   >/dev/null
 echo '0085 无 owner 升级失败且事务完整回滚：通过。'
+
+echo '验证 0086→0087 升级后旧组织可签发并接受定向邀请。'
+docker exec "${container_name}" createdb \
+  -U postgres \
+  "${directed_invitation_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/directed-invitation-baseline-migrations \
+      /tmp/directed-invitation-upgrade-only && \
+   find /workspace/backend/database/migrations \
+     -maxdepth 1 -type f \
+     \( -name '000[1-9]_*.sql' \
+        -o -name '00[1-7][0-9]_*.sql' \
+        -o -name '008[0-6]_*.sql' \) \
+     -exec cp {} /tmp/directed-invitation-baseline-migrations/ \; && \
+   test \"\$(find /tmp/directed-invitation-baseline-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 85 && \
+   cp /workspace/backend/database/migrations/0087_*.sql \
+     /tmp/directed-invitation-upgrade-only/ && \
+   test \"\$(find /tmp/directed-invitation-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${directed_invitation_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/directed-invitation-baseline-migrations \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh \
+  >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${directed_invitation_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$baseline\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 85
+        OR (SELECT max(version) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0086_organization_owner_transfer'
+        OR to_regclass(
+          'app_private.organization_directed_account_invitation_request_claims'
+        ) IS NOT NULL
+        OR to_regclass(
+          'app_private.organization_directed_account_invitation_request_tombstones'
+        ) IS NOT NULL
+        OR to_regclass(
+          'app_private.organization_directed_account_invitation_audit_events'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.protect_organization_directed_invitation_claim_v1()'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.protect_organization_directed_invitation_tombstone_v1()'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.protect_organization_directed_invitation_audit_event_v1()'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.create_organization_directed_account_invitation_v1(uuid,uuid,uuid,uuid)'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.accept_organization_directed_account_invitation_v1(uuid,uuid)'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_data.create_organization_directed_account_invitation_for_identity_v1(text,text,uuid,uuid,uuid)'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_data.accept_organization_directed_account_invitation_for_identity_v1(text,text,uuid)'
+        ) IS NOT NULL
+      THEN
+        RAISE EXCEPTION '0086 directed-invitation upgrade baseline drift';
+      END IF;
+    END
+    \$baseline\$;
+  " \
+  >/dev/null
+directed_invitation_creation_receipt="$(
+  docker exec \
+    --workdir /workspace \
+    "${container_name}" \
+    psql \
+    -U postgres \
+    -d "${directed_invitation_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --file /workspace/backend/database/fixtures/upgrade/0086_organization_directed_account_invitation_live.sql
+)"
+if [[ "${directed_invitation_creation_receipt}" != organization-creation:v1\|* ]] \
+  || [[ "$(printf '%s\n' "${directed_invitation_creation_receipt}" \
+    | awk -F '|' 'NF == 5 { count++ } END { print count+0 }')" -ne 1 ]]; then
+  echo '0086 旧 writer 没有返回单行完整五字段 creation receipt。' >&2
+  exit 1
+fi
+directed_invitation_before_upgrade="$(
+  docker exec "${container_name}" pg_dump \
+    "${directed_invitation_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --exclude-table-data=app_private.organization_directed_account_invitation_request_claims \
+    --exclude-table-data=app_private.organization_directed_account_invitation_request_tombstones \
+    --exclude-table-data=app_private.organization_directed_account_invitation_audit_events \
+    --restrict-key=8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d
+)"
+docker exec \
+  --env DATABASE_URL="${directed_invitation_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/directed-invitation-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+directed_invitation_after_upgrade="$(
+  docker exec "${container_name}" pg_dump \
+    "${directed_invitation_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --exclude-table-data=app_private.organization_directed_account_invitation_request_claims \
+    --exclude-table-data=app_private.organization_directed_account_invitation_request_tombstones \
+    --exclude-table-data=app_private.organization_directed_account_invitation_audit_events \
+    --restrict-key=8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d
+)"
+if [[ "${directed_invitation_before_upgrade}" != \
+  "${directed_invitation_after_upgrade}" ]]; then
+  echo '0087 升级改变了旧组织、owner 或其他业务数据。' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${directed_invitation_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$empty\$
+    BEGIN
+      IF (SELECT count(*)
+          FROM app_private.organization_directed_account_invitation_request_claims)
+            <> 0
+        OR (SELECT count(*)
+            FROM app_private.organization_directed_account_invitation_request_tombstones)
+              <> 0
+        OR (SELECT count(*)
+            FROM app_private.organization_directed_account_invitation_audit_events)
+              <> 0
+      THEN
+        RAISE EXCEPTION '0087 directed-invitation tables are not empty after upgrade';
+      END IF;
+    END
+    \$empty\$;
+  " \
+  >/dev/null
+directed_invitation_first_write="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${directed_invitation_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      SET TIME ZONE 'UTC';
+      CREATE TEMP TABLE directed_invitation_create_receipt (
+        organization_invitation_contract_id text,
+        invitation_id uuid,
+        organization_workspace_id uuid,
+        issued_at_utc timestamptz,
+        expires_at_utc timestamptz
+      );
+      CREATE TEMP TABLE directed_invitation_accept_receipt (
+        organization_invitation_contract_id text,
+        invitation_id uuid,
+        organization_workspace_id uuid,
+        organization_membership_id uuid,
+        accepted_at_utc timestamptz
+      );
+      CREATE TEMP TABLE directed_invitation_clock_bounds AS
+      SELECT clock_timestamp() AS observed_before,
+        NULL::timestamptz AS observed_after;
+      CREATE TEMP TABLE directed_invitation_input AS
+      SELECT organization_workspace_id
+      FROM app_private.organization_creation_request_claims
+      WHERE request_id =
+        '00000000-0086-5000-0000-000000000601'::uuid;
+      GRANT ALL ON directed_invitation_create_receipt,
+        directed_invitation_accept_receipt TO tongxingzhe_runtime;
+      GRANT SELECT ON directed_invitation_input TO tongxingzhe_runtime;
+    " \
+    --command="
+      SET ROLE tongxingzhe_runtime;
+      INSERT INTO directed_invitation_create_receipt
+      SELECT *
+      FROM app_data.create_organization_directed_account_invitation_for_identity_v1(
+        'https://synthetic-directed-invitation-upgrade.example/auth/v1',
+        'owner',
+        '00000000-0087-6000-0000-000000000601',
+        (SELECT organization_workspace_id FROM directed_invitation_input),
+        '00000000-0086-0000-0000-000000000602'
+      );
+      RESET ROLE;
+      UPDATE directed_invitation_clock_bounds
+      SET observed_after = clock_timestamp();
+      SET ROLE tongxingzhe_runtime;
+      INSERT INTO directed_invitation_accept_receipt
+      SELECT *
+      FROM app_data.accept_organization_directed_account_invitation_for_identity_v1(
+        'https://synthetic-directed-invitation-upgrade.example/auth/v1',
+        'target',
+        '00000000-0087-6000-0000-000000000601'
+      );
+      RESET ROLE;
+      TABLE directed_invitation_create_receipt;
+      TABLE directed_invitation_accept_receipt;
+      DO \$written\$
+      DECLARE
+        created directed_invitation_create_receipt%ROWTYPE;
+        accepted directed_invitation_accept_receipt%ROWTYPE;
+        bounds directed_invitation_clock_bounds%ROWTYPE;
+        creation app_private.organization_creation_request_claims%ROWTYPE;
+        invitation
+          app_private.organization_directed_account_invitation_request_claims%ROWTYPE;
+      BEGIN
+        SELECT * INTO STRICT created FROM directed_invitation_create_receipt;
+        SELECT * INTO STRICT accepted FROM directed_invitation_accept_receipt;
+        SELECT * INTO STRICT bounds FROM directed_invitation_clock_bounds;
+        SELECT * INTO STRICT creation
+        FROM app_private.organization_creation_request_claims
+        WHERE request_id =
+          '00000000-0086-5000-0000-000000000601'::uuid;
+        SELECT * INTO STRICT invitation
+        FROM app_private.organization_directed_account_invitation_request_claims
+        WHERE invitation_id = created.invitation_id;
+
+        IF (SELECT count(*) FROM directed_invitation_create_receipt) <> 1
+          OR (SELECT count(*) FROM directed_invitation_accept_receipt) <> 1
+          OR created.organization_invitation_contract_id IS DISTINCT FROM
+            'organization-directed-account-invitation:v1'
+          OR created.invitation_id IS DISTINCT FROM
+            '00000000-0087-6000-0000-000000000601'::uuid
+          OR created.organization_workspace_id IS DISTINCT FROM
+            creation.organization_workspace_id
+          OR created.issued_at_utc IS NULL
+          OR NOT isfinite(created.issued_at_utc)
+          OR created.issued_at_utc < bounds.observed_before
+          OR created.issued_at_utc > bounds.observed_after
+          OR created.expires_at_utc IS DISTINCT FROM
+            created.issued_at_utc + interval '168 hours'
+          OR ROW(
+            accepted.organization_invitation_contract_id,
+            accepted.invitation_id,
+            accepted.organization_workspace_id
+          ) IS DISTINCT FROM ROW(
+            created.organization_invitation_contract_id,
+            created.invitation_id,
+            created.organization_workspace_id
+          )
+          OR accepted.organization_membership_id IS NULL
+          OR accepted.accepted_at_utc IS NULL
+          OR NOT isfinite(accepted.accepted_at_utc)
+          OR invitation.organization_workspace_id IS DISTINCT FROM
+            created.organization_workspace_id
+          OR invitation.inviter_app_user_id IS DISTINCT FROM
+            '00000000-0086-0000-0000-000000000601'::uuid
+          OR invitation.target_app_user_id IS DISTINCT FROM
+            '00000000-0086-0000-0000-000000000602'::uuid
+          OR invitation.issued_at_utc IS DISTINCT FROM created.issued_at_utc
+          OR invitation.expires_at_utc IS DISTINCT FROM created.expires_at_utc
+          OR invitation.accepted_at_utc IS DISTINCT FROM
+            accepted.accepted_at_utc
+          OR invitation.accepted_organization_membership_id IS DISTINCT FROM
+            accepted.organization_membership_id
+          OR (SELECT count(*)
+              FROM app_private.organization_directed_account_invitation_request_claims)
+            <> 1
+          OR (SELECT count(*)
+              FROM app_private.organization_directed_account_invitation_request_tombstones)
+            <> 0
+          OR (SELECT count(*)
+              FROM app_private.organization_directed_account_invitation_audit_events)
+            <> 2
+          OR (SELECT count(*)
+              FROM app_private.organization_directed_account_invitation_audit_events
+              WHERE organization_invitation_contract_id =
+                  created.organization_invitation_contract_id
+                AND invitation_id = created.invitation_id
+                AND organization_workspace_id =
+                  created.organization_workspace_id
+                AND event_kind = 'invitation_issued'
+                AND organization_membership_id IS NULL
+                AND occurred_at_utc = created.issued_at_utc) <> 1
+          OR (SELECT count(*)
+              FROM app_private.organization_directed_account_invitation_audit_events
+              WHERE organization_invitation_contract_id =
+                  accepted.organization_invitation_contract_id
+                AND invitation_id = accepted.invitation_id
+                AND organization_workspace_id =
+                  accepted.organization_workspace_id
+                AND event_kind = 'invitation_accepted'
+                AND organization_membership_id =
+                  accepted.organization_membership_id
+                AND occurred_at_utc = accepted.accepted_at_utc) <> 1
+          OR (SELECT count(*)
+              FROM app_data.organization_memberships
+              WHERE organization_membership_id =
+                  accepted.organization_membership_id
+                AND organization_workspace_id =
+                  accepted.organization_workspace_id
+                AND app_user_id =
+                  '00000000-0086-0000-0000-000000000602'::uuid
+                AND active_from_utc = accepted.accepted_at_utc
+                AND inactive_from_utc IS NULL) <> 1
+          OR (SELECT count(*) FROM app_data.organization_memberships) <> 2
+          OR (SELECT count(*)
+              FROM app_data.organization_owner_assignments AS assignment
+              JOIN app_data.organization_memberships AS membership
+                ON membership.organization_membership_id =
+                  assignment.organization_membership_id
+              WHERE assignment.organization_owner_assignment_id =
+                  creation.organization_owner_assignment_id
+                AND assignment.organization_membership_id =
+                  creation.organization_membership_id
+                AND assignment.active_from_utc = creation.created_at_utc
+                AND assignment.inactive_from_utc IS NULL
+                AND membership.organization_membership_id =
+                  creation.organization_membership_id
+                AND membership.organization_workspace_id =
+                  created.organization_workspace_id
+                AND membership.app_user_id = creation.actor_app_user_id
+                AND membership.active_from_utc = creation.created_at_utc
+                AND membership.inactive_from_utc IS NULL) <> 1
+          OR (SELECT count(*)
+              FROM app_data.organization_owner_assignments) <> 1
+          OR (SELECT count(*)
+              FROM app_private.organization_creation_request_claims) <> 1
+          OR (SELECT count(*)
+              FROM app_private.organization_creation_audit_events) <> 1
+          OR (SELECT count(*) FROM app_data.projects) <> 0
+          OR (SELECT count(*) FROM app_data.project_memberships) <> 0
+          OR (SELECT count(*)
+              FROM app_data.management_report_capability_grants) <> 0
+          OR (SELECT count(*)
+              FROM app_data.promotion_target_assignments) <> 0
+        THEN
+          RAISE EXCEPTION '0087 directed-invitation receipt drift';
+        END IF;
+      END
+      \$written\$;
+    "
+)"
+if [[ "$(printf '%s\n' "${directed_invitation_first_write}" \
+    | awk -F '|' 'NF == 5 { count++ } END { print count+0 }')" -ne 2 ]]; then
+  echo '0087 runtime writers 没有各返回一行完整五字段 receipt。' >&2
+  exit 1
+fi
+directed_invitation_create_receipt="$(
+  printf '%s\n' "${directed_invitation_first_write}" | sed -n '1p'
+)"
+directed_invitation_accept_receipt="$(
+  printf '%s\n' "${directed_invitation_first_write}" | sed -n '2p'
+)"
+directed_invitation_after_first_write="$(
+  docker exec "${container_name}" pg_dump \
+    "${directed_invitation_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d
+)"
+directed_invitation_replay="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${directed_invitation_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      SET TIME ZONE 'UTC';
+      CREATE TEMP TABLE directed_invitation_replay_input AS
+      SELECT organization_workspace_id
+      FROM app_private.organization_creation_request_claims
+      WHERE request_id =
+        '00000000-0086-5000-0000-000000000601'::uuid;
+      GRANT SELECT ON directed_invitation_replay_input TO tongxingzhe_runtime;
+      SET ROLE tongxingzhe_runtime;
+      SELECT *
+      FROM app_data.accept_organization_directed_account_invitation_for_identity_v1(
+        'https://synthetic-directed-invitation-upgrade.example/auth/v1',
+        'target',
+        '00000000-0087-6000-0000-000000000601'
+      );
+      SELECT *
+      FROM app_data.create_organization_directed_account_invitation_for_identity_v1(
+        'https://synthetic-directed-invitation-upgrade.example/auth/v1',
+        'owner',
+        '00000000-0087-6000-0000-000000000601',
+        (SELECT organization_workspace_id
+         FROM directed_invitation_replay_input),
+        '00000000-0086-0000-0000-000000000602'
+      );
+      RESET ROLE;
+    "
+)"
+if [[ "$(printf '%s\n' "${directed_invitation_replay}" | sed -n '1p')" != \
+  "${directed_invitation_accept_receipt}" ]] \
+  || [[ "$(printf '%s\n' "${directed_invitation_replay}" | sed -n '2p')" != \
+    "${directed_invitation_create_receipt}" ]]; then
+  echo '0087 accept/create 反序 exact replay 没有返回原五字段 receipts。' >&2
+  exit 1
+fi
+directed_invitation_after_exact_replay="$(
+  docker exec "${container_name}" pg_dump \
+    "${directed_invitation_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d
+)"
+if [[ "${directed_invitation_after_first_write}" != \
+  "${directed_invitation_after_exact_replay}" ]]; then
+  echo '0087 反序 exact replay 改变了 invitation 或其他业务数据。' >&2
+  exit 1
+fi
+directed_invitation_baseline_replay="$(
+  docker exec \
+    --env DATABASE_URL="${directed_invitation_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/directed-invitation-baseline-migrations \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+directed_invitation_baseline_verified_count="$(
+  printf '%s\n' "${directed_invitation_baseline_replay}" \
+    | awk '/^已验证 .*（无需重复执行）$/ { count++ } END { print count+0 }'
+)"
+if [[ "${directed_invitation_baseline_verified_count}" -ne 85 ]] \
+  || [[ "${directed_invitation_baseline_replay}" == *'已执行 '* ]]; then
+  echo '0001..0086 重复 migrations 没有全部命中 checksum skip。' >&2
+  printf '%s\n' "${directed_invitation_baseline_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${directed_invitation_baseline_replay}"
+directed_invitation_migration_replay="$(
+  docker exec \
+    --env DATABASE_URL="${directed_invitation_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/directed-invitation-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${directed_invitation_migration_replay}" != \
+  *'已验证 0087_organization_directed_account_invitation（无需重复执行）'* ]] \
+  || [[ "${directed_invitation_migration_replay}" == *'已执行 '* ]]; then
+  echo '0087 重复 migration 没有命中 checksum skip。' >&2
+  printf '%s\n' "${directed_invitation_migration_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${directed_invitation_migration_replay}"
+directed_invitation_after_migration_replay="$(
+  docker exec "${container_name}" pg_dump \
+    "${directed_invitation_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d
+)"
+if [[ "${directed_invitation_after_exact_replay}" != \
+  "${directed_invitation_after_migration_replay}" ]]; then
+  echo '重复 0087 migration 改变 directed invitation 业务快照。' >&2
+  exit 1
+fi
+echo '0086→0087 旧组织、五字段 create/accept、反序 exact replay 与 checksum 幂等：通过。'
 
 echo '验证 0087→0088 保留原 0086 writer 已提交的 owner-transfer claim。'
 docker exec "${container_name}" createdb \

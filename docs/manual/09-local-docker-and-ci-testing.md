@@ -2208,6 +2208,22 @@ runner只应用0092。排除三张新表后，升级前后的app_data／app_priv
 
 现有0092 fixture继续覆盖当前schema负例、ACL、恢复期和并发矩阵。7CC不重复这些检查。该合成Docker／CI证据不等于生产升级或真实Auth。
 
+#### 6.2.12 真实旧组织定向邀请升级（Issue #453，MANUAL-112）
+
+7CD在独立库只应用0001至0086。runner核对精确85个migration和最大版本0086。此时0087的三张定向邀请表、三个保护函数、两个private writers及两个runtime bridges均不存在。
+
+upgrade fixture用真实0084 runtime writer创建组织。输入名称含首尾空格；五字段creation receipt必须与canonical workspace、active owner membership／assignment、creation claim和唯一audit逐字段一致。target只建立active app user与external identity，不预建业务membership。项目、project membership、capability grant和promotion-target assignment均为零。
+
+runner只应用0087。排除三张新表后，升级前后的app_data／app_private数据快照必须逐字不变。三张新表在升级后均为空。
+
+原owner用固定invitation UUID调用runtime create bridge。唯一五字段receipt必须返回固定contract、原workspace、位于调用墙钟边界内的有限数据库issued time，以及精确晚168小时的expiry。target再调用runtime accept bridge；唯一五字段receipt必须返回同一contract／invitation／workspace、新普通membership和数据库accepted time。
+
+claim的owner、target、workspace、issued／expiry、accepted time和accepted membership必须与两张receipts一致。`invitation_issued`与`invitation_accepted`两条audit分别绑定相同字段；claim／tombstone／audit总数为1／0／2。组织membership总数为2，active current owner仍为1，creation claim／audit保持1／1。项目、project membership、capability和全历史promotion-target assignment仍为零。
+
+接受后先重放accept、再由owner重放create。两次exact replay必须逐字段返回原receipts，且不增加或改写业务行。第二次0087部署必须命中checksum skip，最终快照仍不变。
+
+现有0087 fixture继续覆盖当前schema的wrong-target、过期、恢复期、ACL、unlink和并发矩阵。7CD不重复这些检查。该合成Docker／CI证据不等于生产升级或真实Auth。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。
