@@ -2130,6 +2130,14 @@ active non-member applicant通过旧link提交固定application UUID。六字段
 
 提交与exact replay不能新增organization membership、owner assignment、project membership或capability grant。同一application和link的exact replay逐字段返回原receipt，且不增加claim或audit。第二次0093部署验证checksum并跳过，业务快照仍不变。完整runner还须通过空库重建、既有检查／并发、checksum漂移拒绝和独立恢复。该合成升级证明不等于生产升级或生产Auth。
 
+#### 6.2.6 真实旧 0086 负责人交接 claim 升级（Issue #441，MANUAL-106）
+
+7BX在独立库只应用0001至0087，并核对86个版本及原0086 private writer。upgrade fixture使用真实0084 runtime writer创建组织，再由原0086 runtime writer提交负责人交接。它保存原五字段receipt，并确认旧owner结束、新owner开始、claim和唯一audit使用同一交接时间。
+
+runner保存private function的OID、owner、ACL和完整app_data／app_private业务快照，再只应用0088。0088必须保留函数身份，把首次执行的当前授权时间改为锁后`clock_timestamp()`，并保持旧业务行不变。原actor此时已失去owner身份；只要账号仍active，同request、workspace和target的exact replay必须逐字段返回原receipt，且不能新增owner assignment、claim、audit或其他业务行。
+
+第二次0088部署必须验证checksum并跳过，业务快照仍不变。7BX证明原0086 writer的claim可以穿过0088替换；7BN另行证明0088时代的claim可以穿过0097／0098。直接运行完整runner，在空库重建、既有检查／并发、checksum漂移拒绝和独立恢复一起通过后才交付。该合成升级证明不等于生产升级或生产Auth。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。
