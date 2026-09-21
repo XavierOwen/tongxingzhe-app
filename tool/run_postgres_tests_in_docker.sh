@@ -14,6 +14,7 @@ restore_database='tongxingzhe_restore'
 upgrade_database='tongxingzhe_region_upgrade'
 ownerless_upgrade_database='tongxingzhe_ownerless_upgrade'
 owner_authorization_upgrade_database='tongxingzhe_owner_authorization_upgrade'
+organization_directory_upgrade_database='tongxingzhe_organization_directory_upgrade'
 invitation_preview_upgrade_database='tongxingzhe_invitation_preview_upgrade'
 link_submit_upgrade_database='tongxingzhe_link_submit_upgrade'
 application_approval_upgrade_database='tongxingzhe_application_approval_upgrade'
@@ -22,6 +23,7 @@ database_url="postgresql://postgres:postgres@127.0.0.1:5432/${test_database}"
 upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${upgrade_database}"
 ownerless_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${ownerless_upgrade_database}"
 owner_authorization_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${owner_authorization_upgrade_database}"
+organization_directory_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${organization_directory_upgrade_database}"
 invitation_preview_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${invitation_preview_upgrade_database}"
 link_submit_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${link_submit_upgrade_database}"
 application_approval_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${application_approval_upgrade_database}"
@@ -912,6 +914,157 @@ if [[ "${owner_authorization_after_replay}" != \
   exit 1
 fi
 echo '0087→0088 旧 claim、函数身份、完整 receipt、exact replay、checksum 幂等与业务数据不变：通过。'
+
+echo '验证 0088→0089 旧 projectless organization 可由新 directory reader 读取。'
+docker exec "${container_name}" createdb \
+  -U postgres \
+  "${organization_directory_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/organization-directory-upgrade-baseline-migrations \
+      /tmp/organization-directory-upgrade-only && \
+   find /workspace/backend/database/migrations \
+     -maxdepth 1 -type f \
+     \( -name '000[1-9]_*.sql' \
+        -o -name '00[1-7][0-9]_*.sql' \
+        -o -name '008[0-8]_*.sql' \) \
+     -exec cp {} /tmp/organization-directory-upgrade-baseline-migrations/ \; && \
+   test \"\$(find /tmp/organization-directory-upgrade-baseline-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 87 && \
+   cp /workspace/backend/database/migrations/0089_*.sql \
+     /tmp/organization-directory-upgrade-only/ && \
+   test \"\$(find /tmp/organization-directory-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${organization_directory_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/organization-directory-upgrade-baseline-migrations \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh \
+  >/dev/null
+organization_directory_upgrade_legacy_receipt="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${organization_directory_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --file /workspace/backend/database/fixtures/upgrade/0088_organization_directory_live.sql
+)"
+if [[ "${organization_directory_upgrade_legacy_receipt}" != \
+  organization-creation:v1\|* ]] \
+  || [[ "$(printf '%s\n' "${organization_directory_upgrade_legacy_receipt}" \
+    | awk -F '|' 'NF == 5 { count++ } END { print count+0 }')" -ne 1 ]]; then
+  echo '0088 旧 writer 没有返回单行完整五字段 creation receipt。' >&2
+  exit 1
+fi
+organization_directory_upgrade_workspace_id="$(
+  printf '%s\n' "${organization_directory_upgrade_legacy_receipt}" \
+    | awk -F '|' '{ print $2 }'
+)"
+organization_directory_upgrade_before="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_directory_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+docker exec \
+  --env DATABASE_URL="${organization_directory_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/organization-directory-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+organization_directory_upgrade_after_migration="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_directory_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+if [[ "${organization_directory_upgrade_before}" != \
+  "${organization_directory_upgrade_after_migration}" ]]; then
+  echo '0089 升级改变了 0088 已有 organization 或其他业务数据。' >&2
+  exit 1
+fi
+organization_directory_upgrade_result="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${organization_directory_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      SET TIME ZONE 'UTC';
+      SET ROLE tongxingzhe_runtime;
+      SELECT *
+      FROM app_data.list_organizations_for_identity_v1(
+        'https://synthetic-organization-directory-upgrade.example/auth/v1',
+        'owner'
+      );
+      RESET ROLE;
+    "
+)"
+if [[ "${organization_directory_upgrade_result}" != \
+  "${organization_directory_upgrade_workspace_id}|0088 Directory upgrade organization" ]] \
+  || [[ "$(printf '%s\n' "${organization_directory_upgrade_result}" \
+    | awk -F '|' 'NF == 2 { count++ } END { print count+0 }')" -ne 1 ]]; then
+  echo '0089 directory 没有返回旧 organization 的单行两字段结果。' >&2
+  exit 1
+fi
+organization_directory_upgrade_after_reader="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_directory_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+if [[ "${organization_directory_upgrade_after_migration}" != \
+  "${organization_directory_upgrade_after_reader}" ]]; then
+  echo '0089 directory read 改变了 organization、membership、owner 或其他业务数据。' >&2
+  exit 1
+fi
+organization_directory_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${organization_directory_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/organization-directory-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${organization_directory_upgrade_replay}" != \
+  *'已验证 0089_organization_directory（无需重复执行）'* ]] \
+  || [[ "${organization_directory_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0089 重复 migration 没有命中 checksum skip。' >&2
+  printf '%s\n' "${organization_directory_upgrade_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${organization_directory_upgrade_replay}"
+organization_directory_upgrade_after_replay="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_directory_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+if [[ "${organization_directory_upgrade_after_reader}" != \
+  "${organization_directory_upgrade_after_replay}" ]]; then
+  echo '重复 0089 migration 改变 organization directory 业务快照。' >&2
+  exit 1
+fi
+echo '0088→0089 旧 organization、两字段 directory、checksum 幂等与业务数据不变：通过。'
 
 echo '验证 0090→0091 旧 directed invitation 可由新 preview reader 读取。'
 docker exec "${container_name}" createdb \

@@ -2148,6 +2148,14 @@ runner只应用0091。升级不能改写旧invitation或其他app_data／app_pri
 
 preview后的完整业务快照必须与调用前相同。第二次0091部署验证checksum并跳过，快照仍不变。现有0091 fixture继续覆盖wrong target、过期、恢复期、ACL和时间边界；7BY只补充真实旧writer记录的分阶段升级证据。该合成证据不等于生产升级或生产Auth。
 
+#### 6.2.8 真实旧组织目录升级（Issue #446，MANUAL-108）
+
+7BZ在独立库只应用0001至0088，并核对87个版本及0089目录reader不存在。upgrade fixture通过真实0084 runtime writer创建projectless组织。writer把带首尾空格的输入保存为canonical组织名。五字段receipt必须与workspace、active owner membership和assignment一致，且不得建立project membership或capability。
+
+runner只应用0089。升级不能改写旧组织或其他app_data／app_private业务行。原actor通过runtime调用新目录reader时，单行两字段结果必须返回旧workspace UUID和writer保存的canonical组织名。reader不返回owner、project或capability，也不能新增或改写业务行。
+
+目录读取后的完整业务快照必须与升级后相同。第二次0089部署验证checksum并跳过，快照仍不变。现有0089 fixture继续覆盖目录排序、资格边界、拒绝和ACL；7BZ只补真实旧writer记录的分阶段升级证据。该合成证据不等于生产升级或生产Auth。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。
