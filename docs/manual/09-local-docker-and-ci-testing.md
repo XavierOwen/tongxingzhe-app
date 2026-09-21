@@ -2156,6 +2156,22 @@ runner只应用0089。升级不能改写旧组织或其他app_data／app_private
 
 目录读取后的完整业务快照必须与升级后相同。第二次0089部署验证checksum并跳过，快照仍不变。现有0089 fixture继续覆盖目录排序、资格边界、拒绝和ACL；7BZ只补真实旧writer记录的分阶段升级证据。该合成证据不等于生产升级或生产Auth。
 
+#### 6.2.9 真实旧邀请成员自助退出升级（Issue #448，MANUAL-109）
+
+7CA在独立库只应用0001至0089，并核对88个版本和最大版本0089。此时0090的三张self-leave表和两个writer尚不存在。
+
+upgrade fixture用真实0084 runtime writer创建组织，再用真实0087 runtime create／accept writers让target成为普通成员。它保存唯一五字段accept receipt，并核对claim、issued／accepted audit和active membership。
+
+target没有owner assignment、project membership、capability grant或对象分配。
+
+runner随后只应用0090。比较旧业务快照时排除0090新增的三张self-leave表，并单独确认三张表仍为空；其余app_data／app_private事实必须逐字不变。target以固定request UUID调用runtime bridge后，单行四字段receipt必须返回固定contract、原workspace、旧accept receipt的membership UUID和数据库effective time。
+
+该membership的inactive time、self-leave claim和唯一audit共用receipt effective time。claim／tombstone／audit总数固定为1／0／1。
+
+旧invitation claim与issued／accepted audit保持不变。owner membership与assignment仍active。organization membership不增行，project、capability和对象分配仍为零。
+
+同request exact replay必须逐字段返回原四字段receipt，且不增加或改写业务行。第二次0090部署验证checksum并跳过，最终快照仍不变。现有0090 fixture继续覆盖当前schema负例、ACL和并发；7CA只补真实旧writer记录的分阶段升级证据。该合成证据不等于生产升级或生产Auth。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。

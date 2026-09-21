@@ -15,6 +15,7 @@ upgrade_database='tongxingzhe_region_upgrade'
 ownerless_upgrade_database='tongxingzhe_ownerless_upgrade'
 owner_authorization_upgrade_database='tongxingzhe_owner_authorization_upgrade'
 organization_directory_upgrade_database='tongxingzhe_organization_directory_upgrade'
+membership_leave_upgrade_database='tongxingzhe_membership_leave_upgrade'
 invitation_preview_upgrade_database='tongxingzhe_invitation_preview_upgrade'
 link_submit_upgrade_database='tongxingzhe_link_submit_upgrade'
 application_approval_upgrade_database='tongxingzhe_application_approval_upgrade'
@@ -24,6 +25,7 @@ upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${upgrade_database}"
 ownerless_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${ownerless_upgrade_database}"
 owner_authorization_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${owner_authorization_upgrade_database}"
 organization_directory_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${organization_directory_upgrade_database}"
+membership_leave_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${membership_leave_upgrade_database}"
 invitation_preview_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${invitation_preview_upgrade_database}"
 link_submit_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${link_submit_upgrade_database}"
 application_approval_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${application_approval_upgrade_database}"
@@ -1065,6 +1067,397 @@ if [[ "${organization_directory_upgrade_after_reader}" != \
   exit 1
 fi
 echo '0088→0089 旧 organization、两字段 directory、checksum 幂等与业务数据不变：通过。'
+
+echo '验证 0089→0090 旧邀请普通成员可由新 self-leave writer 退出。'
+docker exec "${container_name}" createdb \
+  -U postgres \
+  "${membership_leave_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/membership-leave-upgrade-baseline-migrations \
+      /tmp/membership-leave-upgrade-only && \
+   find /workspace/backend/database/migrations \
+     -maxdepth 1 -type f \
+     \( -name '000[1-9]_*.sql' \
+        -o -name '00[1-8][0-9]_*.sql' \) \
+     -exec cp {} /tmp/membership-leave-upgrade-baseline-migrations/ \; && \
+   test \"\$(find /tmp/membership-leave-upgrade-baseline-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 88 && \
+   cp /workspace/backend/database/migrations/0090_*.sql \
+     /tmp/membership-leave-upgrade-only/ && \
+   test \"\$(find /tmp/membership-leave-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${membership_leave_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/membership-leave-upgrade-baseline-migrations \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh \
+  >/dev/null
+membership_leave_upgrade_accept_receipt="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${membership_leave_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --file /workspace/backend/database/fixtures/upgrade/0089_organization_membership_self_leave_live.sql
+)"
+if [[ "${membership_leave_upgrade_accept_receipt}" != \
+  organization-directed-account-invitation:v1\|00000000-0089-6000-0000-000000000901\|* ]] \
+  || [[ "$(printf '%s\n' "${membership_leave_upgrade_accept_receipt}" \
+    | awk -F '|' 'NF == 5 { count++ } END { print count+0 }')" -ne 1 ]]; then
+  echo '0089 旧 invitation accept writer 没有返回单行完整五字段 receipt。' >&2
+  exit 1
+fi
+membership_leave_upgrade_workspace_id="$(
+  printf '%s\n' "${membership_leave_upgrade_accept_receipt}" \
+    | awk -F '|' '{ print $3 }'
+)"
+membership_leave_upgrade_membership_id="$(
+  printf '%s\n' "${membership_leave_upgrade_accept_receipt}" \
+    | awk -F '|' '{ print $4 }'
+)"
+membership_leave_upgrade_before="$(
+  docker exec "${container_name}" pg_dump \
+    "${membership_leave_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --exclude-table-data=app_private.organization_membership_self_leave_request_claims \
+    --exclude-table-data=app_private.organization_membership_self_leave_request_tombstones \
+    --exclude-table-data=app_private.organization_membership_self_leave_audit_events \
+    --restrict-key=3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c
+)"
+docker exec \
+  --env DATABASE_URL="${membership_leave_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/membership-leave-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+membership_leave_upgrade_after_migration="$(
+  docker exec "${container_name}" pg_dump \
+    "${membership_leave_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --exclude-table-data=app_private.organization_membership_self_leave_request_claims \
+    --exclude-table-data=app_private.organization_membership_self_leave_request_tombstones \
+    --exclude-table-data=app_private.organization_membership_self_leave_audit_events \
+    --restrict-key=3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c
+)"
+if [[ "${membership_leave_upgrade_before}" != \
+  "${membership_leave_upgrade_after_migration}" ]]; then
+  echo '0090 升级改变了 0089 已有 organization、invitation 或 membership。' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${membership_leave_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --quiet \
+  --command="
+    DO \$empty\$
+    BEGIN
+      IF (SELECT count(*)
+          FROM app_private.organization_membership_self_leave_request_claims)
+          <> 0
+        OR (SELECT count(*)
+            FROM app_private.organization_membership_self_leave_request_tombstones)
+          <> 0
+        OR (SELECT count(*)
+            FROM app_private.organization_membership_self_leave_audit_events)
+          <> 0
+      THEN
+        RAISE EXCEPTION '0090 self-leave tables are not empty after upgrade';
+      END IF;
+    END
+    \$empty\$;
+  " \
+  >/dev/null
+membership_leave_upgrade_receipt="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${membership_leave_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      SET TIME ZONE 'UTC';
+      SET ROLE tongxingzhe_runtime;
+      SELECT *
+      FROM app_data.leave_organization_membership_for_identity_v1(
+        'https://synthetic-membership-leave-upgrade.example/auth/v1',
+        'target',
+        '00000000-0089-7000-0000-000000000901',
+        '${membership_leave_upgrade_workspace_id}'
+      );
+      RESET ROLE;
+    "
+)"
+if [[ "${membership_leave_upgrade_receipt}" != \
+  "organization-membership-self-leave:v1|${membership_leave_upgrade_workspace_id}|${membership_leave_upgrade_membership_id}|"* ]] \
+  || [[ "$(printf '%s\n' "${membership_leave_upgrade_receipt}" \
+    | awk -F '|' 'NF == 4 { count++ } END { print count+0 }')" -ne 1 ]]; then
+  echo '0090 self-leave bridge 没有返回旧 membership 的单行四字段 receipt。' >&2
+  exit 1
+fi
+membership_leave_upgrade_effective_at_utc="$(
+  printf '%s\n' "${membership_leave_upgrade_receipt}" \
+    | awk -F '|' '{ print $4 }'
+)"
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${membership_leave_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --quiet \
+  --command="
+    DO \$left\$
+    DECLARE
+      leave_claim
+        app_private.organization_membership_self_leave_request_claims%ROWTYPE;
+      invitation_claim
+        app_private.organization_directed_account_invitation_request_claims%ROWTYPE;
+      creation_claim app_private.organization_creation_request_claims%ROWTYPE;
+    BEGIN
+      SELECT * INTO STRICT leave_claim
+      FROM app_private.organization_membership_self_leave_request_claims
+      WHERE request_id = '00000000-0089-7000-0000-000000000901'::uuid;
+      SELECT * INTO STRICT invitation_claim
+      FROM app_private.organization_directed_account_invitation_request_claims
+      WHERE invitation_id = '00000000-0089-6000-0000-000000000901'::uuid;
+      SELECT * INTO STRICT creation_claim
+      FROM app_private.organization_creation_request_claims
+      WHERE request_id = '00000000-0089-5000-0000-000000000901'::uuid;
+
+      IF leave_claim.actor_app_user_id IS DISTINCT FROM
+          '00000000-0089-0000-0000-000000000902'::uuid
+        OR leave_claim.organization_workspace_id IS DISTINCT FROM
+          '${membership_leave_upgrade_workspace_id}'::uuid
+        OR leave_claim.organization_membership_id IS DISTINCT FROM
+          '${membership_leave_upgrade_membership_id}'::uuid
+        OR leave_claim.effective_at_utc IS DISTINCT FROM
+          '${membership_leave_upgrade_effective_at_utc}'::timestamptz
+        OR NOT EXISTS (
+          SELECT 1
+          FROM app_data.organization_memberships AS membership
+          WHERE membership.organization_membership_id =
+              leave_claim.organization_membership_id
+            AND membership.organization_workspace_id =
+              leave_claim.organization_workspace_id
+            AND membership.app_user_id = leave_claim.actor_app_user_id
+            AND membership.active_from_utc = invitation_claim.accepted_at_utc
+            AND membership.inactive_from_utc = leave_claim.effective_at_utc
+        )
+        OR (SELECT count(*)
+            FROM app_private.organization_membership_self_leave_request_claims)
+          <> 1
+        OR (SELECT count(*)
+            FROM app_private.organization_membership_self_leave_request_tombstones)
+          <> 0
+        OR (SELECT count(*)
+            FROM app_private.organization_membership_self_leave_audit_events)
+          <> 1
+        OR (SELECT count(*)
+            FROM app_private.organization_membership_self_leave_audit_events
+            WHERE membership_self_leave_contract_id =
+                'organization-membership-self-leave:v1'
+              AND request_id = leave_claim.request_id
+              AND organization_workspace_id =
+                leave_claim.organization_workspace_id
+              AND organization_membership_id =
+                leave_claim.organization_membership_id
+              AND effective_at_utc = leave_claim.effective_at_utc) <> 1
+        OR invitation_claim.inviter_app_user_id IS DISTINCT FROM
+          '00000000-0089-0000-0000-000000000901'::uuid
+        OR invitation_claim.target_app_user_id IS DISTINCT FROM
+          '00000000-0089-0000-0000-000000000902'::uuid
+        OR invitation_claim.organization_workspace_id IS DISTINCT FROM
+          leave_claim.organization_workspace_id
+        OR invitation_claim.accepted_organization_membership_id IS DISTINCT FROM
+          leave_claim.organization_membership_id
+        OR invitation_claim.accepted_at_utc IS NULL
+        OR (SELECT count(*)
+            FROM app_private.organization_directed_account_invitation_request_claims)
+          <> 1
+        OR (SELECT count(*)
+            FROM app_private.organization_directed_account_invitation_request_tombstones)
+          <> 0
+        OR (SELECT count(*)
+            FROM app_private.organization_directed_account_invitation_audit_events)
+          <> 2
+        OR (SELECT count(*)
+            FROM app_private.organization_directed_account_invitation_audit_events
+            WHERE invitation_id = invitation_claim.invitation_id
+              AND event_kind = 'invitation_issued'
+              AND organization_membership_id IS NULL
+              AND occurred_at_utc = invitation_claim.issued_at_utc) <> 1
+        OR (SELECT count(*)
+            FROM app_private.organization_directed_account_invitation_audit_events
+            WHERE invitation_id = invitation_claim.invitation_id
+              AND event_kind = 'invitation_accepted'
+              AND organization_membership_id =
+                invitation_claim.accepted_organization_membership_id
+              AND occurred_at_utc = invitation_claim.accepted_at_utc) <> 1
+        OR (SELECT count(*)
+            FROM app_data.organization_memberships
+            WHERE organization_workspace_id =
+              leave_claim.organization_workspace_id) <> 2
+        OR NOT EXISTS (
+          SELECT 1
+          FROM app_data.organization_memberships AS owner_membership
+          WHERE owner_membership.organization_membership_id =
+              creation_claim.organization_membership_id
+            AND owner_membership.organization_workspace_id =
+              leave_claim.organization_workspace_id
+            AND owner_membership.app_user_id =
+              '00000000-0089-0000-0000-000000000901'::uuid
+            AND owner_membership.active_from_utc = creation_claim.created_at_utc
+            AND owner_membership.inactive_from_utc IS NULL
+        )
+        OR NOT EXISTS (
+          SELECT 1
+          FROM app_data.organization_owner_assignments AS owner_assignment
+          WHERE owner_assignment.organization_owner_assignment_id =
+              creation_claim.organization_owner_assignment_id
+            AND owner_assignment.organization_membership_id =
+              creation_claim.organization_membership_id
+            AND owner_assignment.active_from_utc = creation_claim.created_at_utc
+            AND owner_assignment.inactive_from_utc IS NULL
+        )
+        OR (SELECT count(*)
+            FROM app_data.organization_owner_assignments AS owner_assignment
+            JOIN app_data.organization_memberships AS owner_membership
+              ON owner_membership.organization_membership_id =
+                owner_assignment.organization_membership_id
+            WHERE owner_membership.organization_workspace_id =
+              leave_claim.organization_workspace_id) <> 1
+        OR EXISTS (
+          SELECT 1
+          FROM app_data.organization_owner_assignments AS owner_assignment
+          WHERE owner_assignment.organization_membership_id =
+            leave_claim.organization_membership_id
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM app_data.project_memberships AS project_membership
+          WHERE project_membership.organization_membership_id =
+            leave_claim.organization_membership_id
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM app_data.management_report_capability_grants AS capability
+          JOIN app_data.project_memberships AS project_membership
+            ON project_membership.project_membership_id =
+              capability.project_membership_id
+          WHERE project_membership.organization_membership_id =
+            leave_claim.organization_membership_id
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM app_data.promotion_target_assignments AS assignment
+          JOIN app_data.promotion_targets AS target
+            ON target.promotion_target_id = assignment.promotion_target_id
+          WHERE assignment.app_user_id = leave_claim.actor_app_user_id
+            AND target.workspace_id = leave_claim.organization_workspace_id
+        )
+      THEN
+        RAISE EXCEPTION '0089→0090 membership self-leave drift';
+      END IF;
+    END
+    \$left\$;
+  " \
+  >/dev/null
+membership_leave_upgrade_after_first_write="$(
+  docker exec "${container_name}" pg_dump \
+    "${membership_leave_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c
+)"
+membership_leave_upgrade_replayed_receipt="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${membership_leave_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      SET TIME ZONE 'UTC';
+      SET ROLE tongxingzhe_runtime;
+      SELECT *
+      FROM app_data.leave_organization_membership_for_identity_v1(
+        'https://synthetic-membership-leave-upgrade.example/auth/v1',
+        'target',
+        '00000000-0089-7000-0000-000000000901',
+        '${membership_leave_upgrade_workspace_id}'
+      );
+      RESET ROLE;
+    "
+)"
+if [[ "${membership_leave_upgrade_receipt}" != \
+  "${membership_leave_upgrade_replayed_receipt}" ]]; then
+  echo '0090 self-leave exact replay 改变原四字段 receipt。' >&2
+  exit 1
+fi
+membership_leave_upgrade_after_exact_replay="$(
+  docker exec "${container_name}" pg_dump \
+    "${membership_leave_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c
+)"
+if [[ "${membership_leave_upgrade_after_first_write}" != \
+  "${membership_leave_upgrade_after_exact_replay}" ]]; then
+  echo '0090 self-leave exact replay 改变 membership、claim 或 audit。' >&2
+  exit 1
+fi
+membership_leave_upgrade_migration_replay="$(
+  docker exec \
+    --env DATABASE_URL="${membership_leave_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/membership-leave-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${membership_leave_upgrade_migration_replay}" != \
+  *'已验证 0090_organization_membership_self_leave（无需重复执行）'* ]] \
+  || [[ "${membership_leave_upgrade_migration_replay}" == *'已执行 '* ]]; then
+  echo '0090 重复 migration 没有命中 checksum skip。' >&2
+  printf '%s\n' "${membership_leave_upgrade_migration_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${membership_leave_upgrade_migration_replay}"
+membership_leave_upgrade_after_migration_replay="$(
+  docker exec "${container_name}" pg_dump \
+    "${membership_leave_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c
+)"
+if [[ "${membership_leave_upgrade_after_exact_replay}" != \
+  "${membership_leave_upgrade_after_migration_replay}" ]]; then
+  echo '重复 0090 migration 改变 membership self-leave 业务快照。' >&2
+  exit 1
+fi
+echo '0089→0090 旧邀请成员、四字段 self-leave、exact replay、checksum 幂等与业务数据不变：通过。'
 
 echo '验证 0090→0091 旧 directed invitation 可由新 preview reader 读取。'
 docker exec "${container_name}" createdb \
