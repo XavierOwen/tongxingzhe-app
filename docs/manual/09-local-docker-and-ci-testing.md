@@ -2172,6 +2172,26 @@ runner随后只应用0090。比较旧业务快照时排除0090新增的三张sel
 
 同request exact replay必须逐字段返回原四字段receipt，且不增加或改写业务行。第二次0090部署验证checksum并跳过，最终快照仍不变。现有0090 fixture继续覆盖当前schema负例、ACL和并发；7CA只补真实旧writer记录的分阶段升级证据。该合成证据不等于生产升级或生产Auth。
 
+#### 6.2.10 真实旧批准成员项目安排升级（Issue #450，MANUAL-110）
+
+7CB在独立库只应用0001至0095。runner核对精确94个migration和最大版本0095。此时0096的三张assignment表、private writer和runtime bridge均不存在。
+
+upgrade fixture先调用0084组织创建writer和0092 link创建writer。它再调用0093 application提交writer和0094批准runtime writer。
+
+这条路径建立owner和已批准普通成员，并保存唯一五字段approval receipt。link、submitted／approved audit、普通membership和owner lineage必须与receipt一致。
+
+仓库没有组织项目创建writer。fixture因此只直接建立一个active organization project，不借此声称项目创建路径已覆盖。升级前的project membership、capability grant和promotion-target assignment均为零。
+
+runner只应用0096。排除三张新表后，升级前后的app_data／app_private数据快照必须逐字不变。runner还单独确认三张新表为空。
+
+owner用固定request UUID调用runtime bridge。唯一七字段receipt返回固定contract、原workspace／project和旧approval membership。它也返回新child membership、数据库active time和空inactive time。
+
+child、claim和唯一audit的相关字段必须与receipt一致。claim／tombstone／audit总数为1／0／1。
+
+旧link、application、approval、organization membership和owner assignment保持不变。capability和promotion-target assignment仍为零。同request exact replay逐字段返回原receipt且不改数据。第二次0096部署必须命中checksum skip，最终快照仍不变。
+
+现有0096 fixture继续覆盖负例、ACL、隔离级别、恢复期和并发矩阵。7CB不重复这些检查。该合成Docker／CI证据不等于生产升级或真实Auth。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。
