@@ -2138,6 +2138,16 @@ runner保存private function的OID、owner、ACL和完整app_data／app_private�
 
 第二次0088部署必须验证checksum并跳过，业务快照仍不变。7BX证明原0086 writer的claim可以穿过0088替换；7BN另行证明0088时代的claim可以穿过0097／0098。直接运行完整runner，在空库重建、既有检查／并发、checksum漂移拒绝和独立恢复一起通过后才交付。该合成升级证明不等于生产升级或生产Auth。
 
+#### 6.2.7 真实旧定向邀请预览升级（Issue #443，MANUAL-107）
+
+7BY在独立库只应用0001至0090，并核对89个版本及0091 preview reader不存在。upgrade fixture建立owner与target的最小前置事实。
+
+旧0087 runtime writer随后签发pending定向邀请。五字段receipt必须与claim的invitation、workspace、签发时间和168小时expiry一致。claim、tombstone、invitation_issued audit总数固定为1／0／1，target仍无组织membership。
+
+runner只应用0091。升级不能改写旧invitation或其他app_data／app_private业务行。绑定target通过runtime调用新reader后，四字段preview必须返回固定contract、原invitation UUID、组织原名和与旧claim相同的expiry。
+
+preview后的完整业务快照必须与调用前相同。第二次0091部署验证checksum并跳过，快照仍不变。现有0091 fixture继续覆盖wrong target、过期、恢复期、ACL和时间边界；7BY只补充真实旧writer记录的分阶段升级证据。该合成证据不等于生产升级或生产Auth。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。
