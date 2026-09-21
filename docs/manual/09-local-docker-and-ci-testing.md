@@ -2114,6 +2114,14 @@ runtime role 验证未配置、启用、幂等重放、冲突、停用和回滚�
 
 第二次0095部署必须验证checksum并跳过。快照比较排除升级新建的空tombstone表，并单独确认该表没有记录；升级、精确replay和checksum重跑后，其余业务数据必须不变。直接运行完整runner，在空库重建、既有检查／并发、checksum漂移拒绝和独立恢复一起通过后才交付。该合成旧记录升级证明不等于生产升级或生产Auth。
 
+#### 6.2.4 真实旧待审批申请批准升级（Issue #437，MANUAL-104）
+
+7BV在独立库只应用0001至0093，并确认0094 approval bridge尚不存在。既有upgrade fixture通过真实0092 link writer和0093 submit writer提交分享链接与待审批申请；随后只应用0094。升级本身不能改变既有app_data／app_private业务行。
+
+当前组织所有者通过runtime bridge批准原application。五字段receipt必须引用原application与organization，并返回新普通成员关系及数据库批准时间。claim的link、applicant、submitted和expires保持原值；新增membership指向原applicant，其active时间与approved claim和approved audit相同。批准不能增加owner assignment、project membership或capability grant。
+
+同一申请的exact replay必须逐字段返回原receipt，且不增加membership或audit。第二次0094部署验证checksum并跳过，已批准业务快照仍不变。直接运行完整runner，在空库重建、既有检查／并发、checksum漂移拒绝和独立恢复一起通过后才交付。该合成升级证明不等于生产升级或生产Auth。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。

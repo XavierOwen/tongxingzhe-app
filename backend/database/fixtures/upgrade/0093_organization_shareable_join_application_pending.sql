@@ -1,4 +1,4 @@
--- Persistent 0093 state for the 0098 -> 0099 reader upgrade test.
+-- Persistent 0093 state for staged application upgrade tests.
 
 \set ON_ERROR_STOP on
 

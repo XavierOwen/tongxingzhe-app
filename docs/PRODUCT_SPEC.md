@@ -3148,6 +3148,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-101` | 学习文档说明READ COMMITTED下全库count与旧baseline如何误报0086重放副作用、live namespace及parent-lineage断言范围、独立detached基准、精确PID/advisory等待下强制无关提交与自身写入反向检查；不把测试修复写成业务writer或权限变更。 |
 | `MANUAL-102` | 学习文档说明现有离线PII探针的Android模拟器九种scenario、三个独立OS进程、断网的active-default-network确认、原始allowlist JSON与授权不续期；说明synthetic时间、撤权与删除失败注入、五scope清理及高字号多行按钮的完整小圆角／48dp边界，不改变真实身份、硬件安全或#161人工验收状态。 |
 | `MANUAL-103` | 学习文档说明真实0094基线用旧writer提交组织创建claim，再仅升级0095；保存原五字段receipt，验证升级、精确replay与checksum重跑不改既有业务行，并区分空库fixture、当前schema恢复和生产升级。 |
+| `MANUAL-104` | 学习文档说明真实0093基线用旧writer提交待审批申请，再仅升级0094；current owner批准原申请时只建立一个普通组织成员关系，并验证原receipt重放、checksum幂等与零额外授权。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3439,6 +3440,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-111` | 7BP 强制0086的exact/failure/detached三组before/after间由独立physical PID在精确advisory barrier提交七类无关事实，旧全库count三条RED含实际main CI同症，新scoped断言GREEN。七种自身相关生成UUID/selector/lineage写入仍触发精确P0001；detached基准独立取当前状态，原receipt/拒绝/immutable/ACL保留。真实Node24、最终owner integration、完整PostgreSQL/并发/restore和精确head CI继续运行，不改业务writer/权限/并行策略，不代表生产Auth或部署。 |
 | `TEST-112` | 7BQ 实际OfflinePiiProbeApp在320×568／线性2倍Widget字号下验证Filled／Outlined多行按钮使用完整小圆角且高度至少48dp，先RED再GREEN；保留原探针阶段、异常、unsupported失败关闭及Vault自动测试。原生Android模拟器的独立进程九种scenario另存simulated allowlist证据，系统高字号与默认字号检查不代替真实Auth、硬件安全、实际72小时、服务器撤权或六平台真人验收；analyze／format／生产边界／链接及精确head CI继续运行。 |
 | `TEST-113` | 7BU 正式Docker从真实0001至0094建立独立旧库，runtime旧writer提交组织创建并保存原五字段receipt；仅0095升级不改既有app_data/app_private业务行，原active actor以相同request和canonical payload精确重放原receipt且不增加组织、membership、owner、claim或audit。重复0095命中checksum并跳过，既有业务快照不变；完整空库／checks／fixtures／runtime／并发／漂移拒绝／独立恢复及精确head CI继续运行，不代表生产升级或Auth。 |
+| `TEST-114` | 7BV 正式Docker从真实0001至0093建立独立旧库，用旧runtime writer提交link和pending application；仅0094升级不改既有app_data/app_private业务行。current owner批准原申请时生成一个active ordinary organization membership，claim、membership及approved audit共用批准时间，不增加owner、project membership或capability grant；exact replay返回原五字段receipt且不增写。重复0094命中checksum并保持已批准快照不变；完整既有套件及精确head CI继续运行，不代表生产升级或Auth。 |
 
 ## 9. UI、视觉与可访问性
 
