@@ -2192,6 +2192,22 @@ child、claim和唯一audit的相关字段必须与receipt一致。claim／tombs
 
 现有0096 fixture继续覆盖负例、ACL、隔离级别、恢复期和并发矩阵。7CB不重复这些检查。该合成Docker／CI证据不等于生产升级或真实Auth。
 
+#### 6.2.11 真实旧组织分享链接创建升级（Issue #452，MANUAL-111）
+
+7CC在独立库只应用0001至0091。runner核对精确90个migration和最大版本0091。此时0092的三张link表、三个保护函数、private create writer及runtime create／preview bridges均不存在。
+
+upgrade fixture用真实0084 runtime writer创建组织。输入名称含首尾空格；五字段creation receipt必须与canonical workspace、active owner membership／assignment、creation claim和唯一audit逐字段一致。项目、project membership、capability grant和promotion-target assignment均为零。
+
+runner只应用0092。排除三张新表后，升级前后的app_data／app_private数据快照必须逐字不变。三张新表在升级后均为空。
+
+原owner用固定link UUID调用runtime create bridge。唯一五字段receipt必须返回固定contract、原workspace、位于调用墙钟边界内的有限数据库issued time，以及精确晚168小时的expiry。claim和唯一`link_created` audit逐字段与receipt一致；claim／tombstone／audit总数为1／0／1。
+
+同一active identity调用preview bridge。唯一四字段结果必须返回固定preview contract、原link UUID、旧组织的canonical名称和首次create的expiry。preview不得写入数据。
+
+旧organization membership和owner assignment保持精确1／1。项目、project membership、capability和全历史promotion-target assignment仍为零。同link exact replay逐字段返回原create receipt且不改数据。第二次0092部署必须命中checksum skip，最终快照仍不变。
+
+现有0092 fixture继续覆盖当前schema负例、ACL、恢复期和并发矩阵。7CC不重复这些检查。该合成Docker／CI证据不等于生产升级或真实Auth。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。

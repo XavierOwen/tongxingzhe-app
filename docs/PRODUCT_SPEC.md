@@ -3155,6 +3155,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-108` | 学习文档说明真实0088基线用0084 runtime writer创建projectless组织，再仅升级0089；原actor目录返回旧workspace和canonical组织名，升级、读取与checksum重跑均不改写业务事实或增加项目授权。 |
 | `MANUAL-109` | 学习文档说明真实0089基线用0084创建writer与0087定向邀请create／accept writers建立普通成员，再仅升级0090；升级不改旧业务事实，普通成员可取得四字段self-leave receipt并结束原membership。说明邀请与owner lineage保留、exact replay／checksum幂等、无下游关系前提，以及合成Docker证据不等于生产升级或Auth。 |
 | `MANUAL-110` | 学习文档说明真实0095基线用0084／0092／0093／0094 runtime writers建立已批准普通成员，再仅升级0096。由于仓库没有组织项目创建writer，fixture直接建立唯一active项目。owner安排返回七字段receipt，只新增普通project membership。旧link／application／organization membership／owner lineage不变，且不授capability或对象分配。说明exact replay、checksum幂等和合成证据边界。 |
+| `MANUAL-111` | 学习文档说明真实0091基线用0084 runtime writer创建旧组织，再仅升级0092。原owner创建并预览分享链接，五字段create receipt、四字段preview、claim和audit逐字段对齐；旧组织与owner lineage不变，且不增加项目、capability或对象分配。说明exact replay、checksum幂等和合成证据边界。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3453,6 +3454,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-118` | 7BZ 正式Docker从真实0001至0088建立独立旧库，用0084 runtime writer创建projectless组织并保存五字段receipt。writer把带首尾空格的输入转为canonical组织名；active owner membership／assignment与receipt一致，且无project membership或capability。仅0089升级不改app_data/app_private业务行；原actor目录返回旧workspace和canonical组织名的单行两字段结果。读取与重复0089 checksum都不改写业务快照；完整既有套件及精确head CI继续运行，不代表生产升级或Auth。 |
 | `TEST-119` | 7CA 正式Docker从真实0001至0089建立独立旧库，用0084 runtime writer创建组织，再用0087 runtime create／accept writers建立普通成员并保存五字段accept receipt。claim、issued／accepted audit、active membership与receipt一致，target无owner、project、capability或对象分配。仅0090升级；排除三张新增空表后的旧业务快照不变，且新表分别为空。target调用runtime self-leave取得原workspace／membership的四字段receipt；membership end、claim和唯一audit共用数据库effective time，claim／tombstone／audit为1／0／1。旧invitation与owner不变，exact replay及重复0090 checksum不改最终数据；完整既有套件及精确head CI继续运行，不代表生产升级或Auth。 |
 | `TEST-120` | 7CB 正式Docker从真实0001至0095建立独立旧库，精确核对94个migration和最大0095。0084／0092／0093／0094 runtime writers建立owner、link、待审申请和已批准普通成员；fixture只因缺少组织项目创建writer而直接建立一个active项目。基线无project membership、capability或对象分配。仅0096升级且三张新表为空，排除新表后的旧业务快照不变。owner以固定request调用runtime bridge后取得七字段receipt；child membership、claim和唯一audit逐字段与receipt对齐，claim／tombstone／audit为1／0／1。旧link／application／organization membership／owner lineage不变，capability和对象分配仍为零。exact replay及重复0096 checksum不改最终快照；完整既有套件及精确head CI继续运行，不代表生产升级或真实Auth。 |
+| `TEST-121` | 7CC 正式Docker从真实0001至0091建立独立旧库，精确核对90个migration和最大0091。0084 runtime writer用含首尾空格的名称创建组织；五字段creation receipt与canonical workspace、active owner membership／assignment、claim及audit逐字段对齐，且无项目或授权事实。仅0092升级且三张新表为空，排除新表后的旧业务快照不变。owner以固定link UUID调用runtime create bridge，取得数据库签发时间和168小时expiry的五字段receipt；claim／tombstone／audit为1／0／1并与receipt对齐。四字段preview返回原canonical组织名和同一expiry且零写入。旧组织与owner lineage保持1／1，项目、project membership、capability和全历史对象分配仍为零。exact replay及重复0092 checksum不改最终快照；完整既有套件及精确head CI继续运行，不代表生产升级或真实Auth。 |
 
 ## 9. UI、视觉与可访问性
 
