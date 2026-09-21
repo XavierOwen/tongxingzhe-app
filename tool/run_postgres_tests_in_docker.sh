@@ -13,12 +13,14 @@ test_database='tongxingzhe_test'
 restore_database='tongxingzhe_restore'
 upgrade_database='tongxingzhe_region_upgrade'
 ownerless_upgrade_database='tongxingzhe_ownerless_upgrade'
+owner_authorization_upgrade_database='tongxingzhe_owner_authorization_upgrade'
 link_submit_upgrade_database='tongxingzhe_link_submit_upgrade'
 application_approval_upgrade_database='tongxingzhe_application_approval_upgrade'
 directory_upgrade_database='tongxingzhe_application_directory_upgrade'
 database_url="postgresql://postgres:postgres@127.0.0.1:5432/${test_database}"
 upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${upgrade_database}"
 ownerless_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${ownerless_upgrade_database}"
+owner_authorization_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${owner_authorization_upgrade_database}"
 link_submit_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${link_submit_upgrade_database}"
 application_approval_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${application_approval_upgrade_database}"
 directory_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${directory_upgrade_database}"
@@ -671,6 +673,243 @@ docker exec "${container_name}" psql \
   " \
   >/dev/null
 echo '0085 无 owner 升级失败且事务完整回滚：通过。'
+
+echo '验证 0087→0088 保留原 0086 writer 已提交的 owner-transfer claim。'
+docker exec "${container_name}" createdb \
+  -U postgres \
+  "${owner_authorization_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/owner-authorization-baseline-migrations \
+      /tmp/owner-authorization-upgrade-only && \
+   find /workspace/backend/database/migrations \
+     -maxdepth 1 -type f \
+     \( -name '000[1-9]_*.sql' \
+        -o -name '00[1-7][0-9]_*.sql' \
+        -o -name '008[0-7]_*.sql' \) \
+     -exec cp {} /tmp/owner-authorization-baseline-migrations/ \; && \
+   test \"\$(find /tmp/owner-authorization-baseline-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 86 && \
+   cp /workspace/backend/database/migrations/0088_*.sql \
+     /tmp/owner-authorization-upgrade-only/ && \
+   test \"\$(find /tmp/owner-authorization-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${owner_authorization_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/owner-authorization-baseline-migrations \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh \
+  >/dev/null
+owner_authorization_function_before="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${owner_authorization_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      DO \$baseline\$
+      DECLARE
+        definition text;
+      BEGIN
+        SELECT pg_get_functiondef(
+          'app_private.transfer_organization_owner_v1(uuid,uuid,uuid,uuid)'::regprocedure
+        ) INTO STRICT definition;
+        IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 86
+          OR (SELECT max(version) FROM app_migrations.schema_migrations)
+            IS DISTINCT FROM '0087_organization_directed_account_invitation'
+          OR position('authorization_time' IN definition) > 0
+          OR regexp_count(definition, '@>[[:space:]]*effective_time') <> 4
+        THEN
+          RAISE EXCEPTION '0087 owner authorization upgrade baseline drift';
+        END IF;
+      END
+      \$baseline\$;
+      SELECT jsonb_build_object(
+        'oid', procedure_row.oid::text,
+        'owner', pg_get_userbyid(procedure_row.proowner),
+        'acl', procedure_row.proacl::text
+      )
+      FROM pg_catalog.pg_proc AS procedure_row
+      WHERE procedure_row.oid =
+        'app_private.transfer_organization_owner_v1(uuid,uuid,uuid,uuid)'::regprocedure;
+    "
+)"
+owner_authorization_legacy_receipt="$(
+  docker exec \
+    --workdir /workspace \
+    "${container_name}" \
+    psql \
+    -U postgres \
+    -d "${owner_authorization_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --file /workspace/backend/database/fixtures/upgrade/0087_organization_owner_transfer_claim.sql
+)"
+if [[ "${owner_authorization_legacy_receipt}" != \
+  organization-owner-transfer:v1\|* ]] \
+  || [[ "$(printf '%s\n' "${owner_authorization_legacy_receipt}" \
+    | awk -F '|' 'NF == 5 { count++ } END { print count+0 }')" -ne 1 ]]; then
+  echo '0087 原 0086 writer 没有返回单行完整五字段 receipt。' >&2
+  exit 1
+fi
+owner_authorization_workspace_id="$(
+  printf '%s\n' "${owner_authorization_legacy_receipt}" | awk -F '|' '{ print $2 }'
+)"
+owner_authorization_before_upgrade="$(
+  docker exec "${container_name}" pg_dump \
+    "${owner_authorization_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d
+)"
+docker exec \
+  --env DATABASE_URL="${owner_authorization_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/owner-authorization-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+owner_authorization_function_after="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${owner_authorization_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      DO \$upgrade\$
+      DECLARE
+        definition text;
+      BEGIN
+        SELECT pg_get_functiondef(
+          'app_private.transfer_organization_owner_v1(uuid,uuid,uuid,uuid)'::regprocedure
+        ) INTO STRICT definition;
+        IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 87
+          OR (SELECT max(version) FROM app_migrations.schema_migrations)
+            IS DISTINCT FROM '0088_organization_owner_transfer_authorization_time'
+          OR regexp_count(
+            definition,
+            'authorization_time[[:space:]]*:[=][[:space:]]*clock_timestamp[[:space:]]*[(][)]'
+          ) <> 1
+          OR regexp_count(definition, '@>[[:space:]]*authorization_time') <> 4
+          OR regexp_count(definition, '@>[[:space:]]*effective_time') <> 0
+        THEN
+          RAISE EXCEPTION '0088 owner authorization upgrade drift';
+        END IF;
+      END
+      \$upgrade\$;
+      SELECT jsonb_build_object(
+        'oid', procedure_row.oid::text,
+        'owner', pg_get_userbyid(procedure_row.proowner),
+        'acl', procedure_row.proacl::text
+      )
+      FROM pg_catalog.pg_proc AS procedure_row
+      WHERE procedure_row.oid =
+        'app_private.transfer_organization_owner_v1(uuid,uuid,uuid,uuid)'::regprocedure;
+    "
+)"
+if [[ -z "${owner_authorization_function_before}" ]] \
+  || [[ "${owner_authorization_function_before}" != \
+    "${owner_authorization_function_after}" ]]; then
+  echo '0088 没有保留 private owner-transfer writer 的 OID、owner 或 ACL。' >&2
+  exit 1
+fi
+owner_authorization_after_upgrade="$(
+  docker exec "${container_name}" pg_dump \
+    "${owner_authorization_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d
+)"
+if [[ "${owner_authorization_before_upgrade}" != \
+  "${owner_authorization_after_upgrade}" ]]; then
+  echo '0088 升级改变旧 owner-transfer claim 或其他业务数据。' >&2
+  exit 1
+fi
+owner_authorization_replayed_receipt="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${owner_authorization_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      SET TIME ZONE 'UTC';
+      SET ROLE tongxingzhe_runtime;
+      SELECT *
+      FROM app_data.transfer_organization_owner_for_identity_v1(
+        'https://synthetic-owner-authorization-upgrade.example/auth/v1',
+        'original-actor',
+        '00000000-0087-6000-0000-000000000702',
+        '${owner_authorization_workspace_id}',
+        '00000000-0087-3000-0000-000000000702'
+      );
+      RESET ROLE;
+    "
+)"
+if [[ "${owner_authorization_legacy_receipt}" != \
+  "${owner_authorization_replayed_receipt}" ]]; then
+  echo '0088 升级后旧 owner-transfer request 的 exact replay 改变原 receipt。' >&2
+  exit 1
+fi
+owner_authorization_after_replay="$(
+  docker exec "${container_name}" pg_dump \
+    "${owner_authorization_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d
+)"
+if [[ "${owner_authorization_after_upgrade}" != \
+  "${owner_authorization_after_replay}" ]]; then
+  echo '0088 exact replay 改变 owner、membership、claim、audit 或其他业务行。' >&2
+  exit 1
+fi
+owner_authorization_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${owner_authorization_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/owner-authorization-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${owner_authorization_upgrade_replay}" != \
+  *'已验证 0088_organization_owner_transfer_authorization_time（无需重复执行）'* ]] \
+  || [[ "${owner_authorization_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0088 重复 migration 没有命中 checksum skip。' >&2
+  printf '%s\n' "${owner_authorization_upgrade_replay}" >&2
+  exit 1
+fi
+owner_authorization_after_migration_replay="$(
+  docker exec "${container_name}" pg_dump \
+    "${owner_authorization_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d
+)"
+if [[ "${owner_authorization_after_replay}" != \
+  "${owner_authorization_after_migration_replay}" ]]; then
+  echo '重复 0088 migration 改变 owner-transfer 业务快照。' >&2
+  exit 1
+fi
+echo '0087→0088 旧 claim、函数身份、完整 receipt、exact replay、checksum 幂等与业务数据不变：通过。'
 
 echo '验证 0092→0093 保留旧 link，并可通过新 submit writer 提交申请。'
 docker exec "${container_name}" createdb \
