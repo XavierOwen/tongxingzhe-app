@@ -2106,6 +2106,14 @@ runtime role 验证未配置、启用、幂等重放、冲突、停用和回滚�
 
 第二次0099部署必须验证checksum并跳过。升级、重跑及两种reader调用之后，完整app_data/app_private data-only dump字符串必须不变；固定测试nonce使比较稳定，不要求宿主shasum。运行现有完整runner，在新安装、全部既有检查／并发、checksum漂移拒绝和独立恢复一起通过后才交付。该合成旧记录升级证明不等于生产升级、生产Auth或真人验收。
 
+#### 6.2.3 真实旧组织创建 claim 升级（Issue #436，MANUAL-103）
+
+7BU在独立库只应用0001至0094，并确认0095尚未执行。旧runtime writer提交一次组织创建，保留原五字段receipt及既有app_data／app_private业务快照；随后只应用0095。
+
+0095可以增加空的创建请求tombstone表并替换私有writer，但不能回填或改写旧workspace、membership、owner assignment、claim或audit。原active actor使用相同request和canonical payload时，必须逐字段返回原receipt。精确replay不能创建第二个组织或增加相关业务行。
+
+第二次0095部署必须验证checksum并跳过。快照比较排除升级新建的空tombstone表，并单独确认该表没有记录；升级、精确replay和checksum重跑后，其余业务数据必须不变。直接运行完整runner，在空库重建、既有检查／并发、checksum漂移拒绝和独立恢复一起通过后才交付。该合成旧记录升级证明不等于生产升级或生产Auth。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。

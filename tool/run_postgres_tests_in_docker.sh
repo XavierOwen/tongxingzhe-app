@@ -668,6 +668,105 @@ docker exec "${container_name}" psql \
   >/dev/null
 echo '0085 无 owner 升级失败且事务完整回滚：通过。'
 
+echo '验证 0094→0095 保留旧 writer 的已提交 organization-creation claim。'
+docker exec "${container_name}" createdb -U postgres tongxingzhe_creation_claim_upgrade
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/creation-claim-baseline-migrations /tmp/creation-claim-upgrade-only && \
+   find /workspace/backend/database/migrations -maxdepth 1 -type f \
+     \( -name '000[1-9]_*.sql' -o -name '00[1-8][0-9]_*.sql' -o -name '009[0-4]_*.sql' \) \
+     -exec cp {} /tmp/creation-claim-baseline-migrations/ \; && \
+   test \"\$(find /tmp/creation-claim-baseline-migrations -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 93 && \
+   cp /workspace/backend/database/migrations/0095_*.sql /tmp/creation-claim-upgrade-only/ && \
+   test \"\$(find /tmp/creation-claim-upgrade-only -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_creation_claim_upgrade \
+  --env MIGRATION_DIR=/tmp/creation-claim-baseline-migrations \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh >/dev/null
+creation_claim_legacy_receipt="$(
+  docker exec "${container_name}" psql -U postgres -d tongxingzhe_creation_claim_upgrade \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --file /workspace/backend/database/fixtures/upgrade/0094_organization_creation_claim.sql
+)"
+if [[ "${creation_claim_legacy_receipt}" != organization-creation:v1\|* ]] \
+  || [[ "$(printf '%s\n' "${creation_claim_legacy_receipt}" | awk -F '|' 'NF == 5 { count++ } END { print count+0 }')" -ne 1 ]]; then
+  echo '0094 旧 writer 没有返回单行完整五字段 receipt。' >&2
+  exit 1
+fi
+creation_claim_before_upgrade="$(
+  docker exec "${container_name}" pg_dump \
+    postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_creation_claim_upgrade \
+    --data-only --schema=app_data --schema=app_private --no-owner --no-privileges \
+    --exclude-table-data=app_private.organization_creation_request_tombstones \
+    --restrict-key=6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a
+)"
+docker exec \
+  --env DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_creation_claim_upgrade \
+  --env MIGRATION_DIR=/tmp/creation-claim-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+creation_claim_after_upgrade="$(
+  docker exec "${container_name}" pg_dump \
+    postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_creation_claim_upgrade \
+    --data-only --schema=app_data --schema=app_private --no-owner --no-privileges \
+    --exclude-table-data=app_private.organization_creation_request_tombstones \
+    --restrict-key=6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a
+)"
+if [[ "${creation_claim_before_upgrade}" != "${creation_claim_after_upgrade}" ]]; then
+  echo '0095 升级改变旧 claim 或其他 app_data／app_private 业务数据。' >&2
+  exit 1
+fi
+creation_claim_replayed_receipt="$(
+  docker exec "${container_name}" psql -U postgres -d tongxingzhe_creation_claim_upgrade \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --file /workspace/backend/database/fixtures/upgrade/0094_organization_creation_claim.sql
+)"
+if [[ "${creation_claim_legacy_receipt}" != "${creation_claim_replayed_receipt}" ]]; then
+  echo '0095 升级后旧 organization-creation request 的 exact replay 改变原五字段 receipt。' >&2
+  exit 1
+fi
+creation_claim_after_exact_replay="$(
+  docker exec "${container_name}" pg_dump \
+    postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_creation_claim_upgrade \
+    --data-only --schema=app_data --schema=app_private --no-owner --no-privileges \
+    --exclude-table-data=app_private.organization_creation_request_tombstones \
+    --restrict-key=6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a
+)"
+if [[ "${creation_claim_after_upgrade}" != "${creation_claim_after_exact_replay}" ]]; then
+  echo '0095 exact replay 改变 organization-creation 业务行。' >&2
+  exit 1
+fi
+creation_claim_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_creation_claim_upgrade \
+    --env MIGRATION_DIR=/tmp/creation-claim-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${creation_claim_upgrade_replay}" != *'已验证 0095_organization_creation_request_tombstone（无需重复执行）'* ]] \
+  || [[ "${creation_claim_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0095 重复 migration 没有命中 checksum skip。' >&2
+  printf '%s\n' "${creation_claim_upgrade_replay}" >&2
+  exit 1
+fi
+creation_claim_after_replay="$(
+  docker exec "${container_name}" pg_dump \
+    postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_creation_claim_upgrade \
+    --data-only --schema=app_data --schema=app_private --no-owner --no-privileges \
+    --exclude-table-data=app_private.organization_creation_request_tombstones \
+    --restrict-key=6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a
+)"
+if [[ "${creation_claim_after_exact_replay}" != "${creation_claim_after_replay}" ]]; then
+  echo '重复 migration 改变 organization-creation 业务行。' >&2
+  exit 1
+fi
+if [[ "$(
+  docker exec "${container_name}" psql -U postgres -d tongxingzhe_creation_claim_upgrade \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command 'SELECT count(*) FROM app_private.organization_creation_request_tombstones'
+)" -ne 0 ]]; then
+  echo '0095 升级或 exact replay 意外写入 organization-creation tombstone。' >&2
+  exit 1
+fi
+echo '0094→0095 旧 claim、完整 receipt、exact replay、checksum 幂等与业务数据不变：通过。'
+
 echo '验证 0096→0097／0098 保留旧 writer 的已提交 owner-transfer claim。'
 docker exec "${container_name}" createdb -U postgres tongxingzhe_owner_claim_upgrade
 docker exec "${container_name}" bash -lc \
