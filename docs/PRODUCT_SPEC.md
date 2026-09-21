@@ -3151,6 +3151,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-104` | 学习文档说明真实0093基线用旧writer提交待审批申请，再仅升级0094；current owner批准原申请时只建立一个普通组织成员关系，并验证原receipt重放、checksum幂等与零额外授权。 |
 | `MANUAL-105` | 学习文档说明真实0092基线用旧writer提交live分享链接，再仅升级0093；active non-member通过原链接提交独立申请，并验证两条168小时期限、原link lineage、精确replay、checksum幂等与零成员授权。 |
 | `MANUAL-106` | 学习文档说明真实0087基线使用0084创建writer与原0086交接writer提交负责人交接，再仅升级0088；保存原五字段receipt、private function身份与完整业务快照，验证已失去owner身份的原actor仍可精确重放。说明它与0096→0098升级证明的差异，并区分合成Docker证据与生产升级。 |
+| `MANUAL-107` | 学习文档说明真实0090基线用旧0087 runtime writer签发pending定向邀请，再仅升级0091；绑定target可预览原组织名称和expiry，升级、预览与checksum重跑均不改写业务事实。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3445,6 +3446,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-114` | 7BV 正式Docker从真实0001至0093建立独立旧库，用旧runtime writer提交link和pending application；仅0094升级不改既有app_data/app_private业务行。current owner批准原申请时生成一个active ordinary organization membership，claim、membership及approved audit共用批准时间，不增加owner、project membership或capability grant；exact replay返回原五字段receipt且不增写。重复0094命中checksum并保持已批准快照不变；完整既有套件及精确head CI继续运行，不代表生产升级或Auth。 |
 | `TEST-115` | 7BW 正式Docker从真实0001至0092建立独立旧库，用旧runtime writer提交live分享链接并保存原五字段receipt；仅0093升级保留原link claim及created audit。active non-member通过旧link提交独立application，workspace沿用原link，submitted与expires形成新的168小时期限，approval字段为空且只写一条submitted audit；membership、owner、project membership及capability均不增加。exact replay返回原六字段receipt且不增写，重复0093命中checksum并保持业务快照不变；完整既有套件及精确head CI继续运行，不代表生产升级或Auth。 |
 | `TEST-116` | 7BX 正式Docker从真实0001至0087建立独立旧库，使用0084创建writer与原0086交接writer提交负责人交接并保存五字段receipt。仅0088替换private writer，保留function OID／owner／ACL且不改app_data/app_private业务行；已失去owner身份的原active actor精确重放原receipt，不增加owner assignment、claim、audit或其他业务行。重复0088命中checksum并保持快照不变；完整既有套件及精确head CI继续运行，不代表生产升级或Auth。 |
+| `TEST-117` | 7BY 正式Docker从真实0001至0090建立独立旧库，用旧0087 runtime writer签发pending定向邀请并保存原五字段receipt。claim、tombstone、invitation_issued audit总数为1／0／1，签发者、target、workspace、同一签发时间及168小时expiry与receipt一致，target仍无组织membership。仅0091升级不改app_data/app_private业务行；绑定target调用新reader时返回原invitation UUID、组织原名和expiry的单行四字段preview。preview与重复0091 checksum都不改写业务快照；完整既有套件及精确head CI继续运行，不代表生产升级或Auth。 |
 
 ## 9. UI、视觉与可访问性
 

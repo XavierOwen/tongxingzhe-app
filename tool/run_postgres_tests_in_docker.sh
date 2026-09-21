@@ -14,6 +14,7 @@ restore_database='tongxingzhe_restore'
 upgrade_database='tongxingzhe_region_upgrade'
 ownerless_upgrade_database='tongxingzhe_ownerless_upgrade'
 owner_authorization_upgrade_database='tongxingzhe_owner_authorization_upgrade'
+invitation_preview_upgrade_database='tongxingzhe_invitation_preview_upgrade'
 link_submit_upgrade_database='tongxingzhe_link_submit_upgrade'
 application_approval_upgrade_database='tongxingzhe_application_approval_upgrade'
 directory_upgrade_database='tongxingzhe_application_directory_upgrade'
@@ -21,6 +22,7 @@ database_url="postgresql://postgres:postgres@127.0.0.1:5432/${test_database}"
 upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${upgrade_database}"
 ownerless_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${ownerless_upgrade_database}"
 owner_authorization_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${owner_authorization_upgrade_database}"
+invitation_preview_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${invitation_preview_upgrade_database}"
 link_submit_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${link_submit_upgrade_database}"
 application_approval_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${application_approval_upgrade_database}"
 directory_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${directory_upgrade_database}"
@@ -910,6 +912,237 @@ if [[ "${owner_authorization_after_replay}" != \
   exit 1
 fi
 echo '0087→0088 旧 claim、函数身份、完整 receipt、exact replay、checksum 幂等与业务数据不变：通过。'
+
+echo '验证 0090→0091 旧 directed invitation 可由新 preview reader 读取。'
+docker exec "${container_name}" createdb \
+  -U postgres \
+  "${invitation_preview_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/invitation-preview-upgrade-baseline-migrations \
+      /tmp/invitation-preview-upgrade-only && \
+   find /workspace/backend/database/migrations \
+     -maxdepth 1 -type f \
+     \( -name '000[1-9]_*.sql' \
+        -o -name '00[1-8][0-9]_*.sql' \
+        -o -name '0090_*.sql' \) \
+     -exec cp {} /tmp/invitation-preview-upgrade-baseline-migrations/ \; && \
+   test \"\$(find /tmp/invitation-preview-upgrade-baseline-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 89 && \
+   cp /workspace/backend/database/migrations/0091_*.sql \
+     /tmp/invitation-preview-upgrade-only/ && \
+   test \"\$(find /tmp/invitation-preview-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${invitation_preview_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/invitation-preview-upgrade-baseline-migrations \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh \
+  >/dev/null
+invitation_preview_upgrade_legacy_receipt="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${invitation_preview_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --file /workspace/backend/database/fixtures/upgrade/0090_organization_directed_account_invitation_live.sql
+)"
+if [[ "${invitation_preview_upgrade_legacy_receipt}" != \
+  organization-directed-account-invitation:v1\|00000000-0090-6000-0000-000000000801\|00000000-0090-2000-0000-000000000801\|* ]] \
+  || [[ "$(printf '%s\n' "${invitation_preview_upgrade_legacy_receipt}" \
+    | awk -F '|' 'NF == 5 { count++ } END { print count+0 }')" -ne 1 ]]; then
+  echo '0090 旧 writer 没有返回单行完整五字段 invitation receipt。' >&2
+  exit 1
+fi
+invitation_preview_upgrade_claim_receipt="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${invitation_preview_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      SET TIME ZONE 'UTC';
+      SELECT
+        'organization-directed-account-invitation:v1',
+        invitation_id,
+        organization_workspace_id,
+        issued_at_utc,
+        expires_at_utc
+      FROM app_private.organization_directed_account_invitation_request_claims;
+    "
+)"
+if [[ "${invitation_preview_upgrade_legacy_receipt}" != \
+  "${invitation_preview_upgrade_claim_receipt}" ]]; then
+  echo '0090 旧 writer 的 receipt 与 invitation claim 不一致。' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${invitation_preview_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$legacy\$
+    DECLARE
+      claim
+        app_private.organization_directed_account_invitation_request_claims%ROWTYPE;
+    BEGIN
+      SELECT * INTO STRICT claim
+      FROM app_private.organization_directed_account_invitation_request_claims
+      WHERE invitation_id =
+        '00000000-0090-6000-0000-000000000801'::uuid;
+
+      IF claim.organization_workspace_id IS DISTINCT FROM
+          '00000000-0090-2000-0000-000000000801'::uuid
+        OR claim.inviter_app_user_id IS DISTINCT FROM
+          '00000000-0090-0000-0000-000000000801'::uuid
+        OR claim.target_app_user_id IS DISTINCT FROM
+          '00000000-0090-0000-0000-000000000802'::uuid
+        OR claim.expires_at_utc IS DISTINCT FROM
+          claim.issued_at_utc + interval '168 hours'
+        OR claim.accepted_at_utc IS NOT NULL
+        OR claim.accepted_organization_membership_id IS NOT NULL
+        OR (SELECT count(*)
+            FROM app_private.organization_directed_account_invitation_request_claims) <> 1
+        OR (SELECT count(*)
+            FROM app_private.organization_directed_account_invitation_request_tombstones) <> 0
+        OR (SELECT count(*)
+            FROM app_private.organization_directed_account_invitation_audit_events) <> 1
+        OR (SELECT count(*)
+            FROM app_private.organization_directed_account_invitation_audit_events
+            WHERE organization_invitation_contract_id =
+                'organization-directed-account-invitation:v1'
+              AND invitation_id = claim.invitation_id
+              AND organization_workspace_id = claim.organization_workspace_id
+              AND event_kind = 'invitation_issued'
+              AND organization_membership_id IS NULL
+              AND occurred_at_utc = claim.issued_at_utc) <> 1
+        OR EXISTS (
+          SELECT 1
+          FROM app_data.organization_memberships
+          WHERE organization_workspace_id = claim.organization_workspace_id
+            AND app_user_id = claim.target_app_user_id
+        )
+      THEN
+        RAISE EXCEPTION '0090 legacy invitation drift';
+      END IF;
+    END
+    \$legacy\$;
+  " \
+  >/dev/null
+invitation_preview_upgrade_before="$(
+  docker exec "${container_name}" pg_dump \
+    "${invitation_preview_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e
+)"
+docker exec \
+  --env DATABASE_URL="${invitation_preview_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/invitation-preview-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+invitation_preview_upgrade_after_migration="$(
+  docker exec "${container_name}" pg_dump \
+    "${invitation_preview_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e
+)"
+if [[ "${invitation_preview_upgrade_before}" != \
+  "${invitation_preview_upgrade_after_migration}" ]]; then
+  echo '0091 升级改变了 0090 已有 invitation 或其他业务数据。' >&2
+  exit 1
+fi
+invitation_preview_upgrade_expires_at="$(
+  printf '%s\n' "${invitation_preview_upgrade_legacy_receipt}" \
+    | awk -F '|' '{ print $5 }'
+)"
+invitation_preview_upgrade_result="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${invitation_preview_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      SET TIME ZONE 'UTC';
+      SET ROLE tongxingzhe_runtime;
+      SELECT *
+      FROM app_data.preview_organization_directed_invitation_for_identity_v1(
+        'https://synthetic-invitation-preview-upgrade.example/auth/v1',
+        'target',
+        '00000000-0090-6000-0000-000000000801'
+      );
+      RESET ROLE;
+    "
+)"
+if [[ "${invitation_preview_upgrade_result}" != \
+  "organization-directed-account-invitation-preview:v1|00000000-0090-6000-0000-000000000801| 0090 Original invitation organization |${invitation_preview_upgrade_expires_at}" ]] \
+  || [[ "$(printf '%s\n' "${invitation_preview_upgrade_result}" \
+    | awk -F '|' 'NF == 4 { count++ } END { print count+0 }')" -ne 1 ]]; then
+  echo '0091 preview 没有返回与旧 invitation 一致的单行四字段结果。' >&2
+  exit 1
+fi
+invitation_preview_upgrade_after_preview="$(
+  docker exec "${container_name}" pg_dump \
+    "${invitation_preview_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e
+)"
+if [[ "${invitation_preview_upgrade_after_migration}" != \
+  "${invitation_preview_upgrade_after_preview}" ]]; then
+  echo '0091 preview 改变了 claim、tombstone、audit、membership 或其他业务数据。' >&2
+  exit 1
+fi
+invitation_preview_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${invitation_preview_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/invitation-preview-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${invitation_preview_upgrade_replay}" != \
+  *'已验证 0091_organization_directed_account_invitation_preview（无需重复执行）'* ]] \
+  || [[ "${invitation_preview_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0091 重复 migration 没有命中 checksum skip。' >&2
+  printf '%s\n' "${invitation_preview_upgrade_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${invitation_preview_upgrade_replay}"
+invitation_preview_upgrade_after_replay="$(
+  docker exec "${container_name}" pg_dump \
+    "${invitation_preview_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e
+)"
+if [[ "${invitation_preview_upgrade_after_preview}" != \
+  "${invitation_preview_upgrade_after_replay}" ]]; then
+  echo '重复 0091 migration 改变 invitation preview 业务快照。' >&2
+  exit 1
+fi
+echo '0090→0091 旧 invitation、四字段 preview、checksum 幂等与业务数据不变：通过。'
 
 echo '验证 0092→0093 保留旧 link，并可通过新 submit writer 提交申请。'
 docker exec "${container_name}" createdb \
