@@ -19,6 +19,7 @@ membership_leave_upgrade_database='tongxingzhe_membership_leave_upgrade'
 invitation_preview_upgrade_database='tongxingzhe_invitation_preview_upgrade'
 link_submit_upgrade_database='tongxingzhe_link_submit_upgrade'
 application_approval_upgrade_database='tongxingzhe_application_approval_upgrade'
+project_assignment_upgrade_database='tongxingzhe_project_assignment_upgrade'
 directory_upgrade_database='tongxingzhe_application_directory_upgrade'
 database_url="postgresql://postgres:postgres@127.0.0.1:5432/${test_database}"
 upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${upgrade_database}"
@@ -29,6 +30,7 @@ membership_leave_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${me
 invitation_preview_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${invitation_preview_upgrade_database}"
 link_submit_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${link_submit_upgrade_database}"
 application_approval_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${application_approval_upgrade_database}"
+project_assignment_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${project_assignment_upgrade_database}"
 directory_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${directory_upgrade_database}"
 container_started=0
 restore_container_started=0
@@ -2579,6 +2581,467 @@ if [[ "$(
   exit 1
 fi
 echo '0094→0095 旧 claim、完整 receipt、exact replay、checksum 幂等与业务数据不变：通过。'
+
+echo '验证 0095→0096 升级后可将旧批准成员安排进组织项目。'
+docker exec "${container_name}" createdb \
+  -U postgres \
+  "${project_assignment_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/project-assignment-baseline-migrations \
+      /tmp/project-assignment-upgrade-only && \
+   find /workspace/backend/database/migrations \
+     -maxdepth 1 -type f \
+     \( -name '000[1-9]_*.sql' \
+        -o -name '00[1-8][0-9]_*.sql' \
+        -o -name '009[0-5]_*.sql' \) \
+     -exec cp {} /tmp/project-assignment-baseline-migrations/ \; && \
+   test \"\$(find /tmp/project-assignment-baseline-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 94 && \
+   cp /workspace/backend/database/migrations/0096_*.sql \
+     /tmp/project-assignment-upgrade-only/ && \
+   test \"\$(find /tmp/project-assignment-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${project_assignment_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/project-assignment-baseline-migrations \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh \
+  >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${project_assignment_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$baseline\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 94
+        OR (SELECT max(version) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0095_organization_creation_request_tombstone'
+        OR to_regclass(
+          'app_private.organization_project_membership_assignment_request_claims'
+        ) IS NOT NULL
+        OR to_regclass(
+          'app_private.organization_project_membership_assignment_request_tombstones'
+        ) IS NOT NULL
+        OR to_regclass(
+          'app_private.organization_project_membership_assignment_audit_events'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.assign_organization_project_member_v1(uuid,uuid,uuid,uuid,uuid)'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.protect_organization_project_membership_assignment_claim_v1()'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.protect_organization_project_membership_assignment_terminal_v1()'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_data.assign_organization_project_member_for_identity_v1(text,text,uuid,uuid,uuid,uuid)'
+        ) IS NOT NULL
+      THEN
+        RAISE EXCEPTION '0095 project assignment upgrade baseline drift';
+      END IF;
+    END
+    \$baseline\$;
+  " \
+  >/dev/null
+project_assignment_approval_receipt="$(
+  docker exec \
+    --workdir /workspace \
+    "${container_name}" \
+    psql \
+    -U postgres \
+    -d "${project_assignment_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --file /workspace/backend/database/fixtures/upgrade/0095_organization_project_membership_assignment_live.sql
+)"
+if [[ "${project_assignment_approval_receipt}" != \
+  organization-shareable-join-application:v1\|* ]] \
+  || [[ "$(printf '%s\n' "${project_assignment_approval_receipt}" \
+    | awk -F '|' 'NF == 5 { count++ } END { print count+0 }')" -ne 1 ]]; then
+  echo '0095 旧 writer 链没有返回单行完整五字段 approval receipt。' >&2
+  exit 1
+fi
+project_assignment_before_upgrade="$(
+  docker exec "${container_name}" pg_dump \
+    "${project_assignment_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --exclude-table-data=app_private.organization_project_membership_assignment_request_claims \
+    --exclude-table-data=app_private.organization_project_membership_assignment_request_tombstones \
+    --exclude-table-data=app_private.organization_project_membership_assignment_audit_events \
+    --restrict-key=9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d
+)"
+docker exec \
+  --env DATABASE_URL="${project_assignment_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/project-assignment-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+project_assignment_after_upgrade="$(
+  docker exec "${container_name}" pg_dump \
+    "${project_assignment_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --exclude-table-data=app_private.organization_project_membership_assignment_request_claims \
+    --exclude-table-data=app_private.organization_project_membership_assignment_request_tombstones \
+    --exclude-table-data=app_private.organization_project_membership_assignment_audit_events \
+    --restrict-key=9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d
+)"
+if [[ "${project_assignment_before_upgrade}" != \
+  "${project_assignment_after_upgrade}" ]]; then
+  echo '0096 升级改变旧批准、membership 或其他业务数据。' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${project_assignment_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$empty\$
+    BEGIN
+      IF (SELECT count(*)
+          FROM app_private.organization_project_membership_assignment_request_claims)
+            <> 0
+        OR (SELECT count(*)
+            FROM app_private.organization_project_membership_assignment_request_tombstones)
+              <> 0
+        OR (SELECT count(*)
+            FROM app_private.organization_project_membership_assignment_audit_events)
+              <> 0
+      THEN
+        RAISE EXCEPTION '0096 assignment tables are not empty after upgrade';
+      END IF;
+    END
+    \$empty\$;
+  " \
+  >/dev/null
+project_assignment_legacy_before_write="$(
+  docker exec "${container_name}" pg_dump \
+    "${project_assignment_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --exclude-table-data=app_data.project_memberships \
+    --exclude-table-data=app_private.organization_project_membership_assignment_request_claims \
+    --exclude-table-data=app_private.organization_project_membership_assignment_request_tombstones \
+    --exclude-table-data=app_private.organization_project_membership_assignment_audit_events \
+    --restrict-key=9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d
+)"
+project_assignment_receipt="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${project_assignment_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      CREATE TEMP TABLE project_assignment_receipt (
+        project_membership_assignment_contract_id text,
+        organization_workspace_id uuid,
+        project_id uuid,
+        organization_membership_id uuid,
+        project_membership_id uuid,
+        active_from_utc timestamptz,
+        inactive_from_utc timestamptz
+      );
+      CREATE TEMP TABLE project_assignment_input AS
+      SELECT
+        organization_workspace_id,
+        approved_organization_membership_id AS organization_membership_id
+      FROM app_private.organization_shareable_join_application_request_claims
+      WHERE application_id =
+        '00000000-0095-7000-0000-000000000901'::uuid;
+      GRANT ALL ON project_assignment_receipt TO tongxingzhe_runtime;
+      GRANT SELECT ON project_assignment_input TO tongxingzhe_runtime;
+      SET ROLE tongxingzhe_runtime;
+      INSERT INTO project_assignment_receipt
+      SELECT *
+      FROM app_data.assign_organization_project_member_for_identity_v1(
+        'https://synthetic-project-assignment-upgrade.example/auth/v1',
+        'owner',
+        '00000000-0096-9000-0000-000000000901',
+        (
+          SELECT organization_workspace_id
+          FROM project_assignment_input
+        ),
+        '00000000-0095-8000-0000-000000000901',
+        (
+          SELECT organization_membership_id
+          FROM project_assignment_input
+        )
+      );
+      RESET ROLE;
+      TABLE project_assignment_receipt;
+      DO \$assigned\$
+      DECLARE
+        receipt project_assignment_receipt%ROWTYPE;
+        approval
+          app_private.organization_shareable_join_application_request_claims%ROWTYPE;
+        creation app_private.organization_creation_request_claims%ROWTYPE;
+      BEGIN
+        SELECT * INTO STRICT receipt FROM project_assignment_receipt;
+        SELECT * INTO STRICT approval
+        FROM app_private.organization_shareable_join_application_request_claims
+        WHERE application_id =
+          '00000000-0095-7000-0000-000000000901'::uuid;
+        SELECT * INTO STRICT creation
+        FROM app_private.organization_creation_request_claims
+        WHERE request_id = '00000000-0095-5000-0000-000000000901'::uuid;
+
+        IF (SELECT count(*) FROM project_assignment_receipt) <> 1
+          OR receipt.project_membership_assignment_contract_id
+            IS DISTINCT FROM 'organization-project-membership-assignment:v1'
+          OR receipt.organization_workspace_id IS DISTINCT FROM
+            approval.organization_workspace_id
+          OR receipt.project_id IS DISTINCT FROM
+            '00000000-0095-8000-0000-000000000901'::uuid
+          OR receipt.organization_membership_id IS DISTINCT FROM
+            approval.approved_organization_membership_id
+          OR receipt.project_membership_id IS NULL
+          OR receipt.active_from_utc IS NULL
+          OR receipt.inactive_from_utc IS NOT NULL
+          OR NOT EXISTS (
+            SELECT 1
+            FROM app_data.project_memberships AS child
+            WHERE child.project_membership_id = receipt.project_membership_id
+              AND child.organization_membership_id =
+                receipt.organization_membership_id
+              AND child.project_id = receipt.project_id
+              AND child.active_from_utc = receipt.active_from_utc
+              AND child.inactive_from_utc IS NOT DISTINCT FROM
+                receipt.inactive_from_utc
+          )
+          OR NOT EXISTS (
+            SELECT 1
+            FROM app_private.organization_project_membership_assignment_request_claims
+              AS claim
+            WHERE claim.request_id =
+                '00000000-0096-9000-0000-000000000901'::uuid
+              AND claim.actor_app_user_id =
+                '00000000-0095-0000-0000-000000000901'::uuid
+              AND claim.organization_workspace_id =
+                receipt.organization_workspace_id
+              AND claim.project_id = receipt.project_id
+              AND claim.organization_membership_id =
+                receipt.organization_membership_id
+              AND claim.project_membership_id = receipt.project_membership_id
+              AND claim.active_from_utc = receipt.active_from_utc
+              AND claim.inactive_from_utc IS NOT DISTINCT FROM
+                receipt.inactive_from_utc
+          )
+          OR NOT EXISTS (
+            SELECT 1
+            FROM app_private.organization_project_membership_assignment_audit_events
+              AS audit
+            WHERE audit.project_membership_assignment_audit_event_id IS NOT NULL
+              AND audit.project_membership_assignment_contract_id =
+                receipt.project_membership_assignment_contract_id
+              AND audit.request_id =
+                '00000000-0096-9000-0000-000000000901'::uuid
+              AND audit.organization_workspace_id =
+                receipt.organization_workspace_id
+              AND audit.project_id = receipt.project_id
+              AND audit.project_membership_id = receipt.project_membership_id
+              AND audit.active_from_utc = receipt.active_from_utc
+              AND audit.inactive_from_utc IS NOT DISTINCT FROM
+                receipt.inactive_from_utc
+          )
+          OR (SELECT count(*)
+              FROM app_private.organization_project_membership_assignment_request_claims)
+            <> 1
+          OR (SELECT count(*)
+              FROM app_private.organization_project_membership_assignment_request_tombstones)
+            <> 0
+          OR (SELECT count(*)
+              FROM app_private.organization_project_membership_assignment_audit_events)
+            <> 1
+          OR NOT EXISTS (
+            SELECT 1
+            FROM app_data.organization_memberships AS membership
+            WHERE membership.organization_membership_id =
+                approval.approved_organization_membership_id
+              AND membership.organization_workspace_id =
+                approval.organization_workspace_id
+              AND membership.app_user_id =
+                '00000000-0095-0000-0000-000000000902'::uuid
+              AND membership.active_from_utc = approval.approved_at_utc
+              AND membership.inactive_from_utc IS NULL
+          )
+          OR NOT EXISTS (
+            SELECT 1
+            FROM app_data.organization_memberships AS membership
+            JOIN app_data.organization_owner_assignments AS owner
+              ON owner.organization_membership_id =
+                membership.organization_membership_id
+            WHERE membership.organization_membership_id =
+                creation.organization_membership_id
+              AND membership.organization_workspace_id =
+                creation.organization_workspace_id
+              AND membership.app_user_id =
+                '00000000-0095-0000-0000-000000000901'::uuid
+              AND membership.active_from_utc = creation.created_at_utc
+              AND membership.inactive_from_utc IS NULL
+              AND owner.organization_owner_assignment_id =
+                creation.organization_owner_assignment_id
+              AND owner.active_from_utc = creation.created_at_utc
+              AND owner.inactive_from_utc IS NULL
+          )
+          OR (SELECT count(*) FROM app_data.organization_owner_assignments) <> 1
+          OR (SELECT count(*)
+              FROM app_data.organization_memberships
+              WHERE organization_workspace_id = receipt.organization_workspace_id)
+            <> 2
+          OR (SELECT count(*) FROM app_data.project_memberships) <> 1
+          OR (SELECT count(*)
+              FROM app_data.management_report_capability_grants) <> 0
+          OR (SELECT count(*) FROM app_data.promotion_target_assignments) <> 0
+        THEN
+          RAISE EXCEPTION '0095→0096 project membership assignment drift';
+        END IF;
+      END
+      \$assigned\$;
+    "
+)"
+if [[ "${project_assignment_receipt}" != \
+  organization-project-membership-assignment:v1\|* ]] \
+  || [[ "$(printf '%s\n' "${project_assignment_receipt}" \
+    | awk -F '|' 'NF == 7 { count++ } END { print count+0 }')" -ne 1 ]]; then
+  echo '0096 runtime bridge 没有返回单行完整七字段 receipt。' >&2
+  exit 1
+fi
+project_assignment_legacy_after_write="$(
+  docker exec "${container_name}" pg_dump \
+    "${project_assignment_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --exclude-table-data=app_data.project_memberships \
+    --exclude-table-data=app_private.organization_project_membership_assignment_request_claims \
+    --exclude-table-data=app_private.organization_project_membership_assignment_request_tombstones \
+    --exclude-table-data=app_private.organization_project_membership_assignment_audit_events \
+    --restrict-key=9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d
+)"
+if [[ "${project_assignment_legacy_before_write}" != \
+  "${project_assignment_legacy_after_write}" ]]; then
+  echo '0096 assignment 改变旧 link、application、membership 或 owner lineage。' >&2
+  exit 1
+fi
+project_assignment_after_first_write="$(
+  docker exec "${container_name}" pg_dump \
+    "${project_assignment_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d
+)"
+project_assignment_replayed_receipt="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${project_assignment_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      CREATE TEMP TABLE project_assignment_input AS
+      SELECT
+        organization_workspace_id,
+        approved_organization_membership_id AS organization_membership_id
+      FROM app_private.organization_shareable_join_application_request_claims
+      WHERE application_id =
+        '00000000-0095-7000-0000-000000000901'::uuid;
+      GRANT SELECT ON project_assignment_input TO tongxingzhe_runtime;
+      SET ROLE tongxingzhe_runtime;
+      SELECT *
+      FROM app_data.assign_organization_project_member_for_identity_v1(
+        'https://synthetic-project-assignment-upgrade.example/auth/v1',
+        'owner',
+        '00000000-0096-9000-0000-000000000901',
+        (
+          SELECT organization_workspace_id
+          FROM project_assignment_input
+        ),
+        '00000000-0095-8000-0000-000000000901',
+        (
+          SELECT organization_membership_id
+          FROM project_assignment_input
+        )
+      );
+      RESET ROLE;
+    "
+)"
+if [[ "${project_assignment_receipt}" != \
+  "${project_assignment_replayed_receipt}" ]]; then
+  echo '0096 exact replay 改变原七字段 assignment receipt。' >&2
+  exit 1
+fi
+project_assignment_after_exact_replay="$(
+  docker exec "${container_name}" pg_dump \
+    "${project_assignment_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d
+)"
+if [[ "${project_assignment_after_first_write}" != \
+  "${project_assignment_after_exact_replay}" ]]; then
+  echo '0096 exact replay 增加 project membership、claim 或 audit。' >&2
+  exit 1
+fi
+project_assignment_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${project_assignment_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/project-assignment-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${project_assignment_upgrade_replay}" != \
+  *'已验证 0096_organization_project_membership_assignment（无需重复执行）'* ]] \
+  || [[ "${project_assignment_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0096 重复 migration 没有命中 checksum skip。' >&2
+  printf '%s\n' "${project_assignment_upgrade_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${project_assignment_upgrade_replay}"
+project_assignment_after_migration_replay="$(
+  docker exec "${container_name}" pg_dump \
+    "${project_assignment_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d
+)"
+if [[ "${project_assignment_after_exact_replay}" != \
+  "${project_assignment_after_migration_replay}" ]]; then
+  echo '重复 0096 migration 改变 assignment 最终业务快照。' >&2
+  exit 1
+fi
+echo '0095→0096 旧批准成员、七字段 assignment、exact replay、checksum 幂等与业务数据不变：通过。'
 
 echo '验证 0096→0097／0098 保留旧 writer 的已提交 owner-transfer claim。'
 docker exec "${container_name}" createdb -U postgres tongxingzhe_owner_claim_upgrade
