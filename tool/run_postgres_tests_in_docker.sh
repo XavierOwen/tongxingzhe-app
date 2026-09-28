@@ -14,6 +14,7 @@ restore_database='tongxingzhe_restore'
 upgrade_database='tongxingzhe_region_upgrade'
 ownerless_upgrade_database='tongxingzhe_ownerless_upgrade'
 consent_replacement_upgrade_database='tongxingzhe_consent_replacement_upgrade'
+channel_replacement_upgrade_database='tongxingzhe_channel_replacement_upgrade'
 original_region_replacement_upgrade_database='tongxingzhe_original_region_replacement_upgrade'
 current_city_replacement_upgrade_database='tongxingzhe_current_city_replacement_upgrade'
 interest_replacement_upgrade_database='tongxingzhe_interest_replacement_upgrade'
@@ -32,6 +33,7 @@ database_url="postgresql://postgres:postgres@127.0.0.1:5432/${test_database}"
 upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${upgrade_database}"
 ownerless_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${ownerless_upgrade_database}"
 consent_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${consent_replacement_upgrade_database}"
+channel_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${channel_replacement_upgrade_database}"
 original_region_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${original_region_replacement_upgrade_database}"
 current_city_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${current_city_replacement_upgrade_database}"
 interest_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${interest_replacement_upgrade_database}"
@@ -537,6 +539,536 @@ docker exec "${container_name}" psql \
   >/dev/null
 echo '0038→0039 历史 resolved provenance 回填：通过。'
 echo '已有区域树升级为冻结发布版本：通过。'
+
+echo '验证 0066→0067 升级保留旧批准 channel 快照，并可登记替代。'
+docker exec "${container_name}" createdb \
+  -U postgres \
+  "${channel_replacement_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/channel-replacement-baseline-migrations \
+      /tmp/channel-replacement-upgrade-only && \
+   find /workspace/backend/database/migrations \
+     -maxdepth 1 -type f \
+     \( -name '000[1-9]_*.sql' \
+        -o -name '00[1-5][0-9]_*.sql' \
+        -o -name '006[0-6]_*.sql' \) \
+     -exec cp {} /tmp/channel-replacement-baseline-migrations/ \; && \
+   test \"\$(find /tmp/channel-replacement-baseline-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 65 && \
+   cp /workspace/backend/database/migrations/0067_*.sql \
+     /tmp/channel-replacement-upgrade-only/ && \
+   test \"\$(find /tmp/channel-replacement-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${channel_replacement_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/channel-replacement-baseline-migrations \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh \
+  >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${channel_replacement_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$baseline\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 65
+        OR (SELECT max(version) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0066_management_original_region_report'
+        OR to_regclass(
+          'app_private.management_report_snapshot_replacements'
+        ) IS NOT NULL
+        OR EXISTS (
+          SELECT 1
+          FROM pg_catalog.pg_policies
+          WHERE schemaname = 'app_private'
+            AND tablename = 'management_report_snapshots'
+            AND policyname =
+              'management_report_snapshot_lifecycle_writer_read_scope'
+        )
+        OR to_regprocedure(
+          'app_private.management_report_snapshot_has_trusted_channel_v2_provenance_v1(uuid,uuid)'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.validate_management_report_snapshot_replacement_insert_v1()'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.declare_management_report_snapshot_replacement_v1(uuid,uuid,uuid,uuid,uuid,text)'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.read_management_report_snapshot_lifecycle_v1(uuid,uuid)'
+        ) IS NOT NULL
+      THEN
+        RAISE EXCEPTION '0066 channel replacement upgrade baseline drift';
+      END IF;
+    END
+    \$baseline\$;
+  " \
+  >/dev/null
+channel_replacement_release_receipts="$(
+  docker exec \
+    --workdir /workspace \
+    "${container_name}" \
+    psql \
+    -U postgres \
+    -d "${channel_replacement_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --file /workspace/backend/database/fixtures/upgrade/0066_management_report_snapshot_replacement_live.sql
+)"
+if [[ "$(printf '%s\n' "${channel_replacement_release_receipts}" \
+  | awk '/^\{.*\}$/ { count++ } END { print count+0 }')" -ne 2 ]] \
+  || [[ "${channel_replacement_release_receipts}" != \
+    *'"result_status": "approved_baseline"'* ]] \
+  || [[ "${channel_replacement_release_receipts}" != \
+    *'"result_status": "approved"'* ]]; then
+  echo '0066 旧 writer 没有返回两份 approved value-free release receipts。' >&2
+  printf '%s\n' "${channel_replacement_release_receipts}" >&2
+  exit 1
+fi
+channel_replacement_history_sql="
+  SELECT jsonb_build_object(
+    'count', count(*),
+    'rows', jsonb_agg(
+      jsonb_build_object('kind', entity_kind, 'id', entity_id, 'bytes', entity_bytes)
+      ORDER BY entity_kind, entity_id
+    )
+  )::text
+  FROM (
+    SELECT 'snapshot'::text AS entity_kind, snapshot_id AS entity_id,
+      to_jsonb(snapshot.*) AS entity_bytes
+    FROM app_private.management_report_snapshots AS snapshot
+    WHERE release_request_id IN (
+      '66d90000-0000-4000-8000-000000000001',
+      '66d90000-0000-4000-8000-000000000002'
+    )
+    UNION ALL
+    SELECT 'v2_attempt', release_request_id, to_jsonb(attempt.*)
+    FROM app_private.management_report_release_v2_attempts AS attempt
+    WHERE release_request_id IN (
+      '66d90000-0000-4000-8000-000000000001',
+      '66d90000-0000-4000-8000-000000000002'
+    )
+    UNION ALL
+    SELECT 'v1_attempt', release_request_id, to_jsonb(attempt.*)
+    FROM app_private.management_report_release_attempts AS attempt
+    WHERE release_request_id IN (
+      '66d90000-0000-4000-8000-000000000001',
+      '66d90000-0000-4000-8000-000000000002'
+    )
+    UNION ALL
+    SELECT 'release_claim', release_request_id, to_jsonb(claim.*)
+    FROM app_private.management_report_release_request_claims AS claim
+    WHERE release_request_id IN (
+      '66d90000-0000-4000-8000-000000000001',
+      '66d90000-0000-4000-8000-000000000002'
+    )
+  ) AS history"
+channel_replacement_history_before="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${channel_replacement_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="${channel_replacement_history_sql}"
+)"
+if [[ "${channel_replacement_history_before}" != *'"count": 8'* ]]; then
+  echo '0066 历史 channel 快照、v2/v1 attempts 与 release claims 未满八行。' >&2
+  exit 1
+fi
+channel_replacement_before_upgrade="$(
+  docker exec "${container_name}" pg_dump \
+    "${channel_replacement_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --exclude-table-data=app_private.management_report_snapshot_replacements \
+    --restrict-key=6666666666666666666666666666666666666666666666666666666666666666
+)"
+docker exec \
+  --env DATABASE_URL="${channel_replacement_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/channel-replacement-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+channel_replacement_after_upgrade="$(
+  docker exec "${container_name}" pg_dump \
+    "${channel_replacement_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --exclude-table-data=app_private.management_report_snapshot_replacements \
+    --restrict-key=6666666666666666666666666666666666666666666666666666666666666666
+)"
+if [[ "${channel_replacement_before_upgrade}" != \
+  "${channel_replacement_after_upgrade}" ]]; then
+  echo '0067 升级改写了旧 channel 发布历史或其他业务数据。' >&2
+  exit 1
+fi
+channel_replacement_history_after="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${channel_replacement_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="${channel_replacement_history_sql}"
+)"
+if [[ "${channel_replacement_history_before}" != \
+  "${channel_replacement_history_after}" ]]; then
+  echo '0067 升级改写了旧 channel 历史八行。' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${channel_replacement_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$empty\$
+    BEGIN
+      IF (SELECT count(*)
+          FROM app_private.management_report_snapshot_replacements) <> 0
+      THEN
+        RAISE EXCEPTION '0067 replacement table is not empty after upgrade';
+      END IF;
+    END
+    \$empty\$;
+  " \
+  >/dev/null
+
+channel_replacement_first_write="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${channel_replacement_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      SET TIME ZONE 'UTC';
+      CREATE TEMP TABLE channel_replacement_input AS
+      SELECT
+        (SELECT released_snapshot_id
+         FROM app_private.management_report_release_v2_attempts
+         WHERE release_request_id =
+           '66d90000-0000-4000-8000-000000000001'::uuid)
+          AS first_snapshot_id,
+        (SELECT released_snapshot_id
+         FROM app_private.management_report_release_v2_attempts
+         WHERE release_request_id =
+           '66d90000-0000-4000-8000-000000000002'::uuid)
+          AS second_snapshot_id;
+      CREATE TEMP TABLE channel_replacement_receipt (receipt jsonb NOT NULL);
+      GRANT SELECT ON channel_replacement_input
+        TO tongxingzhe_management_report_snapshot_lifecycle_writer;
+      GRANT ALL ON channel_replacement_receipt
+        TO tongxingzhe_management_report_snapshot_lifecycle_writer;
+    " \
+    --command="
+      SET ROLE tongxingzhe_management_report_snapshot_lifecycle_writer;
+      INSERT INTO channel_replacement_receipt
+      SELECT app_private.declare_management_report_snapshot_replacement_v1(
+        '66da0000-0000-4000-8000-000000000001',
+        '66d10000-0000-4000-8000-000000000001',
+        '66d30000-0000-4000-8000-000000000001',
+        first_snapshot_id,
+        second_snapshot_id,
+        'late_accepted_data'
+      )
+      FROM channel_replacement_input;
+      RESET ROLE;
+      DO \$written\$
+      DECLARE
+        receipt jsonb := (SELECT r.receipt FROM channel_replacement_receipt AS r);
+        replacement_row
+          app_private.management_report_snapshot_replacements%ROWTYPE;
+        first_lifecycle jsonb;
+        second_lifecycle jsonb;
+      BEGIN
+        SELECT * INTO STRICT replacement_row
+        FROM app_private.management_report_snapshot_replacements
+        WHERE replacement_request_id =
+          '66da0000-0000-4000-8000-000000000001'::uuid;
+        first_lifecycle :=
+          app_private.read_management_report_snapshot_lifecycle_v1(
+            '66d30000-0000-4000-8000-000000000001',
+            replacement_row.superseded_snapshot_id
+          );
+        second_lifecycle :=
+          app_private.read_management_report_snapshot_lifecycle_v1(
+            '66d30000-0000-4000-8000-000000000001',
+            replacement_row.replacement_snapshot_id
+          );
+        IF (SELECT count(*) FROM channel_replacement_receipt) <> 1
+          OR (SELECT count(*) FROM jsonb_object_keys(receipt)) <> 11
+          OR NOT receipt ?& ARRAY[
+            'replacement_contract_id', 'replacement_request_id',
+            'project_id', 'release_lineage_id', 'report_id', 'report_version',
+            'superseded_snapshot_id', 'replacement_snapshot_id',
+            'replacement_reason_code', 'declared_at_utc', 'result_status'
+          ]
+          OR receipt->>'replacement_contract_id' IS DISTINCT FROM
+            'channel_management_report_snapshot_replacement_v1'
+          OR receipt->>'replacement_request_id' IS DISTINCT FROM
+            '66da0000-0000-4000-8000-000000000001'
+          OR receipt->>'project_id' IS DISTINCT FROM
+            '66d30000-0000-4000-8000-000000000001'
+          OR receipt->>'release_lineage_id' IS DISTINCT FROM
+            'management-report:contact_sessions_by_channel_two_periods'
+          OR receipt->>'report_id' IS DISTINCT FROM
+            'contact_sessions_by_channel_two_periods'
+          OR receipt->>'report_version' IS DISTINCT FROM '1'
+          OR receipt->>'replacement_reason_code' IS DISTINCT FROM
+            'late_accepted_data'
+          OR receipt->>'result_status' IS DISTINCT FROM 'completed'
+          OR receipt->>'superseded_snapshot_id' IS DISTINCT FROM (
+            SELECT first_snapshot_id::text FROM channel_replacement_input
+          )
+          OR receipt->>'replacement_snapshot_id' IS DISTINCT FROM (
+            SELECT second_snapshot_id::text FROM channel_replacement_input
+          )
+          OR receipt::text ~*
+            '\\\"(protected_report|period_results|cells|value_count|contact_id|contributor|phone|email|raw_answer)\\\"[[:space:]]*:'
+          OR replacement_row.requested_by_app_user_id IS DISTINCT FROM
+            '66d10000-0000-4000-8000-000000000001'::uuid
+          OR replacement_row.organization_workspace_id IS DISTINCT FROM
+            '66d20000-0000-4000-8000-000000000001'::uuid
+          OR replacement_row.organization_membership_id IS DISTINCT FROM
+            '66d40000-0000-4000-8000-000000000001'::uuid
+          OR replacement_row.project_membership_id IS DISTINCT FROM
+            '66d50000-0000-4000-8000-000000000001'::uuid
+          OR replacement_row.capability_grant_id IS DISTINCT FROM
+            '66d60000-0000-4000-8000-000000000001'::uuid
+          OR replacement_row.capability_id IS DISTINCT FROM
+            'release_management_reports'
+          OR replacement_row.project_id::text IS DISTINCT FROM
+            receipt->>'project_id'
+          OR replacement_row.release_lineage_id IS DISTINCT FROM
+            receipt->>'release_lineage_id'
+          OR replacement_row.report_id IS DISTINCT FROM receipt->>'report_id'
+          OR replacement_row.report_version::text IS DISTINCT FROM
+            receipt->>'report_version'
+          OR replacement_row.superseded_snapshot_id::text IS DISTINCT FROM
+            receipt->>'superseded_snapshot_id'
+          OR replacement_row.replacement_snapshot_id::text IS DISTINCT FROM
+            receipt->>'replacement_snapshot_id'
+          OR replacement_row.replacement_reason_code IS DISTINCT FROM
+            receipt->>'replacement_reason_code'
+          OR to_char(
+            replacement_row.declared_at_utc AT TIME ZONE 'UTC',
+            'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'
+          ) IS DISTINCT FROM receipt->>'declared_at_utc'
+          OR replacement_row.authorization_reference_at_utc IS DISTINCT FROM
+            replacement_row.declared_at_utc
+          OR NOT isfinite(replacement_row.declared_at_utc)
+          OR replacement_row.result_document IS DISTINCT FROM receipt
+          OR (SELECT count(*)
+              FROM app_private.management_report_release_request_claims
+              WHERE release_family_id =
+                'channel_management_report_snapshot_release') <> 2
+          OR (SELECT count(*)
+              FROM app_private.management_report_release_request_claims
+              WHERE release_request_id =
+                '66da0000-0000-4000-8000-000000000001'::uuid) <> 0
+          OR (SELECT count(*)
+              FROM app_private.management_report_snapshot_replacements) <> 1
+          OR (SELECT count(*) FROM jsonb_object_keys(first_lifecycle)) <> 5
+          OR (SELECT count(*) FROM jsonb_object_keys(second_lifecycle)) <> 5
+          OR NOT first_lifecycle ?& ARRAY[
+            'lifecycle_contract_id', 'project_id', 'snapshot_id',
+            'lifecycle_status', 'replacement_snapshot_id'
+          ]
+          OR NOT second_lifecycle ?& ARRAY[
+            'lifecycle_contract_id', 'project_id', 'snapshot_id',
+            'lifecycle_status', 'replacement_snapshot_id'
+          ]
+          OR first_lifecycle->>'lifecycle_contract_id' IS DISTINCT FROM
+            'channel_management_report_snapshot_lifecycle_v1'
+          OR second_lifecycle->>'lifecycle_contract_id' IS DISTINCT FROM
+            first_lifecycle->>'lifecycle_contract_id'
+          OR first_lifecycle->>'project_id' IS DISTINCT FROM
+            '66d30000-0000-4000-8000-000000000001'
+          OR second_lifecycle->>'project_id' IS DISTINCT FROM
+            first_lifecycle->>'project_id'
+          OR first_lifecycle->>'snapshot_id' IS DISTINCT FROM
+            replacement_row.superseded_snapshot_id::text
+          OR second_lifecycle->>'snapshot_id' IS DISTINCT FROM
+            replacement_row.replacement_snapshot_id::text
+          OR first_lifecycle->>'lifecycle_status' IS DISTINCT FROM 'superseded'
+          OR first_lifecycle->>'replacement_snapshot_id' IS DISTINCT FROM
+            replacement_row.replacement_snapshot_id::text
+          OR second_lifecycle->>'lifecycle_status' IS DISTINCT FROM 'active'
+          OR second_lifecycle->'replacement_snapshot_id' <> 'null'::jsonb
+          OR (first_lifecycle::text || second_lifecycle::text) ~*
+            '\\\"(protected_report|period_results|cells|value_count|contact_id|contributor|phone|email|raw_answer)\\\"[[:space:]]*:'
+          OR (SELECT count(*) FROM app_private.management_report_snapshots) <> 2
+          OR (SELECT count(*)
+              FROM app_private.management_report_release_v2_attempts) <> 2
+          OR (SELECT count(*)
+              FROM app_private.management_report_release_attempts) <> 2
+        THEN
+          RAISE EXCEPTION '0067 channel replacement receipt drift';
+        END IF;
+      END
+      \$written\$;
+      SELECT receipt::text FROM channel_replacement_receipt;
+    "
+)"
+if [[ "$(printf '%s\n' "${channel_replacement_first_write}" \
+  | awk '/^\{.*\}$/ { count++ } END { print count+0 }')" -ne 1 ]] \
+  || [[ "${channel_replacement_first_write}" != \
+    *'"result_status": "completed"'* ]]; then
+  echo '0067 replacement writer 没有返回唯一完整十一字段 receipt。' >&2
+  printf '%s\n' "${channel_replacement_first_write}" >&2
+  exit 1
+fi
+channel_replacement_history_after_write="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${channel_replacement_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="${channel_replacement_history_sql}"
+)"
+if [[ "${channel_replacement_history_before}" != \
+  "${channel_replacement_history_after_write}" ]]; then
+  echo '0067 replacement writer 改写了旧 channel 历史八行。' >&2
+  exit 1
+fi
+channel_replacement_after_first_write="$(
+  docker exec "${container_name}" pg_dump \
+    "${channel_replacement_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=6666666666666666666666666666666666666666666666666666666666666666
+)"
+channel_replacement_exact_replay="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${channel_replacement_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="
+      CREATE TEMP TABLE channel_replacement_replay_input AS
+      SELECT
+        (SELECT released_snapshot_id
+         FROM app_private.management_report_release_v2_attempts
+         WHERE release_request_id =
+           '66d90000-0000-4000-8000-000000000001'::uuid)
+          AS first_snapshot_id,
+        (SELECT released_snapshot_id
+         FROM app_private.management_report_release_v2_attempts
+         WHERE release_request_id =
+           '66d90000-0000-4000-8000-000000000002'::uuid)
+          AS second_snapshot_id;
+      GRANT SELECT ON channel_replacement_replay_input
+        TO tongxingzhe_management_report_snapshot_lifecycle_writer;
+      SET ROLE tongxingzhe_management_report_snapshot_lifecycle_writer;
+      SELECT app_private.declare_management_report_snapshot_replacement_v1(
+        '66da0000-0000-4000-8000-000000000001',
+        '66d10000-0000-4000-8000-000000000001',
+        '66d30000-0000-4000-8000-000000000001',
+        first_snapshot_id,
+        second_snapshot_id,
+        'late_accepted_data'
+      )::text
+      FROM channel_replacement_replay_input;
+      RESET ROLE;
+    "
+)"
+if [[ "${channel_replacement_exact_replay}" != \
+  "${channel_replacement_first_write}" ]]; then
+  echo '0067 channel replacement exact replay 未返回原 receipt。' >&2
+  exit 1
+fi
+channel_replacement_after_exact_replay="$(
+  docker exec "${container_name}" pg_dump \
+    "${channel_replacement_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=6666666666666666666666666666666666666666666666666666666666666666
+)"
+if [[ "${channel_replacement_after_first_write}" != \
+  "${channel_replacement_after_exact_replay}" ]]; then
+  echo '0067 channel replacement exact replay 改写了业务数据。' >&2
+  exit 1
+fi
+channel_replacement_baseline_replay="$(
+  docker exec \
+    --env DATABASE_URL="${channel_replacement_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/channel-replacement-baseline-migrations \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh \
+    2>&1
+)"
+channel_replacement_baseline_verified_count="$(
+  printf '%s\n' "${channel_replacement_baseline_replay}" \
+    | awk '/^已验证 .*（无需重复执行）$/ { count++ } END { print count+0 }'
+)"
+if [[ "${channel_replacement_baseline_verified_count}" -ne 65 ]] \
+  || [[ "${channel_replacement_baseline_replay}" == *'已执行 '* ]]; then
+  echo '0001..0066 重复 migrations 没有全部命中 checksum skip。' >&2
+  printf '%s\n' "${channel_replacement_baseline_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${channel_replacement_baseline_replay}"
+channel_replacement_migration_replay="$(
+  docker exec \
+    --env DATABASE_URL="${channel_replacement_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/channel-replacement-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${channel_replacement_migration_replay}" != \
+  *'已验证 0067_management_report_snapshot_replacements（无需重复执行）'* ]] \
+  || [[ "${channel_replacement_migration_replay}" == *'已执行 '* ]]; then
+  echo '0067 重复 migration 没有命中 checksum skip。' >&2
+  printf '%s\n' "${channel_replacement_migration_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${channel_replacement_migration_replay}"
+channel_replacement_after_migration_replay="$(
+  docker exec "${container_name}" pg_dump \
+    "${channel_replacement_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=6666666666666666666666666666666666666666666666666666666666666666
+)"
+if [[ "${channel_replacement_after_exact_replay}" != \
+  "${channel_replacement_after_migration_replay}" ]]; then
+  echo '重复 0067 migration 改写 channel replacement 业务快照。' >&2
+  exit 1
+fi
+echo '0066→0067 旧 channel 快照替代、exact replay 与 checksum 幂等：通过。'
 
 echo '验证 0071→0072 升级保留旧批准 original-region 快照，并可登记替代。'
 docker exec "${container_name}" createdb \
