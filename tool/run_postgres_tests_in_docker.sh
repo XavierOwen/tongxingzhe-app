@@ -19,6 +19,7 @@ runtime_read_upgrade_database='tongxingzhe_runtime_read_upgrade'
 snapshot_directory_upgrade_database='tongxingzhe_snapshot_directory_upgrade'
 runtime_release_replay_upgrade_database='tongxingzhe_runtime_release_replay_upgrade'
 interest_ordinal_upgrade_database='tongxingzhe_interest_ordinal_upgrade'
+target_response_upgrade_database='tongxingzhe_target_response_upgrade'
 channel_replacement_upgrade_database='tongxingzhe_channel_replacement_upgrade'
 original_region_replacement_upgrade_database='tongxingzhe_original_region_replacement_upgrade'
 current_city_replacement_upgrade_database='tongxingzhe_current_city_replacement_upgrade'
@@ -43,6 +44,7 @@ runtime_read_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${runtim
 snapshot_directory_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${snapshot_directory_upgrade_database}"
 runtime_release_replay_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${runtime_release_replay_upgrade_database}"
 interest_ordinal_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${interest_ordinal_upgrade_database}"
+target_response_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${target_response_upgrade_database}"
 channel_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${channel_replacement_upgrade_database}"
 original_region_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${original_region_replacement_upgrade_database}"
 current_city_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${current_city_replacement_upgrade_database}"
@@ -2205,6 +2207,253 @@ if [[ "${interest_ordinal_dump_before}" != \
   exit 1
 fi
 echo '0040→0041 旧个人接触序数汇总、历史不变与 checksum 幂等：通过。'
+
+echo '验证 0043→0044 旧 contact-target links 可汇总个人对象反应。'
+docker exec "${container_name}" createdb -U postgres \
+  "${target_response_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/target-response-baseline-migrations \
+      /tmp/target-response-upgrade-only && \
+   cp /workspace/backend/database/migrations/00{01..43}_*.sql \
+     /tmp/target-response-baseline-migrations/ && \
+   test \"\$(find /tmp/target-response-baseline-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 43 && \
+   cp /workspace/backend/database/migrations/0044_*.sql \
+     /tmp/target-response-upgrade-only/ && \
+   test \"\$(find /tmp/target-response-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec --env DATABASE_URL="${target_response_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/target-response-baseline-migrations \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres -d "${target_response_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$baseline\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 43
+        OR (SELECT max(version) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0043_personal_interest_subset_ratios'
+        OR to_regprocedure(
+          'app_data.read_personal_target_response_distribution(uuid,uuid,uuid,timestamptz,timestamptz)'
+        ) IS NOT NULL
+      THEN
+        RAISE EXCEPTION '0043 target response baseline drift';
+      END IF;
+    END
+    \$baseline\$;
+  " >/dev/null
+docker exec --workdir /workspace "${container_name}" psql \
+  -U postgres -d "${target_response_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --file /workspace/backend/database/fixtures/upgrade/0043_personal_target_response_distribution_live.sql \
+  >/dev/null
+target_response_history_sql="
+  SELECT jsonb_build_object(
+    'count', count(*),
+    'rows', jsonb_agg(jsonb_build_object(
+      'kind', kind, 'id', entity_id, 'row', entity_row
+    ) ORDER BY kind, entity_id)
+  )::text
+  FROM (
+    SELECT 'contact'::text AS kind, contact_id AS entity_id,
+      to_jsonb(contact_row.*) AS entity_row
+    FROM app_data.contacts AS contact_row
+    WHERE contact_id = '7cp-contact'
+    UNION ALL
+    SELECT 'revision', contact_id || ':' || revision_number,
+      to_jsonb(revision_row.*)
+    FROM app_data.contact_revisions AS revision_row
+    WHERE contact_id = '7cp-contact'
+    UNION ALL
+    SELECT 'link', contact_id || ':' || revision_number || ':' ||
+      promotion_target_id, to_jsonb(link_row.*)
+    FROM app_data.contact_target_links AS link_row
+    WHERE contact_id = '7cp-contact'
+    UNION ALL
+    SELECT 'target', promotion_target_id::text, to_jsonb(target_row.*)
+    FROM app_data.promotion_targets AS target_row
+    WHERE promotion_target_id IN (
+      SELECT promotion_target_id FROM app_data.contact_target_links
+      WHERE contact_id = '7cp-contact'
+    )
+    UNION ALL
+    SELECT 'retention', event_id::text, to_jsonb(event_row.*)
+    FROM app_data.promotion_target_retention_events AS event_row
+    WHERE mutation_id = '7cp-target-four-anonymize'
+  ) AS old_rows"
+target_response_history_before="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${target_response_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${target_response_history_sql}"
+)"
+if [[ "${target_response_history_before}" != *'"count": 9'* ]]; then
+  echo '0043 旧 contact、revision、三条 link、三个 target、retention 未齐。' >&2
+  exit 1
+fi
+target_response_counts_sql="
+  SELECT jsonb_build_object(
+    'contacts', (SELECT count(*) FROM app_data.contacts),
+    'revisions', (SELECT count(*) FROM app_data.contact_revisions),
+    'links', (SELECT count(*) FROM app_data.contact_target_links),
+    'targets', (SELECT count(*) FROM app_data.promotion_targets),
+    'retention', (SELECT count(*) FROM app_data.promotion_target_retention_events)
+  )::text"
+target_response_counts_before="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${target_response_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${target_response_counts_sql}"
+)"
+target_response_dump_key='4343434343434343434343434343434343434343434343434343434343434343'
+target_response_dump_before="$(
+  docker exec "${container_name}" pg_dump "${target_response_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges --restrict-key="${target_response_dump_key}"
+)"
+docker exec --env DATABASE_URL="${target_response_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/target-response-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${target_response_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --file /workspace/backend/database/checks/verify_personal_target_response_distribution.sql \
+  >/dev/null
+target_response_dump_after_migration="$(
+  docker exec "${container_name}" pg_dump "${target_response_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges --restrict-key="${target_response_dump_key}"
+)"
+if [[ "${target_response_dump_before}" != \
+  "${target_response_dump_after_migration}" ]]; then
+  echo '0044 migration 改写了旧 contact-target 业务数据。' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${target_response_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$acl\$
+    BEGIN
+      IF has_table_privilege('tongxingzhe_runtime', 'app_data.contacts', 'SELECT')
+        OR has_table_privilege('tongxingzhe_runtime', 'app_data.contact_revisions', 'SELECT')
+        OR has_table_privilege('tongxingzhe_runtime', 'app_data.contact_target_links', 'SELECT')
+        OR has_table_privilege('tongxingzhe_runtime', 'app_data.promotion_targets', 'SELECT')
+        OR has_table_privilege('tongxingzhe_runtime', 'app_data.promotion_target_assignments', 'SELECT')
+        OR has_table_privilege('tongxingzhe_runtime', 'app_data.promotion_target_retention_events', 'SELECT')
+        OR has_table_privilege('tongxingzhe_runtime', 'app_data.external_identities', 'SELECT')
+      THEN
+        RAISE EXCEPTION '0044 runtime has direct contact, link, target or PII SELECT';
+      END IF;
+    END
+    \$acl\$;
+  " >/dev/null
+IFS='|' read -r target_response_user_id target_response_workspace_id \
+  target_response_project_id <<< "$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${target_response_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="
+      SELECT identity_row.app_user_id || '|' || workspace_row.workspace_id ||
+        '|' || project_row.project_id
+      FROM app_data.external_identities AS identity_row
+      JOIN app_data.workspaces AS workspace_row
+        ON workspace_row.personal_owner_app_user_id = identity_row.app_user_id
+       AND workspace_row.workspace_kind = 'personal'
+       AND workspace_row.deleted_at IS NULL
+      JOIN app_data.projects AS project_row
+        ON project_row.workspace_id = workspace_row.workspace_id
+       AND project_row.is_personal_default AND project_row.status = 'active'
+      WHERE identity_row.issuer =
+          'https://synthetic-target-response-upgrade.example/auth/v1'
+        AND identity_row.subject = '7cp-owner'"
+)"
+if [[ -z "${target_response_project_id}" ]]; then
+  echo '0043 active personal context 缺席。' >&2
+  exit 1
+fi
+target_response_distribution="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${target_response_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command='SET ROLE tongxingzhe_runtime' \
+    --command="
+      SELECT string_agg(
+        response_level || ',' || numerator || ',' || denominator || ',' ||
+          unanswered_count, ';' ORDER BY response_level)
+      FROM app_data.read_personal_target_response_distribution(
+        '${target_response_user_id}', '${target_response_workspace_id}',
+        '${target_response_project_id}',
+        '2030-02-01T00:00:00Z', '2030-02-02T00:00:00Z')"
+)"
+if [[ "${target_response_distribution}" != \
+  '0,1,2,1;1,0,2,1;2,0,2,1;3,0,2,1;4,1,2,1' ]]; then
+  echo '0044 runtime 旧对象关联的五档反应分布错误。' >&2
+  exit 1
+fi
+target_response_history_after="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${target_response_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${target_response_history_sql}"
+)"
+target_response_counts_after="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${target_response_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${target_response_counts_sql}"
+)"
+target_response_dump_after_read="$(
+  docker exec "${container_name}" pg_dump "${target_response_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges --restrict-key="${target_response_dump_key}"
+)"
+if [[ "${target_response_history_before}" != \
+  "${target_response_history_after}" ]] \
+  || [[ "${target_response_counts_before}" != \
+  "${target_response_counts_after}" ]] \
+  || [[ "${target_response_dump_before}" != \
+  "${target_response_dump_after_read}" ]]; then
+  echo '0044 runtime 读取改写了旧对象关联历史、行数或完整业务 dump。' >&2
+  exit 1
+fi
+target_response_baseline_replay="$(
+  docker exec --env DATABASE_URL="${target_response_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/target-response-baseline-migrations \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "$(printf '%s\n' "${target_response_baseline_replay}" \
+  | awk '/^已验证 .*（无需重复执行）$/ { count++ } END { print count+0 }')" \
+    -ne 43 ]] \
+  || [[ "${target_response_baseline_replay}" == *'已执行 '* ]]; then
+  echo '0001..0043 重复 migrations 没有全部命中 checksum skip。' >&2
+  printf '%s\n' "${target_response_baseline_replay}" >&2
+  exit 1
+fi
+target_response_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${target_response_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/target-response-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${target_response_upgrade_replay}" != \
+  *'已验证 0044_personal_target_response_distribution（无需重复执行）'* ]] \
+  || [[ "${target_response_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0044 重复 migration 没有命中 checksum skip。' >&2
+  printf '%s\n' "${target_response_upgrade_replay}" >&2
+  exit 1
+fi
+target_response_dump_after_checksum="$(
+  docker exec "${container_name}" pg_dump "${target_response_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges --restrict-key="${target_response_dump_key}"
+)"
+if [[ "${target_response_dump_before}" != \
+  "${target_response_dump_after_checksum}" ]]; then
+  echo '重复 0044 migration 改写了旧对象关联业务数据。' >&2
+  exit 1
+fi
+echo '0043→0044 旧对象反应、匿名化历史、业务不变与 checksum 幂等：通过。'
 
 echo '验证 0066→0067 升级保留旧批准 channel 快照，并可登记替代。'
 docker exec "${container_name}" createdb \

@@ -2458,6 +2458,37 @@ runner随后只应用0041。runtime使用同一active用户、personal workspace
 
 Docker／CI中的合成PostgreSQL证据只证明0041 migration、真实personal writer、UTC半开区间、下中位语义、最小ACL和staged upgrade保存。它不证明生产Auth、HTTP、token验证、network、真人联系人、统计解释或UI行为。
 
+#### 6.2.24 真实旧 personal contact-target links 对象反应分布升级（Issue #477，MANUAL-124）
+
+7CP在独立库只应用0001至0043。runner核对精确43个migration和最大版本0043；0044 personal target response distribution函数尚不存在。
+
+upgrade fixture复用真实personal bootstrap、promotion target、contact submit v3与retention writer。
+它建立固定active personal context、promotion target和accepted contact/revision。
+三条current target links的response level分别为0、4、NULL。
+旧库再对固定target执行真实retention anonymize。
+fixture保存contacts、revisions、links、targets、retention action、匿名化事实及相关完整data-only dump。
+
+runner随后只应用0044。
+runtime使用同一active用户、personal workspace和显式project调用窄分布函数。
+固定UTC半开区间必须返回response level 0至4的五行。
+answered denominator为2，unanswered为1，level 0和4各为1，其余等级为0。
+
+当前revision、active contact和同一active用户的personal scope决定候选集。
+旧匿名化对象仍按既定非PII link事实计入。
+不恢复对象身份。
+
+0044函数保持`SECURITY DEFINER`。`PUBLIC`不可执行，`tongxingzhe_runtime`只获最小`EXECUTE`。runtime不能直接读取contacts、contact-target links、promotion targets或PII表。升级和读取不得改写旧contacts、revisions、links、targets、retention action、匿名化事实、表行数或完整`app_data`／`app_private` data-only dump。重放0001至0043应看到43个checksum skip，重放0044应看到1个checksum skip。
+
+现有0044 fixture继续覆盖多关联、旧revision、作废、UTC时间边界、空范围、跨scope、脱敏与ACL矩阵；7CP不重复这些场景。
+
+从仓库根目录运行完整套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+Docker／CI中的合成PostgreSQL证据只证明0044 migration、真实personal／target／contact submit v3／retention writer、UTC半开区间、旧匿名化后的非PII事实、最小ACL和staged upgrade保存。它不证明生产Auth、HTTP、token验证、network或真人联系人。它也不证明对象身份恢复、统计解释或UI行为。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。
