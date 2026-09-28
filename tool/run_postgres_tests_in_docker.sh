@@ -17,6 +17,7 @@ consent_replacement_upgrade_database='tongxingzhe_consent_replacement_upgrade'
 channel_read_upgrade_database='tongxingzhe_channel_read_upgrade'
 runtime_read_upgrade_database='tongxingzhe_runtime_read_upgrade'
 snapshot_directory_upgrade_database='tongxingzhe_snapshot_directory_upgrade'
+runtime_release_replay_upgrade_database='tongxingzhe_runtime_release_replay_upgrade'
 channel_replacement_upgrade_database='tongxingzhe_channel_replacement_upgrade'
 original_region_replacement_upgrade_database='tongxingzhe_original_region_replacement_upgrade'
 current_city_replacement_upgrade_database='tongxingzhe_current_city_replacement_upgrade'
@@ -39,6 +40,7 @@ consent_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/$
 channel_read_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${channel_read_upgrade_database}"
 runtime_read_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${runtime_read_upgrade_database}"
 snapshot_directory_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${snapshot_directory_upgrade_database}"
+runtime_release_replay_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${runtime_release_replay_upgrade_database}"
 channel_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${channel_replacement_upgrade_database}"
 original_region_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${original_region_replacement_upgrade_database}"
 current_city_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${current_city_replacement_upgrade_database}"
@@ -1669,6 +1671,303 @@ if [[ "${snapshot_directory_after_access}" != \
   exit 1
 fi
 echo '0034→0035 旧 channel runtime 目录、单条 value-free 审计与 checksum 幂等：通过。'
+
+echo '验证 0035→0036 升级后旧 trusted-v2 channel 发布可经 runtime 精确重放。'
+docker exec "${container_name}" createdb -U postgres \
+  "${runtime_release_replay_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/runtime-release-replay-baseline-migrations \
+      /tmp/runtime-release-replay-upgrade-only && \
+   cp /workspace/backend/database/migrations/00{01..35}_*.sql \
+     /tmp/runtime-release-replay-baseline-migrations/ && \
+   test \"\$(find /tmp/runtime-release-replay-baseline-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 35 && \
+   cp /workspace/backend/database/migrations/0036_*.sql \
+     /tmp/runtime-release-replay-upgrade-only/ && \
+   test \"\$(find /tmp/runtime-release-replay-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec --env DATABASE_URL="${runtime_release_replay_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/runtime-release-replay-baseline-migrations \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres -d "${runtime_release_replay_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$baseline\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 35
+        OR (SELECT max(version) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0035_management_report_snapshot_directory'
+        OR to_regprocedure(
+          'app_data.release_management_report_snapshot_v1(text,text,uuid,uuid)'
+        ) IS NOT NULL
+      THEN
+        RAISE EXCEPTION '0035 runtime release replay baseline drift';
+      END IF;
+    END
+    \$baseline\$;
+  " >/dev/null
+docker exec --workdir /workspace "${container_name}" psql \
+  -U postgres -d "${runtime_release_replay_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --file /workspace/backend/database/fixtures/upgrade/0031_authorized_management_report_snapshot_read_live.sql \
+  >/dev/null
+docker exec --workdir /workspace "${container_name}" psql \
+  -U postgres -d "${runtime_release_replay_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --file /workspace/backend/database/fixtures/upgrade/0035_runtime_trusted_management_report_release_replay_live.sql \
+  >/dev/null
+runtime_release_old_rows_sql="
+  SELECT jsonb_build_object(
+    'count', count(*),
+    'rows', jsonb_agg(
+      jsonb_build_object('kind', entity_kind, 'id', entity_id, 'row', entity_row)
+      ORDER BY entity_kind, entity_id
+    )
+  )::text
+  FROM (
+    SELECT 'snapshot'::text AS entity_kind, snapshot_id AS entity_id,
+      to_jsonb(snapshot.*) AS entity_row
+    FROM app_private.management_report_snapshots AS snapshot
+    UNION ALL
+    SELECT 'v1_attempt', release_request_id, to_jsonb(attempt.*)
+    FROM app_private.management_report_release_attempts AS attempt
+    UNION ALL
+    SELECT 'v2_attempt', release_request_id, to_jsonb(attempt.*)
+    FROM app_private.management_report_release_v2_attempts AS attempt
+    UNION ALL
+    SELECT 'identity', external_identity_id, to_jsonb(identity_row.*)
+    FROM app_data.external_identities AS identity_row
+    WHERE external_identity_id = '00000000-0000-4000-8000-000000007c13'
+  ) AS old_rows"
+runtime_release_old_rows_before="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${runtime_release_replay_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${runtime_release_old_rows_sql}"
+)"
+if [[ "${runtime_release_old_rows_before}" != *'"count": 4'* ]]; then
+  echo '0035 旧 snapshot、v1/v2 attempt 与 publisher identity 未满四行。' >&2
+  exit 1
+fi
+runtime_release_receipt_before="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${runtime_release_replay_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="
+      SELECT result_document::text
+      FROM app_private.management_report_release_v2_attempts
+      WHERE release_request_id =
+        '00000000-0000-4000-8000-000000007c0c'"
+)"
+if [[ -z "${runtime_release_receipt_before}" ]]; then
+  echo '0035 旧 14 字段 receipt 缺席。' >&2
+  exit 1
+fi
+runtime_release_counts_sql="
+  SELECT jsonb_build_object(
+    'app_users', (SELECT count(*) FROM app_data.app_users),
+    'workspaces', (SELECT count(*) FROM app_data.workspaces),
+    'projects', (SELECT count(*) FROM app_data.projects),
+    'external_identities', (SELECT count(*) FROM app_data.external_identities),
+    'snapshots',
+      (SELECT count(*) FROM app_private.management_report_snapshots),
+    'v1_attempts',
+      (SELECT count(*) FROM app_private.management_report_release_attempts),
+    'v2_attempts',
+      (SELECT count(*) FROM app_private.management_report_release_v2_attempts)
+  )::text"
+runtime_release_counts_before="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${runtime_release_replay_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${runtime_release_counts_sql}"
+)"
+runtime_release_dump_key='3636363636363636363636363636363636363636363636363636363636363636'
+runtime_release_dump_before="$(
+  docker exec "${container_name}" pg_dump "${runtime_release_replay_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges --restrict-key="${runtime_release_dump_key}"
+)"
+docker exec --env DATABASE_URL="${runtime_release_replay_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/runtime-release-replay-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${runtime_release_replay_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$acl\$
+    DECLARE bridge pg_catalog.pg_proc%ROWTYPE;
+    BEGIN
+      SELECT * INTO STRICT bridge FROM pg_catalog.pg_proc
+      WHERE oid =
+        'app_data.release_management_report_snapshot_v1(text,text,uuid,uuid)'
+          ::regprocedure;
+      IF bridge.prosecdef IS NOT TRUE
+        OR bridge.provolatile <> 'v'
+        OR bridge.proconfig IS DISTINCT FROM
+          ARRAY['search_path=pg_catalog']::text[]
+        OR has_function_privilege(
+          'public',
+          'app_data.release_management_report_snapshot_v1(text,text,uuid,uuid)',
+          'EXECUTE')
+        OR NOT has_function_privilege(
+          'tongxingzhe_runtime',
+          'app_data.release_management_report_snapshot_v1(text,text,uuid,uuid)',
+          'EXECUTE')
+        OR has_schema_privilege('tongxingzhe_runtime', 'app_private', 'USAGE')
+        OR has_function_privilege(
+          'tongxingzhe_runtime',
+          'app_private.release_management_report_snapshot_v2(uuid,uuid,uuid,text,integer)',
+          'EXECUTE')
+        OR has_table_privilege(
+          'tongxingzhe_runtime', 'app_data.app_users', 'SELECT')
+        OR has_table_privilege(
+          'tongxingzhe_runtime', 'app_data.external_identities', 'SELECT')
+        OR has_table_privilege(
+          'tongxingzhe_runtime', 'app_data.workspaces', 'SELECT')
+        OR has_table_privilege(
+          'tongxingzhe_runtime', 'app_data.projects', 'SELECT')
+        OR has_table_privilege(
+          'tongxingzhe_runtime', 'app_data.organization_memberships', 'SELECT')
+        OR has_table_privilege(
+          'tongxingzhe_runtime', 'app_data.project_memberships', 'SELECT')
+        OR has_table_privilege(
+          'tongxingzhe_runtime',
+          'app_data.management_report_capability_grants', 'SELECT')
+        OR has_table_privilege(
+          'tongxingzhe_runtime',
+          'app_private.management_report_release_attempts', 'SELECT')
+        OR has_table_privilege(
+          'tongxingzhe_runtime',
+          'app_private.management_report_release_v2_attempts', 'SELECT')
+        OR has_table_privilege(
+          'tongxingzhe_runtime',
+          'app_private.management_report_snapshots', 'SELECT')
+        OR has_table_privilege(
+          'tongxingzhe_runtime', 'app_data.contacts', 'SELECT')
+      THEN
+        RAISE EXCEPTION '0036 runtime release bridge or ACL drift';
+      END IF;
+    END
+    \$acl\$;
+  " >/dev/null
+runtime_release_dump_after_migration="$(
+  docker exec "${container_name}" pg_dump "${runtime_release_replay_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges --restrict-key="${runtime_release_dump_key}"
+)"
+if [[ "${runtime_release_dump_before}" != \
+  "${runtime_release_dump_after_migration}" ]]; then
+  echo '0036 migration 改写了旧 channel 业务数据。' >&2
+  exit 1
+fi
+runtime_release_replayed="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${runtime_release_replay_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command='SET ROLE tongxingzhe_runtime' \
+    --command="SELECT app_data.release_management_report_snapshot_v1(
+      'https://upgrade-release.synthetic/auth/v1',
+      '7cn-publisher',
+      '00000000-0000-4000-8000-000000007c0c',
+      '00000000-0000-4000-8000-000000007c05'
+    )::text" \
+    --command='RESET ROLE'
+)"
+if [[ "${runtime_release_replayed}" != "${runtime_release_receipt_before}" ]] \
+  || [[ "${runtime_release_replayed}" == *'protected_report'* ]] \
+  || [[ "${runtime_release_replayed}" == *'"cells"'* ]] \
+  || [[ "${runtime_release_replayed}" == *'"contact"'* ]] \
+  || [[ "${runtime_release_replayed}" == *'"contributor"'* ]]; then
+  echo '0036 runtime 未精确重放旧 14 字段 value-free receipt。' >&2
+  exit 1
+fi
+if runtime_release_near_identity_error="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${runtime_release_replay_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --set=VERBOSITY=verbose \
+    --command='SET ROLE tongxingzhe_runtime' \
+    --command="SELECT app_data.release_management_report_snapshot_v1(
+      'https://upgrade-release.synthetic/auth/v1',
+      ' 7cn-publisher ',
+      '00000000-0000-4000-8000-000000007c0c',
+      '00000000-0000-4000-8000-000000007c05'
+    )" 2>&1
+)"; then
+  echo '0036 runtime 接受了不精确匹配的 publisher subject。' >&2
+  exit 1
+fi
+if [[ "${runtime_release_near_identity_error}" != \
+  *'42501: management report release access forbidden'* ]]; then
+  echo '0036 近似身份失败原因不是精确 identity 拒绝。' >&2
+  printf '%s\n' "${runtime_release_near_identity_error}" >&2
+  exit 1
+fi
+runtime_release_old_rows_after="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${runtime_release_replay_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${runtime_release_old_rows_sql}"
+)"
+runtime_release_counts_after="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${runtime_release_replay_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${runtime_release_counts_sql}"
+)"
+runtime_release_dump_after_replay="$(
+  docker exec "${container_name}" pg_dump "${runtime_release_replay_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges --restrict-key="${runtime_release_dump_key}"
+)"
+if [[ "${runtime_release_old_rows_before}" != \
+  "${runtime_release_old_rows_after}" ]] \
+  || [[ "${runtime_release_counts_before}" != \
+  "${runtime_release_counts_after}" ]] \
+  || [[ "${runtime_release_dump_before}" != \
+  "${runtime_release_dump_after_replay}" ]]; then
+  echo '0036 runtime 重放或近似身份拒绝改写了旧历史、行数或业务 dump。' >&2
+  exit 1
+fi
+runtime_release_baseline_replay="$(
+  docker exec --env DATABASE_URL="${runtime_release_replay_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/runtime-release-replay-baseline-migrations \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "$(printf '%s\n' "${runtime_release_baseline_replay}" \
+  | awk '/^已验证 .*（无需重复执行）$/ { count++ } END { print count+0 }')" \
+    -ne 35 ]] \
+  || [[ "${runtime_release_baseline_replay}" == *'已执行 '* ]]; then
+  echo '0001..0035 重复 migrations 没有全部命中 checksum skip。' >&2
+  printf '%s\n' "${runtime_release_baseline_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${runtime_release_baseline_replay}"
+runtime_release_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${runtime_release_replay_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/runtime-release-replay-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${runtime_release_upgrade_replay}" != \
+  *'已验证 0036_runtime_trusted_management_report_release（无需重复执行）'* ]] \
+  || [[ "${runtime_release_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0036 重复 migration 没有命中 checksum skip。' >&2
+  printf '%s\n' "${runtime_release_upgrade_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${runtime_release_upgrade_replay}"
+runtime_release_dump_after_checksum="$(
+  docker exec "${container_name}" pg_dump "${runtime_release_replay_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges --restrict-key="${runtime_release_dump_key}"
+)"
+if [[ "${runtime_release_dump_before}" != \
+  "${runtime_release_dump_after_checksum}" ]]; then
+  echo '重复 0036 migration 改写了旧 channel 发布数据。' >&2
+  exit 1
+fi
+echo '0035→0036 旧 channel runtime 精确重放、业务不变与 checksum 幂等：通过。'
 
 echo '验证 0066→0067 升级保留旧批准 channel 快照，并可登记替代。'
 docker exec "${container_name}" createdb \
