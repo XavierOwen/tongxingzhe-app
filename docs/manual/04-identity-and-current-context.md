@@ -2012,6 +2012,24 @@ unknown 结果仍只能重试原邀请或经过确认停止重试。重试得到
 
 `TEST-110` 记录真实 UI 触发的调用与参数，并验证资源所有权：关闭借用窗口不关闭 gateway，移除 App 才各关闭一次。复用原 fake 的可配置结果，默认仍是 notConfigured；不修改生产行为、业务授权或接口。运行整份 App 测试、analyze、format、production boundary、链接和精确 head CI。这是生产 UI 接线的 synthetic 证据，不证明真实 Auth、RPC、数据库、当前成员资格或真人平台验收。
 
+### 3.52 组织删除申请、恢复窗口与终结清除合同（Issue #486，MANUAL-128）
+
+7CT 只固定组织生命周期的文档合同。它不新增数据库、Backend、HTTP、Flutter、Drift、清除 writer、备份流程或平台入口。7AD／#350 的 readiness 文档只说明现有代码接点，不是删除、恢复或 purge 的实现证据。
+
+任一组织 current active owner 都可以提交删除申请，也可以在恢复窗口内按已知 workspace 与当前 opaque `deletion_request_id` 申请恢复。服务端必须用 trusted exact identity 在组织治理锁后重新确认 selector 仍指向当前 `deletion_pending` cycle，且 actor 仍是 current active owner；客户端不能自报 owner、组织名称、申请时间或恢复资格。申请人不必是原申请人，owner 转换不改变已存在的首次申请时间。上一轮迟到的首次恢复请求不能恢复同一组织的下一轮删除。
+
+首次申请时间由数据库写入 UTC。恢复窗口是半开区间 `[first_requested_at_utc, first_requested_at_utc + 720 hours)`。状态固定为 `active`、`deletion_pending`、`restored`、`purge_due`、`purging`、`purge_failed` 和 `purged`：首次申请进入 `deletion_pending`，窗口内成功恢复进入 `restored`。`restored` 结束该次 lifecycle attempt，运行权限等同 `active`；以后再次删除必须使用新的 request、claim 和恢复窗口。窗口期满进入 `purge_due`，受控清除依次进入 `purging`、`purged`，清除失败进入 `purge_failed`。`purge_due`、`purging`、`purge_failed` 和 `purged` 都不可访问，`purged` 只由墓碑证明。状态转换必须在组织治理锁后重读；非法状态或非法转换失败关闭。
+
+删除和恢复使用各自的 request UUID claim，恢复 claim 另绑定目标 `deletion_request_id`。仍存活且状态匹配的 claim，只有相同 request、组织、operation、actor 和 deletion cycle 才能返回原 receipt。任一绑定或状态漂移返回固定 conflict。exact replay 不重新检查首次资格，不改首次申请时间，也不延长 deadline。恢复成功不会把窗口重新打开；终结后同 UUID 只能命中 value-free tombstone 并返回 conflict，不能重建业务 receipt。
+
+`deletion_pending` 的恢复期冻结新的普通组织治理／业务 claim、成员和 owner 变化、项目安排及 capability 变化。窗口内首次恢复 writer 及其 claim／状态变更是唯一新的 lifecycle 写入例外；live exact replay、既有管理报告读取及必要的 value-free access audit 也是受控例外。除此之外不能在恢复期改变待清除组织的业务事实。管理报告读取仍按原报告合同授权，不因恢复目录而扩大范围。
+
+处于 `deletion_pending`、`purge_due`、`purging`、`purge_failed` 或 `purged` 的组织不出现在普通组织目录。恢复目录是有界 owner-only 窄目录，只列出读取时 actor 仍是 current active owner 的可恢复组织，并返回 workspace UUID、当前 opaque `deletion_request_id`、原显示名、effective time、deadline 和 status。该 selector 只绑定恢复意图，不是长期资格。目录不提供全局搜索、成员枚举、项目枚举、资料或权限浏览，也不是普通组织目录的替代品。
+
+当数据库 UTC 到达或超过 deadline 后，组织不可恢复，状态只能进入 `purge_due` 及其终结路径。恢复请求、旧 live claim 和普通目录读取都不能重新开放组织或延长期限。终结 purge 只能使用受控 immutable-delete 例外；资格、锁、约束、存储或清除任一步失败，都必须使业务清除事务整体回滚，不暴露底层错误，也不留下部分清除。回滚完成后，独立最小生命周期事务才可记录 `purge_failed`；只有受控 finalizer 可重试，不能恢复组织。终结边界只保留防重放所需的最小 value-free tombstone，即 family、request UUID 与 `purge_completed_at_utc`，不保存组织名称、成员、报告、PII 或数据库原文。`purged` 只由该墓碑证明，不由业务目录返回。
+
+`TEST-138` 在文档层逐项检查 `ORG-041`–`ORG-048`、Slice 7 current status 与本节是否一致，并运行 Markdown links、diff 和 no-slop 检查。通过这些检查只证明文档合同可追溯；不证明 PostgreSQL 状态机、HTTP 授权、Flutter 行为、真实清除、备份恢复、部署或真人平台。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：

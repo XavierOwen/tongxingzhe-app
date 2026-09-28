@@ -320,6 +320,14 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `ORG-038` | 定向账号邀请接受成功后保留窗口，显示既有五字段历史 receipt，含组织 membership UUID 与接受 UTC。历史记录不证明当前 membership，不自动加入项目或授予项目能力；关闭、Back 或 Escape 返回同一 receipt，使原父目录只重新读取一次。换号、会话失效或 ABA 清空并隔离迟到结果；保留原固定邀请重试与 uncertain 退出确认，不新增 reader、资料、缓存或共享资源所有权。 |
 | `ORG-039` | 批准成功历史回执可主动进入既有普通项目安排窗口，固定回执中的组织及 organization membership UUID，目标只读；用户仍输入已知 project UUID、本地核对并独立明确提交。手工批准与待审批目录两条入口借用同一 App-owned assignment gateway，不自动安排、复制、重读或切项目。历史批准不保留安排资格，既有 writer 独立锁后重验；子窗关闭保留原批准回执，父子会话失效／ABA及迟到结果不能复活旧内容。原手工目标入口、独立 request／unknown fixed retry及借用资源所有权不变。 |
 | `ORG-040` | 组织创建、我的组织目录、定向邀请创建、分享链接创建、加入申请提交、负责人交接及退出组织窗口在借用 AppSession 的事件流结束时，沿原会话失效路径退役：清除旧目录、选择与历史回执，隔离迟到成功，不返回旧账号成功或触发旧父目录重读。流结束不等于业务失败；既有 unknown／停止重试确认与同账号换项目语义保留。窗口仍不关闭借用会话或 gateway。 |
+| `ORG-041` | 任一组织 current active owner 都可以提交该组织的删除申请，或在恢复窗口内按已知 workspace 与当前 `deletion_request_id` 申请恢复；actor 必须由 trusted exact identity 在锁后解析并仍是 current active owner，不要求是原申请人，也不接受客户端自报 owner、名称或时间。恢复必须锁后确认 cycle selector 仍指向当前 `deletion_pending` attempt，上一轮迟到请求不能恢复下一轮删除。 |
+| `ORG-042` | 首次删除申请时间由数据库 UTC 写入，恢复窗口固定为 `[first_requested_at_utc, first_requested_at_utc + 720 hours)` 半开区间。deadline 只由首次申请确定，后续重放、换 owner 或恢复失败不得重置、缩短或延长它。 |
+| `ORG-043` | 生命周期状态必须固定为 `active`、`deletion_pending`、`restored`、`purge_due`、`purging`、`purge_failed` 和 `purged`。首次申请从 `active` 进入 `deletion_pending`；窗口内成功恢复进入 `restored`，该次 lifecycle attempt 终止且运行权限等同 `active`。以后再次删除必须使用新的 request、claim 和恢复窗口。窗口期满进入 `purge_due`；受控清除依次进入 `purging`、`purged`，失败进入 `purge_failed`。后四种状态均不可访问，`purged` 只由墓碑证明。状态转换必须在组织治理锁后重读，未知状态或非法转换统一失败关闭。 |
+| `ORG-044` | 删除与恢复各使用独立 request UUID claim；恢复 claim 另绑定目标 `deletion_request_id`。仍存活且 lifecycle 状态匹配的 claim，只有相同 request、workspace、operation、actor 与 deletion cycle 才能精确重放原 receipt；任一绑定或状态漂移返回固定 conflict。exact replay 不重新授权首次资格，也不改变首次申请时间或 deadline。终结后同 UUID 只能命中 value-free tombstone 并返回 conflict，不能为重放保留业务 receipt。 |
+| `ORG-045` | `deletion_pending` 恢复期冻结新的普通组织治理／业务 claim、成员／owner／项目安排和 capability 变化；只保留 live exact replay、窗口内首次恢复 writer 及其 claim／状态变更、既有管理报告读取及必要 value-free access audit 这些受控例外。恢复成功前不得以其他写入改变待清除组织的业务事实。 |
+| `ORG-046` | `deletion_pending`、`purge_due`、`purging`、`purge_failed` 和 `purged` 组织从普通组织目录隐藏；恢复目录是有界 owner-only 窄目录，只列出读取时 actor 仍是 current active owner 的可恢复组织，并返回 workspace UUID、当前 opaque `deletion_request_id`、原显示名、effective time、deadline 和 status。该 selector 只绑定恢复意图，不是长期资格；目录不提供全局搜索、成员／项目枚举、资料或权限浏览。 |
+| `ORG-047` | 当数据库 UTC 到达或超过 deadline 后，组织不可恢复，状态只能进入 `purge_due` 及其终结路径；任何恢复 request、旧 live claim 或普通目录读取都不得重新开放组织或延长期限。`purged` 只由墓碑证明，不由业务目录返回。 |
+| `ORG-048` | 终结 purge 只能通过受控 immutable-delete 例外执行；资格、锁、约束、存储或清除任一步失败都必须使业务清除事务整体回滚，不得留下部分清除。回滚后，独立最小生命周期事务可记录不含底层原文或业务内容的 `purge_failed`；只有受控 finalizer 可重试，不能恢复组织。终结后只保留最小 value-free tombstone（仅防重放所需的 family、request UUID 与 `purge_completed_at_utc`），不保留组织名称、成员、报告、PII 或数据库原文。 |
 
 #### Slice 7B Spec：固定组织原子创建与首位所有者合同
 
@@ -3172,6 +3180,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-125` | 学习文档说明真实0001至0048基线精确48个migration，复用真实personal bootstrap、promotion target、contact submit v3与0048 opt-in writer，建立同一project的yes、no、unknown三条current contact-target links，且接触早于enabled opt-in。随后只应用0049；runtime以exact issuer／subject、显式project、metric与UTC半开区间返回ready的1／1／2／1／5000结果，unknown只计unanswered，不进入分母，当前enabled可回看配置前旧期间。说明0049的最小ACL、旧contacts／revisions／links／project／opt-in versions和完整data-only dump逐字不变、48+1 checksum skip，不重复既有2/3舍入、NULL／拒答／N/A／零分母、旧revision、作废、项目／身份／期间、disabled与unconfigured矩阵，并界定合成数据库证据边界。 |
 | `MANUAL-126` | 学习文档说明真实0001至0051基线实际50个migration且没有0050，复用真实0029 timezone writer、0031 trusted-v2 release writer与0033 runtime read path建立旧approved_baseline snapshot、v1／v2 attempts、固定identity、view grant和旧read audit。随后只应用0052；旧view-only读取仍成功并只追加既定read audit，新增独立export grant后runtime导出同一旧snapshot，四键export document中的`report`等于旧`protected_report`，UTC时间为毫秒格式。说明双capability、最小ACL、独立value-free export audit、旧数据保存、50+1 checksum skip、不重复0052既有矩阵，以及数据库证据不证明canonical UTF-8 bytes或生产交付。 |
 | `MANUAL-127` | 学习文档说明真实0001至0056基线实际55个migration且没有0050，复用真实0029 timezone writer、0031 trusted-v2 writer与旧v1 writer建立同UUID的delegated v1／v2 attempts和另一UUID的v1-only legacy attempt。随后只应用0057；共享ledger精确回填两条channel claims，同UUID去重、v1-only保留、current-city为0，ledger实际只含`release_request_id`与`release_family_id`两个字段，不虚构时间事实。说明旧snapshot、attempts、旧行与业务dump保存、55+1 checksum replay不重复写入，既有0057 fixture继续覆盖schema／ACL／trigger／current-city／cross-family矩阵，以及合成数据库 staged proof不证明生产Auth、HTTP、token、network、部署或服务交付。 |
+| `MANUAL-128` | 学习文档说明7CT的生命周期合同：任一current active owner可提交删除申请或在连续720小时恢复窗口内恢复；首次申请时间取数据库UTC，窗口为半开区间，恢复绑定当前opaque `deletion_request_id`以隔离跨周期迟到请求，状态转换、exact replay、drift conflict与不可延长deadline固定。恢复期冻结普通组织写入，只允许首次恢复writer及其claim／状态变更、live exact replay、既有管理报告读取和必要value-free access audit四类受控例外；普通目录隐藏，恢复目录仅向current owner开放。期满不可恢复，受控purge任一步失败都关闭且不留部分清除，只保留最小value-free tombstone。明确本票仅文档合同，#350 readiness不是实现证据，不证明DB、HTTP、Flutter、清除、备份或真人平台。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3487,6 +3496,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-135` | 7CQ 正式Docker从真实0001至0048建立独立旧库，精确核对48个migration和最大0048；0049 personal follow-up consent ratio函数不存在。fixture复用真实personal bootstrap、promotion target、contact submit v3与0048 opt-in writer，建立固定active personal context、同一project的三条current contact-target links（yes、no、unknown），且接触早于enabled opt-in。仅应用0049后，runtime以exact issuer／subject和显式project、metric与UTC半开区间读取旧期间，返回ready：yes=1、no=1、denominator=2、unanswered=1、percentage_basis_points=5000；unknown只计unanswered，不进入分母。当前enabled可以回看配置前接触，读取不改写旧contacts、revisions、links、project、opt-in versions、表行数或完整data-only dump。bridge保持`SECURITY DEFINER`与最小ACL，`PUBLIC`不可执行，runtime只有窄函数`EXECUTE`且不能直接读取contact、link、opt-in或PII表；重跑0001至0048与0049分别命中48+1 checksum skip。现有0049 fixture继续覆盖2/3舍入、NULL／拒答／N/A／零分母、旧revision、作废、项目／身份／期间、disabled与unconfigured矩阵，7CQ不重复这些矩阵；合成数据库证据不证明生产Auth、HTTP、token、network、真人联系人、统计解释、历史as-of查询或UI行为。 |
 | `TEST-136` | 7CR 正式Docker从真实0001至0051建立独立旧库，精确核对实际50个migration和最大0051，仓库没有0050 migration；0052 export-events表、private exporter与runtime export bridge均不存在。fixture复用真实0029 timezone writer、0031 trusted-v2 release writer与0033 runtime read path，建立固定project、approved_baseline旧snapshot、delegated v1／v2 attempts、active external identity、仅view grant和唯一旧read audit，并保存旧snapshot、attempts、identity、grant、read audit与完整旧业务dump。仅应用0052后，旧view-only identity仍可读取同一旧snapshot并按既定语义新增一条read audit；追加独立`export_management_reports` grant后，runtime导出同一旧snapshot，`export_document`固定为四键`export_contract_id`、`snapshot_id`、`released_at_utc`、`report`，其中`report`等于旧`protected_report`，UTC时间为毫秒格式且不暴露授权证据。export只追加独立value-free export audit，不因export追加普通read audit；view与export capability及授权证据分离，`PUBLIC`不可执行，runtime只有窄bridge `EXECUTE`且不能直读private快照、attempt、read／export audit、identity、grant或业务表。旧历史与其他业务数据保存，重跑0001至0051与0052分别命中50+1 checksum skip；既有0052 fixture继续覆盖view-only／export-only／release-only、legacy、cross-project、重复／错误与ACL矩阵，7CR不重复这些场景。数据库证据不把jsonb文本声明为canonical UTF-8 bytes，也不证明生产Auth、HTTP、token、network、文件交付、真人数据或部署完成。 |
 | `TEST-137` | 7CS 正式Docker从真实0001至0056建立独立旧库；仓库没有0050 migration，因此实际为55个migration，最大版本为0056。fixture复用真实0029 timezone writer与0031 trusted-v2 writer，建立固定channel approved_baseline snapshot及同UUID的delegated v1／v2 attempts，再用旧v1 writer建立另一UUID的v1-only legacy attempt；current-city attempts表与共享`management_report_release_request_claims`表在升级前均不存在。仅应用0057后，共享ledger恰有两条channel claim：同UUID的v1／v2 attempts只去重为一条，v1-only UUID保留一条，current-city family为0；ledger只保存`release_request_id`与`release_family_id`两个字段，不虚构时间事实，也不保存report或其他报告值。旧snapshot、attempts、旧行与业务dump保持不变；重放0001至0056命中55个checksum skip，重放0057命中1个skip，ledger仍为两条，55+1 replay不重复写入。既有0057 fixture继续覆盖schema、ACL、trigger、current-city与cross-family矩阵；7CS只补旧channel历史回填。合成数据库 staged proof只证明migration、真实旧writer、UUID去重、value-free ledger、不可变性与幂等，不证明生产Auth、HTTP、token、network、部署或服务交付。 |
+| `TEST-138` | 7CT 只验证文档合同：Product Spec 的 `ORG-041`–`ORG-048`、Slice 7 current status 与说明书 3.52／`MANUAL-128` 逐项覆盖 owner 申请／恢复、数据库UTC与720小时半开窗口、当前 `deletion_request_id` cycle selector、状态、exact replay／drift／deadline、恢复期冻结、目录、期满、受控purge和value-free tombstone。运行 Markdown links、diff 与 no-slop 检查；#350 readiness不作为实现证据，本票不证明DB、HTTP、Flutter、清除、备份或真人平台。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3821,7 +3831,7 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 7AC／#348 将同一监听清理与最终检查顺序用于 invitation 三操作和 membership self-leave，消除清理等待窗口及原始清理异常。它不增加业务功能或生产验证结论。
 
 7AD／#350 的[组织生命周期接入准备](./research/organization-lifecycle-readiness.md)记录现有读写入口、锁与恢复期要求之间的接点，供后续删除／恢复合同使用。
-这是一份代码依据清单，不是已经实现的生命周期。删除申请和恢复的授权选择仍待确认；不新增已接受的执行合同、状态字段、writer、HTTP 或 UI。
+它在 7AD 当时只是一份代码依据清单，不是生命周期实现，也没有新增执行合同、状态字段、writer、HTTP 或 UI；当时待定的申请与恢复授权现由 7CT／#486 和 ADR-0188 固定，实施仍待后续切片。
 
 7AE／#351 在已有组织行接入按已知 target UUID 创建邀请的窗口，保留同窗口幂等重试，成功后由用户显式复制 invitation UUID 手工交给收件人。
 该路径不提供本人账号编号展示或账号查询，也不等于邮箱邀请或完整的普通用户编号获取流程；邀请规则和服务端权限不变。
@@ -3883,6 +3893,8 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 7BK／#413 使定向邀请接受成功后能读取原五字段历史回执，并在关闭时沿用父目录的一次在线重读；不把历史 membership UUID 解释成当前成员资格或自动项目加入。
 
 7BJ／#415 把批准历史回执连接到既有显式普通项目安排窗口，固定目标成员而不自动提交；安排仍独立重新授权，不增加成员／项目目录、管理能力或生命周期政策。
+
+7CT／#486 固定组织删除申请与恢复合同：任一 current active owner 可提交申请或在数据库 UTC 首次申请后的连续 720 小时半开窗口内恢复；状态、exact replay、drift、deadline 不延长、恢复期写冻结、live replay／既有管理报告读取例外、普通目录隐藏、owner-only 窄恢复目录、期满不可恢复、purge 失败关闭和最小 value-free tombstone 均有文档定义。本票仅交付文档合同；#350 readiness 不是实现证据，也不证明 DB、HTTP、Flutter、清除、备份或真人平台。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 

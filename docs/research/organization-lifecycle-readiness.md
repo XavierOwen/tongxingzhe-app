@@ -1,6 +1,6 @@
 # 组织删除与恢复接入准备度
 
-> 状态：Issue #350 的代码证据与实施地图；不是 ADR、接口规范或权限决定。查验范围截至 migration 0091。
+> 状态：Issue #350 的代码证据与实施地图；不是实现证据。查验范围截至 migration 0091。文中“待决定”记录的是 7AD 当时状态；申请／恢复授权、连续 720 小时窗口和恢复期操作边界现由 [ADR-0188](../adr/0188-organization-deletion-and-recovery-execution-contract.md) 固定。
 
 ## 结论
 
