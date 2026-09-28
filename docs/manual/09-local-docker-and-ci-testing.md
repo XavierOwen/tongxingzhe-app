@@ -2340,6 +2340,38 @@ first lifecycle必须为`superseded`并指向second，second必须为`active`且
 
 现有0067 fixture继续覆盖当前schema的原因allowlist、跨project／lineage、stale head、分叉／循环、ACL、不可变性和并发矩阵。7CJ不重复这些检查，也不声称生成、更新或泄露受保护报告；20条合成contact不代表生产联系人数据。
 
+#### 6.2.19 真实旧 channel 快照授权读取升级（Issue #468，MANUAL-119）
+
+7CK在独立库只应用0001至0031。runner核对精确31个migration和最大版本0031。此时0032的access-events表、validator和reader函数均不存在。
+
+upgrade fixture直接建立固定active publisher和viewer、同一organization／project的memberships、`release_management_reports`／`view_anonymous_analytics` capabilities与questionnaire前置。
+它调用真实0029 timezone writer建立UTC version 1，为两个已完成UTC期间各建10条voice contact，再调用真实0031 trusted-v2 writer建立`approved_baseline`。fixture保存旧snapshot、v1 attempt和v2 attempt三行的完整JSON字节，作为升级前历史基线；这些行不是0032新建的审计。
+
+runner随后只应用0032。排除新建的空access-events表后，升级前后的`app_data`／`app_private` data-only dump必须逐字不变；旧snapshot、v1 attempt和v2 attempt三行也必须逐字不变。升级后access-events表必须为空，不能因为migration自动补写读取记录。
+
+授权viewer调用0032 private reader时，成功响应只能有七个键：`access_contract_id`、`access_event_id`、`requested_snapshot_id`、`resolved_snapshot_id`、`result_status`、`reason_code`和`protected_report`。`protected_report`必须与已保存的trusted-v2 snapshot逐字相同。该读取只追加一条17列value-free audit，列为`access_event_id`、`requested_by_app_user_id`、`organization_workspace_id`、`organization_membership_id`、`project_membership_id`、`capability_grant_id`、`capability_id`、`authorization_reference_at_utc`、`project_id`、`requested_snapshot_id`、`resolved_snapshot_id`、`report_id`、`report_version`、`query_fingerprint`、`accessed_at_utc`、`result_status`和`reason_code`。audit不保存`protected_report`、cells、contact、contributor、原始答案或其他报告值。
+
+读取是非幂等操作。同一个合法viewer重复读取同一snapshot时，报告内容可以相同，但每次都产生新的`access_event_id`和新的audit行；它不是release writer的exact replay。现有0032 fixture继续覆盖重复读取，以及unknown／cross-project的`not_found`、legacy或不可信来源、release-only、过期授权和无项目成员等负例。失败读取不返回`protected_report`，也不能借此改写旧发布历史。
+
+从仓库根目录运行完整套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+套件会在源库先验证0031基线、运行upgrade fixture、只应用0032，再重放0001至0031和0032。必须分别看到31个基线migration与0032的checksum skip，并看到旧三行历史和非审计业务dump保持不变。只调试当前0032合同时，可在确认数据库不是production后运行：
+
+```bash
+export DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:5432/tongxingzhe_test'
+./tool/postgres_migrate.sh
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_authorized_management_report_snapshot_read.sql
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/fixtures/0032_authorized_management_report_snapshot_read.sql
+```
+
+check验证对象、函数属性、不可变audit和最小ACL；fixture验证trusted read、重复读取、负例、value-free audit和UPDATE／DELETE拒绝。Docker／CI中的合成PostgreSQL证据只证明当前数据库合同，不证明生产Auth、HTTP、runtime bridge、真人平台或服务交付审计提交。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。
