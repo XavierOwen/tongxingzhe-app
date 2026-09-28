@@ -16,6 +16,7 @@ ownerless_upgrade_database='tongxingzhe_ownerless_upgrade'
 consent_replacement_upgrade_database='tongxingzhe_consent_replacement_upgrade'
 channel_read_upgrade_database='tongxingzhe_channel_read_upgrade'
 runtime_read_upgrade_database='tongxingzhe_runtime_read_upgrade'
+channel_export_upgrade_database='tongxingzhe_channel_export_upgrade'
 snapshot_directory_upgrade_database='tongxingzhe_snapshot_directory_upgrade'
 runtime_release_replay_upgrade_database='tongxingzhe_runtime_release_replay_upgrade'
 interest_ordinal_upgrade_database='tongxingzhe_interest_ordinal_upgrade'
@@ -42,6 +43,7 @@ ownerless_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${ownerless
 consent_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${consent_replacement_upgrade_database}"
 channel_read_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${channel_read_upgrade_database}"
 runtime_read_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${runtime_read_upgrade_database}"
+channel_export_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${channel_export_upgrade_database}"
 snapshot_directory_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${snapshot_directory_upgrade_database}"
 runtime_release_replay_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${runtime_release_replay_upgrade_database}"
 interest_ordinal_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${interest_ordinal_upgrade_database}"
@@ -1303,6 +1305,431 @@ if [[ "${runtime_read_after_access}" != "${runtime_read_after_replay}" ]]; then
   exit 1
 fi
 echo '0032→0033 旧 channel runtime 授权读取、单条新审计与 checksum 幂等：通过。'
+
+echo '验证 0051→0052 旧 channel 快照经独立查看与导出授权仍可导出。'
+docker exec "${container_name}" createdb -U postgres "${channel_export_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/channel-export-baseline-migrations \
+      /tmp/channel-export-upgrade-only && \
+   cp /workspace/backend/database/migrations/00{01..49}_*.sql \
+      /workspace/backend/database/migrations/0051_*.sql \
+      /tmp/channel-export-baseline-migrations/ && \
+   test \"\$(find /tmp/channel-export-baseline-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 50 && \
+   cp /workspace/backend/database/migrations/0052_*.sql \
+      /tmp/channel-export-upgrade-only/ && \
+   test \"\$(find /tmp/channel-export-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${channel_export_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/channel-export-baseline-migrations \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres -d "${channel_export_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --command="
+    DO \$baseline\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 50
+        OR (SELECT max(version) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0051_personal_relationship_stage_change_summary'
+        OR to_regclass(
+          'app_private.management_report_snapshot_export_events'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.export_authorized_management_report_snapshot_v1(uuid,uuid,uuid)'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_data.export_authorized_management_report_snapshot_v1(text,text,uuid,uuid)'
+        ) IS NOT NULL
+      THEN
+        RAISE EXCEPTION '0051 channel export upgrade baseline drift';
+      END IF;
+    END
+    \$baseline\$;
+  " >/dev/null
+docker exec --workdir /workspace "${container_name}" psql \
+  -U postgres -d "${channel_export_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --file /workspace/backend/database/fixtures/upgrade/0031_authorized_management_report_snapshot_read_live.sql \
+  >/dev/null
+docker exec --workdir /workspace "${container_name}" psql \
+  -U postgres -d "${channel_export_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --file /workspace/backend/database/fixtures/upgrade/0051_management_report_snapshot_export_live.sql \
+  >/dev/null
+channel_export_snapshot_id="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${channel_export_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="SELECT released_snapshot_id
+      FROM app_private.management_report_release_v2_attempts
+      WHERE release_request_id =
+        '00000000-0000-4000-8000-000000007c0c'"
+)"
+channel_export_old_read_id="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${channel_export_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="SELECT access_event_id
+      FROM app_private.management_report_snapshot_access_events"
+)"
+channel_export_old_rows_sql="
+  SELECT jsonb_build_object(
+    'count', count(*),
+    'rows', jsonb_agg(
+      jsonb_build_object('kind', kind, 'id', id, 'row', row_data)
+      ORDER BY kind, id
+    )
+  )::text
+  FROM (
+    SELECT 'snapshot'::text AS kind, snapshot_id AS id,
+      to_jsonb(snapshot.*) AS row_data
+    FROM app_private.management_report_snapshots AS snapshot
+    UNION ALL
+    SELECT 'v1_attempt', release_request_id, to_jsonb(attempt.*)
+    FROM app_private.management_report_release_attempts AS attempt
+    UNION ALL
+    SELECT 'v2_attempt', release_request_id, to_jsonb(attempt.*)
+    FROM app_private.management_report_release_v2_attempts AS attempt
+    UNION ALL
+    SELECT 'identity', external_identity_id, to_jsonb(identity_row.*)
+    FROM app_data.external_identities AS identity_row
+    WHERE external_identity_id =
+      '00000000-0000-4000-8000-000000007c12'
+    UNION ALL
+    SELECT 'view_grant', capability_grant_id, to_jsonb(grant_row.*)
+    FROM app_data.management_report_capability_grants AS grant_row
+    WHERE capability_grant_id =
+      '00000000-0000-4000-8000-000000007c0b'
+    UNION ALL
+    SELECT 'old_read', access_event_id, to_jsonb(access_row.*)
+    FROM app_private.management_report_snapshot_access_events AS access_row
+    WHERE access_event_id = '${channel_export_old_read_id}'
+  ) AS old_rows"
+channel_export_old_rows_before="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${channel_export_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${channel_export_old_rows_sql}"
+)"
+if [[ -z "${channel_export_snapshot_id}" ]] \
+  || [[ -z "${channel_export_old_read_id}" ]] \
+  || [[ "${channel_export_old_rows_before}" != *'"count": 6'* ]]; then
+  echo '0051 旧 snapshot、v1/v2 attempt、identity、view grant、read audit 未满六行。' >&2
+  exit 1
+fi
+channel_export_dump_key='3435343534353435343534353435343534353435343534353435343534353435'
+channel_export_before_upgrade="$(
+  docker exec "${container_name}" pg_dump "${channel_export_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges \
+    --exclude-table-data=app_private.management_report_snapshot_export_events \
+    --restrict-key="${channel_export_dump_key}"
+)"
+channel_export_business_before="$(
+  docker exec "${container_name}" pg_dump "${channel_export_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges \
+    --exclude-table-data=app_data.management_report_capability_grants \
+    --exclude-table-data=app_private.management_report_snapshot_access_events \
+    --exclude-table-data=app_private.management_report_snapshot_export_events \
+    --restrict-key="${channel_export_dump_key}"
+)"
+docker exec \
+  --env DATABASE_URL="${channel_export_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/channel-export-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh >/dev/null
+docker exec --workdir /workspace "${container_name}" psql \
+  -U postgres -d "${channel_export_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --file /workspace/backend/database/checks/verify_management_report_snapshot_export.sql \
+  >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres -d "${channel_export_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --command="
+    DO \$empty\$
+    BEGIN
+      IF (SELECT count(*)
+          FROM app_private.management_report_snapshot_export_events) <> 0
+        OR (SELECT count(*)
+            FROM app_data.management_report_capability_grants) <> 2
+      THEN
+        RAISE EXCEPTION '0052 upgrade changed old grants or seeded export audit';
+      END IF;
+      IF has_table_privilege(
+          'tongxingzhe_runtime', 'app_data.app_users', 'SELECT'
+        ) OR has_table_privilege(
+          'tongxingzhe_runtime', 'app_data.external_identities', 'SELECT'
+        ) OR has_table_privilege(
+          'tongxingzhe_runtime', 'app_data.workspaces', 'SELECT'
+        ) OR has_table_privilege(
+          'tongxingzhe_runtime', 'app_data.projects', 'SELECT'
+        ) OR has_table_privilege(
+          'tongxingzhe_runtime', 'app_data.organization_memberships', 'SELECT'
+        ) OR has_table_privilege(
+          'tongxingzhe_runtime', 'app_data.project_memberships', 'SELECT'
+        ) OR has_table_privilege(
+          'tongxingzhe_runtime',
+          'app_data.management_report_capability_grants', 'SELECT'
+        ) OR has_table_privilege(
+          'tongxingzhe_runtime',
+          'app_private.management_report_snapshots', 'SELECT'
+        ) OR has_table_privilege(
+          'tongxingzhe_runtime',
+          'app_private.management_report_release_v2_attempts', 'SELECT'
+        ) OR has_table_privilege(
+          'tongxingzhe_runtime',
+          'app_private.management_report_snapshot_access_events', 'SELECT'
+        ) OR has_table_privilege(
+          'tongxingzhe_runtime',
+          'app_private.management_report_snapshot_export_events', 'SELECT'
+        ) THEN
+        RAISE EXCEPTION '0052 runtime received direct identity or report data access';
+      END IF;
+    END
+    \$empty\$;
+  " >/dev/null
+channel_export_after_upgrade="$(
+  docker exec "${container_name}" pg_dump "${channel_export_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges \
+    --exclude-table-data=app_private.management_report_snapshot_export_events \
+    --restrict-key="${channel_export_dump_key}"
+)"
+channel_export_old_rows_after_upgrade="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${channel_export_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${channel_export_old_rows_sql}"
+)"
+if [[ "${channel_export_before_upgrade}" != "${channel_export_after_upgrade}" ]] \
+  || [[ "${channel_export_old_rows_before}" != \
+    "${channel_export_old_rows_after_upgrade}" ]]; then
+  echo '0052 升级改写了旧 channel 数据或六行历史。' >&2
+  exit 1
+fi
+channel_export_new_read="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${channel_export_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command='SET ROLE tongxingzhe_runtime' \
+    --command="SELECT app_data.read_authorized_management_report_snapshot_v1(
+      'https://upgrade-report-export.synthetic/auth/v1',
+      '7cr-viewer',
+      '00000000-0000-4000-8000-000000007c05',
+      '${channel_export_snapshot_id}'::uuid
+    )::text" \
+    --command='RESET ROLE'
+)"
+channel_export_expected_read="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${channel_export_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="
+      SELECT jsonb_build_object(
+        'access_contract_id', 'authorized_management_report_snapshot_read_v1',
+        'access_event_id', access_row.access_event_id,
+        'requested_snapshot_id', snapshot.snapshot_id,
+        'resolved_snapshot_id', snapshot.snapshot_id,
+        'result_status', 'completed', 'reason_code', NULL,
+        'protected_report', snapshot.protected_report
+      )::text
+      FROM app_private.management_report_snapshots AS snapshot
+      JOIN app_private.management_report_snapshot_access_events AS access_row
+        ON access_row.resolved_snapshot_id = snapshot.snapshot_id
+      WHERE snapshot.snapshot_id = '${channel_export_snapshot_id}'
+        AND access_row.access_event_id <> '${channel_export_old_read_id}'"
+)"
+if [[ -z "${channel_export_new_read}" ]] \
+  || [[ "${channel_export_new_read}" != "${channel_export_expected_read}" ]]; then
+  echo '0052 共享 resolver 未保留旧 view-only runtime 读取合同。' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${channel_export_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --command="
+    INSERT INTO app_data.management_report_capability_grants (
+      capability_grant_id, project_membership_id, capability_id, active_from_utc
+    ) VALUES (
+      '00000000-0000-4000-8000-000000007c13',
+      '00000000-0000-4000-8000-000000007c09',
+      'export_management_reports',
+      transaction_timestamp() - interval '60 days'
+    );
+  " >/dev/null
+channel_export_result="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${channel_export_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command='SET ROLE tongxingzhe_runtime' \
+    --command="SELECT app_data.export_authorized_management_report_snapshot_v1(
+      'https://upgrade-report-export.synthetic/auth/v1',
+      '7cr-viewer',
+      '00000000-0000-4000-8000-000000007c05',
+      '${channel_export_snapshot_id}'::uuid
+    )::text" \
+    --command='RESET ROLE'
+)"
+channel_export_expected="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${channel_export_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="
+      SELECT jsonb_build_object(
+        'export_access_contract_id',
+          'authorized_management_report_snapshot_export_v1',
+        'export_event_id', event.export_event_id,
+        'requested_snapshot_id', snapshot.snapshot_id,
+        'resolved_snapshot_id', snapshot.snapshot_id,
+        'result_status', 'completed', 'reason_code', NULL,
+        'export_document', jsonb_build_object(
+          'export_contract_id', 'management_report_snapshot_export_v1',
+          'snapshot_id', snapshot.snapshot_id,
+          'released_at_utc', to_char(
+            snapshot.released_at_utc AT TIME ZONE 'UTC',
+            'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'
+          ),
+          'report', snapshot.protected_report
+        )
+      )::text
+      FROM app_private.management_report_snapshots AS snapshot
+      JOIN app_private.management_report_snapshot_export_events AS event
+        ON event.resolved_snapshot_id = snapshot.snapshot_id
+      WHERE snapshot.snapshot_id = '${channel_export_snapshot_id}'"
+)"
+if [[ -z "${channel_export_result}" ]] \
+  || [[ "${channel_export_result}" != "${channel_export_expected}" ]]; then
+  echo '0052 runtime 未返回固定四键、旧 protected_report 的精确导出文档。' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${channel_export_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --command="
+    DO \$verify\$
+    DECLARE
+      read_row app_private.management_report_snapshot_access_events%ROWTYPE;
+      export_row app_private.management_report_snapshot_export_events%ROWTYPE;
+    BEGIN
+      SELECT * INTO STRICT read_row
+      FROM app_private.management_report_snapshot_access_events
+      WHERE access_event_id <> '${channel_export_old_read_id}';
+      SELECT * INTO STRICT export_row
+      FROM app_private.management_report_snapshot_export_events;
+      IF (SELECT count(*)
+          FROM app_private.management_report_snapshot_access_events) <> 2
+        OR (SELECT count(*)
+            FROM app_private.management_report_snapshot_export_events) <> 1
+        OR (SELECT count(*)
+            FROM app_data.management_report_capability_grants) <> 3
+        OR (SELECT count(*)
+            FROM app_data.management_report_capability_grants
+            WHERE project_membership_id =
+              '00000000-0000-4000-8000-000000007c09'
+              AND capability_id IN (
+                'view_anonymous_analytics', 'export_management_reports'
+              )) <> 2
+        OR read_row.capability_grant_id <>
+          '00000000-0000-4000-8000-000000007c0b'
+        OR read_row.capability_id <> 'view_anonymous_analytics'
+        OR read_row.result_status <> 'completed'
+        OR (SELECT count(*) FROM jsonb_object_keys(to_jsonb(export_row))) <> 16
+        OR export_row.requested_by_app_user_id <>
+          '00000000-0000-4000-8000-000000007c02'
+        OR export_row.organization_workspace_id <>
+          '00000000-0000-4000-8000-000000007c03'
+        OR export_row.organization_membership_id <>
+          '00000000-0000-4000-8000-000000007c07'
+        OR export_row.project_membership_id <>
+          '00000000-0000-4000-8000-000000007c09'
+        OR export_row.view_capability_grant_id <>
+          '00000000-0000-4000-8000-000000007c0b'
+        OR export_row.export_capability_grant_id <>
+          '00000000-0000-4000-8000-000000007c13'
+        OR export_row.project_id <>
+          '00000000-0000-4000-8000-000000007c05'
+        OR export_row.requested_snapshot_id <> '${channel_export_snapshot_id}'
+        OR export_row.resolved_snapshot_id IS DISTINCT FROM
+          '${channel_export_snapshot_id}'::uuid
+        OR export_row.export_access_contract_id <>
+          'authorized_management_report_snapshot_export_v1'
+        OR export_row.export_contract_id <>
+          'management_report_snapshot_export_v1'
+        OR export_row.export_version <> 1
+        OR NOT isfinite(export_row.requested_at_utc)
+        OR export_row.result_status <> 'completed'
+        OR export_row.reason_code IS NOT NULL
+        OR to_jsonb(export_row)::text ~*
+          '\"(protected_report|export_document|cells|value_count|contributor|contact_id|reach_count|interest_level|raw_answer)\"[[:space:]]*:'
+      THEN
+        RAISE EXCEPTION '0052 dual-grant read/export audit contract drift';
+      END IF;
+    END
+    \$verify\$;
+  " >/dev/null
+channel_export_old_rows_after="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${channel_export_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${channel_export_old_rows_sql}"
+)"
+channel_export_business_after="$(
+  docker exec "${container_name}" pg_dump "${channel_export_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges \
+    --exclude-table-data=app_data.management_report_capability_grants \
+    --exclude-table-data=app_private.management_report_snapshot_access_events \
+    --exclude-table-data=app_private.management_report_snapshot_export_events \
+    --restrict-key="${channel_export_dump_key}"
+)"
+if [[ "${channel_export_old_rows_before}" != "${channel_export_old_rows_after}" ]] \
+  || [[ "${channel_export_business_before}" != "${channel_export_business_after}" ]]; then
+  echo '0052 导出改写了旧历史或预期 grant／audit 外的业务数据。' >&2
+  exit 1
+fi
+channel_export_final_dump="$(
+  docker exec "${container_name}" pg_dump "${channel_export_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges --restrict-key="${channel_export_dump_key}"
+)"
+channel_export_baseline_replay="$(
+  docker exec --env DATABASE_URL="${channel_export_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/channel-export-baseline-migrations \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "$(printf '%s\n' "${channel_export_baseline_replay}" \
+  | awk '/^已验证 .*（无需重复执行）$/ { count++ } END { print count+0 }')" \
+    -ne 50 ]] \
+  || [[ "${channel_export_baseline_replay}" == *'已执行 '* ]]; then
+  echo '0001..0051 重放没有精确命中 50 个 checksum skip。' >&2
+  printf '%s\n' "${channel_export_baseline_replay}" >&2
+  exit 1
+fi
+channel_export_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${channel_export_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/channel-export-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${channel_export_upgrade_replay}" != \
+  *'已验证 0052_management_report_snapshot_export（无需重复执行）'* ]] \
+  || [[ "${channel_export_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0052 重放没有命中 checksum skip。' >&2
+  printf '%s\n' "${channel_export_upgrade_replay}" >&2
+  exit 1
+fi
+channel_export_replay_dump="$(
+  docker exec "${container_name}" pg_dump "${channel_export_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges --restrict-key="${channel_export_dump_key}"
+)"
+if [[ "${channel_export_final_dump}" != "${channel_export_replay_dump}" ]]; then
+  echo '0052 重放改写了最终业务或审计数据。' >&2
+  exit 1
+fi
+echo '0051→0052 旧 channel 双授权导出、独立审计与 50+1 checksum 幂等：通过。'
 
 echo '验证 0034→0035 升级后旧 trusted-v2 channel 快照可由 runtime 目录读取。'
 docker exec "${container_name}" createdb -U postgres \

@@ -2516,6 +2516,34 @@ runtime不能直接读取contacts、contact-target links、opt-in versions或PII
 
 Docker／CI中的合成PostgreSQL证据只证明0049 migration、真实personal writer、contact-target link候选边界、当前opt-in、UTC半开区间、unknown分母语义、最小ACL和staged upgrade保存。它不证明生产Auth、HTTP、token验证、network、client delivery、部署交付、真人联系人、统计解释或历史as-of查询。
 
+#### 6.2.26 真实旧 channel 快照双授权导出升级（Issue #480，MANUAL-126）
+
+7CR在独立库只应用0001至0051。仓库没有0050 migration，因此runner必须核对实际50个migration和最大版本0051。升级前，0052的export-events表、private exporter和runtime export bridge都不存在。
+
+upgrade fixture复用真实0029 timezone writer、0031 trusted-v2 release writer和0033 runtime read path。
+它建立固定project和`approved_baseline`旧snapshot。
+它再建立delegated v1／v2 attempts和active external identity。
+它只授`view_anonymous_analytics` grant，并留下唯一旧read audit。
+它保存旧snapshot、attempts、identity、grant、旧read audit以及完整旧业务dump。
+
+runner随后只应用0052。migration完成后，旧snapshot、attempts、identity、view grant和旧read audit必须逐字不变，新的export audit表必须为空。原view-only identity仍必须能够读取同一旧snapshot，并按0032既定语义追加一条新的read audit。这个回归读取不改变旧snapshot或发布历史。
+
+fixture再为同一viewer追加独立`export_management_reports` grant，并以同一exact external identity、project和snapshot调用runtime export bridge。view与export capability必须在同一授权链中分别解析。导出成功时，`export_document`只能有四个键：`export_contract_id`、`snapshot_id`、`released_at_utc`和`report`。`report`必须与旧snapshot的`protected_report`相等，`released_at_utc`必须是UTC毫秒格式。导出文档不包含内部授权证据。
+
+export只追加一条独立的value-free export audit。它不追加普通read audit，也不把导出伪装成0032读取。export audit保持不可变，不保存报告格值、contact、contributor、位置、PII、query或其他报告内容。
+
+0052的共享授权解析器必须保留旧view合同。`PUBLIC`不得执行export入口，`tongxingzhe_runtime`只获得窄runtime bridge的最小`EXECUTE`，不能直接读取private snapshot、release attempt、read／export audit、identity、grant或业务表。既有0052 fixture继续覆盖view-only／export-only／release-only、legacy、cross-project、重复／错误与ACL矩阵；7CR只验证旧view回归和新增双capability导出，不重复这些场景。
+
+重放0001至0051必须命中50个checksum skip，重放0052必须命中1个skip。除预期新增export grant、一次回归read audit和一次export audit外，旧snapshot、发布历史、identity与其他业务数据必须保持不变。数据库阶段验证固定JSON字段、值相等关系和UTC毫秒文本，不把jsonb文本宣称为canonical UTF-8 bytes；后者属于Backend序列化合同。
+
+从仓库根目录运行完整套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+Docker中的合成数据库证据只证明0052 migration、旧view兼容、双capability授权、固定四键导出文档、value-free export audit和checksum幂等。它不证明Backend canonical UTF-8字节序、生产Auth、HTTP、token验证、network、文件下载、真人数据、服务交付审计提交或部署完成。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。
