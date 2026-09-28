@@ -2439,6 +2439,25 @@ runtime重放后，旧snapshot、v1／v2 attempt和external identity必须逐字
 
 Docker／CI中的合成PostgreSQL证据只证明0036 migration、exact-identity bridge、旧receipt重放、零新写入和ACL合同，不证明生产Auth、HTTP、token验证、network、client delivery、部署交付或真人数据。
 
+#### 6.2.23 真实旧 personal contacts 兴趣序数汇总升级（Issue #475，MANUAL-123）
+
+7CO在独立库只应用0001至0040。runner核对精确40个migration和最大版本0040；0041 personal interest ordinal summary函数尚不存在。
+
+upgrade fixture复用真实personal context与contact submit writer，读取与Drift共用的`personal_contact_metrics_v1.csv`，建立固定用户、primary default personal project和7条accepted contacts。
+主项目窗内的3条接触位于2030-01-08至2030-01-15 UTC半开区间，兴趣为0、3、4各一场。共享CSV的其他行继续作为右边界、其他项目和其他用户的既有边界数据。contacts、revisions、provenance、处理命令及相关旧业务数据都是升级前历史。
+
+runner随后只应用0041。runtime使用同一active用户、personal workspace和显式project调用窄汇总函数。该函数保持`SECURITY DEFINER`，`PUBLIC`不可执行，`tongxingzhe_runtime`只获最小`EXECUTE`，不能直接读取`app_data.contacts`。2030-01-08至2030-01-15 UTC半开区间必须返回3场，兴趣0、3、4各一场，下中位为3。2030-01-09至2030-01-13 UTC半开区间必须返回2场，兴趣0、3各一场，下中位为0。下中位使用排序后较低的真实等级，不计算算术平均值。
+
+升级和读取不得改写旧contacts、revisions、provenance、处理命令、表行数或完整`app_data`／`app_private` data-only dump。重放0001至0040应看到40个checksum skip，重放0041应看到1个checksum skip。现有0041 fixture继续覆盖空区间、跨项目和跨用户；7CO不重复这些矩阵。
+
+从仓库根目录运行完整套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+Docker／CI中的合成PostgreSQL证据只证明0041 migration、真实personal writer、UTC半开区间、下中位语义、最小ACL和staged upgrade保存。它不证明生产Auth、HTTP、token验证、network、真人联系人、统计解释或UI行为。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。
