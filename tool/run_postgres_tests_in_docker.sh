@@ -15,6 +15,7 @@ upgrade_database='tongxingzhe_region_upgrade'
 ownerless_upgrade_database='tongxingzhe_ownerless_upgrade'
 consent_replacement_upgrade_database='tongxingzhe_consent_replacement_upgrade'
 channel_read_upgrade_database='tongxingzhe_channel_read_upgrade'
+runtime_read_upgrade_database='tongxingzhe_runtime_read_upgrade'
 channel_replacement_upgrade_database='tongxingzhe_channel_replacement_upgrade'
 original_region_replacement_upgrade_database='tongxingzhe_original_region_replacement_upgrade'
 current_city_replacement_upgrade_database='tongxingzhe_current_city_replacement_upgrade'
@@ -35,6 +36,7 @@ upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${upgrade_database}"
 ownerless_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${ownerless_upgrade_database}"
 consent_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${consent_replacement_upgrade_database}"
 channel_read_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${channel_read_upgrade_database}"
+runtime_read_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${runtime_read_upgrade_database}"
 channel_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${channel_replacement_upgrade_database}"
 original_region_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${original_region_replacement_upgrade_database}"
 current_city_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${current_city_replacement_upgrade_database}"
@@ -929,6 +931,368 @@ if [[ "${channel_read_after_access}" != \
   exit 1
 fi
 echo '0031→0032 旧 channel 授权读取、单条 value-free 审计与 checksum 幂等：通过。'
+
+echo '验证 0032→0033 升级后 runtime 可读取旧授权 channel 快照。'
+docker exec "${container_name}" createdb -U postgres \
+  "${runtime_read_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/runtime-read-baseline-migrations \
+      /tmp/runtime-read-upgrade-only && \
+   cp /workspace/backend/database/migrations/00{01..32}_*.sql \
+     /tmp/runtime-read-baseline-migrations/ && \
+   test \"\$(find /tmp/runtime-read-baseline-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 32 && \
+   cp /workspace/backend/database/migrations/0033_*.sql \
+     /tmp/runtime-read-upgrade-only/ && \
+   test \"\$(find /tmp/runtime-read-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${runtime_read_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/runtime-read-baseline-migrations \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh \
+  >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres -d "${runtime_read_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$baseline\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 32
+        OR (SELECT max(version) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0032_authorized_management_report_snapshot_read'
+        OR to_regprocedure(
+          'app_data.read_authorized_management_report_snapshot_v1(text,text,uuid,uuid)'
+        ) IS NOT NULL
+      THEN
+        RAISE EXCEPTION '0032 runtime channel read upgrade baseline drift';
+      END IF;
+    END
+    \$baseline\$;
+  " \
+  >/dev/null
+docker exec --workdir /workspace "${container_name}" psql \
+  -U postgres -d "${runtime_read_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --file /workspace/backend/database/fixtures/upgrade/0031_authorized_management_report_snapshot_read_live.sql \
+  >/dev/null
+docker exec --workdir /workspace "${container_name}" psql \
+  -U postgres -d "${runtime_read_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --file /workspace/backend/database/fixtures/upgrade/0032_runtime_authorized_management_report_snapshot_read_live.sql \
+  >/dev/null
+runtime_read_snapshot_id="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${runtime_read_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="SELECT released_snapshot_id
+      FROM app_private.management_report_release_v2_attempts
+      WHERE release_request_id =
+        '00000000-0000-4000-8000-000000007c0c'"
+)"
+runtime_read_old_audit_id="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${runtime_read_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="SELECT access_event_id
+      FROM app_private.management_report_snapshot_access_events"
+)"
+runtime_read_history_sql="
+  SELECT jsonb_build_object(
+    'count', count(*),
+    'rows', jsonb_agg(
+      jsonb_build_object('kind', entity_kind, 'id', entity_id, 'bytes', entity_bytes)
+      ORDER BY entity_kind, entity_id
+    )
+  )::text
+  FROM (
+    SELECT 'snapshot'::text AS entity_kind, snapshot_id AS entity_id,
+      to_jsonb(snapshot.*) AS entity_bytes
+    FROM app_private.management_report_snapshots AS snapshot
+    UNION ALL
+    SELECT 'v2_attempt', release_request_id, to_jsonb(attempt.*)
+    FROM app_private.management_report_release_v2_attempts AS attempt
+    UNION ALL
+    SELECT 'v1_attempt', release_request_id, to_jsonb(attempt.*)
+    FROM app_private.management_report_release_attempts AS attempt
+    UNION ALL
+    SELECT 'identity', external_identity_id, to_jsonb(identity_row.*)
+    FROM app_data.external_identities AS identity_row
+    WHERE external_identity_id =
+      '00000000-0000-4000-8000-000000007c11'
+    UNION ALL
+    SELECT 'audit', access_event_id, to_jsonb(access_row.*)
+    FROM app_private.management_report_snapshot_access_events AS access_row
+    WHERE access_event_id = '${runtime_read_old_audit_id}'
+  ) AS history"
+runtime_read_history_before="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${runtime_read_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${runtime_read_history_sql}"
+)"
+if [[ "${runtime_read_history_before}" != *'"count": 5'* ]]; then
+  echo '0032 旧 snapshot、v1/v2 attempt、identity、audit 未满五行。' >&2
+  exit 1
+fi
+runtime_read_counts_sql="
+  SELECT jsonb_build_object(
+    'app_users', (SELECT count(*) FROM app_data.app_users),
+    'workspaces', (SELECT count(*) FROM app_data.workspaces),
+    'projects', (SELECT count(*) FROM app_data.projects),
+    'external_identities', (SELECT count(*) FROM app_data.external_identities)
+  )::text"
+runtime_read_counts_before="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${runtime_read_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${runtime_read_counts_sql}"
+)"
+runtime_read_before_upgrade="$(
+  docker exec "${container_name}" pg_dump "${runtime_read_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges \
+    --restrict-key=3132313231323132313231323132313231323132313231323132313231323132
+)"
+runtime_read_business_before="$(
+  docker exec "${container_name}" pg_dump "${runtime_read_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges \
+    --exclude-table-data=app_private.management_report_snapshot_access_events \
+    --restrict-key=3132313231323132313231323132313231323132313231323132313231323132
+)"
+docker exec \
+  --env DATABASE_URL="${runtime_read_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/runtime-read-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+docker exec --workdir /workspace "${container_name}" psql \
+  -U postgres -d "${runtime_read_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --file /workspace/backend/database/checks/verify_runtime_authorized_management_report_snapshot_read.sql \
+  >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres -d "${runtime_read_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$acl\$
+    BEGIN
+      IF has_table_privilege(
+        'tongxingzhe_runtime', 'app_data.app_users', 'SELECT'
+      ) OR has_table_privilege(
+        'tongxingzhe_runtime', 'app_data.external_identities', 'SELECT'
+      ) OR has_table_privilege(
+        'tongxingzhe_runtime', 'app_data.workspaces', 'SELECT'
+      ) OR has_table_privilege(
+        'tongxingzhe_runtime', 'app_data.projects', 'SELECT'
+      ) OR has_table_privilege(
+        'tongxingzhe_runtime', 'app_data.organization_memberships', 'SELECT'
+      ) OR has_table_privilege(
+        'tongxingzhe_runtime', 'app_data.project_memberships', 'SELECT'
+      ) OR has_table_privilege(
+        'tongxingzhe_runtime',
+        'app_data.management_report_capability_grants', 'SELECT'
+      ) THEN
+        RAISE EXCEPTION '0033 runtime received direct identity or grant access';
+      END IF;
+    END
+    \$acl\$;
+  " \
+  >/dev/null
+runtime_read_after_upgrade="$(
+  docker exec "${container_name}" pg_dump "${runtime_read_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges \
+    --restrict-key=3132313231323132313231323132313231323132313231323132313231323132
+)"
+if [[ "${runtime_read_before_upgrade}" != "${runtime_read_after_upgrade}" ]]; then
+  echo '0033 升级改写了旧 channel 数据。' >&2
+  exit 1
+fi
+runtime_read_result="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${runtime_read_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command='SET ROLE tongxingzhe_runtime' \
+    --command="SELECT app_data.read_authorized_management_report_snapshot_v1(
+      'https://upgrade-runtime-report.synthetic/auth/v1',
+      '7cl-viewer',
+      '00000000-0000-4000-8000-000000007c05',
+      '${runtime_read_snapshot_id}'::uuid
+    )::text" \
+    --command='RESET ROLE'
+)"
+runtime_read_expected="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${runtime_read_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="
+      SELECT jsonb_build_object(
+        'access_contract_id', 'authorized_management_report_snapshot_read_v1',
+        'access_event_id', access_row.access_event_id,
+        'requested_snapshot_id', snapshot.snapshot_id,
+        'resolved_snapshot_id', snapshot.snapshot_id,
+        'result_status', 'completed',
+        'reason_code', NULL,
+        'protected_report', snapshot.protected_report
+      )::text
+      FROM app_private.management_report_snapshots AS snapshot
+      JOIN app_private.management_report_snapshot_access_events AS access_row
+        ON access_row.resolved_snapshot_id = snapshot.snapshot_id
+      WHERE snapshot.snapshot_id = '${runtime_read_snapshot_id}'
+        AND access_row.access_event_id <> '${runtime_read_old_audit_id}'"
+)"
+if [[ -z "${runtime_read_result}" ]] \
+  || [[ "${runtime_read_result}" != "${runtime_read_expected}" ]]; then
+  echo '0033 runtime 没有返回唯一旧 protected_report 的精确 completed envelope。' >&2
+  exit 1
+fi
+if runtime_near_identity_error="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${runtime_read_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --set=VERBOSITY=verbose \
+    --quiet --tuples-only --no-align \
+    --command='SET ROLE tongxingzhe_runtime' \
+    --command="SELECT app_data.read_authorized_management_report_snapshot_v1(
+      'https://upgrade-runtime-report.synthetic/auth/v1',
+      ' 7cl-viewer ',
+      '00000000-0000-4000-8000-000000007c05',
+      '${runtime_read_snapshot_id}'::uuid
+    )" 2>&1
+)"; then
+  echo '0033 runtime 接受了不精确匹配的 external subject。' >&2
+  exit 1
+fi
+if [[ "${runtime_near_identity_error}" != \
+  *'42501: management report snapshot access forbidden'* ]]; then
+  echo '0033 近似身份失败原因不是精确 identity 拒绝。' >&2
+  printf '%s\n' "${runtime_near_identity_error}" >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${runtime_read_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$read\$
+    DECLARE
+      access_row app_private.management_report_snapshot_access_events%ROWTYPE;
+      snapshot_row app_private.management_report_snapshots%ROWTYPE;
+    BEGIN
+      SELECT e.* INTO STRICT access_row
+      FROM app_private.management_report_snapshot_access_events AS e
+      WHERE e.access_event_id <> '${runtime_read_old_audit_id}';
+      SELECT s.* INTO STRICT snapshot_row
+      FROM app_private.management_report_snapshots AS s
+      WHERE s.snapshot_id = '${runtime_read_snapshot_id}';
+      IF (SELECT count(*)
+          FROM app_private.management_report_snapshot_access_events) <> 2
+        OR (SELECT count(*) FROM jsonb_object_keys(to_jsonb(access_row))) <> 17
+        OR access_row.requested_by_app_user_id <>
+          '00000000-0000-4000-8000-000000007c02'
+        OR access_row.organization_workspace_id <>
+          '00000000-0000-4000-8000-000000007c03'
+        OR access_row.organization_membership_id <>
+          '00000000-0000-4000-8000-000000007c07'
+        OR access_row.project_membership_id <>
+          '00000000-0000-4000-8000-000000007c09'
+        OR access_row.capability_grant_id <>
+          '00000000-0000-4000-8000-000000007c0b'
+        OR access_row.capability_id <> 'view_anonymous_analytics'
+        OR access_row.authorization_reference_at_utc <>
+          access_row.accessed_at_utc
+        OR access_row.project_id <>
+          '00000000-0000-4000-8000-000000007c05'
+        OR access_row.requested_snapshot_id <> snapshot_row.snapshot_id
+        OR access_row.resolved_snapshot_id IS DISTINCT FROM
+          snapshot_row.snapshot_id
+        OR access_row.report_id IS DISTINCT FROM snapshot_row.report_id
+        OR access_row.report_version IS DISTINCT FROM snapshot_row.report_version
+        OR access_row.query_fingerprint IS DISTINCT FROM
+          snapshot_row.query_fingerprint
+        OR access_row.result_status <> 'completed'
+        OR access_row.reason_code IS NOT NULL
+        OR to_jsonb(access_row)::text ~*
+          '\"(protected_report|cells|value_count|contributor|contact_id|reach_count|interest_level|raw_answer)\"[[:space:]]*:'
+      THEN
+        RAISE EXCEPTION '0033 runtime read or value-free access audit drift';
+      END IF;
+    END
+    \$read\$;
+  " \
+  >/dev/null
+runtime_read_history_after="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${runtime_read_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${runtime_read_history_sql}"
+)"
+runtime_read_counts_after="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${runtime_read_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${runtime_read_counts_sql}"
+)"
+runtime_read_business_after="$(
+  docker exec "${container_name}" pg_dump "${runtime_read_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges \
+    --exclude-table-data=app_private.management_report_snapshot_access_events \
+    --restrict-key=3132313231323132313231323132313231323132313231323132313231323132
+)"
+if [[ "${runtime_read_history_before}" != "${runtime_read_history_after}" ]] \
+  || [[ "${runtime_read_counts_before}" != "${runtime_read_counts_after}" ]] \
+  || [[ "${runtime_read_business_before}" != "${runtime_read_business_after}" ]]; then
+  echo '0033 runtime 读取改写了旧五行或审计之外的业务数据。' >&2
+  exit 1
+fi
+runtime_read_after_access="$(
+  docker exec "${container_name}" pg_dump "${runtime_read_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges \
+    --restrict-key=3132313231323132313231323132313231323132313231323132313231323132
+)"
+runtime_read_baseline_replay="$(
+  docker exec \
+    --env DATABASE_URL="${runtime_read_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/runtime-read-baseline-migrations \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "$(printf '%s\n' "${runtime_read_baseline_replay}" \
+  | awk '/^已验证 .*（无需重复执行）$/ { count++ } END { print count+0 }')" \
+    -ne 32 ]] \
+  || [[ "${runtime_read_baseline_replay}" == *'已执行 '* ]]; then
+  echo '0001..0032 重复 migrations 没有全部命中 checksum skip。' >&2
+  printf '%s\n' "${runtime_read_baseline_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${runtime_read_baseline_replay}"
+runtime_read_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${runtime_read_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/runtime-read-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${runtime_read_upgrade_replay}" != \
+  *'已验证 0033_runtime_authorized_management_report_snapshot_read（无需重复执行）'* ]] \
+  || [[ "${runtime_read_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0033 重复 migration 没有命中 checksum skip。' >&2
+  printf '%s\n' "${runtime_read_upgrade_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${runtime_read_upgrade_replay}"
+runtime_read_after_replay="$(
+  docker exec "${container_name}" pg_dump "${runtime_read_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges \
+    --restrict-key=3132313231323132313231323132313231323132313231323132313231323132
+)"
+if [[ "${runtime_read_after_access}" != "${runtime_read_after_replay}" ]]; then
+  echo '重复 0033 migration 改写了 runtime read 业务或审计数据。' >&2
+  exit 1
+fi
+echo '0032→0033 旧 channel runtime 授权读取、单条新审计与 checksum 幂等：通过。'
 
 echo '验证 0066→0067 升级保留旧批准 channel 快照，并可登记替代。'
 docker exec "${container_name}" createdb \
