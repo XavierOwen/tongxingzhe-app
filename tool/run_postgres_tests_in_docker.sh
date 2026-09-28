@@ -38,6 +38,8 @@ link_submit_upgrade_database='tongxingzhe_link_submit_upgrade'
 application_approval_upgrade_database='tongxingzhe_application_approval_upgrade'
 project_assignment_upgrade_database='tongxingzhe_project_assignment_upgrade'
 directory_upgrade_database='tongxingzhe_application_directory_upgrade'
+organization_deletion_upgrade_database='tongxingzhe_organization_deletion_upgrade'
+organization_deletion_preflight_database='tongxingzhe_organization_deletion_preflight'
 database_url="postgresql://postgres:postgres@127.0.0.1:5432/${test_database}"
 upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${upgrade_database}"
 ownerless_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${ownerless_upgrade_database}"
@@ -66,6 +68,8 @@ link_submit_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${link_su
 application_approval_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${application_approval_upgrade_database}"
 project_assignment_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${project_assignment_upgrade_database}"
 directory_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${directory_upgrade_database}"
+organization_deletion_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${organization_deletion_upgrade_database}"
+organization_deletion_preflight_url="postgresql://postgres:postgres@127.0.0.1:5432/${organization_deletion_preflight_database}"
 container_started=0
 restore_container_started=0
 restore_temporary_directory=''
@@ -10050,6 +10054,300 @@ if [[ "${directory_upgrade_before}" != "${directory_upgrade_after}" ]]; then
   exit 1
 fi
 echo '0098→0099 旧 0093 待审批记录可读、授权与业务数据不变、checksum 幂等：通过。'
+
+echo '验证 0099→0100 旧组织可申请、恢复并开启新删除周期。'
+docker exec "${container_name}" createdb \
+  -U postgres \
+  "${organization_deletion_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/organization-deletion-upgrade-migrations && \
+   find /workspace/backend/database/migrations \
+     -maxdepth 1 -type f \
+     \( -name '000[1-9]_*.sql' -o -name '00[1-9][0-9]_*.sql' \) \
+     -exec cp {} /tmp/organization-deletion-upgrade-migrations/ \; && \
+   test \"\$(find /tmp/organization-deletion-upgrade-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 98"
+docker exec \
+  --env DATABASE_URL="${organization_deletion_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/organization-deletion-upgrade-migrations \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh \
+  >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${organization_deletion_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$baseline\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 98
+        OR (SELECT max(left(version, 4))
+            FROM app_migrations.schema_migrations) IS DISTINCT FROM '0099'
+        OR to_regclass(
+          'app_private.organization_deletion_current'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.request_organization_deletion_v1(uuid,uuid,uuid)'
+        ) IS NOT NULL
+      THEN
+        RAISE EXCEPTION '0099 organization deletion upgrade baseline drift';
+      END IF;
+    END
+    \$baseline\$;
+  " \
+  >/dev/null
+docker exec \
+  --workdir /workspace \
+  "${container_name}" \
+  psql \
+  -U postgres \
+  -d "${organization_deletion_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --file /workspace/backend/database/fixtures/upgrade/0099_organization_deletion_recovery_live.sql \
+  >/dev/null
+organization_deletion_upgrade_before="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_deletion_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --exclude-table='app_private.organization_deletion_*' \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/organization-deletion-upgrade-only && \
+   cp /workspace/backend/database/migrations/0100_*.sql \
+     /tmp/organization-deletion-upgrade-only/ && \
+   test \"\$(find /tmp/organization-deletion-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${organization_deletion_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/organization-deletion-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${organization_deletion_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$upgrade\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 99
+        OR (SELECT max(left(version, 4))
+            FROM app_migrations.schema_migrations) IS DISTINCT FROM '0100'
+        OR (SELECT count(*)
+            FROM app_private.organization_deletion_current) <> 0
+        OR (SELECT count(*)
+            FROM app_private.organization_deletion_request_claims) <> 0
+        OR (SELECT count(*)
+            FROM app_private.organization_deletion_restore_claims) <> 0
+        OR (SELECT count(*)
+            FROM app_private.organization_deletion_audit_events) <> 0
+      THEN
+        RAISE EXCEPTION '0099→0100 migration metadata drift';
+      END IF;
+    END
+    \$upgrade\$;
+  " \
+  >/dev/null
+organization_deletion_upgrade_after="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_deletion_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --exclude-table='app_private.organization_deletion_*' \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+if [[ "${organization_deletion_upgrade_before}" != \
+  "${organization_deletion_upgrade_after}" ]]; then
+  echo '0100 migration changed existing organization business rows.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${organization_deletion_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$lifecycle\$
+    DECLARE
+      lifecycle_workspace_id uuid;
+      deletion_receipt record;
+      restoration_receipt record;
+      second_deletion_receipt record;
+    BEGIN
+      SELECT project.workspace_id INTO STRICT lifecycle_workspace_id
+      FROM app_data.projects AS project
+      WHERE project.project_id =
+        '00000000-0100-6000-8000-000000000901'::uuid;
+
+      SELECT * INTO STRICT deletion_receipt
+      FROM app_private.request_organization_deletion_v1(
+        '00000000-0100-0000-8000-000000000901'::uuid,
+        '00000000-0100-4000-8000-000000000901'::uuid,
+        lifecycle_workspace_id
+      );
+      SELECT * INTO STRICT restoration_receipt
+      FROM app_private.restore_organization_v1(
+        '00000000-0100-0000-8000-000000000902'::uuid,
+        '00000000-0100-5000-8000-000000000901'::uuid,
+        lifecycle_workspace_id,
+        deletion_receipt.deletion_request_id
+      );
+      SELECT * INTO STRICT second_deletion_receipt
+      FROM app_private.request_organization_deletion_v1(
+        '00000000-0100-0000-8000-000000000902'::uuid,
+        '00000000-0100-4000-8000-000000000902'::uuid,
+        lifecycle_workspace_id
+      );
+
+      IF deletion_receipt.organization_deletion_contract_id
+          IS DISTINCT FROM 'organization-deletion-request:v1'
+        OR restoration_receipt.organization_deletion_restore_contract_id
+          IS DISTINCT FROM 'organization-deletion-restore:v1'
+        OR restoration_receipt.deletion_request_id IS DISTINCT FROM
+          deletion_receipt.deletion_request_id
+        OR second_deletion_receipt.deletion_request_id IS NOT DISTINCT FROM
+          deletion_receipt.deletion_request_id
+        OR (SELECT deleted_at FROM app_data.workspaces
+            WHERE app_data.workspaces.workspace_id = lifecycle_workspace_id)
+          IS DISTINCT FROM second_deletion_receipt.effective_at_utc
+        OR (SELECT count(*)
+            FROM app_data.organization_owner_assignments AS assignment
+            JOIN app_data.organization_memberships AS membership
+              USING (organization_membership_id)
+            WHERE membership.organization_workspace_id = lifecycle_workspace_id
+              AND assignment.inactive_from_utc IS NULL) <> 2
+        OR (SELECT count(*) FROM app_data.projects
+            WHERE project_id = '00000000-0100-6000-8000-000000000901'::uuid
+              AND workspace_id = lifecycle_workspace_id) <> 1
+      THEN
+        RAISE EXCEPTION '0099→0100 deletion lifecycle drift';
+      END IF;
+    END
+    \$lifecycle\$;
+  " \
+  >/dev/null
+organization_deletion_before_replay="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_deletion_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+organization_deletion_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${organization_deletion_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/organization-deletion-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${organization_deletion_upgrade_replay}" != \
+    *'已验证 0100_organization_deletion_recovery_core（无需重复执行）'* ]] \
+  || [[ "${organization_deletion_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0100 migration did not skip its checksum-verified replay.' >&2
+  printf '%s\n' "${organization_deletion_upgrade_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${organization_deletion_upgrade_replay}"
+organization_deletion_after_replay="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_deletion_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+if [[ "${organization_deletion_before_replay}" != \
+  "${organization_deletion_after_replay}" ]]; then
+  echo '0100 checksum replay changed organization lifecycle rows.' >&2
+  exit 1
+fi
+echo '0099→0100 旧组织删除、跨 owner 恢复、新周期与 98+1 checksum：通过。'
+
+echo '验证 0100 对来源不明的旧组织 deleted_at 失败关闭。'
+docker exec "${container_name}" createdb \
+  -U postgres \
+  "${organization_deletion_preflight_database}"
+docker exec \
+  --env DATABASE_URL="${organization_deletion_preflight_url}" \
+  --env MIGRATION_DIR=/tmp/organization-deletion-upgrade-migrations \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh \
+  >/dev/null
+docker exec \
+  --workdir /workspace \
+  "${container_name}" \
+  psql \
+  -U postgres \
+  -d "${organization_deletion_preflight_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --file /workspace/backend/database/fixtures/upgrade/0099_organization_deletion_recovery_live.sql \
+  >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${organization_deletion_preflight_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    UPDATE app_data.workspaces AS workspace
+    SET deleted_at = clock_timestamp()
+    FROM app_data.projects AS project
+    WHERE project.project_id =
+      '00000000-0100-6000-8000-000000000901'::uuid
+      AND workspace.workspace_id = project.workspace_id;
+  " \
+  >/dev/null
+if organization_deletion_preflight_output="$(
+  docker exec \
+    --env DATABASE_URL="${organization_deletion_preflight_url}" \
+    --env MIGRATION_DIR=/tmp/organization-deletion-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh 2>&1
+)"; then
+  echo '0100 migration accepted an organization with unknown deletion provenance.' >&2
+  exit 1
+fi
+if [[ "${organization_deletion_preflight_output}" != \
+  *'organization deletion lifecycle provenance unavailable'* ]]; then
+  echo '0100 deletion provenance preflight returned an unexpected error.' >&2
+  printf '%s\n' "${organization_deletion_preflight_output}" >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${organization_deletion_preflight_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$preflight\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 98
+        OR to_regclass(
+          'app_private.organization_deletion_current'
+        ) IS NOT NULL
+      THEN
+        RAISE EXCEPTION '0100 deletion provenance preflight was not atomic';
+      END IF;
+    END
+    \$preflight\$;
+  " \
+  >/dev/null
+echo '0100 来源不明 deleted_at 预检失败且未留下对象：通过。'
 
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
