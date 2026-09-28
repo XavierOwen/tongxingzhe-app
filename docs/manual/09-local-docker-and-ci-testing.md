@@ -2417,6 +2417,28 @@ runner随后只应用0035。runtime使用固定`issuer`／`subject`和显式proj
 
 Docker／CI中的合成PostgreSQL证据只证明0035 migration、directory bridge、重新授权、旧context保存、metadata-only目录和value-free audit合同，不证明生产Auth、HTTP、token验证、network、client delivery、部署交付或真人数据。
 
+#### 6.2.22 真实旧 channel 发布历史 runtime 重放升级（Issue #473，MANUAL-122）
+
+7CN在独立库只应用0001至0035。runner核对精确35个migration和最大版本0035；0036 runtime release bridge不存在。
+
+upgrade fixture复用真实0029 timezone writer与0031 trusted-v2 writer。它建立固定publisher和固定external identity。它在同一project的两个已完成UTC期间各建立10条voice contact。随后它建立`approved_baseline` channel snapshot、delegated v1 attempt和v2 attempt。
+fixture保存旧14字段release receipt及相关历史行的完整JSON字节。这些前置只为0036提供旧发布历史，不代表生产Auth证据。
+
+runner随后只应用0036。runtime以同一exact issuer／subject、显式project UUID和同一旧request UUID调用四参数 release bridge。bridge必须是`SECURITY DEFINER`、`VOLATILE`、固定`search_path = pg_catalog`。`PUBLIC`不得执行，`tongxingzhe_runtime`只获最小`EXECUTE`，不能使用`app_private`或直接读取identity、memberships、capability grants、attempts、snapshots或业务表。
+
+成功结果必须与升级前保存的14字段release receipt完全相同。runtime必须重新确认active external identity和project授权；0036不得新增release attempt、snapshot、app user、workspace或project。带首尾空格的近似subject必须以`42501`失败，且不得留下任何发布或账号证据。
+
+runtime重放后，旧snapshot、v1／v2 attempt和external identity必须逐字不变。升级前后的完整`app_data`／`app_private` data-only dump必须逐字相同。
+重放0001至0035应看到35个checksum skip。重放0036应看到1个checksum skip。现有0036 fixture继续覆盖fresh、same-key replay、legacy lineage、cross-project、unknown／disabled／view-only与no-bootstrap。7CN不重复这些矩阵。
+
+从仓库根目录运行完整套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+Docker／CI中的合成PostgreSQL证据只证明0036 migration、exact-identity bridge、旧receipt重放、零新写入和ACL合同，不证明生产Auth、HTTP、token验证、network、client delivery、部署交付或真人数据。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。
