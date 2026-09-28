@@ -2296,6 +2296,28 @@ replacement row的actor、workspace、organization／project memberships、capab
 
 现有0080 fixture继续覆盖当前schema的原因allowlist、跨project／lineage、stale head、分叉／循环、ACL、不可变性和并发矩阵。7CH不重复这些检查，也不声称生成、更新或泄露受保护报告；最小合成区域树也不代表生产区域数据。
 
+#### 6.2.17 真实旧 original-region 快照替代升级（Issue #464，MANUAL-117）
+
+7CI在独立库只应用0001至0071。runner核对精确70个migration和最大版本0071。此时0072的original-region replacement表、snapshot read policy、provenance／trust／validation／replacement／lifecycle五个函数都不存在，共享request-family check也尚未接受original-region replacement family。
+
+upgrade fixture只直接建立固定active actor、organization／project memberships、`release_management_reports` capability和最小questionnaire。这些关系逐项绑定同一固定project，只为真实timezone、region-tree publish、0068 release和0072 replacement writers提供授权与来源上下文。它们不代表生产Auth、HTTP、组织准入或真人平台证据。
+
+fixture调用真实timezone writer建立UTC version 1，再用真实publish writer发布最小一国一城一boundary的source tree。两个已完成期间各有一条resolved contact revision，并使用同一source tree tuple。fixture在两次release前捕获固定`source_change_sequence`，且不在两次release之间新增change-feed事实。
+
+同一psql session先调用真实0068 original-region release writer建立`approved_baseline`，提交后等待至少10 ms，再在新事务建立`approved`。两份receipt都精确为19字段且不包含report values。first的compared pointer为null，shared period／assessed cell为0／0。second指回first，shared period／assessed cell为2／2。两者reason为空，`source_change_sequence`精确等于预先捕获值。
+
+fixture逐字段核对receipt、snapshot、original-region release attempt和release-family claim。`reporting_time_zone_version_number`为1并在receipt与attempt中一致。second cutoff必须严格较晚，previous pointer指向first，authorization、attempt cutoff、snapshot cutoff和released time对齐。两份protected report的identity、periods、privacy、source scope和source-tree tuple在递增cutoff外保持一致；`periods.reporting_time_zone`均为UTC，`source_change_sequence`完全相同。
+
+升级前保存两份snapshot、两份attempt和两份release-family claim的完整JSON字节。runner另以固定restrict key取得app_data／app_private dump，随后只应用0072。排除新replacement表后，升级前后旧业务dump必须逐字不变，新表初始为空。
+
+授权actor以固定request将first登记为由second替代。唯一十一字段receipt只含contract、request、project、lineage、report、version、superseded snapshot、replacement snapshot、`late_accepted_data` reason、declared time和`completed`状态。replacement row的actor、workspace、organization／project memberships、capability grant、authorization time和result document必须与receipt对齐，replacement-family claim与row均为1。
+
+first lifecycle必须为`superseded`并指向second，second必须为`active`且replacement snapshot为null。两份输出都精确为五字段，不包含report values、区域名称、contact、contributor、坐标或PII。替代前后原六行历史字节不变，snapshot和attempt仍各为2，不生成新release事实。
+
+相同actor、request、project、snapshot pair和reason的exact replay必须返回原receipt，完整业务dump不变。重复0001至0071部署精确命中70个checksum skip，重复0072只允许一个checksum skip，最终dump保持不变。
+
+现有0072 fixture继续覆盖当前schema的原因allowlist、跨project／family、source-tree漂移、stale head、分叉／循环、ACL、不可变性和并发矩阵。7CI不重复这些检查，也不声称生成、更新或泄露受保护报告。最小合成区域树与contact revisions不代表生产区域或联系人数据。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。
