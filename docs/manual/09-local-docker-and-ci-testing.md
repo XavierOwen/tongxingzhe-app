@@ -2372,6 +2372,26 @@ psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
 
 check验证对象、函数属性、不可变audit和最小ACL；fixture验证trusted read、重复读取、负例、value-free audit和UPDATE／DELETE拒绝。Docker／CI中的合成PostgreSQL证据只证明当前数据库合同，不证明生产Auth、HTTP、runtime bridge、真人平台或服务交付审计提交。
 
+#### 6.2.20 真实旧 channel 快照 runtime bridge 升级（Issue #470，MANUAL-120）
+
+7CL在独立库只应用0001至0032。runner核对精确32个migration和最大版本0032；0033 runtime exact-identity bridge尚不存在。
+
+upgrade fixture复用真实0029 timezone writer与0031 trusted-v2 writer。它先建立旧`approved_baseline`和trusted-v2 snapshot，再调用0032 private reader。旧库因此留下同一报告的一条17列value-free access audit。固定external identity、snapshot、v1 attempt、v2 attempt和旧audit都是升级前历史，不是0033新建的事实。
+
+runner随后只应用0033。该migration只增加四参数 `app_data.read_authorized_management_report_snapshot_v1` bridge。它接收Backend已验证的 exact `issuer + subject`、显式project UUID和snapshot UUID，映射已存在且active的内部用户，再调用0032 private reader。bridge必须是 `SECURITY DEFINER`、`VOLATILE`，固定 `search_path = pg_catalog`。`PUBLIC`不得执行。`tongxingzhe_runtime`只获这个bridge的最小 `EXECUTE`，不能使用`app_private`、执行private reader或读取identity、snapshot、audit等底表。
+
+runtime以同一固定external identity读取同一旧报告。成功报告仍来自旧snapshot，只允许新增第二条17列value-free audit；0033不得建立app user、workspace或project，也不得复制报告值。旧snapshot、delegated v1／v2 attempt、external identity、0032留下的旧audit，以及排除access-events表数据后的`app_data`／`app_private`业务dump必须逐字不变。
+
+从仓库根目录运行完整套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+套件会先验证0032旧库和一条既有audit，再运行upgrade fixture。应用0033后，套件以runtime role读取同一旧报告。最后重放0001至0032和0033。必须分别看到32个基线migration与0033的checksum skip。套件还必须看到第二条17列value-free audit。旧历史、固定identity和排除audit业务dump必须保持不变。现有0033 fixture继续覆盖unknown／cross-project、legacy或不可信来源与release-only等负例。它不覆盖停用identity。
+
+Docker／CI中的合成PostgreSQL证据只证明当前migration、exact-identity bridge、private reader委托和ACL合同，不证明生产Auth、HTTP、token验证、network、client delivery或真人数据。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。
