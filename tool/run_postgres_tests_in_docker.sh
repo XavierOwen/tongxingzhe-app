@@ -18,6 +18,7 @@ channel_read_upgrade_database='tongxingzhe_channel_read_upgrade'
 runtime_read_upgrade_database='tongxingzhe_runtime_read_upgrade'
 snapshot_directory_upgrade_database='tongxingzhe_snapshot_directory_upgrade'
 runtime_release_replay_upgrade_database='tongxingzhe_runtime_release_replay_upgrade'
+interest_ordinal_upgrade_database='tongxingzhe_interest_ordinal_upgrade'
 channel_replacement_upgrade_database='tongxingzhe_channel_replacement_upgrade'
 original_region_replacement_upgrade_database='tongxingzhe_original_region_replacement_upgrade'
 current_city_replacement_upgrade_database='tongxingzhe_current_city_replacement_upgrade'
@@ -41,6 +42,7 @@ channel_read_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${channe
 runtime_read_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${runtime_read_upgrade_database}"
 snapshot_directory_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${snapshot_directory_upgrade_database}"
 runtime_release_replay_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${runtime_release_replay_upgrade_database}"
+interest_ordinal_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${interest_ordinal_upgrade_database}"
 channel_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${channel_replacement_upgrade_database}"
 original_region_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${original_region_replacement_upgrade_database}"
 current_city_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${current_city_replacement_upgrade_database}"
@@ -1968,6 +1970,241 @@ if [[ "${runtime_release_dump_before}" != \
   exit 1
 fi
 echo '0035→0036 旧 channel runtime 精确重放、业务不变与 checksum 幂等：通过。'
+
+echo '验证 0040→0041 升级后旧个人接触可汇总兴趣序数。'
+docker exec "${container_name}" createdb -U postgres \
+  "${interest_ordinal_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/interest-ordinal-baseline-migrations \
+      /tmp/interest-ordinal-upgrade-only && \
+   cp /workspace/backend/database/migrations/00{01..40}_*.sql \
+     /tmp/interest-ordinal-baseline-migrations/ && \
+   test \"\$(find /tmp/interest-ordinal-baseline-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 40 && \
+   cp /workspace/backend/database/migrations/0041_*.sql \
+     /tmp/interest-ordinal-upgrade-only/ && \
+   test \"\$(find /tmp/interest-ordinal-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec --env DATABASE_URL="${interest_ordinal_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/interest-ordinal-baseline-migrations \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres -d "${interest_ordinal_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$baseline\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 40
+        OR (SELECT max(version) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0040_canonical_region_resolution_provenance'
+        OR to_regprocedure(
+          'app_data.read_personal_interest_ordinal_summary(uuid,uuid,uuid,timestamptz,timestamptz)'
+        ) IS NOT NULL
+      THEN
+        RAISE EXCEPTION '0040 personal interest baseline drift';
+      END IF;
+    END
+    \$baseline\$;
+  " >/dev/null
+docker exec --workdir /workspace "${container_name}" psql \
+  -U postgres -d "${interest_ordinal_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --file /workspace/backend/database/fixtures/upgrade/0040_personal_interest_ordinal_summary_live.sql \
+  >/dev/null
+interest_ordinal_history_sql="
+  SELECT jsonb_build_object(
+    'count', count(*),
+    'rows', jsonb_agg(jsonb_build_object(
+      'kind', kind, 'id', entity_id, 'row', entity_row
+    ) ORDER BY kind, entity_id)
+  )::text
+  FROM (
+    SELECT 'contact'::text AS kind, contact_id AS entity_id,
+      to_jsonb(contact_row.*) AS entity_row
+    FROM app_data.contacts AS contact_row
+    WHERE contact_id LIKE '7co-metric-contact-%'
+    UNION ALL
+    SELECT 'revision', contact_id || ':' || revision_number,
+      to_jsonb(revision_row.*)
+    FROM app_data.contact_revisions AS revision_row
+    WHERE contact_id LIKE '7co-metric-contact-%'
+    UNION ALL
+    SELECT 'provenance', source_id::text, to_jsonb(provenance_row.*)
+    FROM app_data.contact_location_provenance AS provenance_row
+    WHERE contact_id LIKE '7co-metric-contact-%'
+    UNION ALL
+    SELECT 'command', command_id, to_jsonb(command_row.*)
+    FROM app_data.processed_commands AS command_row
+    WHERE command_id LIKE '7co-command-metric-contact-%'
+  ) AS old_rows"
+interest_ordinal_history_before="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${interest_ordinal_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${interest_ordinal_history_sql}"
+)"
+if [[ "${interest_ordinal_history_before}" != *'"count": 28'* ]]; then
+  echo '0040 旧 contact、revision、provenance、command 未各满七行。' >&2
+  exit 1
+fi
+interest_ordinal_counts_sql="
+  SELECT jsonb_build_object(
+    'contacts', (SELECT count(*) FROM app_data.contacts),
+    'revisions', (SELECT count(*) FROM app_data.contact_revisions),
+    'provenance', (SELECT count(*) FROM app_data.contact_location_provenance),
+    'commands', (SELECT count(*) FROM app_data.processed_commands)
+  )::text"
+interest_ordinal_counts_before="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${interest_ordinal_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${interest_ordinal_counts_sql}"
+)"
+interest_ordinal_dump_key='4141414141414141414141414141414141414141414141414141414141414141'
+interest_ordinal_dump_before="$(
+  docker exec "${container_name}" pg_dump "${interest_ordinal_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges --restrict-key="${interest_ordinal_dump_key}"
+)"
+docker exec --env DATABASE_URL="${interest_ordinal_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/interest-ordinal-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${interest_ordinal_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --file /workspace/backend/database/checks/verify_personal_interest_ordinal_summary.sql \
+  >/dev/null
+interest_ordinal_dump_after_migration="$(
+  docker exec "${container_name}" pg_dump "${interest_ordinal_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges --restrict-key="${interest_ordinal_dump_key}"
+)"
+if [[ "${interest_ordinal_dump_before}" != \
+  "${interest_ordinal_dump_after_migration}" ]]; then
+  echo '0041 migration 改写了旧个人接触业务数据。' >&2
+  exit 1
+fi
+IFS='|' read -r interest_ordinal_user_id interest_ordinal_workspace_id \
+  interest_ordinal_project_id <<< "$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${interest_ordinal_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="
+      SELECT identity_row.app_user_id || '|' || workspace_row.workspace_id ||
+        '|' || project_row.project_id
+      FROM app_data.external_identities AS identity_row
+      JOIN app_data.app_users AS app_user
+        ON app_user.app_user_id = identity_row.app_user_id
+       AND app_user.status = 'active'
+      JOIN app_data.workspaces AS workspace_row
+        ON workspace_row.personal_owner_app_user_id = identity_row.app_user_id
+       AND workspace_row.workspace_kind = 'personal'
+       AND workspace_row.deleted_at IS NULL
+      JOIN app_data.projects AS project_row
+        ON project_row.workspace_id = workspace_row.workspace_id
+       AND project_row.is_personal_default
+       AND project_row.status = 'active'
+      WHERE identity_row.issuer =
+          'https://synthetic-interest-upgrade.example/auth/v1'
+        AND identity_row.subject = '7co-primary'"
+)"
+if [[ -z "${interest_ordinal_project_id}" ]]; then
+  echo '0040 primary default 个人项目上下文缺席。' >&2
+  exit 1
+fi
+interest_ordinal_odd="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${interest_ordinal_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command='SET ROLE tongxingzhe_runtime' \
+    --command="SELECT concat_ws(',', contact_session_count,
+      interest_0_count, interest_1_count, interest_2_count,
+      interest_3_count, interest_4_count, median_level)
+      FROM app_data.read_personal_interest_ordinal_summary(
+        '${interest_ordinal_user_id}', '${interest_ordinal_workspace_id}',
+        '${interest_ordinal_project_id}',
+        '2030-01-08T00:00:00Z', '2030-01-15T00:00:00Z')"
+)"
+interest_ordinal_even="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${interest_ordinal_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command='SET ROLE tongxingzhe_runtime' \
+    --command="SELECT concat_ws(',', contact_session_count,
+      interest_0_count, interest_1_count, interest_2_count,
+      interest_3_count, interest_4_count, median_level)
+      FROM app_data.read_personal_interest_ordinal_summary(
+        '${interest_ordinal_user_id}', '${interest_ordinal_workspace_id}',
+        '${interest_ordinal_project_id}',
+        '2030-01-09T00:00:00Z', '2030-01-13T00:00:00Z')"
+)"
+if [[ "${interest_ordinal_odd}" != '3,1,0,0,1,1,3' ]] \
+  || [[ "${interest_ordinal_even}" != '2,1,0,0,1,0,0' ]]; then
+  echo '0041 runtime 旧个人接触的 UTC 半开区间或下中位结果错误。' >&2
+  exit 1
+fi
+interest_ordinal_history_after="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${interest_ordinal_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${interest_ordinal_history_sql}"
+)"
+interest_ordinal_counts_after="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${interest_ordinal_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${interest_ordinal_counts_sql}"
+)"
+interest_ordinal_dump_after_read="$(
+  docker exec "${container_name}" pg_dump "${interest_ordinal_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges --restrict-key="${interest_ordinal_dump_key}"
+)"
+if [[ "${interest_ordinal_history_before}" != \
+  "${interest_ordinal_history_after}" ]] \
+  || [[ "${interest_ordinal_counts_before}" != \
+  "${interest_ordinal_counts_after}" ]] \
+  || [[ "${interest_ordinal_dump_before}" != \
+  "${interest_ordinal_dump_after_read}" ]]; then
+  echo '0041 runtime 读取改写了旧接触历史、行数或完整业务 dump。' >&2
+  exit 1
+fi
+interest_ordinal_baseline_replay="$(
+  docker exec --env DATABASE_URL="${interest_ordinal_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/interest-ordinal-baseline-migrations \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "$(printf '%s\n' "${interest_ordinal_baseline_replay}" \
+  | awk '/^已验证 .*（无需重复执行）$/ { count++ } END { print count+0 }')" \
+    -ne 40 ]] \
+  || [[ "${interest_ordinal_baseline_replay}" == *'已执行 '* ]]; then
+  echo '0001..0040 重复 migrations 没有全部命中 checksum skip。' >&2
+  printf '%s\n' "${interest_ordinal_baseline_replay}" >&2
+  exit 1
+fi
+interest_ordinal_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${interest_ordinal_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/interest-ordinal-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${interest_ordinal_upgrade_replay}" != \
+  *'已验证 0041_personal_interest_ordinal_summary（无需重复执行）'* ]] \
+  || [[ "${interest_ordinal_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0041 重复 migration 没有命中 checksum skip。' >&2
+  printf '%s\n' "${interest_ordinal_upgrade_replay}" >&2
+  exit 1
+fi
+interest_ordinal_dump_after_checksum="$(
+  docker exec "${container_name}" pg_dump "${interest_ordinal_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges --restrict-key="${interest_ordinal_dump_key}"
+)"
+if [[ "${interest_ordinal_dump_before}" != \
+  "${interest_ordinal_dump_after_checksum}" ]]; then
+  echo '重复 0041 migration 改写了旧个人接触业务数据。' >&2
+  exit 1
+fi
+echo '0040→0041 旧个人接触序数汇总、历史不变与 checksum 幂等：通过。'
 
 echo '验证 0066→0067 升级保留旧批准 channel 快照，并可登记替代。'
 docker exec "${container_name}" createdb \
