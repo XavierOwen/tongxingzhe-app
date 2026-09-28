@@ -14,6 +14,7 @@ restore_database='tongxingzhe_restore'
 upgrade_database='tongxingzhe_region_upgrade'
 ownerless_upgrade_database='tongxingzhe_ownerless_upgrade'
 consent_replacement_upgrade_database='tongxingzhe_consent_replacement_upgrade'
+channel_read_upgrade_database='tongxingzhe_channel_read_upgrade'
 channel_replacement_upgrade_database='tongxingzhe_channel_replacement_upgrade'
 original_region_replacement_upgrade_database='tongxingzhe_original_region_replacement_upgrade'
 current_city_replacement_upgrade_database='tongxingzhe_current_city_replacement_upgrade'
@@ -33,6 +34,7 @@ database_url="postgresql://postgres:postgres@127.0.0.1:5432/${test_database}"
 upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${upgrade_database}"
 ownerless_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${ownerless_upgrade_database}"
 consent_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${consent_replacement_upgrade_database}"
+channel_read_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${channel_read_upgrade_database}"
 channel_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${channel_replacement_upgrade_database}"
 original_region_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${original_region_replacement_upgrade_database}"
 current_city_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${current_city_replacement_upgrade_database}"
@@ -539,6 +541,394 @@ docker exec "${container_name}" psql \
   >/dev/null
 echo '0038→0039 历史 resolved provenance 回填：通过。'
 echo '已有区域树升级为冻结发布版本：通过。'
+
+echo '验证 0031→0032 升级保留旧 trusted-v2 channel 快照，并追加授权读取审计。'
+docker exec "${container_name}" createdb \
+  -U postgres \
+  "${channel_read_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/channel-read-baseline-migrations \
+      /tmp/channel-read-upgrade-only && \
+   find /workspace/backend/database/migrations \
+     -maxdepth 1 -type f \
+     \( -name '000[1-9]_*.sql' \
+        -o -name '00[12][0-9]_*.sql' \
+        -o -name '003[01]_*.sql' \) \
+     -exec cp {} /tmp/channel-read-baseline-migrations/ \; && \
+   test \"\$(find /tmp/channel-read-baseline-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 31 && \
+   cp /workspace/backend/database/migrations/0032_*.sql \
+     /tmp/channel-read-upgrade-only/ && \
+   test \"\$(find /tmp/channel-read-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${channel_read_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/channel-read-baseline-migrations \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh \
+  >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${channel_read_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$baseline\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 31
+        OR (SELECT max(version) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0031_trusted_management_report_release'
+        OR to_regclass(
+          'app_private.management_report_snapshot_access_events'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.validate_management_report_snapshot_access_insert_v1()'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.read_authorized_management_report_snapshot_v1(uuid,uuid,uuid)'
+        ) IS NOT NULL
+      THEN
+        RAISE EXCEPTION '0031 authorized channel read upgrade baseline drift';
+      END IF;
+    END
+    \$baseline\$;
+  " \
+  >/dev/null
+channel_read_release_receipt="$(
+  docker exec \
+    --workdir /workspace \
+    "${container_name}" \
+    psql \
+    -U postgres \
+    -d "${channel_read_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --file /workspace/backend/database/fixtures/upgrade/0031_authorized_management_report_snapshot_read_live.sql
+)"
+if [[ "$(printf '%s\n' "${channel_read_release_receipt}" \
+  | awk '/^\{.*\}$/ { count++ } END { print count+0 }')" -ne 1 ]] \
+  || [[ "${channel_read_release_receipt}" != \
+    *'"result_status": "approved_baseline"'* ]]; then
+  echo '0031 旧 writer 没有返回唯一 approved_baseline release receipt。' >&2
+  printf '%s\n' "${channel_read_release_receipt}" >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${channel_read_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$history\$
+    BEGIN
+      IF (SELECT count(*) FROM app_private.management_report_snapshots) <> 1
+        OR (SELECT count(*)
+            FROM app_private.management_report_release_v2_attempts) <> 1
+        OR (SELECT count(*)
+            FROM app_private.management_report_release_attempts) <> 1
+      THEN
+        RAISE EXCEPTION '0031 release history must contain one row per family';
+      END IF;
+    END
+    \$history\$;
+  " \
+  >/dev/null
+channel_read_history_sql="
+  SELECT jsonb_build_object(
+    'count', count(*),
+    'rows', jsonb_agg(
+      jsonb_build_object('kind', entity_kind, 'id', entity_id, 'bytes', entity_bytes)
+      ORDER BY entity_kind, entity_id
+    )
+  )::text
+  FROM (
+    SELECT 'snapshot'::text AS entity_kind, snapshot_id AS entity_id,
+      to_jsonb(snapshot.*) AS entity_bytes
+    FROM app_private.management_report_snapshots AS snapshot
+    UNION ALL
+    SELECT 'v2_attempt', release_request_id, to_jsonb(attempt.*)
+    FROM app_private.management_report_release_v2_attempts AS attempt
+    UNION ALL
+    SELECT 'v1_attempt', release_request_id, to_jsonb(attempt.*)
+    FROM app_private.management_report_release_attempts AS attempt
+  ) AS history"
+channel_read_history_before="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${channel_read_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="${channel_read_history_sql}"
+)"
+if [[ "${channel_read_history_before}" != *'"count": 3'* ]]; then
+  echo '0031 历史 snapshot、v2 attempt 与委托 v1 attempt 未满三行。' >&2
+  exit 1
+fi
+channel_read_before_upgrade="$(
+  docker exec "${container_name}" pg_dump \
+    "${channel_read_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --exclude-table-data=app_private.management_report_snapshot_access_events \
+    --restrict-key=3132313231323132313231323132313231323132313231323132313231323132
+)"
+docker exec \
+  --env DATABASE_URL="${channel_read_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/channel-read-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+channel_read_after_upgrade="$(
+  docker exec "${container_name}" pg_dump \
+    "${channel_read_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --exclude-table-data=app_private.management_report_snapshot_access_events \
+    --restrict-key=3132313231323132313231323132313231323132313231323132313231323132
+)"
+if [[ "${channel_read_before_upgrade}" != \
+  "${channel_read_after_upgrade}" ]]; then
+  echo '0032 升级改写了旧 channel 发布历史或其他业务数据。' >&2
+  exit 1
+fi
+channel_read_history_after_upgrade="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${channel_read_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="${channel_read_history_sql}"
+)"
+if [[ "${channel_read_history_before}" != \
+  "${channel_read_history_after_upgrade}" ]]; then
+  echo '0032 升级改写了旧 channel 历史三行。' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${channel_read_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$empty\$
+    BEGIN
+      IF (SELECT count(*)
+          FROM app_private.management_report_snapshot_access_events) <> 0
+      THEN
+        RAISE EXCEPTION '0032 access audit table is not empty after upgrade';
+      END IF;
+    END
+    \$empty\$;
+  " \
+  >/dev/null
+
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${channel_read_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --quiet \
+  --command="
+    CREATE TEMP TABLE channel_read_result (result jsonb NOT NULL);
+    INSERT INTO channel_read_result
+    SELECT app_private.read_authorized_management_report_snapshot_v1(
+      '00000000-0000-4000-8000-000000007c02'::uuid,
+      '00000000-0000-4000-8000-000000007c05'::uuid,
+      attempt.released_snapshot_id
+    )
+    FROM app_private.management_report_release_v2_attempts AS attempt
+    WHERE attempt.release_request_id =
+      '00000000-0000-4000-8000-000000007c0c'::uuid;
+    DO \$read\$
+    DECLARE
+      result jsonb := (SELECT channel_read_result.result FROM channel_read_result);
+      audit_row app_private.management_report_snapshot_access_events%ROWTYPE;
+      snapshot_row app_private.management_report_snapshots%ROWTYPE;
+    BEGIN
+      SELECT * INTO STRICT audit_row
+      FROM app_private.management_report_snapshot_access_events;
+      SELECT * INTO STRICT snapshot_row
+      FROM app_private.management_report_snapshots
+      WHERE release_request_id =
+        '00000000-0000-4000-8000-000000007c0c'::uuid;
+      IF (SELECT count(*) FROM channel_read_result) <> 1
+        OR result - ARRAY[
+          'access_contract_id', 'access_event_id',
+          'requested_snapshot_id', 'resolved_snapshot_id',
+          'result_status', 'reason_code', 'protected_report'
+        ] <> '{}'::jsonb
+        OR NOT result ?& ARRAY[
+          'access_contract_id', 'access_event_id',
+          'requested_snapshot_id', 'resolved_snapshot_id',
+          'result_status', 'reason_code', 'protected_report'
+        ]
+        OR result->>'access_contract_id' IS DISTINCT FROM
+          'authorized_management_report_snapshot_read_v1'
+        OR result->>'access_event_id' IS DISTINCT FROM
+          audit_row.access_event_id::text
+        OR result->>'requested_snapshot_id' IS DISTINCT FROM
+          snapshot_row.snapshot_id::text
+        OR result->>'resolved_snapshot_id' IS DISTINCT FROM
+          snapshot_row.snapshot_id::text
+        OR result->>'result_status' IS DISTINCT FROM 'completed'
+        OR result->'reason_code' <> 'null'::jsonb
+        OR result->'protected_report' IS DISTINCT FROM
+          snapshot_row.protected_report
+        OR (SELECT count(*) FROM jsonb_object_keys(to_jsonb(audit_row))) <> 17
+        OR NOT to_jsonb(audit_row) ?& ARRAY[
+          'access_event_id', 'requested_by_app_user_id',
+          'organization_workspace_id', 'organization_membership_id',
+          'project_membership_id', 'capability_grant_id', 'capability_id',
+          'authorization_reference_at_utc', 'project_id',
+          'requested_snapshot_id', 'resolved_snapshot_id', 'report_id',
+          'report_version', 'query_fingerprint', 'accessed_at_utc',
+          'result_status', 'reason_code'
+        ]
+        OR audit_row.requested_by_app_user_id IS DISTINCT FROM
+          '00000000-0000-4000-8000-000000007c02'::uuid
+        OR audit_row.organization_workspace_id IS DISTINCT FROM
+          '00000000-0000-4000-8000-000000007c03'::uuid
+        OR audit_row.organization_membership_id IS DISTINCT FROM
+          '00000000-0000-4000-8000-000000007c07'::uuid
+        OR audit_row.project_membership_id IS DISTINCT FROM
+          '00000000-0000-4000-8000-000000007c09'::uuid
+        OR audit_row.capability_grant_id IS DISTINCT FROM
+          '00000000-0000-4000-8000-000000007c0b'::uuid
+        OR audit_row.capability_id IS DISTINCT FROM
+          'view_anonymous_analytics'
+        OR audit_row.project_id IS DISTINCT FROM
+          '00000000-0000-4000-8000-000000007c05'::uuid
+        OR audit_row.requested_snapshot_id IS DISTINCT FROM
+          snapshot_row.snapshot_id
+        OR audit_row.resolved_snapshot_id IS DISTINCT FROM
+          snapshot_row.snapshot_id
+        OR audit_row.report_id IS DISTINCT FROM snapshot_row.report_id
+        OR audit_row.report_version IS DISTINCT FROM
+          snapshot_row.report_version
+        OR audit_row.query_fingerprint IS DISTINCT FROM
+          snapshot_row.query_fingerprint
+        OR audit_row.authorization_reference_at_utc IS DISTINCT FROM
+          audit_row.accessed_at_utc
+        OR NOT isfinite(audit_row.accessed_at_utc)
+        OR audit_row.result_status IS DISTINCT FROM 'completed'
+        OR audit_row.reason_code IS NOT NULL
+        OR to_jsonb(audit_row)::text ~*
+          '\"(protected_report|cells|value_count|contributor|contact_id|reach_count|interest_level|raw_answer)\"[[:space:]]*:'
+        OR (SELECT count(*)
+            FROM app_private.management_report_snapshot_access_events) <> 1
+      THEN
+        RAISE EXCEPTION '0032 authorized channel read or access audit drift';
+      END IF;
+    END
+    \$read\$;
+  " \
+  >/dev/null
+channel_read_history_after_access="$(
+  docker exec "${container_name}" psql \
+    -U postgres \
+    -d "${channel_read_upgrade_database}" \
+    --no-psqlrc \
+    --set=ON_ERROR_STOP=1 \
+    --quiet \
+    --tuples-only \
+    --no-align \
+    --command="${channel_read_history_sql}"
+)"
+if [[ "${channel_read_history_before}" != \
+  "${channel_read_history_after_access}" ]]; then
+  echo '0032 授权读取改写了旧 channel 历史三行。' >&2
+  exit 1
+fi
+channel_read_after_access_without_audit="$(
+  docker exec "${container_name}" pg_dump \
+    "${channel_read_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --exclude-table-data=app_private.management_report_snapshot_access_events \
+    --restrict-key=3132313231323132313231323132313231323132313231323132313231323132
+)"
+if [[ "${channel_read_before_upgrade}" != \
+  "${channel_read_after_access_without_audit}" ]]; then
+  echo '0032 授权读取改写了审计以外的业务数据。' >&2
+  exit 1
+fi
+channel_read_after_access="$(
+  docker exec "${container_name}" pg_dump \
+    "${channel_read_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=3132313231323132313231323132313231323132313231323132313231323132
+)"
+channel_read_baseline_replay="$(
+  docker exec \
+    --env DATABASE_URL="${channel_read_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/channel-read-baseline-migrations \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh \
+    2>&1
+)"
+channel_read_baseline_verified_count="$(
+  printf '%s\n' "${channel_read_baseline_replay}" \
+    | awk '/^已验证 .*（无需重复执行）$/ { count++ } END { print count+0 }'
+)"
+if [[ "${channel_read_baseline_verified_count}" -ne 31 ]] \
+  || [[ "${channel_read_baseline_replay}" == *'已执行 '* ]]; then
+  echo '0001..0031 重复 migrations 没有全部命中 checksum skip。' >&2
+  printf '%s\n' "${channel_read_baseline_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${channel_read_baseline_replay}"
+channel_read_migration_replay="$(
+  docker exec \
+    --env DATABASE_URL="${channel_read_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/channel-read-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${channel_read_migration_replay}" != \
+  *'已验证 0032_authorized_management_report_snapshot_read（无需重复执行）'* ]] \
+  || [[ "${channel_read_migration_replay}" == *'已执行 '* ]]; then
+  echo '0032 重复 migration 没有命中 checksum skip。' >&2
+  printf '%s\n' "${channel_read_migration_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${channel_read_migration_replay}"
+channel_read_after_migration_replay="$(
+  docker exec "${container_name}" pg_dump \
+    "${channel_read_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=3132313231323132313231323132313231323132313231323132313231323132
+)"
+if [[ "${channel_read_after_access}" != \
+  "${channel_read_after_migration_replay}" ]]; then
+  echo '重复 0032 migration 改写 channel read 业务或审计数据。' >&2
+  exit 1
+fi
+echo '0031→0032 旧 channel 授权读取、单条 value-free 审计与 checksum 幂等：通过。'
 
 echo '验证 0066→0067 升级保留旧批准 channel 快照，并可登记替代。'
 docker exec "${container_name}" createdb \
