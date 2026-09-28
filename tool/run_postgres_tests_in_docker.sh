@@ -16,6 +16,7 @@ ownerless_upgrade_database='tongxingzhe_ownerless_upgrade'
 consent_replacement_upgrade_database='tongxingzhe_consent_replacement_upgrade'
 channel_read_upgrade_database='tongxingzhe_channel_read_upgrade'
 runtime_read_upgrade_database='tongxingzhe_runtime_read_upgrade'
+snapshot_directory_upgrade_database='tongxingzhe_snapshot_directory_upgrade'
 channel_replacement_upgrade_database='tongxingzhe_channel_replacement_upgrade'
 original_region_replacement_upgrade_database='tongxingzhe_original_region_replacement_upgrade'
 current_city_replacement_upgrade_database='tongxingzhe_current_city_replacement_upgrade'
@@ -37,6 +38,7 @@ ownerless_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${ownerless
 consent_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${consent_replacement_upgrade_database}"
 channel_read_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${channel_read_upgrade_database}"
 runtime_read_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${runtime_read_upgrade_database}"
+snapshot_directory_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${snapshot_directory_upgrade_database}"
 channel_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${channel_replacement_upgrade_database}"
 original_region_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${original_region_replacement_upgrade_database}"
 current_city_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${current_city_replacement_upgrade_database}"
@@ -1293,6 +1295,380 @@ if [[ "${runtime_read_after_access}" != "${runtime_read_after_replay}" ]]; then
   exit 1
 fi
 echo '0032→0033 旧 channel runtime 授权读取、单条新审计与 checksum 幂等：通过。'
+
+echo '验证 0034→0035 升级后旧 trusted-v2 channel 快照可由 runtime 目录读取。'
+docker exec "${container_name}" createdb -U postgres \
+  "${snapshot_directory_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/snapshot-directory-baseline-migrations \
+      /tmp/snapshot-directory-upgrade-only && \
+   cp /workspace/backend/database/migrations/00{01..34}_*.sql \
+     /tmp/snapshot-directory-baseline-migrations/ && \
+   test \"\$(find /tmp/snapshot-directory-baseline-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 34 && \
+   cp /workspace/backend/database/migrations/0035_*.sql \
+     /tmp/snapshot-directory-upgrade-only/ && \
+   test \"\$(find /tmp/snapshot-directory-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${snapshot_directory_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/snapshot-directory-baseline-migrations \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh \
+  >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres -d "${snapshot_directory_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$baseline\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 34
+        OR (SELECT max(version) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0034_management_analysis_contexts'
+        OR to_regclass(
+          'app_private.management_report_snapshot_directory_access_events'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.validate_management_report_snapshot_directory_access_v1()'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_private.list_authorized_management_report_snapshots_v1(uuid,uuid)'
+        ) IS NOT NULL
+        OR to_regprocedure(
+          'app_data.list_authorized_management_report_snapshots_v1(text,text,uuid)'
+        ) IS NOT NULL
+      THEN
+        RAISE EXCEPTION '0034 snapshot directory upgrade baseline drift';
+      END IF;
+    END
+    \$baseline\$;
+  " \
+  >/dev/null
+docker exec --workdir /workspace "${container_name}" psql \
+  -U postgres -d "${snapshot_directory_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --file /workspace/backend/database/fixtures/upgrade/0031_authorized_management_report_snapshot_read_live.sql \
+  >/dev/null
+docker exec --workdir /workspace "${container_name}" psql \
+  -U postgres -d "${snapshot_directory_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --file /workspace/backend/database/fixtures/upgrade/0034_management_report_snapshot_directory_live.sql \
+  >/dev/null
+snapshot_directory_old_rows_sql="
+  SELECT jsonb_build_object(
+    'count', count(*),
+    'rows', jsonb_agg(
+      jsonb_build_object('kind', entity_kind, 'id', entity_id, 'row', entity_row)
+      ORDER BY entity_kind, entity_id
+    )
+  )::text
+  FROM (
+    SELECT 'snapshot'::text AS entity_kind, snapshot_id AS entity_id,
+      to_jsonb(snapshot.*) AS entity_row
+    FROM app_private.management_report_snapshots AS snapshot
+    UNION ALL
+    SELECT 'v1_attempt', release_request_id, to_jsonb(attempt.*)
+    FROM app_private.management_report_release_attempts AS attempt
+    UNION ALL
+    SELECT 'v2_attempt', release_request_id, to_jsonb(attempt.*)
+    FROM app_private.management_report_release_v2_attempts AS attempt
+    UNION ALL
+    SELECT 'identity', external_identity_id, to_jsonb(identity_row.*)
+    FROM app_data.external_identities AS identity_row
+    WHERE external_identity_id =
+      '00000000-0000-4000-8000-000000007c12'
+    UNION ALL
+    SELECT 'current_context', app_user_id, to_jsonb(context_row.*)
+    FROM app_data.management_analysis_current_contexts AS context_row
+    WHERE app_user_id = '00000000-0000-4000-8000-000000007c02'
+  ) AS old_rows"
+snapshot_directory_old_rows_before="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${snapshot_directory_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${snapshot_directory_old_rows_sql}"
+)"
+if [[ "${snapshot_directory_old_rows_before}" != *'"count": 5'* ]]; then
+  echo '0034 旧 snapshot、v1/v2 attempt、identity、current context 未满五行。' >&2
+  exit 1
+fi
+snapshot_directory_counts_sql="
+  SELECT jsonb_build_object(
+    'app_users', (SELECT count(*) FROM app_data.app_users),
+    'workspaces', (SELECT count(*) FROM app_data.workspaces),
+    'projects', (SELECT count(*) FROM app_data.projects),
+    'organization_memberships',
+      (SELECT count(*) FROM app_data.organization_memberships),
+    'project_memberships',
+      (SELECT count(*) FROM app_data.project_memberships),
+    'capability_grants',
+      (SELECT count(*) FROM app_data.management_report_capability_grants),
+    'external_identities',
+      (SELECT count(*) FROM app_data.external_identities),
+    'contacts', (SELECT count(*) FROM app_data.contacts),
+    'snapshots',
+      (SELECT count(*) FROM app_private.management_report_snapshots),
+    'v1_attempts',
+      (SELECT count(*) FROM app_private.management_report_release_attempts),
+    'v2_attempts',
+      (SELECT count(*) FROM app_private.management_report_release_v2_attempts),
+    'current_contexts',
+      (SELECT count(*) FROM app_data.management_analysis_current_contexts)
+  )::text"
+snapshot_directory_counts_before="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${snapshot_directory_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${snapshot_directory_counts_sql}"
+)"
+snapshot_directory_dump_key='3435343534353435343534353435343534353435343534353435343534353435'
+snapshot_directory_business_before="$(
+  docker exec "${container_name}" pg_dump "${snapshot_directory_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges \
+    --exclude-table-data=app_private.management_report_snapshot_directory_access_events \
+    --restrict-key="${snapshot_directory_dump_key}"
+)"
+docker exec \
+  --env DATABASE_URL="${snapshot_directory_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/snapshot-directory-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+docker exec --workdir /workspace "${container_name}" psql \
+  -U postgres -d "${snapshot_directory_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --file /workspace/backend/database/checks/verify_management_report_snapshot_directory.sql \
+  >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres -d "${snapshot_directory_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$acl\$
+    BEGIN
+      IF (SELECT count(*) FROM
+          app_private.management_report_snapshot_directory_access_events) <> 0
+        OR has_table_privilege(
+          'tongxingzhe_runtime', 'app_data.app_users', 'SELECT'
+        ) OR has_table_privilege(
+          'tongxingzhe_runtime', 'app_data.external_identities', 'SELECT'
+        ) OR has_table_privilege(
+          'tongxingzhe_runtime', 'app_data.workspaces', 'SELECT'
+        ) OR has_table_privilege(
+          'tongxingzhe_runtime', 'app_data.projects', 'SELECT'
+        ) OR has_table_privilege(
+          'tongxingzhe_runtime', 'app_data.organization_memberships', 'SELECT'
+        ) OR has_table_privilege(
+          'tongxingzhe_runtime', 'app_data.project_memberships', 'SELECT'
+        ) OR has_table_privilege(
+          'tongxingzhe_runtime',
+          'app_data.management_report_capability_grants', 'SELECT'
+        ) OR has_table_privilege(
+          'tongxingzhe_runtime',
+          'app_data.management_analysis_current_contexts', 'SELECT'
+        ) THEN
+        RAISE EXCEPTION '0035 directory initial audit or runtime ACL drift';
+      END IF;
+    END
+    \$acl\$;
+  " \
+  >/dev/null
+snapshot_directory_business_after_migration="$(
+  docker exec "${container_name}" pg_dump "${snapshot_directory_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges \
+    --exclude-table-data=app_private.management_report_snapshot_directory_access_events \
+    --restrict-key="${snapshot_directory_dump_key}"
+)"
+if [[ "${snapshot_directory_business_before}" != \
+  "${snapshot_directory_business_after_migration}" ]]; then
+  echo '0035 migration 改写了旧 channel 业务数据。' >&2
+  exit 1
+fi
+snapshot_directory_result="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${snapshot_directory_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command='SET ROLE tongxingzhe_runtime' \
+    --command="SELECT app_data.list_authorized_management_report_snapshots_v1(
+      'https://upgrade-directory.synthetic/auth/v1',
+      '7cm-viewer',
+      '00000000-0000-4000-8000-000000007c05'
+    )::text" \
+    --command='RESET ROLE'
+)"
+snapshot_directory_expected="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${snapshot_directory_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="
+      SELECT jsonb_build_object(
+        'access_contract_id',
+          'authorized_management_report_snapshot_directory_v1',
+        'access_event_id', audit.access_event_id,
+        'project_id', snapshot.project_id,
+        'snapshots', jsonb_build_array(jsonb_build_object(
+          'snapshot_id', snapshot.snapshot_id,
+          'report_id', snapshot.report_id,
+          'report_version', snapshot.report_version,
+          'reporting_time_zone', snapshot.reporting_time_zone,
+          'data_cutoff_utc', to_char(
+            snapshot.data_cutoff_utc AT TIME ZONE 'UTC',
+            'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'
+          ),
+          'released_at_utc', to_char(
+            snapshot.released_at_utc AT TIME ZONE 'UTC',
+            'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'
+          )
+        ))
+      )::text
+      FROM app_private.management_report_snapshots AS snapshot
+      JOIN app_private.management_report_release_v2_attempts AS attempt
+        ON attempt.released_snapshot_id = snapshot.snapshot_id
+      CROSS JOIN
+        app_private.management_report_snapshot_directory_access_events AS audit
+      WHERE attempt.release_request_id =
+        '00000000-0000-4000-8000-000000007c0c'
+        AND attempt.result_status = 'approved_baseline'"
+)"
+if [[ -z "${snapshot_directory_result}" ]] \
+  || [[ "${snapshot_directory_result}" != "${snapshot_directory_expected}" ]]; then
+  echo '0035 runtime directory 未返回旧 snapshot 的精确四字段响应和六字段目录项。' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${snapshot_directory_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$audit\$
+    DECLARE
+      audit app_private.management_report_snapshot_directory_access_events%ROWTYPE;
+      context_row app_data.management_analysis_current_contexts%ROWTYPE;
+    BEGIN
+      IF (SELECT count(*) FROM
+          app_private.management_report_snapshot_directory_access_events) <> 1
+        OR (SELECT array_agg(column_name::text ORDER BY ordinal_position)
+            FROM information_schema.columns
+            WHERE table_schema = 'app_private'
+              AND table_name =
+                'management_report_snapshot_directory_access_events')
+          IS DISTINCT FROM ARRAY[
+            'access_event_id', 'requested_by_app_user_id',
+            'organization_workspace_id', 'organization_membership_id',
+            'project_membership_id', 'capability_grant_id', 'capability_id',
+            'authorization_reference_at_utc', 'project_id', 'accessed_at_utc',
+            'result_status', 'returned_snapshot_count'
+          ]::text[]
+      THEN
+        RAISE EXCEPTION '0035 directory audit cardinality or value-free columns drift';
+      END IF;
+      SELECT * INTO STRICT audit
+      FROM app_private.management_report_snapshot_directory_access_events;
+      SELECT * INTO STRICT context_row
+      FROM app_data.management_analysis_current_contexts
+      WHERE app_user_id = '00000000-0000-4000-8000-000000007c02';
+      IF audit.requested_by_app_user_id <> context_row.app_user_id
+        OR audit.organization_workspace_id <>
+          context_row.organization_workspace_id
+        OR audit.organization_membership_id <>
+          context_row.organization_membership_id
+        OR audit.project_membership_id <> context_row.project_membership_id
+        OR audit.capability_grant_id <> context_row.capability_grant_id
+        OR audit.capability_id <> 'view_anonymous_analytics'
+        OR audit.project_id <> context_row.project_id
+        OR audit.authorization_reference_at_utc <> audit.accessed_at_utc
+        OR audit.accessed_at_utc < context_row.selected_at_utc
+        OR audit.result_status <> 'completed'
+        OR audit.returned_snapshot_count <> 1
+      THEN
+        RAISE EXCEPTION '0035 directory audit authorization drift';
+      END IF;
+    END
+    \$audit\$;
+  " \
+  >/dev/null
+snapshot_directory_old_rows_after="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${snapshot_directory_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${snapshot_directory_old_rows_sql}"
+)"
+snapshot_directory_counts_after="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${snapshot_directory_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${snapshot_directory_counts_sql}"
+)"
+snapshot_directory_business_after_access="$(
+  docker exec "${container_name}" pg_dump "${snapshot_directory_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges \
+    --exclude-table-data=app_private.management_report_snapshot_directory_access_events \
+    --restrict-key="${snapshot_directory_dump_key}"
+)"
+if [[ "${snapshot_directory_old_rows_before}" != \
+  "${snapshot_directory_old_rows_after}" ]]; then
+  echo '0035 directory read 改写了旧五行。' >&2
+  exit 1
+fi
+if [[ "${snapshot_directory_counts_before}" != \
+  "${snapshot_directory_counts_after}" ]]; then
+  echo '0035 directory read 改写了旧表行数。' >&2
+  exit 1
+fi
+if [[ "${snapshot_directory_business_before}" != \
+  "${snapshot_directory_business_after_access}" ]]; then
+  echo '0035 directory read 改写了审计之外的业务数据。' >&2
+  exit 1
+fi
+snapshot_directory_after_access="$(
+  docker exec "${container_name}" pg_dump "${snapshot_directory_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges \
+    --restrict-key="${snapshot_directory_dump_key}"
+)"
+snapshot_directory_baseline_replay="$(
+  docker exec \
+    --env DATABASE_URL="${snapshot_directory_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/snapshot-directory-baseline-migrations \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "$(printf '%s\n' "${snapshot_directory_baseline_replay}" \
+  | awk '/^已验证 .*（无需重复执行）$/ { count++ } END { print count+0 }')" \
+    -ne 34 ]] \
+  || [[ "${snapshot_directory_baseline_replay}" == *'已执行 '* ]]; then
+  echo '0001..0034 重复 migrations 没有全部命中 checksum skip。' >&2
+  printf '%s\n' "${snapshot_directory_baseline_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${snapshot_directory_baseline_replay}"
+snapshot_directory_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${snapshot_directory_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/snapshot-directory-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${snapshot_directory_upgrade_replay}" != \
+  *'已验证 0035_management_report_snapshot_directory（无需重复执行）'* ]] \
+  || [[ "${snapshot_directory_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0035 重复 migration 没有命中 checksum skip。' >&2
+  printf '%s\n' "${snapshot_directory_upgrade_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${snapshot_directory_upgrade_replay}"
+snapshot_directory_after_replay="$(
+  docker exec "${container_name}" pg_dump "${snapshot_directory_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges \
+    --restrict-key="${snapshot_directory_dump_key}"
+)"
+if [[ "${snapshot_directory_after_access}" != \
+  "${snapshot_directory_after_replay}" ]]; then
+  echo '重复 0035 migration 改写了目录业务或审计数据。' >&2
+  exit 1
+fi
+echo '0034→0035 旧 channel runtime 目录、单条 value-free 审计与 checksum 幂等：通过。'
 
 echo '验证 0066→0067 升级保留旧批准 channel 快照，并可登记替代。'
 docker exec "${container_name}" createdb \

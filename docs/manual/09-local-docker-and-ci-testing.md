@@ -2392,6 +2392,31 @@ runtime以同一固定external identity读取同一旧报告。成功报告仍�
 
 Docker／CI中的合成PostgreSQL证据只证明当前migration、exact-identity bridge、private reader委托和ACL合同，不证明生产Auth、HTTP、token验证、network、client delivery或真人数据。
 
+#### 6.2.21 真实旧导航选择与 channel 快照目录升级（Issue #471，MANUAL-121）
+
+7CM在独立库只应用0001至0034。runner核对精确34个migration和最大版本0034；0035 directory access-events表、validator、private reader与runtime bridge均不存在。
+
+upgrade fixture复用真实0029 timezone writer和0031 trusted-v2 writer，建立一份旧`approved_baseline` channel snapshot。它再调用真实0034 `app_data.select_management_analysis_context_v1` selector。
+固定external identity和同一active project保存唯一current context。snapshot、v1 attempt、v2 attempt、external identity和current context都是升级前历史，不是0035新建的事实。
+
+runner随后只应用0035。runtime使用固定`issuer`／`subject`和显式project UUID调用directory bridge。directory bridge必须重新确认当前identity、组织membership、project membership、view grant和project状态。它不能把0034保存的context当作token。它不能把排序第一项称为current、latest或最新有效。
+
+成功响应必须只有四个根键：`access_contract_id`、`access_event_id`、`project_id`和`snapshots`，且`snapshots`数组恰有一项。唯一目录项必须只有六个键：`snapshot_id`、`report_id`、`report_version`、`reporting_time_zone`、`data_cutoff_utc`和`released_at_utc`。六个值必须与升级前旧snapshot和成功v2 attempt逐字段一致。
+
+一次目录读取只新增一条12列`completed` value-free audit，且`returned_snapshot_count=1`。audit不保存snapshot ID、report metadata、`protected_report`、cells、contact、contributor、原始答案、报告统计值或其他报告内容。它只保存授权链、project和返回数量所需的非内容事实。directory audit必须保持不可变。runtime role只能获得这个bridge的最小`EXECUTE`。它不能直接读取private snapshot、attempt、directory audit、identity、context或授权表。`PUBLIC`不得执行。
+
+旧snapshot、v1／v2 attempt、external identity和current context必须逐字不变。排除新directory access-events表后，升级前后的`app_data`／`app_private`业务dump必须逐字相同。重放0001至0034应看到34个checksum skip，重放0035应看到1个checksum skip。
+
+现有0035 fixture和并发脚本继续负责20项上限、`data_cutoff_utc`／`released_at_utc`／`snapshot_id`排序、legacy排除、空目录、unknown／unauthorized、audit不可变性和目录读取与撤权竞争。7CM不重复这些检查，只验证旧记录穿过0035后的目录读取和数据保存边界。
+
+从仓库根目录运行完整套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+Docker／CI中的合成PostgreSQL证据只证明0035 migration、directory bridge、重新授权、旧context保存、metadata-only目录和value-free audit合同，不证明生产Auth、HTTP、token验证、network、client delivery、部署交付或真人数据。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。
