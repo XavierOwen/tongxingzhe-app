@@ -2544,6 +2544,24 @@ export只追加一条独立的value-free export audit。它不追加普通read a
 
 Docker中的合成数据库证据只证明0052 migration、旧view兼容、双capability授权、固定四键导出文档、value-free export audit和checksum幂等。它不证明Backend canonical UTF-8字节序、生产Auth、HTTP、token验证、network、文件下载、真人数据、服务交付审计提交或部署完成。
 
+#### 6.2.27 真实旧 channel release requests 回填共享 claim ledger（Issue #482，MANUAL-127）
+
+7CS在独立库只应用0001至0056。仓库没有0050 migration，因此runner必须核对实际55个migration和最大版本0056。升级前，current-city attempts表和共享`management_report_release_request_claims`表都不存在。
+
+upgrade fixture复用真实0029 timezone writer和0031 trusted-v2 writer，建立固定channel `approved_baseline` snapshot及同一个request UUID的delegated v1／v2 attempts。它再使用旧v1 writer，以另一个request UUID建立v1-only legacy attempt。fixture不重复既有0057 fixture已覆盖的schema、ACL、trigger、current-city和cross-family矩阵。
+
+runner随后只应用0057。升级后，共享ledger必须只有两条channel claim：同UUID的v1／v2 attempts合并为一条，v1-only UUID形成一条，current-city family为零。ledger实际只有`release_request_id`和`release_family_id`两个字段，不保存report、protected_report、cells、contact、contributor、授权证据或时间事实。
+
+旧snapshot、两类attempts、旧行和升级前的业务dump必须保持不变。重放0001至0056应命中55个checksum skip，重放0057应命中1个skip；ledger仍为两条，重放不新增claim。ledger保持不可变，`PUBLIC`和runtime不能直接读取或写入；既有0057 fixture继续承担受控writer、ACL和cross-family验证。
+
+从仓库根目录运行完整套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+Docker中的合成数据库 staged proof只证明0057 migration、真实旧writer、channel UUID去重、v1-only回填、value-free ledger、不可变性和checksum幂等。它不证明生产Auth、HTTP、token验证、network、部署、服务交付审计提交或真人数据。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。
