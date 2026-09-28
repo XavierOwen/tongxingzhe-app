@@ -2489,6 +2489,33 @@ answered denominator为2，unanswered为1，level 0和4各为1，其余等级为
 
 Docker／CI中的合成PostgreSQL证据只证明0044 migration、真实personal／target／contact submit v3／retention writer、UTC半开区间、旧匿名化后的非PII事实、最小ACL和staged upgrade保存。它不证明生产Auth、HTTP、token验证、network或真人联系人。它也不证明对象身份恢复、统计解释或UI行为。
 
+#### 6.2.25 真实旧 personal follow-up consent 与 opt-in 汇总升级（Issue #478，MANUAL-125）
+
+7CQ在独立库只应用0001至0048。runner核对精确48个migration和最大版本0048；0049 personal follow-up consent ratio函数尚不存在。
+
+upgrade fixture复用真实personal bootstrap、promotion target、contact submit v3与0048 opt-in writer。
+它建立固定active personal context和同一project。
+它再建立三条current contact-target links，follow-up consent分别为yes、no、unknown。
+接触发生在enabled opt-in之前。fixture保存contact、revision、link、project和opt-in version历史。
+
+runner随后只应用0049。runtime使用exact issuer／subject、显式project、metric和固定UTC半开区间读取旧期间。结果必须为ready：yes=1、no=1、denominator=2、unanswered=1、percentage_basis_points=5000。unknown只计unanswered，不进入分母。当前enabled可以回看配置前已存在的接触；读取不改写旧事实。
+
+0049 bridge必须保持`SECURITY DEFINER`和最小ACL。
+`PUBLIC`不可执行，`tongxingzhe_runtime`只获窄函数`EXECUTE`。
+runtime不能直接读取contacts、contact-target links、opt-in versions或PII表。
+升级和读取不得改写旧contacts、revisions、links、project、opt-in versions、表行数或完整`app_data`／`app_private` data-only dump。
+重放0001至0048应看到48个checksum skip。重放0049应看到1个checksum skip。
+
+现有0049 fixture继续覆盖2/3舍入、NULL／拒答／N/A／零分母、旧revision、作废、项目／身份／期间、disabled与unconfigured矩阵；7CQ不重复这些场景。
+
+从仓库根目录运行完整套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+Docker／CI中的合成PostgreSQL证据只证明0049 migration、真实personal writer、contact-target link候选边界、当前opt-in、UTC半开区间、unknown分母语义、最小ACL和staged upgrade保存。它不证明生产Auth、HTTP、token验证、network、client delivery、部署交付、真人联系人、统计解释或历史as-of查询。
+
 ### 6.3 怎样读输出
 
 正常输出会先显示 `已执行 0001_bootstrap` 到当前最高 migration。第二轮应显示 `无需重复执行`。

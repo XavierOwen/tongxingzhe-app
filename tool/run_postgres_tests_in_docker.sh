@@ -20,6 +20,7 @@ snapshot_directory_upgrade_database='tongxingzhe_snapshot_directory_upgrade'
 runtime_release_replay_upgrade_database='tongxingzhe_runtime_release_replay_upgrade'
 interest_ordinal_upgrade_database='tongxingzhe_interest_ordinal_upgrade'
 target_response_upgrade_database='tongxingzhe_target_response_upgrade'
+consent_ratio_upgrade_database='tongxingzhe_consent_ratio_upgrade'
 channel_replacement_upgrade_database='tongxingzhe_channel_replacement_upgrade'
 original_region_replacement_upgrade_database='tongxingzhe_original_region_replacement_upgrade'
 current_city_replacement_upgrade_database='tongxingzhe_current_city_replacement_upgrade'
@@ -45,6 +46,7 @@ snapshot_directory_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${
 runtime_release_replay_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${runtime_release_replay_upgrade_database}"
 interest_ordinal_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${interest_ordinal_upgrade_database}"
 target_response_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${target_response_upgrade_database}"
+consent_ratio_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${consent_ratio_upgrade_database}"
 channel_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${channel_replacement_upgrade_database}"
 original_region_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${original_region_replacement_upgrade_database}"
 current_city_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${current_city_replacement_upgrade_database}"
@@ -2454,6 +2456,280 @@ if [[ "${target_response_dump_before}" != \
   exit 1
 fi
 echo '0043→0044 旧对象反应、匿名化历史、业务不变与 checksum 幂等：通过。'
+
+echo '验证 0048→0049 旧对象后续联系同意与项目启用可汇总。'
+docker exec "${container_name}" createdb -U postgres \
+  "${consent_ratio_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/consent-ratio-baseline-migrations \
+      /tmp/consent-ratio-upgrade-only && \
+   cp /workspace/backend/database/migrations/00{01..48}_*.sql \
+     /tmp/consent-ratio-baseline-migrations/ && \
+   test \"\$(find /tmp/consent-ratio-baseline-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 48 && \
+   cp /workspace/backend/database/migrations/0049_*.sql \
+     /tmp/consent-ratio-upgrade-only/ && \
+   test \"\$(find /tmp/consent-ratio-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec --env DATABASE_URL="${consent_ratio_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/consent-ratio-baseline-migrations \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres -d "${consent_ratio_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$baseline\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 48
+        OR (SELECT max(version) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0048_project_follow_up_consent_opt_in'
+        OR to_regprocedure(
+          'app_data.read_personal_follow_up_consent_ratio_v1(text,text,uuid,text,timestamptz,timestamptz)'
+        ) IS NOT NULL
+      THEN
+        RAISE EXCEPTION '0048 consent ratio baseline drift';
+      END IF;
+    END
+    \$baseline\$;
+  " >/dev/null
+docker exec --workdir /workspace "${container_name}" psql \
+  -U postgres -d "${consent_ratio_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --file /workspace/backend/database/fixtures/upgrade/0048_personal_follow_up_consent_ratio_live.sql \
+  >/dev/null
+consent_ratio_history_sql="
+  SELECT jsonb_build_object(
+    'count', count(*),
+    'rows', jsonb_agg(jsonb_build_object(
+      'kind', kind, 'id', entity_id, 'row', entity_row
+    ) ORDER BY kind, entity_id)
+  )::text
+  FROM (
+    SELECT 'contact'::text AS kind, contact_id AS entity_id,
+      to_jsonb(contact_row.*) AS entity_row
+    FROM app_data.contacts AS contact_row
+    WHERE contact_id = '7cq-contact'
+    UNION ALL
+    SELECT 'revision', contact_id || ':' || revision_number,
+      to_jsonb(revision_row.*)
+    FROM app_data.contact_revisions AS revision_row
+    WHERE contact_id = '7cq-contact'
+    UNION ALL
+    SELECT 'link', contact_id || ':' || revision_number || ':' ||
+      promotion_target_id, to_jsonb(link_row.*)
+    FROM app_data.contact_target_links AS link_row
+    WHERE contact_id = '7cq-contact'
+    UNION ALL
+    SELECT 'project', project_row.project_id::text,
+      to_jsonb(project_row.*)
+    FROM app_data.projects AS project_row
+    JOIN app_data.contacts AS contact_row
+      ON contact_row.project_id = project_row.project_id
+    WHERE contact_row.contact_id = '7cq-contact'
+    UNION ALL
+    SELECT 'opt-in', version_row.project_id || ':' ||
+      version_row.version_number, to_jsonb(version_row.*)
+    FROM app_private.project_follow_up_consent_opt_in_versions AS version_row
+    JOIN app_data.contacts AS contact_row
+      ON contact_row.project_id = version_row.project_id
+    WHERE contact_row.contact_id = '7cq-contact'
+  ) AS old_rows"
+consent_ratio_history_before="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${consent_ratio_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${consent_ratio_history_sql}"
+)"
+if [[ "${consent_ratio_history_before}" != *'"count": 7'* ]]; then
+  echo '0048 旧 contact、revision、三条 link、project、opt-in 未齐。' >&2
+  exit 1
+fi
+consent_ratio_counts_sql="
+  SELECT jsonb_build_object(
+    'contacts', (SELECT count(*) FROM app_data.contacts),
+    'revisions', (SELECT count(*) FROM app_data.contact_revisions),
+    'links', (SELECT count(*) FROM app_data.contact_target_links),
+    'projects', (SELECT count(*) FROM app_data.projects),
+    'opt_in_versions', (SELECT count(*) FROM
+      app_private.project_follow_up_consent_opt_in_versions)
+  )::text"
+consent_ratio_counts_before="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${consent_ratio_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${consent_ratio_counts_sql}"
+)"
+consent_ratio_dump_key='4949494949494949494949494949494949494949494949494949494949494949'
+consent_ratio_dump_before="$(
+  docker exec "${container_name}" pg_dump "${consent_ratio_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges --restrict-key="${consent_ratio_dump_key}"
+)"
+docker exec --env DATABASE_URL="${consent_ratio_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/consent-ratio-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${consent_ratio_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --file /workspace/backend/database/checks/verify_personal_follow_up_consent_ratio.sql \
+  >/dev/null
+consent_ratio_dump_after_migration="$(
+  docker exec "${container_name}" pg_dump "${consent_ratio_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges --restrict-key="${consent_ratio_dump_key}"
+)"
+if [[ "${consent_ratio_dump_before}" != \
+  "${consent_ratio_dump_after_migration}" ]]; then
+  echo '0049 migration 改写了旧同意或启用历史。' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${consent_ratio_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$acl\$
+    BEGIN
+      IF has_schema_privilege('tongxingzhe_runtime', 'app_private', 'USAGE')
+        OR has_function_privilege('public',
+          'app_data.read_personal_follow_up_consent_ratio_v1(text,text,uuid,text,timestamptz,timestamptz)',
+          'EXECUTE')
+        OR NOT has_function_privilege('tongxingzhe_runtime',
+          'app_data.read_personal_follow_up_consent_ratio_v1(text,text,uuid,text,timestamptz,timestamptz)',
+          'EXECUTE')
+        OR has_table_privilege('tongxingzhe_runtime', 'app_data.contacts', 'SELECT')
+        OR has_table_privilege('tongxingzhe_runtime', 'app_data.contact_revisions', 'SELECT')
+        OR has_table_privilege('tongxingzhe_runtime', 'app_data.contact_target_links', 'SELECT')
+        OR has_table_privilege('tongxingzhe_runtime', 'app_data.promotion_targets', 'SELECT')
+        OR has_table_privilege('tongxingzhe_runtime', 'app_data.external_identities', 'SELECT')
+        OR has_table_privilege('tongxingzhe_runtime',
+          'app_private.project_follow_up_consent_opt_in_versions', 'SELECT')
+      THEN
+        RAISE EXCEPTION '0049 runtime has excess direct access or unsafe function ACL';
+      END IF;
+    END
+    \$acl\$;
+  " >/dev/null
+consent_ratio_project_id="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${consent_ratio_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="
+      SELECT contact_row.project_id
+      FROM app_data.contacts AS contact_row
+      JOIN app_data.external_identities AS identity_row
+        ON identity_row.app_user_id = contact_row.app_user_id
+      WHERE contact_row.contact_id = '7cq-contact'
+        AND identity_row.issuer =
+          'https://synthetic-consent-ratio-upgrade.example/auth/v1'
+        AND identity_row.subject = '7cq-owner'"
+)"
+if [[ -z "${consent_ratio_project_id}" ]]; then
+  echo '0048 旧个人项目身份缺席。' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${consent_ratio_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --command="
+    SET ROLE tongxingzhe_runtime;
+    DO \$ratio\$
+    DECLARE result jsonb;
+    BEGIN
+      result := app_data.read_personal_follow_up_consent_ratio_v1(
+        'https://synthetic-consent-ratio-upgrade.example/auth/v1',
+        '7cq-owner',
+        '${consent_ratio_project_id}'::uuid,
+        'follow_up_consent_ratio@1',
+        '2026-08-01T00:00:00Z', '2026-08-02T00:00:00Z'
+      );
+      IF result->>'status' IS DISTINCT FROM 'ready'
+        OR result->>'project_id' IS DISTINCT FROM '${consent_ratio_project_id}'
+        OR result->'value'->>'yes_count' IS DISTINCT FROM '1'
+        OR result->'value'->>'no_count' IS DISTINCT FROM '1'
+        OR result->'value'->>'numerator' IS DISTINCT FROM '1'
+        OR result->'value'->>'denominator' IS DISTINCT FROM '2'
+        OR result->'value'->>'unanswered_count' IS DISTINCT FROM '1'
+        OR result->'value'->>'unknown_count' IS DISTINCT FROM '0'
+        OR result->'value'->>'percentage_basis_points' IS DISTINCT FROM '5000'
+      THEN
+        RAISE EXCEPTION '0049 old consent ratio differs: %', result;
+      END IF;
+      BEGIN
+        PERFORM app_data.read_personal_follow_up_consent_ratio_v1(
+          'https://synthetic-consent-ratio-upgrade.example/auth/v1',
+          ' 7cq-owner ',
+          '${consent_ratio_project_id}'::uuid,
+          'follow_up_consent_ratio@1',
+          '2026-08-01T00:00:00Z', '2026-08-02T00:00:00Z'
+        );
+        RAISE EXCEPTION '0049 accepted near identity';
+      EXCEPTION WHEN SQLSTATE '42501' THEN NULL;
+      END;
+    END
+    \$ratio\$;
+  " >/dev/null
+consent_ratio_history_after="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${consent_ratio_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${consent_ratio_history_sql}"
+)"
+consent_ratio_counts_after="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${consent_ratio_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${consent_ratio_counts_sql}"
+)"
+consent_ratio_dump_after_read="$(
+  docker exec "${container_name}" pg_dump "${consent_ratio_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges --restrict-key="${consent_ratio_dump_key}"
+)"
+if [[ "${consent_ratio_history_before}" != \
+  "${consent_ratio_history_after}" ]] \
+  || [[ "${consent_ratio_counts_before}" != \
+  "${consent_ratio_counts_after}" ]] \
+  || [[ "${consent_ratio_dump_before}" != \
+  "${consent_ratio_dump_after_read}" ]]; then
+  echo '0049 runtime 改写了旧接触、同意或启用历史。' >&2
+  exit 1
+fi
+consent_ratio_baseline_replay="$(
+  docker exec --env DATABASE_URL="${consent_ratio_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/consent-ratio-baseline-migrations \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "$(printf '%s\n' "${consent_ratio_baseline_replay}" \
+  | awk '/^已验证 .*（无需重复执行）$/ { count++ } END { print count+0 }')" \
+    -ne 48 ]] \
+  || [[ "${consent_ratio_baseline_replay}" == *'已执行 '* ]]; then
+  echo '0001..0048 重复 migrations 没有全部命中 checksum skip。' >&2
+  printf '%s\n' "${consent_ratio_baseline_replay}" >&2
+  exit 1
+fi
+consent_ratio_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${consent_ratio_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/consent-ratio-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${consent_ratio_upgrade_replay}" != \
+  *'已验证 0049_personal_follow_up_consent_ratio（无需重复执行）'* ]] \
+  || [[ "${consent_ratio_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0049 重复 migration 没有命中 checksum skip。' >&2
+  printf '%s\n' "${consent_ratio_upgrade_replay}" >&2
+  exit 1
+fi
+consent_ratio_dump_after_checksum="$(
+  docker exec "${container_name}" pg_dump "${consent_ratio_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges --restrict-key="${consent_ratio_dump_key}"
+)"
+if [[ "${consent_ratio_dump_before}" != \
+  "${consent_ratio_dump_after_checksum}" ]]; then
+  echo '重复 0049 migration 改写了旧同意或启用历史。' >&2
+  exit 1
+fi
+echo '0048→0049 旧同意占比、当前启用、业务不变与 checksum 幂等：通过。'
 
 echo '验证 0066→0067 升级保留旧批准 channel 快照，并可登记替代。'
 docker exec "${container_name}" createdb \
