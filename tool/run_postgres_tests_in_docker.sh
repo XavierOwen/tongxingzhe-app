@@ -17,6 +17,7 @@ consent_replacement_upgrade_database='tongxingzhe_consent_replacement_upgrade'
 channel_read_upgrade_database='tongxingzhe_channel_read_upgrade'
 runtime_read_upgrade_database='tongxingzhe_runtime_read_upgrade'
 channel_export_upgrade_database='tongxingzhe_channel_export_upgrade'
+channel_claim_upgrade_database='tongxingzhe_channel_claim_upgrade'
 snapshot_directory_upgrade_database='tongxingzhe_snapshot_directory_upgrade'
 runtime_release_replay_upgrade_database='tongxingzhe_runtime_release_replay_upgrade'
 interest_ordinal_upgrade_database='tongxingzhe_interest_ordinal_upgrade'
@@ -44,6 +45,7 @@ consent_replacement_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/$
 channel_read_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${channel_read_upgrade_database}"
 runtime_read_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${runtime_read_upgrade_database}"
 channel_export_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${channel_export_upgrade_database}"
+channel_claim_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${channel_claim_upgrade_database}"
 snapshot_directory_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${snapshot_directory_upgrade_database}"
 runtime_release_replay_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${runtime_release_replay_upgrade_database}"
 interest_ordinal_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${interest_ordinal_upgrade_database}"
@@ -1730,6 +1732,202 @@ if [[ "${channel_export_final_dump}" != "${channel_export_replay_dump}" ]]; then
   exit 1
 fi
 echo '0051→0052 旧 channel 双授权导出、独立审计与 50+1 checksum 幂等：通过。'
+
+echo '验证 0056→0057 旧 channel release UUID 精确回填到共享 claim ledger。'
+docker exec "${container_name}" createdb -U postgres "${channel_claim_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/channel-claim-baseline-migrations \
+      /tmp/channel-claim-upgrade-only && \
+   cp /workspace/backend/database/migrations/00{01..49}_*.sql \
+      /workspace/backend/database/migrations/00{51..56}_*.sql \
+      /tmp/channel-claim-baseline-migrations/ && \
+   test \"\$(find /tmp/channel-claim-baseline-migrations \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 55 && \
+   cp /workspace/backend/database/migrations/0057_*.sql \
+      /tmp/channel-claim-upgrade-only/"
+docker exec --env DATABASE_URL="${channel_claim_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/channel-claim-baseline-migrations \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres -d "${channel_claim_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --command="
+    DO \$baseline\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 55
+        OR (SELECT max(version) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0056_management_current_city_report'
+        OR to_regclass(
+          'app_private.management_report_release_request_claims'
+        ) IS NOT NULL
+        OR to_regclass(
+          'app_private.management_current_city_report_release_attempts'
+        ) IS NOT NULL
+      THEN
+        RAISE EXCEPTION '0056 channel claim upgrade baseline drift';
+      END IF;
+    END
+    \$baseline\$;
+  " >/dev/null
+docker exec --workdir /workspace "${container_name}" psql \
+  -U postgres -d "${channel_claim_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --file /workspace/backend/database/fixtures/upgrade/0031_authorized_management_report_snapshot_read_live.sql \
+  --file /workspace/backend/database/fixtures/upgrade/0056_management_channel_release_claims_live.sql \
+  >/dev/null
+channel_claim_old_rows_sql="
+  SELECT jsonb_build_object(
+    'count', count(*),
+    'rows', jsonb_agg(
+      jsonb_build_object('kind', kind, 'id', id, 'row', row_data)
+      ORDER BY kind, id
+    )
+  )::text
+  FROM (
+    SELECT 'snapshot'::text AS kind, snapshot_id AS id,
+      to_jsonb(snapshot.*) AS row_data
+    FROM app_private.management_report_snapshots AS snapshot
+    UNION ALL
+    SELECT 'v1_attempt', release_request_id, to_jsonb(attempt.*)
+    FROM app_private.management_report_release_attempts AS attempt
+    UNION ALL
+    SELECT 'v2_attempt', release_request_id, to_jsonb(attempt.*)
+    FROM app_private.management_report_release_v2_attempts AS attempt
+  ) AS old_rows
+"
+channel_claim_old_rows_before="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${channel_claim_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${channel_claim_old_rows_sql}"
+)"
+channel_claim_dump_key='5757575757575757575757575757575757575757575757575757575757575757'
+channel_claim_business_before="$(
+  docker exec "${container_name}" pg_dump "${channel_claim_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges \
+    --exclude-table-data=app_private.management_report_release_request_claims \
+    --exclude-table-data=app_private.management_current_city_report_release_attempts \
+    --restrict-key="${channel_claim_dump_key}"
+)"
+docker exec --env DATABASE_URL="${channel_claim_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/channel-claim-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh >/dev/null
+docker exec --workdir /workspace "${container_name}" psql \
+  -U postgres -d "${channel_claim_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --file /workspace/backend/database/checks/verify_management_current_city_report_snapshot_lineage.sql \
+  >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres -d "${channel_claim_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --quiet \
+  --command="
+    DO \$claim\$
+    BEGIN
+      IF (SELECT count(*) FROM app_private.management_report_release_request_claims) <> 2
+        OR (SELECT count(*) FROM app_private.management_report_release_request_claims
+            WHERE release_family_id = 'channel_management_report_snapshot_release') <> 2
+        OR (SELECT count(*) FROM app_private.management_report_release_request_claims
+            WHERE release_family_id = 'current_city_management_report_snapshot_release') <> 0
+        OR EXISTS (
+          SELECT release_request_id
+          FROM app_private.management_report_release_request_claims
+          EXCEPT
+          SELECT release_request_id
+          FROM (
+            SELECT release_request_id
+            FROM app_private.management_report_release_attempts
+            UNION
+            SELECT release_request_id
+            FROM app_private.management_report_release_v2_attempts
+          ) AS old_attempts
+        )
+        OR EXISTS (
+          SELECT release_request_id
+          FROM (
+            SELECT release_request_id
+            FROM app_private.management_report_release_attempts
+            UNION
+            SELECT release_request_id
+            FROM app_private.management_report_release_v2_attempts
+          ) AS old_attempts
+          EXCEPT
+          SELECT release_request_id
+          FROM app_private.management_report_release_request_claims
+        )
+        OR NOT EXISTS (
+          SELECT 1 FROM app_private.management_report_release_request_claims
+          WHERE release_request_id = '00000000-0000-4000-8000-000000007c0c'
+        )
+        OR NOT EXISTS (
+          SELECT 1 FROM app_private.management_report_release_request_claims
+          WHERE release_request_id = '00000000-0000-4000-8000-000000007c57'
+        )
+      THEN
+        RAISE EXCEPTION '0057 old channel request UUID backfill drift';
+      END IF;
+    END
+    \$claim\$;
+  " >/dev/null
+channel_claim_old_rows_after="$(
+  docker exec "${container_name}" psql \
+    -U postgres -d "${channel_claim_upgrade_database}" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+    --command="${channel_claim_old_rows_sql}"
+)"
+channel_claim_business_after="$(
+  docker exec "${container_name}" pg_dump "${channel_claim_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges \
+    --exclude-table-data=app_private.management_report_release_request_claims \
+    --exclude-table-data=app_private.management_current_city_report_release_attempts \
+    --restrict-key="${channel_claim_dump_key}"
+)"
+if [[ "${channel_claim_old_rows_before}" != "${channel_claim_old_rows_after}" ]] \
+  || [[ "${channel_claim_business_before}" != "${channel_claim_business_after}" ]]; then
+  echo '0057 升级改写了旧四行 channel 历史或其他旧业务数据。' >&2
+  exit 1
+fi
+channel_claim_final_dump="$(
+  docker exec "${container_name}" pg_dump "${channel_claim_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges --restrict-key="${channel_claim_dump_key}"
+)"
+channel_claim_baseline_replay="$(
+  docker exec --env DATABASE_URL="${channel_claim_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/channel-claim-baseline-migrations \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "$(printf '%s\n' "${channel_claim_baseline_replay}" \
+  | awk '/^已验证 .*（无需重复执行）$/ { count++ } END { print count+0 }')" \
+    -ne 55 ]] \
+  || [[ "${channel_claim_baseline_replay}" == *'已执行 '* ]]; then
+  echo '0001..0056 重放没有精确命中 55 个 checksum skip。' >&2
+  printf '%s\n' "${channel_claim_baseline_replay}" >&2
+  exit 1
+fi
+channel_claim_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${channel_claim_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/channel-claim-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${channel_claim_upgrade_replay}" != \
+  *'已验证 0057_management_current_city_report_snapshot_lineage（无需重复执行）'* ]] \
+  || [[ "${channel_claim_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0057 重放没有命中 checksum skip。' >&2
+  printf '%s\n' "${channel_claim_upgrade_replay}" >&2
+  exit 1
+fi
+channel_claim_replay_dump="$(
+  docker exec "${container_name}" pg_dump "${channel_claim_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges --restrict-key="${channel_claim_dump_key}"
+)"
+if [[ "${channel_claim_final_dump}" != "${channel_claim_replay_dump}" ]]; then
+  echo '0057 重放改写了旧历史或共享 claim ledger。' >&2
+  exit 1
+fi
+echo '0056→0057 旧 channel 双 UUID 回填、旧数据不变与 55+1 checksum 幂等：通过。'
 
 echo '验证 0034→0035 升级后旧 trusted-v2 channel 快照可由 runtime 目录读取。'
 docker exec "${container_name}" createdb -U postgres \
