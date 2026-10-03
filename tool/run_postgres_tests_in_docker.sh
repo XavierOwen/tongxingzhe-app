@@ -76,13 +76,18 @@ restore_temporary_directory=''
 
 cleanup() {
   local status=$?
+  local cleanup_failed=0
   trap - EXIT
   if [[ "${restore_container_started}" -eq 1 ]]; then
     if [[ "${status}" -ne 0 && "${keep_failed_container}" == '1' ]]; then
       echo "恢复测试失败；保留独立容器：${restore_container_name}" >&2
     else
-      docker rm --force "${restore_container_name}" >/dev/null 2>&1 || true
-      echo "已删除恢复 PostgreSQL 容器：${restore_container_name}"
+      if docker rm --force --volumes "${restore_container_name}" >/dev/null; then
+        echo "已删除恢复 PostgreSQL 容器及匿名 volume：${restore_container_name}"
+      else
+        echo "未能确认删除恢复 PostgreSQL 容器及匿名 volume：${restore_container_name}" >&2
+        cleanup_failed=1
+      fi
     fi
   fi
   if [[ "${container_started}" -eq 1 ]]; then
@@ -90,15 +95,22 @@ cleanup() {
       echo "PostgreSQL 测试失败；保留容器：${container_name}" >&2
       echo "查看日志：docker logs ${container_name}" >&2
       echo "进入 psql：docker exec -it ${container_name} psql -U postgres -d ${test_database}" >&2
-      echo "完成检查后删除：docker rm --force ${container_name}" >&2
+      echo "完成检查后删除：docker rm --force --volumes ${container_name}" >&2
     else
-      docker rm --force "${container_name}" >/dev/null 2>&1 || true
-      echo "已删除临时 PostgreSQL 容器：${container_name}"
+      if docker rm --force --volumes "${container_name}" >/dev/null; then
+        echo "已删除临时 PostgreSQL 容器及匿名 volume：${container_name}"
+      else
+        echo "未能确认删除临时 PostgreSQL 容器及匿名 volume：${container_name}" >&2
+        cleanup_failed=1
+      fi
     fi
   fi
   if [[ -n "${restore_temporary_directory}" ]]; then
     rm -f "${restore_temporary_directory}/tongxingzhe.dump"
     rmdir "${restore_temporary_directory}"
+  fi
+  if [[ "${status}" -eq 0 && "${cleanup_failed}" -eq 1 ]]; then
+    status=1
   fi
   exit "${status}"
 }
