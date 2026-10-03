@@ -38,7 +38,7 @@ Linux 的额外检查复用现有 platform job，不增加长期 runner。真实
 | container（容器） | 从镜像启动的隔离进程和文件系统 | 源 PostgreSQL、Node 24 一次性容器和 `-restore` PostgreSQL |
 | database（数据库） | PostgreSQL 进程中的一个逻辑数据库 | `tongxingzhe_test` |
 
-删除两个临时容器会删除其中的测试数据库。Node 24 容器也会在命令结束后删除。这是预期行为。测试只使用 synthetic 数据，脚本不挂载持久 volume，也不公开 PostgreSQL 端口。
+删除两个临时 PostgreSQL 容器及其匿名 volume 会删除其中的测试数据库。Node 24 容器也会在命令结束后删除。这是预期行为。测试只使用 synthetic 数据；脚本不配置命名持久 volume，也不公开 PostgreSQL 端口。PostgreSQL 镜像会为数据目录自动创建匿名 volume。
 
 ### 2.2 PostgreSQL 容器与 Supabase 本地栈不是同一项
 
@@ -2619,7 +2619,7 @@ ORDER BY version;
 完成检查后，只删除脚本打印的准确容器：
 
 ```bash
-docker rm --force tongxingzhe-postgres-test-12345
+docker rm --force --volumes tongxingzhe-postgres-test-12345
 ```
 
 不要用未核对的通配符或批量命令删除其他 Docker 容器。
@@ -2647,7 +2647,7 @@ BACKEND_POSTGRES_TEST_IMAGE='node:24-bookworm' \
 成功运行后直接再次执行同一个命令即可。每次运行使用新的进程号命名容器；脚本会先检查同名容器，避免覆盖别的测试现场。若上一次运行设置了 `KEEP_POSTGRES_TEST_CONTAINER=1`，先用脚本输出的准确名称查看并删除旧容器，再重跑：
 
 ```bash
-docker rm --force tongxingzhe-postgres-test-12345
+docker rm --force --volumes tongxingzhe-postgres-test-12345
 ./tool/run_postgres_tests_in_docker.sh
 ```
 
