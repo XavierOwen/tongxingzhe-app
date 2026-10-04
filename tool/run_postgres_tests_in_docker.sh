@@ -10735,6 +10735,7 @@ docker run \
   --env ORGANIZATION_SHAREABLE_JOIN_APPLICATION_APPROVAL_FIXTURE=/source/backend/database/fixtures/0094_organization_shareable_join_application_approval.sql \
   --env ORGANIZATION_SHAREABLE_JOIN_APPLICATION_DIRECTORY_FIXTURE=/source/backend/database/fixtures/0099_organization_shareable_join_application_directory.sql \
   --env ORGANIZATION_PROJECT_MEMBERSHIP_ASSIGNMENT_FIXTURE=/source/backend/database/fixtures/0096_organization_project_membership_assignment.sql \
+  --env ORGANIZATION_DELETION_IDENTITY_BRIDGES_FIXTURE=/source/backend/database/fixtures/0104_organization_deletion_identity_bridges.sql \
   "${backend_image}" \
   bash -lc \
     'mkdir -p backend/server backend/database/fixtures &&
@@ -10762,6 +10763,7 @@ docker run \
        dist/test/organization-owner-transfer.integration.js \
        dist/test/organization-project-membership-assignment.integration.js \
        dist/test/organization-project-membership-assignment-http.integration.js \
+       dist/test/organization-deletion-lifecycle.integration.js \
        dist/test/organization-join-project-assignment-http.integration.js \
        dist/test/personal-current-relationship-stage.integration.js \
        dist/test/personal-relationship-stage-change-summary.integration.js \
