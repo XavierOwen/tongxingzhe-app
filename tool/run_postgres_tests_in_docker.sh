@@ -10361,6 +10361,99 @@ docker exec "${container_name}" psql \
   >/dev/null
 echo '0100 来源不明 deleted_at 预检失败且未留下对象：通过。'
 
+echo '验证 0100→0101 组织删除恢复目录升级、无数据写入及 checksum 重放。'
+docker exec "${container_name}" bash -lc \
+  "mkdir -p /tmp/organization-deletion-directory-upgrade-only && \
+   cp /workspace/backend/database/migrations/0101_organization_deletion_recovery_directory.sql \
+     /tmp/organization-deletion-directory-upgrade-only/"
+organization_directory_upgrade_before="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_deletion_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --exclude-table='app_private.organization_deletion_*' \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+organization_directory_upgrade_lifecycle_before="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_deletion_upgrade_url}" \
+    --data-only \
+    --table='app_private.organization_deletion_*' \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+docker exec \
+  --env DATABASE_URL="${organization_deletion_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/organization-deletion-directory-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${organization_deletion_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$directory_upgrade\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations
+          WHERE version='0101_organization_deletion_recovery_directory') <> 1
+        OR to_regprocedure(
+          'app_data.list_organization_deletion_recovery_for_identity_v1(text,text)'
+        ) IS NULL
+        OR (SELECT count(*) FROM app_private.organization_deletion_current) <> 1
+      THEN RAISE EXCEPTION '0100→0101 upgrade lost lifecycle state or omitted directory'; END IF;
+    END
+    \$directory_upgrade\$;
+  " \
+  >/dev/null
+organization_directory_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${organization_deletion_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/organization-deletion-directory-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${organization_directory_upgrade_replay}" != \
+    *'已验证 0101_organization_deletion_recovery_directory（无需重复执行）'* ]] \
+  || [[ "${organization_directory_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0101 migration did not skip its checksum-verified replay.' >&2
+  printf '%s\n' "${organization_directory_upgrade_replay}" >&2
+  exit 1
+fi
+organization_directory_upgrade_after="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_deletion_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --exclude-table='app_private.organization_deletion_*' \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+organization_directory_upgrade_lifecycle_after="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_deletion_upgrade_url}" \
+    --data-only \
+    --table='app_private.organization_deletion_*' \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+if [[ "${organization_directory_upgrade_before}" != \
+    "${organization_directory_upgrade_after}" \
+  || "${organization_directory_upgrade_lifecycle_before}" != \
+    "${organization_directory_upgrade_lifecycle_after}" ]]; then
+  echo '0101 migration or checksum replay changed existing business or lifecycle rows.' >&2
+  exit 1
+fi
+printf '%s\n' "${organization_directory_upgrade_replay}"
+echo '0100→0101 live lifecycle rows, no-op checksum replay：通过。'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 
