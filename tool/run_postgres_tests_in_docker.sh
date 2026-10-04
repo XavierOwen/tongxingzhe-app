@@ -7306,15 +7306,6 @@ organization_directory_upgrade_before="$(
     --no-privileges \
     --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
 )"
-organization_directory_upgrade_lifecycle_before="$(
-  docker exec "${container_name}" pg_dump \
-    "${organization_deletion_upgrade_url}" \
-    --data-only \
-    --table='app_private.organization_deletion_*' \
-    --no-owner \
-    --no-privileges \
-    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
-)"
 docker exec \
   --env DATABASE_URL="${organization_directory_upgrade_url}" \
   --env MIGRATION_DIR=/tmp/organization-directory-upgrade-only \
@@ -10385,6 +10376,15 @@ organization_directory_upgrade_before="$(
     --no-owner \
     --no-privileges \
     --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+organization_directory_upgrade_lifecycle_before="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_deletion_upgrade_url}" \
+    --data-only \
+    --table='app_private.organization_deletion_*' \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
 )"
 docker exec \
   --env DATABASE_URL="${organization_deletion_upgrade_url}" \
