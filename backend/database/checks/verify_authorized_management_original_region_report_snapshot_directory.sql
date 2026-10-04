@@ -313,7 +313,7 @@ BEGIN
     OR bridge_source NOT ILIKE '%ERRCODE = ''22023''%'
     OR bridge_source NOT ILIKE '%ERRCODE = ''42501''%'
     OR private_source ~* 'list_authorized_management_report_snapshots_v1|read_authorized_management_report_snapshot_v1|read_authorized_management_current_city_report_snapshot_v1|read_authorized_management_interest_report_snapshot_v1'
-    OR private_source !~* 'resolve_management_report_authorization_v1'
+    OR private_source !~* 'resolve_management_report_recovery_read_authorization_v1'
   THEN
     RAISE EXCEPTION
       'original-region snapshot directory does not use its narrow bridge';

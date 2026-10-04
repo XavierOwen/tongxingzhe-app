@@ -306,7 +306,7 @@ BEGIN
           'search_path=pg_catalog, app_private'
         ]::text[]
         OR function_definition NOT ILIKE
-          '%resolve_management_report_authorization_v1%'
+          '%resolve_management_report_recovery_read_authorization_v1%'
         OR function_definition NOT ILIKE '%view_anonymous_analytics%'
         OR function_definition NOT ILIKE
           '%management_original_region_report_release_attempts%'

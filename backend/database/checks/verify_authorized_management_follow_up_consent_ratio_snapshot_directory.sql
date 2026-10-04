@@ -240,7 +240,7 @@ BEGIN
   FROM pg_catalog.pg_proc AS function_row
   WHERE function_row.oid = private_directory;
 
-  IF private_source !~* 'resolve_management_report_authorization_v1'
+  IF private_source !~* 'resolve_management_report_recovery_read_authorization_v1'
     OR private_source !~* 'view_anonymous_analytics'
     OR private_source !~* 'management_follow_up_consent_report_release_attempts'
     OR private_source !~* 'management_report_release_request_claims'
