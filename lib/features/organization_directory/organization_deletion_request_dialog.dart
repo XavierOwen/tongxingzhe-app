@@ -225,7 +225,7 @@ final class _OrganizationDeletionRequestDialogState
   );
 
   Widget _liveStatus(String key) => Semantics(
-    key: const ValueKey('organization-deletion-request-status'),
+    key: ValueKey('organization-deletion-request-status-$key'),
     liveRegion: true,
     child: Text(widget.text.t(key)),
   );
