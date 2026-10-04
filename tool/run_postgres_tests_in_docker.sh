@@ -10655,6 +10655,7 @@ docker run \
   --env OWNER_TRANSFER_FIXTURE=/source/backend/database/fixtures/0086_organization_owner_transfer.sql \
   --env ORGANIZATION_DIRECTED_ACCOUNT_INVITATION_FIXTURE=/source/backend/database/fixtures/0087_organization_directed_account_invitation.sql \
   --env ORGANIZATION_DIRECTORY_FIXTURE=/source/backend/database/fixtures/0089_organization_directory.sql \
+  --env ORGANIZATION_DELETION_RECOVERY_DIRECTORY_FIXTURE=/source/backend/database/fixtures/0101_organization_deletion_recovery_directory.sql \
   --env ORGANIZATION_MEMBERSHIP_SELF_LEAVE_FIXTURE=/source/backend/database/fixtures/0090_organization_membership_self_leave.sql \
   --env ORGANIZATION_SHAREABLE_JOIN_LINK_FIXTURE=/source/backend/database/fixtures/0092_organization_shareable_join_link.sql \
   --env ORGANIZATION_SHAREABLE_JOIN_APPLICATION_SUBMIT_FIXTURE=/source/backend/database/fixtures/0093_organization_shareable_join_application_submit.sql \
@@ -10679,6 +10680,7 @@ docker run \
        dist/test/contact-location-evidence.integration.js \
        dist/test/organization-creation.integration.js \
        dist/test/organization-directory.integration.js \
+       dist/test/organization-deletion-recovery-directory.integration.js \
        dist/test/organization-directed-account-invitations.integration.js \
        dist/test/organization-membership-self-leave.integration.js \
        dist/test/organization-shareable-join-links.integration.js \

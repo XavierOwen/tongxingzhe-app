@@ -19,17 +19,8 @@ const fixturePath = process.env.ORGANIZATION_DELETION_RECOVERY_DIRECTORY_FIXTURE
     "../../../database/fixtures/0101_organization_deletion_recovery_directory.sql");
 const fixture = readFileSync(fixturePath, "utf8")
   .replace(/^\\set ON_ERROR_STOP on\s*/mu, "")
-  .replace(/^BEGIN;\s*$/gmu, "")
-  .replace(/^COMMIT;\s*$/gmu, "")
-  .replace(/^ROLLBACK;\s*$/gmu, "")
-  .replace(
-    "UPDATE app_data.organization_owner_assignments AS assignment",
-    "INSERT INTO app_data.organization_memberships(organization_membership_id, organization_workspace_id, app_user_id, active_from_utc) " +
-      "SELECT gen_random_uuid(), org.workspace_id, user_row.user_id, clock.now_utc - interval '1 hour' " +
-      "FROM fixture_0101_orgs AS org CROSS JOIN fixture_0101_users AS user_row CROSS JOIN fixture_0101_clock AS clock " +
-      "WHERE org.n = 1 AND user_row.n = 3;\n" +
-      "UPDATE app_data.organization_owner_assignments AS assignment",
-  );
+  .split("\nCOMMIT;\n", 1)[0]!
+  .replace(/^BEGIN;\s*/u, "");
 
 test("0101 runtime bridge returns only recoverable current-owner directory rows without lifecycle writes",
   async () => {
@@ -38,6 +29,19 @@ test("0101 runtime bridge returns only recoverable current-owner directory rows 
     try {
       await client.query("BEGIN");
       await client.query(fixture);
+      await client.query(
+        "UPDATE app_data.workspaces AS workspace " +
+          "SET deleted_at=clock.now_utc - interval '1 hour' " +
+          "FROM fixture_0101_orgs AS org CROSS JOIN fixture_0101_clock AS clock " +
+          "WHERE workspace.workspace_id=org.workspace_id AND org.n IN (1,2); " +
+          "INSERT INTO app_private.organization_deletion_current(" +
+          "organization_workspace_id,deletion_request_id,effective_at_utc,purge_after_utc,status) " +
+          "SELECT org.workspace_id,attempt.deletion_request_id, " +
+          "clock.now_utc - interval '1 hour',clock.now_utc + interval '719 hours','deletion_pending' " +
+          "FROM fixture_0101_orgs AS org " +
+          "JOIN fixture_0101_attempts AS attempt ON attempt.n=org.n " +
+          "CROSS JOIN fixture_0101_clock AS clock WHERE org.n IN (1,2)",
+      );
       const issuerResult = await client.query(
         "SELECT issuer FROM fixture_0101_clock",
       );

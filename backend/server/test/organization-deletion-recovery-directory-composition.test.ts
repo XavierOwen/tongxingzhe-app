@@ -17,6 +17,10 @@ const directoryModule = readFileSync(
   ),
   "utf8",
 );
+const dockerRunner = readFileSync(
+  fileURLToPath(new URL("../../../../tool/run_postgres_tests_in_docker.sh", import.meta.url)),
+  "utf8",
+);
 
 test("production composition wires the recovery reader to verified identity and pool query", () => {
   assert.match(
@@ -67,4 +71,15 @@ test("recovery store calls only the approved SQL reader and keeps complete SQL o
   );
   assert.doesNotMatch(directoryModule, /\.sort\(|localeCompare|\bLIMIT\b|\bOFFSET\b/i);
   assert.doesNotMatch(directoryModule, /INSERT|UPDATE|DELETE|app_private|console\.|process\./);
+});
+
+test("Docker PostgreSQL runner supplies the 0101 fixture and executes the Backend integration", () => {
+  assert.match(
+    dockerRunner,
+    /ORGANIZATION_DELETION_RECOVERY_DIRECTORY_FIXTURE=\/source\/backend\/database\/fixtures\/0101_organization_deletion_recovery_directory\.sql/,
+  );
+  assert.match(
+    dockerRunner,
+    /dist\/test\/organization-deletion-recovery-directory\.integration\.js/,
+  );
 });

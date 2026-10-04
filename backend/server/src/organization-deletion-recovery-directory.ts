@@ -140,12 +140,15 @@ export class PostgresOrganizationDeletionRecoveryDirectoryStore
       const result = await this.query(
         `SELECT
            organization_deletion_recovery_directory_contract_id,
-           observed_at_utc,
+           to_char(observed_at_utc AT TIME ZONE 'UTC',
+             'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS observed_at_utc,
            organization_workspace_id,
            deletion_request_id,
            display_name,
-           effective_at_utc,
-           purge_after_utc,
+           to_char(effective_at_utc AT TIME ZONE 'UTC',
+             'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS effective_at_utc,
+           to_char(purge_after_utc AT TIME ZONE 'UTC',
+             'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS purge_after_utc,
            status
          FROM app_data.list_organization_deletion_recovery_for_identity_v1($1::text, $2::text)`,
         [identity.issuer, identity.subject],

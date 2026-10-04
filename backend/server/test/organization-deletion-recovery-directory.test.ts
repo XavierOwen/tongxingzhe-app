@@ -141,11 +141,28 @@ test("PostgreSQL store uses the trusted external identity and preserves SQL orde
     /FROM app_data\.list_organization_deletion_recovery_for_identity_v1\(\$1::text, \$2::text\)/,
   );
   assert.deepEqual(calls[0]!.values, [identity.issuer, identity.subject]);
+  assert.match(calls[0]!.text, /to_char\(observed_at_utc AT TIME ZONE 'UTC'/);
+  assert.match(calls[0]!.text, /SS\.US"Z"/);
 
   const emptyStore = new PostgresOrganizationDeletionRecoveryDirectoryStore(
     async () => ({ rows: [] }),
   );
   assert.deepEqual(await emptyStore.list(identity), []);
+});
+
+test("PostgreSQL store preserves microseconds when timestamps share a millisecond", async () => {
+  const exactWindow = {
+    ...wireRow,
+    observed_at_utc: "2030-01-31T03:04:05.123000Z",
+    effective_at_utc: "2030-01-01T03:04:05.123000Z",
+    purge_after_utc: "2030-01-31T03:04:05.123456Z",
+  };
+  const store = new PostgresOrganizationDeletionRecoveryDirectoryStore(
+    async () => ({ rows: [exactWindow] }),
+  );
+
+  assert.equal((await store.list(identity))[0]?.purgeAfterUtc,
+    "2030-01-31T03:04:05.123456Z");
 });
 
 test("PostgreSQL store rejects malformed, inconsistent, or partial rows", async () => {
