@@ -14,6 +14,9 @@ import {
   PostgresOrganizationOwnerTransferStore,
 } from "./organization-owner-transfer.js";
 import {
+  PostgresOrganizationDeletionLifecycleStore,
+} from "./organization-deletion-lifecycle.js";
+import {
   PostgresOrganizationProjectMembershipAssignmentStore,
 } from "./organization-project-membership-assignment.js";
 import {
@@ -171,6 +174,10 @@ const organizationDeletionRecoveryDirectoryStore =
   new PostgresOrganizationDeletionRecoveryDirectoryStore(query);
 const organizationOwnerTransferStore =
   new PostgresOrganizationOwnerTransferStore(query);
+// Request and restore each execute one identity bridge statement. The pool
+// promise resolves only after PostgreSQL commits and authorizes the receipt.
+const organizationDeletionLifecycleStore =
+  new PostgresOrganizationDeletionLifecycleStore(query);
 const organizationProjectMembershipAssignmentStore =
   new PostgresOrganizationProjectMembershipAssignmentStore(query);
 const organizationMembershipSelfLeaveStore =
@@ -192,6 +199,7 @@ const server = createBackendServer({
   organizationDirectoryStore,
   organizationDeletionRecoveryDirectoryStore,
   organizationOwnerTransferStore,
+  organizationDeletionLifecycleStore,
   organizationProjectMembershipAssignmentStore,
   organizationMembershipSelfLeaveStore,
   organizationDirectedAccountInvitationStore,

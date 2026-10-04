@@ -148,6 +148,11 @@ import {
   type OrganizationOwnerTransferStore,
 } from "./organization-owner-transfer.js";
 import {
+  handleOrganizationDeletionLifecycle,
+  matchOrganizationDeletionLifecycleRequestTarget,
+  type OrganizationDeletionLifecycleStore,
+} from "./organization-deletion-lifecycle.js";
+import {
   handleOrganizationProjectMembershipAssignment,
   matchOrganizationProjectMembershipAssignmentRequestTarget,
   type OrganizationProjectMembershipAssignmentStore,
@@ -228,6 +233,7 @@ export interface BackendServerDependencies
   readonly organizationDeletionRecoveryDirectoryStore?:
     OrganizationDeletionRecoveryDirectoryStore;
   readonly organizationOwnerTransferStore?: OrganizationOwnerTransferStore;
+  readonly organizationDeletionLifecycleStore?: OrganizationDeletionLifecycleStore;
   readonly organizationProjectMembershipAssignmentStore?:
     OrganizationProjectMembershipAssignmentStore;
   readonly organizationMembershipSelfLeaveStore?:
@@ -370,6 +376,32 @@ export function createBackendServer(
           {
             identityVerifier: dependencies.identityVerifier,
             transferStore: dependencies.organizationOwnerTransferStore,
+          },
+        );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
+      }
+      return;
+    }
+
+    const organizationDeletionLifecycleMatch =
+      matchOrganizationDeletionLifecycleRequestTarget(request.url);
+    if (
+      request.method === "POST" &&
+      organizationDeletionLifecycleMatch !== null
+    ) {
+      try {
+        const result = await handleOrganizationDeletionLifecycle(
+          {
+            ...organizationDeletionLifecycleMatch,
+            authorization: request.headers.authorization,
+            readBody: async () => readJsonBody(request),
+          },
+          {
+            identityVerifier: dependencies.identityVerifier,
+            store: dependencies.organizationDeletionLifecycleStore,
           },
         );
         response.statusCode = result.status;

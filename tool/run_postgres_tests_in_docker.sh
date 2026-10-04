@@ -10612,6 +10612,79 @@ fi
 printf '%s\n' "${organization_report_read_upgrade_replay}"
 echo '0102→0103 live lifecycle rows, no-op checksum replay：通过。'
 
+echo '验证 0103→0104 组织删除 identity bridge 升级、无数据写入及 checksum 重放。'
+docker exec "${container_name}" bash -lc \
+  "mkdir -p /tmp/organization-deletion-identity-bridges-upgrade-only && \
+   cp /workspace/backend/database/migrations/0104_organization_deletion_identity_bridges.sql \
+     /tmp/organization-deletion-identity-bridges-upgrade-only/"
+organization_identity_bridges_upgrade_before="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_deletion_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+docker exec \
+  --env DATABASE_URL="${organization_deletion_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/organization-deletion-identity-bridges-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${organization_deletion_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$identity_bridges_upgrade\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 103
+        OR to_regprocedure(
+          'app_data.request_organization_deletion_for_identity_v1(text,text,uuid,uuid)'
+        ) IS NULL
+        OR to_regprocedure(
+          'app_data.restore_organization_for_identity_v1(text,text,uuid,uuid,uuid)'
+        ) IS NULL
+        OR (SELECT count(*) FROM app_private.organization_deletion_current) <> 1
+      THEN RAISE EXCEPTION '0103→0104 migration metadata or lifecycle drift'; END IF;
+    END
+    \$identity_bridges_upgrade\$;
+  " \
+  >/dev/null
+organization_identity_bridges_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${organization_deletion_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/organization-deletion-identity-bridges-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${organization_identity_bridges_upgrade_replay}" != \
+    *'已验证 0104_organization_deletion_identity_bridges（无需重复执行）'* ]] \
+  || [[ "${organization_identity_bridges_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0104 migration did not skip its checksum-verified replay.' >&2
+  printf '%s\n' "${organization_identity_bridges_upgrade_replay}" >&2
+  exit 1
+fi
+organization_identity_bridges_upgrade_after="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_deletion_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+if [[ "${organization_identity_bridges_upgrade_before}" != \
+    "${organization_identity_bridges_upgrade_after}" ]]; then
+  echo '0104 migration or checksum replay changed existing business or lifecycle rows.' >&2
+  exit 1
+fi
+printf '%s\n' "${organization_identity_bridges_upgrade_replay}"
+echo '0103→0104 live lifecycle rows, no-op checksum replay：通过。'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 
@@ -10662,6 +10735,7 @@ docker run \
   --env ORGANIZATION_SHAREABLE_JOIN_APPLICATION_APPROVAL_FIXTURE=/source/backend/database/fixtures/0094_organization_shareable_join_application_approval.sql \
   --env ORGANIZATION_SHAREABLE_JOIN_APPLICATION_DIRECTORY_FIXTURE=/source/backend/database/fixtures/0099_organization_shareable_join_application_directory.sql \
   --env ORGANIZATION_PROJECT_MEMBERSHIP_ASSIGNMENT_FIXTURE=/source/backend/database/fixtures/0096_organization_project_membership_assignment.sql \
+  --env ORGANIZATION_DELETION_IDENTITY_BRIDGES_FIXTURE=/source/backend/database/fixtures/0104_organization_deletion_identity_bridges.sql \
   "${backend_image}" \
   bash -lc \
     'mkdir -p backend/server backend/database/fixtures &&
@@ -10689,6 +10763,7 @@ docker run \
        dist/test/organization-owner-transfer.integration.js \
        dist/test/organization-project-membership-assignment.integration.js \
        dist/test/organization-project-membership-assignment-http.integration.js \
+       dist/test/organization-deletion-lifecycle.integration.js \
        dist/test/organization-join-project-assignment-http.integration.js \
        dist/test/personal-current-relationship-stage.integration.js \
        dist/test/personal-relationship-stage-change-summary.integration.js \
