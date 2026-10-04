@@ -1,8 +1,14 @@
 # 组织删除与恢复接入准备度
 
-> 状态：Issue #350 的代码证据与实施地图；不是实现证据。查验范围截至 migration 0091。文中“待决定”记录的是 7AD 当时状态；申请／恢复授权、连续 720 小时窗口和恢复期操作边界现由 [ADR-0188](../adr/0188-organization-deletion-and-recovery-execution-contract.md) 固定。
+> 历史快照：本文是 Issue #350 在 migration 0091 时的代码证据与实施地图，不是当前实现清单。下文的“目前”“当前”“待决定”均指该快照；申请／恢复授权、连续 720 小时窗口和恢复期操作边界后来由 [ADR-0188](../adr/0188-organization-deletion-and-recovery-execution-contract.md) 固定。
 
-## 结论
+## 2026-10-04 进展
+
+Migration 0100–0105 已实现删除／恢复数据库核心、恢复目录、报告与配置写入冻结、恢复期既有管理报告读取、identity bridge 和到期 `purge_due` 标记。Backend 已接入删除／恢复请求及恢复目录；Flutter 已接入恢复 gateway 和独立恢复入口。这些合并项及验证记录见 [Issue #9](https://github.com/XavierOwen/tongxingzhe-app/issues/9#issuecomment-5976224664) 和其[主分支复验](https://github.com/XavierOwen/tongxingzhe-app/issues/9#issuecomment-5976297022)。
+
+删除申请的 Flutter 确认组件仍在[草稿 PR #506](https://github.com/XavierOwen/tongxingzhe-app/pull/506)，尚未接入入口；入口是否只向 owner 显示记录在 [Issue #505](https://github.com/XavierOwen/tongxingzhe-app/issues/505)。[Issue #509](https://github.com/XavierOwen/tongxingzhe-app/issues/509) 的单事务终结清除尚未实现；`purge_due` 只标记到期，不证明业务数据、已发布副本或备份已清除。下文保留 0091 时的分析与缺口，不能用来判断现行 migration 的权限或行为。
+
+## 0091 快照结论
 
 组织删除与恢复目前**不可执行**。已接受的产品结果是“删除申请生效后进入三十天可撤销只读期，期满完整清除”；但数据库只有 `workspaces.deleted_at`，没有删除申请、截止时间、恢复、终结清除或失败关闭状态，Backend 和 Flutter 也没有对应入口。
 
@@ -18,7 +24,7 @@
 - [ADR-0151](../adr/0151-management-report-retention-follows-organization-lifecycle.md)规定：恢复期内，仍获授权的成员可读取已有报告；不得发布、登记 replacement 或生成导出。恢复保留报告原状；期满清除全部 report family 及含业务内容的依赖，清除不完整时失败关闭。
 - [ADR-0182](../adr/0182-organization-directory-is-membership-scoped.md)明确普通“我的组织”目录不显示恢复期组织。报告可读不等于恢复期组织应重新出现在普通目录。
 
-## 当前可执行边界
+## 0091 快照的可执行边界
 
 [0002](../../backend/database/migrations/0002_identity_context.sql)中的 `app_data.workspaces` 只有可空的 `deleted_at`。它不能区分申请已提交、恢复截止时间、已恢复、等待清除、清除失败或已完成清除。[0085](../../backend/database/migrations/0085_organization_owner_invariant.sql)则已提供 `organization-governance:<workspace>` 锁，并通过 deferred constraint trigger 要求软删除组织仍保有 active owner，只有物理清除的 workspace 才退出该不变量。
 
