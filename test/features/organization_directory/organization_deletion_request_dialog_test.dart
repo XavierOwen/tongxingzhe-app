@@ -119,7 +119,6 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(tester.view.resetPhysicalSize);
       final semantics = tester.ensureSemantics();
-      addTearDown(semantics.dispose);
       final gateway = _RecoveryGateway(store, const [
         OrganizationDeletionRecoverySuccess(
           OrganizationDeletionRequestReceipt(
@@ -148,6 +147,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(gateway.requests, hasLength(1));
       expect(tester.takeException(), isNull);
+      semantics.dispose();
     },
   );
 
