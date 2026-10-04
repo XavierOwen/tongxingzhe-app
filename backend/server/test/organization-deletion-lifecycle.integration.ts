@@ -22,6 +22,9 @@ const fixture = readFileSync(fixturePath, "utf8")
   .replace(/^\\set ON_ERROR_STOP on\s*/mu, "")
   .replace(/^BEGIN;\s*/mu, "")
   .replace(/^ROLLBACK;\s*$/mu, "");
+const firstRuntimeCall = fixture.indexOf("\nSET LOCAL ROLE tongxingzhe_runtime;");
+assert.notEqual(firstRuntimeCall, -1);
+const fixtureSetup = fixture.slice(0, firstRuntimeCall);
 
 const issuer = " https://synthetic-0104.example/issuer ";
 const identity = {issuer, subject: "owner two"};
@@ -35,7 +38,7 @@ test("Backend lifecycle routes preserve 0104 bridge receipts and six timestamp d
   let server: Server | undefined;
   try {
     await client.query("BEGIN");
-    await client.query(fixture);
+    await client.query(fixtureSetup);
     const workspaceId = (await client.query<{organization_workspace_id: string}>(
       "SELECT organization_workspace_id FROM fixture_0104_org",
     )).rows[0]?.organization_workspace_id;
