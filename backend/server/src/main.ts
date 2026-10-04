@@ -8,6 +8,9 @@ import {
 import { PostgresOrganizationCreationStore } from "./organization-creation.js";
 import { PostgresOrganizationDirectoryStore } from "./organization-directory.js";
 import {
+  PostgresOrganizationDeletionRecoveryDirectoryStore,
+} from "./organization-deletion-recovery-directory.js";
+import {
   PostgresOrganizationOwnerTransferStore,
 } from "./organization-owner-transfer.js";
 import {
@@ -164,6 +167,8 @@ const managementAnalysisContextStore =
   new PostgresManagementAnalysisContextStore(query);
 const organizationCreationStore = new PostgresOrganizationCreationStore(query);
 const organizationDirectoryStore = new PostgresOrganizationDirectoryStore(query);
+const organizationDeletionRecoveryDirectoryStore =
+  new PostgresOrganizationDeletionRecoveryDirectoryStore(query);
 const organizationOwnerTransferStore =
   new PostgresOrganizationOwnerTransferStore(query);
 const organizationProjectMembershipAssignmentStore =
@@ -185,6 +190,7 @@ const server = createBackendServer({
   organizationCreationIdentityVerifier,
   organizationCreationStore,
   organizationDirectoryStore,
+  organizationDeletionRecoveryDirectoryStore,
   organizationOwnerTransferStore,
   organizationProjectMembershipAssignmentStore,
   organizationMembershipSelfLeaveStore,

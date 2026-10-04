@@ -139,6 +139,10 @@ import {
   type OrganizationDirectoryStore,
 } from "./organization-directory.js";
 import {
+  listOrganizationDeletionRecoveryDirectory,
+  type OrganizationDeletionRecoveryDirectoryStore,
+} from "./organization-deletion-recovery-directory.js";
+import {
   handleOrganizationOwnerTransfer,
   matchOrganizationOwnerTransferRequestTarget,
   type OrganizationOwnerTransferStore,
@@ -221,6 +225,8 @@ export interface BackendServerDependencies
     OrganizationCreationIdentityVerifier;
   readonly organizationCreationStore?: OrganizationCreationStore;
   readonly organizationDirectoryStore?: OrganizationDirectoryStore;
+  readonly organizationDeletionRecoveryDirectoryStore?:
+    OrganizationDeletionRecoveryDirectoryStore;
   readonly organizationOwnerTransferStore?: OrganizationOwnerTransferStore;
   readonly organizationProjectMembershipAssignmentStore?:
     OrganizationProjectMembershipAssignmentStore;
@@ -430,6 +436,31 @@ export function createBackendServer(
             : {
               organizationDirectoryStore:
                 dependencies.organizationDirectoryStore,
+            }),
+        },
+      );
+      response.statusCode = result.status;
+      response.end(JSON.stringify(result.body));
+      return;
+    }
+
+    if (
+      request.method === "GET" &&
+      requestUrl.pathname === "/v1/organizations/deletion-recovery"
+    ) {
+      const result = await listOrganizationDeletionRecoveryDirectory(
+        {
+          authorization: request.headers.authorization,
+          hasQuery: (request.url ?? "").includes("?"),
+          hasBody: requestDeclaresBody(request.headers),
+        },
+        {
+          identityVerifier: dependencies.identityVerifier,
+          ...(dependencies.organizationDeletionRecoveryDirectoryStore === undefined
+            ? {}
+            : {
+              organizationDeletionRecoveryDirectoryStore:
+                dependencies.organizationDeletionRecoveryDirectoryStore,
             }),
         },
       );
