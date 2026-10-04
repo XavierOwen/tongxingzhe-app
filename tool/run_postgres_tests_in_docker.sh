@@ -10542,6 +10542,76 @@ fi
 printf '%s\n' "${organization_write_fence_upgrade_replay}"
 echo '0101→0102 live lifecycle rows, pending fail-closed write, no-op checksum replay：通过。'
 
+echo '验证 0102→0103 恢复期报告读取升级、无数据写入及 checksum 重放。'
+docker exec "${container_name}" bash -lc \
+  "mkdir -p /tmp/organization-report-recovery-read-upgrade-only && \
+   cp /workspace/backend/database/migrations/0103_organization_report_recovery_read.sql \
+     /tmp/organization-report-recovery-read-upgrade-only/"
+organization_report_read_upgrade_before="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_deletion_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+docker exec \
+  --env DATABASE_URL="${organization_deletion_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/organization-report-recovery-read-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${organization_deletion_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$report_read_upgrade\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 102
+        OR to_regprocedure(
+          'app_private.resolve_management_report_recovery_read_authorization_v1(uuid,uuid,text,timestamptz)'
+        ) IS NULL
+        OR (SELECT count(*) FROM app_private.organization_deletion_current) <> 1
+      THEN RAISE EXCEPTION '0102→0103 migration metadata or lifecycle drift'; END IF;
+    END
+    \$report_read_upgrade\$;
+  " \
+  >/dev/null
+organization_report_read_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${organization_deletion_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/organization-report-recovery-read-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${organization_report_read_upgrade_replay}" != \
+    *'已验证 0103_organization_report_recovery_read（无需重复执行）'* ]] \
+  || [[ "${organization_report_read_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0103 migration did not skip its checksum-verified replay.' >&2
+  printf '%s\n' "${organization_report_read_upgrade_replay}" >&2
+  exit 1
+fi
+organization_report_read_upgrade_after="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_deletion_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+if [[ "${organization_report_read_upgrade_before}" != \
+    "${organization_report_read_upgrade_after}" ]]; then
+  echo '0103 migration or checksum replay changed existing business or lifecycle rows.' >&2
+  exit 1
+fi
+printf '%s\n' "${organization_report_read_upgrade_replay}"
+echo '0102→0103 live lifecycle rows, no-op checksum replay：通过。'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 
