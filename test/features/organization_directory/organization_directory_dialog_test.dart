@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/app_session/app_session.dart';
 import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_directory_dialog.dart';
+import 'package:tongxingzhe_app/organization_deletion_recovery/organization_deletion_recovery.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_invitation_accept_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_invitation_create_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_membership_self_leave_dialog.dart';
@@ -29,6 +30,68 @@ import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
 import '../../support/fake_runtime_values.dart';
 
 void main() {
+  testWidgets(
+    'empty directory keeps recovery entry and requires confirmation',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final recovery = _DeletionRecoveryGateway(
+        const OrganizationDeletionRecoverySuccess(
+          OrganizationDeletionRecoveryDirectory(
+            items: [
+              OrganizationDeletionRecoveryItem(
+                organizationWorkspaceId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+                deletionRequestId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+                displayName: '待恢复组织',
+                observedAtUtc: '2026-10-01T10:00:00.000000Z',
+                effectiveAtUtc: '2026-10-01T10:00:00.000000Z',
+                purgeAfterUtc: '2026-10-31T10:00:00.000000Z',
+              ),
+            ],
+          ),
+        ),
+      );
+      await _open(
+        tester,
+        fixture.session,
+        _Gateway([OrganizationDirectorySuccess([])]),
+        deletionRecoveryGateway: recovery,
+      );
+      expect(
+        find.byKey(const ValueKey('organization-directory-recovery')),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('organization-directory-recovery')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('待恢复组织'), findsOneWidget);
+      expect(find.text('2026-10-31T10:00:00.000000Z'), findsOneWidget);
+      final restore = find.byKey(
+        const ValueKey(
+          'organization-recovery-restore-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        ),
+      );
+      await tester.tap(restore);
+      await tester.pumpAndSettle();
+      expect(recovery.restoreCalls, isEmpty);
+      await tester.tap(
+        find.byKey(const ValueKey('organization-deletion-recovery-confirm')),
+      );
+      await tester.pumpAndSettle();
+      final restoreCall = recovery.restoreCalls.single;
+      expect(restoreCall.requestId, matches(RegExp(r'^[0-9a-f-]{36}$')));
+      expect(
+        restoreCall.organizationWorkspaceId,
+        'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      );
+      expect(
+        restoreCall.deletionRequestId,
+        'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      );
+    },
+  );
+
   testWidgets(
     'borrowed session retirement fences late self-leave success without directory refresh',
     (tester) async {
@@ -1950,6 +2013,8 @@ Future<void> _open(
   OrganizationProjectMembershipAssignmentGateway
       projectMembershipAssignmentGateway =
       const DeferredOrganizationProjectMembershipAssignmentGateway(),
+  OrganizationDeletionRecoveryGateway deletionRecoveryGateway =
+      const DeferredOrganizationDeletionRecoveryGateway(),
 }) async {
   await _pumpLauncher(
     tester,
@@ -1963,6 +2028,7 @@ Future<void> _open(
     shareableJoinGateway: shareableJoinGateway,
     ownerTransferGateway: ownerTransferGateway,
     projectMembershipAssignmentGateway: projectMembershipAssignmentGateway,
+    deletionRecoveryGateway: deletionRecoveryGateway,
   );
   await tester.tap(_launcher);
   if (settle) {
@@ -1990,6 +2056,8 @@ Future<void> _pumpLauncher(
   OrganizationProjectMembershipAssignmentGateway
       projectMembershipAssignmentGateway =
       const DeferredOrganizationProjectMembershipAssignmentGateway(),
+  OrganizationDeletionRecoveryGateway deletionRecoveryGateway =
+      const DeferredOrganizationDeletionRecoveryGateway(),
 }) => tester.pumpWidget(
   MaterialApp(
     theme: ThemeData(useMaterial3: true),
@@ -2016,6 +2084,7 @@ Future<void> _pumpLauncher(
                 ownerTransferGateway: ownerTransferGateway,
                 projectMembershipAssignmentGateway:
                     projectMembershipAssignmentGateway,
+                deletionRecoveryGateway: deletionRecoveryGateway,
               ),
             ),
             child: const Text('Open'),
@@ -2287,6 +2356,63 @@ final class _ContextGateway implements SessionContextGateway {
     String displayName,
   ) async =>
       const SessionContextRejected(SessionContextFailureCode.serverRejected);
+
+  @override
+  Future<void> close() async {}
+}
+
+final class _DeletionRecoveryGateway
+    implements OrganizationDeletionRecoveryGateway {
+  _DeletionRecoveryGateway(this.directory);
+
+  final OrganizationDeletionRecoveryResult<
+    OrganizationDeletionRecoveryDirectory
+  >
+  directory;
+  final restoreCalls =
+      <
+        ({
+          String requestId,
+          String organizationWorkspaceId,
+          String deletionRequestId,
+        })
+      >[];
+
+  @override
+  Future<
+    OrganizationDeletionRecoveryResult<OrganizationDeletionRecoveryDirectory>
+  >
+  listRecoverableOrganizations() async => directory;
+
+  @override
+  Future<OrganizationDeletionRecoveryResult<OrganizationDeletionRequestReceipt>>
+  requestDeletion({
+    required String requestId,
+    required String organizationWorkspaceId,
+  }) async => const OrganizationDeletionRecoveryRejected(
+    OrganizationDeletionRecoveryFailureCode.notConfigured,
+  );
+
+  @override
+  Future<OrganizationDeletionRecoveryResult<OrganizationRestorationReceipt>>
+  restore({
+    required String requestId,
+    required String organizationWorkspaceId,
+    required String deletionRequestId,
+  }) async {
+    restoreCalls.add((
+      requestId: requestId,
+      organizationWorkspaceId: organizationWorkspaceId,
+      deletionRequestId: deletionRequestId,
+    ));
+    return OrganizationDeletionRecoverySuccess(
+      OrganizationRestorationReceipt(
+        organizationWorkspaceId: organizationWorkspaceId,
+        deletionRequestId: deletionRequestId,
+        restoredAtUtc: '2026-10-02T12:00:00.000000Z',
+      ),
+    );
+  }
 
   @override
   Future<void> close() async {}

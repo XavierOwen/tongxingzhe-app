@@ -546,6 +546,8 @@ final class _ReadyAppState extends State<_ReadyApp> {
             widget.organizationShareableJoinGateway,
         organizationOwnerTransferGateway:
             widget.organizationOwnerTransferGateway,
+        organizationDeletionRecoveryGateway:
+            widget.organizationDeletionRecoveryGateway,
         organizationProjectMembershipAssignmentGateway:
             widget.organizationProjectMembershipAssignmentGateway,
         managementReportExportDelivery: widget.managementReportExportDelivery,

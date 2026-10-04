@@ -110,6 +110,51 @@ const Map<String, Map<String, String>> _strings = {
     'projectMenu': '切换推广项目',
     'createProject': '创建推广项目',
     'organizationDirectoryTitle': '我的组织',
+    'organizationDeletionRecoveryAction': '查看可恢复组织',
+    'organizationDeletionRecoveryTitle': '可恢复组织',
+    'organizationDeletionRecoveryConfirmTitle': '确认恢复组织？',
+    'organizationDeletionRecoveryHelp':
+        '这里只列出你此刻仍是有效所有者、且仍在恢复期限内的组织。提交时服务器会重新核对身份、删除周期和截止时间；恢复不会切换当前项目。',
+    'organizationDeletionRecoveryLoading': '正在读取可恢复组织…',
+    'organizationDeletionRecoveryLoaded': '可恢复组织列表已更新。',
+    'organizationDeletionRecoveryEmpty': '目前没有可恢复的组织。',
+    'organizationDeletionRecoveryRefresh': '刷新',
+    'organizationDeletionRecoveryClose': '关闭',
+    'organizationDeletionRecoveryWorkspaceId': '组织标识（UUID）',
+    'organizationDeletionRecoveryDeletionRequestId': '本次删除周期编号',
+    'organizationDeletionRecoveryDeadline': '恢复截止时间（UTC）',
+    'organizationDeletionRecoveryRestoreAction': '恢复组织',
+    'organizationDeletionRecoveryConfirmHelp':
+        '请确认要恢复此组织。服务器会再次检查你当前的所有者身份、删除周期与恢复期限。当前项目不会改变。',
+    'organizationDeletionRecoveryCancel': '返回列表',
+    'organizationDeletionRecoveryConfirm': '确认恢复',
+    'organizationDeletionRecoverySubmitting': '正在提交恢复请求…',
+    'organizationDeletionRecoveryUncertain':
+        '恢复可能已完成，但尚未收到可验证结果。重试会使用相同请求编号、组织标识和删除周期编号。',
+    'organizationDeletionRecoveryRetry': '重试这次恢复',
+    'organizationDeletionRecoverySuccess': '组织恢复已完成。',
+    'organizationDeletionRecoverySuccessNotice':
+        '服务器已确认恢复。当前项目保持不变；组织权限仍以服务器当前状态为准。',
+    'organizationDeletionRecoveryRestoredAt': '恢复时间（UTC）',
+    'organizationDeletionRecoveryUnauthorized': '登录状态已失效。已清除目录与回执；请关闭窗口并重新登录。',
+    'organizationDeletionRecoveryBackToList': '返回列表',
+    'organizationDeletionRecoveryDiscardTitle': '停止重试这次恢复？',
+    'organizationDeletionRecoveryDiscardBody':
+        '恢复可能已完成。关闭只会清除此窗口中的重试信息，不会撤销服务器上可能已完成的恢复。',
+    'organizationDeletionRecoveryKeepRetry': '继续重试',
+    'organizationDeletionRecoveryDiscard': '放弃重试并关闭',
+    'organizationDeletionRecoveryFailure.notConfigured':
+        '恢复服务尚未配置，没有完成恢复。请稍后重试。',
+    'organizationDeletionRecoveryFailure.unauthorized': '登录状态已失效，请重新登录。',
+    'organizationDeletionRecoveryFailure.invalidRequest': '恢复请求无效。',
+    'organizationDeletionRecoveryFailure.forbidden': '当前账号不能恢复此组织，或组织不再符合恢复条件。',
+    'organizationDeletionRecoveryFailure.conflict': '恢复请求与已有记录冲突。',
+    'organizationDeletionRecoveryFailure.serviceUnavailable':
+        '服务暂时不可用，无法确认恢复结果。请在此窗口重试。',
+    'organizationDeletionRecoveryFailure.networkUnavailable':
+        '网络不可用，无法确认恢复结果。请检查连接后在此窗口重试。',
+    'organizationDeletionRecoveryFailure.invalidResponse':
+        '未收到可验证的恢复结果，请在此窗口重试。',
     'organizationDirectoryHelp': '仅显示你目前加入的组织。查看列表不会切换当前项目。',
     'organizationDirectoryLoading': '正在读取组织列表…',
     'organizationDirectoryLoaded': '组织列表已更新。',
@@ -1638,6 +1683,59 @@ const Map<String, Map<String, String>> _strings = {
     'projectMenu': 'Switch promotion project',
     'createProject': 'Create promotion project',
     'organizationDirectoryTitle': 'My organizations',
+    'organizationDeletionRecoveryAction': 'View recoverable organizations',
+    'organizationDeletionRecoveryTitle': 'Recoverable organizations',
+    'organizationDeletionRecoveryConfirmTitle':
+        'Confirm organization recovery?',
+    'organizationDeletionRecoveryHelp':
+        'This list only shows organizations where you are a current owner and the recovery window is open. The server rechecks your identity, deletion cycle, and deadline when you submit. Recovery does not switch your current project.',
+    'organizationDeletionRecoveryLoading': 'Loading recoverable organizations…',
+    'organizationDeletionRecoveryLoaded':
+        'Recoverable organization list updated.',
+    'organizationDeletionRecoveryEmpty':
+        'There are no organizations to recover right now.',
+    'organizationDeletionRecoveryRefresh': 'Refresh',
+    'organizationDeletionRecoveryClose': 'Close',
+    'organizationDeletionRecoveryWorkspaceId': 'Organization ID (UUID)',
+    'organizationDeletionRecoveryDeletionRequestId': 'Deletion cycle ID',
+    'organizationDeletionRecoveryDeadline': 'Recovery deadline (UTC)',
+    'organizationDeletionRecoveryRestoreAction': 'Restore organization',
+    'organizationDeletionRecoveryConfirmHelp':
+        'Confirm that you want to restore this organization. The server will check your current owner status, deletion cycle, and recovery deadline again. Your current project will not change.',
+    'organizationDeletionRecoveryCancel': 'Back to list',
+    'organizationDeletionRecoveryConfirm': 'Confirm recovery',
+    'organizationDeletionRecoverySubmitting': 'Submitting recovery request…',
+    'organizationDeletionRecoveryUncertain':
+        'Recovery may have completed, but no verifiable result arrived. Retry uses the same request ID, organization ID, and deletion cycle ID.',
+    'organizationDeletionRecoveryRetry': 'Retry this recovery',
+    'organizationDeletionRecoverySuccess': 'The organization was restored.',
+    'organizationDeletionRecoverySuccessNotice':
+        'The server confirmed recovery. Your current project is unchanged; current organization access remains governed by the server.',
+    'organizationDeletionRecoveryRestoredAt': 'Restored at (UTC)',
+    'organizationDeletionRecoveryUnauthorized':
+        'Your session expired. The directory and receipt were cleared. Close this window and sign in again.',
+    'organizationDeletionRecoveryBackToList': 'Back to list',
+    'organizationDeletionRecoveryDiscardTitle': 'Stop retrying this recovery?',
+    'organizationDeletionRecoveryDiscardBody':
+        'Recovery may have completed. Closing only clears retry details in this window; it does not reverse a recovery that may have completed on the server.',
+    'organizationDeletionRecoveryKeepRetry': 'Keep retrying',
+    'organizationDeletionRecoveryDiscard': 'Discard retry and close',
+    'organizationDeletionRecoveryFailure.notConfigured':
+        'The recovery service is not configured. Try again later.',
+    'organizationDeletionRecoveryFailure.unauthorized':
+        'Your session expired. Sign in again.',
+    'organizationDeletionRecoveryFailure.invalidRequest':
+        'The recovery request is invalid.',
+    'organizationDeletionRecoveryFailure.forbidden':
+        'This account cannot restore this organization, or the organization is no longer eligible.',
+    'organizationDeletionRecoveryFailure.conflict':
+        'This recovery request conflicts with an existing record.',
+    'organizationDeletionRecoveryFailure.serviceUnavailable':
+        'The service is unavailable, so the recovery result is uncertain. Retry in this window.',
+    'organizationDeletionRecoveryFailure.networkUnavailable':
+        'The network is unavailable, so the recovery result is uncertain. Check your connection and retry in this window.',
+    'organizationDeletionRecoveryFailure.invalidResponse':
+        'The recovery result could not be verified. Retry in this window.',
     'organizationDirectoryHelp':
         'Only organizations you currently belong to appear here. '
         'Viewing this list does not switch your current project.',

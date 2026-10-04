@@ -39,6 +39,7 @@ import '../management_reports/original_region_report_gateway.dart';
 import '../organization_creation/organization_creation.dart';
 import '../organization_directed_account_invitation/organization_directed_account_invitation.dart';
 import '../organization_directory/organization_directory.dart';
+import '../organization_deletion_recovery/organization_deletion_recovery.dart';
 import '../organization_membership_self_leave/organization_membership_self_leave.dart';
 import '../organization_owner_transfer/organization_owner_transfer.dart';
 import '../organization_project_membership_assignment/organization_project_membership_assignment.dart';
@@ -89,6 +90,8 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.organizationShareableJoinGateway,
     this.organizationOwnerTransferGateway =
         const DeferredOrganizationOwnerTransferGateway(),
+    this.organizationDeletionRecoveryGateway =
+        const DeferredOrganizationDeletionRecoveryGateway(),
     this.organizationProjectMembershipAssignmentGateway =
         const DeferredOrganizationProjectMembershipAssignmentGateway(),
     required this.managementReportExportDelivery,
@@ -134,6 +137,7 @@ final class ProductionHomeShell extends StatefulWidget {
   organizationDirectedAccountInvitationGateway;
   final OrganizationShareableJoinGateway organizationShareableJoinGateway;
   final OrganizationOwnerTransferGateway organizationOwnerTransferGateway;
+  final OrganizationDeletionRecoveryGateway organizationDeletionRecoveryGateway;
   final OrganizationProjectMembershipAssignmentGateway
   organizationProjectMembershipAssignmentGateway;
   final ManagementReportExportDelivery managementReportExportDelivery;
@@ -681,6 +685,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
         invitationGateway: widget.organizationDirectedAccountInvitationGateway,
         shareableJoinGateway: widget.organizationShareableJoinGateway,
         ownerTransferGateway: widget.organizationOwnerTransferGateway,
+        deletionRecoveryGateway: widget.organizationDeletionRecoveryGateway,
         projectMembershipAssignmentGateway:
             widget.organizationProjectMembershipAssignmentGateway,
         appSession: widget.appSession,
