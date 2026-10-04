@@ -31,7 +31,7 @@ void main() {
       });
       addTearDown(gateway.close);
 
-      final directory = await gateway.listRecovery();
+      final directory = await gateway.listRecoverableOrganizations();
       final deletion = await gateway.requestDeletion(
         requestId: _requestId.toUpperCase(),
         organizationWorkspaceId: _workspace.toUpperCase(),
@@ -132,7 +132,7 @@ void main() {
         (_) async =>
             _error('organization_deletion_recovery_directory_forbidden', 403),
       );
-      final forbidden = await forbiddenGateway.listRecovery();
+      final forbidden = await forbiddenGateway.listRecoverableOrganizations();
       await forbiddenGateway.close();
       expect(
         (forbidden as OrganizationDeletionRecoveryRejected).code,
@@ -174,7 +174,7 @@ void main() {
           ],
         }),
       );
-      final result = await gateway.listRecovery();
+      final result = await gateway.listRecoverableOrganizations();
       await gateway.close();
       expect(
         (result as OrganizationDeletionRecoveryRejected).code,
@@ -208,6 +208,69 @@ void main() {
     expect(requests[0].body, requests[1].body);
   });
 
+  test('preserves directory order and accepts an empty result', () async {
+    final second = {
+      ..._directoryItem,
+      'organization_workspace_id': _otherWorkspace,
+      'deletion_request_id': _otherDeletionId,
+      'display_name': 'South team',
+    };
+    final gateway = _gateway(
+      (_) async => _json({
+        'organization_deletion_recovery_directory_contract_id':
+            _directoryContract,
+        'items': [second, _directoryItem],
+      }),
+    );
+    final result = await gateway.listRecoverableOrganizations();
+    await gateway.close();
+    expect(
+      (result
+              as OrganizationDeletionRecoverySuccess<
+                OrganizationDeletionRecoveryDirectory
+              >)
+          .value
+          .items
+          .map((item) => item.organizationWorkspaceId),
+      [_otherWorkspace, _workspace],
+    );
+
+    final emptyGateway = _gateway(
+      (_) async => _json({
+        'organization_deletion_recovery_directory_contract_id':
+            _directoryContract,
+        'items': <Object>[],
+      }),
+    );
+    final empty = await emptyGateway.listRecoverableOrganizations();
+    await emptyGateway.close();
+    expect(
+      (empty
+              as OrganizationDeletionRecoverySuccess<
+                OrganizationDeletionRecoveryDirectory
+              >)
+          .value
+          .items,
+      isEmpty,
+    );
+  });
+
+  test('rejects a deletion receipt for a different request selector', () async {
+    final gateway = _gateway(
+      (_) async =>
+          _json({..._deletionReceipt, 'deletion_request_id': _deletionId}),
+    );
+    final result = await gateway.requestDeletion(
+      requestId: _requestId,
+      organizationWorkspaceId: _workspace,
+    );
+    await gateway.close();
+    expect(
+      (result as OrganizationDeletionRecoveryRejected).code,
+      OrganizationDeletionRecoveryFailureCode.invalidResponse,
+    );
+  });
+
   test(
     'identity change while the request is in flight discards its result',
     () async {
@@ -235,11 +298,65 @@ void main() {
       );
     },
   );
+
+  test(
+    'sign-out and same-account sign-in ABA invalidates an in-flight request',
+    () async {
+      final identity = _ChangingIdentitySession();
+      final sent = Completer<void>();
+      final response = Completer<http.Response>();
+      final gateway = _gateway((_) {
+        sent.complete();
+        return response.future;
+      }, identity: identity);
+      addTearDown(gateway.close);
+      addTearDown(identity.close);
+
+      final pending = gateway.requestDeletion(
+        requestId: _requestId,
+        organizationWorkspaceId: _workspace,
+      );
+      await sent.future;
+      identity.signOutAndSignBackIntoSameAccount();
+      response.complete(_json(_deletionReceipt));
+
+      expect(
+        (await pending as OrganizationDeletionRecoveryRejected).code,
+        OrganizationDeletionRecoveryFailureCode.unauthorized,
+      );
+    },
+  );
+
+  test('late response after close is discarded', () async {
+    final identity = _ChangingIdentitySession();
+    final sent = Completer<void>();
+    final response = Completer<http.Response>();
+    final gateway = _gateway((_) {
+      sent.complete();
+      return response.future;
+    }, identity: identity);
+    addTearDown(identity.close);
+
+    final pending = gateway.requestDeletion(
+      requestId: _requestId,
+      organizationWorkspaceId: _workspace,
+    );
+    await sent.future;
+    await gateway.close();
+    response.complete(_json(_deletionReceipt));
+
+    expect(
+      (await pending as OrganizationDeletionRecoveryRejected).code,
+      OrganizationDeletionRecoveryFailureCode.unauthorized,
+    );
+  });
 }
 
 const _directoryContract = 'organization-deletion-recovery-directory:v1';
 const _workspace = 'abcdefab-cdef-0abc-0def-abcdefabcdef';
+const _otherWorkspace = 'abcdefab-cdef-0abc-0def-abcdefabcdea';
 const _deletionId = 'abcdefab-cdef-0abc-0def-abcdefabcdee';
+const _otherDeletionId = 'abcdefab-cdef-0abc-0def-abcdefabcdcc';
 const _requestId = 'abcdefab-cdef-0abc-0def-abcdefabcded';
 const _directoryItem = {
   'organization_workspace_id': _workspace,
@@ -301,11 +418,27 @@ final class _ChangingIdentitySession implements IdentitySession {
   Stream<IdentitySnapshot> get changes => _changes.stream;
 
   void changeToAnotherAccount() {
-    _current = const IdentitySnapshot(
-      stage: IdentityStage.signedIn,
-      principal: IdentityPrincipal(externalSubject: 'subject-2', email: null),
+    _emit(
+      const IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: IdentityPrincipal(externalSubject: 'subject-2', email: null),
+      ),
     );
-    _changes.add(_current);
+  }
+
+  void signOutAndSignBackIntoSameAccount() {
+    _emit(const IdentitySnapshot.signedOut());
+    _emit(
+      const IdentitySnapshot(
+        stage: IdentityStage.signedIn,
+        principal: IdentityPrincipal(externalSubject: 'subject-1', email: null),
+      ),
+    );
+  }
+
+  void _emit(IdentitySnapshot snapshot) {
+    _current = snapshot;
+    _changes.add(snapshot);
   }
 
   @override

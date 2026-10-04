@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +8,7 @@ import 'package:tongxingzhe_app/app/tongxingzhe_app.dart';
 import 'package:tongxingzhe_app/data/local_database.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/organization_deletion_recovery/organization_deletion_recovery.dart';
+import 'package:tongxingzhe_app/platform/platform_capabilities.dart';
 
 import '../support/fake_identity_session.dart';
 import '../support/fake_platform_capabilities.dart';
@@ -72,6 +75,40 @@ void main() {
 
     expect(gateway.closeCount, 1);
   });
+
+  testWidgets('removal during startup closes gateways created after the wait', (
+    tester,
+  ) async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final capabilityWait = _BlockingPlatformCapabilitiesProvider();
+    final gateway = _TrackingGateway();
+    var builderCalls = 0;
+    final dependencies = AppDependencies(
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2)),
+      idGenerator: CountingIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: capabilityWait,
+      organizationDeletionRecoveryGatewayBuilder: (_) {
+        builderCalls++;
+        return gateway;
+      },
+    );
+    addTearDown(database.close);
+
+    await tester.pumpWidget(TongxingzheApp(dependencies: dependencies));
+    await tester.pump();
+    expect(capabilityWait.loadCalls, 1);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    capabilityWait.complete();
+    await tester.pumpAndSettle();
+
+    expect(builderCalls, 1);
+    expect(gateway.closeCount, 1);
+  });
 }
 
 final class _TrackingGateway implements OrganizationDeletionRecoveryGateway {
@@ -81,9 +118,10 @@ final class _TrackingGateway implements OrganizationDeletionRecoveryGateway {
   Future<
     OrganizationDeletionRecoveryResult<OrganizationDeletionRecoveryDirectory>
   >
-  listRecovery() async => const OrganizationDeletionRecoveryRejected(
-    OrganizationDeletionRecoveryFailureCode.notConfigured,
-  );
+  listRecoverableOrganizations() async =>
+      const OrganizationDeletionRecoveryRejected(
+        OrganizationDeletionRecoveryFailureCode.notConfigured,
+      );
 
   @override
   Future<OrganizationDeletionRecoveryResult<OrganizationDeletionRequestReceipt>>
@@ -108,4 +146,18 @@ final class _TrackingGateway implements OrganizationDeletionRecoveryGateway {
   Future<void> close() async {
     closeCount++;
   }
+}
+
+final class _BlockingPlatformCapabilitiesProvider
+    implements PlatformCapabilitiesProvider {
+  final _completion = Completer<PlatformCapabilities>();
+  var loadCalls = 0;
+
+  @override
+  Future<PlatformCapabilities> load() {
+    loadCalls++;
+    return _completion.future;
+  }
+
+  void complete() => _completion.complete(fullyAvailableTestCapabilities);
 }

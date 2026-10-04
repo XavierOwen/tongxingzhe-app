@@ -65,7 +65,7 @@ final class HttpOrganizationDeletionRecoveryGateway
   Future<
     OrganizationDeletionRecoveryResult<OrganizationDeletionRecoveryDirectory>
   >
-  listRecovery() => _request(
+  listRecoverableOrganizations() => _request(
     method: 'GET',
     url: baseUri.resolve(_directoryPath),
     body: null,
