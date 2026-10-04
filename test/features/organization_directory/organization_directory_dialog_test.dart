@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/app_session/app_session.dart';
 import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_directory_dialog.dart';
+import 'package:tongxingzhe_app/organization_deletion_recovery/organization_deletion_recovery.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_invitation_accept_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_invitation_create_dialog.dart';
 import 'package:tongxingzhe_app/features/organization_directory/organization_membership_self_leave_dialog.dart';
@@ -29,6 +30,308 @@ import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
 import '../../support/fake_runtime_values.dart';
 
 void main() {
+  testWidgets(
+    'empty directory keeps recovery entry and requires confirmation',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final recovery = _DeletionRecoveryGateway(
+        const OrganizationDeletionRecoverySuccess(
+          OrganizationDeletionRecoveryDirectory(
+            items: [
+              OrganizationDeletionRecoveryItem(
+                organizationWorkspaceId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+                deletionRequestId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+                displayName: '待恢复组织',
+                observedAtUtc: '2026-10-01T10:00:00.000000Z',
+                effectiveAtUtc: '2026-10-01T10:00:00.000000Z',
+                purgeAfterUtc: '2026-10-31T10:00:00.000000Z',
+              ),
+            ],
+          ),
+        ),
+      );
+      await _open(
+        tester,
+        fixture.session,
+        _Gateway([OrganizationDirectorySuccess([])]),
+        deletionRecoveryGateway: recovery,
+      );
+      expect(
+        find.byKey(const ValueKey('organization-directory-recovery')),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('organization-directory-recovery')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('待恢复组织'), findsOneWidget);
+      expect(find.text('2026-10-31T10:00:00.000000Z'), findsOneWidget);
+      final restore = find.byKey(
+        const ValueKey(
+          'organization-recovery-restore-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        ),
+      );
+      await tester.tap(restore);
+      await tester.pumpAndSettle();
+      expect(recovery.restoreCalls, isEmpty);
+      await tester.tap(
+        find.byKey(const ValueKey('organization-deletion-recovery-confirm')),
+      );
+      await tester.pumpAndSettle();
+      final restoreCall = recovery.restoreCalls.single;
+      expect(restoreCall.requestId, matches(RegExp(r'^[0-9a-f-]{36}$')));
+      expect(
+        restoreCall.organizationWorkspaceId,
+        'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      );
+      expect(
+        restoreCall.deletionRequestId,
+        'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      );
+    },
+  );
+
+  testWidgets(
+    'uncertain restore retries the same selector and refreshes directory once',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final directory = _Gateway([
+        OrganizationDirectorySuccess(const []),
+        OrganizationDirectorySuccess(const [_organizationA]),
+      ]);
+      final recovery = _DeletionRecoveryGateway(
+        const OrganizationDeletionRecoverySuccess(
+          OrganizationDeletionRecoveryDirectory(items: [_recoveryItem]),
+        ),
+        restoreResults: [
+          const OrganizationDeletionRecoveryRejected(
+            OrganizationDeletionRecoveryFailureCode.networkUnavailable,
+          ),
+          const OrganizationDeletionRecoverySuccess(
+            OrganizationRestorationReceipt(
+              organizationWorkspaceId: _recoveryWorkspaceId,
+              deletionRequestId: _recoveryDeletionRequestId,
+              restoredAtUtc: '2026-10-02T12:00:00.000000Z',
+            ),
+          ),
+        ],
+      );
+      await _open(
+        tester,
+        fixture.session,
+        directory,
+        deletionRecoveryGateway: recovery,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('organization-directory-recovery')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(
+          const ValueKey('organization-recovery-restore-$_recoveryWorkspaceId'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final confirm = find.byKey(
+        const ValueKey('organization-deletion-recovery-confirm'),
+      );
+      await tester.tap(confirm);
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          const AppStrings('zh').t('organizationDeletionRecoveryUncertain'),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(confirm);
+      await tester.pumpAndSettle();
+
+      expect(recovery.restoreCalls, hasLength(2));
+      expect(recovery.restoreCalls[1], recovery.restoreCalls[0]);
+      expect(directory.listCalls, 2);
+      expect(fixture.session.current.context, _contextA);
+      expect(find.text(_organizationA.organizationName), findsOneWidget);
+      expect(
+        find.text(
+          const AppStrings('zh').t('organizationDeletionRecoverySuccess'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'signout while recovery list is pending clears it and fences late rows',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final pending =
+          Completer<
+            OrganizationDeletionRecoveryResult<
+              OrganizationDeletionRecoveryDirectory
+            >
+          >();
+      final recovery = _DeletionRecoveryGateway(
+        const OrganizationDeletionRecoverySuccess(
+          OrganizationDeletionRecoveryDirectory(items: []),
+        ),
+        pendingDirectory: pending,
+      );
+      await _open(
+        tester,
+        fixture.session,
+        _Gateway([OrganizationDirectorySuccess(const [])]),
+        deletionRecoveryGateway: recovery,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('organization-directory-recovery')),
+      );
+      await tester.pump();
+      fixture.identity.emit(const IdentitySnapshot.signedOut());
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          const AppStrings('zh').t('organizationDeletionRecoveryUnauthorized'),
+        ),
+        findsOneWidget,
+      );
+      pending.complete(
+        const OrganizationDeletionRecoverySuccess(
+          OrganizationDeletionRecoveryDirectory(items: [_recoveryItem]),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(_recoveryItem.displayName), findsNothing);
+      expect(find.text(_recoveryWorkspaceId), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'signout while restore is pending clears selection and fences late receipt',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final pending =
+          Completer<
+            OrganizationDeletionRecoveryResult<OrganizationRestorationReceipt>
+          >();
+      final recovery = _DeletionRecoveryGateway(
+        const OrganizationDeletionRecoverySuccess(
+          OrganizationDeletionRecoveryDirectory(items: [_recoveryItem]),
+        ),
+        restoreResults: [pending],
+      );
+      await _open(
+        tester,
+        fixture.session,
+        _Gateway([OrganizationDirectorySuccess(const [])]),
+        deletionRecoveryGateway: recovery,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('organization-directory-recovery')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(
+          const ValueKey('organization-recovery-restore-$_recoveryWorkspaceId'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('organization-deletion-recovery-confirm')),
+      );
+      await tester.pump();
+      expect(recovery.restoreCalls, hasLength(1));
+      fixture.identity.emit(const IdentitySnapshot.signedOut());
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          const AppStrings('zh').t('organizationDeletionRecoveryUnauthorized'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text(_recoveryWorkspaceId), findsNothing);
+      pending.complete(
+        const OrganizationDeletionRecoverySuccess(
+          OrganizationRestorationReceipt(
+            organizationWorkspaceId: _recoveryWorkspaceId,
+            deletionRequestId: _recoveryDeletionRequestId,
+            restoredAtUtc: '2026-10-02T12:00:00.000000Z',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(_recoveryWorkspaceId), findsNothing);
+      expect(find.text('2026-10-02T12:00:00.000000Z'), findsNothing);
+      expect(recovery.restoreCalls, hasLength(1));
+    },
+  );
+
+  testWidgets(
+    'recovery remains scrollable and semantically actionable at 200% on narrow screen',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      _useNarrowLargeText(tester);
+      final semantics = tester.ensureSemantics();
+      final items = List.generate(
+        8,
+        (index) => OrganizationDeletionRecoveryItem(
+          organizationWorkspaceId:
+              '00000000-0000-4000-8000-${(index + 1).toString().padLeft(12, '0')}',
+          deletionRequestId:
+              'dddddddd-dddd-4ddd-8ddd-${(index + 1).toString().padLeft(12, '0')}',
+          displayName: '待恢复组织 $index ${List.filled(18, '界').join()}',
+          observedAtUtc: '2026-10-01T10:00:00.000000Z',
+          effectiveAtUtc: '2026-10-01T10:00:00.000000Z',
+          purgeAfterUtc: '2026-10-31T10:00:00.000000Z',
+        ),
+      );
+      final recovery = _DeletionRecoveryGateway(
+        OrganizationDeletionRecoverySuccess(
+          OrganizationDeletionRecoveryDirectory(items: items),
+        ),
+      );
+      await _open(
+        tester,
+        fixture.session,
+        _Gateway([OrganizationDirectorySuccess(const [])]),
+        deletionRecoveryGateway: recovery,
+        textScaler: TextScaler.linear(2),
+      );
+      final entry = find.byKey(
+        const ValueKey('organization-directory-recovery'),
+      );
+      expect(entry, findsOneWidget);
+      await tester.ensureVisible(entry);
+      await tester.tap(entry);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      final lastRestore = find.byKey(
+        ValueKey(
+          'organization-recovery-restore-${items.last.organizationWorkspaceId}',
+        ),
+      );
+      await tester.ensureVisible(lastRestore);
+      expect(tester.getRect(lastRestore).bottom, lessThanOrEqualTo(568));
+      await tester.tap(lastRestore);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      final confirmLabel = const AppStrings(
+        'zh',
+      ).t('organizationDeletionRecoveryConfirm');
+      tester.semantics.tap(find.semantics.byLabel(confirmLabel));
+      await tester.pumpAndSettle();
+      expect(recovery.restoreCalls, hasLength(1));
+      expect(tester.takeException(), isNull);
+      semantics.dispose();
+    },
+  );
+
   testWidgets(
     'borrowed session retirement fences late self-leave success without directory refresh',
     (tester) async {
@@ -1950,6 +2253,8 @@ Future<void> _open(
   OrganizationProjectMembershipAssignmentGateway
       projectMembershipAssignmentGateway =
       const DeferredOrganizationProjectMembershipAssignmentGateway(),
+  OrganizationDeletionRecoveryGateway deletionRecoveryGateway =
+      const DeferredOrganizationDeletionRecoveryGateway(),
 }) async {
   await _pumpLauncher(
     tester,
@@ -1963,6 +2268,7 @@ Future<void> _open(
     shareableJoinGateway: shareableJoinGateway,
     ownerTransferGateway: ownerTransferGateway,
     projectMembershipAssignmentGateway: projectMembershipAssignmentGateway,
+    deletionRecoveryGateway: deletionRecoveryGateway,
   );
   await tester.tap(_launcher);
   if (settle) {
@@ -1990,6 +2296,8 @@ Future<void> _pumpLauncher(
   OrganizationProjectMembershipAssignmentGateway
       projectMembershipAssignmentGateway =
       const DeferredOrganizationProjectMembershipAssignmentGateway(),
+  OrganizationDeletionRecoveryGateway deletionRecoveryGateway =
+      const DeferredOrganizationDeletionRecoveryGateway(),
 }) => tester.pumpWidget(
   MaterialApp(
     theme: ThemeData(useMaterial3: true),
@@ -2016,6 +2324,7 @@ Future<void> _pumpLauncher(
                 ownerTransferGateway: ownerTransferGateway,
                 projectMembershipAssignmentGateway:
                     projectMembershipAssignmentGateway,
+                deletionRecoveryGateway: deletionRecoveryGateway,
               ),
             ),
             child: const Text('Open'),
@@ -2287,6 +2596,92 @@ final class _ContextGateway implements SessionContextGateway {
     String displayName,
   ) async =>
       const SessionContextRejected(SessionContextFailureCode.serverRejected);
+
+  @override
+  Future<void> close() async {}
+}
+
+final class _DeletionRecoveryGateway
+    implements OrganizationDeletionRecoveryGateway {
+  _DeletionRecoveryGateway(
+    this.directory, {
+    Iterable<Object> restoreResults = const [],
+    this.pendingDirectory,
+  }) : _restoreResults = Queue.of(restoreResults);
+
+  final OrganizationDeletionRecoveryResult<
+    OrganizationDeletionRecoveryDirectory
+  >
+  directory;
+  final Completer<
+    OrganizationDeletionRecoveryResult<OrganizationDeletionRecoveryDirectory>
+  >?
+  pendingDirectory;
+  final Queue<Object> _restoreResults;
+  var listCalls = 0;
+  final restoreCalls =
+      <
+        ({
+          String requestId,
+          String organizationWorkspaceId,
+          String deletionRequestId,
+        })
+      >[];
+
+  @override
+  Future<
+    OrganizationDeletionRecoveryResult<OrganizationDeletionRecoveryDirectory>
+  >
+  listRecoverableOrganizations() async {
+    listCalls += 1;
+    return pendingDirectory?.future ?? directory;
+  }
+
+  @override
+  Future<OrganizationDeletionRecoveryResult<OrganizationDeletionRequestReceipt>>
+  requestDeletion({
+    required String requestId,
+    required String organizationWorkspaceId,
+  }) async => const OrganizationDeletionRecoveryRejected(
+    OrganizationDeletionRecoveryFailureCode.notConfigured,
+  );
+
+  @override
+  Future<OrganizationDeletionRecoveryResult<OrganizationRestorationReceipt>>
+  restore({
+    required String requestId,
+    required String organizationWorkspaceId,
+    required String deletionRequestId,
+  }) async {
+    restoreCalls.add((
+      requestId: requestId,
+      organizationWorkspaceId: organizationWorkspaceId,
+      deletionRequestId: deletionRequestId,
+    ));
+    if (_restoreResults.isNotEmpty) {
+      final next = _restoreResults.removeFirst();
+      if (next
+          is Completer<
+            OrganizationDeletionRecoveryResult<OrganizationRestorationReceipt>
+          >) {
+        return next.future;
+      }
+      if (next
+          is OrganizationDeletionRecoveryResult<
+            OrganizationRestorationReceipt
+          >) {
+        return next;
+      }
+      throw next;
+    }
+    return OrganizationDeletionRecoverySuccess(
+      OrganizationRestorationReceipt(
+        organizationWorkspaceId: organizationWorkspaceId,
+        deletionRequestId: deletionRequestId,
+        restoredAtUtc: '2026-10-02T12:00:00.000000Z',
+      ),
+    );
+  }
 
   @override
   Future<void> close() async {}
@@ -2709,6 +3104,16 @@ final _longOrganization = OrganizationDirectoryEntry(
 
 const _requestIdA = 'c1111111-1111-4111-8111-111111111111';
 const _requestIdB = 'c2222222-2222-4222-8222-222222222222';
+const _recoveryWorkspaceId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const _recoveryDeletionRequestId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+const _recoveryItem = OrganizationDeletionRecoveryItem(
+  organizationWorkspaceId: _recoveryWorkspaceId,
+  deletionRequestId: _recoveryDeletionRequestId,
+  displayName: '待恢复组织',
+  observedAtUtc: '2026-10-01T10:00:00.000000Z',
+  effectiveAtUtc: '2026-10-01T10:00:00.000000Z',
+  purgeAfterUtc: '2026-10-31T10:00:00.000000Z',
+);
 const _targetAppUserId = '99999999-9999-4999-8999-999999999999';
 const _shareableJoinLinkId = 'e1111111-1111-4111-8111-111111111111';
 const _shareableJoinApplicationId = 'e2222222-2222-4222-8222-222222222222';

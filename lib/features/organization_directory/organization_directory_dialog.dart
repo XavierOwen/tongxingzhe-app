@@ -7,6 +7,7 @@ import '../../app_session/app_session.dart';
 import '../../l10n/app_strings.dart';
 import '../../organization_directed_account_invitation/organization_directed_account_invitation.dart';
 import '../../organization_directory/organization_directory.dart';
+import '../../organization_deletion_recovery/organization_deletion_recovery.dart';
 import '../../organization_membership_self_leave/organization_membership_self_leave.dart';
 import '../../organization_owner_transfer/organization_owner_transfer.dart';
 import '../../organization_project_membership_assignment/organization_project_membership_assignment.dart';
@@ -15,6 +16,7 @@ import 'organization_invitation_create_dialog.dart';
 import 'organization_invitation_accept_dialog.dart';
 import 'organization_membership_self_leave_dialog.dart';
 import 'organization_owner_transfer_dialog.dart';
+import 'organization_deletion_recovery_dialog.dart';
 import 'organization_project_membership_assignment_dialog.dart';
 import 'organization_shareable_join_application_approve_dialog.dart';
 import 'organization_shareable_join_application_directory_dialog.dart';
@@ -38,6 +40,8 @@ final class OrganizationDirectoryDialog extends StatefulWidget {
         const DeferredOrganizationShareableJoinGateway(),
     this.ownerTransferGateway =
         const DeferredOrganizationOwnerTransferGateway(),
+    this.deletionRecoveryGateway =
+        const DeferredOrganizationDeletionRecoveryGateway(),
     this.projectMembershipAssignmentGateway =
         const DeferredOrganizationProjectMembershipAssignmentGateway(),
   });
@@ -49,6 +53,7 @@ final class OrganizationDirectoryDialog extends StatefulWidget {
   final OrganizationDirectedAccountInvitationGateway invitationGateway;
   final OrganizationShareableJoinGateway shareableJoinGateway;
   final OrganizationOwnerTransferGateway ownerTransferGateway;
+  final OrganizationDeletionRecoveryGateway deletionRecoveryGateway;
   final OrganizationProjectMembershipAssignmentGateway
   projectMembershipAssignmentGateway;
 
@@ -149,6 +154,14 @@ final class _OrganizationDirectoryDialogState
               label: Text(
                 widget.text.t('organizationShareableJoinApplicationAction'),
               ),
+            ),
+            TextButton.icon(
+              key: const ValueKey('organization-directory-recovery'),
+              onPressed: _busy || _sessionInvalidated
+                  ? null
+                  : _viewRecoverableOrganizations,
+              icon: const Icon(Icons.restore_outlined),
+              label: Text(widget.text.t('organizationDeletionRecoveryAction')),
             ),
           ],
         ),
@@ -625,6 +638,20 @@ final class _OrganizationDirectoryDialogState
         organization: entry,
         gateway: widget.ownerTransferGateway,
         appSession: widget.appSession,
+      ),
+    );
+  }
+
+  Future<void> _viewRecoverableOrganizations() async {
+    if (_busy || !_hasTrustedSession(widget.appSession.current)) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => OrganizationDeletionRecoveryDialog(
+        text: widget.text,
+        gateway: widget.deletionRecoveryGateway,
+        appSession: widget.appSession,
+        onRestored: _load,
       ),
     );
   }
