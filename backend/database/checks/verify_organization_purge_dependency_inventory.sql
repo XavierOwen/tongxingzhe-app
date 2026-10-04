@@ -2,6 +2,7 @@
 BEGIN;
 
 -- Reviewed Slice 7DC inventory, grounded in migrations through 0104.
+-- This is a structural definition baseline, not proof of runtime purge behavior.
 -- Workspaces and projects are shared roots: process rows only when their workspace
 -- is an organization; personal spaces and cross-organization shared roots survive.
 -- RESTRICT/NO ACTION means the finalizer must explicitly order child cleanup;
@@ -352,34 +353,55 @@ INSERT INTO purge_inventory_expected_family VALUES
 
 CREATE TEMP TABLE purge_inventory_expected_trigger (
   relation_name text NOT NULL, trigger_name text NOT NULL,
-  function_name text NOT NULL, trigger_type integer NOT NULL,
-  enabled_state "char" NOT NULL, PRIMARY KEY (relation_name, trigger_name)
+  function_identity text NOT NULL, function_definition_md5 text NOT NULL,
+  trigger_type integer NOT NULL, enabled_state "char" NOT NULL,
+  PRIMARY KEY (relation_name, trigger_name)
 );
 INSERT INTO purge_inventory_expected_trigger VALUES
-  ('app_private.organization_creation_audit_events', 'organization_creation_audit_events_immutable', 'protect_organization_creation_audit_event_v1', 27, 'O'),
-  ('app_private.organization_creation_request_claims', 'organization_creation_request_claims_immutable', 'protect_organization_creation_request_claim_v1', 27, 'O'),
-  ('app_private.organization_creation_request_tombstones', 'organization_creation_request_tombstones_immutable', 'protect_organization_creation_request_tombstone_v1', 27, 'O'),
-  ('app_private.organization_deletion_audit_events', 'organization_deletion_audit_events_immutable', 'protect_organization_deletion_audit_v1', 27, 'O'),
-  ('app_private.organization_deletion_request_claims', 'organization_deletion_request_claims_immutable', 'protect_organization_deletion_claim_v1', 27, 'O'),
-  ('app_private.organization_deletion_restore_claims', 'organization_deletion_restore_claims_immutable', 'protect_organization_deletion_claim_v1', 27, 'O'),
-  ('app_private.organization_directed_account_invitation_audit_events', 'organization_directed_invitation_audit_events_immutable', 'protect_organization_directed_invitation_audit_event_v1', 27, 'O'),
-  ('app_private.organization_directed_account_invitation_request_claims', 'organization_directed_invitation_claims_immutable', 'protect_organization_directed_invitation_claim_v1', 27, 'O'),
-  ('app_private.organization_directed_account_invitation_request_tombstones', 'organization_directed_invitation_tombstones_immutable', 'protect_organization_directed_invitation_tombstone_v1', 27, 'O'),
-  ('app_private.organization_membership_self_leave_audit_events', 'organization_membership_self_leave_audit_events_immutable', 'protect_organization_membership_self_leave_audit_event_v1', 27, 'O'),
-  ('app_private.organization_membership_self_leave_request_claims', 'organization_membership_self_leave_claims_immutable', 'protect_organization_membership_self_leave_request_claim_v1', 27, 'O'),
-  ('app_private.organization_membership_self_leave_request_tombstones', 'organization_membership_self_leave_tombstones_immutable', 'protect_organization_membership_self_leave_request_tombstone_v1', 27, 'O'),
-  ('app_private.organization_owner_transfer_audit_events', 'organization_owner_transfer_audit_events_immutable', 'protect_organization_owner_transfer_audit_event_v1', 27, 'O'),
-  ('app_private.organization_owner_transfer_request_claims', 'organization_owner_transfer_request_claims_immutable', 'protect_organization_owner_transfer_request_claim_v1', 27, 'O'),
-  ('app_private.organization_owner_transfer_request_tombstones', 'organization_owner_transfer_request_tombstones_immutable', 'protect_organization_owner_transfer_request_tombstone_v1', 27, 'O'),
-  ('app_private.organization_project_membership_assignment_audit_events', 'organization_project_membership_assignment_audit_immutable', 'protect_organization_project_membership_assignment_terminal_v1', 27, 'O'),
-  ('app_private.organization_project_membership_assignment_request_claims', 'organization_project_membership_assignment_claims_immutable', 'protect_organization_project_membership_assignment_claim_v1', 27, 'O'),
-  ('app_private.organization_project_membership_assignment_request_tombstones', 'organization_project_membership_assignment_tombstones_immutable', 'protect_organization_project_membership_assignment_terminal_v1', 27, 'O'),
-  ('app_private.organization_shareable_join_application_audit_events', 'organization_shareable_join_application_audit_events_immutable', 'protect_organization_shareable_join_application_audit_event_v1', 27, 'O'),
-  ('app_private.organization_shareable_join_application_request_claims', 'organization_shareable_join_application_claims_immutable', 'protect_organization_shareable_join_application_claim_v1', 27, 'O'),
-  ('app_private.organization_shareable_join_application_request_tombstones', 'organization_shareable_join_application_tombstones_immutable', 'protect_organization_shareable_join_application_tombstone_v1', 27, 'O'),
-  ('app_private.organization_shareable_join_link_audit_events', 'organization_shareable_join_link_audit_events_immutable', 'protect_organization_shareable_join_link_audit_event_v1', 27, 'O'),
-  ('app_private.organization_shareable_join_link_request_claims', 'organization_shareable_join_link_claims_immutable', 'protect_organization_shareable_join_link_claim_v1', 27, 'O'),
-  ('app_private.organization_shareable_join_link_request_tombstones', 'organization_shareable_join_link_tombstones_immutable', 'protect_organization_shareable_join_link_tombstone_v1', 27, 'O');
+  ('app_data.organization_owner_assignments', 'organization_owner_assignments_active_owner_invariant', 'app_private.enforce_organization_active_owner_v1()', '8c8e7db05f022b936c6fa92c3ac9873a', 29, 'O'),
+  ('app_data.organization_owner_assignments', 'organization_owner_assignments_governance_fence', 'app_private.lock_organization_governance_for_mutation_v1()', '1e53de6f759226f46d02da4060d03810', 31, 'O'),
+  ('app_data.organization_owner_assignments', 'organization_owner_assignments_protect_history', 'app_private.protect_organization_owner_assignment_history_v1()', '34324c840ea3d2adbf5a975846f7dba8', 27, 'O'),
+  ('app_data.organization_owner_assignments', 'organization_owner_assignments_validate', 'app_private.validate_organization_owner_assignment_v1()', '0ad0bc74b6bb44f04409e1dc29584239', 23, 'O'),
+  ('app_private.organization_creation_audit_events', 'organization_creation_audit_events_immutable', 'app_private.protect_organization_creation_audit_event_v1()', 'c30d7f3d1e68739fe9e2436ba4770b8a', 27, 'O'),
+  ('app_private.organization_creation_request_claims', 'organization_creation_request_claims_immutable', 'app_private.protect_organization_creation_request_claim_v1()', '61bbb7da4bb9ae5aa9b43316288a0e68', 27, 'O'),
+  ('app_private.organization_creation_request_tombstones', 'organization_creation_request_tombstones_immutable', 'app_private.protect_organization_creation_request_tombstone_v1()', 'f46bf594f281be9806be475c91b28163', 27, 'O'),
+  ('app_private.organization_deletion_audit_events', 'organization_deletion_audit_events_immutable', 'app_private.protect_organization_deletion_audit_v1()', '4a673fd0dd4714563c26bae4bcf6628d', 27, 'O'),
+  ('app_private.organization_deletion_request_claims', 'organization_deletion_request_claims_immutable', 'app_private.protect_organization_deletion_claim_v1()', 'c25f07378dd1a229da2fa217a70d22fd', 27, 'O'),
+  ('app_private.organization_deletion_restore_claims', 'organization_deletion_restore_claims_immutable', 'app_private.protect_organization_deletion_claim_v1()', 'c25f07378dd1a229da2fa217a70d22fd', 27, 'O'),
+  ('app_private.organization_directed_account_invitation_audit_events', 'organization_directed_invitation_audit_events_immutable', 'app_private.protect_organization_directed_invitation_audit_event_v1()', 'be2f699fb3451c0c87ad867376ba63c5', 27, 'O'),
+  ('app_private.organization_directed_account_invitation_request_claims', 'organization_directed_invitation_claims_immutable', 'app_private.protect_organization_directed_invitation_claim_v1()', '77ed0a84b16d6161c2436b9dc9635703', 27, 'O'),
+  ('app_private.organization_directed_account_invitation_request_tombstones', 'organization_directed_invitation_tombstones_immutable', 'app_private.protect_organization_directed_invitation_tombstone_v1()', '7faf324b761ef7f413148695fbaaf1fc', 27, 'O'),
+  ('app_private.organization_membership_self_leave_audit_events', 'organization_membership_self_leave_audit_events_immutable', 'app_private.protect_organization_membership_self_leave_audit_event_v1()', 'fcc9092bb77a0e44d72e3f94ee512268', 27, 'O'),
+  ('app_private.organization_membership_self_leave_request_claims', 'organization_membership_self_leave_claims_immutable', 'app_private.protect_organization_membership_self_leave_request_claim_v1()', '605210a4ba44115a2747b19c51b9895e', 27, 'O'),
+  ('app_private.organization_membership_self_leave_request_tombstones', 'organization_membership_self_leave_tombstones_immutable', 'app_private.protect_organization_membership_self_leave_request_tombstone_v1()', 'c0cd4989fa1bc1d3c9e441a33d3a9f71', 27, 'O'),
+  ('app_private.organization_owner_transfer_audit_events', 'organization_owner_transfer_audit_events_immutable', 'app_private.protect_organization_owner_transfer_audit_event_v1()', '19375ff8dafbaf502fe248df810b83c6', 27, 'O'),
+  ('app_private.organization_owner_transfer_request_claims', 'organization_owner_transfer_request_claims_immutable', 'app_private.protect_organization_owner_transfer_request_claim_v1()', '618dfe00d3bd10dcb378c82f5a6d0532', 27, 'O'),
+  ('app_private.organization_owner_transfer_request_tombstones', 'organization_owner_transfer_request_tombstones_immutable', 'app_private.protect_organization_owner_transfer_request_tombstone_v1()', 'aac5356f40144c5c20ca9c94a1d5cc77', 27, 'O'),
+  ('app_private.organization_project_membership_assignment_audit_events', 'organization_project_membership_assignment_audit_immutable', 'app_private.protect_organization_project_membership_assignment_terminal_v1()', '843cf9a8eeaa7d220a2aea1366ad095e', 27, 'O'),
+  ('app_private.organization_project_membership_assignment_request_claims', 'organization_project_membership_assignment_claims_immutable', 'app_private.protect_organization_project_membership_assignment_claim_v1()', '5cc0061cb0781b656f58d0de57a438ba', 27, 'O'),
+  ('app_private.organization_project_membership_assignment_request_tombstones', 'organization_project_membership_assignment_tombstones_immutable', 'app_private.protect_organization_project_membership_assignment_terminal_v1()', '843cf9a8eeaa7d220a2aea1366ad095e', 27, 'O'),
+  ('app_private.organization_shareable_join_application_audit_events', 'organization_shareable_join_application_audit_events_immutable', 'app_private.protect_organization_shareable_join_application_audit_event_v1()', 'a851e466ccfd99478ff93632afe622a5', 27, 'O'),
+  ('app_private.organization_shareable_join_application_request_claims', 'organization_shareable_join_application_claims_immutable', 'app_private.protect_organization_shareable_join_application_claim_v1()', '006b52b1494113545a1fae67fe3e38c5', 27, 'O'),
+  ('app_private.organization_shareable_join_application_request_tombstones', 'organization_shareable_join_application_tombstones_immutable', 'app_private.protect_organization_shareable_join_application_tombstone_v1()', '2050fa5b3a437d33346ce0f727744f92', 27, 'O'),
+  ('app_private.organization_shareable_join_link_audit_events', 'organization_shareable_join_link_audit_events_immutable', 'app_private.protect_organization_shareable_join_link_audit_event_v1()', 'aa428eb76c2110ce00a0d02e8ddce7c0', 27, 'O'),
+  ('app_private.organization_shareable_join_link_request_claims', 'organization_shareable_join_link_claims_immutable', 'app_private.protect_organization_shareable_join_link_claim_v1()', '04e90c62f2b5deafc0bc3a095bfd4c60', 27, 'O'),
+  ('app_private.organization_shareable_join_link_request_tombstones', 'organization_shareable_join_link_tombstones_immutable', 'app_private.protect_organization_shareable_join_link_tombstone_v1()', '32f8e4cc9ac772679ce4fca74ec52566', 27, 'O');
+
+-- Definition fingerprints bind each trigger to its qualified guard implementation.
+CREATE TEMP VIEW purge_inventory_actual_trigger AS
+SELECT n.nspname || '.' || c.relname AS relation_name, t.tgname AS trigger_name,
+       pn.nspname || '.' || p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')' AS function_identity,
+       md5(pg_get_functiondef(p.oid)) AS function_definition_md5,
+       t.tgtype AS trigger_type, t.tgenabled AS enabled_state
+FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
+JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_proc p ON p.oid=t.tgfoid
+JOIN pg_namespace pn ON pn.oid=p.pronamespace
+WHERE NOT t.tgisinternal AND (
+  (n.nspname='app_private' AND
+    (c.relname ~ '^organization_.*_(claims|tombstones|audit_events)$'
+     OR c.relname='organization_deletion_current'))
+  OR (n.nspname='app_data' AND c.relname='organization_owner_assignments')
+);
 
 DO $inventory$
 DECLARE
@@ -397,7 +419,8 @@ BEGIN
     (SELECT 'app_private.' || c.relname
      FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
      WHERE n.nspname='app_private'
-       AND c.relname ~ '^organization_.*_(claims|tombstones|audit_events)$'
+       AND (c.relname ~ '^organization_.*_(claims|tombstones|audit_events)$'
+         OR c.relname='organization_deletion_current')
      EXCEPT
      SELECT relation_name FROM purge_inventory_expected_family)
   ) THEN
@@ -405,23 +428,14 @@ BEGIN
   END IF;
 
   IF EXISTS (
-    (SELECT relation_name, trigger_name, function_name, trigger_type, enabled_state
+    (SELECT relation_name, trigger_name, function_identity,
+            function_definition_md5, trigger_type, enabled_state
      FROM purge_inventory_expected_trigger
-     EXCEPT
-     SELECT n.nspname || '.' || c.relname, t.tgname, p.proname, t.tgtype, t.tgenabled
-     FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
-     JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_proc p ON p.oid=t.tgfoid
-     WHERE NOT t.tgisinternal AND n.nspname='app_private'
-       AND (c.relname ~ '^organization_.*_(claims|tombstones|audit_events)$'
-         OR c.relname='organization_deletion_current'))
+     EXCEPT SELECT * FROM purge_inventory_actual_trigger)
     UNION ALL
-    (SELECT n.nspname || '.' || c.relname, t.tgname, p.proname, t.tgtype, t.tgenabled
-     FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
-     JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_proc p ON p.oid=t.tgfoid
-     WHERE NOT t.tgisinternal AND n.nspname='app_private'
-       AND c.relname ~ '^organization_.*_(claims|tombstones|audit_events)$'
-     EXCEPT
-     SELECT relation_name, trigger_name, function_name, trigger_type, enabled_state
+    (SELECT * FROM purge_inventory_actual_trigger
+     EXCEPT SELECT relation_name, trigger_name, function_identity,
+                   function_definition_md5, trigger_type, enabled_state
      FROM purge_inventory_expected_trigger)
   ) THEN
     RAISE EXCEPTION 'organization immutable trigger inventory drift';
@@ -477,6 +491,54 @@ BEGIN
   END IF;
 END
 $inventory$;
+
+-- Negative trigger probes are transactional and the final ROLLBACK restores both.
+ALTER TABLE app_data.organization_owner_assignments
+  DISABLE TRIGGER organization_owner_assignments_protect_history;
+DO $disabled_guard$
+BEGIN
+  IF NOT EXISTS (
+    (SELECT relation_name, trigger_name, function_identity,
+            function_definition_md5, trigger_type, enabled_state
+     FROM purge_inventory_expected_trigger
+     EXCEPT SELECT * FROM purge_inventory_actual_trigger)
+    UNION ALL
+    (SELECT * FROM purge_inventory_actual_trigger
+     EXCEPT SELECT relation_name, trigger_name, function_identity,
+                   function_definition_md5, trigger_type, enabled_state
+     FROM purge_inventory_expected_trigger)
+  ) THEN
+    RAISE EXCEPTION 'disabled immutable trigger escaped inventory comparison';
+  END IF;
+END
+$disabled_guard$;
+ALTER TABLE app_data.organization_owner_assignments
+  ENABLE TRIGGER organization_owner_assignments_protect_history;
+
+CREATE OR REPLACE FUNCTION app_private.protect_organization_owner_assignment_history_v1()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog
+AS $replacement$
+BEGIN
+  RETURN NEW;
+END
+$replacement$;
+DO $replaced_guard$
+BEGIN
+  IF NOT EXISTS (
+    (SELECT relation_name, trigger_name, function_identity,
+            function_definition_md5, trigger_type, enabled_state
+     FROM purge_inventory_expected_trigger
+     EXCEPT SELECT * FROM purge_inventory_actual_trigger)
+    UNION ALL
+    (SELECT * FROM purge_inventory_actual_trigger
+     EXCEPT SELECT relation_name, trigger_name, function_identity,
+                   function_definition_md5, trigger_type, enabled_state
+     FROM purge_inventory_expected_trigger)
+  ) THEN
+    RAISE EXCEPTION 'replaced guard function escaped definition fingerprint comparison';
+  END IF;
+END
+$replaced_guard$;
 
 -- Prove the same catalog comparison rejects an unreviewed child FK without
 -- leaving a schema object: the synthetic table lives only in this psql session.
