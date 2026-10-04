@@ -29,6 +29,7 @@ import '../organization_directory/organization_directory.dart';
 import '../organization_directed_account_invitation/organization_directed_account_invitation.dart';
 import '../organization_membership_self_leave/organization_membership_self_leave.dart';
 import '../organization_owner_transfer/organization_owner_transfer.dart';
+import '../organization_deletion_recovery/organization_deletion_recovery.dart';
 import '../organization_project_membership_assignment/organization_project_membership_assignment.dart';
 import '../organization_shareable_join/organization_shareable_join.dart';
 import '../plans/personal_action_plan.dart';
@@ -77,6 +78,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
   OrganizationMembershipSelfLeaveGateway?
   _organizationMembershipSelfLeaveGateway;
   OrganizationOwnerTransferGateway? _organizationOwnerTransferGateway;
+  OrganizationDeletionRecoveryGateway? _organizationDeletionRecoveryGateway;
   OrganizationProjectMembershipAssignmentGateway?
   _organizationProjectMembershipAssignmentGateway;
   OrganizationShareableJoinGateway? _organizationShareableJoinGateway;
@@ -123,6 +125,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       :final organizationDirectedAccountInvitationGateway,
       :final organizationMembershipSelfLeaveGateway,
       :final organizationOwnerTransferGateway,
+      :final organizationDeletionRecoveryGateway,
       :final organizationProjectMembershipAssignmentGateway,
       :final organizationShareableJoinGateway,
       :final appSession,
@@ -154,6 +157,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       _organizationMembershipSelfLeaveGateway =
           organizationMembershipSelfLeaveGateway;
       _organizationOwnerTransferGateway = organizationOwnerTransferGateway;
+      _organizationDeletionRecoveryGateway =
+          organizationDeletionRecoveryGateway;
       _organizationProjectMembershipAssignmentGateway =
           organizationProjectMembershipAssignmentGateway;
       _organizationShareableJoinGateway = organizationShareableJoinGateway;
@@ -192,6 +197,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       startup.organizationDirectedAccountInvitationGateway.close(),
       startup.organizationMembershipSelfLeaveGateway.close(),
       startup.organizationOwnerTransferGateway.close(),
+      startup.organizationDeletionRecoveryGateway.close(),
       startup.organizationProjectMembershipAssignmentGateway.close(),
       startup.organizationShareableJoinGateway.close(),
       startup.syncEngineFactory?.close() ?? Future<void>.value(),
@@ -225,6 +231,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
     unawaited(_organizationDirectedAccountInvitationGateway?.close());
     unawaited(_organizationMembershipSelfLeaveGateway?.close());
     unawaited(_organizationOwnerTransferGateway?.close());
+    unawaited(_organizationDeletionRecoveryGateway?.close());
     unawaited(_organizationProjectMembershipAssignmentGateway?.close());
     unawaited(_organizationShareableJoinGateway?.close());
     unawaited(_syncEngineFactory?.close());
@@ -292,6 +299,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
             :final organizationMembershipSelfLeaveGateway,
             :final organizationDirectedAccountInvitationGateway,
             :final organizationOwnerTransferGateway,
+            :final organizationDeletionRecoveryGateway,
             :final organizationProjectMembershipAssignmentGateway,
             :final organizationShareableJoinGateway,
             :final managementReportExportDelivery,
@@ -339,6 +347,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
                   organizationShareableJoinGateway,
               organizationOwnerTransferGateway:
                   organizationOwnerTransferGateway,
+              organizationDeletionRecoveryGateway:
+                  organizationDeletionRecoveryGateway,
               organizationProjectMembershipAssignmentGateway:
                   organizationProjectMembershipAssignmentGateway,
               managementReportExportDelivery: managementReportExportDelivery,
@@ -390,6 +400,7 @@ class _ReadyApp extends StatefulWidget {
     required this.organizationDirectedAccountInvitationGateway,
     required this.organizationShareableJoinGateway,
     required this.organizationOwnerTransferGateway,
+    required this.organizationDeletionRecoveryGateway,
     required this.organizationProjectMembershipAssignmentGateway,
     required this.managementReportExportDelivery,
     required this.currentRelationshipStageRepository,
@@ -432,6 +443,7 @@ class _ReadyApp extends StatefulWidget {
   organizationDirectedAccountInvitationGateway;
   final OrganizationShareableJoinGateway organizationShareableJoinGateway;
   final OrganizationOwnerTransferGateway organizationOwnerTransferGateway;
+  final OrganizationDeletionRecoveryGateway organizationDeletionRecoveryGateway;
   final OrganizationProjectMembershipAssignmentGateway
   organizationProjectMembershipAssignmentGateway;
   final ManagementReportExportDelivery managementReportExportDelivery;
