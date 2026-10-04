@@ -270,6 +270,69 @@ void main() {
   );
 
   testWidgets(
+    'recovery remains scrollable and semantically actionable at 200% on narrow screen',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      _useNarrowLargeText(tester);
+      final semantics = tester.ensureSemantics();
+      addTearDown(semantics.dispose);
+      final items = List.generate(
+        8,
+        (index) => OrganizationDeletionRecoveryItem(
+          organizationWorkspaceId:
+              '00000000-0000-4000-8000-${(index + 1).toString().padLeft(12, '0')}',
+          deletionRequestId:
+              'dddddddd-dddd-4ddd-8ddd-${(index + 1).toString().padLeft(12, '0')}',
+          displayName: '待恢复组织 $index ${List.filled(18, '界').join()}',
+          observedAtUtc: '2026-10-01T10:00:00.000000Z',
+          effectiveAtUtc: '2026-10-01T10:00:00.000000Z',
+          purgeAfterUtc: '2026-10-31T10:00:00.000000Z',
+        ),
+      );
+      final recovery = _DeletionRecoveryGateway(
+        OrganizationDeletionRecoverySuccess(
+          OrganizationDeletionRecoveryDirectory(items: items),
+        ),
+      );
+      await _open(
+        tester,
+        fixture.session,
+        _Gateway([OrganizationDirectorySuccess(const [])]),
+        deletionRecoveryGateway: recovery,
+        textScaler: TextScaler.linear(2),
+      );
+      final entry = find.byKey(
+        const ValueKey('organization-directory-recovery'),
+      );
+      expect(entry, findsOneWidget);
+      await tester.ensureVisible(entry);
+      await tester.tap(entry);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      final lastRestore = find.byKey(
+        ValueKey(
+          'organization-recovery-restore-${items.last.organizationWorkspaceId}',
+        ),
+      );
+      await tester.ensureVisible(lastRestore);
+      expect(tester.getRect(lastRestore).bottom, lessThanOrEqualTo(568));
+      await tester.tap(lastRestore);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      final confirmLabel = const AppStrings(
+        'zh',
+      ).t('organizationDeletionRecoveryConfirm');
+      tester.semantics.tap(find.semantics.byLabel(confirmLabel));
+      await tester.pumpAndSettle();
+      expect(recovery.restoreCalls, hasLength(1));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'borrowed session retirement fences late self-leave success without directory refresh',
     (tester) async {
       final fixture = await _Fixture.create();
