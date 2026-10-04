@@ -10384,7 +10384,7 @@ organization_directory_upgrade_lifecycle_before="$(
     --table='app_private.organization_deletion_*' \
     --no-owner \
     --no-privileges \
-    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
 )"
 docker exec \
   --env DATABASE_URL="${organization_deletion_upgrade_url}" \
