@@ -276,7 +276,6 @@ void main() {
       addTearDown(fixture.close);
       _useNarrowLargeText(tester);
       final semantics = tester.ensureSemantics();
-      addTearDown(semantics.dispose);
       final items = List.generate(
         8,
         (index) => OrganizationDeletionRecoveryItem(
@@ -329,6 +328,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(recovery.restoreCalls, hasLength(1));
       expect(tester.takeException(), isNull);
+      semantics.dispose();
     },
   );
 
