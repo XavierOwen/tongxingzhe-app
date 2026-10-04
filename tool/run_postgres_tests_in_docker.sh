@@ -10454,6 +10454,94 @@ fi
 printf '%s\n' "${organization_directory_upgrade_replay}"
 echo '0100→0101 live lifecycle rows, no-op checksum replay：通过。'
 
+echo '验证 0101→0102 报告写入 fence 升级、pending 失败关闭与 checksum 重放。'
+docker exec "${container_name}" bash -lc \
+  "mkdir -p /tmp/organization-report-write-fence-upgrade-only && \
+   cp /workspace/backend/database/migrations/0102_organization_report_write_fence.sql \
+     /tmp/organization-report-write-fence-upgrade-only/"
+organization_write_fence_upgrade_before="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_deletion_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+docker exec \
+  --env DATABASE_URL="${organization_deletion_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/organization-report-write-fence-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${organization_deletion_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$report_write_fence_upgrade\$
+    DECLARE actual_state text; actual_message text;
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 101
+        OR (SELECT max(left(version, 4))
+            FROM app_migrations.schema_migrations) IS DISTINCT FROM '0102'
+        OR (SELECT count(*) FROM app_private.organization_deletion_current) <> 1
+        OR (SELECT count(*) FROM pg_trigger
+            WHERE tgname = 'a_org_report_write_fence'
+              AND NOT tgisinternal) <> 14
+      THEN RAISE EXCEPTION '0101→0102 migration metadata or lifecycle drift'; END IF;
+
+      BEGIN
+        INSERT INTO app_private.management_report_release_attempts(project_id)
+        VALUES ('00000000-0100-6000-8000-000000000901'::uuid);
+      EXCEPTION WHEN OTHERS THEN
+        GET STACKED DIAGNOSTICS actual_state = RETURNED_SQLSTATE,
+          actual_message = MESSAGE_TEXT;
+      END;
+      IF actual_state IS DISTINCT FROM '55000'
+        OR actual_message IS DISTINCT FROM
+          'organization report write unavailable'
+      THEN
+        RAISE EXCEPTION '0101→0102 pending write did not fail closed: % / %',
+          actual_state, actual_message;
+      END IF;
+    END
+    \$report_write_fence_upgrade\$;
+  " \
+  >/dev/null
+organization_write_fence_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${organization_deletion_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/organization-report-write-fence-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${organization_write_fence_upgrade_replay}" != \
+    *'已验证 0102_organization_report_write_fence（无需重复执行）'* ]] \
+  || [[ "${organization_write_fence_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0102 migration did not skip its checksum-verified replay.' >&2
+  printf '%s\n' "${organization_write_fence_upgrade_replay}" >&2
+  exit 1
+fi
+organization_write_fence_upgrade_after="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_deletion_upgrade_url}" \
+    --data-only \
+    --schema=app_data \
+    --schema=app_private \
+    --no-owner \
+    --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+if [[ "${organization_write_fence_upgrade_before}" != \
+    "${organization_write_fence_upgrade_after}" ]]; then
+  echo '0102 migration or checksum replay changed existing business or lifecycle rows.' >&2
+  exit 1
+fi
+printf '%s\n' "${organization_write_fence_upgrade_replay}"
+echo '0101→0102 live lifecycle rows, pending fail-closed write, no-op checksum replay：通过。'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 
