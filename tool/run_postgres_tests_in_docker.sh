@@ -10685,6 +10685,104 @@ fi
 printf '%s\n' "${organization_identity_bridges_upgrade_replay}"
 echo '0103→0104 live lifecycle rows, no-op checksum replay：通过。'
 
+echo '验证 0104→0105 组织删除 purge_due 原语升级、数据保留及 checksum 重放。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${organization_deletion_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$restored_upgrade_row\$
+    DECLARE created_row record; deletion_row record; restoration_row record;
+    BEGIN
+      SELECT * INTO STRICT created_row
+      FROM app_private.create_organization_v1(
+        '00000000-0100-0000-8000-000000000901',
+        '00000000-0105-1000-8000-000000000901',
+        '0104 to 0105 restored attempt');
+      SELECT * INTO STRICT deletion_row
+      FROM app_private.request_organization_deletion_v1(
+        '00000000-0100-0000-8000-000000000901',
+        '00000000-0105-4000-8000-000000000901',
+        created_row.organization_workspace_id);
+      SELECT * INTO STRICT restoration_row
+      FROM app_private.restore_organization_v1(
+        '00000000-0100-0000-8000-000000000901',
+        '00000000-0105-5000-8000-000000000901',
+        created_row.organization_workspace_id,
+        deletion_row.deletion_request_id);
+      IF restoration_row.deletion_request_id IS DISTINCT FROM
+          deletion_row.deletion_request_id
+        OR (SELECT status FROM app_private.organization_deletion_current
+            WHERE organization_workspace_id = created_row.organization_workspace_id)
+          IS DISTINCT FROM 'restored'
+      THEN RAISE EXCEPTION '0104→0105 restored upgrade row setup drift'; END IF;
+    END
+    \$restored_upgrade_row\$;
+  " >/dev/null
+docker exec "${container_name}" bash -lc \
+  "mkdir -p /tmp/organization-deletion-purge-due-upgrade-only && \
+   cp /workspace/backend/database/migrations/0105_organization_deletion_purge_due.sql \
+     /tmp/organization-deletion-purge-due-upgrade-only/"
+organization_purge_due_upgrade_before="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_deletion_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+docker exec \
+  --env DATABASE_URL="${organization_deletion_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/organization-deletion-purge-due-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${organization_deletion_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$purge_due_upgrade\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 104
+        OR (SELECT max(left(version, 4)) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0105'
+        OR to_regprocedure(
+          'app_private.mark_organization_deletion_purge_due_v1(uuid)'
+        ) IS NULL
+        OR (SELECT count(*) FROM app_private.organization_deletion_current) <> 2
+        OR (SELECT count(*) FROM app_private.organization_deletion_current
+            WHERE status = 'deletion_pending') <> 1
+        OR (SELECT count(*) FROM app_private.organization_deletion_current
+            WHERE status = 'restored') <> 1
+      THEN RAISE EXCEPTION '0104→0105 migration metadata or lifecycle drift'; END IF;
+    END
+    \$purge_due_upgrade\$;
+  " >/dev/null
+organization_purge_due_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${organization_deletion_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/organization-deletion-purge-due-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${organization_purge_due_upgrade_replay}" != \
+    *'已验证 0105_organization_deletion_purge_due（无需重复执行）'* ]] \
+  || [[ "${organization_purge_due_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0105 migration did not skip its checksum-verified replay.' >&2
+  printf '%s\n' "${organization_purge_due_upgrade_replay}" >&2
+  exit 1
+fi
+organization_purge_due_upgrade_after="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_deletion_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+if [[ "${organization_purge_due_upgrade_before}" != \
+    "${organization_purge_due_upgrade_after}" ]]; then
+  echo '0105 migration or checksum replay changed existing business or lifecycle rows.' >&2
+  exit 1
+fi
+printf '%s\n' "${organization_purge_due_upgrade_replay}"
+echo '0104→0105 live lifecycle rows, no-op checksum replay：通过。'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 
