@@ -47,6 +47,8 @@ import '../organization_membership_self_leave/http_organization_membership_self_
 import '../organization_membership_self_leave/organization_membership_self_leave.dart';
 import '../organization_owner_transfer/http_organization_owner_transfer_gateway.dart';
 import '../organization_owner_transfer/organization_owner_transfer.dart';
+import '../organization_deletion_recovery/http_organization_deletion_recovery_gateway.dart';
+import '../organization_deletion_recovery/organization_deletion_recovery.dart';
 import '../organization_project_membership_assignment/http_organization_project_membership_assignment_gateway.dart';
 import '../organization_project_membership_assignment/organization_project_membership_assignment.dart';
 import '../organization_shareable_join/http_organization_shareable_join_gateway.dart';
@@ -108,6 +110,7 @@ final class AppDependencies {
     this.organizationDirectedAccountInvitationGatewayBuilder,
     this.organizationMembershipSelfLeaveGatewayBuilder,
     this.organizationOwnerTransferGatewayBuilder,
+    this.organizationDeletionRecoveryGatewayBuilder,
     this.organizationProjectMembershipAssignmentGatewayBuilder,
     this.organizationShareableJoinGatewayBuilder,
     this.managementReportExportDelivery,
@@ -159,6 +162,8 @@ final class AppDependencies {
           productionOrganizationMembershipSelfLeaveGateway,
       organizationOwnerTransferGatewayBuilder:
           productionOrganizationOwnerTransferGateway,
+      organizationDeletionRecoveryGatewayBuilder:
+          productionOrganizationDeletionRecoveryGateway,
       organizationProjectMembershipAssignmentGatewayBuilder:
           productionOrganizationProjectMembershipAssignmentGateway,
       organizationShareableJoinGatewayBuilder:
@@ -221,6 +226,8 @@ final class AppDependencies {
   organizationMembershipSelfLeaveGatewayBuilder;
   final OrganizationOwnerTransferGateway Function(IdentitySession)?
   organizationOwnerTransferGatewayBuilder;
+  final OrganizationDeletionRecoveryGateway Function(IdentitySession)?
+  organizationDeletionRecoveryGatewayBuilder;
   final OrganizationProjectMembershipAssignmentGateway Function(
     IdentitySession,
   )?
@@ -264,6 +271,7 @@ final class AppDependencies {
     OrganizationMembershipSelfLeaveGateway?
     organizationMembershipSelfLeaveGateway;
     OrganizationOwnerTransferGateway? organizationOwnerTransferGateway;
+    OrganizationDeletionRecoveryGateway? organizationDeletionRecoveryGateway;
     OrganizationProjectMembershipAssignmentGateway?
     organizationProjectMembershipAssignmentGateway;
     OrganizationShareableJoinGateway? organizationShareableJoinGateway;
@@ -385,6 +393,9 @@ final class AppDependencies {
       organizationOwnerTransferGateway =
           organizationOwnerTransferGatewayBuilder?.call(identitySession) ??
           const DeferredOrganizationOwnerTransferGateway();
+      organizationDeletionRecoveryGateway =
+          organizationDeletionRecoveryGatewayBuilder?.call(identitySession) ??
+          const DeferredOrganizationDeletionRecoveryGateway();
       organizationProjectMembershipAssignmentGateway =
           organizationProjectMembershipAssignmentGatewayBuilder?.call(
             identitySession,
@@ -538,6 +549,8 @@ final class AppDependencies {
         organizationMembershipSelfLeaveGateway:
             organizationMembershipSelfLeaveGateway,
         organizationOwnerTransferGateway: organizationOwnerTransferGateway,
+        organizationDeletionRecoveryGateway:
+            organizationDeletionRecoveryGateway,
         organizationProjectMembershipAssignmentGateway:
             organizationProjectMembershipAssignmentGateway,
         organizationShareableJoinGateway: organizationShareableJoinGateway,
@@ -573,6 +586,7 @@ final class AppDependencies {
       await organizationDirectedAccountInvitationGateway?.close();
       await organizationMembershipSelfLeaveGateway?.close();
       await organizationOwnerTransferGateway?.close();
+      await organizationDeletionRecoveryGateway?.close();
       await organizationProjectMembershipAssignmentGateway?.close();
       await organizationShareableJoinGateway?.close();
       await currentRelationshipStageGateway?.close();
@@ -632,6 +646,7 @@ final class AppStartupReady extends AppStartupResult {
     required this.organizationDirectedAccountInvitationGateway,
     required this.organizationMembershipSelfLeaveGateway,
     required this.organizationOwnerTransferGateway,
+    required this.organizationDeletionRecoveryGateway,
     this.organizationProjectMembershipAssignmentGateway =
         const DeferredOrganizationProjectMembershipAssignmentGateway(),
     required this.organizationShareableJoinGateway,
@@ -679,6 +694,7 @@ final class AppStartupReady extends AppStartupResult {
   final OrganizationMembershipSelfLeaveGateway
   organizationMembershipSelfLeaveGateway;
   final OrganizationOwnerTransferGateway organizationOwnerTransferGateway;
+  final OrganizationDeletionRecoveryGateway organizationDeletionRecoveryGateway;
   final OrganizationProjectMembershipAssignmentGateway
   organizationProjectMembershipAssignmentGateway;
   final OrganizationShareableJoinGateway organizationShareableJoinGateway;
