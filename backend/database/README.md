@@ -25,6 +25,22 @@ Node 阶段按[正式 runner](../../tool/run_postgres_tests_in_docker.sh)中明�
 入口缺失、编译失败或断言失败都会使整套测试失败；不能把此前 SQL fixture 的通过单独写成
 Backend adapter 集成通过。
 
+## 7DS：原子准备个人空间 PII 导出
+
+0112 实现 Issue #537 的 DB-only 子集。`tongxingzhe_runtime` 只能执行 exact-identity bridge；Backend 先验证 JWT 和 `password` AMR，再传入可信 issuer、subject、当前 project 与认证时间。PostgreSQL 不验证 JWT 签名，也不接收原始 token、AMR、actor、workspace 或 capability。
+
+private writer 以事务时间复核 `-60 seconds <= age < 15 minutes`，锁定 active app user、personal workspace、current active project，再按 target → assignment 顺序读取 workspace 内仍分配给该账号的 active 对象。当前 project 只确认上下文，不缩小导出范围。
+
+数据库生成固定 key 顺序、无额外空白或结尾换行的 UTF-8 `bytea`。同一事务用相同 event、时间、对象数和 bytes 追加不可变审计；审计不保存 project、对象 ID、PII、文件内容或 hash。每次成功调用产生新 event，失败不返回部分 bytes 或写成功审计。
+
+完整 runner 自动发现 0112 migration、structural check、rollback fixture 和双会话并发脚本：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+只调试可丢弃的专用测试库时，先确认 `DATABASE_URL` 不是 production，再依次运行 migration、`backend/database/checks/verify_personal_target_pii_export.sql`、`backend/database/fixtures/0112_personal_target_pii_export.sql` 和 `tool/verify_personal_target_pii_export_concurrency.sh`。并发脚本会保留固定合成数据，每个测试库只运行一次。通过只证明 synthetic PostgreSQL 的可信参数复核、exact bytes、事务锁、value-free audit、ACL、checksum 与 restore；不证明生产 Supabase JWT、Backend HTTP、真实 PII、文件交付或六平台运行时。
+
 ## 7AH：可分享加入链接的数据库创建与预览
 
 0092 实现 Issue #358 的 link-only 子集。

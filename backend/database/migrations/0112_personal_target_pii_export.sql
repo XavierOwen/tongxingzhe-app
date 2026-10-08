@@ -124,6 +124,8 @@ BEGIN
   );
 
   -- Keep the established anonymization lock order: target before assignment.
+  -- ponytail: repeated text concatenation favors one auditable lock/serializer
+  -- path; switch to locked staging plus string_agg if export size proves costly.
   FOR target_row IN
     SELECT candidate.*
     FROM app_data.promotion_targets AS candidate
