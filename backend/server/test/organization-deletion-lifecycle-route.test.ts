@@ -8,6 +8,7 @@ import {
   type VerifiedIdentity,
 } from "../src/identity.js";
 import {
+  OrganizationDeletionLifecycleStoreError,
   type OrganizationDeletionLifecycleStore,
 } from "../src/organization-deletion-lifecycle.js";
 import {createBackendServer} from "../src/server.js";
@@ -42,6 +43,7 @@ test("raw lifecycle paths fail closed before authentication; unsupported methods
       return identity;
     },
     store: {
+      listDeletionEligibleOrganizations: async () => [],
       requestDeletion: async () => {
         storeCalls += 1;
         return deletionReceipt;
@@ -86,6 +88,7 @@ test("lifecycle route authenticates before query, path, and body checks", async 
       return identity;
     },
     store: {
+      listDeletionEligibleOrganizations: async () => [],
       requestDeletion: async () => {
         storeCalls += 1;
         return deletionReceipt;
@@ -135,6 +138,7 @@ test("HTTP exposes exact deletion and restoration receipts after store completio
   const server = createServer({
     verify: async () => identity,
     store: {
+      listDeletionEligibleOrganizations: async () => [],
       requestDeletion: async () => {
         started?.();
         await new Promise<void>((resolve) => { release = resolve; });
@@ -185,6 +189,115 @@ test("HTTP exposes exact deletion and restoration receipts after store completio
     deletion_request_id: deletionRequestId,
     restored_at_utc: restorationReceipt.restoredAtUtc,
   });
+});
+
+test("eligibility raw path and method variants stay 404 before authentication", async () => {
+  let calls = 0;
+  const server = createServer({
+    verify: async () => { calls += 1; return identity; },
+    store: {
+      listDeletionEligibleOrganizations: async () => { calls += 1; return []; },
+      requestDeletion: async () => { throw new Error("mutation must not run"); },
+      restore: async () => { throw new Error("mutation must not run"); },
+    },
+  });
+  const address = await listen(server);
+  test.after(() => close(server));
+  for (const [method, path] of [
+    ["POST", "/v1/organizations/deletion-eligibility"],
+    ["HEAD", "/v1/organizations/deletion-eligibility"],
+    ["GET", "/v1/organizations/deletion-eligibility/"],
+    ["GET", "/v1/organizations/%64eletion-eligibility"],
+    ["GET", "/v1/organizations/./deletion-eligibility"],
+    ["GET", "/v1//organizations/deletion-eligibility"],
+    ["GET", "/v1/organizations/deletion-eligibility#fragment"],
+  ]) {
+    if (method === "HEAD") {
+      const response = await fetch(`http://127.0.0.1:${address.port}${path}`, {method});
+      assert.equal(response.status, 404);
+      assert.equal(response.headers.get("cache-control"), "no-store");
+    } else {
+      assertResponse(await rawRequest(address.port, method!, path!,
+        {authorization: "Bearer token"}, ""), 404, {error: {code: "not_found"}});
+    }
+  }
+  assert.equal(calls, 0);
+});
+
+test("eligibility HTTP authenticates before query/body and never dispatches lifecycle writes", async () => {
+  const events: string[] = [];
+  const server = createServer({
+    verify: async (token) => {
+      events.push("identity");
+      if (token === "invalid") throw new IdentityVerificationError("unauthenticated");
+      return identity;
+    },
+    store: {
+      listDeletionEligibleOrganizations: async (value) => {
+        events.push("store");
+        assert.deepEqual(value, identity);
+        return [workspaceId];
+      },
+      requestDeletion: async () => { throw new Error("mutation must not run"); },
+      restore: async () => { throw new Error("mutation must not run"); },
+    },
+  });
+  const address = await listen(server);
+  test.after(() => close(server));
+  for (const [query, body] of [["?", ""], ["?x=1", ""], ["", "not-json"]]) {
+    for (const token of ["invalid", "valid"]) {
+      events.length = 0;
+      const response = await rawRequest(address.port, "GET",
+        `/v1/organizations/deletion-eligibility${query}`,
+        {authorization: `Bearer ${token}`}, body!);
+      assertResponse(response, token === "invalid" ? 401 : 400, {
+        error: {code: token === "invalid" ? "unauthenticated"
+          : "invalid_organization_deletion_eligibility_request"},
+      });
+      assert.deepEqual(events, ["identity"]);
+    }
+  }
+  events.length = 0;
+  assertResponse(await rawRequest(address.port, "GET",
+    "/v1/organizations/deletion-eligibility", {authorization: "Bearer valid"}, ""),
+  200, {
+    organization_deletion_eligibility_contract_id: "organization-deletion-eligibility:v1",
+    organization_workspace_ids: [workspaceId],
+  });
+  assert.deepEqual(events, ["identity", "store"]);
+});
+
+test("eligibility HTTP exposes empty success and fixed store errors", async () => {
+  let outcome: readonly string[] | Error = [];
+  const server = createServer({
+    verify: async () => identity,
+    store: {
+      listDeletionEligibleOrganizations: async () => {
+        if (outcome instanceof Error) throw outcome;
+        return outcome;
+      },
+      requestDeletion: async () => { throw new Error("mutation must not run"); },
+      restore: async () => { throw new Error("mutation must not run"); },
+    },
+  });
+  const address = await listen(server);
+  test.after(() => close(server));
+  assertResponse(await rawRequest(address.port, "GET",
+    "/v1/organizations/deletion-eligibility", {authorization: "Bearer token"}, ""),
+  200, {
+    organization_deletion_eligibility_contract_id: "organization-deletion-eligibility:v1",
+    organization_workspace_ids: [],
+  });
+  for (const [error, status, code] of [
+    [new OrganizationDeletionLifecycleStoreError("organization_deletion_eligibility_forbidden"),
+      403, "organization_deletion_eligibility_forbidden"],
+    [new Error("private identity / SQL / data"), 503, "organization_deletion_eligibility_unavailable"],
+  ] as const) {
+    outcome = error;
+    assertResponse(await rawRequest(address.port, "GET",
+      "/v1/organizations/deletion-eligibility", {authorization: "Bearer token"}, ""),
+    status, {error: {code}});
+  }
 });
 
 function createServer(options: {

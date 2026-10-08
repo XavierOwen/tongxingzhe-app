@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   handleOrganizationDeletionLifecycle,
+  listOrganizationDeletionEligibility,
   matchOrganizationDeletionLifecycleRequestTarget,
   OrganizationDeletionLifecycleStoreError,
   parseOrganizationDeletionLifecycleBody,
@@ -125,6 +126,7 @@ test("identity is verified before query, path, and body shape", async () => {
           },
         },
         store: {
+          listDeletionEligibleOrganizations: async () => [],
           requestDeletion: async () => {
             events.push("store");
             return deletionReceipt;
@@ -166,6 +168,7 @@ test("identity is verified before query, path, and body shape", async () => {
 
 test("request and restoration return the fixed typed receipts", async () => {
   const store = {
+    listDeletionEligibleOrganizations: async () => [],
     requestDeletion: async (...args: readonly unknown[]) => {
       assert.deepEqual(args, [identity, requestId, workspaceId]);
       return deletionReceipt;
@@ -291,6 +294,7 @@ test("known lifecycle SQL failures map narrowly; malformed rows and unknown erro
       {
         identityVerifier: {verify: async () => identity},
         store: {
+          listDeletionEligibleOrganizations: async () => [],
           requestDeletion: async () => { throw error; },
           restore: async () => { throw error; },
         },
@@ -314,4 +318,119 @@ test("known lifecycle SQL failures map narrowly; malformed rows and unknown erro
     (error: unknown) => error instanceof OrganizationDeletionLifecycleStoreError &&
       error.code === "organization_deletion_unavailable",
   );
+});
+
+const eligibilityRequest = {
+  authorization: "Bearer token",
+  hasQuery: false,
+  hasBody: false,
+};
+
+test("eligibility authenticates before shape/store and returns only ordered UUIDs", async () => {
+  const events: string[] = [];
+  const dependencies = {
+    identityVerifier: {verify: async (token: string) => {
+      events.push("identity");
+      if (token === "bad") throw new IdentityVerificationError("unauthenticated");
+      return identity;
+    }},
+    store: {
+      listDeletionEligibleOrganizations: async (value: VerifiedIdentity) => {
+        assert.deepEqual(value, identity);
+        events.push("store");
+        return [deletionRequestId, workspaceId];
+      },
+      requestDeletion: async () => { throw new Error("mutation must not run"); },
+      restore: async () => { throw new Error("mutation must not run"); },
+    },
+  };
+  for (const shape of [{hasQuery: true}, {hasBody: true}]) {
+    events.length = 0;
+    assert.deepEqual(await listOrganizationDeletionEligibility(
+      {...eligibilityRequest, ...shape}, dependencies,
+    ), {status: 400, body: {error: {code: "invalid_organization_deletion_eligibility_request"}}});
+    assert.deepEqual(events, ["identity"]);
+    events.length = 0;
+    assert.deepEqual(await listOrganizationDeletionEligibility(
+      {...eligibilityRequest, ...shape, authorization: "Bearer bad"}, dependencies,
+    ), {status: 401, body: {error: {code: "unauthenticated"}}});
+    assert.deepEqual(events, ["identity"]);
+  }
+  events.length = 0;
+  assert.deepEqual(await listOrganizationDeletionEligibility(eligibilityRequest, dependencies), {
+    status: 200,
+    body: {
+      organization_deletion_eligibility_contract_id: "organization-deletion-eligibility:v1",
+      organization_workspace_ids: [deletionRequestId, workspaceId],
+    },
+  });
+  assert.deepEqual(events, ["identity", "store"]);
+});
+
+test("eligibility adapter uses one exact identity query and strictly parses UUID-only rows", async () => {
+  const calls: {text: string; values: readonly unknown[]}[] = [];
+  for (const rows of [[], [
+    {organization_workspace_id: deletionRequestId},
+    {organization_workspace_id: workspaceId},
+  ]]) {
+    const store = new PostgresOrganizationDeletionLifecycleStore(async (text, values) => {
+      calls.push({text, values});
+      return {rows};
+    });
+    assert.deepEqual(await store.listDeletionEligibleOrganizations(identity),
+      rows.map((row) => row.organization_workspace_id));
+  }
+  assert.equal(calls.length, 2);
+  for (const call of calls) {
+    assert.match(call.text, /FROM app_data\.list_organization_deletion_eligible_for_identity_v1\(\$1::text, \$2::text\)/);
+    assert.doesNotMatch(call.text, /app_private|LIMIT|organization_name|list_organizations_for_identity|recovery/i);
+    assert.deepEqual(call.values, [identity.issuer, identity.subject]);
+  }
+  for (const rows of [
+    [null], [[]], [{}], [{organization_workspace_id: null}],
+    [{organization_workspace_id: 1}], [{organization_workspace_id: "bad"}],
+    [{organization_workspace_id: workspaceId.toUpperCase()}],
+    [{organization_workspace_id: workspaceId, name: "private"}],
+    [{organization_workspace_id: workspaceId}, {organization_workspace_id: workspaceId}],
+  ]) {
+    const store = new PostgresOrganizationDeletionLifecycleStore(async () => ({rows}));
+    assert.deepEqual(await listOrganizationDeletionEligibility(eligibilityRequest, {
+      identityVerifier: {verify: async () => identity}, store,
+    }), {status: 503, body: {error: {code: "organization_deletion_eligibility_unavailable"}}});
+  }
+});
+
+test("eligibility returns fixed errors for missing dependencies, identity, and narrow SQL failures", async () => {
+  const unavailable = {status: 503, body: {error: {code: "organization_deletion_eligibility_unavailable"}}};
+  assert.deepEqual(await listOrganizationDeletionEligibility(eligibilityRequest, {
+    identityVerifier: undefined, store: undefined,
+  }), unavailable);
+  assert.deepEqual(await listOrganizationDeletionEligibility(eligibilityRequest, {
+    identityVerifier: {verify: async () => identity}, store: undefined,
+  }), unavailable);
+  assert.deepEqual(await listOrganizationDeletionEligibility(
+    {...eligibilityRequest, authorization: undefined, hasQuery: true},
+    {identityVerifier: undefined, store: undefined},
+  ), {status: 401, body: {error: {code: "unauthenticated"}}});
+  for (const error of [new IdentityVerificationError("unavailable"), new Error("private identity")]) {
+    assert.deepEqual(await listOrganizationDeletionEligibility(eligibilityRequest, {
+      identityVerifier: {verify: async () => { throw error; }}, store: undefined,
+    }), unavailable);
+  }
+  for (const [code, message, status] of [
+    ["42501", "organization deletion eligibility forbidden", 403],
+    ["42501", "organization deletion eligibility forbidden private detail", 503],
+    ["22023", "invalid organization deletion eligibility identity", 503],
+    ["55000", "organization deletion eligibility unavailable", 503],
+    ["XX000", "private SQL or identity", 503],
+  ] as const) {
+    const store = new PostgresOrganizationDeletionLifecycleStore(async () => {
+      throw Object.assign(new Error(message), {code});
+    });
+    assert.deepEqual(await listOrganizationDeletionEligibility(eligibilityRequest, {
+      identityVerifier: {verify: async () => identity}, store,
+    }), {status, body: {error: {code: status === 403
+      ? "organization_deletion_eligibility_forbidden"
+      : "organization_deletion_eligibility_unavailable"}}});
+  }
 });

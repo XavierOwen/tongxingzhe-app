@@ -149,6 +149,7 @@ import {
 } from "./organization-owner-transfer.js";
 import {
   handleOrganizationDeletionLifecycle,
+  listOrganizationDeletionEligibility,
   matchOrganizationDeletionLifecycleRequestTarget,
   type OrganizationDeletionLifecycleStore,
 } from "./organization-deletion-lifecycle.js";
@@ -383,6 +384,26 @@ export function createBackendServer(
       } catch (error) {
         writeBodyError(response, error);
       }
+      return;
+    }
+
+    if (
+      request.method === "GET" &&
+      (request.url ?? "").split("?")[0] === "/v1/organizations/deletion-eligibility"
+    ) {
+      const result = await listOrganizationDeletionEligibility(
+        {
+          authorization: request.headers.authorization,
+          hasQuery: (request.url ?? "").includes("?"),
+          hasBody: requestDeclaresBody(request.headers),
+        },
+        {
+          identityVerifier: dependencies.identityVerifier,
+          store: dependencies.organizationDeletionLifecycleStore,
+        },
+      );
+      response.statusCode = result.status;
+      response.end(JSON.stringify(result.body));
       return;
     }
 

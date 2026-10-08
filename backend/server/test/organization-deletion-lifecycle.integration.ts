@@ -32,7 +32,7 @@ const workspaceRequestId = "00000000-0104-4000-8000-000000000002";
 const restoreRequestId = "00000000-0104-5000-8000-000000000002";
 const deletionRequestId = "00000000-0104-4000-8000-000000000002";
 
-test("Backend lifecycle routes preserve 0104 bridge receipts and six timestamp digits", async () => {
+test("Backend lifecycle routes preserve receipts, owner eligibility, and read-only observations", async () => {
   const pool = new Pool({connectionString: databaseUrl});
   const client = await pool.connect();
   let server: Server | undefined;
@@ -49,7 +49,8 @@ test("Backend lifecycle routes preserve 0104 bridge receipts and six timestamp d
       (text, values) => client.query(text, [...values]),
     );
     server = createBackendServer({
-      identityVerifier: {verify: async () => identity},
+      identityVerifier: {verify: async (token) => token === "fixture-token"
+        ? identity : {issuer, subject: decodeURIComponent(token)}},
       organizationDeletionLifecycleStore: store,
       contextStore: {
         loadOrCreate: async () => {
@@ -58,6 +59,38 @@ test("Backend lifecycle routes preserve 0104 bridge receipts and six timestamp d
       },
     });
     const address = await listen(server);
+
+    const snapshotSql = [
+      "app_data.workspaces", "app_data.app_users", "app_data.external_identities",
+      "app_data.organization_memberships", "app_data.organization_owner_assignments",
+      "app_private.organization_deletion_current",
+      "app_private.organization_deletion_request_claims",
+      "app_private.organization_deletion_restore_claims",
+      "app_private.organization_deletion_audit_events",
+    ].map((table) => `SELECT '${table}' AS name,
+      COALESCE(jsonb_agg(to_jsonb(record) ORDER BY to_jsonb(record)::text), '[]') AS rows
+      FROM ${table} AS record`).join(" UNION ALL ") + " ORDER BY name";
+    await client.query("RESET ROLE");
+    const beforeReads = (await client.query(snapshotSql)).rows;
+    await client.query("SET LOCAL ROLE tongxingzhe_runtime");
+    for (const subject of ["owner one", "owner two", "member"]) {
+      const eligibility = await getEligibility(address.port, subject);
+      assert.equal(eligibility.status, 200);
+      assert.deepEqual(eligibility.body, {
+        organization_deletion_eligibility_contract_id: "organization-deletion-eligibility:v1",
+        organization_workspace_ids: subject === "member" ? [] : [workspaceId],
+      });
+    }
+    await client.query("SAVEPOINT unavailable_identity");
+    const forbidden = await getEligibility(address.port, "unknown");
+    assert.equal(forbidden.status, 403);
+    assert.deepEqual(forbidden.body, {
+      error: {code: "organization_deletion_eligibility_forbidden"},
+    });
+    await client.query("ROLLBACK TO SAVEPOINT unavailable_identity");
+    await client.query("RESET ROLE");
+    assert.deepEqual((await client.query(snapshotSql)).rows, beforeReads);
+    await client.query("SET LOCAL ROLE tongxingzhe_runtime");
 
     const deletion = await postJson(address.port,
       `/v1/organizations/${workspaceId}/deletion-requests`,
@@ -75,6 +108,13 @@ test("Backend lifecycle routes preserve 0104 bridge receipts and six timestamp d
       /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/);
     assert.match(String(deletion.body.purge_after_utc),
       /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/);
+
+    const pendingEligibility = await getEligibility(address.port, "owner two");
+    assert.equal(pendingEligibility.status, 200);
+    assert.deepEqual(pendingEligibility.body, {
+      organization_deletion_eligibility_contract_id: "organization-deletion-eligibility:v1",
+      organization_workspace_ids: [],
+    });
 
     const replay = await postJson(address.port,
       `/v1/organizations/${workspaceId}/deletion-requests`,
@@ -95,7 +135,19 @@ test("Backend lifecycle routes preserve 0104 bridge receipts and six timestamp d
     assert.match(String(restoration.body.restored_at_utc),
       /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/);
 
-    process.stdout.write("Backend organization deletion lifecycle HTTP integration: passed\n");
+    await client.query("RESET ROLE");
+    const beforeRestoredRead = (await client.query(snapshotSql)).rows;
+    await client.query("SET LOCAL ROLE tongxingzhe_runtime");
+    const restoredEligibility = await getEligibility(address.port, "owner two");
+    assert.equal(restoredEligibility.status, 200);
+    assert.deepEqual(restoredEligibility.body, {
+      organization_deletion_eligibility_contract_id: "organization-deletion-eligibility:v1",
+      organization_workspace_ids: [workspaceId],
+    });
+    await client.query("RESET ROLE");
+    assert.deepEqual((await client.query(snapshotSql)).rows, beforeRestoredRead);
+
+    process.stdout.write("Backend organization deletion lifecycle and eligibility HTTP integration: passed\n");
   } finally {
     if (server !== undefined) await close(server);
     try {
@@ -106,6 +158,18 @@ test("Backend lifecycle routes preserve 0104 bridge receipts and six timestamp d
     }
   }
 });
+
+async function getEligibility(port: number, subject: string): Promise<{
+  readonly status: number;
+  readonly body: unknown;
+}> {
+  const response = await fetch(`http://127.0.0.1:${port}/v1/organizations/deletion-eligibility`, {
+    headers: {authorization: `Bearer ${encodeURIComponent(subject)}`},
+  });
+  assert.equal(response.headers.get("content-type"), "application/json; charset=utf-8");
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  return {status: response.status, body: await response.json() as unknown};
+}
 
 async function postJson(
   port: number,
