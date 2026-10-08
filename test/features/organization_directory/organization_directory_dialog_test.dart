@@ -97,8 +97,8 @@ void main() {
         _organizationA.organizationWorkspaceId,
       );
       expect(directory.listCalls, 1);
-    await tester.tap(
-      find.byKey(const ValueKey('organization-deletion-request-done')),
+      await tester.tap(
+        find.byKey(const ValueKey('organization-deletion-request-done')),
       );
       await tester.pumpAndSettle();
       expect(directory.listCalls, 2);
