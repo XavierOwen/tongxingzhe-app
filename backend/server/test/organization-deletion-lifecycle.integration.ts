@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
+import {randomUUID} from "node:crypto";
 import {type Server} from "node:http";
 import {Pool} from "pg";
 import test from "node:test";
@@ -35,6 +36,7 @@ const deletionRequestId = "00000000-0104-4000-8000-000000000002";
 test("Backend lifecycle routes preserve receipts, owner eligibility, and read-only observations", async () => {
   const pool = new Pool({connectionString: databaseUrl});
   const client = await pool.connect();
+  const unrelatedUserId = randomUUID();
   let server: Server | undefined;
   try {
     await client.query("BEGIN");
@@ -60,18 +62,45 @@ test("Backend lifecycle routes preserve receipts, owner eligibility, and read-on
     });
     const address = await listen(server);
 
-    const snapshotSql = [
-      "app_data.workspaces", "app_data.app_users", "app_data.external_identities",
-      "app_data.organization_memberships", "app_data.organization_owner_assignments",
-      "app_private.organization_deletion_current",
-      "app_private.organization_deletion_request_claims",
-      "app_private.organization_deletion_restore_claims",
-      "app_private.organization_deletion_audit_events",
-    ].map((table) => `SELECT '${table}' AS name,
+    // Lifecycle writers require READ COMMITTED. Freeze the fixture's actors so
+    // parallel committed fixtures cannot change these read-only observations.
+    await client.query("RESET ROLE");
+    const actorIds = (await client.query<{app_user_id: string}>(
+      "SELECT app_user_id FROM app_data.external_identities WHERE issuer=$1", [issuer],
+    )).rows.map((row) => row.app_user_id);
+    assert.equal(actorIds.length, 4);
+    const snapshotTables = [
+      ["app_data.workspaces", "workspace_id=$1::uuid OR personal_owner_app_user_id=ANY($2::uuid[])"],
+      ["app_data.app_users", "app_user_id=ANY($2::uuid[])"],
+      ["app_data.external_identities", "issuer=$3::text OR app_user_id=ANY($2::uuid[])"],
+      ["app_data.organization_memberships", "organization_workspace_id=$1::uuid OR app_user_id=ANY($2::uuid[])"],
+      ["app_data.organization_owner_assignments", "organization_membership_id IN (SELECT organization_membership_id FROM app_data.organization_memberships WHERE organization_workspace_id=$1::uuid OR app_user_id=ANY($2::uuid[]))"],
+      ["app_private.organization_deletion_current", "organization_workspace_id=$1::uuid"],
+      ["app_private.organization_deletion_request_claims", "organization_workspace_id=$1::uuid"],
+      ["app_private.organization_deletion_restore_claims", "organization_workspace_id=$1::uuid"],
+      ["app_private.organization_deletion_audit_events", "organization_workspace_id=$1::uuid"],
+    ] as const;
+    const snapshotSql = snapshotTables.map(([table, predicate]) => `SELECT '${table}' AS name,
+      COALESCE(jsonb_agg(to_jsonb(record) ORDER BY to_jsonb(record)::text), '[]') AS rows
+      FROM ${table} AS record WHERE ${predicate}`).join(" UNION ALL ") + " ORDER BY name";
+    const snapshotValues = [workspaceId, actorIds, issuer];
+    const beforeReads = (await client.query(snapshotSql, snapshotValues)).rows;
+
+    // A separate connection commits between observations: the old full-table
+    // snapshot changes, while this fixture's rows remain unchanged.
+    const unboundedSnapshotSql = snapshotTables.map(([table]) => `SELECT '${table}' AS name,
       COALESCE(jsonb_agg(to_jsonb(record) ORDER BY to_jsonb(record)::text), '[]') AS rows
       FROM ${table} AS record`).join(" UNION ALL ") + " ORDER BY name";
-    await client.query("RESET ROLE");
-    const beforeReads = (await client.query(snapshotSql)).rows;
+    const beforeUnrelatedCommit = (await client.query(unboundedSnapshotSql)).rows;
+    await pool.query("INSERT INTO app_data.app_users(app_user_id,status) VALUES ($1::uuid,'active')", [unrelatedUserId]);
+    assert.notDeepEqual((await client.query(unboundedSnapshotSql)).rows, beforeUnrelatedCommit);
+    assert.deepEqual((await client.query(snapshotSql, snapshotValues)).rows, beforeReads);
+
+    // Scope must still expose our own real writes, not merely stabilize output.
+    await client.query("SAVEPOINT snapshot_write_probe");
+    await client.query("UPDATE app_data.workspaces SET display_name='0104 snapshot write probe' WHERE workspace_id=$1::uuid", [workspaceId]);
+    assert.notDeepEqual((await client.query(snapshotSql, snapshotValues)).rows, beforeReads);
+    await client.query("ROLLBACK TO SAVEPOINT snapshot_write_probe");
     await client.query("SET LOCAL ROLE tongxingzhe_runtime");
     for (const subject of ["owner one", "owner two", "member"]) {
       const eligibility = await getEligibility(address.port, subject);
@@ -89,7 +118,7 @@ test("Backend lifecycle routes preserve receipts, owner eligibility, and read-on
     });
     await client.query("ROLLBACK TO SAVEPOINT unavailable_identity");
     await client.query("RESET ROLE");
-    assert.deepEqual((await client.query(snapshotSql)).rows, beforeReads);
+    assert.deepEqual((await client.query(snapshotSql, snapshotValues)).rows, beforeReads);
     await client.query("SET LOCAL ROLE tongxingzhe_runtime");
 
     const deletion = await postJson(address.port,
@@ -136,7 +165,7 @@ test("Backend lifecycle routes preserve receipts, owner eligibility, and read-on
       /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/);
 
     await client.query("RESET ROLE");
-    const beforeRestoredRead = (await client.query(snapshotSql)).rows;
+    const beforeRestoredRead = (await client.query(snapshotSql, snapshotValues)).rows;
     await client.query("SET LOCAL ROLE tongxingzhe_runtime");
     const restoredEligibility = await getEligibility(address.port, "owner two");
     assert.equal(restoredEligibility.status, 200);
@@ -145,7 +174,7 @@ test("Backend lifecycle routes preserve receipts, owner eligibility, and read-on
       organization_workspace_ids: [workspaceId],
     });
     await client.query("RESET ROLE");
-    assert.deepEqual((await client.query(snapshotSql)).rows, beforeRestoredRead);
+    assert.deepEqual((await client.query(snapshotSql, snapshotValues)).rows, beforeRestoredRead);
 
     process.stdout.write("Backend organization deletion lifecycle and eligibility HTTP integration: passed\n");
   } finally {
@@ -154,7 +183,11 @@ test("Backend lifecycle routes preserve receipts, owner eligibility, and read-on
       await client.query("ROLLBACK");
     } finally {
       client.release();
-      await pool.end();
+      try {
+        await pool.query("DELETE FROM app_data.app_users WHERE app_user_id=$1::uuid", [unrelatedUserId]);
+      } finally {
+        await pool.end();
+      }
     }
   }
 });
