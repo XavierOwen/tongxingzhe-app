@@ -46,6 +46,7 @@ import '../screens/auth_screen.dart';
 import '../screens/production_home_shell.dart';
 import '../services/location_service.dart';
 import '../sync/sync_engine_factory.dart';
+import '../targets/personal_target_csv_import.dart';
 import '../targets/promotion_target.dart';
 import 'app_dependencies.dart';
 import 'private_session_data_guard.dart';
@@ -88,6 +89,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
   QuestionnaireCatalog? _questionnaireCatalog;
   QuestionnaireAdministrationGateway? _questionnaireAdministration;
   PromotionTargetGateway? _promotionTargetGateway;
+  PersonalTargetCsvImportGateway? _personalTargetCsvImportGateway;
   PersonalActionPlanGateway? _personalActionPlanGateway;
   PersonalActionReminderGateway? _personalActionReminderGateway;
   PersonalFollowUpConsentOptInGateway? _personalFollowUpConsentOptInGateway;
@@ -134,6 +136,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       :final questionnaireCatalog,
       :final questionnaireAdministration,
       :final promotionTargetGateway,
+      :final personalTargetCsvImportGateway,
       :final personalActionPlanGateway,
       :final personalActionReminderGateway,
       :final personalFollowUpConsentOptInGateway,
@@ -168,6 +171,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       _questionnaireCatalog = questionnaireCatalog;
       _questionnaireAdministration = questionnaireAdministration;
       _promotionTargetGateway = promotionTargetGateway;
+      _personalTargetCsvImportGateway = personalTargetCsvImportGateway;
       _personalActionPlanGateway = personalActionPlanGateway;
       _personalActionReminderGateway = personalActionReminderGateway;
       _personalFollowUpConsentOptInGateway =
@@ -205,6 +209,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       startup.questionnaireCatalog.close(),
       startup.questionnaireAdministration.close(),
       startup.promotionTargetGateway.close(),
+      startup.personalTargetCsvImportGateway.close(),
       startup.personalActionPlanGateway.close(),
       startup.personalActionReminderGateway.close(),
       startup.personalFollowUpConsentOptInGateway.close(),
@@ -239,6 +244,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
     unawaited(_questionnaireCatalog?.close());
     unawaited(_questionnaireAdministration?.close());
     unawaited(_promotionTargetGateway?.close());
+    unawaited(_personalTargetCsvImportGateway?.close());
     unawaited(_personalActionPlanGateway?.close());
     unawaited(_personalActionReminderGateway?.close());
     unawaited(_personalFollowUpConsentOptInGateway?.close());
@@ -284,6 +290,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
             :final questionnaireCatalog,
             :final questionnaireAdministration,
             :final promotionTargetGateway,
+            :final personalTargetCsvImportGateway,
             :final personalActionPlanGateway,
             :final personalActionReminderGateway,
             :final personalFollowUpConsentOptInGateway,
@@ -323,6 +330,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
               questionnaireCatalog: questionnaireCatalog,
               questionnaireAdministration: questionnaireAdministration,
               promotionTargetGateway: promotionTargetGateway,
+              personalTargetCsvImportGateway: personalTargetCsvImportGateway,
               personalActionPlanGateway: personalActionPlanGateway,
               personalActionReminderGateway: personalActionReminderGateway,
               personalFollowUpConsentOptInGateway:
@@ -384,6 +392,7 @@ class _ReadyApp extends StatefulWidget {
     required this.questionnaireCatalog,
     required this.questionnaireAdministration,
     required this.promotionTargetGateway,
+    required this.personalTargetCsvImportGateway,
     required this.personalActionPlanGateway,
     required this.personalActionReminderGateway,
     required this.personalFollowUpConsentOptInGateway,
@@ -424,6 +433,7 @@ class _ReadyApp extends StatefulWidget {
   final QuestionnaireCatalog questionnaireCatalog;
   final QuestionnaireAdministrationGateway questionnaireAdministration;
   final PromotionTargetGateway promotionTargetGateway;
+  final PersonalTargetCsvImportGateway personalTargetCsvImportGateway;
   final PersonalActionPlanGateway personalActionPlanGateway;
   final PersonalActionReminderGateway personalActionReminderGateway;
   final PersonalFollowUpConsentOptInGateway personalFollowUpConsentOptInGateway;
@@ -522,6 +532,7 @@ final class _ReadyAppState extends State<_ReadyApp> {
         contactPageClosedEvents: contactPageClosedEvents,
         questionnaireAdministration: widget.questionnaireAdministration,
         promotionTargetGateway: widget.promotionTargetGateway,
+        personalTargetCsvImportGateway: widget.personalTargetCsvImportGateway,
         personalActionPlanGateway: widget.personalActionPlanGateway,
         personalActionReminderGateway: widget.personalActionReminderGateway,
         personalFollowUpConsentOptInGateway:

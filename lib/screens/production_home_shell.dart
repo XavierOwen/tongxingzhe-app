@@ -51,6 +51,7 @@ import '../questionnaires/questionnaire_administration.dart';
 import '../routing/app_router.dart';
 import '../services/location_service.dart';
 import '../sync/sync_engine_factory.dart';
+import '../targets/personal_target_csv_import.dart';
 import '../targets/promotion_target.dart';
 
 /// 正式产品的四项主框架。
@@ -73,6 +74,7 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.contactPageClosedEvents,
     required this.questionnaireAdministration,
     required this.promotionTargetGateway,
+    required this.personalTargetCsvImportGateway,
     required this.personalActionPlanGateway,
     required this.personalActionReminderGateway,
     required this.personalFollowUpConsentOptInGateway,
@@ -118,6 +120,7 @@ final class ProductionHomeShell extends StatefulWidget {
   final ValueListenable<ContactPageClosedEvent> contactPageClosedEvents;
   final QuestionnaireAdministrationGateway questionnaireAdministration;
   final PromotionTargetGateway promotionTargetGateway;
+  final PersonalTargetCsvImportGateway personalTargetCsvImportGateway;
   final PersonalActionPlanGateway personalActionPlanGateway;
   final PersonalActionReminderGateway personalActionReminderGateway;
   final PersonalFollowUpConsentOptInGateway personalFollowUpConsentOptInGateway;
@@ -309,9 +312,16 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
       PromotionTargetDirectoryPage(
         text: strings,
         gateway: widget.promotionTargetGateway,
+        importGateway: widget.personalTargetCsvImportGateway,
         idGenerator: widget.idGenerator,
         clock: widget.clock,
-        scopeKey: '${widget.context.workspace.id}/${widget.context.project.id}',
+        scopeKey:
+            '${widget.context.appUserId}/'
+            '${widget.context.workspace.id}/'
+            '${widget.context.project.id}',
+        canImport:
+            widget.context.workspace.kind == WorkspaceKind.personal &&
+            widget.context.capabilities.contains('import_target_pii'),
         canCreate: widget.context.capabilities.contains('create_target'),
         canConfigureStageAliases: widget.context.capabilities.contains(
           'manage_analysis_definitions',
