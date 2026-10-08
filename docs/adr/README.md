@@ -18,6 +18,7 @@
 | --- | --- | --- | --- |
 | [0022](./0022-offline-first-contact-recording-with-an-outbox.md) | 已接受，2026-07-31 | Slice 1–2；`ARCH-001`、`ARCH-007`、`TEST-001`、`TEST-003` | 离线事实和 Outbox 总原则；运行状态由 ADR-0098 细化 |
 | [0025](./0025-use-firebase-authentication-for-production-identity.md) | 已被 ADR-0096 取代 | Slice 0；`AUTH-004`–`AUTH-008` | 保留认证决策历史 |
+| [0041](./0041-imported-target-data-never-creates-contact-facts.md) | 已接受，2026-07-31；7DN 于 2026-10-08 细化 | Slice 7DN；Issue #527；`PII-007`、`PII-010`、`TEST-140`、`MANUAL-129` | CSV v1 只导入个人空间对象；预览、精确重复提示、整批原子确认和 value-free 审计不生成接触事实 |
 | [0067](./0067-anonymous-analytics-prevent-differencing-without-noise.md) | 已被 ADR-0099 取代 | Slice 6；`PRIVACY-001`–`PRIVACY-011` | 原“防相减”表述不再是当前保证 |
 | [0096](./0096-use-supabase-auth-with-cognito-fallback.md) | 已接受，2026-07-31 | Slice 0／发布门槛；`AUTH-004`–`AUTH-008` | Supabase Auth 首选，Cognito 后备 |
 | [0097](./0097-use-supabase-postgresql-for-the-initial-stage.md) | 已接受，2026-07-31 | Slice 0／发布门槛；`ARCH-003`–`ARCH-010` | 首阶段数据库与发布前复审 |
