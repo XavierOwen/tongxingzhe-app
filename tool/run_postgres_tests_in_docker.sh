@@ -11042,6 +11042,89 @@ fi
 printf '%s\n' "${organization_purge_foundation_upgrade_replay}"
 echo '0107→0108 live lifecycle rows, no-op checksum replay：通过。'
 
+echo '验证 0108→0109 既有丰富组织图、数据保留、checksum 与终结清除。'
+docker exec "${container_name}" psql -U postgres -d "${organization_deletion_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --command="
+    DO \$baseline\$ BEGIN
+      IF (SELECT max(left(version,4)) FROM app_migrations.schema_migrations) IS DISTINCT FROM '0108'
+        OR (SELECT count(*) FROM app_migrations.schema_migrations)<>107 THEN
+        RAISE EXCEPTION '0109 upgrade requires exact 0108 baseline'; END IF;
+    END \$baseline\$;" \
+  --command='BEGIN;' \
+  --file=/workspace/backend/database/fixtures/shared/organization_purge_finalizer_seed.sql \
+  --command="CREATE TABLE public.fixture_0109_upgrade_preserved AS TABLE fixture_0109_preserved;
+    CREATE TABLE public.fixture_0109_upgrade_root AS
+      SELECT organization_workspace_id,(SELECT deletion_request_id FROM fixture_0109_cycle) AS cycle
+      FROM fixture_0109_org; COMMIT;"
+docker exec "${container_name}" bash -lc \
+  'mkdir -p /tmp/organization-purge-finalizer-upgrade-only && cp /workspace/backend/database/migrations/0109_organization_purge_finalizer.sql /tmp/organization-purge-finalizer-upgrade-only/'
+organization_purge_finalizer_upgrade_before="$(
+  docker exec "${container_name}" pg_dump "${organization_deletion_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private --no-owner --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+docker exec --env DATABASE_URL="${organization_deletion_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/organization-purge-finalizer-upgrade-only "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql -U postgres -d "${organization_deletion_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_organization_purge_finalizer.sql \
+  --command="DO \$metadata\$ BEGIN
+    IF (SELECT max(left(version,4)) FROM app_migrations.schema_migrations) IS DISTINCT FROM '0109'
+      OR (SELECT count(*) FROM app_migrations.schema_migrations)<>108 THEN
+      RAISE EXCEPTION '0108→0109 migration metadata drift'; END IF;
+    END \$metadata\$;"
+organization_purge_finalizer_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${organization_deletion_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/organization-purge-finalizer-upgrade-only "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${organization_purge_finalizer_upgrade_replay}" != \
+    *'已验证 0109_organization_purge_finalizer（无需重复执行）'* ]] \
+  || [[ "${organization_purge_finalizer_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0109 migration did not skip its checksum-verified replay.' >&2
+  printf '%s\n' "${organization_purge_finalizer_upgrade_replay}" >&2
+  exit 1
+fi
+organization_purge_finalizer_upgrade_after="$(
+  docker exec "${container_name}" pg_dump "${organization_deletion_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private --no-owner --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+if [[ "${organization_purge_finalizer_upgrade_before}" != "${organization_purge_finalizer_upgrade_after}" ]]; then
+  echo '0109 migration or checksum replay changed existing rich business/lifecycle rows.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql -U postgres -d "${organization_deletion_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --command="BEGIN;
+    CREATE TEMP TABLE fixture_0109_upgrade_completed AS
+      SELECT receipt.* FROM public.fixture_0109_upgrade_root root,
+      LATERAL app_private.finalize_organization_purge_v1(root.organization_workspace_id,root.cycle) receipt;
+    DO \$upgrade_purge\$
+    DECLARE checked_relation text; actual_rows jsonb; expected_rows jsonb;
+    BEGIN
+      IF (SELECT count(*) FROM fixture_0109_upgrade_completed)<>1
+        OR EXISTS (SELECT 1 FROM app_private.organization_purge_delete_authorizations)
+        OR EXISTS (SELECT 1 FROM app_private.organization_deletion_current a JOIN public.fixture_0109_upgrade_root r
+          ON a.organization_workspace_id=r.organization_workspace_id)
+        OR (SELECT count(DISTINCT claim_family) FROM app_private.organization_purge_request_tombstones)<>21
+        OR EXISTS (SELECT 1 FROM fixture_0109_upgrade_completed completed CROSS JOIN public.fixture_0109_upgrade_root root
+          CROSS JOIN LATERAL app_private.finalize_organization_purge_v1(root.organization_workspace_id,root.cycle) retry
+          WHERE to_jsonb(completed) IS DISTINCT FROM to_jsonb(retry)) THEN
+        RAISE EXCEPTION '0109 upgraded graph completion/retry/auth drift'; END IF;
+      FOR checked_relation IN SELECT format('%I.%I',n.nspname,c.relname) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+        WHERE n.nspname IN ('app_data','app_private') AND c.relkind='r' AND c.relname NOT LIKE '%request_tombstones' LOOP
+        EXECUTE format('SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),''[]''::jsonb) FROM %s t',checked_relation) INTO actual_rows;
+        SELECT coalesce(jsonb_agg(row_data ORDER BY row_data::text),'[]'::jsonb) INTO expected_rows
+          FROM public.fixture_0109_upgrade_preserved WHERE relation_name=checked_relation;
+        IF actual_rows IS DISTINCT FROM expected_rows THEN RAISE EXCEPTION '0109 upgraded purge changed control or left payload in %',checked_relation; END IF;
+      END LOOP;
+    END \$upgrade_purge\$;
+    COMMIT;"
+printf '%s\n' "${organization_purge_finalizer_upgrade_replay}"
+echo '0108→0109 committed rich graph preserved, atomic finalizer, no-op checksum replay：通过。'
+
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 
