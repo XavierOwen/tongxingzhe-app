@@ -1344,7 +1344,7 @@ final class _TrackingManagementReportExportDelivery
 
   @override
   Future<ManagementReportExportDeliveryResult> requestDownload(
-    ManagementReportExportArtifact artifact,
+    ExportDownloadArtifact artifact,
   ) async => const ManagementReportDownloadRequested();
 }
 

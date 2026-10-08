@@ -266,6 +266,7 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `PII-009` | 人工合并保留原对象、字段来源、项目关系和接触关联，必须可逆拆分；无法确定归属的合并后新数据由人工分配。 |
 | `PII-010` | CSV v1 只向当前账号拥有的个人空间开放。导入必须先预览、再明确确认；确认时重验权限、行内容和同空间重复提示。同批全部成功或全部回滚，导入者是每个新对象的创建者和初始跟进者。审计不保存原 CSV 或字段值。 |
 | `PII-011` | 个人空间 PII 导出 v1 同时要求 `export_target_pii` 与 `view_assigned_target_pii`，并只接受已验签 JWT 中 15 分钟内的 `password` AMR。导出只包含同一事务内仍分配给当前账号的 active 对象，使用固定 canonical JSON，并追加不含对象资料的不可变导出审计。 |
+| `PII-012` | 个人空间 PII JSON 导出分为 artifact 准备与 Web 浏览器下载请求两步。准备完成只在当前页面内存保留已验证的原始 bytes、固定 MIME 和文件名；只有用户再次明确操作才请求下载。失败重试复用同一 artifact，不重新请求导出、不重新序列化或新增服务端审计；非 Web 明确 unavailable。成功只表示浏览器已接受请求，不证明文件已保存、打开或保留。 |
 
 #### 5.6.3 个人空间 CSV 导入 v1
 
@@ -3216,6 +3217,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-128` | 学习文档说明7CT的生命周期合同：任一current active owner可提交删除申请或在连续720小时恢复窗口内恢复；首次申请时间取数据库UTC，窗口为半开区间，恢复绑定当前opaque `deletion_request_id`以隔离跨周期迟到请求，状态转换、exact replay、drift conflict与不可延长deadline固定。恢复期冻结普通组织写入，只允许首次恢复writer及其claim／状态变更、live exact replay、既有管理报告读取和必要value-free access audit四类受控例外；普通目录隐藏，恢复目录仅向current owner开放。期满不可恢复，受控purge任一步失败都关闭且不留部分清除，只保留最小value-free tombstone。明确本票仅文档合同，#350 readiness不是实现证据，不证明DB、HTTP、Flutter、清除、备份或真人平台。 |
 | `MANUAL-129` | 学习文档说明个人空间 CSV v1 的 `import_target_pii` 来源、UTF-8 文件与四列 header、500 行／1 MiB 上限、行校验、精确重复提示、明确另建、stale preview、整批原子写入、精确重放与 value-free 审计。它明确导入者只是 creator 和初始跟进者，不因导入生成接触、阶段或同意；文档合同不证明 parser、数据库、HTTP、Flutter、真实 PII 或部署。 |
 | `MANUAL-130` | 学习文档说明个人空间 PII 导出 v1 的双 capability、workspace-wide active assignment 范围、15 分钟 `password` AMR、60 秒时钟偏差、固定 canonical JSON 与下载 headers。它说明失败关闭、不返回部分资料、value-free 审计、重试的新 event 和客户端内存交付边界。文档合同不证明数据库、Backend、Flutter、生产 AMR、真实 PII 或六平台交付。 |
+| `MANUAL-131` | 学习文档说明个人空间 PII JSON 导出的服务端准备／审计、客户端内存 artifact 与 Web 浏览器下载请求的区别。第二次明确操作传递原始 bytes、固定 MIME 和文件名；失败重试不重新 GET 或新增审计，状态只表示“已请求下载”。Web 请求不证明保存，原生保存／分享和生产 Supabase password AMR 尚未验证。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3535,6 +3537,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-139` | 删除入口资格的 DB reader 验证 exact identity、active 账号空目录、current owner 与 membership 半开区间、projectless／多 owner、restored 与 pending／due 排除、只读及 runtime 最小 ACL；0105→0106 升级、checksum 重放和 dump／restore 保留既有数据。HTTP 与 Flutter 继续验证固定 UUID-only 合同、失败关闭、目录取交集、会话隔离以及撤权后 POST 重新授权。合成证据不证明生产身份、部署、真人平台或终结清除。 |
 | `TEST-140` | 7DN 只验证文档合同：Product Spec 的 `PII-007`／`PII-010`、ADR-0041 与说明书 `MANUAL-129` 逐项覆盖个人空间 capability、UTF-8 四列 CSV、预览 receipt 绑定与 15 分钟半开期限、精确重复信号、明确另建、stale preview、best-effort 非唯一性边界、整批原子写入、精确重放和 value-free 审计。运行 Markdown links、diff 和 no-slop 检查；本票不证明 parser、DB、HTTP、Flutter、真实 PII、生产授权或部署。 |
 | `TEST-141` | 7DR 只验证文档合同：Product Spec 的 `PII-006`／`PII-011`、ADR-0040 与说明书 `MANUAL-130` 逐项覆盖个人／组织 capability 边界、workspace-wide active assignment 范围、15 分钟 `password` AMR 与 refresh 排除、canonical JSON exact keys／顺序／null、下载 headers、稳定失败和零部分资料。还要覆盖 value-free 审计、`export_event_id` 绑定、`prepared` 结果、重试新 event 与客户端内存边界。运行 Markdown links、diff 和 no-slop 检查；本票不证明 DB、Backend、Flutter、生产 JWT AMR、真实 PII、六平台保存／分享或部署。 |
+| `TEST-142` | 7DV 覆盖 artifact 未准备时阻止 delivery、准备后不自动下载、第二次明确操作传递原始 bytes／固定 MIME／文件名、无第二次 export GET、双击去重、失败后同 artifact 重试、非 Web unavailable，以及身份／上下文／capability／在线状态／页面生命周期／请求代次变化后的迟到结果隔离。Web adapter 另覆盖 anchor 与 object URL 清理；既有管理报告行为必须保持。测试只证明浏览器下载请求，不证明文件保存、生产 AMR 或原生交付。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3937,6 +3940,8 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 7DN／#527 固定个人空间 CSV 导入 v1：当前 owner 上下文须明确包含 `import_target_pii`，文件绑定四列和有界大小／行数，必须先预览再确认。同空间精确电话／email 只提示，不自动合并；确认重验后整批写入或整批回滚。导入者成为创建者和初始跟进者，不生成接触、阶段或同意，审计不保存 CSV 内容。本票只交付文档合同，不证明导入已实现。
 
 7DR／#535 固定个人空间 PII 导出 v1：当前 owner 上下文必须同时具有 `export_target_pii` 与 `view_assigned_target_pii`，并提供 15 分钟内的已验签 `password` AMR。导出覆盖当前账号在个人空间仍分配的全部 active 对象，使用固定 canonical JSON 与 value-free 审计。本票只交付文档合同，不证明 DB、Backend、Flutter、生产 AMR 或真实文件交付已实现。
+
+7DV／#543 在个人空间 PII artifact 准备完成后提供第二次明确的 Web 浏览器下载请求。delivery 只传递已验证的原始 bytes、固定 MIME 和文件名；失败重试复用同一 artifact，不重新 GET、序列化或新增服务端审计。身份、上下文、权限、在线可信状态、页面或请求代次变化会清除 artifact 和交付状态；非 Web 为 unavailable。界面只表达“已请求下载”，不证明文件保存、打开或保留；原生保存／分享及生产 Supabase password AMR 仍未验证。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 

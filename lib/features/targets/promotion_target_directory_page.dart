@@ -9,6 +9,7 @@ import '../../app_session/session_context_gateway.dart';
 import '../../foundation/runtime_values.dart';
 import '../../identity/identity_session.dart';
 import '../../l10n/app_strings.dart';
+import '../../management_reports/management_report_export_delivery_contract.dart';
 import '../../targets/personal_pii_export_gateway.dart';
 import '../../targets/personal_target_csv_file.dart';
 import '../../targets/personal_target_csv_import.dart';
@@ -23,6 +24,7 @@ final class PromotionTargetDirectoryPage extends StatefulWidget {
     required this.identitySession,
     required this.appSession,
     required this.exportGateway,
+    required this.exportDelivery,
     required this.idGenerator,
     required this.clock,
     required this.scopeKey,
@@ -41,6 +43,7 @@ final class PromotionTargetDirectoryPage extends StatefulWidget {
   final IdentitySession identitySession;
   final AppSession appSession;
   final PersonalPiiExportGateway exportGateway;
+  final ManagementReportExportDelivery exportDelivery;
   final IdGenerator idGenerator;
   final AppClock clock;
   final String scopeKey;
@@ -74,9 +77,11 @@ final class _PromotionTargetDirectoryPageState
   StreamSubscription<AppSessionSnapshot>? _appSessionSubscription;
   PersonalPiiExportArtifact? _exportArtifact;
   String? _exportFailureKey;
+  String? _exportDeliveryMessageKey;
   String? _exportSubject;
   var _exportGeneration = 0;
   var _exportBusy = false;
+  var _exportDeliveryBusy = false;
   var _csvImportGeneration = 0;
   var _csvBusy = false;
   var _csvStale = false;
@@ -102,6 +107,7 @@ final class _PromotionTargetDirectoryPageState
     }
     if (exportDependenciesChanged ||
         !identical(oldWidget.exportGateway, widget.exportGateway) ||
+        !identical(oldWidget.exportDelivery, widget.exportDelivery) ||
         oldWidget.scopeKey != widget.scopeKey ||
         (oldWidget.canExport && !widget.canExport)) {
       _clearExport();
@@ -156,7 +162,9 @@ final class _PromotionTargetDirectoryPageState
     _exportSubject = null;
     _exportArtifact = null;
     _exportFailureKey = failureKey;
+    _exportDeliveryMessageKey = null;
     _exportBusy = false;
+    _exportDeliveryBusy = false;
   }
 
   void _clearCsvImport() {
@@ -198,7 +206,9 @@ final class _PromotionTargetDirectoryPageState
           const SizedBox(height: 16),
           FilledButton.tonalIcon(
             key: const ValueKey('prepare-personal-pii-export'),
-            onPressed: _exportBusy ? null : _preparePersonalPiiExport,
+            onPressed: _exportBusy || _exportDeliveryBusy
+                ? null
+                : _preparePersonalPiiExport,
             icon: _exportBusy
                 ? const SizedBox.square(
                     dimension: 18,
@@ -221,13 +231,63 @@ final class _PromotionTargetDirectoryPageState
           if (_exportArtifact != null)
             Card(
               key: const ValueKey('personal-pii-export-artifact'),
-              child: ListTile(
-                leading: const Icon(Icons.privacy_tip_outlined),
-                title: Text(text.t('targetsPiiExportPrepared')),
-                subtitle: Text(
-                  '${_exportArtifact!.fileName}\n'
-                  '${text.format('targetsPiiExportSize', {'count': _exportArtifact!.bytes.length})}\n'
-                  '${text.t('targetsPiiExportNotDelivered')}',
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ListTile(
+                      leading: const Icon(Icons.privacy_tip_outlined),
+                      title: Text(text.t('targetsPiiExportPrepared')),
+                      subtitle: Text(
+                        '${_exportArtifact!.fileName}\n'
+                        '${text.format('targetsPiiExportSize', {'count': _exportArtifact!.bytes.length})}\n'
+                        '${text.t('targetsPiiExportNotDelivered')}',
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: FilledButton.tonalIcon(
+                        key: const ValueKey(
+                          'request-personal-pii-export-download',
+                        ),
+                        onPressed: _exportDeliveryBusy
+                            ? null
+                            : _requestPersonalPiiDownload,
+                        icon: _exportDeliveryBusy
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.download_outlined),
+                        label: Text(
+                          text.t(
+                            _exportDeliveryBusy
+                                ? 'targetsPiiExportDownloadRequesting'
+                                : _exportDeliveryMessageKey ==
+                                      'targetsPiiExportDownloadRequested'
+                                ? 'targetsPiiExportDownloadRequestAgain'
+                                : 'targetsPiiExportDownloadRequest',
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (_exportDeliveryMessageKey != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                        child: Semantics(
+                          liveRegion: true,
+                          child: Text(
+                            text.t(_exportDeliveryMessageKey!),
+                            key: const ValueKey(
+                              'personal-pii-export-download-status',
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
@@ -472,7 +532,7 @@ final class _PromotionTargetDirectoryPageState
   }
 
   Future<void> _preparePersonalPiiExport() async {
-    if (_exportBusy || !widget.canExport) return;
+    if (_exportBusy || _exportDeliveryBusy || !widget.canExport) return;
     final identity = widget.identitySession.current;
     final subject = identity.principal?.externalSubject;
     final email = identity.principal?.email;
@@ -554,6 +614,49 @@ final class _PromotionTargetDirectoryPageState
     }
   }
 
+  Future<void> _requestPersonalPiiDownload() async {
+    if (_exportDeliveryBusy) return;
+    final artifact = _exportArtifact;
+    final subject = _exportSubject;
+    final generation = _exportGeneration;
+    if (artifact == null ||
+        subject == null ||
+        !_currentPreparedExport(generation, subject, artifact)) {
+      if (mounted && artifact != null) {
+        setState(
+          () => _clearExport(failureKey: 'targetsPiiExportContextChanged'),
+        );
+      }
+      return;
+    }
+    if (!widget.exportDelivery.isAvailable) {
+      setState(
+        () => _exportDeliveryMessageKey = 'targetsPiiExportDownloadUnavailable',
+      );
+      return;
+    }
+
+    setState(() {
+      _exportDeliveryBusy = true;
+      _exportDeliveryMessageKey = null;
+    });
+    final result = await widget.exportDelivery.requestDownload(artifact);
+    if (!_currentPreparedExport(generation, subject, artifact) ||
+        !_exportDeliveryBusy) {
+      return;
+    }
+    setState(() {
+      _exportDeliveryBusy = false;
+      _exportDeliveryMessageKey = switch (result) {
+        ManagementReportDownloadRequested() =>
+          'targetsPiiExportDownloadRequested',
+        ManagementReportDownloadUnavailable() =>
+          'targetsPiiExportDownloadUnavailable',
+        ManagementReportDownloadFailed() => 'targetsPiiExportDownloadFailed',
+      };
+    });
+  }
+
   void _finishExportFailure(int generation, String failureKey) {
     if (!mounted || generation != _exportGeneration) return;
     setState(() => _clearExport(failureKey: failureKey));
@@ -564,6 +667,21 @@ final class _PromotionTargetDirectoryPageState
       generation == _exportGeneration &&
       _exportBusy &&
       widget.canExport &&
+      _exportSubject == subject &&
+      widget.identitySession.current.stage == IdentityStage.signedIn &&
+      widget.identitySession.current.principal?.externalSubject == subject &&
+      _eligibleSession(widget.appSession.current, subject);
+
+  bool _currentPreparedExport(
+    int generation,
+    String subject,
+    PersonalPiiExportArtifact artifact,
+  ) =>
+      mounted &&
+      generation == _exportGeneration &&
+      !_exportBusy &&
+      widget.canExport &&
+      identical(_exportArtifact, artifact) &&
       _exportSubject == subject &&
       widget.identitySession.current.stage == IdentityStage.signedIn &&
       widget.identitySession.current.principal?.externalSubject == subject &&

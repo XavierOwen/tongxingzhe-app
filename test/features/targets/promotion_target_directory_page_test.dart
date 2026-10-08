@@ -11,6 +11,7 @@ import 'package:tongxingzhe_app/features/targets/promotion_target_directory_page
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/l10n/app_strings.dart';
+import 'package:tongxingzhe_app/management_reports/management_report_export_delivery_contract.dart';
 import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
 import 'package:tongxingzhe_app/targets/personal_pii_export_gateway.dart';
 import 'package:tongxingzhe_app/targets/personal_target_csv_import.dart';
@@ -136,7 +137,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('correct-private-password'), findsNothing);
-      expect(find.textContaining('尚未保存、打开或分享'), findsOneWidget);
+      expect(find.textContaining('不据此判断浏览器已保存、打开或分享'), findsOneWidget);
 
       await tester.tap(
         find.byKey(const ValueKey('prepare-personal-pii-export')),
@@ -326,6 +327,294 @@ void main() {
     exporter.complete();
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('personal PII artifact is delivered only on explicit request', (
+    tester,
+  ) async {
+    final harness = await _ExportHarness.start();
+    final exporter = _MemoryPersonalPiiExportGateway();
+    final delivery = _MemoryExportDelivery();
+    final pending = delivery.deferNext();
+    addTearDown(harness.close);
+    await tester.pumpWidget(
+      _app(
+        _MemoryGateway(),
+        identitySession: harness.identity,
+        appSession: harness.appSession,
+        exportGateway: exporter,
+        exportDelivery: delivery,
+        canExport: true,
+        scopeKey: harness.scopeKey,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _preparePersonalPiiExport(tester);
+    expect(exporter.calls, 1);
+    expect(delivery.requests, isEmpty);
+
+    final downloadButton = find.byKey(
+      const ValueKey('request-personal-pii-export-download'),
+    );
+    await tester.tap(downloadButton);
+    await tester.tap(downloadButton);
+    await tester.pump();
+    expect(delivery.requests, hasLength(1));
+    expect(identical(delivery.requests.single, exporter.artifact), isTrue);
+    expect(delivery.requests.single.bytes, [123, 125]);
+    expect(
+      delivery.requests.single.fileName,
+      'personal-promotion-target-pii-v1.json',
+    );
+    expect(
+      delivery.requests.single.contentType,
+      'application/json; charset=utf-8',
+    );
+
+    pending.complete(const ManagementReportDownloadFailed());
+    await tester.pumpAndSettle();
+    expect(find.text('浏览器未能接收下载请求。可使用同一份已验证文件重试。'), findsOneWidget);
+
+    await tester.tap(downloadButton);
+    await tester.pumpAndSettle();
+    expect(delivery.requests, hasLength(2));
+    expect(identical(delivery.requests[1], exporter.artifact), isTrue);
+    expect(exporter.calls, 1);
+    expect(find.text('已向浏览器请求下载。浏览器可能保存、询问或阻止；此状态不证明文件已保存。'), findsOneWidget);
+    expect(find.text('已保存'), findsNothing);
+  });
+
+  testWidgets('late PII delivery after account ABA does not restore status', (
+    tester,
+  ) async {
+    final harness = await _ExportHarness.start();
+    final exporter = _MemoryPersonalPiiExportGateway();
+    final delivery = _MemoryExportDelivery();
+    final pending = delivery.deferNext();
+    addTearDown(harness.close);
+    await tester.pumpWidget(
+      _app(
+        _MemoryGateway(),
+        identitySession: harness.identity,
+        appSession: harness.appSession,
+        exportGateway: exporter,
+        exportDelivery: delivery,
+        canExport: true,
+        scopeKey: harness.scopeKey,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _preparePersonalPiiExport(tester);
+    await tester.tap(
+      find.byKey(const ValueKey('request-personal-pii-export-download')),
+    );
+    await tester.pump();
+    expect(delivery.requests, hasLength(1));
+
+    harness.identity.emit(_signedInSnapshot('other-subject'));
+    harness.identity.emit(_signedInSnapshot('test-subject'));
+    await tester.pump();
+    pending.complete(const ManagementReportDownloadRequested());
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('personal-pii-export-artifact')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('personal-pii-export-download-status')),
+      findsNothing,
+    );
+    expect(exporter.calls, 1);
+  });
+
+  testWidgets('late PII delivery after capability revocation stays cleared', (
+    tester,
+  ) async {
+    final harness = await _ExportHarness.start();
+    final exporter = _MemoryPersonalPiiExportGateway();
+    final delivery = _MemoryExportDelivery();
+    final pending = delivery.deferNext();
+    addTearDown(harness.close);
+    await tester.pumpWidget(
+      _app(
+        _MemoryGateway(),
+        identitySession: harness.identity,
+        appSession: harness.appSession,
+        exportGateway: exporter,
+        exportDelivery: delivery,
+        canExport: true,
+        scopeKey: harness.scopeKey,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _preparePersonalPiiExport(tester);
+    await tester.tap(
+      find.byKey(const ValueKey('request-personal-pii-export-download')),
+    );
+    await tester.pump();
+    expect(delivery.requests, hasLength(1));
+
+    harness.contextGateway.context = _exportContextWithoutCapability;
+    await harness.appSession.refreshContext();
+    await tester.pumpAndSettle();
+    pending.complete(const ManagementReportDownloadRequested());
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('personal-pii-export-artifact')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('personal-pii-export-download-status')),
+      findsNothing,
+    );
+    expect(exporter.calls, 1);
+  });
+
+  testWidgets('late PII delivery after page disposal does not throw', (
+    tester,
+  ) async {
+    final harness = await _ExportHarness.start();
+    final exporter = _MemoryPersonalPiiExportGateway();
+    final delivery = _MemoryExportDelivery();
+    final pending = delivery.deferNext();
+    addTearDown(harness.close);
+    await tester.pumpWidget(
+      _app(
+        _MemoryGateway(),
+        identitySession: harness.identity,
+        appSession: harness.appSession,
+        exportGateway: exporter,
+        exportDelivery: delivery,
+        canExport: true,
+        scopeKey: harness.scopeKey,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _preparePersonalPiiExport(tester);
+    await tester.tap(
+      find.byKey(const ValueKey('request-personal-pii-export-download')),
+    );
+    await tester.pump();
+    expect(delivery.requests, hasLength(1));
+
+    await tester.pumpWidget(const SizedBox());
+    pending.complete(const ManagementReportDownloadRequested());
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('unavailable PII delivery keeps the prepared artifact', (
+    tester,
+  ) async {
+    final harness = await _ExportHarness.start();
+    final exporter = _MemoryPersonalPiiExportGateway();
+    final delivery = _MemoryExportDelivery(isAvailable: false);
+    addTearDown(harness.close);
+    await tester.pumpWidget(
+      _app(
+        _MemoryGateway(),
+        identitySession: harness.identity,
+        appSession: harness.appSession,
+        exportGateway: exporter,
+        exportDelivery: delivery,
+        canExport: true,
+        scopeKey: harness.scopeKey,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _preparePersonalPiiExport(tester);
+    final button = find.byKey(
+      const ValueKey('request-personal-pii-export-download'),
+    );
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(find.text('当前平台不提供 Web 浏览器下载。'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('personal-pii-export-artifact')),
+      findsOneWidget,
+    );
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(find.text('当前平台不提供 Web 浏览器下载。'), findsOneWidget);
+    expect(delivery.requests, isEmpty);
+    expect(exporter.calls, 1);
+  });
+
+  testWidgets('English PII delivery status fits compact large-text view', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final harness = await _ExportHarness.start();
+    final gateway = _MemoryGateway();
+    final exporter = _MemoryPersonalPiiExportGateway();
+    final delivery = _MemoryExportDelivery();
+    addTearDown(harness.close);
+    await tester.pumpWidget(
+      _app(
+        gateway,
+        text: const AppStrings('en'),
+        identitySession: harness.identity,
+        appSession: harness.appSession,
+        exportGateway: exporter,
+        exportDelivery: delivery,
+        canExport: true,
+        scopeKey: harness.scopeKey,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _preparePersonalPiiExport(tester);
+    final button = find.byKey(
+      const ValueKey('request-personal-pii-export-download'),
+    );
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    final status = find.byKey(
+      const ValueKey('personal-pii-export-download-status'),
+    );
+    await tester.ensureVisible(status);
+    await tester.pumpAndSettle();
+    _compactView(tester);
+    await tester.pumpWidget(
+      _app(
+        gateway,
+        text: const AppStrings('en'),
+        textScaler: TextScaler.linear(2),
+        identitySession: harness.identity,
+        appSession: harness.appSession,
+        exportGateway: exporter,
+        exportDelivery: delivery,
+        canExport: true,
+        scopeKey: harness.scopeKey,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(status, 160);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(
+      tester
+          .getSemantics(status)
+          .getSemanticsData()
+          .flagsCollection
+          .isLiveRegion,
+      isTrue,
+    );
+    expect(
+      find.text(
+        'The download was requested from the browser. The browser may save, ask, or block it; this does not prove that the file was saved.',
+      ),
+      findsOneWidget,
+    );
+    semantics.dispose();
   });
 
   testWidgets(
@@ -996,12 +1285,29 @@ void main() {
   });
 }
 
+Future<void> _preparePersonalPiiExport(WidgetTester tester) async {
+  final prepare = find.byKey(const ValueKey('prepare-personal-pii-export'));
+  await tester.scrollUntilVisible(prepare, 160);
+  await tester.tap(prepare);
+  await tester.pump(const Duration(milliseconds: 500));
+  await tester.enterText(
+    find.byKey(const ValueKey('personal-pii-export-password')),
+    'private-password',
+  );
+  await tester.pump();
+  await tester.tap(find.byKey(const ValueKey('confirm-personal-pii-export')));
+  await tester.pumpAndSettle();
+}
+
 Widget _app(
   PromotionTargetGateway gateway, {
+  AppStrings text = const AppStrings('zh'),
+  TextScaler textScaler = TextScaler.noScaling,
   AppClock? clock,
   IdentitySession? identitySession,
   AppSession? appSession,
   PersonalPiiExportGateway? exportGateway,
+  ManagementReportExportDelivery? exportDelivery,
   PersonalTargetCsvImportGateway? importGateway,
   bool canImport = false,
   bool canExport = false,
@@ -1010,9 +1316,13 @@ Widget _app(
 }) {
   final identity = identitySession ?? const UnavailableIdentitySession();
   return MaterialApp(
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+      child: child!,
+    ),
     home: Scaffold(
       body: PromotionTargetDirectoryPage(
-        text: const AppStrings('zh'),
+        text: text,
         gateway: gateway,
         identitySession: identity,
         appSession:
@@ -1023,6 +1333,8 @@ Widget _app(
             ),
         exportGateway:
             exportGateway ?? const DeferredPersonalPiiExportGateway(),
+        exportDelivery:
+            exportDelivery ?? const UnsupportedManagementReportExportDelivery(),
         idGenerator: _FixedIds(),
         clock: clock ?? _FixedClock(DateTime.utc(2026, 8, 6, 13)),
         scopeKey: scopeKey,
@@ -1038,6 +1350,13 @@ Widget _app(
       ),
     ),
   );
+}
+
+void _compactView(WidgetTester tester) {
+  tester.view.devicePixelRatio = 1;
+  tester.view.physicalSize = const Size(320, 568);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  addTearDown(tester.view.resetPhysicalSize);
 }
 
 final class _ExportHarness {
@@ -1112,10 +1431,9 @@ final class _MemoryPersonalPiiExportGateway
 
   final Completer<PersonalPiiExportResult>? _pending;
   var calls = 0;
+  final artifact = PersonalPiiExportArtifact(bytes: const [123, 125]);
 
-  PersonalPiiExportResult get _ready => PersonalPiiExportReady(
-    PersonalPiiExportArtifact(bytes: const [123, 125]),
-  );
+  PersonalPiiExportResult get _ready => PersonalPiiExportReady(artifact);
 
   @override
   Future<PersonalPiiExportResult> export({
@@ -1129,6 +1447,30 @@ final class _MemoryPersonalPiiExportGateway
 
   @override
   Future<void> close() async {}
+}
+
+final class _MemoryExportDelivery implements ManagementReportExportDelivery {
+  _MemoryExportDelivery({this.isAvailable = true});
+
+  @override
+  final bool isAvailable;
+  final requests = <ExportDownloadArtifact>[];
+  final _pending = <Completer<ManagementReportExportDeliveryResult>>[];
+
+  Completer<ManagementReportExportDeliveryResult> deferNext() {
+    final completer = Completer<ManagementReportExportDeliveryResult>();
+    _pending.add(completer);
+    return completer;
+  }
+
+  @override
+  Future<ManagementReportExportDeliveryResult> requestDownload(
+    ExportDownloadArtifact artifact,
+  ) {
+    requests.add(artifact);
+    if (_pending.isNotEmpty) return _pending.removeAt(0).future;
+    return Future.value(const ManagementReportDownloadRequested());
+  }
 }
 
 final class _MemorySecureValueStore implements SecureValueStore {

@@ -5,7 +5,6 @@ import 'dart:typed_data';
 import 'package:web/web.dart' as web;
 
 import 'management_report_export_delivery_contract.dart';
-import 'management_report_gateway.dart';
 
 /// Browser adapter for requesting a download of a validated export artifact.
 final class WebManagementReportExportDelivery
@@ -17,7 +16,7 @@ final class WebManagementReportExportDelivery
 
   @override
   Future<ManagementReportExportDeliveryResult> requestDownload(
-    ManagementReportExportArtifact artifact,
+    ExportDownloadArtifact artifact,
   ) async {
     String? objectUrl;
     web.HTMLAnchorElement? anchor;

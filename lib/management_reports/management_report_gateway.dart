@@ -1,5 +1,7 @@
 import 'dart:collection';
 
+import 'management_report_export_delivery_contract.dart';
+
 /// Flutter 读取管理分析项目、可信快照目录和受保护报告的唯一接口。
 ///
 /// 该接口不暴露 bearer token、授权关系或客户端隐私计算。每次调用都由远端
@@ -130,7 +132,7 @@ final class ManagementReportSnapshot {
 ///
 /// [bytes] 保留服务端 canonical JSON v1 原始字节，不由客户端重新序列化。
 /// 该对象只存在于内存；后续平台交付必须通过独立 capability adapter。
-final class ManagementReportExportArtifact {
+final class ManagementReportExportArtifact implements ExportDownloadArtifact {
   ManagementReportExportArtifact({
     required List<int> bytes,
     required this.fileName,
@@ -139,8 +141,11 @@ final class ManagementReportExportArtifact {
     required this.snapshot,
   }) : bytes = UnmodifiableListView(List<int>.of(bytes));
 
+  @override
   final List<int> bytes;
+  @override
   final String fileName;
+  @override
   final String contentType;
   final String exportEventId;
   final ManagementReportSnapshot snapshot;

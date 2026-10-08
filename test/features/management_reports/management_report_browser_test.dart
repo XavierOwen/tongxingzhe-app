@@ -1861,11 +1861,11 @@ final class _Delivery implements ManagementReportExportDelivery {
   @override
   final bool isAvailable;
   ManagementReportExportDeliveryResult result;
-  final requests = <ManagementReportExportArtifact>[];
+  final requests = <ExportDownloadArtifact>[];
 
   @override
   Future<ManagementReportExportDeliveryResult> requestDownload(
-    ManagementReportExportArtifact artifact,
+    ExportDownloadArtifact artifact,
   ) async {
     requests.add(artifact);
     return result;

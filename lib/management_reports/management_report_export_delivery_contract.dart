@@ -1,4 +1,10 @@
-import 'management_report_gateway.dart';
+/// The validated, in-memory file fields required by a platform delivery
+/// adapter.
+abstract interface class ExportDownloadArtifact {
+  List<int> get bytes;
+  String get fileName;
+  String get contentType;
+}
 
 /// The second-stage capability that asks a platform to deliver a validated
 /// management-report export artifact.
@@ -9,7 +15,7 @@ abstract interface class ManagementReportExportDelivery {
   bool get isAvailable;
 
   Future<ManagementReportExportDeliveryResult> requestDownload(
-    ManagementReportExportArtifact artifact,
+    ExportDownloadArtifact artifact,
   );
 }
 
@@ -45,6 +51,6 @@ final class UnsupportedManagementReportExportDelivery
 
   @override
   Future<ManagementReportExportDeliveryResult> requestDownload(
-    ManagementReportExportArtifact artifact,
+    ExportDownloadArtifact artifact,
   ) async => const ManagementReportDownloadUnavailable();
 }

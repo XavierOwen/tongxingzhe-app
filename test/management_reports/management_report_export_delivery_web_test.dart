@@ -8,7 +8,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_export_delivery_contract.dart';
 import 'package:tongxingzhe_app/management_reports/management_report_export_delivery_web.dart';
-import 'package:tongxingzhe_app/management_reports/management_report_gateway.dart';
+import 'package:tongxingzhe_app/targets/personal_pii_export_gateway.dart';
 import 'package:web/web.dart' as web;
 
 void main() {
@@ -82,42 +82,5 @@ void main() {
   );
 }
 
-ManagementReportExportArtifact _artifact() => ManagementReportExportArtifact(
-  bytes: const [0, 1, 2, 127, 128, 255],
-  fileName: 'management-report.json',
-  contentType: 'application/json; charset=utf-8',
-  exportEventId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-  snapshot: ManagementReportSnapshot(
-    summary: ManagementReportSnapshotSummary(
-      snapshotId: 'snapshot-1',
-      reportId: 'report-1',
-      reportVersion: 1,
-      reportingTimeZone: 'America/Chicago',
-      dataCutoffUtc: DateTime.utc(2030, 3, 11),
-      releasedAtUtc: DateTime.utc(2030, 3, 11, 1),
-    ),
-    report: ProtectedManagementReport(
-      reportId: 'report-1',
-      reportVersion: 1,
-      metricId: 'contact_sessions',
-      metricVersion: 1,
-      dimension: 'channel',
-      queryFingerprint: 'test',
-      privacyPolicy: 'test',
-      sourceScope: 'test',
-      projectId: 'project-1',
-      periodBoundaryId: 'test',
-      reportingTimeZone: 'America/Chicago',
-      dataCutoffUtc: DateTime.utc(2030, 3, 11),
-      previousPeriod: ManagementReportPeriod(
-        startUtc: DateTime.utc(2030, 2, 25),
-        untilUtc: DateTime.utc(2030, 3, 4),
-      ),
-      currentPeriod: ManagementReportPeriod(
-        startUtc: DateTime.utc(2030, 3, 4),
-        untilUtc: DateTime.utc(2030, 3, 11),
-      ),
-      cells: const [],
-    ),
-  ),
-);
+PersonalPiiExportArtifact _artifact() =>
+    PersonalPiiExportArtifact(bytes: const [0, 1, 2, 127, 128, 255]);
