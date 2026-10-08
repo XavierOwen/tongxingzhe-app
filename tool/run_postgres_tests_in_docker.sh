@@ -10950,6 +10950,98 @@ fi
 printf '%s\n' "${report_request_lock_order_upgrade_replay}"
 echo '0106→0107 live lifecycle rows, no-op checksum replay：通过。'
 
+echo '验证 0107→0108 组织清除基础升级、数据保留及 checksum 重放。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${organization_deletion_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$purge_foundation_baseline\$
+    BEGIN
+      IF (SELECT max(left(version, 4)) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0107'
+        OR (SELECT count(*) FROM app_migrations.schema_migrations) <> 106
+      THEN RAISE EXCEPTION '0108 purge foundation upgrade requires the 0107 baseline'; END IF;
+    END
+    \$purge_foundation_baseline\$;
+  " >/dev/null
+docker exec "${container_name}" bash -lc \
+  "mkdir -p /tmp/organization-purge-foundation-upgrade-only && \
+   cp /workspace/backend/database/migrations/0108_organization_purge_foundation.sql \
+     /tmp/organization-purge-foundation-upgrade-only/"
+organization_purge_foundation_upgrade_before="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_deletion_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --exclude-table=app_private.organization_purge_request_tombstones \
+    --exclude-table=app_private.organization_purge_delete_authorizations \
+    --no-owner --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+docker exec \
+  --env DATABASE_URL="${organization_deletion_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/organization-purge-foundation-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${organization_deletion_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$purge_foundation_upgrade\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 107
+        OR (SELECT max(left(version, 4)) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0108'
+        OR (SELECT count(*) FROM app_private.organization_deletion_current) <> 2
+        OR (SELECT count(*) FROM app_private.organization_deletion_current
+            WHERE status = 'deletion_pending') <> 1
+        OR (SELECT count(*) FROM app_private.organization_deletion_current
+            WHERE status = 'restored') <> 1
+      THEN RAISE EXCEPTION '0107→0108 migration metadata or lifecycle drift'; END IF;
+    END
+    \$purge_foundation_upgrade\$;
+  " >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres -d "${organization_deletion_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file /workspace/backend/database/checks/verify_organization_purge_foundation.sql \
+  --file /workspace/backend/database/fixtures/0108_organization_purge_foundation.sql
+docker exec "${container_name}" psql -X -v ON_ERROR_STOP=1 \
+  -U postgres -d "${organization_deletion_upgrade_database}" \
+  -c "DO \$empty_0108\$ BEGIN
+    IF EXISTS (SELECT 1 FROM app_private.organization_purge_request_tombstones)
+      OR EXISTS (SELECT 1 FROM app_private.organization_purge_delete_authorizations)
+    THEN RAISE EXCEPTION '0108 upgrade/rollback fixture left purge rows'; END IF;
+  END \$empty_0108\$;"
+organization_purge_foundation_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${organization_deletion_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/organization-purge-foundation-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${organization_purge_foundation_upgrade_replay}" != \
+    *'已验证 0108_organization_purge_foundation（无需重复执行）'* ]] \
+  || [[ "${organization_purge_foundation_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0108 migration did not skip its checksum-verified replay.' >&2
+  printf '%s\n' "${organization_purge_foundation_upgrade_replay}" >&2
+  exit 1
+fi
+organization_purge_foundation_upgrade_after="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_deletion_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --exclude-table=app_private.organization_purge_request_tombstones \
+    --exclude-table=app_private.organization_purge_delete_authorizations \
+    --no-owner --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+if [[ "${organization_purge_foundation_upgrade_before}" != \
+    "${organization_purge_foundation_upgrade_after}" ]]; then
+  echo '0108 migration or checksum replay changed existing business or lifecycle rows.' >&2
+  exit 1
+fi
+printf '%s\n' "${organization_purge_foundation_upgrade_replay}"
+echo '0107→0108 live lifecycle rows, no-op checksum replay：通过。'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 
