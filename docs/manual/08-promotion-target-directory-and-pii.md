@@ -155,6 +155,28 @@ Flutter 提交关系修改时发送当前看到的 `expected_revision` 和一次
 
 如果网络重试同一个 `mutation_id`，且内容完全相同，服务器返回第一次已经接受的 revision，不再增加历史。同一个 ID 携带不同内容会冲突。阶段下降还必须使用失去联系、时间变化、情况变化、对象请求、项目变化、更正或其他等结构化原因；普通“进展更新”不能解释下降。
 
+## 个人空间 CSV 导入 v1
+
+首版 CSV 导入只适用于当前账号拥有的个人空间。数据库在 exact identity 对应 active app user、该账号拥有个人空间且项目有效时，为上下文派生 `import_target_pii`。Backend 检查该 capability，PostgreSQL writer 根据可信身份重验 owner 事实。客户端字符串和预览结果都不授权。组织空间和 CRM API 需要另一份授权与分配合同。
+
+有效文件使用 UTF-8，可以带 BOM，并按 RFC 4180 解码。record 换行可以是 CRLF 或 LF。文件不超过 1 MiB，且最多包含 500 条解码后数据记录。header 必须精确为：
+
+```csv
+target_type,display_name,phone,email
+```
+
+`target_type` 只能是 `person` 或 `institution`。名称去除首尾空白后保留 1 至 200 个字符；电话和 email 可以为空，非空时分别保留 1 至 80 与 1 至 320 个字符。空值转为 `null`。缺列、重复列、额外列或超过上限都不能进入确认。
+
+预览先显示逐行校验。它只用当前文件与当前账号在同空间已分配的 active 对象做重复提示，不检查其他空间。两行的电话去除首尾空白后完全相同，或 email 去除首尾空白后不区分大小写时，系统给出提示。名称相同不构成信号。使用者可排除该行，也可明确选择建立独立对象。导入不会自动合并、覆盖或更新既有资料。重复提示只是确认事务所见的 best-effort 结果，不是唯一性保证；并发建立可能产生两个独立对象。
+
+预览返回 opaque receipt，绑定规范化完整行集、行序和当时重复提示。receipt 从数据库 UTC 预览时间起连续 15 分钟有效，到期时刻已不有效。确认必须引用该 receipt。无提示的有效行只接受 `skip` 或 `create`；提示行只接受 `skip` 或明确的 `create_separate`。PostgreSQL 重新运行授权、行校验和重复检查。receipt 过期或任何行内容、行序、提示漂移都返回 stale preview，本次不写数据。确认后的已选行在一个事务中全部建立；任一行或审计失败时全部回滚。一个 import request UUID 固定账号、空间、receipt、规范化行序和完整选择。精确重试返回首次确认结果；相同 UUID 的任何载荷改变都发生冲突。
+
+每个新对象的 creator、assignment actor 和 assignee 都取当前可信账号。这只表示账号负责初始跟进，不表示已经接触对方。导入不建立接触、兴趣、对象反应、项目关系、阶段、同意、个人机构关系或共享备注。
+
+预览和确认分别追加 value-free 审计。审计只保存 actor、workspace、request／preview ID、phase、outcome、行数、提示数、建立数、`source_kind = csv` 和数据库时间。原文件名、CSV bytes、字段值、错误行内容、姓名、电话和 email 不进入审计、日志或错误。
+
+本节是 7DN／#527 的文档合同。它不表示 CSV parser、数据库 writer、HTTP 或 Flutter 已经实现。
+
 ## HTTP 与权限边界
 
 | 方法与路径 | 用途 | Backend capability |
