@@ -85,6 +85,9 @@ final class OrganizationDeletionRecoveryRejected<T>
 }
 
 abstract interface class OrganizationDeletionRecoveryGateway {
+  Future<OrganizationDeletionRecoveryResult<List<String>>>
+  listDeletionEligibleOrganizations();
+
   Future<
     OrganizationDeletionRecoveryResult<OrganizationDeletionRecoveryDirectory>
   >
@@ -109,6 +112,13 @@ abstract interface class OrganizationDeletionRecoveryGateway {
 final class DeferredOrganizationDeletionRecoveryGateway
     implements OrganizationDeletionRecoveryGateway {
   const DeferredOrganizationDeletionRecoveryGateway();
+
+  @override
+  Future<OrganizationDeletionRecoveryResult<List<String>>>
+  listDeletionEligibleOrganizations() async =>
+      const OrganizationDeletionRecoveryRejected(
+        OrganizationDeletionRecoveryFailureCode.notConfigured,
+      );
 
   @override
   Future<

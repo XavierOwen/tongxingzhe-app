@@ -598,6 +598,8 @@ const Map<String, Map<String, String>> _strings = {
     'organizationLeaveFailure.networkUnavailable':
         '网络不可用，无法确认退出结果。请检查连接后在此窗口重试。',
     'organizationLeaveFailure.invalidResponse': '未收到可验证的退出结果，请在此窗口重试。',
+    'organizationDeletionRequestAction': '申请删除',
+    'organizationDeletionEligibilityUnavailable': '暂时无法确认删除资格，请刷新后再试。',
     'organizationDeletionRequestTitle': '申请删除这个组织？',
     'organizationDeletionRequestHelp':
         '服务端会在提交时重新核对当前所有者身份和组织状态。应用不会依据本机时钟判断资格。',
@@ -2409,6 +2411,9 @@ const Map<String, Map<String, String>> _strings = {
         'The network is unavailable, so the leave result is unknown. Check your connection and retry in this window.',
     'organizationLeaveFailure.invalidResponse':
         'The app could not verify the leave result. Retry in this window.',
+    'organizationDeletionRequestAction': 'Request deletion',
+    'organizationDeletionEligibilityUnavailable':
+        'Deletion eligibility is unavailable. Refresh to try again.',
     'organizationDeletionRequestTitle': 'Request organization deletion?',
     'organizationDeletionRequestHelp':
         'The server checks current ownership and organization state when you submit. The app does not use the device clock to decide eligibility.',

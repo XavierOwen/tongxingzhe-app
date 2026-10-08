@@ -12,6 +12,7 @@ const _directoryPath = '/v1/organizations/deletion-recovery';
 const _deletionContractId = 'organization-deletion-request:v1';
 const _restorationContractId = 'organization-deletion-restore:v1';
 const _directoryContractId = 'organization-deletion-recovery-directory:v1';
+const _eligibilityContractId = 'organization-deletion-eligibility:v1';
 final _uuidPattern = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
   caseSensitive: false,
@@ -60,6 +61,23 @@ final class HttpOrganizationDeletionRecoveryGateway
   final http.Client client;
   final Duration timeout;
   bool _closed = false;
+
+  @override
+  Future<OrganizationDeletionRecoveryResult<List<String>>>
+  listDeletionEligibleOrganizations() => _request(
+    method: 'GET',
+    url: baseUri.resolve('/v1/organizations/deletion-eligibility'),
+    body: null,
+    parseSuccess: _parseEligibility,
+    expectedErrors: const {
+      'invalid_organization_deletion_eligibility_request':
+          OrganizationDeletionRecoveryFailureCode.invalidRequest,
+      'organization_deletion_eligibility_forbidden':
+          OrganizationDeletionRecoveryFailureCode.forbidden,
+      'organization_deletion_eligibility_unavailable':
+          OrganizationDeletionRecoveryFailureCode.serviceUnavailable,
+    },
+  );
 
   @override
   Future<
@@ -271,6 +289,22 @@ final class HttpOrganizationDeletionRecoveryGateway
     _closed = true;
     client.close();
   }
+}
+
+List<String> _parseEligibility(Map<String, Object?> root) {
+  _requireExactKeys(root, const [
+    'organization_deletion_eligibility_contract_id',
+    'organization_workspace_ids',
+  ]);
+  final values = root['organization_workspace_ids'];
+  if (root['organization_deletion_eligibility_contract_id'] !=
+          _eligibilityContractId ||
+      values is! List) {
+    throw const FormatException();
+  }
+  final ids = values.map(_responseUuid).toList(growable: false);
+  if (ids.toSet().length != ids.length) throw const FormatException();
+  return List.unmodifiable(ids);
 }
 
 OrganizationDeletionRecoveryDirectory _parseDirectory(

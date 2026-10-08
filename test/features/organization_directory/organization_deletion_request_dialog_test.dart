@@ -299,6 +299,11 @@ final class _RecoveryGateway implements OrganizationDeletionRecoveryGateway {
   final cacheReadCounts = <int>[];
 
   @override
+  Future<OrganizationDeletionRecoveryResult<List<String>>>
+  listDeletionEligibleOrganizations() async =>
+      const OrganizationDeletionRecoverySuccess([]);
+
+  @override
   Future<OrganizationDeletionRecoveryResult<OrganizationDeletionRequestReceipt>>
   requestDeletion({
     required String requestId,

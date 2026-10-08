@@ -31,6 +31,226 @@ import '../../support/fake_runtime_values.dart';
 
 void main() {
   testWidgets(
+    'only eligible directory rows expose deletion; receipt reloads once',
+    (tester) async {
+      final local = await _LocalVault.seeded();
+      final fixture = await _Fixture.create(offlinePiiVault: local.vault);
+      addTearDown(fixture.close);
+      final directory = _Gateway([
+        OrganizationDirectorySuccess(const [_organizationA, _organizationB]),
+        OrganizationDirectorySuccess(const [_organizationB]),
+      ]);
+      final recovery = _DeletionRecoveryGateway(
+        const OrganizationDeletionRecoverySuccess(
+          OrganizationDeletionRecoveryDirectory(items: []),
+        ),
+        eligibilityResults: [
+          OrganizationDeletionRecoverySuccess([
+            _organizationA.organizationWorkspaceId,
+            'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+          ]),
+        ],
+        deletionResult: const OrganizationDeletionRecoverySuccess(
+          OrganizationDeletionRequestReceipt(
+            organizationWorkspaceId: _recoveryWorkspaceId,
+            deletionRequestId: _recoveryDeletionRequestId,
+            effectiveAtUtc: '2026-10-03T12:00:00.000000Z',
+            purgeAfterUtc: '2026-11-02T12:00:00.000000Z',
+          ),
+        ),
+      );
+      final initialContext = fixture.session.current.context;
+      await _open(
+        tester,
+        fixture.session,
+        directory,
+        deletionRecoveryGateway: recovery,
+      );
+      final action = find.byKey(
+        ValueKey(
+          'organization-delete-${_organizationA.organizationWorkspaceId}',
+        ),
+      );
+      expect(action, findsOneWidget);
+      expect(
+        find.byKey(
+          ValueKey(
+            'organization-delete-${_organizationB.organizationWorkspaceId}',
+          ),
+        ),
+        findsNothing,
+      );
+      expect(find.text('cccccccc-cccc-4ccc-8ccc-cccccccccccc'), findsNothing);
+      await tester.ensureVisible(action);
+      await tester.tap(action);
+      await tester.pumpAndSettle();
+      expect(recovery.deletionCalls, isEmpty);
+      final confirm = find.byKey(
+        const ValueKey('organization-deletion-request-confirm'),
+      );
+      await tester.ensureVisible(confirm);
+      await tester.tap(confirm);
+      await tester.pumpAndSettle();
+      expect(recovery.deletionCalls, hasLength(1));
+      expect(
+        recovery.deletionCalls.single.organizationWorkspaceId,
+        _organizationA.organizationWorkspaceId,
+      );
+      expect(directory.listCalls, 1);
+    await tester.tap(
+      find.byKey(const ValueKey('organization-deletion-request-done')),
+      );
+      await tester.pumpAndSettle();
+      expect(directory.listCalls, 2);
+      expect(recovery.eligibilityCalls, 2);
+      expect(find.text(_organizationA.organizationWorkspaceId), findsNothing);
+      expect(find.text(_organizationB.organizationWorkspaceId), findsOneWidget);
+      expect(fixture.session.current.context, initialContext);
+    },
+  );
+
+  testWidgets('eligibility failure hides deletion without blocking directory', (
+    tester,
+  ) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final directory = _Gateway([
+      OrganizationDirectorySuccess(const [_organizationA]),
+      OrganizationDirectorySuccess(const [_organizationA]),
+    ]);
+    final recovery = _DeletionRecoveryGateway(
+      const OrganizationDeletionRecoverySuccess(
+        OrganizationDeletionRecoveryDirectory(items: []),
+      ),
+      eligibilityResults: [
+        OrganizationDeletionRecoverySuccess([
+          _organizationA.organizationWorkspaceId,
+        ]),
+        const OrganizationDeletionRecoveryRejected<List<String>>(
+          OrganizationDeletionRecoveryFailureCode.serviceUnavailable,
+        ),
+      ],
+    );
+    await _open(
+      tester,
+      fixture.session,
+      directory,
+      deletionRecoveryGateway: recovery,
+    );
+    final action = find.byKey(
+      ValueKey('organization-delete-${_organizationA.organizationWorkspaceId}'),
+    );
+    expect(action, findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('organization-directory-refresh')),
+    );
+    await tester.pumpAndSettle();
+    expect(action, findsNothing);
+    expect(find.text(_organizationA.organizationWorkspaceId), findsOneWidget);
+    expect(
+      find.text(
+        const AppStrings('zh').t('organizationDeletionEligibilityUnavailable'),
+      ),
+      findsOneWidget,
+    );
+    expect(recovery.deletionCalls, isEmpty);
+  });
+
+  testWidgets(
+    'pending eligibility leaves directory usable and fences signout',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final pending =
+          Completer<OrganizationDeletionRecoveryResult<List<String>>>();
+      final recovery = _DeletionRecoveryGateway(
+        const OrganizationDeletionRecoverySuccess(
+          OrganizationDeletionRecoveryDirectory(items: []),
+        ),
+        eligibilityResults: [pending],
+      );
+      await _open(
+        tester,
+        fixture.session,
+        _Gateway([
+          OrganizationDirectorySuccess(const [_organizationA]),
+        ]),
+        deletionRecoveryGateway: recovery,
+      );
+      expect(find.text(_organizationA.organizationWorkspaceId), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const ValueKey('organization-directory-refresh')),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      fixture.identity.emit(const IdentitySnapshot.signedOut());
+      await tester.pumpAndSettle();
+      pending.complete(
+        OrganizationDeletionRecoverySuccess([
+          _organizationA.organizationWorkspaceId,
+        ]),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(_organizationA.organizationWorkspaceId), findsNothing);
+      expect(
+        find.byKey(
+          ValueKey(
+            'organization-delete-${_organizationA.organizationWorkspaceId}',
+          ),
+        ),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets('refresh discards an older successful eligibility response', (
+    tester,
+  ) async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final pending =
+        Completer<OrganizationDeletionRecoveryResult<List<String>>>();
+    final recovery = _DeletionRecoveryGateway(
+      const OrganizationDeletionRecoverySuccess(
+        OrganizationDeletionRecoveryDirectory(items: []),
+      ),
+      eligibilityResults: [pending],
+    );
+    await _open(
+      tester,
+      fixture.session,
+      _Gateway([
+        OrganizationDirectorySuccess(const [_organizationA]),
+        OrganizationDirectorySuccess(const [_organizationA]),
+      ]),
+      deletionRecoveryGateway: recovery,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('organization-directory-refresh')),
+    );
+    await tester.pumpAndSettle();
+    pending.complete(
+      OrganizationDeletionRecoverySuccess([
+        _organizationA.organizationWorkspaceId,
+      ]),
+    );
+    await tester.pumpAndSettle();
+    expect(recovery.eligibilityCalls, 2);
+    expect(find.text(_organizationA.organizationWorkspaceId), findsOneWidget);
+    expect(
+      find.byKey(
+        ValueKey(
+          'organization-delete-${_organizationA.organizationWorkspaceId}',
+        ),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets(
     'empty directory keeps recovery entry and requires confirmation',
     (tester) async {
       final fixture = await _Fixture.create();
@@ -1501,9 +1721,21 @@ void main() {
     addTearDown(fixture.close);
     final directoryGateway = _Gateway([
       OrganizationDirectorySuccess(const [_organizationA, _organizationB]),
+      OrganizationDirectorySuccess(const [_organizationA, _organizationB]),
     ]);
     final ownerTransferGateway = _OwnerTransferGateway(
       _organizationOwnerTransferReceipt,
+    );
+    final recovery = _DeletionRecoveryGateway(
+      const OrganizationDeletionRecoverySuccess(
+        OrganizationDeletionRecoveryDirectory(items: []),
+      ),
+      eligibilityResults: [
+        OrganizationDeletionRecoverySuccess([
+          _organizationB.organizationWorkspaceId,
+        ]),
+        const OrganizationDeletionRecoverySuccess<List<String>>([]),
+      ],
     );
     final initialContext = fixture.session.current.context;
     await _open(
@@ -1511,6 +1743,7 @@ void main() {
       fixture.session,
       directoryGateway,
       ownerTransferGateway: ownerTransferGateway,
+      deletionRecoveryGateway: recovery,
     );
 
     final transfer = find.byKey(
@@ -1603,7 +1836,16 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(directoryGateway.listCalls, 1);
+    expect(directoryGateway.listCalls, 2);
+    expect(recovery.eligibilityCalls, 2);
+    expect(
+      find.byKey(
+        ValueKey(
+          'organization-delete-${_organizationB.organizationWorkspaceId}',
+        ),
+      ),
+      findsNothing,
+    );
     expect(fixture.session.current.context, initialContext);
     expect(ownerTransferGateway.closed, isFalse);
   });
@@ -2606,8 +2848,13 @@ final class _DeletionRecoveryGateway
   _DeletionRecoveryGateway(
     this.directory, {
     Iterable<Object> restoreResults = const [],
+    Iterable<Object> eligibilityResults = const [],
+    this.deletionResult = const OrganizationDeletionRecoveryRejected(
+      OrganizationDeletionRecoveryFailureCode.notConfigured,
+    ),
     this.pendingDirectory,
-  }) : _restoreResults = Queue.of(restoreResults);
+  }) : _restoreResults = Queue.of(restoreResults),
+       _eligibilityResults = Queue.of(eligibilityResults);
 
   final OrganizationDeletionRecoveryResult<
     OrganizationDeletionRecoveryDirectory
@@ -2618,7 +2865,13 @@ final class _DeletionRecoveryGateway
   >?
   pendingDirectory;
   final Queue<Object> _restoreResults;
+  final Queue<Object> _eligibilityResults;
+  final OrganizationDeletionRecoveryResult<OrganizationDeletionRequestReceipt>
+  deletionResult;
+  var eligibilityCalls = 0;
   var listCalls = 0;
+  final deletionCalls =
+      <({String requestId, String organizationWorkspaceId})>[];
   final restoreCalls =
       <
         ({
@@ -2627,6 +2880,21 @@ final class _DeletionRecoveryGateway
           String deletionRequestId,
         })
       >[];
+
+  @override
+  Future<OrganizationDeletionRecoveryResult<List<String>>>
+  listDeletionEligibleOrganizations() async {
+    eligibilityCalls++;
+    if (_eligibilityResults.isEmpty) {
+      return const OrganizationDeletionRecoverySuccess([]);
+    }
+    final next = _eligibilityResults.removeFirst();
+    if (next is Completer<OrganizationDeletionRecoveryResult<List<String>>>) {
+      return next.future;
+    }
+    if (next is OrganizationDeletionRecoveryResult<List<String>>) return next;
+    throw next;
+  }
 
   @override
   Future<
@@ -2642,9 +2910,13 @@ final class _DeletionRecoveryGateway
   requestDeletion({
     required String requestId,
     required String organizationWorkspaceId,
-  }) async => const OrganizationDeletionRecoveryRejected(
-    OrganizationDeletionRecoveryFailureCode.notConfigured,
-  );
+  }) async {
+    deletionCalls.add((
+      requestId: requestId,
+      organizationWorkspaceId: organizationWorkspaceId,
+    ));
+    return deletionResult;
+  }
 
   @override
   Future<OrganizationDeletionRecoveryResult<OrganizationRestorationReceipt>>
