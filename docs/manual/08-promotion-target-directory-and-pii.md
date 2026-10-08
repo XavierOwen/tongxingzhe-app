@@ -195,7 +195,9 @@ v1 不使用 CSV。CSV quoting 不阻止电子表格公式注入，为 `+phone` 
 
 每次完整授权并准备好文件的请求，都在同一数据库事务中追加一条不可变审计。JSON `export_event_id` 必须等于审计 event ID，审计 `result` 固定为 `prepared`。其余字段只记录 actor、workspace、合同、认证方法与时间、对象数、字节数和数据库时间。它不记录对象 ID、PII、文件 bytes 或字段 hash。每次重试产生新 event；审计只证明服务端已准备交付。
 
-客户端只把 artifact 与 bytes 留在内存，直到使用者明确启动系统保存或分享。它们不进入 Drift、离线 PII vault、Outbox、普通缓存、日志或错误。生产 Supabase JWT 的 AMR 仍需隔离账号观察，自动化文档检查不能替代该证据。
+Flutter 入口只在当前在线可信个人空间上下文同时有两项 capability 时显示；离线缓存上下文不能启动导出。它捕获发起时的 external subject，使用当前邮箱把密码只交给 Auth，同账号成功后强制在线重读 AppSession context，再发一次固定 GET。账号、上下文、权限、页面或请求代次改变时，迟到结果不能恢复 artifact。
+
+客户端只把通过固定响应头、UTF-8、长度和 exact schema 校验的原始 bytes 留在当前页面内存；新请求、失败或会话变化会清除它。本 Slice 只证明服务端已准备文件，没有接入系统保存、打开或分享，因此也不声称文件已交付。自动化使用 synthetic Auth、fake context 与 HTTP 响应；生产 Supabase JWT 的 password AMR、真实 PII、网络和系统文件交付仍需分别验证。
 
 ## HTTP 与权限边界
 

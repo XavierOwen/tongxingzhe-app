@@ -15,15 +15,24 @@ final class FakeIdentitySessionFactory implements IdentitySessionFactory {
 final class FakeIdentitySession implements IdentitySession {
   FakeIdentitySession({
     IdentitySnapshot initial = const IdentitySnapshot.signedOut(),
+    this.externalSubject = 'test-subject',
   }) : _current = initial;
 
   final StreamController<IdentitySnapshot> _changes =
       StreamController<IdentitySnapshot>.broadcast();
   IdentitySnapshot _current;
+  String externalSubject;
   IdentityFailure? rejectNextWith;
   IdentityFailure? rejectNextAccessTokenWith;
+  Completer<void>? accessTokenRequested;
+  Future<void>? accessTokenBarrier;
   final List<bool> accessTokenForceRefreshValues = [];
   bool isClosed = false;
+
+  void emit(IdentitySnapshot next) {
+    _current = next;
+    _changes.add(next);
+  }
 
   @override
   IdentitySnapshot get current => _current;
@@ -100,6 +109,9 @@ final class FakeIdentitySession implements IdentitySession {
     bool forceRefresh = false,
   }) async {
     accessTokenForceRefreshValues.add(forceRefresh);
+    final requested = accessTokenRequested;
+    if (requested != null && !requested.isCompleted) requested.complete();
+    await accessTokenBarrier;
     final failure = rejectNextAccessTokenWith ?? _takeFailure();
     rejectNextAccessTokenWith = null;
     if (failure != null) {
@@ -155,7 +167,7 @@ final class FakeIdentitySession implements IdentitySession {
 
   IdentityPrincipal _principal(String email) {
     return IdentityPrincipal(
-      externalSubject: 'test-subject',
+      externalSubject: externalSubject,
       email: email.trim().toLowerCase(),
     );
   }

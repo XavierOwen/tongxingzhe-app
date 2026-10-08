@@ -29,6 +29,7 @@ import '../features/reminders/personal_action_reminder_panel.dart';
 import '../features/questionnaire_admin/questionnaire_admin_screen.dart';
 import '../features/targets/promotion_target_directory_page.dart';
 import '../features/management_reports/management_report_browser.dart';
+import '../identity/identity_session.dart';
 import '../l10n/app_strings.dart';
 import '../management_reports/current_city_report_gateway.dart';
 import '../management_reports/follow_up_consent_ratio_report_gateway.dart';
@@ -52,6 +53,7 @@ import '../routing/app_router.dart';
 import '../services/location_service.dart';
 import '../sync/sync_engine_factory.dart';
 import '../targets/personal_target_csv_import.dart';
+import '../targets/personal_pii_export_gateway.dart';
 import '../targets/promotion_target.dart';
 
 /// 正式产品的四项主框架。
@@ -62,6 +64,7 @@ final class ProductionHomeShell extends StatefulWidget {
   const ProductionHomeShell({
     super.key,
     required this.localeCode,
+    required this.identitySession,
     required this.appSession,
     required this.context,
     required this.contactJournal,
@@ -74,6 +77,7 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.contactPageClosedEvents,
     required this.questionnaireAdministration,
     required this.promotionTargetGateway,
+    required this.personalPiiExportGateway,
     required this.personalTargetCsvImportGateway,
     required this.personalActionPlanGateway,
     required this.personalActionReminderGateway,
@@ -108,6 +112,7 @@ final class ProductionHomeShell extends StatefulWidget {
   });
 
   final String localeCode;
+  final IdentitySession identitySession;
   final AppSession appSession;
   final TrustedSessionContext context;
   final ContactJournal contactJournal;
@@ -120,6 +125,7 @@ final class ProductionHomeShell extends StatefulWidget {
   final ValueListenable<ContactPageClosedEvent> contactPageClosedEvents;
   final QuestionnaireAdministrationGateway questionnaireAdministration;
   final PromotionTargetGateway promotionTargetGateway;
+  final PersonalPiiExportGateway personalPiiExportGateway;
   final PersonalTargetCsvImportGateway personalTargetCsvImportGateway;
   final PersonalActionPlanGateway personalActionPlanGateway;
   final PersonalActionReminderGateway personalActionReminderGateway;
@@ -312,6 +318,9 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
       PromotionTargetDirectoryPage(
         text: strings,
         gateway: widget.promotionTargetGateway,
+        identitySession: widget.identitySession,
+        appSession: widget.appSession,
+        exportGateway: widget.personalPiiExportGateway,
         importGateway: widget.personalTargetCsvImportGateway,
         idGenerator: widget.idGenerator,
         clock: widget.clock,
@@ -322,6 +331,11 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
         canImport:
             widget.context.workspace.kind == WorkspaceKind.personal &&
             widget.context.capabilities.contains('import_target_pii'),
+        canExport:
+            !widget.appSession.current.fromOfflineCache &&
+            widget.context.workspace.kind == WorkspaceKind.personal &&
+            widget.context.capabilities.contains('export_target_pii') &&
+            widget.context.capabilities.contains('view_assigned_target_pii'),
         canCreate: widget.context.capabilities.contains('create_target'),
         canConfigureStageAliases: widget.context.capabilities.contains(
           'manage_analysis_definitions',

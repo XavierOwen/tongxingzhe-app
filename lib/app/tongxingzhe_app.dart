@@ -47,6 +47,7 @@ import '../screens/production_home_shell.dart';
 import '../services/location_service.dart';
 import '../sync/sync_engine_factory.dart';
 import '../targets/personal_target_csv_import.dart';
+import '../targets/personal_pii_export_gateway.dart';
 import '../targets/promotion_target.dart';
 import 'app_dependencies.dart';
 import 'private_session_data_guard.dart';
@@ -89,6 +90,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
   QuestionnaireCatalog? _questionnaireCatalog;
   QuestionnaireAdministrationGateway? _questionnaireAdministration;
   PromotionTargetGateway? _promotionTargetGateway;
+  PersonalPiiExportGateway? _personalPiiExportGateway;
   PersonalTargetCsvImportGateway? _personalTargetCsvImportGateway;
   PersonalActionPlanGateway? _personalActionPlanGateway;
   PersonalActionReminderGateway? _personalActionReminderGateway;
@@ -136,6 +138,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       :final questionnaireCatalog,
       :final questionnaireAdministration,
       :final promotionTargetGateway,
+      :final personalPiiExportGateway,
       :final personalTargetCsvImportGateway,
       :final personalActionPlanGateway,
       :final personalActionReminderGateway,
@@ -171,6 +174,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       _questionnaireCatalog = questionnaireCatalog;
       _questionnaireAdministration = questionnaireAdministration;
       _promotionTargetGateway = promotionTargetGateway;
+      _personalPiiExportGateway = personalPiiExportGateway;
       _personalTargetCsvImportGateway = personalTargetCsvImportGateway;
       _personalActionPlanGateway = personalActionPlanGateway;
       _personalActionReminderGateway = personalActionReminderGateway;
@@ -209,6 +213,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       startup.questionnaireCatalog.close(),
       startup.questionnaireAdministration.close(),
       startup.promotionTargetGateway.close(),
+      startup.personalPiiExportGateway.close(),
       startup.personalTargetCsvImportGateway.close(),
       startup.personalActionPlanGateway.close(),
       startup.personalActionReminderGateway.close(),
@@ -244,6 +249,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
     unawaited(_questionnaireCatalog?.close());
     unawaited(_questionnaireAdministration?.close());
     unawaited(_promotionTargetGateway?.close());
+    unawaited(_personalPiiExportGateway?.close());
     unawaited(_personalTargetCsvImportGateway?.close());
     unawaited(_personalActionPlanGateway?.close());
     unawaited(_personalActionReminderGateway?.close());
@@ -290,6 +296,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
             :final questionnaireCatalog,
             :final questionnaireAdministration,
             :final promotionTargetGateway,
+            :final personalPiiExportGateway,
             :final personalTargetCsvImportGateway,
             :final personalActionPlanGateway,
             :final personalActionReminderGateway,
@@ -330,6 +337,7 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
               questionnaireCatalog: questionnaireCatalog,
               questionnaireAdministration: questionnaireAdministration,
               promotionTargetGateway: promotionTargetGateway,
+              personalPiiExportGateway: personalPiiExportGateway,
               personalTargetCsvImportGateway: personalTargetCsvImportGateway,
               personalActionPlanGateway: personalActionPlanGateway,
               personalActionReminderGateway: personalActionReminderGateway,
@@ -392,6 +400,7 @@ class _ReadyApp extends StatefulWidget {
     required this.questionnaireCatalog,
     required this.questionnaireAdministration,
     required this.promotionTargetGateway,
+    required this.personalPiiExportGateway,
     required this.personalTargetCsvImportGateway,
     required this.personalActionPlanGateway,
     required this.personalActionReminderGateway,
@@ -433,6 +442,7 @@ class _ReadyApp extends StatefulWidget {
   final QuestionnaireCatalog questionnaireCatalog;
   final QuestionnaireAdministrationGateway questionnaireAdministration;
   final PromotionTargetGateway promotionTargetGateway;
+  final PersonalPiiExportGateway personalPiiExportGateway;
   final PersonalTargetCsvImportGateway personalTargetCsvImportGateway;
   final PersonalActionPlanGateway personalActionPlanGateway;
   final PersonalActionReminderGateway personalActionReminderGateway;
@@ -520,6 +530,7 @@ final class _ReadyAppState extends State<_ReadyApp> {
       appSession: widget.appSession,
       readyBuilder: (context, trustedContext) => ProductionHomeShell(
         localeCode: widget.localeCode,
+        identitySession: widget.identitySession,
         appSession: widget.appSession,
         context: trustedContext,
         contactJournal: widget.contactJournal,
@@ -532,6 +543,7 @@ final class _ReadyAppState extends State<_ReadyApp> {
         contactPageClosedEvents: contactPageClosedEvents,
         questionnaireAdministration: widget.questionnaireAdministration,
         promotionTargetGateway: widget.promotionTargetGateway,
+        personalPiiExportGateway: widget.personalPiiExportGateway,
         personalTargetCsvImportGateway: widget.personalTargetCsvImportGateway,
         personalActionPlanGateway: widget.personalActionPlanGateway,
         personalActionReminderGateway: widget.personalActionReminderGateway,

@@ -71,6 +71,7 @@ import '../sync/sync_engine_factory.dart';
 import '../sync/sync_transport.dart';
 import '../targets/http_promotion_target_gateway.dart';
 import '../targets/offline_promotion_target_gateway.dart';
+import '../targets/personal_pii_export_gateway.dart';
 import '../targets/personal_target_csv_import.dart';
 import '../targets/promotion_target.dart';
 import 'private_session_data_guard.dart';
@@ -96,6 +97,7 @@ final class AppDependencies {
     this.questionnaireRemoteSourceBuilder,
     this.questionnaireAdministrationBuilder,
     this.promotionTargetGatewayBuilder,
+    this.personalPiiExportGatewayBuilder,
     this.personalTargetCsvImportGatewayBuilder,
     this.personalActionPlanGatewayBuilder,
     this.personalActionReminderGatewayBuilder,
@@ -140,6 +142,7 @@ final class AppDependencies {
       questionnaireRemoteSourceBuilder: productionQuestionnaireRemoteSource,
       questionnaireAdministrationBuilder: productionQuestionnaireAdministration,
       promotionTargetGatewayBuilder: productionPromotionTargetGateway,
+      personalPiiExportGatewayBuilder: productionPersonalPiiExportGateway,
       personalTargetCsvImportGatewayBuilder:
           productionPersonalTargetCsvImportGateway,
       personalActionPlanGatewayBuilder: productionPersonalActionPlanGateway,
@@ -197,6 +200,8 @@ final class AppDependencies {
   questionnaireAdministrationBuilder;
   final PromotionTargetGateway Function(IdentitySession)?
   promotionTargetGatewayBuilder;
+  final PersonalPiiExportGateway Function(IdentitySession)?
+  personalPiiExportGatewayBuilder;
   final PersonalTargetCsvImportGateway Function(IdentitySession)?
   personalTargetCsvImportGatewayBuilder;
   final PersonalActionPlanGateway Function(IdentitySession)?
@@ -259,6 +264,7 @@ final class AppDependencies {
     QuestionnaireCatalog? questionnaireCatalog;
     QuestionnaireAdministrationGateway? questionnaireAdministration;
     PromotionTargetGateway? promotionTargetGateway;
+    PersonalPiiExportGateway? personalPiiExportGateway;
     PersonalTargetCsvImportGateway? personalTargetCsvImportGateway;
     PersonalActionPlanGateway? personalActionPlanGateway;
     PersonalActionReminderGateway? personalActionReminderGateway;
@@ -447,6 +453,9 @@ final class AppDependencies {
                 return (externalSubject: liveSubject, context: context);
               },
             );
+      personalPiiExportGateway =
+          personalPiiExportGatewayBuilder?.call(identitySession) ??
+          const DeferredPersonalPiiExportGateway();
       personalTargetCsvImportGateway =
           personalTargetCsvImportGatewayBuilder?.call(identitySession) ??
           const DeferredPersonalTargetCsvImportGateway();
@@ -539,6 +548,7 @@ final class AppDependencies {
         questionnaireCatalog: questionnaireCatalog,
         questionnaireAdministration: questionnaireAdministration,
         promotionTargetGateway: promotionTargetGateway,
+        personalPiiExportGateway: personalPiiExportGateway,
         personalTargetCsvImportGateway: personalTargetCsvImportGateway,
         personalActionPlanGateway: personalActionPlanGateway,
         personalActionReminderGateway: personalActionReminderGateway,
@@ -582,6 +592,7 @@ final class AppDependencies {
       await questionnaireCatalog?.close();
       await questionnaireAdministration?.close();
       await promotionTargetGateway?.close();
+      await personalPiiExportGateway?.close();
       await personalTargetCsvImportGateway?.close();
       await personalActionPlanGateway?.close();
       await personalActionReminderGateway?.close();
@@ -643,6 +654,7 @@ final class AppStartupReady extends AppStartupResult {
     required this.questionnaireCatalog,
     required this.questionnaireAdministration,
     required this.promotionTargetGateway,
+    required this.personalPiiExportGateway,
     required this.personalTargetCsvImportGateway,
     required this.personalActionPlanGateway,
     required this.personalActionReminderGateway,
@@ -689,6 +701,7 @@ final class AppStartupReady extends AppStartupResult {
   final QuestionnaireCatalog questionnaireCatalog;
   final QuestionnaireAdministrationGateway questionnaireAdministration;
   final PromotionTargetGateway promotionTargetGateway;
+  final PersonalPiiExportGateway personalPiiExportGateway;
   final PersonalTargetCsvImportGateway personalTargetCsvImportGateway;
   final PersonalActionPlanGateway personalActionPlanGateway;
   final PersonalActionReminderGateway personalActionReminderGateway;
