@@ -71,6 +71,7 @@ import '../sync/sync_engine_factory.dart';
 import '../sync/sync_transport.dart';
 import '../targets/http_promotion_target_gateway.dart';
 import '../targets/offline_promotion_target_gateway.dart';
+import '../targets/personal_target_csv_import.dart';
 import '../targets/promotion_target.dart';
 import 'private_session_data_guard.dart';
 
@@ -95,6 +96,7 @@ final class AppDependencies {
     this.questionnaireRemoteSourceBuilder,
     this.questionnaireAdministrationBuilder,
     this.promotionTargetGatewayBuilder,
+    this.personalTargetCsvImportGatewayBuilder,
     this.personalActionPlanGatewayBuilder,
     this.personalActionReminderGatewayBuilder,
     this.personalFollowUpConsentOptInGatewayBuilder,
@@ -138,6 +140,8 @@ final class AppDependencies {
       questionnaireRemoteSourceBuilder: productionQuestionnaireRemoteSource,
       questionnaireAdministrationBuilder: productionQuestionnaireAdministration,
       promotionTargetGatewayBuilder: productionPromotionTargetGateway,
+      personalTargetCsvImportGatewayBuilder:
+          productionPersonalTargetCsvImportGateway,
       personalActionPlanGatewayBuilder: productionPersonalActionPlanGateway,
       personalActionReminderGatewayBuilder:
           productionPersonalActionReminderGateway,
@@ -193,6 +197,8 @@ final class AppDependencies {
   questionnaireAdministrationBuilder;
   final PromotionTargetGateway Function(IdentitySession)?
   promotionTargetGatewayBuilder;
+  final PersonalTargetCsvImportGateway Function(IdentitySession)?
+  personalTargetCsvImportGatewayBuilder;
   final PersonalActionPlanGateway Function(IdentitySession)?
   personalActionPlanGatewayBuilder;
   final PersonalActionReminderGateway Function(IdentitySession)?
@@ -253,6 +259,7 @@ final class AppDependencies {
     QuestionnaireCatalog? questionnaireCatalog;
     QuestionnaireAdministrationGateway? questionnaireAdministration;
     PromotionTargetGateway? promotionTargetGateway;
+    PersonalTargetCsvImportGateway? personalTargetCsvImportGateway;
     PersonalActionPlanGateway? personalActionPlanGateway;
     PersonalActionReminderGateway? personalActionReminderGateway;
     PersonalFollowUpConsentOptInGateway? personalFollowUpConsentOptInGateway;
@@ -440,6 +447,9 @@ final class AppDependencies {
                 return (externalSubject: liveSubject, context: context);
               },
             );
+      personalTargetCsvImportGateway =
+          personalTargetCsvImportGatewayBuilder?.call(identitySession) ??
+          const DeferredPersonalTargetCsvImportGateway();
       final planningCache = DriftPersonalPlanningCache(database);
       reminderNotificationScheduler = reminderSchedulerBuilder(
         platformCapabilities.platform,
@@ -529,6 +539,7 @@ final class AppDependencies {
         questionnaireCatalog: questionnaireCatalog,
         questionnaireAdministration: questionnaireAdministration,
         promotionTargetGateway: promotionTargetGateway,
+        personalTargetCsvImportGateway: personalTargetCsvImportGateway,
         personalActionPlanGateway: personalActionPlanGateway,
         personalActionReminderGateway: personalActionReminderGateway,
         personalFollowUpConsentOptInGateway:
@@ -571,6 +582,7 @@ final class AppDependencies {
       await questionnaireCatalog?.close();
       await questionnaireAdministration?.close();
       await promotionTargetGateway?.close();
+      await personalTargetCsvImportGateway?.close();
       await personalActionPlanGateway?.close();
       await personalActionReminderGateway?.close();
       await personalFollowUpConsentOptInGateway?.close();
@@ -631,6 +643,7 @@ final class AppStartupReady extends AppStartupResult {
     required this.questionnaireCatalog,
     required this.questionnaireAdministration,
     required this.promotionTargetGateway,
+    required this.personalTargetCsvImportGateway,
     required this.personalActionPlanGateway,
     required this.personalActionReminderGateway,
     required this.personalFollowUpConsentOptInGateway,
@@ -676,6 +689,7 @@ final class AppStartupReady extends AppStartupResult {
   final QuestionnaireCatalog questionnaireCatalog;
   final QuestionnaireAdministrationGateway questionnaireAdministration;
   final PromotionTargetGateway promotionTargetGateway;
+  final PersonalTargetCsvImportGateway personalTargetCsvImportGateway;
   final PersonalActionPlanGateway personalActionPlanGateway;
   final PersonalActionReminderGateway personalActionReminderGateway;
   final PersonalFollowUpConsentOptInGateway personalFollowUpConsentOptInGateway;

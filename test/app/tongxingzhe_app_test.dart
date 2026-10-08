@@ -42,6 +42,7 @@ import 'package:tongxingzhe_app/services/location_service.dart';
 import 'package:tongxingzhe_app/screens/production_home_shell.dart';
 import 'package:tongxingzhe_app/sync/sync_models.dart';
 import 'package:tongxingzhe_app/sync/sync_transport.dart';
+import 'package:tongxingzhe_app/targets/personal_target_csv_import.dart';
 
 import '../support/fake_identity_session.dart';
 import '../support/fake_platform_capabilities.dart';
@@ -56,6 +57,7 @@ void main() {
     final directoryGateway = _TrackingOrganizationDirectoryGateway();
     final selfLeaveGateway = _TrackingOrganizationMembershipSelfLeaveGateway();
     final shareableJoinGateway = _TrackingOrganizationShareableJoinGateway();
+    final csvImportGateway = _TrackingPersonalTargetCsvImportGateway();
     var builderCalls = 0;
     final dependencies = AppDependencies(
       databaseFactory: SingleDatabaseFactory(database),
@@ -71,6 +73,7 @@ void main() {
       organizationDirectoryGatewayBuilder: (_) => directoryGateway,
       organizationMembershipSelfLeaveGatewayBuilder: (_) => selfLeaveGateway,
       organizationShareableJoinGatewayBuilder: (_) => shareableJoinGateway,
+      personalTargetCsvImportGatewayBuilder: (_) => csvImportGateway,
     );
     addTearDown(database.close);
 
@@ -89,6 +92,7 @@ void main() {
     expect(directoryGateway.closeCount, 1);
     expect(selfLeaveGateway.closeCount, 1);
     expect(shareableJoinGateway.closeCount, 1);
+    expect(csvImportGateway.closeCount, 1);
   });
 
   testWidgets('移除 TongxingzheApp 后关闭组织 gateways 恰好一次', (tester) async {
@@ -97,17 +101,24 @@ void main() {
     final directoryGateway = _TrackingOrganizationDirectoryGateway();
     final selfLeaveGateway = _TrackingOrganizationMembershipSelfLeaveGateway();
     final shareableJoinGateway = _TrackingOrganizationShareableJoinGateway();
+    final csvImportGateway = _TrackingPersonalTargetCsvImportGateway();
+    final identity = FakeIdentitySession();
+    IdentitySession? csvImportIdentity;
     final dependencies = AppDependencies(
       databaseFactory: SingleDatabaseFactory(database),
       clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
       idGenerator: CountingIdGenerator(),
-      identitySessionFactory: FakeIdentitySessionFactory(FakeIdentitySession()),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
       sessionContextGateway: FakeSessionContextGateway(),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       organizationCreationGatewayBuilder: (_) => gateway,
       organizationDirectoryGatewayBuilder: (_) => directoryGateway,
       organizationMembershipSelfLeaveGatewayBuilder: (_) => selfLeaveGateway,
       organizationShareableJoinGatewayBuilder: (_) => shareableJoinGateway,
+      personalTargetCsvImportGatewayBuilder: (session) {
+        csvImportIdentity = session;
+        return csvImportGateway;
+      },
     );
     addTearDown(database.close);
 
@@ -120,6 +131,8 @@ void main() {
     expect(directoryGateway.closeCount, 1);
     expect(selfLeaveGateway.closeCount, 1);
     expect(shareableJoinGateway.closeCount, 1);
+    expect(identical(csvImportIdentity, identity), isTrue);
+    expect(csvImportGateway.closeCount, 1);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
@@ -127,6 +140,7 @@ void main() {
     expect(directoryGateway.closeCount, 1);
     expect(selfLeaveGateway.closeCount, 1);
     expect(shareableJoinGateway.closeCount, 1);
+    expect(csvImportGateway.closeCount, 1);
   });
 
   testWidgets('启动尚未完成时移除 App 仍关闭后来取得的 owner transfer gateway 一次', (
@@ -3363,6 +3377,28 @@ final class _TrackingFollowUpConsentRatioReportGateway
       FollowUpConsentRatioReportFailureCode.notConfigured,
     );
   }
+}
+
+final class _TrackingPersonalTargetCsvImportGateway
+    implements PersonalTargetCsvImportGateway {
+  var closeCount = 0;
+
+  @override
+  Future<void> close() async => closeCount++;
+
+  @override
+  Future<PersonalTargetCsvImportResult<PersonalTargetCsvImportPreview>>
+  preview({required List<int> csvBytes}) async =>
+      const PersonalTargetCsvImportRejected(
+        PersonalTargetCsvImportFailureCode.networkUnavailable,
+      );
+
+  @override
+  Future<PersonalTargetCsvImportResult<PersonalTargetCsvImportConfirmReceipt>>
+  confirm({required PersonalTargetCsvImportConfirmation confirmation}) async =>
+      const PersonalTargetCsvImportRejected(
+        PersonalTargetCsvImportFailureCode.networkUnavailable,
+      );
 }
 
 final class _TrackingOrganizationCreationGateway

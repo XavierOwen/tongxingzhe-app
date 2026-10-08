@@ -32,6 +32,7 @@ import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
 import 'package:tongxingzhe_app/project_settings/http_personal_follow_up_consent_opt_in_gateway.dart';
 import 'package:tongxingzhe_app/project_settings/personal_follow_up_consent_opt_in.dart';
 import 'package:tongxingzhe_app/targets/http_promotion_target_gateway.dart';
+import 'package:tongxingzhe_app/targets/personal_target_csv_import.dart';
 import 'package:tongxingzhe_app/targets/promotion_target.dart';
 
 import '../support/fake_identity_session.dart';
@@ -76,6 +77,10 @@ void main() {
     expect(
       ready.personalRelationshipStageChangeSummaryGateway,
       isA<DeferredPersonalRelationshipStageChangeSummaryGateway>(),
+    );
+    expect(
+      ready.personalTargetCsvImportGateway,
+      isA<DeferredPersonalTargetCsvImportGateway>(),
     );
     expect(
       ready.followUpConsentRatioReportGateway,

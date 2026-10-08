@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:typed_data';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import '../../foundation/runtime_values.dart';
 import '../../l10n/app_strings.dart';
+import '../../targets/personal_target_csv_file.dart';
+import '../../targets/personal_target_csv_import.dart';
 import '../../targets/promotion_target.dart';
 import 'target_institution_relationship_panel.dart';
 
@@ -15,6 +19,9 @@ final class PromotionTargetDirectoryPage extends StatefulWidget {
     required this.idGenerator,
     required this.clock,
     required this.scopeKey,
+    required this.importGateway,
+    required this.canImport,
+    this.pickCsvFile,
     required this.canCreate,
     required this.canConfigureStageAliases,
     required this.canManageRelationship,
@@ -26,6 +33,9 @@ final class PromotionTargetDirectoryPage extends StatefulWidget {
   final IdGenerator idGenerator;
   final AppClock clock;
   final String scopeKey;
+  final PersonalTargetCsvImportGateway importGateway;
+  final bool canImport;
+  final Future<XFile?> Function()? pickCsvFile;
   final bool canCreate;
   final bool canConfigureStageAliases;
   final bool canManageRelationship;
@@ -43,6 +53,14 @@ final class _PromotionTargetDirectoryPageState
   PromotionTargetFailureCode? _failure;
   DateTime? _offlineAuthorizedAtUtc;
   Timer? _offlineExpiryTimer;
+  PersonalTargetCsvImportPreview? _csvPreview;
+  final Map<int, PersonalTargetCsvImportAction> _csvActions = {};
+  String? _csvRequestId;
+  PersonalTargetCsvImportFailureCode? _csvFailure;
+  List<PersonalTargetCsvImportIssue> _csvIssues = const [];
+  var _csvImportGeneration = 0;
+  var _csvBusy = false;
+  var _csvStale = false;
   var _busy = true;
 
   @override
@@ -54,8 +72,18 @@ final class _PromotionTargetDirectoryPageState
   @override
   void didUpdateWidget(covariant PromotionTargetDirectoryPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.scopeKey == widget.scopeKey &&
-        identical(oldWidget.gateway, widget.gateway)) {
+    final scopeOrGatewayChanged =
+        oldWidget.scopeKey != widget.scopeKey ||
+        !identical(oldWidget.gateway, widget.gateway) ||
+        !identical(oldWidget.importGateway, widget.importGateway);
+    if (!scopeOrGatewayChanged && !(oldWidget.canImport && !widget.canImport)) {
+      return;
+    }
+    _clearCsvImport();
+    final directoryChanged =
+        oldWidget.scopeKey != widget.scopeKey ||
+        !identical(oldWidget.gateway, widget.gateway);
+    if (!directoryChanged) {
       return;
     }
     _offlineExpiryTimer?.cancel();
@@ -74,6 +102,17 @@ final class _PromotionTargetDirectoryPageState
   void dispose() {
     _offlineExpiryTimer?.cancel();
     super.dispose();
+  }
+
+  void _clearCsvImport() {
+    _csvImportGeneration++;
+    _csvPreview = null;
+    _csvActions.clear();
+    _csvRequestId = null;
+    _csvFailure = null;
+    _csvIssues = const [];
+    _csvBusy = false;
+    _csvStale = false;
   }
 
   @override
@@ -142,6 +181,44 @@ final class _PromotionTargetDirectoryPageState
               label: Text(text.t('targetsConfigureStageAliases')),
             ),
           ),
+        ],
+        const SizedBox(height: 16),
+        if (widget.canImport) ...[
+          FilledButton.tonalIcon(
+            key: const ValueKey('import-promotion-target-csv'),
+            onPressed:
+                _busy ||
+                    _csvBusy ||
+                    _csvRequestId != null ||
+                    _offlineAuthorizedAtUtc != null
+                ? null
+                : _chooseCsv,
+            icon: const Icon(Icons.upload_file_outlined),
+            label: Text(text.t('targetsCsvImport')),
+          ),
+          const SizedBox(height: 8),
+          Text(text.t('targetsCsvImportHelp')),
+          if (_csvFailure != null || _csvStale)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                text.t(
+                  _csvStale
+                      ? 'targetsCsvImportStale'
+                      : 'targetsCsvImportFailed',
+                ),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+          for (final issue in _csvIssues)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                '${text.t('targetsCsvImportInvalid')} '
+                '#${issue.rowNumber}: ${issue.field} (${issue.code})',
+              ),
+            ),
+          if (_csvPreview != null) _csvPreviewCard(text),
         ],
         const SizedBox(height: 16),
         if (_busy && _targets == null)
@@ -276,6 +353,260 @@ final class _PromotionTargetDirectoryPageState
     );
   }
 
+  Future<void> _chooseCsv() async {
+    if (_busy || _csvBusy) return;
+    final pickerGeneration = _csvImportGeneration;
+    setState(() => _csvBusy = true);
+    XFile? file;
+    try {
+      file = await (widget.pickCsvFile ?? _pickCsvFile)();
+    } catch (_) {
+      if (mounted && pickerGeneration == _csvImportGeneration) {
+        setState(() {
+          _csvBusy = false;
+          _csvFailure = PersonalTargetCsvImportFailureCode.networkUnavailable;
+        });
+      }
+      return;
+    }
+    if (!mounted || pickerGeneration != _csvImportGeneration) return;
+    if (file == null) {
+      setState(() => _csvBusy = false);
+      return;
+    }
+    setState(() {
+      _clearCsvImport();
+      _csvBusy = true;
+    });
+    final readGeneration = _csvImportGeneration;
+    Uint8List? bytes;
+    try {
+      bytes = await readPersonalTargetCsvFile(file);
+    } on PersonalTargetCsvFileTooLarge {
+      if (mounted && readGeneration == _csvImportGeneration) {
+        setState(() {
+          _csvBusy = false;
+          _csvFailure = PersonalTargetCsvImportFailureCode.payloadTooLarge;
+        });
+      }
+      return;
+    } catch (_) {
+      if (mounted && readGeneration == _csvImportGeneration) {
+        setState(() {
+          _csvBusy = false;
+          _csvFailure = PersonalTargetCsvImportFailureCode.networkUnavailable;
+        });
+      }
+      return;
+    }
+    if (!mounted || readGeneration != _csvImportGeneration) return;
+    if (bytes == null) {
+      setState(() => _csvBusy = false);
+      return;
+    }
+    final previewGeneration = _csvImportGeneration;
+    final result = await widget.importGateway.preview(csvBytes: bytes);
+    if (!mounted || previewGeneration != _csvImportGeneration) return;
+    switch (result) {
+      case PersonalTargetCsvImportSuccess(:final value):
+        setState(() {
+          _csvPreview = value;
+          _csvBusy = false;
+        });
+      case PersonalTargetCsvImportStale():
+        setState(() {
+          _csvStale = true;
+          _csvBusy = false;
+        });
+      case PersonalTargetCsvImportRejected(:final code, :final issues):
+        setState(() {
+          _csvBusy = false;
+          if (_clearsImportPii(code)) _clearCsvImport();
+          _csvFailure = code;
+          _csvIssues = issues;
+        });
+    }
+  }
+
+  Widget _csvPreviewCard(AppStrings text) {
+    final preview = _csvPreview!;
+    final actionsLocked = _csvRequestId != null;
+    final ready = preview.rows.every(
+      (row) => _csvActions[row.rowNumber] != null,
+    );
+    return Card(
+      key: const ValueKey('promotion-target-csv-preview'),
+      margin: const EdgeInsets.only(top: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(text.t('targetsCsvImportPreview')),
+            const SizedBox(height: 8),
+            for (final row in preview.rows) ...[
+              ListTile(
+                key: ValueKey('promotion-target-csv-row-${row.rowNumber}'),
+                contentPadding: EdgeInsets.zero,
+                title: Text(row.displayName),
+                subtitle: Text(
+                  [
+                    row.type == PromotionTargetType.person
+                        ? text.t('targetsPerson')
+                        : text.t('targetsInstitution'),
+                    if (row.phone != null)
+                      '${text.t('targetsPhone')}: ${row.phone}',
+                    if (row.email != null)
+                      '${text.t('targetsEmail')}: ${row.email}',
+                    if (row.hinted) text.t('targetsCsvImportHinted'),
+                  ].join('\n'),
+                ),
+              ),
+              DropdownButtonFormField<PersonalTargetCsvImportAction>(
+                key: ValueKey('promotion-target-csv-action-${row.rowNumber}'),
+                initialValue: _csvActions[row.rowNumber],
+                decoration: InputDecoration(
+                  labelText: text.t('targetsCsvImportPreview'),
+                ),
+                items: [
+                  if (!row.hinted)
+                    DropdownMenuItem(
+                      value: PersonalTargetCsvImportAction.create,
+                      child: Text(text.t('targetsCsvImportCreate')),
+                    ),
+                  if (row.hinted)
+                    DropdownMenuItem(
+                      value: PersonalTargetCsvImportAction.createSeparate,
+                      child: Text(text.t('targetsCsvImportCreateSeparate')),
+                    ),
+                  DropdownMenuItem(
+                    value: PersonalTargetCsvImportAction.skip,
+                    child: Text(text.t('targetsCsvImportSkip')),
+                  ),
+                ],
+                onChanged: _csvBusy || actionsLocked
+                    ? null
+                    : (value) {
+                        if (value == null) return;
+                        setState(() => _csvActions[row.rowNumber] = value);
+                      },
+              ),
+            ],
+            if (preview.rows.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(text.t('targetsCsvImportNoRows')),
+              ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton(
+                key: const ValueKey('confirm-promotion-target-csv-import'),
+                onPressed: _csvBusy || !ready || preview.rows.isEmpty
+                    ? null
+                    : _confirmCsvImport,
+                child: Text(
+                  text.t(
+                    _csvRequestId == null
+                        ? 'targetsCsvImportConfirm'
+                        : 'targetsCsvImportFailed',
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmCsvImport() async {
+    final preview = _csvPreview;
+    if (preview == null || _csvBusy) return;
+    final confirmationGeneration = _csvImportGeneration;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(widget.text.t('targetsCsvImportConfirm')),
+        content: Text(widget.text.t('targetsCsvImportHelp')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(widget.text.t('cancel')),
+          ),
+          FilledButton(
+            key: const ValueKey('confirm-csv-import-dialog'),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(widget.text.t('targetsCsvImportConfirm')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true ||
+        !mounted ||
+        confirmationGeneration != _csvImportGeneration) {
+      return;
+    }
+    final requestId = _csvRequestId ??= widget.idGenerator.next();
+    final actions = [
+      for (final row in preview.rows) _csvActions[row.rowNumber]!,
+    ];
+    setState(() {
+      _csvBusy = true;
+      _csvFailure = null;
+    });
+    final requestGeneration = _csvImportGeneration;
+    final result = await widget.importGateway.confirm(
+      confirmation: PersonalTargetCsvImportConfirmation(
+        previewId: preview.receipt.previewId,
+        requestId: requestId,
+        rows: preview.rows,
+        actions: actions,
+      ),
+    );
+    if (!mounted || requestGeneration != _csvImportGeneration) return;
+    switch (result) {
+      case PersonalTargetCsvImportSuccess():
+        setState(_clearCsvImport);
+        await _load();
+      case PersonalTargetCsvImportStale():
+        setState(() {
+          _clearCsvImport();
+          _csvStale = true;
+        });
+      case PersonalTargetCsvImportRejected(:final code, :final issues):
+        setState(() {
+          _csvBusy = false;
+          if (_clearsImportPii(code)) {
+            _clearCsvImport();
+          } else if (!_mustRetrySameRequest(code)) {
+            _csvRequestId = null;
+          }
+          _csvFailure = code;
+          _csvIssues = issues;
+        });
+    }
+  }
+
+  bool _clearsImportPii(PersonalTargetCsvImportFailureCode code) =>
+      code == PersonalTargetCsvImportFailureCode.unauthorized ||
+      code == PersonalTargetCsvImportFailureCode.forbidden;
+
+  bool _mustRetrySameRequest(PersonalTargetCsvImportFailureCode code) =>
+      code == PersonalTargetCsvImportFailureCode.networkUnavailable ||
+      code == PersonalTargetCsvImportFailureCode.serviceUnavailable ||
+      code == PersonalTargetCsvImportFailureCode.malformedResponse;
+
+  Future<XFile?> _pickCsvFile() => openFile(
+    acceptedTypeGroups: [
+      const XTypeGroup(
+        label: 'CSV',
+        extensions: ['csv'],
+        uniformTypeIdentifiers: ['public.comma-separated-values-text'],
+      ),
+    ],
+  );
+
   List<PromotionTargetStageAlias>? get _stageAliases {
     for (final target in _targets ?? const <PromotionTargetProfile>[]) {
       final relationship = target.projectRelationship;
@@ -345,6 +676,7 @@ final class _PromotionTargetDirectoryPageState
     _offlineExpiryTimer?.cancel();
     _offlineExpiryTimer = null;
     setState(() {
+      _clearCsvImport();
       _targets = null;
       _retentionTasks = const [];
       _offlineAuthorizedAtUtc = null;

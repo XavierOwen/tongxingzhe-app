@@ -175,8 +175,9 @@ target_type,display_name,phone,email
 
 预览和确认分别追加 value-free 审计。审计只保存 actor、workspace、request／preview ID、phase、outcome、行数、提示数、建立数、`source_kind = csv` 和数据库时间。原文件名、CSV bytes、字段值、错误行内容、姓名、电话和 email 不进入审计、日志或错误。
 
-本节的数据库 preview／confirm writer 与 Backend CSV／HTTP 边界已实现。
-Flutter 文件选择、预览界面与真人六平台运行时仍未实现或验证。
+推广对象目录中的“导入 CSV”入口只在个人空间且当前可信上下文含 `import_target_pii` 时显示；目录来自离线加密快照时入口禁用。App 通过系统文件选择器读取一个 `.csv` 文件；文件 bytes 只在当前页面内存中短暂保留，客户端按实际读取量限制为 1 MiB，不解析内容，也不写入 Drift、离线 PII vault 或 Outbox。页面直接展示 Backend 返回的规范化行和 value-free 行错误。疑似重复行必须明确选择“另建对象”或“跳过”，其余有效行可以“建立对象”或“跳过”。确认前仍可取消，不产生写入；确认成功后目录立即重新读取。
+
+身份、workspace 或 project 改变时，页面清除文件、receipt、行和选择。确认网络重试复用同一个 request UUID；stale preview 会清除旧选择并要求重新预览。macOS sandbox 只授予用户所选文件的只读访问。自动化测试与六平台 build 证明客户端合同、资源释放和可构建性；真人六平台系统文件选择、生产 Auth／network／PII 与发布运行仍未验证。
 
 ## HTTP 与权限边界
 

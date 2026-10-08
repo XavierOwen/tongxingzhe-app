@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'dart:typed_data';
+
+import 'package:file_selector/file_selector.dart';
 import 'package:tongxingzhe_app/features/targets/promotion_target_directory_page.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
 import 'package:tongxingzhe_app/l10n/app_strings.dart';
+import 'package:tongxingzhe_app/targets/personal_target_csv_import.dart';
 import 'package:tongxingzhe_app/targets/promotion_target.dart';
 
 void main() {
@@ -82,6 +86,330 @@ void main() {
       expect(find.textContaining('关系阶段: 达成项目目标关系 (8)'), findsOneWidget);
     },
   );
+
+  testWidgets('CSV import stays hidden without capability and cancels safely', (
+    tester,
+  ) async {
+    final importer = _MemoryCsvImportGateway();
+    await tester.pumpWidget(
+      _app(_MemoryGateway(), importGateway: importer, canImport: false),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('import-promotion-target-csv')),
+      findsNothing,
+    );
+
+    await tester.pumpWidget(
+      _app(
+        _MemoryGateway(),
+        importGateway: importer,
+        canImport: true,
+        pickCsvFile: () async => null,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('import-promotion-target-csv')));
+    await tester.pumpAndSettle();
+    expect(importer.previewCalls, 0);
+    expect(importer.confirmCalls, 0);
+  });
+
+  testWidgets('CSV preview requires explicit actions and confirmation', (
+    tester,
+  ) async {
+    final directory = _MemoryGateway();
+    final importer = _MemoryCsvImportGateway();
+    await tester.pumpWidget(
+      _app(
+        directory,
+        importGateway: importer,
+        canImport: true,
+        pickCsvFile: () async =>
+            XFile.fromData(Uint8List.fromList([1, 2]), name: 'targets.csv'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('import-promotion-target-csv')));
+    await tester.pumpAndSettle();
+
+    expect(importer.previewCalls, 1);
+    expect(find.text('规范姓名'), findsOneWidget);
+    expect(find.textContaining('possible duplicate · 可能是重复'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('confirm-promotion-target-csv-import')),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('promotion-target-csv-action-1')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('建立对象').last);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('promotion-target-csv-action-2')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('跳过').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('confirm-promotion-target-csv-import')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('取消').last);
+    await tester.pumpAndSettle();
+    expect(importer.confirmCalls, 0);
+
+    await tester.tap(
+      find.byKey(const ValueKey('confirm-promotion-target-csv-import')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('confirm-csv-import-dialog')));
+    await tester.pumpAndSettle();
+    expect(importer.confirmCalls, 1);
+    expect(importer.confirmations.single.requestId, 'request-1');
+    expect(importer.confirmations.single.actions, [
+      PersonalTargetCsvImportAction.create,
+      PersonalTargetCsvImportAction.skip,
+    ]);
+    expect(directory.loadCalls, greaterThan(1));
+    expect(find.text('规范姓名'), findsNothing);
+  });
+
+  testWidgets('hinted CSV rows require create separately or skip', (
+    tester,
+  ) async {
+    final directory = _MemoryGateway();
+    final importer = _MemoryCsvImportGateway(hintedOnly: true);
+    await tester.pumpWidget(
+      _app(
+        directory,
+        importGateway: importer,
+        canImport: true,
+        pickCsvFile: () async =>
+            XFile.fromData(Uint8List.fromList([1]), name: 'targets.csv'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('import-promotion-target-csv')));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('confirm-promotion-target-csv-import')),
+          )
+          .onPressed,
+      isNull,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('promotion-target-csv-action-1')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('建立对象'), findsNothing);
+    expect(find.text('建立为独立对象'), findsOneWidget);
+    await tester.tap(find.text('建立为独立对象').last);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('confirm-promotion-target-csv-import')),
+          )
+          .onPressed,
+      isNotNull,
+    );
+
+    await tester.pumpWidget(
+      _app(
+        directory,
+        importGateway: importer,
+        canImport: true,
+        pickCsvFile: () async =>
+            XFile.fromData(Uint8List.fromList([1]), name: 'targets.csv'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('规范姓名'), findsOneWidget);
+    await tester.pumpWidget(
+      _app(
+        directory,
+        importGateway: importer,
+        canImport: true,
+        scopeKey: 'workspace-1/project-2',
+        pickCsvFile: () async =>
+            XFile.fromData(Uint8List.fromList([1]), name: 'targets.csv'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('规范姓名'), findsNothing);
+  });
+
+  testWidgets('invalid rows show only value-free issues', (tester) async {
+    final importer = _MemoryCsvImportGateway(
+      previewRejected: const PersonalTargetCsvImportRejected(
+        PersonalTargetCsvImportFailureCode.invalidRows,
+        issues: [
+          PersonalTargetCsvImportIssue(
+            rowNumber: 3,
+            field: 'display_name',
+            code: 'required',
+          ),
+        ],
+      ),
+    );
+    await tester.pumpWidget(
+      _app(
+        _MemoryGateway(),
+        importGateway: importer,
+        canImport: true,
+        pickCsvFile: () async =>
+            XFile.fromData(Uint8List.fromList([1]), name: 'targets.csv'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('import-promotion-target-csv')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('#3: display_name (required)'), findsOneWidget);
+    expect(find.text('不应显示的原始姓名'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('promotion-target-csv-preview')),
+      findsNothing,
+    );
+  });
+
+  testWidgets(
+    'unknown confirm outcome locks actions and retries same request',
+    (tester) async {
+      final importer = _MemoryCsvImportGateway(
+        confirmResults: [
+          const PersonalTargetCsvImportRejected(
+            PersonalTargetCsvImportFailureCode.malformedResponse,
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        _app(
+          _MemoryGateway(),
+          importGateway: importer,
+          canImport: true,
+          pickCsvFile: () async =>
+              XFile.fromData(Uint8List.fromList([1]), name: 'targets.csv'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('import-promotion-target-csv')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('promotion-target-csv-action-1')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('建立对象').last);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('promotion-target-csv-action-2')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('跳过').last);
+      await tester.pumpAndSettle();
+
+      Future<void> confirmOnce() async {
+        await tester.tap(
+          find.byKey(const ValueKey('confirm-promotion-target-csv-import')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const ValueKey('confirm-csv-import-dialog')),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      await confirmOnce();
+      final action = tester.widget<DropdownButtonFormField>(
+        find.byKey(const ValueKey('promotion-target-csv-action-1')),
+      );
+      expect(action.onChanged, isNull);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const ValueKey('import-promotion-target-csv')),
+            )
+            .onPressed,
+        isNull,
+      );
+      await confirmOnce();
+      expect(importer.confirmations, hasLength(2));
+      expect(importer.confirmations.map((c) => c.requestId).toSet(), {
+        'request-1',
+      });
+      expect(
+        importer.confirmations[0].actions,
+        importer.confirmations[1].actions,
+      );
+    },
+  );
+
+  testWidgets('stale confirmation clears preview and requires a new preview', (
+    tester,
+  ) async {
+    final importer = _MemoryCsvImportGateway(
+      confirmResults: [
+        PersonalTargetCsvImportStale(
+          PersonalTargetCsvImportConfirmReceipt(
+            previewId: 'preview-id',
+            requestId: 'request-1',
+            stale: true,
+            rowCount: 1,
+            hintCount: 0,
+            createdCount: 0,
+            createdTargets: const [],
+            completedAtUtc: DateTime.utc(2026, 8, 6),
+          ),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      _app(
+        _MemoryGateway(),
+        importGateway: importer,
+        canImport: true,
+        pickCsvFile: () async =>
+            XFile.fromData(Uint8List.fromList([1]), name: 'targets.csv'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('import-promotion-target-csv')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('promotion-target-csv-action-1')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('建立对象').last);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('promotion-target-csv-action-2')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('跳过').last);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('confirm-promotion-target-csv-import')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('confirm-csv-import-dialog')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('规范姓名'), findsNothing);
+    expect(find.textContaining('预览已过期'), findsOneWidget);
+    expect(importer.previewCalls, 1);
+  });
 
   testWidgets('same-field conflict keeps proposal until assignee resolves it', (
     tester,
@@ -201,7 +529,11 @@ void main() {
       ..expiresAtUtc = DateTime.utc(2026, 8, 9, 12);
 
     await tester.pumpWidget(
-      _app(gateway, clock: _FixedClock(DateTime.utc(2026, 8, 9, 11, 59))),
+      _app(
+        gateway,
+        clock: _FixedClock(DateTime.utc(2026, 8, 9, 11, 59)),
+        canImport: true,
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -211,6 +543,14 @@ void main() {
       find.byKey(const ValueKey('create-promotion-target')),
     );
     expect(createButton.onPressed, isNull);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('import-promotion-target-csv')),
+          )
+          .onPressed,
+      isNull,
+    );
   });
 
   testWidgets('offline PII is removed from an open page at expiry', (
@@ -384,6 +724,9 @@ void main() {
 Widget _app(
   PromotionTargetGateway gateway, {
   AppClock? clock,
+  PersonalTargetCsvImportGateway? importGateway,
+  bool canImport = false,
+  Future<XFile?> Function()? pickCsvFile,
   String scopeKey = 'workspace-1/project-1',
 }) => MaterialApp(
   home: Scaffold(
@@ -393,6 +736,10 @@ Widget _app(
       idGenerator: _FixedIds(),
       clock: clock ?? _FixedClock(DateTime.utc(2026, 8, 6, 13)),
       scopeKey: scopeKey,
+      importGateway:
+          importGateway ?? const DeferredPersonalTargetCsvImportGateway(),
+      canImport: canImport,
+      pickCsvFile: pickCsvFile,
       canCreate: true,
       canConfigureStageAliases: true,
       canManageRelationship: true,
@@ -410,6 +757,7 @@ final class _FixedIds implements IdGenerator {
 
 final class _MemoryGateway
     implements PromotionTargetGateway, PromotionTargetRetentionGateway {
+  var loadCalls = 0;
   final targets = <PromotionTargetProfile>[];
   String? createdName;
   String? requestId;
@@ -466,6 +814,7 @@ final class _MemoryGateway
   @override
   Future<PromotionTargetResult<List<PromotionTargetProfile>>>
   loadAssigned() async {
+    loadCalls++;
     final failure = listFailure;
     if (failure != null) return PromotionTargetRejected(failure);
     return PromotionTargetSuccess(
@@ -616,6 +965,91 @@ final class _MemoryGateway
     );
     institutionRelationships[0] = ended;
     return PromotionTargetSuccess(ended);
+  }
+
+  @override
+  Future<void> close() async {}
+}
+
+final class _MemoryCsvImportGateway implements PersonalTargetCsvImportGateway {
+  _MemoryCsvImportGateway({
+    this.hintedOnly = false,
+    this.previewRejected,
+    List<PersonalTargetCsvImportResult<PersonalTargetCsvImportConfirmReceipt>>?
+    confirmResults,
+  }) : confirmResults = confirmResults ?? [];
+
+  final bool hintedOnly;
+  final PersonalTargetCsvImportRejected<PersonalTargetCsvImportPreview>?
+  previewRejected;
+  final List<
+    PersonalTargetCsvImportResult<PersonalTargetCsvImportConfirmReceipt>
+  >
+  confirmResults;
+  var previewCalls = 0;
+  var confirmCalls = 0;
+  final confirmations = <PersonalTargetCsvImportConfirmation>[];
+
+  @override
+  Future<PersonalTargetCsvImportResult<PersonalTargetCsvImportPreview>>
+  preview({required List<int> csvBytes}) async {
+    previewCalls++;
+    final rejection = previewRejected;
+    if (rejection != null) return rejection;
+    final rows = [
+      PersonalTargetCsvImportPreviewRow(
+        rowNumber: 1,
+        type: PromotionTargetType.person,
+        displayName: '规范姓名',
+        phone: '555-0101',
+        email: null,
+        hinted: hintedOnly,
+      ),
+      if (!hintedOnly)
+        const PersonalTargetCsvImportPreviewRow(
+          rowNumber: 2,
+          type: PromotionTargetType.institution,
+          displayName: 'possible duplicate · 可能是重复',
+          phone: null,
+          email: 'office@example.test',
+          hinted: true,
+        ),
+    ];
+    return PersonalTargetCsvImportSuccess(
+      PersonalTargetCsvImportPreview(
+        receipt: PersonalTargetCsvImportPreviewReceipt(
+          previewId: 'preview-id',
+          rowCount: rows.length,
+          hintedRows: [
+            for (final row in rows)
+              if (row.hinted) row.rowNumber,
+          ],
+          previewedAtUtc: DateTime.utc(2026, 8, 6),
+          expiresAtUtc: DateTime.utc(2026, 8, 6, 1),
+        ),
+        rows: rows,
+      ),
+    );
+  }
+
+  @override
+  Future<PersonalTargetCsvImportResult<PersonalTargetCsvImportConfirmReceipt>>
+  confirm({required PersonalTargetCsvImportConfirmation confirmation}) async {
+    confirmCalls++;
+    confirmations.add(confirmation);
+    if (confirmResults.isNotEmpty) return confirmResults.removeAt(0);
+    return PersonalTargetCsvImportSuccess(
+      PersonalTargetCsvImportConfirmReceipt(
+        previewId: confirmation.previewId,
+        requestId: confirmation.requestId,
+        stale: false,
+        rowCount: confirmation.rows.length,
+        hintCount: 1,
+        createdCount: 1,
+        createdTargets: const [],
+        completedAtUtc: DateTime.utc(2026, 8, 6),
+      ),
+    );
   }
 
   @override
