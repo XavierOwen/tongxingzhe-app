@@ -14,6 +14,6 @@
 
 固定的 28 个 guard 只在 DELETE、当前执行者具有 checker EXECUTE 且 exact-row proof 成立时返回 OLD。其余 body、owner、ACL、SECURITY INVOKER／DEFINER 与 search path 保持原状。无 helper 权限的 invoker 沿原 guard 报错；runtime 不获得 checker 权限。七组旧 organization tombstone 与新的 completion tombstone 即使存在授权行也拒绝，个人 draft／plan／reminder／opt-in guard 继续关闭。
 
-`organization_purge_request_tombstones` 只保存明确 allowlist 中的 claim family、UUID 与有限 UTC 完成时间，复合主键并追加不可变。七组原有组织 writer 继续读取原 tombstone。删除、恢复、管理报告 release／replacement、报告时区与 management opt-in writer 在已有 request lock 后检查新的 completion ledger，复用各自的 22023 幂等冲突合同。九组共享 release／replacement family 的 UUID 互斥；渠道 replacement 使用既有独立 namespace。
+`organization_purge_request_tombstones` 只保存明确 allowlist 中的 claim family、UUID 与有限 UTC 完成时间，复合主键并追加不可变。七组原有组织 writer 继续读取原 tombstone。删除、恢复、管理报告 release／replacement（包括可信直接 legacy v1 及 v2 同 UUID 委托）、报告时区与 management opt-in writer 在已有 request lock 后检查新的 completion ledger，复用各自的 22023 幂等冲突合同。九组共享 release／replacement family 的 UUID 互斥；渠道 replacement 使用既有独立 namespace。
 
 后续 finalizer 在同一可信事务中选择固定范围、取得 request／治理锁、临时写入逐行授权、执行删除、写入 completion ledger，并在返回前清空授权。失败由事务回滚授权与业务变更，回滚后另行记录最小失败状态。0108 的 schema／ACL、synthetic rollback fixture、old-live-data upgrade、checksum replay 与 dump／restore 只能证明此 foundation，不证明生产清除或备份清除。

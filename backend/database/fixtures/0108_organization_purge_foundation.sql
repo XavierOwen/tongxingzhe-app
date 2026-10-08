@@ -137,5 +137,46 @@ BEGIN
   EXCEPTION WHEN object_not_in_prerequisite_state THEN NULL; END;
 END
 $terminal$;
+-- A trusted direct legacy caller still uses a real active project. The old
+-- completed UUID has no live receipt; an ordinary fresh UUID remains usable.
+INSERT INTO app_data.app_users (app_user_id, status)
+VALUES ('81070000-0000-4000-8000-000000000001', 'active');
+SELECT app_private.create_organization_v1(
+  '81070000-0000-4000-8000-000000000001',
+  '81080000-0000-4000-8000-000000000010', '0108 legacy replay fixture');
+INSERT INTO app_data.projects (project_id, workspace_id, display_name)
+SELECT '81070000-0000-4000-8000-000000000003', organization_workspace_id, '0108 legacy release project'
+FROM app_private.organization_creation_request_claims
+WHERE request_id = '81080000-0000-4000-8000-000000000010';
+DO $legacy_replay$
+DECLARE release_result jsonb;
+BEGIN
+  release_result := app_private.release_management_report_snapshot_v1(
+    '81080000-0000-4000-8000-000000000011',
+    '81070000-0000-4000-8000-000000000001', '81070000-0000-4000-8000-000000000003',
+    'contact_sessions_by_channel_two_periods', 1, 'UTC', '2026-06-17 12:34:56+00', '2026-06-17 12:35:00+00');
+  IF release_result->>'result_status' <> 'approved_baseline'
+    OR NOT EXISTS (SELECT 1 FROM app_private.management_report_release_request_claims
+      WHERE release_request_id = '81080000-0000-4000-8000-000000000011'
+        AND release_family_id = 'channel_management_report_snapshot_release')
+  THEN RAISE EXCEPTION '0108 fresh legacy request was not usable'; END IF;
+  BEGIN
+    PERFORM app_private.release_management_report_snapshot_v1(
+      '81070000-0000-4000-8000-000000000005',
+      '81070000-0000-4000-8000-000000000001', '81070000-0000-4000-8000-000000000003',
+      'contact_sessions_by_channel_two_periods', 1, 'UTC', '2026-06-17 12:34:56+00', '2026-06-17 12:35:00+00');
+    RAISE EXCEPTION '0108 trusted legacy terminal UUID was reused';
+  EXCEPTION WHEN invalid_parameter_value THEN
+    IF SQLERRM <> 'management report release idempotency conflict' THEN RAISE; END IF;
+  END;
+  IF EXISTS (SELECT 1 FROM app_private.management_report_release_attempts
+      WHERE release_request_id = '81070000-0000-4000-8000-000000000005')
+    OR EXISTS (SELECT 1 FROM app_private.management_report_release_request_claims
+      WHERE release_request_id = '81070000-0000-4000-8000-000000000005')
+    OR EXISTS (SELECT 1 FROM app_private.management_report_snapshots
+      WHERE release_request_id = '81070000-0000-4000-8000-000000000005')
+  THEN RAISE EXCEPTION '0108 terminal legacy replay left live report facts'; END IF;
+END
+$legacy_replay$;
 SELECT 'organization purge exact-row/replay rollback fixture: passed' AS result;
 ROLLBACK;

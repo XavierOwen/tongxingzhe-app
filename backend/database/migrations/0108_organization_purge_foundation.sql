@@ -199,6 +199,7 @@ BEGIN
     ('app_private.request_organization_deletion_v1(uuid,uuid,uuid)', 'organization-deletion-request', 'requested_request_id', 'organization deletion idempotency conflict'),
     ('app_private.restore_organization_v1(uuid,uuid,uuid,uuid)', 'organization-deletion-restore-request', 'requested_request_id', 'organization restoration idempotency conflict'),
     ('app_private.configure_project_reporting_time_zone_v1(uuid,uuid,uuid,integer,text,timestamptz)', 'project-reporting-time-zone-change-request', 'requested_change_request_id', 'project reporting time zone idempotency conflict'),
+    ('app_private.release_management_report_snapshot_v1(uuid,uuid,uuid,text,integer,text,timestamptz,timestamptz)', 'channel_management_report_snapshot_release', 'requested_release_request_id', 'management report release idempotency conflict'),
     ('app_private.release_management_report_snapshot_v2(uuid,uuid,uuid,text,integer)', 'channel_management_report_snapshot_release', 'requested_release_request_id', 'trusted management report release idempotency conflict'),
     ('app_private.release_management_current_city_report_snapshot_v1(uuid,uuid,uuid,text,integer)', 'current_city_management_report_snapshot_release', 'requested_release_request_id', 'current city report release idempotency conflict'),
     ('app_private.release_management_interest_report_snapshot_v1(uuid,uuid,uuid,text,integer)', 'interest_management_report_snapshot_release', 'requested_release_request_id', 'management interest report release idempotency conflict'),

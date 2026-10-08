@@ -35,10 +35,15 @@ BEGIN
       OR has_function_privilege('tongxingzhe_runtime', target.identity, 'EXECUTE')
     THEN RAISE EXCEPTION '0108 private helper owner/security/ACL drift: %', target.identity; END IF;
   END LOOP;
+  IF NOT EXISTS (SELECT 1 FROM pg_proc WHERE oid = 'app_private.release_management_report_snapshot_v1(uuid,uuid,uuid,text,integer,text,timestamptz,timestamptz)'::regprocedure
+    AND proowner = owner_oid AND NOT prosecdef AND proconfig = ARRAY['search_path=pg_catalog'])
+    OR has_function_privilege('tongxingzhe_runtime', 'app_private.release_management_report_snapshot_v1(uuid,uuid,uuid,text,integer,text,timestamptz,timestamptz)', 'EXECUTE')
+  THEN RAISE EXCEPTION '0108 legacy release owner/security/ACL drift'; END IF;
   FOR target IN SELECT * FROM (VALUES
     ('app_private.request_organization_deletion_v1(uuid,uuid,uuid)', 'organization-deletion-request', 'requested_request_id'),
     ('app_private.restore_organization_v1(uuid,uuid,uuid,uuid)', 'organization-deletion-restore-request', 'requested_request_id'),
     ('app_private.configure_project_reporting_time_zone_v1(uuid,uuid,uuid,integer,text,timestamptz)', 'project-reporting-time-zone-change-request', 'requested_change_request_id'),
+    ('app_private.release_management_report_snapshot_v1(uuid,uuid,uuid,text,integer,text,timestamptz,timestamptz)', 'channel_management_report_snapshot_release', 'requested_release_request_id'),
     ('app_private.release_management_report_snapshot_v2(uuid,uuid,uuid,text,integer)', 'channel_management_report_snapshot_release', 'requested_release_request_id'),
     ('app_private.release_management_current_city_report_snapshot_v1(uuid,uuid,uuid,text,integer)', 'current_city_management_report_snapshot_release', 'requested_release_request_id'),
     ('app_private.release_management_interest_report_snapshot_v1(uuid,uuid,uuid,text,integer)', 'interest_management_report_snapshot_release', 'requested_release_request_id'),
