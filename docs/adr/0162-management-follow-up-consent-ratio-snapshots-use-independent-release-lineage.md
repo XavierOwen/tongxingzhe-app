@@ -20,7 +20,7 @@
 
 固定 identity 是 `contact_target_follow_up_consent_ratio_two_periods@1`、`follow_up_consent_ratio@1`、统计单位 `contact_target_link`、dimension `consent_state`、period boundary `iso_week_monday_v1`、privacy policy `management_follow_up_consent_ratio_privacy_v1`、source scope `backend_accepted_active_contact_target_links_current_revision` 和 query fingerprint `management-report:contact_target_follow_up_consent_ratio_two_periods:v1`。
 
-发布入口只接受 request UUID、可信内部 actor、显式 project 和固定 report identity。事务取得授权、request、项目时区和 lineage 锁后，重新确认活动账号、组织／项目 membership、项目状态、`release_management_reports` capability 和 6BO 当前 opt-in，再调用 6BP executor。每次可能等待后都重新授权。
+发布入口只接受 request UUID、可信内部 actor、显式 project 和固定 report identity。锁顺序条款由 [ADR-0190](0190-management-report-request-locks-precede-authorization-locks.md) 替代：事务取得 request、授权、项目时区和 lineage 锁后，重新确认活动账号、组织／项目 membership、项目状态、`release_management_reports` capability 和 6BO 当前 opt-in，再调用 6BP executor。每次可能等待后都重新授权。
 
 validator 只接受 6BP 的 completed protected document。它固定 report／metric identity、统计单位、dimension、period boundary、privacy policy、query fingerprint 和 source scope。它也固定两个期间和字段 allowlist。
 

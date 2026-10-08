@@ -10869,6 +10869,87 @@ fi
 printf '%s\n' "${organization_eligibility_upgrade_replay}"
 echo '0105→0106 live lifecycle rows, no-op checksum replay：通过。'
 
+echo '验证 0106→0107 管理报告 request 锁序升级、数据保留及 checksum 重放。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${organization_deletion_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$request_lock_order_baseline\$
+    BEGIN
+      IF (SELECT max(left(version, 4)) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0106'
+        OR (SELECT count(*) FROM app_migrations.schema_migrations) <> 105
+      THEN RAISE EXCEPTION '0107 lock-order upgrade requires the 0106 baseline'; END IF;
+    END
+    \$request_lock_order_baseline\$;
+  " >/dev/null
+docker exec "${container_name}" bash -lc \
+  "mkdir -p /tmp/management-report-request-lock-order-upgrade-only && \
+   cp /workspace/backend/database/migrations/0107_management_report_request_lock_order.sql \
+     /tmp/management-report-request-lock-order-upgrade-only/"
+report_request_lock_order_upgrade_before="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_deletion_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+docker exec \
+  --env DATABASE_URL="${organization_deletion_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/management-report-request-lock-order-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${organization_deletion_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$request_lock_order_upgrade\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 106
+        OR (SELECT max(left(version, 4)) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0107'
+        OR (SELECT count(*) FROM app_private.organization_deletion_current) <> 2
+        OR (SELECT count(*) FROM app_private.organization_deletion_current
+            WHERE status = 'deletion_pending') <> 1
+        OR (SELECT count(*) FROM app_private.organization_deletion_current
+            WHERE status = 'restored') <> 1
+      THEN RAISE EXCEPTION '0106→0107 migration metadata or lifecycle drift'; END IF;
+    END
+    \$request_lock_order_upgrade\$;
+  " >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres -d "${organization_deletion_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file /workspace/backend/database/checks/verify_management_report_request_lock_order.sql \
+  --file /workspace/backend/database/fixtures/0107_management_report_request_lock_order.sql
+report_request_lock_order_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${organization_deletion_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/management-report-request-lock-order-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${report_request_lock_order_upgrade_replay}" != \
+    *'已验证 0107_management_report_request_lock_order（无需重复执行）'* ]] \
+  || [[ "${report_request_lock_order_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0107 migration did not skip its checksum-verified replay.' >&2
+  printf '%s\n' "${report_request_lock_order_upgrade_replay}" >&2
+  exit 1
+fi
+report_request_lock_order_upgrade_after="$(
+  docker exec "${container_name}" pg_dump \
+    "${organization_deletion_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private \
+    --no-owner --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+if [[ "${report_request_lock_order_upgrade_before}" != \
+    "${report_request_lock_order_upgrade_after}" ]]; then
+  echo '0107 migration or checksum replay changed existing business or lifecycle rows.' >&2
+  exit 1
+fi
+printf '%s\n' "${report_request_lock_order_upgrade_replay}"
+echo '0106→0107 live lifecycle rows, no-op checksum replay：通过。'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 
