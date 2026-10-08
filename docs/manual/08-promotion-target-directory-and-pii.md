@@ -179,6 +179,24 @@ target_type,display_name,phone,email
 
 身份、workspace 或 project 改变时，页面清除文件、receipt、行和选择。确认网络重试复用同一个 request UUID；stale preview 会清除旧选择并要求重新预览。macOS sandbox 只授予用户所选文件的只读访问。自动化测试与六平台 build 证明客户端合同、资源释放和可构建性；真人六平台系统文件选择、生产 Auth／network／PII 与发布运行仍未验证。
 
+## 个人空间 PII 导出 v1
+
+首版导出只适用于当前账号拥有的 active personal workspace。可信上下文必须同时包含 `export_target_pii` 和 `view_assigned_target_pii`。Backend 与 PostgreSQL 重验 exact identity、owner、workspace 和两项 capability。当前项目只确认上下文，导出仍覆盖个人空间中分配给该账号的全部 active 对象。组织 owner 或管理员不自动取得导出能力。
+
+导出前，使用者必须重新输入密码。密码只交给 Supabase Auth，不进入自有 Backend、存储或日志。新会话必须仍是原 external subject。Backend 只接受已验签 JWT `amr` 中的 `password` 方法；`timestamp` 使用 Unix 秒，多个结构有效的 password 条目取最新值。数据库事务时间与认证时间的差必须满足 `-60 seconds <= age < 15 minutes`。普通 token refresh、`iat`、session restore、畸形 AMR 和其他方法都不合格。
+
+文件是 `personal_promotion_target_pii_export_v1` canonical JSON。顶层字段按顺序为 `export_contract_id`、`export_event_id`、`exported_at_utc`、`targets`。每个对象按顺序只有 `target_type`、`display_name`、`phone`、`email`；电话和 email 保留原字符串或显式 `null`。对象按建立时间和 UUID 升序。文件使用 UTF-8，无 BOM、额外空白或结尾换行；该合同不声称 RFC 8785。空范围返回 `targets: []`，任一失败都不返回部分对象。
+
+v1 不使用 CSV。CSV quoting 不阻止电子表格公式注入，为 `+phone` 加前缀又会改变原值。如果以后需要 Excel 或 Calc 直接打开，必须单独定义 typed XLSX 的 text-cell 合同。
+
+只读入口是 `GET /v1/promotion-targets/export`，不接受 query 或 request body。Backend 先验 bearer token 签名与 password AMR，再读取上下文或 PII。成功响应固定使用 `Content-Type: application/json; charset=utf-8`、`Content-Disposition: attachment; filename="personal-promotion-target-pii-v1.json"`、`Cache-Control: no-store`、`X-Content-Type-Options: nosniff` 和精确 `Content-Length`。
+
+缺失或无效身份返回 `401 unauthenticated`；近期认证不合格返回 `403 reauthentication_required`；上下文或权限不合格返回 `403 personal_target_pii_export_forbidden`。query 或 body 返回 `400 invalid_personal_target_pii_export_request`；内部依赖失败返回不含值的 `503 personal_target_pii_export_unavailable`。
+
+每次完整授权并准备好文件的请求，都在同一数据库事务中追加一条不可变审计。JSON `export_event_id` 必须等于审计 event ID，审计 `result` 固定为 `prepared`。其余字段只记录 actor、workspace、合同、认证方法与时间、对象数、字节数和数据库时间。它不记录对象 ID、PII、文件 bytes 或字段 hash。每次重试产生新 event；审计只证明服务端已准备交付。
+
+客户端只把 artifact 与 bytes 留在内存，直到使用者明确启动系统保存或分享。它们不进入 Drift、离线 PII vault、Outbox、普通缓存、日志或错误。生产 Supabase JWT 的 AMR 仍需隔离账号观察，自动化文档检查不能替代该证据。
+
 ## HTTP 与权限边界
 
 | 方法与路径 | 用途 | Backend capability |
@@ -187,6 +205,7 @@ target_type,display_name,phone,email
 | `POST /v1/promotion-targets` | 建立对象和初始分配 | `create_target` + 查看能力 |
 | `POST /v1/promotion-targets/imports/csv/preview` | 解码有界 CSV，返回规范化行、疑似重复提示与限时 receipt | `import_target_pii`，且当前为本人拥有的个人空间 |
 | `POST /v1/promotion-targets/imports/csv/confirm` | 重验 receipt、完整行与 actions，原子建立全部已选对象 | `import_target_pii`，且 PostgreSQL 重验 exact identity owner |
+| `GET /v1/promotion-targets/export` | 导出当前账号在个人空间的全部 active assigned 对象 | `export_target_pii` + `view_assigned_target_pii` + 近 15 分钟 `password` AMR |
 | `GET /v1/promotion-target-retention-tasks` | 返回不含姓名和联系方式的到期前复核任务 | `manage_assigned_target_follow_up` + 查看能力 |
 | `POST /v1/promotion-targets/:id/retention` | 明确续期或不可逆匿名化 | `manage_assigned_target_follow_up` + 查看能力，且数据库仍有当前分配 |
 | `PATCH /v1/promotion-targets/:id/relationship` | 追加关系修订或明确解决冲突 | `manage_assigned_target_follow_up` + 查看能力，且数据库仍有当前分配 |
@@ -203,6 +222,7 @@ Backend 每次列表或建立操作都重新检查 capability：
 
 - `create_target` 允许建立对象；
 - `view_assigned_target_pii` 允许读取当前分配对象的资料；
+- `export_target_pii` 只在同时具有查看能力和近期密码认证时允许批量导出；
 - `manage_assigned_target_follow_up` 允许维护项目关系、明确续期或匿名化；
 - `manage_assigned_target_relations` 允许在仍可查看两端时建立或结束个人与机构关系。
 
@@ -412,4 +432,4 @@ CI 的 Linux job 在保留原 App build 后，执行 [`run_linux_offline_pii_dis
 
 ## 当前边界
 
-当前实现完成对象目录、个人或机构资料建立、初始分配、当前分配读取、接触关联、对象当次反应、项目关系阶段、独立生命周期、共享备注历史、显式冲突、阶段显示别名、个人与机构的六类历史关系、十二个月上限的保留复核、明确续期、不可逆匿名化，以及当前分配对象的七十二小时加密只读快照。组织切片仍需把组织角色和较短保留期的管理界面接入已经存在的策略表。
+当前实现完成对象目录、个人或机构资料建立、初始分配、当前分配读取、接触关联、对象当次反应、项目关系阶段、独立生命周期、共享备注历史、显式冲突、阶段显示别名、个人与机构的六类历史关系、十二个月上限的保留复核、明确续期、不可逆匿名化，以及当前分配对象的七十二小时加密只读快照。个人空间 PII 导出 v1 目前只是文档合同；它的数据库、Backend、Flutter 和真实交付证据尚未实现。组织切片仍需把组织角色和较短保留期的管理界面接入已经存在的策略表。

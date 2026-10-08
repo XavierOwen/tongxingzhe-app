@@ -265,6 +265,7 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `PII-008` | 系统可以在同一空间提示疑似重复，但绝不自动合并，也不进行跨空间检测。 |
 | `PII-009` | 人工合并保留原对象、字段来源、项目关系和接触关联，必须可逆拆分；无法确定归属的合并后新数据由人工分配。 |
 | `PII-010` | CSV v1 只向当前账号拥有的个人空间开放。导入必须先预览、再明确确认；确认时重验权限、行内容和同空间重复提示。同批全部成功或全部回滚，导入者是每个新对象的创建者和初始跟进者。审计不保存原 CSV 或字段值。 |
+| `PII-011` | 个人空间 PII 导出 v1 同时要求 `export_target_pii` 与 `view_assigned_target_pii`，并只接受已验签 JWT 中 15 分钟内的 `password` AMR。导出只包含同一事务内仍分配给当前账号的 active 对象，使用固定 canonical JSON，并追加不含对象资料的不可变导出审计。 |
 
 #### 5.6.3 个人空间 CSV 导入 v1
 
@@ -277,6 +278,24 @@ CSV v1 只处理当前可信账号拥有的个人空间。数据库只在 exact 
 预览返回 opaque receipt，绑定规范化完整行集、行序和当时提示；它不携带或授予权限。receipt 从数据库 UTC `previewed_at` 起连续 15 分钟有效，有效区间为半开的 `[previewed_at, previewed_at + 15 minutes)`。确认必须引用该 receipt：无提示的有效行只接受 `skip` 或 `create`，提示行只接受 `skip` 或明确的 `create_separate`。确认时重新运行同一组行校验与重复检查。receipt 过期或任何行内容、行序、提示漂移都返回 stale preview，且不写入任何对象。客户端生成的 import request UUID 固定账号、空间、receipt、规范化行序和完整选择；精确重放返回首次确认结果，任何载荷漂移发生冲突。首次确认在一个事务中建立所有已选行、初始分配和审计；任一行、授权或审计写入失败时整批回滚。
 
 每个新对象的 creator、assignment actor 和 assignee 都是当前可信账号。导入不建立接触、兴趣、对象反应、项目关系、阶段、同意、个人机构关系或共享备注。预览和确认分别追加 value-free 审计，只保存 actor、workspace、request／preview ID、phase、outcome、行数、提示数、建立数、`source_kind = csv` 和数据库时间。原文件名、CSV bytes、字段值、错误行内容和对象 PII 不进入审计、日志或错误。
+
+#### 5.6.4 个人空间 PII 导出 v1
+
+导出 v1 只处理当前可信账号拥有的 active personal workspace。有效个人上下文同时派生 `export_target_pii` 和 `view_assigned_target_pii`；Backend 与 PostgreSQL 每次重验 exact identity、active app user、owner、workspace 和两项 capability。当前项目只用于确认可信上下文，不把 workspace 导出缩成单一项目。组织 owner 或管理员不自动获得导出权，组织空间需要另行定义显式 capability grant。
+
+近期重新认证只接受已验签 Supabase access token 的 `amr` 中 `method = password` 条目。`timestamp` 是 Unix 秒；多个结构有效的 password 条目取最大时间。以数据库事务时间计算的年龄必须满足 `-60 seconds <= age < 15 minutes`；60 秒只容纳服务器时钟偏差。`iat`、`token_refresh`、session restore、普通 refresh、recovery、invite、signup、缺失、畸形或只有未知方法的 AMR 都不是重新认证。Backend 先验 token 与 AMR，再读取上下文或 PII；PostgreSQL 用自己的事务时间再验可信认证时间。
+
+导出范围是同一一致性读取中，当前账号仍有 active assignment 的全部 active 对象。已结束分配、inactive、已匿名化、其他账号或其他空间对象全部排除。空范围返回合法空文件；授权、读取、序列化或审计任一失败都不返回部分资料。
+
+`personal_promotion_target_pii_export_v1` 使用 UTF-8 JSON，无 BOM、额外空白或结尾换行。顶层 exact keys 按顺序为 `export_contract_id`、`export_event_id`、`exported_at_utc`、`targets`。每个 target exact keys 按顺序为 `target_type`、`display_name`、`phone`、`email`；字符串保留数据库原值，空电话或 email 明确序列化为 JSON `null`。对象按 `created_at ASC, promotion_target_id ASC` 稳定排序。`exported_at_utc` 取数据库事务时间并使用 UTC 毫秒格式。非 ASCII 文字直接编码为 UTF-8；引号、反斜线和控制字符按 JSON 规则转义。这是本产品的固定序列化合同，不声称符合 RFC 8785。
+
+v1 不使用 CSV。RFC 4180 quoting 不阻止 spreadsheet formula injection，为 `+phone` 等字段加前缀又会改变权威值。文件固定标示为机器可读 JSON；如果后续要求 Excel 或 Calc 直接打开，另行定义所有 PII 格为 text cell 的 typed XLSX 合同。
+
+只读入口固定为 `GET /v1/promotion-targets/export`，不接受 query 或 request body。成功响应使用 `Content-Type: application/json; charset=utf-8`、`Content-Disposition: attachment; filename="personal-promotion-target-pii-v1.json"`、`Cache-Control: no-store`、`X-Content-Type-Options: nosniff` 和精确 `Content-Length`。缺失或无效身份返回 `401 unauthenticated`；有效身份的近期认证不合格返回 `403 reauthentication_required`；上下文或权限不合格返回 `403 personal_target_pii_export_forbidden`。query 或 body 返回 `400 invalid_personal_target_pii_export_request`，内部依赖失败返回不含值的 `503 personal_target_pii_export_unavailable`。
+
+每次完整授权并准备好全部文件的请求，都在同一数据库事务中追加独立不可变审计。JSON `export_event_id` 等于该审计的 event ID，审计 `result` 固定为 `prepared`。审计其余字段只保存 actor、workspace、导出合同、认证方法与时间、对象数、字节数和数据库时间。对象 ID、姓名、电话、email、文件 bytes 和字段 hash 不进入审计。网络重试产生新导出事件；审计只证明服务端已准备交付，不证明客户端已保存、打开或分享。
+
+Flutter 重新输入的密码只交给 Supabase Auth，不发送到自有 Backend，也不持久化或记录。新会话必须仍是发起导出的同一 external subject；成功后重新读取可信上下文，并立即发起一次导出。artifact 与 bytes 只在内存中保留到明确的系统交付动作，不进入 Drift、离线 PII vault、Outbox、普通缓存、日志或错误。生产 JWT AMR 行为仍需隔离账号观察验证。
 
 7Y／#340 修复现有离线 PII 请求的撤权竞态。请求开始时固定身份、可信上下文和撤权代次。
 注销、切换账号或项目、匿名化等撤权使旧请求失效，旧响应不能写回密文、清除锁或返回旧 PII。
@@ -3196,6 +3215,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-127` | 学习文档说明真实0001至0056基线实际55个migration且没有0050，复用真实0029 timezone writer、0031 trusted-v2 writer与旧v1 writer建立同UUID的delegated v1／v2 attempts和另一UUID的v1-only legacy attempt。随后只应用0057；共享ledger精确回填两条channel claims，同UUID去重、v1-only保留、current-city为0，ledger实际只含`release_request_id`与`release_family_id`两个字段，不虚构时间事实。说明旧snapshot、attempts、旧行与业务dump保存、55+1 checksum replay不重复写入，既有0057 fixture继续覆盖schema／ACL／trigger／current-city／cross-family矩阵，以及合成数据库 staged proof不证明生产Auth、HTTP、token、network、部署或服务交付。 |
 | `MANUAL-128` | 学习文档说明7CT的生命周期合同：任一current active owner可提交删除申请或在连续720小时恢复窗口内恢复；首次申请时间取数据库UTC，窗口为半开区间，恢复绑定当前opaque `deletion_request_id`以隔离跨周期迟到请求，状态转换、exact replay、drift conflict与不可延长deadline固定。恢复期冻结普通组织写入，只允许首次恢复writer及其claim／状态变更、live exact replay、既有管理报告读取和必要value-free access audit四类受控例外；普通目录隐藏，恢复目录仅向current owner开放。期满不可恢复，受控purge任一步失败都关闭且不留部分清除，只保留最小value-free tombstone。明确本票仅文档合同，#350 readiness不是实现证据，不证明DB、HTTP、Flutter、清除、备份或真人平台。 |
 | `MANUAL-129` | 学习文档说明个人空间 CSV v1 的 `import_target_pii` 来源、UTF-8 文件与四列 header、500 行／1 MiB 上限、行校验、精确重复提示、明确另建、stale preview、整批原子写入、精确重放与 value-free 审计。它明确导入者只是 creator 和初始跟进者，不因导入生成接触、阶段或同意；文档合同不证明 parser、数据库、HTTP、Flutter、真实 PII 或部署。 |
+| `MANUAL-130` | 学习文档说明个人空间 PII 导出 v1 的双 capability、workspace-wide active assignment 范围、15 分钟 `password` AMR、60 秒时钟偏差、固定 canonical JSON 与下载 headers。它说明失败关闭、不返回部分资料、value-free 审计、重试的新 event 和客户端内存交付边界。文档合同不证明数据库、Backend、Flutter、生产 AMR、真实 PII 或六平台交付。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3514,6 +3534,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-138` | 7CT 只验证文档合同：Product Spec 的 `ORG-041`–`ORG-048`、Slice 7 current status 与说明书 3.52／`MANUAL-128` 逐项覆盖 owner 申请／恢复、数据库UTC与720小时半开窗口、当前 `deletion_request_id` cycle selector、状态、exact replay／drift／deadline、恢复期冻结、目录、期满、受控purge和value-free tombstone。运行 Markdown links、diff 与 no-slop 检查；#350 readiness不作为实现证据，本票不证明DB、HTTP、Flutter、清除、备份或真人平台。 |
 | `TEST-139` | 删除入口资格的 DB reader 验证 exact identity、active 账号空目录、current owner 与 membership 半开区间、projectless／多 owner、restored 与 pending／due 排除、只读及 runtime 最小 ACL；0105→0106 升级、checksum 重放和 dump／restore 保留既有数据。HTTP 与 Flutter 继续验证固定 UUID-only 合同、失败关闭、目录取交集、会话隔离以及撤权后 POST 重新授权。合成证据不证明生产身份、部署、真人平台或终结清除。 |
 | `TEST-140` | 7DN 只验证文档合同：Product Spec 的 `PII-007`／`PII-010`、ADR-0041 与说明书 `MANUAL-129` 逐项覆盖个人空间 capability、UTF-8 四列 CSV、预览 receipt 绑定与 15 分钟半开期限、精确重复信号、明确另建、stale preview、best-effort 非唯一性边界、整批原子写入、精确重放和 value-free 审计。运行 Markdown links、diff 和 no-slop 检查；本票不证明 parser、DB、HTTP、Flutter、真实 PII、生产授权或部署。 |
+| `TEST-141` | 7DR 只验证文档合同：Product Spec 的 `PII-006`／`PII-011`、ADR-0040 与说明书 `MANUAL-130` 逐项覆盖个人／组织 capability 边界、workspace-wide active assignment 范围、15 分钟 `password` AMR 与 refresh 排除、canonical JSON exact keys／顺序／null、下载 headers、稳定失败和零部分资料。还要覆盖 value-free 审计、`export_event_id` 绑定、`prepared` 结果、重试新 event 与客户端内存边界。运行 Markdown links、diff 和 no-slop 检查；本票不证明 DB、Backend、Flutter、生产 JWT AMR、真实 PII、六平台保存／分享或部署。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3914,6 +3935,8 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 7CT／#486 固定组织删除申请与恢复合同：任一 current active owner 可提交申请或在数据库 UTC 首次申请后的连续 720 小时半开窗口内恢复；状态、exact replay、drift、deadline 不延长、恢复期写冻结、live replay／既有管理报告读取例外、普通目录隐藏、owner-only 窄恢复目录、期满不可恢复、purge 失败关闭和最小 value-free tombstone 均有文档定义。本票仅交付文档合同；#350 readiness 不是实现证据，也不证明 DB、HTTP、Flutter、清除、备份或真人平台。
 
 7DN／#527 固定个人空间 CSV 导入 v1：当前 owner 上下文须明确包含 `import_target_pii`，文件绑定四列和有界大小／行数，必须先预览再确认。同空间精确电话／email 只提示，不自动合并；确认重验后整批写入或整批回滚。导入者成为创建者和初始跟进者，不生成接触、阶段或同意，审计不保存 CSV 内容。本票只交付文档合同，不证明导入已实现。
+
+7DR／#535 固定个人空间 PII 导出 v1：当前 owner 上下文必须同时具有 `export_target_pii` 与 `view_assigned_target_pii`，并提供 15 分钟内的已验签 `password` AMR。导出覆盖当前账号在个人空间仍分配的全部 active 对象，使用固定 canonical JSON 与 value-free 审计。本票只交付文档合同，不证明 DB、Backend、Flutter、生产 AMR 或真实文件交付已实现。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 
