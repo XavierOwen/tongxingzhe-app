@@ -321,6 +321,7 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
         identitySession: widget.identitySession,
         appSession: widget.appSession,
         exportGateway: widget.personalPiiExportGateway,
+        exportDelivery: widget.managementReportExportDelivery,
         importGateway: widget.personalTargetCsvImportGateway,
         idGenerator: widget.idGenerator,
         clock: widget.clock,

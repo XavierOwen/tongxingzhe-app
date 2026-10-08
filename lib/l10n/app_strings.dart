@@ -792,7 +792,13 @@ const Map<String, Map<String, String>> _strings = {
     'targetsPiiExportAuthenticate': '验证并准备',
     'targetsPiiExportPrepared': '服务端已准备导出文件',
     'targetsPiiExportSize': '{count} 字节',
-    'targetsPiiExportNotDelivered': '文件仅在内存中，尚未保存、打开或分享。',
+    'targetsPiiExportNotDelivered': 'App 只在本页内存中保留此文件；不据此判断浏览器已保存、打开或分享。',
+    'targetsPiiExportDownloadRequest': '请求浏览器下载',
+    'targetsPiiExportDownloadRequestAgain': '再次请求浏览器下载',
+    'targetsPiiExportDownloadRequesting': '正在向浏览器请求下载…',
+    'targetsPiiExportDownloadRequested': '已向浏览器请求下载。浏览器可能保存、询问或阻止；此状态不证明文件已保存。',
+    'targetsPiiExportDownloadUnavailable': '当前平台不提供 Web 浏览器下载。',
+    'targetsPiiExportDownloadFailed': '浏览器未能接收下载请求。可使用同一份已验证文件重试。',
     'targetsPiiExportAuthFailed': '密码验证未完成，没有请求导出文件。',
     'targetsPiiExportSessionChanged': '账号或登录流程已改变，没有请求或保留导出文件。',
     'targetsPiiExportContextFailed': '未能重新读取可信上下文，没有请求导出文件。',
@@ -2684,7 +2690,17 @@ const Map<String, Map<String, String>> _strings = {
     'targetsPiiExportPrepared': 'The server prepared the export file',
     'targetsPiiExportSize': '{count} bytes',
     'targetsPiiExportNotDelivered':
-        'The file is only in memory. It has not been saved, opened, or shared.',
+        'The app keeps this file only in this page’s memory. This does not show that the browser saved, opened, or shared it.',
+    'targetsPiiExportDownloadRequest': 'Request browser download',
+    'targetsPiiExportDownloadRequestAgain': 'Request browser download again',
+    'targetsPiiExportDownloadRequesting':
+        'Requesting the download from the browser…',
+    'targetsPiiExportDownloadRequested':
+        'The download was requested from the browser. The browser may save, ask, or block it; this does not prove that the file was saved.',
+    'targetsPiiExportDownloadUnavailable':
+        'Web browser download is unavailable on this platform.',
+    'targetsPiiExportDownloadFailed':
+        'The browser did not accept the download request. Retry with the same validated file.',
     'targetsPiiExportAuthFailed':
         'Password verification did not complete. No export was requested.',
     'targetsPiiExportSessionChanged':

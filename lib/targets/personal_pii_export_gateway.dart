@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../foundation/backend_base_uri.dart';
 import '../identity/identity_session.dart';
+import '../management_reports/management_report_export_delivery_contract.dart';
 
 const _backendBaseUrl = String.fromEnvironment('BACKEND_BASE_URL');
 
@@ -69,12 +70,15 @@ enum PersonalPiiExportFailure {
   invalidResponse,
 }
 
-final class PersonalPiiExportArtifact {
+final class PersonalPiiExportArtifact implements ExportDownloadArtifact {
   PersonalPiiExportArtifact({required List<int> bytes})
     : bytes = List<int>.unmodifiable(bytes);
 
+  @override
   final List<int> bytes;
+  @override
   String get fileName => _fileName;
+  @override
   String get contentType => _contentType;
 }
 

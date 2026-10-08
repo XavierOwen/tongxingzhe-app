@@ -540,14 +540,14 @@ final class _Delivery implements ManagementReportExportDelivery {
   final bool isAvailable;
   ManagementReportExportDeliveryResult result;
   final Future<ManagementReportExportDeliveryResult> Function(
-    ManagementReportExportArtifact artifact,
+    ExportDownloadArtifact artifact,
   )?
   handler;
-  final requests = <ManagementReportExportArtifact>[];
+  final requests = <ExportDownloadArtifact>[];
 
   @override
   Future<ManagementReportExportDeliveryResult> requestDownload(
-    ManagementReportExportArtifact artifact,
+    ExportDownloadArtifact artifact,
   ) async {
     requests.add(artifact);
     return handler?.call(artifact) ?? result;
