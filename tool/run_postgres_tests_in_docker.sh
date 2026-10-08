@@ -11124,6 +11124,77 @@ docker exec "${container_name}" psql -U postgres -d "${organization_deletion_upg
 printf '%s\n' "${organization_purge_finalizer_upgrade_replay}"
 echo '0108→0109 committed rich graph preserved, atomic finalizer, no-op checksum replay：通过。'
 
+echo '验证 0109→0110 旧 original-region 报表及 receipt 不变、hex UUID 真实 release 与 checksum 重放。'
+docker exec "${container_name}" psql -U postgres -d "${organization_deletion_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --set=original_region_project_id=00000110-0000-4000-8000-000000000001 \
+  --command="DO \$baseline\$ BEGIN
+    IF (SELECT max(left(version,4)) FROM app_migrations.schema_migrations) IS DISTINCT FROM '0109'
+      OR (SELECT count(*) FROM app_migrations.schema_migrations)<>108 THEN
+      RAISE EXCEPTION '0110 upgrade requires exact 0109 baseline'; END IF;
+    END \$baseline\$;" \
+  --command='BEGIN;' \
+  --file=/workspace/backend/database/fixtures/shared/original_region_report_project_uuid_seed.sql \
+  --command='CREATE TABLE public.fixture_0110_upgrade_receipt AS
+    SELECT context.app_user_id,context.project_id,context.release_request_id,receipt.receipt
+    FROM fixture_0110_context context CROSS JOIN fixture_0110_receipt receipt; COMMIT;'
+docker exec "${container_name}" bash -lc \
+  'mkdir -p /tmp/original-region-report-project-uuid-upgrade-only && cp /workspace/backend/database/migrations/0110_original_region_report_project_uuid.sql /tmp/original-region-report-project-uuid-upgrade-only/'
+original_region_project_uuid_upgrade_before="$(
+  docker exec "${container_name}" pg_dump "${organization_deletion_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private --no-owner --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+docker exec --env DATABASE_URL="${organization_deletion_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/original-region-report-project-uuid-upgrade-only "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql -U postgres -d "${organization_deletion_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/0110_original_region_report_project_uuid.sql \
+  --command="DO \$metadata\$ BEGIN
+    IF (SELECT max(left(version,4)) FROM app_migrations.schema_migrations) IS DISTINCT FROM '0110'
+      OR (SELECT count(*) FROM app_migrations.schema_migrations)<>109 THEN
+      RAISE EXCEPTION '0109→0110 migration metadata drift'; END IF;
+    END \$metadata\$;"
+original_region_project_uuid_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${organization_deletion_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/original-region-report-project-uuid-upgrade-only "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${original_region_project_uuid_upgrade_replay}" != \
+    *'已验证 0110_original_region_report_project_uuid（无需重复执行）'* ]] \
+  || [[ "${original_region_project_uuid_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0110 migration did not skip its checksum-verified replay.' >&2
+  printf '%s\n' "${original_region_project_uuid_upgrade_replay}" >&2
+  exit 1
+fi
+docker exec "${container_name}" psql -U postgres -d "${organization_deletion_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 --command="DO \$legacy_receipt\$ BEGIN
+    IF (SELECT count(*) FROM public.fixture_0110_upgrade_receipt)<>1
+      OR EXISTS (SELECT 1 FROM public.fixture_0110_upgrade_receipt saved
+        WHERE app_private.release_management_original_region_report_snapshot_v1(
+          saved.release_request_id,saved.app_user_id,saved.project_id,
+          'contact_sessions_by_original_region_two_periods',1) IS DISTINCT FROM saved.receipt)
+      THEN RAISE EXCEPTION '0110 changed legacy original-region release receipt'; END IF;
+    END \$legacy_receipt\$;"
+original_region_project_uuid_upgrade_after="$(
+  docker exec "${container_name}" pg_dump "${organization_deletion_upgrade_url}" \
+    --data-only --schema=app_data --schema=app_private --no-owner --no-privileges \
+    --restrict-key=7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b
+)"
+if [[ "${original_region_project_uuid_upgrade_before}" != "${original_region_project_uuid_upgrade_after}" ]]; then
+  echo '0110 migration, fixture or checksum replay changed existing business/report/receipt rows.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql -U postgres -d "${organization_deletion_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --set=original_region_project_id=f2458ab8-c322-4abc-8def-74bd3f9b34c0 \
+  --command='BEGIN;' \
+  --file=/workspace/backend/database/fixtures/shared/original_region_report_project_uuid_seed.sql \
+  --command='ROLLBACK;'
+printf '%s\n' "${original_region_project_uuid_upgrade_replay}"
+echo '0109→0110 committed report/receipt preserved, hex UUID release/replay, no-op checksum replay：通过。'
+
 
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
@@ -11148,6 +11219,14 @@ run_sql_files \
   '/workspace/backend/database/fixtures' \
   '[0-9][0-9][0-9][0-9]_*.sql' \
   'fixture'
+
+echo '验证 fresh schema 上 hex project UUID 的真实 original-region release 与 exact replay。'
+docker exec "${container_name}" psql -U postgres -d "${test_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --set=original_region_project_id=f2458ab8-c322-4abc-8def-74bd3f9b34c0 \
+  --command='BEGIN;' \
+  --file=/workspace/backend/database/fixtures/shared/original_region_report_project_uuid_seed.sql \
+  --command='ROLLBACK;'
 
 echo "用真实 Backend adapter 对账 PostgreSQL（${backend_image}）。"
 docker run \
