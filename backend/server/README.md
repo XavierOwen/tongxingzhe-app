@@ -6,7 +6,7 @@
 
 ## 组织创建专用的已验证邮箱资格
 
-组织创建流程使用独立的资格 verifier。它不改变全局 `VerifiedIdentity`，后者仍只包含受信的 `issuer` 和 `subject`。该 verifier 只接受 access token，不接受请求 body、邮箱、`email_verified`、`email_confirmed_at` 或 `is_anonymous` 作为资格输入。
+组织创建流程使用独立的资格 verifier。通用 `VerifiedIdentity` 保留受信的 `issuer`、`subject` 和可选的已验签 password AMR Unix 秒。缺失有效 AMR 不使普通身份失效。组织创建 verifier 只接受 access token，不接受请求 body、邮箱、`email_verified`、`email_confirmed_at` 或 `is_anonymous` 作为资格输入。
 
 它先复用通用 JWT verifier 的签名、issuer、audience、期限、subject 和 `authenticated` role 校验。JWT 通过后，再由注入的 provider-neutral Auth user lookup 使用同一 token 读取可信 user endpoint。
 Supabase adapter 只向配置的 HTTPS endpoint 发送 `Authorization: Bearer <access-token>`、publishable key 和受控超时。它拒绝 JWT secret、service-role key 和其他 secret，不跟随重定向，并把响应限制在 16 KiB。
@@ -333,6 +333,21 @@ JSON。两者都先验证 Bearer identity、当前个人空间与
 actions 和 request UUID。stale preview 返回 `409` 及可重放 receipt。所有
 响应均为 JSON UTF-8 且 `Cache-Control: no-store`；未授权请求不读取上传体，
 错误不回显 CSV 值或 PostgreSQL 原文。
+
+`GET /v1/promotion-targets/export` 先验证 Bearer token 和已验签 JWT 中的
+password AMR，再读取可信个人上下文。AMR 必须满足
+`-60 seconds <= age < 15 minutes`。query、declared body、组织上下文或缺少
+`export_target_pii`／`view_assigned_target_pii` 都在调用导出 bridge 前拒绝。
+
+PostgreSQL adapter 只调用一次
+`app_data.prepare_personal_target_pii_export_v1`。它把数据库返回的 `bytea`
+作为 `Buffer` 原样发送，不解析或重新序列化。成功响应使用固定 JSON MIME、
+附件文件名、`no-store`、`nosniff` 和精确字节长度。HTTP 响应等待 bridge
+完成，因此文件与 0112 的不可变审计来自同一次数据库事务。
+
+Node 测试使用 synthetic 已签名 JWT、HTTP server 和 PostgreSQL runtime role。
+这些测试证明 AMR 选择、前置授权、原始 bytes、headers 和 value-free audit
+对账。它们不证明生产 Supabase AMR、部署、真实 PII 或客户端文件交付。
 
 客户端不提交用户、空间、项目或对象 ID。PostgreSQL 生成对象 UUID，并用已验证使用者与 request ID 保护重试。当前对象资料只在线读取，不进入 Flutter 本地库、接触同步 command 或 warehouse。
 

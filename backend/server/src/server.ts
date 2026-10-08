@@ -50,6 +50,10 @@ import {
   type PersonalTargetCsvImportStore,
 } from "./personal-target-csv-import.js";
 import {
+  exportPersonalTargetPii,
+  type PersonalTargetPiiExportStore,
+} from "./personal-target-pii-export.js";
+import {
   createTargetInstitutionRelationship,
   endTargetInstitutionRelationship,
   listTargetInstitutionRelationships,
@@ -198,6 +202,7 @@ export interface BackendServerDependencies
   readonly promotionTargetStore?: PromotionTargetStore;
   readonly promotionTargetRetentionStore?: PromotionTargetRetentionStore;
   readonly personalTargetCsvImportStore?: PersonalTargetCsvImportStore;
+  readonly personalTargetPiiExportStore?: PersonalTargetPiiExportStore;
   readonly targetInstitutionRelationshipStore?:
     TargetInstitutionRelationshipStore;
   readonly personalActionPlanStore?: PersonalActionPlanStore;
@@ -1147,6 +1152,40 @@ export function createBackendServer(
         response.end(JSON.stringify(result.body));
       } catch (error) {
         writeBodyError(response, error);
+      }
+      return;
+    }
+
+    if (
+      request.method === "GET" &&
+      requestUrl.pathname === "/v1/promotion-targets/export"
+    ) {
+      const result = await exportPersonalTargetPii(
+        {
+          authorization: request.headers.authorization,
+          hasQuery: (request.url ?? "").includes("?"),
+          hasBody: requestDeclaresBody(request.headers),
+        },
+        {
+          identityVerifier: dependencies.identityVerifier,
+          contextStore: dependencies.contextStore,
+          ...(dependencies.personalTargetPiiExportStore === undefined
+            ? {}
+            : {exportStore: dependencies.personalTargetPiiExportStore}),
+        },
+      );
+      response.statusCode = result.status;
+      if ("bytes" in result) {
+        response.setHeader("content-type", "application/json; charset=utf-8");
+        response.setHeader(
+          "content-disposition",
+          'attachment; filename="personal-promotion-target-pii-v1.json"',
+        );
+        response.setHeader("x-content-type-options", "nosniff");
+        response.setHeader("content-length", result.bytes.byteLength);
+        response.end(result.bytes);
+      } else {
+        response.end(JSON.stringify(result.body));
       }
       return;
     }

@@ -8,6 +8,7 @@ import {
 export interface VerifiedIdentity {
   readonly issuer: string;
   readonly subject: string;
+  readonly passwordAuthenticatedAtUnixSeconds?: number;
 }
 
 export interface IdentityVerifier {
@@ -72,7 +73,34 @@ export function createSupabaseIdentityVerifier(
           throw new InvalidIdentityTokenError();
         }
 
-        return { issuer: payload.iss, subject: payload.sub };
+        const passwordAuthenticatedAtUnixSeconds = Array.isArray(payload.amr)
+          ? payload.amr.reduce<number | undefined>((latest, entry) => {
+              if (entry === null || typeof entry !== "object") return latest;
+              const { method, timestamp } = entry as {
+                readonly method?: unknown;
+                readonly timestamp?: unknown;
+              };
+              if (
+                method !== "password" ||
+                typeof timestamp !== "number" ||
+                !Number.isSafeInteger(timestamp) ||
+                timestamp < 0
+              ) {
+                return latest;
+              }
+              return latest === undefined || timestamp > latest
+                ? timestamp
+                : latest;
+            }, undefined)
+          : undefined;
+
+        return {
+          issuer: payload.iss,
+          subject: payload.sub,
+          ...(passwordAuthenticatedAtUnixSeconds === undefined
+            ? {}
+            : { passwordAuthenticatedAtUnixSeconds }),
+        };
       } catch (cause) {
         throw new IdentityVerificationError(identityFailureCategory(cause), {
           cause,

@@ -42,6 +42,9 @@ import { PostgresPromotionTargetStore } from "./promotion-targets.js";
 import {
   PostgresPersonalTargetCsvImportStore,
 } from "./personal-target-csv-import.js";
+import {
+  PostgresPersonalTargetPiiExportStore,
+} from "./personal-target-pii-export.js";
 import { PostgresTargetInstitutionRelationshipStore } from "./target-institution-relationships.js";
 import { PostgresPersonalActionPlanStore } from "./personal-action-plans.js";
 import { PostgresPersonalActionReminderStore } from "./personal-action-reminders.js";
@@ -128,6 +131,8 @@ const questionnaireMetricCompatibilityStore =
 const promotionTargetStore = new PostgresPromotionTargetStore(query);
 const personalTargetCsvImportStore =
   new PostgresPersonalTargetCsvImportStore(query);
+const personalTargetPiiExportStore =
+  new PostgresPersonalTargetPiiExportStore(query);
 const targetInstitutionRelationshipStore =
   new PostgresTargetInstitutionRelationshipStore(query);
 const personalActionPlanStore = new PostgresPersonalActionPlanStore(query);
@@ -219,6 +224,7 @@ const server = createBackendServer({
   promotionTargetStore,
   promotionTargetRetentionStore: promotionTargetStore,
   personalTargetCsvImportStore,
+  personalTargetPiiExportStore,
   targetInstitutionRelationshipStore,
   personalActionPlanStore,
   personalActionReminderStore,
