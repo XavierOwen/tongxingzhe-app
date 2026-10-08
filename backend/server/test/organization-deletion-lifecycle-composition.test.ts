@@ -42,3 +42,16 @@ test("lifecycle wiring does not depend on creation eligibility or SessionContext
   assert.match(lifecycleModule, /IdentityVerifier/);
   assert.doesNotMatch(lifecycleModule, /OrganizationCreation|AuthUser|SessionContext|app_private/i);
 });
+
+test("eligibility reuses the injected lifecycle store and generic identity", () => {
+  const start = productionServer.indexOf('(request.url ?? "").split("?")[0] === "/v1/organizations/deletion-eligibility"');
+  const end = productionServer.indexOf("const organizationDeletionLifecycleMatch", start);
+  assert.ok(start >= 0 && end > start);
+  const route = productionServer.slice(start, end);
+  assert.match(route, /listOrganizationDeletionEligibility/);
+  assert.match(route, /identityVerifier: dependencies\.identityVerifier/);
+  assert.match(route, /store: dependencies\.organizationDeletionLifecycleStore/);
+  assert.doesNotMatch(route, /readJsonBody|contextStore|DirectoryStore|Creation/);
+  assert.equal((productionMain.match(/new PostgresOrganizationDeletionLifecycleStore/g) ?? []).length, 1);
+  assert.match(lifecycleModule, /app_data\.list_organization_deletion_eligible_for_identity_v1/);
+});

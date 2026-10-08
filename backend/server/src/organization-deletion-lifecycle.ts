@@ -5,6 +5,7 @@ import {
   type VerifiedIdentity,
 } from "./identity.js";
 
+const eligibilityContractId = "organization-deletion-eligibility:v1" as const;
 const deletionContractId = "organization-deletion-request:v1" as const;
 const restorationContractId = "organization-deletion-restore:v1" as const;
 const uuidPattern =
@@ -41,6 +42,9 @@ export interface OrganizationDeletionRestoreReceipt {
 }
 
 export interface OrganizationDeletionLifecycleStore {
+  listDeletionEligibleOrganizations(
+    identity: VerifiedIdentity,
+  ): Promise<readonly string[]>;
   requestDeletion(
     identity: VerifiedIdentity,
     requestId: string,
@@ -60,6 +64,8 @@ export type OrganizationDeletionLifecycleQuery = (
 ) => Promise<{ readonly rows: readonly unknown[] }>;
 
 export type OrganizationDeletionLifecycleErrorCode =
+  | "organization_deletion_eligibility_forbidden"
+  | "organization_deletion_eligibility_unavailable"
   | "invalid_organization_deletion_request"
   | "organization_deletion_forbidden"
   | "organization_deletion_conflict"
@@ -114,6 +120,52 @@ export function matchOrganizationDeletionLifecycleRequestTarget(
     hasQuery: queryIndex >= 0,
     operation: match?.[2] === "restorations" ? "restore" : "request",
   };
+}
+
+export async function listOrganizationDeletionEligibility(
+  request: {
+    readonly authorization: string | undefined;
+    readonly hasQuery: boolean;
+    readonly hasBody: boolean;
+  },
+  dependencies: OrganizationDeletionLifecycleDependencies,
+): Promise<OrganizationDeletionLifecycleHttpResult> {
+  const unavailableCode = "organization_deletion_eligibility_unavailable";
+  const accessToken = bearerToken(request.authorization);
+  if (accessToken === null) return failure(401, "unauthenticated");
+  if (dependencies.identityVerifier === undefined) return failure(503, unavailableCode);
+
+  let identity: VerifiedIdentity;
+  try {
+    identity = await dependencies.identityVerifier.verify(accessToken);
+  } catch (error) {
+    return error instanceof IdentityVerificationError &&
+        error.category === "unauthenticated"
+      ? failure(401, "unauthenticated")
+      : failure(503, unavailableCode);
+  }
+  if (request.hasQuery || request.hasBody) {
+    return failure(400, "invalid_organization_deletion_eligibility_request");
+  }
+  if (dependencies.store === undefined) return failure(503, unavailableCode);
+
+  try {
+    const workspaceIds = parseEligibilityWorkspaceIds(
+      await dependencies.store.listDeletionEligibleOrganizations(identity),
+    );
+    return {
+      status: 200,
+      body: {
+        organization_deletion_eligibility_contract_id: eligibilityContractId,
+        organization_workspace_ids: workspaceIds,
+      },
+    };
+  } catch (error) {
+    return error instanceof OrganizationDeletionLifecycleStoreError &&
+        error.code === "organization_deletion_eligibility_forbidden"
+      ? failure(403, error.code)
+      : failure(503, unavailableCode);
+  }
 }
 
 export async function handleOrganizationDeletionLifecycle(
@@ -181,6 +233,32 @@ export class PostgresOrganizationDeletionLifecycleStore
   implements OrganizationDeletionLifecycleStore
 {
   constructor(private readonly query: OrganizationDeletionLifecycleQuery) {}
+
+  async listDeletionEligibleOrganizations(
+    identity: VerifiedIdentity,
+  ): Promise<readonly string[]> {
+    try {
+      const result = await this.query(
+        `SELECT organization_workspace_id
+         FROM app_data.list_organization_deletion_eligible_for_identity_v1($1::text, $2::text)`,
+        [identity.issuer, identity.subject],
+      );
+      return parseEligibilityWorkspaceIds(result.rows.map((value) => {
+        const row = object(value);
+        if (row === null || !hasExactKeys(row, ["organization_workspace_id"])) {
+          throw new Error("invalid organization deletion eligibility result");
+        }
+        return row.organization_workspace_id;
+      }));
+    } catch (error) {
+      throw new OrganizationDeletionLifecycleStoreError(
+        propertyString(error, "code") === "42501" &&
+          propertyString(error, "message") === "organization deletion eligibility forbidden"
+          ? "organization_deletion_eligibility_forbidden"
+          : "organization_deletion_eligibility_unavailable",
+      );
+    }
+  }
 
   async requestDeletion(
     identity: VerifiedIdentity,
@@ -250,6 +328,19 @@ export class PostgresOrganizationDeletionLifecycleStore
       throw mapStoreError("restore", error);
     }
   }
+}
+
+function parseEligibilityWorkspaceIds(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) throw new Error("invalid organization deletion eligibility result");
+  const workspaceIds = new Set<string>();
+  for (const workspaceId of value) {
+    if (typeof workspaceId !== "string" || uuid(workspaceId) !== workspaceId ||
+      workspaceIds.has(workspaceId)) {
+      throw new Error("invalid organization deletion eligibility result");
+    }
+    workspaceIds.add(workspaceId);
+  }
+  return value as readonly string[];
 }
 
 function parseBody(
@@ -414,6 +505,8 @@ function storeFailure(
     case "organization_deletion_unavailable":
     case "organization_restoration_unavailable":
       return failure(503, storeError.code);
+    default:
+      return failure(503, unavailableCode);
   }
 }
 
