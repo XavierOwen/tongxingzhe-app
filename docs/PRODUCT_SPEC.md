@@ -267,6 +267,7 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `PII-010` | CSV v1 只向当前账号拥有的个人空间开放。导入必须先预览、再明确确认；确认时重验权限、行内容和同空间重复提示。同批全部成功或全部回滚，导入者是每个新对象的创建者和初始跟进者。审计不保存原 CSV 或字段值。 |
 | `PII-011` | 个人空间 PII 导出 v1 同时要求 `export_target_pii` 与 `view_assigned_target_pii`，并只接受已验签 JWT 中 15 分钟内的 `password` AMR。导出只包含同一事务内仍分配给当前账号的 active 对象，使用固定 canonical JSON，并追加不含对象资料的不可变导出审计。 |
 | `PII-012` | 个人空间 PII JSON 导出分为 artifact 准备与 Web 浏览器下载请求两步。准备完成只在当前页面内存保留已验证的原始 bytes、固定 MIME 和文件名；只有用户再次明确操作才请求下载。失败重试复用同一 artifact，不重新请求导出、不重新序列化或新增服务端审计；非 Web 明确 unavailable。成功只表示浏览器已接受请求，不证明文件已保存、打开或保留。 |
+| `PII-013` | 个人空间疑似重复对象合并 v1 要求 `view_assigned_target_pii` 与独立 `manage_assigned_target_merges`。候选只来自同空间、同类型、当前可见且仍获分配的 active 对象，并只使用精确电话或 email 信号。一次 active merge 只含两个对象，保留原对象与来源，并以合并代次约束全部相关 writer。拆分必须完整分配本代次内来源不明的事实，并在一个事务中全部生效或零变更。合并不续期；较早的成员截止控制复核，到期未续期或拆分时原子结束 merge 并匿名化两端及本代次敏感事实。 |
 
 #### 5.6.3 个人空间 CSV 导入 v1
 
@@ -308,6 +309,30 @@ Flutter 重新输入的密码只交给 Supabase Auth，不发送到自有 Backen
 代次只保护同一 Vault 实例中的在途请求，复用串行队列与既有持久锁；不新增跨重启队列、workspace 清除 API 或组织退出 UI。
 回归测试必须以可控 Future 覆盖响应晚于撤权、同上下文匿名化、上下文切换后返回、账号切换、缺失上下文、网络回退和新请求恢复。
 这些本地测试不证明多进程安全存储或真人平台运行时。
+
+#### 5.6.5 个人空间疑似重复对象合并与拆分 v1
+
+v1 只处理当前可信账号拥有的 active personal workspace。可信上下文必须同时具有 `view_assigned_target_pii` 与独立的 `manage_assigned_target_merges`。Backend 与 PostgreSQL 每次重验 exact identity、active app user、owner、workspace、两项 capability 和两端 active assignment。客户端 capability、对象 ID、当前项目和 receipt 都不授权。离线缓存上下文不能预览、合并或拆分。
+
+候选只从当前账号可见、仍获分配、未到期、同 workspace、同 `target_type` 的 active 对象中产生。一个非空电话去除首尾空白后完全相同，或一个非空 email 去除首尾空白后不区分大小写时，两个对象成为候选。名称、模糊匹配、电话规范化、跨空间资料和当前不可见对象不参与。候选只是人工复核提示，不能触发自动合并。
+
+预览返回两个原对象、不含跨空间信息的匹配原因、两端保留截止、较早的合并截止，以及到期后两端匿名化的明确后果。opaque receipt 本身不携带 PII；服务端把它绑定到双方 ID、当时字段、状态、assignment、保留截止、匹配信号和数据库预览时间。receipt 从 `previewed_at` 起连续 15 分钟有效，有效区间为半开的 `[previewed_at, previewed_at + 15 minutes)`。确认时重新取得授权并重读全部绑定事实。receipt 过期，任一成员已经到期，或任一对象、字段、状态、assignment、保留截止、capability、owner 事实或匹配信号漂移时，本次确认零写入。
+
+一次 active merge 只包含两个尚未参加其他 active merge 的对象。两个对象必须不同、同 workspace 且同 `target_type`。使用者指定其中一个原对象为保留对象，并为 `display_name`、`phone` 和 `email` 分别选择一个原对象的现有值或该对象原有的 `null`。相同值仍记录所选来源。确认不接受自由编辑、链式合并、嵌套合并或三方 merge group。
+
+active merge 不删除、匿名化或改写任一原对象。普通目录用保留对象 ID 显示合并视图，并隐藏另一成员的独立目录项。授权来源审查仍能读取两个原对象。原字段、创建来源、assignment、项目关系及修订、接触关联、个人与机构关系和其他既有历史继续绑定原 ID。
+
+同一项目的既有关系、阶段、生命周期和备注按来源对象分开展示和操作。合并视图不计算统一阶段，也不覆盖任一关系值。拆分后，这些关系仍归原对象。当前 PII-011 导出也继续按 `personal_promotion_target_pii_export_v1` 分别导出仍符合条件的 active 源对象，不应用合并视图，也不增加 merge metadata。合并后导出若有需要，必须另定版本化文件合同。
+
+active merge 具有稳定的合并代次。所有目标相关 writer 都必须在锁后识别 active merge，并把新增或修订事实绑定当前代次和已知来源对象。该规则覆盖合并视图、既有按对象 ID 的写入入口和旧客户端。writer 无法安全绑定时失败关闭。通过合并视图建立且没有明确来源对象的事实在本代次内保持待分配，不能伪装成合并前事实。
+
+拆分自动把合并前事实和已有明确来源的本代次事实归回原对象。使用者必须把每项待分配事实明确归给一个原对象。确认载荷绑定 active merge、合并代次和完整分配集。数据库在锁后重验两端状态、授权和待处理事实清单；遗漏、新增事实、重复分配、错误对象、漂移或任一写入失败使整次拆分零变更。成功拆分结束 active merge 并恢复两个目录项，但不删除 merge、split 或事实分配历史。
+
+active merge 期间，手动匿名化任一成员、结束其最后 active assignment 或把任一成员加入另一 active merge 前，必须先拆分。合并操作不构成保留续期。active merge 的有效保留截止取两个成员当前截止时间中较早者，并沿用既有的到期前三十天复核任务。继续保留需要在截止前对每个即将到期的成员分别执行明确续期；系统随后重算较早截止。到达截止时仍未续期或拆分，retention writer 必须在一个事务中结束 active merge，并按既有匿名化合同处理两个成员、本代次待分配事实和合并投影。它只保留 value-free 的 merge／retention 历史和必要 opaque 引用。任一清除失败使整个到期事务回滚。该不可逆处理不是拆分，也不能阻断其他到期对象。
+
+merge 与 split 各使用客户端 request UUID 和固定 canonical payload。相同请求精确重放首次结果；载荷漂移、stale receipt、同对象、跨空间、跨类型、并发 merge／split、撤权或不完整分配返回稳定失败，并且不留部分状态。merge ledger 只保存 opaque 对象／事实 ID、合并代次、字段来源指针和拆分分配状态。PII 与事实值仍在各自受保留规则约束的权威表中；ledger 不复制或散列这些值。独立不可变 audit 只保存 event、actor、workspace、request、operation、outcome、计数和数据库时间，不保存姓名、电话、email、备注、接触内容或错误原文。
+
+本节只固定后续实现合同。当前产品尚未提供目录级候选、合并或拆分功能，也未证明数据库可逆性、并发安全、HTTP、Flutter、生产授权、真实 PII 或部署。
 
 ### 5.7 组织治理与生命周期
 
@@ -3218,6 +3243,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-129` | 学习文档说明个人空间 CSV v1 的 `import_target_pii` 来源、UTF-8 文件与四列 header、500 行／1 MiB 上限、行校验、精确重复提示、明确另建、stale preview、整批原子写入、精确重放与 value-free 审计。它明确导入者只是 creator 和初始跟进者，不因导入生成接触、阶段或同意；文档合同不证明 parser、数据库、HTTP、Flutter、真实 PII 或部署。 |
 | `MANUAL-130` | 学习文档说明个人空间 PII 导出 v1 的双 capability、workspace-wide active assignment 范围、15 分钟 `password` AMR、60 秒时钟偏差、固定 canonical JSON 与下载 headers。它说明失败关闭、不返回部分资料、value-free 审计、重试的新 event 和客户端内存交付边界。文档合同不证明数据库、Backend、Flutter、生产 AMR、真实 PII 或六平台交付。 |
 | `MANUAL-131` | 学习文档说明个人空间 PII JSON 导出的服务端准备／审计、客户端内存 artifact 与 Web 浏览器下载请求的区别。第二次明确操作传递原始 bytes、固定 MIME 和文件名；失败重试不重新 GET 或新增审计，状态只表示“已请求下载”。Web 请求不证明保存，原生保存／分享和生产 Supabase password AMR 尚未验证。 |
+| `MANUAL-132` | 学习文档说明个人空间疑似重复对象与可逆合并 v1：双 capability、同空间同类型的精确候选、15 分钟 opaque receipt、双对象上限、保留对象和逐字段来源、原事实保留、来源分开的项目关系、合并代次 writer 约束、全有或全无拆分、较早保留截止、到期双端匿名化和既有 PII 导出边界。它明确当前产品尚未实现候选目录、合并或拆分。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3538,6 +3564,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-140` | 7DN 只验证文档合同：Product Spec 的 `PII-007`／`PII-010`、ADR-0041 与说明书 `MANUAL-129` 逐项覆盖个人空间 capability、UTF-8 四列 CSV、预览 receipt 绑定与 15 分钟半开期限、精确重复信号、明确另建、stale preview、best-effort 非唯一性边界、整批原子写入、精确重放和 value-free 审计。运行 Markdown links、diff 和 no-slop 检查；本票不证明 parser、DB、HTTP、Flutter、真实 PII、生产授权或部署。 |
 | `TEST-141` | 7DR 只验证文档合同：Product Spec 的 `PII-006`／`PII-011`、ADR-0040 与说明书 `MANUAL-130` 逐项覆盖个人／组织 capability 边界、workspace-wide active assignment 范围、15 分钟 `password` AMR 与 refresh 排除、canonical JSON exact keys／顺序／null、下载 headers、稳定失败和零部分资料。还要覆盖 value-free 审计、`export_event_id` 绑定、`prepared` 结果、重试新 event 与客户端内存边界。运行 Markdown links、diff 和 no-slop 检查；本票不证明 DB、Backend、Flutter、生产 JWT AMR、真实 PII、六平台保存／分享或部署。 |
 | `TEST-142` | 7DV 覆盖 artifact 未准备时阻止 delivery、准备后不自动下载、第二次明确操作传递原始 bytes／固定 MIME／文件名、无第二次 export GET、双击去重、失败后同 artifact 重试、非 Web unavailable，以及身份／上下文／capability／在线状态／页面生命周期／请求代次变化后的迟到结果隔离。Web adapter 另覆盖 anchor 与 object URL 清理；既有管理报告行为必须保持。测试只证明浏览器下载请求，不证明文件保存、生产 AMR 或原生交付。 |
+| `TEST-143` | 7DW 只验证文档合同：Product Spec 的 `PII-008`／`PII-009`／`PII-013`、ADR-0042／0043 与说明书 `MANUAL-132` 逐项覆盖个人／组织边界、双 capability、精确候选、15 分钟 receipt、双对象上限、逐字段来源、原事实保留、合并代次 writer 约束、来源分开的项目关系、原子拆分、较早保留截止、到期双端匿名化、既有 PII 导出和 value-free audit。运行 Markdown links、diff 和 no-slop 检查；本票不证明 DB、Backend、Flutter、生产授权、真实 PII、并发安全或部署。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3942,6 +3969,8 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 7DR／#535 固定个人空间 PII 导出 v1：当前 owner 上下文必须同时具有 `export_target_pii` 与 `view_assigned_target_pii`，并提供 15 分钟内的已验签 `password` AMR。导出覆盖当前账号在个人空间仍分配的全部 active 对象，使用固定 canonical JSON 与 value-free 审计。本票只交付文档合同，不证明 DB、Backend、Flutter、生产 AMR 或真实文件交付已实现。
 
 7DV／#543 在个人空间 PII artifact 准备完成后提供第二次明确的 Web 浏览器下载请求。delivery 只传递已验证的原始 bytes、固定 MIME 和文件名；失败重试复用同一 artifact，不重新 GET、序列化或新增服务端审计。身份、上下文、权限、在线可信状态、页面或请求代次变化会清除 artifact 和交付状态；非 Web 为 unavailable。界面只表达“已请求下载”，不证明文件保存、打开或保留；原生保存／分享及生产 Supabase password AMR 仍未验证。
+
+7DW／#545 固定个人空间疑似重复对象与可逆合并／拆分合同：两项 capability 和两端 active assignment 才能处理同空间、同类型的精确电话／email 候选。一次 active merge 只含两个对象，保留原事实并记录逐字段来源；全部相关 writer 绑定合并代次，拆分完整分配来源不明事实并原子生效。自动到期、来源分开的同项目关系和既有 PII 导出边界也已固定。本票只交付文档合同，不证明 DB、Backend、Flutter、生产授权、真实 PII 或部署。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 
