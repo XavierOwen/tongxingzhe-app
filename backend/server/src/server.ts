@@ -45,6 +45,11 @@ import {
   type PromotionTargetStore,
 } from "./promotion-targets.js";
 import {
+  handlePersonalTargetCsvImportConfirm,
+  handlePersonalTargetCsvImportPreview,
+  type PersonalTargetCsvImportStore,
+} from "./personal-target-csv-import.js";
+import {
   createTargetInstitutionRelationship,
   endTargetInstitutionRelationship,
   listTargetInstitutionRelationships,
@@ -192,6 +197,7 @@ export interface BackendServerDependencies
     QuestionnaireMetricCompatibilityStore;
   readonly promotionTargetStore?: PromotionTargetStore;
   readonly promotionTargetRetentionStore?: PromotionTargetRetentionStore;
+  readonly personalTargetCsvImportStore?: PersonalTargetCsvImportStore;
   readonly targetInstitutionRelationshipStore?:
     TargetInstitutionRelationshipStore;
   readonly personalActionPlanStore?: PersonalActionPlanStore;
@@ -1146,6 +1152,48 @@ export function createBackendServer(
     }
 
     if (
+      request.method === "POST" &&
+      (requestUrl.pathname ===
+          "/v1/promotion-targets/imports/csv/preview" ||
+        requestUrl.pathname ===
+          "/v1/promotion-targets/imports/csv/confirm")
+    ) {
+      try {
+        const importRequest = {
+          authorization: request.headers.authorization,
+          hasQuery: (request.url ?? "").includes("?"),
+          hasBody: requestDeclaresBody(request.headers),
+          contentType: request.headers["content-type"],
+          readBody: async () => readRawBody(request),
+        };
+        const importDependencies = {
+          identityVerifier: dependencies.identityVerifier,
+          contextStore: dependencies.contextStore,
+          ...(dependencies.personalTargetCsvImportStore === undefined
+            ? {}
+            : {
+                personalTargetCsvImportStore:
+                  dependencies.personalTargetCsvImportStore,
+              }),
+        };
+        const result = requestUrl.pathname.endsWith("/preview")
+          ? await handlePersonalTargetCsvImportPreview(
+              importRequest,
+              importDependencies,
+            )
+          : await handlePersonalTargetCsvImportConfirm(
+              importRequest,
+              importDependencies,
+            );
+        response.statusCode = result.status;
+        response.end(JSON.stringify(result.body));
+      } catch (error) {
+        writeBodyError(response, error);
+      }
+      return;
+    }
+
+    if (
       requestUrl.pathname === "/v1/promotion-targets" &&
       (request.method === "GET" || request.method === "POST")
     ) {
@@ -1795,6 +1843,14 @@ function writeBodyError(
 }
 
 async function readJsonBody(request: AsyncIterable<unknown>): Promise<unknown> {
+  const body = await readRawBody(request);
+  if (body.length === 0) {
+    throw new SyntaxError("Request body is empty");
+  }
+  return JSON.parse(body.toString("utf8")) as unknown;
+}
+
+async function readRawBody(request: AsyncIterable<unknown>): Promise<Buffer> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of request) {
@@ -1805,8 +1861,5 @@ async function readJsonBody(request: AsyncIterable<unknown>): Promise<unknown> {
     }
     chunks.push(buffer);
   }
-  if (chunks.length === 0) {
-    throw new SyntaxError("Request body is empty");
-  }
-  return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
+  return Buffer.concat(chunks);
 }
