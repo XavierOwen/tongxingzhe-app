@@ -115,6 +115,11 @@ final class _TrackingGateway implements OrganizationDeletionRecoveryGateway {
   int closeCount = 0;
 
   @override
+  Future<OrganizationDeletionRecoveryResult<List<String>>>
+  listDeletionEligibleOrganizations() async =>
+      const OrganizationDeletionRecoverySuccess([]);
+
+  @override
   Future<
     OrganizationDeletionRecoveryResult<OrganizationDeletionRecoveryDirectory>
   >

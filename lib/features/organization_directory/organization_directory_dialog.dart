@@ -17,6 +17,7 @@ import 'organization_invitation_accept_dialog.dart';
 import 'organization_membership_self_leave_dialog.dart';
 import 'organization_owner_transfer_dialog.dart';
 import 'organization_deletion_recovery_dialog.dart';
+import 'organization_deletion_request_dialog.dart';
 import 'organization_project_membership_assignment_dialog.dart';
 import 'organization_shareable_join_application_approve_dialog.dart';
 import 'organization_shareable_join_application_directory_dialog.dart';
@@ -66,6 +67,8 @@ final class _OrganizationDirectoryDialogState
     extends State<OrganizationDirectoryDialog> {
   StreamSubscription<AppSessionSnapshot>? _sessionSubscription;
   List<OrganizationDirectoryEntry> _organizations = const [];
+  Set<String> _deletionEligibleWorkspaceIds = const {};
+  var _deletionEligibilityUnavailable = false;
   OrganizationDirectoryFailureCode? _failure;
   String? _notice;
   String? _trustedAppUserId;
@@ -172,6 +175,10 @@ final class _OrganizationDirectoryDialogState
           _selfIdentity(context, appUserId),
         ],
         const SizedBox(height: 16),
+        if (_deletionEligibilityUnavailable) ...[
+          Text(widget.text.t('organizationDeletionEligibilityUnavailable')),
+          const SizedBox(height: 12),
+        ],
         if (_notice case final notice?) ...[
           Semantics(
             key: const ValueKey('organization-directory-notice'),
@@ -337,6 +344,19 @@ final class _OrganizationDirectoryDialogState
               icon: const Icon(Icons.logout),
               label: Text(widget.text.t('organizationLeaveAction')),
             ),
+            if (_deletionEligibleWorkspaceIds.contains(
+              entry.organizationWorkspaceId,
+            ))
+              TextButton.icon(
+                key: ValueKey(
+                  'organization-delete-${entry.organizationWorkspaceId}',
+                ),
+                onPressed: _busy || _sessionInvalidated
+                    ? null
+                    : () => _requestDeletion(entry),
+                icon: const Icon(Icons.delete_outline),
+                label: Text(widget.text.t('organizationDeletionRequestAction')),
+              ),
           ],
         ),
       ],
@@ -392,7 +412,10 @@ final class _OrganizationDirectoryDialogState
       _busy = true;
       _organizations = const [];
       _failure = null;
+      _deletionEligibleWorkspaceIds = const {};
+      _deletionEligibilityUnavailable = false;
     });
+    unawaited(_loadDeletionEligibility(generation));
 
     OrganizationDirectoryResult result;
     try {
@@ -421,6 +444,33 @@ final class _OrganizationDirectoryDialogState
           _failure = code;
         });
     }
+  }
+
+  Future<void> _loadDeletionEligibility(int generation) async {
+    OrganizationDeletionRecoveryResult<List<String>> result;
+    try {
+      result = await widget.deletionRecoveryGateway
+          .listDeletionEligibleOrganizations();
+    } catch (_) {
+      result = const OrganizationDeletionRecoveryRejected(
+        OrganizationDeletionRecoveryFailureCode.invalidResponse,
+      );
+    }
+    if (!mounted || generation != _requestGeneration) return;
+    if (!_hasTrustedSession(widget.appSession.current)) {
+      _invalidateSession();
+      return;
+    }
+    setState(() {
+      switch (result) {
+        case OrganizationDeletionRecoverySuccess(:final value):
+          _deletionEligibleWorkspaceIds = value.toSet();
+          _deletionEligibilityUnavailable = false;
+        case OrganizationDeletionRecoveryRejected():
+          _deletionEligibleWorkspaceIds = const {};
+          _deletionEligibilityUnavailable = true;
+      }
+    });
   }
 
   Future<void> _copySelfAppUserId() async {
@@ -465,6 +515,8 @@ final class _OrganizationDirectoryDialogState
       _busy = false;
       _copyingSelfId = false;
       _organizations = const [];
+      _deletionEligibleWorkspaceIds = const {};
+      _deletionEligibilityUnavailable = false;
       _notice = null;
       _failure = OrganizationDirectoryFailureCode.unauthorized;
       _trustedAppUserId = null;
@@ -511,6 +563,32 @@ final class _OrganizationDirectoryDialogState
         appSession: widget.appSession,
       ),
     );
+  }
+
+  Future<void> _requestDeletion(OrganizationDirectoryEntry entry) async {
+    if (_busy ||
+        !_organizations.contains(entry) ||
+        !_deletionEligibleWorkspaceIds.contains(
+          entry.organizationWorkspaceId,
+        ) ||
+        !_hasTrustedSession(widget.appSession.current)) {
+      return;
+    }
+    final receipt = await showDialog<OrganizationDeletionRequestReceipt>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => OrganizationDeletionRequestDialog(
+        text: widget.text,
+        organization: entry,
+        gateway: widget.deletionRecoveryGateway,
+        appSession: widget.appSession,
+      ),
+    );
+    if (mounted &&
+        receipt != null &&
+        _hasTrustedSession(widget.appSession.current)) {
+      await _load();
+    }
   }
 
   Future<void> _useShareableJoinLink() async {
@@ -640,6 +718,7 @@ final class _OrganizationDirectoryDialogState
         appSession: widget.appSession,
       ),
     );
+    if (mounted && _hasTrustedSession(widget.appSession.current)) await _load();
   }
 
   Future<void> _viewRecoverableOrganizations() async {

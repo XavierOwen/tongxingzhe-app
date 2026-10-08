@@ -790,7 +790,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('交接组织'), findsOneWidget);
     expect(find.text('个人空间 → 我的推广项目'), findsOneWidget);
-    expect(directoryGateway.listCalls, 1);
+    expect(directoryGateway.listCalls, 2);
     expect(transferGateway.closeCount, 0);
 
     await tester.pumpWidget(const SizedBox());

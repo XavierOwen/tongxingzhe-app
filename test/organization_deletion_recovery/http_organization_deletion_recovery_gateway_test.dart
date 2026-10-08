@@ -12,6 +12,151 @@ import '../support/fake_identity_session.dart';
 
 void main() {
   test(
+    'eligibility uses the UUID-only GET contract and accepts empty lists',
+    () async {
+      for (final ids in [
+        <String>[_otherWorkspace, _workspace],
+        <String>[],
+      ]) {
+        final requests = <http.Request>[];
+        final gateway = _gateway((request) async {
+          requests.add(request);
+          return _json({
+            'organization_deletion_eligibility_contract_id':
+                _eligibilityContract,
+            'organization_workspace_ids': ids,
+          });
+        });
+        final result = await gateway.listDeletionEligibleOrganizations();
+        await gateway.close();
+        final value =
+            (result as OrganizationDeletionRecoverySuccess<List<String>>).value;
+        expect(value, ids);
+        expect(() => value.add(_workspace), throwsUnsupportedError);
+        final request = requests.single;
+        expect(request.method, 'GET');
+        expect(request.url.path, '/v1/organizations/deletion-eligibility');
+        expect(request.url.query, isEmpty);
+        expect(request.body, isEmpty);
+        expect(request.headers, {
+          'accept': 'application/json',
+          'authorization': 'Bearer test-only-access-token',
+        });
+      }
+    },
+  );
+
+  test(
+    'eligibility rejects malformed contracts and canonical UUID violations',
+    () async {
+      final valid = {
+        'organization_deletion_eligibility_contract_id': _eligibilityContract,
+        'organization_workspace_ids': [_workspace],
+      };
+      for (final payload in [
+        {
+          ...valid,
+          'organization_deletion_eligibility_contract_id': 'unknown:v1',
+        },
+        {...valid, 'unexpected': true},
+        {'organization_deletion_eligibility_contract_id': _eligibilityContract},
+        {...valid, 'organization_workspace_ids': _workspace},
+        {
+          ...valid,
+          'organization_workspace_ids': [_workspace, _workspace],
+        },
+        {
+          ...valid,
+          'organization_workspace_ids': [_workspace.toUpperCase()],
+        },
+        {
+          ...valid,
+          'organization_workspace_ids': ['invalid'],
+        },
+        {
+          ...valid,
+          'organization_workspace_ids': [null],
+        },
+      ]) {
+        final gateway = _gateway((_) async => _json(payload));
+        final result = await gateway.listDeletionEligibleOrganizations();
+        await gateway.close();
+        expect(
+          (result as OrganizationDeletionRecoveryRejected).code,
+          OrganizationDeletionRecoveryFailureCode.invalidResponse,
+        );
+      }
+    },
+  );
+
+  test(
+    'eligibility maps fixed errors and refreshes once for a valid 401',
+    () async {
+      for (final (status, code, expected) in [
+        (
+          400,
+          'invalid_organization_deletion_eligibility_request',
+          OrganizationDeletionRecoveryFailureCode.invalidRequest,
+        ),
+        (
+          403,
+          'organization_deletion_eligibility_forbidden',
+          OrganizationDeletionRecoveryFailureCode.forbidden,
+        ),
+        (
+          503,
+          'organization_deletion_eligibility_unavailable',
+          OrganizationDeletionRecoveryFailureCode.serviceUnavailable,
+        ),
+      ]) {
+        final gateway = _gateway((_) async => _error(code, status));
+        final result = await gateway.listDeletionEligibleOrganizations();
+        await gateway.close();
+        expect((result as OrganizationDeletionRecoveryRejected).code, expected);
+      }
+      var calls = 0;
+      final gateway = _gateway(
+        (_) async => ++calls == 1
+            ? _error('unauthenticated', 401)
+            : _json({
+                'organization_deletion_eligibility_contract_id':
+                    _eligibilityContract,
+                'organization_workspace_ids': <String>[],
+              }),
+      );
+      final result = await gateway.listDeletionEligibleOrganizations();
+      await gateway.close();
+      expect(result, isA<OrganizationDeletionRecoverySuccess<List<String>>>());
+      expect(calls, 2);
+    },
+  );
+
+  test('eligibility discards a response from a previous identity', () async {
+    final identity = _ChangingIdentitySession();
+    final sent = Completer<void>();
+    final response = Completer<http.Response>();
+    final gateway = _gateway((_) {
+      sent.complete();
+      return response.future;
+    }, identity: identity);
+    addTearDown(gateway.close);
+    addTearDown(identity.close);
+    final pending = gateway.listDeletionEligibleOrganizations();
+    await sent.future;
+    identity.changeToAnotherAccount();
+    response.complete(
+      _json({
+        'organization_deletion_eligibility_contract_id': _eligibilityContract,
+        'organization_workspace_ids': [_workspace],
+      }),
+    );
+    expect(
+      (await pending as OrganizationDeletionRecoveryRejected).code,
+      OrganizationDeletionRecoveryFailureCode.unauthorized,
+    );
+  });
+
+  test(
     'uses the exact recovery directory and lifecycle wire contracts',
     () async {
       final requests = <http.Request>[];
@@ -353,6 +498,7 @@ void main() {
 }
 
 const _directoryContract = 'organization-deletion-recovery-directory:v1';
+const _eligibilityContract = 'organization-deletion-eligibility:v1';
 const _workspace = 'abcdefab-cdef-0abc-0def-abcdefabcdef';
 const _otherWorkspace = 'abcdefab-cdef-0abc-0def-abcdefabcdea';
 const _deletionId = 'abcdefab-cdef-0abc-0def-abcdefabcdee';

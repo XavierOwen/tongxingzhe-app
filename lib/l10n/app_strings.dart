@@ -598,6 +598,53 @@ const Map<String, Map<String, String>> _strings = {
     'organizationLeaveFailure.networkUnavailable':
         '网络不可用，无法确认退出结果。请检查连接后在此窗口重试。',
     'organizationLeaveFailure.invalidResponse': '未收到可验证的退出结果，请在此窗口重试。',
+    'organizationDeletionRequestAction': '申请删除',
+    'organizationDeletionEligibilityUnavailable': '暂时无法确认删除资格，请刷新后再试。',
+    'organizationDeletionRequestTitle': '申请删除这个组织？',
+    'organizationDeletionRequestHelp':
+        '服务端会在提交时重新核对当前所有者身份和组织状态。应用不会依据本机时钟判断资格。',
+    'organizationDeletionRequestOrganizationId': '组织标识（UUID）',
+    'organizationDeletionRequestDeletionRequestId': '删除周期编号',
+    'organizationDeletionRequestCacheNotice':
+        '每次提交前，应用都会先清除此设备上该组织的敏感缓存。缓存无法恢复；若未能确认清除，应用不会发送请求。',
+    'organizationDeletionRequestClearing': '正在清除此组织的本地敏感缓存…',
+    'organizationDeletionRequestCacheClearFailed':
+        '未能确认本地敏感缓存已清除，因此没有发送删除请求。请在此窗口重试。',
+    'organizationDeletionRequestSubmitting': '正在提交组织删除请求…',
+    'organizationDeletionRequestConfirm': '清除缓存并提交',
+    'organizationDeletionRequestRetry': '重试这次请求',
+    'organizationDeletionRequestCancel': '取消',
+    'organizationDeletionRequestClose': '关闭',
+    'organizationDeletionRequestInvalidRequest': '未能建立有效的请求编号，请在此窗口重试。',
+    'organizationDeletionRequestUnauthorized':
+        '账号或会话状态已改变。已清除请求信息与回执；请关闭窗口后重新查看组织列表。',
+    'organizationDeletionRequestUncertain':
+        '请求可能已提交。重试会使用相同请求编号和组织标识；每次重试前都会再次清除本地敏感缓存。',
+    'organizationDeletionRequestSuccess': '组织删除请求已确认。',
+    'organizationDeletionRequestReceiptTitle': '删除请求回执',
+    'organizationDeletionRequestReceiptNotice':
+        '这是服务端确认的请求记录，不代表组织已立即删除。恢复资格和截止时间以服务端为准。',
+    'organizationDeletionRequestEffectiveAt': '生效时间（UTC）',
+    'organizationDeletionRequestPurgeAfter': '计划清除时间（UTC）',
+    'organizationDeletionRequestDiscardTitle': '停止重试这次请求？',
+    'organizationDeletionRequestDiscardBody':
+        '请求可能已提交。关闭只会清除此窗口中的重试信息，不会撤销服务端可能已记录的请求。',
+    'organizationDeletionRequestKeepRetry': '保留并返回',
+    'organizationDeletionRequestDiscard': '放弃重试并关闭',
+    'organizationDeletionRequestFailure.notConfigured':
+        '删除请求服务尚未配置，没有提交请求。请稍后重试。',
+    'organizationDeletionRequestFailure.unauthorized': '登录状态已失效。请关闭窗口并重新登录。',
+    'organizationDeletionRequestFailure.invalidRequest': '删除请求无效，请重新查看组织列表后再试。',
+    'organizationDeletionRequestFailure.forbidden':
+        '当前账号或组织状态不符合删除条件。服务端未接受这次请求。',
+    'organizationDeletionRequestFailure.conflict':
+        '这次请求与已有记录冲突。请关闭窗口并重新读取组织列表。',
+    'organizationDeletionRequestFailure.serviceUnavailable':
+        '服务暂时不可用，无法确认请求结果。请在此窗口重试。',
+    'organizationDeletionRequestFailure.networkUnavailable':
+        '网络不可用，无法确认请求结果。请检查连接后在此窗口重试。',
+    'organizationDeletionRequestFailure.invalidResponse':
+        '未收到可验证的请求结果，请在此窗口重试。',
     'organizationCreate': '创建组织',
     'organizationName': '组织名称',
     'organizationCreateHelp': '创建私有组织后，你将成为首位所有者。当前项目不会切换。组织项目与成员管理尚未开放。',
@@ -2364,6 +2411,60 @@ const Map<String, Map<String, String>> _strings = {
         'The network is unavailable, so the leave result is unknown. Check your connection and retry in this window.',
     'organizationLeaveFailure.invalidResponse':
         'The app could not verify the leave result. Retry in this window.',
+    'organizationDeletionRequestAction': 'Request deletion',
+    'organizationDeletionEligibilityUnavailable':
+        'Deletion eligibility is unavailable. Refresh to try again.',
+    'organizationDeletionRequestTitle': 'Request organization deletion?',
+    'organizationDeletionRequestHelp':
+        'The server checks current ownership and organization state when you submit. The app does not use the device clock to decide eligibility.',
+    'organizationDeletionRequestOrganizationId': 'Organization ID (UUID)',
+    'organizationDeletionRequestDeletionRequestId': 'Deletion cycle ID',
+    'organizationDeletionRequestCacheNotice':
+        'Before every submission, the app clears this organization’s sensitive cache from this device. The cache cannot be restored. The app will not send a request unless it confirms the cache was cleared.',
+    'organizationDeletionRequestClearing':
+        'Clearing this organization’s sensitive cache…',
+    'organizationDeletionRequestCacheClearFailed':
+        'The app could not confirm that it cleared the sensitive cache, so it did not send a deletion request. Retry in this dialog.',
+    'organizationDeletionRequestSubmitting':
+        'Submitting the organization deletion request…',
+    'organizationDeletionRequestConfirm': 'Clear cache and submit',
+    'organizationDeletionRequestRetry': 'Retry this request',
+    'organizationDeletionRequestCancel': 'Cancel',
+    'organizationDeletionRequestClose': 'Close',
+    'organizationDeletionRequestInvalidRequest':
+        'Could not prepare a valid request ID. Retry in this dialog.',
+    'organizationDeletionRequestUnauthorized':
+        'The account or session changed. The request details and receipt were cleared. Close this dialog and reload your organizations.',
+    'organizationDeletionRequestUncertain':
+        'The request may have been submitted. Retry uses the same request ID and organization ID; the sensitive cache is cleared again before every retry.',
+    'organizationDeletionRequestSuccess':
+        'The organization deletion request was confirmed.',
+    'organizationDeletionRequestReceiptTitle': 'Deletion request receipt',
+    'organizationDeletionRequestReceiptNotice':
+        'This is a server-confirmed request record. It does not mean the organization was deleted immediately. The server decides recovery eligibility and deadline.',
+    'organizationDeletionRequestEffectiveAt': 'Effective at (UTC)',
+    'organizationDeletionRequestPurgeAfter': 'Scheduled purge time (UTC)',
+    'organizationDeletionRequestDiscardTitle': 'Stop retrying this request?',
+    'organizationDeletionRequestDiscardBody':
+        'The request may already have been submitted. Closing only discards retry details in this dialog; it does not cancel a request the server may have recorded.',
+    'organizationDeletionRequestKeepRetry': 'Keep request and return',
+    'organizationDeletionRequestDiscard': 'Discard retry and close',
+    'organizationDeletionRequestFailure.notConfigured':
+        'The deletion request service is not configured. No request was sent. Try again later.',
+    'organizationDeletionRequestFailure.unauthorized':
+        'Your sign-in has expired. Close this dialog and sign in again.',
+    'organizationDeletionRequestFailure.invalidRequest':
+        'The deletion request is invalid. Reload your organizations before trying again.',
+    'organizationDeletionRequestFailure.forbidden':
+        'This account or organization state does not qualify for deletion. The server did not accept this request.',
+    'organizationDeletionRequestFailure.conflict':
+        'This request conflicts with an existing record. Close this dialog and reload your organizations.',
+    'organizationDeletionRequestFailure.serviceUnavailable':
+        'The service is unavailable, so the request result is unknown. Retry in this dialog.',
+    'organizationDeletionRequestFailure.networkUnavailable':
+        'The network is unavailable, so the request result is unknown. Check your connection and retry in this dialog.',
+    'organizationDeletionRequestFailure.invalidResponse':
+        'The app could not verify the request result. Retry in this dialog.',
     'organizationName': 'Organization name',
     'organizationCreateHelp':
         'You will be the first owner of a private organization. Your current '
