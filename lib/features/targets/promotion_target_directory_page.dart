@@ -4,8 +4,12 @@ import 'dart:typed_data';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
+import '../../app_session/app_session.dart';
+import '../../app_session/session_context_gateway.dart';
 import '../../foundation/runtime_values.dart';
+import '../../identity/identity_session.dart';
 import '../../l10n/app_strings.dart';
+import '../../targets/personal_pii_export_gateway.dart';
 import '../../targets/personal_target_csv_file.dart';
 import '../../targets/personal_target_csv_import.dart';
 import '../../targets/promotion_target.dart';
@@ -16,11 +20,15 @@ final class PromotionTargetDirectoryPage extends StatefulWidget {
     super.key,
     required this.text,
     required this.gateway,
+    required this.identitySession,
+    required this.appSession,
+    required this.exportGateway,
     required this.idGenerator,
     required this.clock,
     required this.scopeKey,
     required this.importGateway,
     required this.canImport,
+    required this.canExport,
     this.pickCsvFile,
     required this.canCreate,
     required this.canConfigureStageAliases,
@@ -30,11 +38,15 @@ final class PromotionTargetDirectoryPage extends StatefulWidget {
 
   final AppStrings text;
   final PromotionTargetGateway gateway;
+  final IdentitySession identitySession;
+  final AppSession appSession;
+  final PersonalPiiExportGateway exportGateway;
   final IdGenerator idGenerator;
   final AppClock clock;
   final String scopeKey;
   final PersonalTargetCsvImportGateway importGateway;
   final bool canImport;
+  final bool canExport;
   final Future<XFile?> Function()? pickCsvFile;
   final bool canCreate;
   final bool canConfigureStageAliases;
@@ -58,6 +70,13 @@ final class _PromotionTargetDirectoryPageState
   String? _csvRequestId;
   PersonalTargetCsvImportFailureCode? _csvFailure;
   List<PersonalTargetCsvImportIssue> _csvIssues = const [];
+  StreamSubscription<IdentitySnapshot>? _identitySubscription;
+  StreamSubscription<AppSessionSnapshot>? _appSessionSubscription;
+  PersonalPiiExportArtifact? _exportArtifact;
+  String? _exportFailureKey;
+  String? _exportSubject;
+  var _exportGeneration = 0;
+  var _exportBusy = false;
   var _csvImportGeneration = 0;
   var _csvBusy = false;
   var _csvStale = false;
@@ -66,12 +85,27 @@ final class _PromotionTargetDirectoryPageState
   @override
   void initState() {
     super.initState();
+    _subscribeToExportFences();
     unawaited(_load());
   }
 
   @override
   void didUpdateWidget(covariant PromotionTargetDirectoryPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final exportDependenciesChanged =
+        !identical(oldWidget.identitySession, widget.identitySession) ||
+        !identical(oldWidget.appSession, widget.appSession);
+    if (exportDependenciesChanged) {
+      unawaited(_identitySubscription?.cancel());
+      unawaited(_appSessionSubscription?.cancel());
+      _subscribeToExportFences();
+    }
+    if (exportDependenciesChanged ||
+        !identical(oldWidget.exportGateway, widget.exportGateway) ||
+        oldWidget.scopeKey != widget.scopeKey ||
+        (oldWidget.canExport && !widget.canExport)) {
+      _clearExport();
+    }
     final scopeOrGatewayChanged =
         oldWidget.scopeKey != widget.scopeKey ||
         !identical(oldWidget.gateway, widget.gateway) ||
@@ -100,8 +134,29 @@ final class _PromotionTargetDirectoryPageState
 
   @override
   void dispose() {
+    _exportGeneration++;
+    _exportArtifact = null;
+    unawaited(_identitySubscription?.cancel());
+    unawaited(_appSessionSubscription?.cancel());
     _offlineExpiryTimer?.cancel();
     super.dispose();
+  }
+
+  void _subscribeToExportFences() {
+    _identitySubscription = widget.identitySession.changes.listen(
+      _identityChanged,
+    );
+    _appSessionSubscription = widget.appSession.changes.listen(
+      _appSessionChanged,
+    );
+  }
+
+  void _clearExport({String? failureKey}) {
+    _exportGeneration++;
+    _exportSubject = null;
+    _exportArtifact = null;
+    _exportFailureKey = failureKey;
+    _exportBusy = false;
   }
 
   void _clearCsvImport() {
@@ -139,6 +194,44 @@ final class _PromotionTargetDirectoryPageState
         ),
         const SizedBox(height: 6),
         Text(text.t('targetsPrivacyHelp')),
+        if (widget.canExport) ...[
+          const SizedBox(height: 16),
+          FilledButton.tonalIcon(
+            key: const ValueKey('prepare-personal-pii-export'),
+            onPressed: _exportBusy ? null : _preparePersonalPiiExport,
+            icon: _exportBusy
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.file_download_outlined),
+            label: Text(text.t('targetsPiiExportPrepare')),
+          ),
+          const SizedBox(height: 8),
+          Text(text.t('targetsPiiExportHelp')),
+          if (_exportFailureKey != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                text.t(_exportFailureKey!),
+                key: const ValueKey('personal-pii-export-failure'),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+          if (_exportArtifact != null)
+            Card(
+              key: const ValueKey('personal-pii-export-artifact'),
+              child: ListTile(
+                leading: const Icon(Icons.privacy_tip_outlined),
+                title: Text(text.t('targetsPiiExportPrepared')),
+                subtitle: Text(
+                  '${_exportArtifact!.fileName}\n'
+                  '${text.format('targetsPiiExportSize', {'count': _exportArtifact!.bytes.length})}\n'
+                  '${text.t('targetsPiiExportNotDelivered')}',
+                ),
+              ),
+            ),
+        ],
         if (_offlineAuthorizedAtUtc != null) ...[
           const SizedBox(height: 8),
           Card(
@@ -352,6 +445,160 @@ final class _PromotionTargetDirectoryPageState
       ),
     );
   }
+
+  void _identityChanged(IdentitySnapshot identity) {
+    final subject = _exportSubject;
+    if ((_exportBusy || _exportArtifact != null) &&
+        (identity.stage != IdentityStage.signedIn ||
+            identity.principal?.externalSubject != subject)) {
+      _invalidateExport('targetsPiiExportSessionChanged');
+    }
+  }
+
+  void _appSessionChanged(AppSessionSnapshot snapshot) {
+    final subject = _exportSubject;
+    if ((_exportBusy || _exportArtifact != null) &&
+        (subject == null || !_eligibleSession(snapshot, subject))) {
+      _invalidateExport('targetsPiiExportContextChanged');
+    }
+  }
+
+  void _invalidateExport(String failureKey) {
+    if (!mounted) {
+      _clearExport(failureKey: failureKey);
+      return;
+    }
+    setState(() => _clearExport(failureKey: failureKey));
+  }
+
+  Future<void> _preparePersonalPiiExport() async {
+    if (_exportBusy || !widget.canExport) return;
+    final identity = widget.identitySession.current;
+    final subject = identity.principal?.externalSubject;
+    final email = identity.principal?.email;
+    if (identity.stage != IdentityStage.signedIn ||
+        subject == null ||
+        email == null ||
+        email.trim().isEmpty ||
+        !_eligibleSession(widget.appSession.current, subject)) {
+      setState(
+        () => _clearExport(failureKey: 'targetsPiiExportSessionChanged'),
+      );
+      return;
+    }
+
+    late final int generation;
+    setState(() {
+      _clearExport();
+      _exportBusy = true;
+      _exportSubject = subject;
+      generation = _exportGeneration;
+    });
+    final password = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _PersonalPiiExportPasswordDialog(text: widget.text),
+    );
+    if (!_currentExportAttempt(generation, subject)) return;
+    if (password == null) {
+      setState(() => _clearExport());
+      return;
+    }
+
+    final authentication = await widget.identitySession.signIn(
+      email: email,
+      password: password,
+    );
+    if (!_currentExportAttempt(generation, subject)) return;
+    switch (authentication) {
+      case IdentityRejected<IdentitySnapshot>():
+        _finishExportFailure(generation, 'targetsPiiExportAuthFailed');
+        return;
+      case IdentitySuccess<IdentitySnapshot>(:final value):
+        if (value.stage != IdentityStage.signedIn ||
+            value.principal?.externalSubject != subject) {
+          _finishExportFailure(generation, 'targetsPiiExportSessionChanged');
+          return;
+        }
+    }
+
+    final refreshed = await widget.appSession.refreshContext();
+    if (!_currentExportAttempt(generation, subject)) return;
+    switch (refreshed) {
+      case SessionContextRejected():
+        _finishExportFailure(generation, 'targetsPiiExportContextFailed');
+        return;
+      case SessionContextSuccess(:final context):
+        if (!_eligibleContext(context) ||
+            widget.appSession.current.fromOfflineCache) {
+          _finishExportFailure(generation, 'targetsPiiExportContextChanged');
+          return;
+        }
+    }
+
+    final result = await widget.exportGateway.export(
+      requestIsCurrent: () => _currentExportAttempt(generation, subject),
+    );
+    if (!_currentExportAttempt(generation, subject)) {
+      return;
+    }
+    switch (result) {
+      case PersonalPiiExportReady(:final artifact):
+        setState(() {
+          _exportArtifact = artifact;
+          _exportFailureKey = null;
+          _exportBusy = false;
+        });
+      case PersonalPiiExportRejected(:final failure):
+        _finishExportFailure(generation, _exportFailureMessage(failure));
+    }
+  }
+
+  void _finishExportFailure(int generation, String failureKey) {
+    if (!mounted || generation != _exportGeneration) return;
+    setState(() => _clearExport(failureKey: failureKey));
+  }
+
+  bool _currentExportAttempt(int generation, String subject) =>
+      mounted &&
+      generation == _exportGeneration &&
+      _exportBusy &&
+      widget.canExport &&
+      _exportSubject == subject &&
+      widget.identitySession.current.stage == IdentityStage.signedIn &&
+      widget.identitySession.current.principal?.externalSubject == subject &&
+      _eligibleSession(widget.appSession.current, subject);
+
+  bool _eligibleSession(AppSessionSnapshot snapshot, String subject) {
+    final context = snapshot.context;
+    return snapshot.stage == AppSessionStage.ready &&
+        !snapshot.fromOfflineCache &&
+        snapshot.identity?.stage == IdentityStage.signedIn &&
+        snapshot.identity?.principal?.externalSubject == subject &&
+        context != null &&
+        _eligibleContext(context);
+  }
+
+  bool _eligibleContext(TrustedSessionContext context) =>
+      context.workspace.kind == WorkspaceKind.personal &&
+      context.capabilities.contains('export_target_pii') &&
+      context.capabilities.contains('view_assigned_target_pii') &&
+      widget.scopeKey ==
+          '${context.appUserId}/${context.workspace.id}/${context.project.id}';
+
+  String _exportFailureMessage(PersonalPiiExportFailure failure) =>
+      switch (failure) {
+        PersonalPiiExportFailure.reauthenticationRequired =>
+          'targetsPiiExportReauthenticationRequired',
+        PersonalPiiExportFailure.unauthenticated ||
+        PersonalPiiExportFailure.exportForbidden =>
+          'targetsPiiExportContextChanged',
+        PersonalPiiExportFailure.serviceUnavailable ||
+        PersonalPiiExportFailure.networkUnavailable =>
+          'targetsPiiExportUnavailable',
+        PersonalPiiExportFailure.invalidResponse =>
+          'targetsPiiExportInvalidResponse',
+      };
 
   Future<void> _chooseCsv() async {
     if (_busy || _csvBusy) return;
@@ -1324,6 +1571,70 @@ final class _StageAliasDialogState extends State<_StageAliasDialog> {
             ),
         ]),
         child: Text(widget.text.t('save')),
+      ),
+    ],
+  );
+}
+
+final class _PersonalPiiExportPasswordDialog extends StatefulWidget {
+  const _PersonalPiiExportPasswordDialog({required this.text});
+
+  final AppStrings text;
+
+  @override
+  State<_PersonalPiiExportPasswordDialog> createState() =>
+      _PersonalPiiExportPasswordDialogState();
+}
+
+final class _PersonalPiiExportPasswordDialogState
+    extends State<_PersonalPiiExportPasswordDialog> {
+  final _password = TextEditingController();
+
+  @override
+  void dispose() {
+    _password.clear();
+    _password.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_password.text.isNotEmpty) Navigator.pop(context, _password.text);
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.text.t('targetsPiiExportConfirmTitle')),
+    content: AutofillGroup(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(widget.text.t('targetsPiiExportWarning')),
+          const SizedBox(height: 16),
+          TextField(
+            key: const ValueKey('personal-pii-export-password'),
+            controller: _password,
+            obscureText: true,
+            autofocus: true,
+            autofillHints: const [AutofillHints.password],
+            textInputAction: TextInputAction.done,
+            decoration: InputDecoration(labelText: widget.text.t('password')),
+            onChanged: (_) => setState(() {}),
+            onSubmitted: (_) => _submit(),
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        key: const ValueKey('cancel-personal-pii-export'),
+        onPressed: () => Navigator.pop(context),
+        child: Text(widget.text.t('cancel')),
+      ),
+      FilledButton(
+        key: const ValueKey('confirm-personal-pii-export'),
+        onPressed: _password.text.isEmpty ? null : _submit,
+        child: Text(widget.text.t('targetsPiiExportAuthenticate')),
       ),
     ],
   );

@@ -785,6 +785,21 @@ const Map<String, Map<String, String>> _strings = {
     'targetsAnonymousDefault': '不建立对象不会影响记录接触。',
     'targetsOperationFailed': '对象操作未完成，请检查网络或权限后重试。',
     'targetsCreate': '建立推广对象',
+    'targetsPiiExportPrepare': '准备个人资料导出文件',
+    'targetsPiiExportHelp': '导出个人空间中当前分配给你的可识别资料。操作前必须重新输入当前账号密码；文件只暂存在本页内存。',
+    'targetsPiiExportConfirmTitle': '重新验证并准备 PII 文件',
+    'targetsPiiExportWarning': '文件包含姓名和联系方式。密码只交给认证服务；服务器会重新检查当前账号、个人空间和导出权限。',
+    'targetsPiiExportAuthenticate': '验证并准备',
+    'targetsPiiExportPrepared': '服务端已准备导出文件',
+    'targetsPiiExportSize': '{count} 字节',
+    'targetsPiiExportNotDelivered': '文件仅在内存中，尚未保存、打开或分享。',
+    'targetsPiiExportAuthFailed': '密码验证未完成，没有请求导出文件。',
+    'targetsPiiExportSessionChanged': '账号或登录流程已改变，没有请求或保留导出文件。',
+    'targetsPiiExportContextFailed': '未能重新读取可信上下文，没有请求导出文件。',
+    'targetsPiiExportContextChanged': '个人空间或导出权限已改变，导出文件已清除。',
+    'targetsPiiExportReauthenticationRequired': '服务器未确认近期密码验证，没有准备导出文件。',
+    'targetsPiiExportUnavailable': '暂时无法准备导出文件，请检查网络后重新开始。',
+    'targetsPiiExportInvalidResponse': '服务器响应未通过文件合同校验，没有保留导出文件。',
     'targetsCsvImport': '导入 CSV',
     'targetsCsvImportHelp': '先查看规范化行和重复提示；只有明确确认后才会写入。',
     'targetsCsvImportPreview': '预览',
@@ -2659,6 +2674,31 @@ const Map<String, Map<String, String>> _strings = {
     'targetsOperationFailed':
         'The target operation did not complete. Check the network or your access and retry.',
     'targetsCreate': 'Create promotion target',
+    'targetsPiiExportPrepare': 'Prepare personal data export',
+    'targetsPiiExportHelp':
+        'Export identifiable details currently assigned to you across the personal workspace. Re-enter the current account password first; the file remains only in this page’s memory.',
+    'targetsPiiExportConfirmTitle': 'Reauthenticate and prepare PII file',
+    'targetsPiiExportWarning':
+        'This file contains names and contact details. The password goes only to the authentication service; the server rechecks the current account, personal workspace, and export access.',
+    'targetsPiiExportAuthenticate': 'Authenticate and prepare',
+    'targetsPiiExportPrepared': 'The server prepared the export file',
+    'targetsPiiExportSize': '{count} bytes',
+    'targetsPiiExportNotDelivered':
+        'The file is only in memory. It has not been saved, opened, or shared.',
+    'targetsPiiExportAuthFailed':
+        'Password verification did not complete. No export was requested.',
+    'targetsPiiExportSessionChanged':
+        'The account or sign-in flow changed. No export file was requested or kept.',
+    'targetsPiiExportContextFailed':
+        'The trusted context could not be refreshed. No export was requested.',
+    'targetsPiiExportContextChanged':
+        'The personal workspace or export access changed. The export file was cleared.',
+    'targetsPiiExportReauthenticationRequired':
+        'The server did not confirm recent password authentication. No export file was prepared.',
+    'targetsPiiExportUnavailable':
+        'The export file is temporarily unavailable. Check the network and start again.',
+    'targetsPiiExportInvalidResponse':
+        'The server response failed file-contract validation. No export file was kept.',
     'targetsCsvImport': 'Import CSV',
     'targetsCsvImportHelp':
         'Review normalized rows and duplicate hints. Nothing is written until you confirm.',

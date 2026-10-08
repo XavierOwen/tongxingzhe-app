@@ -70,6 +70,92 @@ final class AppSession {
 
   Stream<AppSessionSnapshot> get changes => _changes.stream;
 
+  /// 强制向 Backend 在线重读当前 signed-in identity 的可信上下文。
+  ///
+  /// 失败时保留当前 snapshot，但调用方必须以本次返回值为准；此操作不使用
+  /// offline cache。
+  Future<SessionContextResult> refreshContext() async {
+    final snapshotIdentity = _current.identity;
+    final identity = _identitySession.current;
+    final subject = identity.principal?.externalSubject;
+    if (_current.stage != AppSessionStage.ready ||
+        snapshotIdentity?.stage != IdentityStage.signedIn ||
+        identity.stage != IdentityStage.signedIn ||
+        subject == null ||
+        snapshotIdentity?.principal?.externalSubject != subject) {
+      return const SessionContextRejected(
+        SessionContextFailureCode.unauthorized,
+      );
+    }
+
+    final generation = ++_generation;
+    bool isCurrentIdentity() =>
+        _isCurrent(generation) &&
+        _identitySession.current.stage == IdentityStage.signedIn &&
+        _identitySession.current.principal?.externalSubject == subject;
+
+    final tokenResult = await _identitySession.accessToken();
+    if (!isCurrentIdentity()) {
+      return const SessionContextRejected(
+        SessionContextFailureCode.unauthorized,
+      );
+    }
+    switch (tokenResult) {
+      case IdentityRejected<IdentityAccessToken>(:final failure):
+        return SessionContextRejected(
+          failure.code == IdentityFailureCode.networkUnavailable
+              ? SessionContextFailureCode.networkUnavailable
+              : SessionContextFailureCode.unauthorized,
+        );
+      case IdentitySuccess<IdentityAccessToken>(:final value):
+        final result = await _contextGateway.resolve(value);
+        if (!isCurrentIdentity()) {
+          return const SessionContextRejected(
+            SessionContextFailureCode.unauthorized,
+          );
+        }
+        switch (result) {
+          case SessionContextRejected(:final code):
+            if (code == SessionContextFailureCode.unauthorized) {
+              await _offlinePiiVault?.revoke(
+                subject,
+                OfflinePiiLockReason.unauthorized,
+              );
+              if (!isCurrentIdentity()) {
+                return const SessionContextRejected(
+                  SessionContextFailureCode.unauthorized,
+                );
+              }
+            }
+            return result;
+          case SessionContextSuccess(:final context, :final availableContexts):
+            await _revokeOfflinePiiAfterContextChange(
+              identity,
+              context,
+              generation: generation,
+            );
+            if (!isCurrentIdentity()) {
+              return const SessionContextRejected(
+                SessionContextFailureCode.unauthorized,
+              );
+            }
+            final normalizedContexts = _withCurrent(context, availableContexts);
+            _publish(
+              AppSessionSnapshot(
+                stage: AppSessionStage.ready,
+                identity: _identitySession.current,
+                context: context,
+                availableContexts: normalizedContexts,
+              ),
+            );
+            return SessionContextSuccess(
+              context,
+              availableContexts: normalizedContexts,
+            );
+        }
+    }
+  }
+
   /// 当前 ready 上下文是否仍属于调用方捕获的 App user。
   ///
   /// 同时对照 IdentitySession，避免 identity change 尚在异步解析时继续使用

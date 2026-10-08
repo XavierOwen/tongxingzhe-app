@@ -174,6 +174,139 @@ void main() {
     expect(gateway.receivedTokens.single.value, 'test-only-access-token');
   });
 
+  test('强制在线刷新重新解析并发布最新上下文', () async {
+    final identity = FakeIdentitySession(initial: _signedInIdentity());
+    final gateway = FakeSessionContextGateway();
+    final session = AppSession(
+      identitySession: identity,
+      contextGateway: gateway,
+    );
+    addTearDown(session.close);
+    addTearDown(identity.close);
+    await session.start();
+    gateway.context = _secondProject;
+    gateway.availableContexts = const [syntheticSessionContext];
+
+    final result = await session.refreshContext();
+
+    expect(result, isA<SessionContextSuccess>());
+    expect(gateway.receivedTokens, hasLength(2));
+    expect(session.current.stage, AppSessionStage.ready);
+    expect(session.current.context, same(_secondProject));
+    expect(session.current.availableContexts, [
+      _secondProject,
+      syntheticSessionContext,
+    ]);
+    expect((result as SessionContextSuccess).context, same(_secondProject));
+  });
+
+  for (final code in [
+    SessionContextFailureCode.networkUnavailable,
+    SessionContextFailureCode.unauthorized,
+  ]) {
+    test('强制在线刷新遇到 $code 时返回拒绝且不回退离线快照', () async {
+      final identity = FakeIdentitySession(initial: _signedInIdentity());
+      final gateway = FakeSessionContextGateway();
+      final session = AppSession(
+        identitySession: identity,
+        contextGateway: gateway,
+      );
+      addTearDown(session.close);
+      addTearDown(identity.close);
+      await session.start();
+      gateway.rejectWith = code;
+
+      final result = await session.refreshContext();
+
+      expect(result, isA<SessionContextRejected>());
+      expect((result as SessionContextRejected).code, code);
+      expect(gateway.receivedTokens, hasLength(2));
+      expect(session.current.stage, AppSessionStage.ready);
+      expect(session.current.context, same(syntheticSessionContext));
+      expect(session.current.fromOfflineCache, isFalse);
+    });
+  }
+
+  test('注销期间强制刷新迟到结果被拒绝', () async {
+    final identity = FakeIdentitySession(initial: _signedInIdentity());
+    final gateway = _RefreshRaceGateway();
+    final session = AppSession(
+      identitySession: identity,
+      contextGateway: gateway,
+    );
+    addTearDown(session.close);
+    addTearDown(identity.close);
+    await session.start();
+    final refresh = session.refreshContext();
+    await gateway.delayedResolveRequested.future;
+    final signedOut = session.changes.firstWhere(
+      (snapshot) => snapshot.stage == AppSessionStage.signedOut,
+    );
+    await identity.signOut();
+    await signedOut;
+    gateway.completeDelayed(const SessionContextSuccess(_secondProject));
+
+    expect(await refresh, isA<SessionContextRejected>());
+    expect(session.current.stage, AppSessionStage.signedOut);
+    expect(session.current.context, isNull);
+  });
+
+  test('身份切换期间强制刷新迟到结果不覆盖新身份上下文', () async {
+    final identity = FakeIdentitySession(initial: _signedInIdentity());
+    final gateway = _RefreshRaceGateway();
+    final session = AppSession(
+      identitySession: identity,
+      contextGateway: gateway,
+    );
+    addTearDown(session.close);
+    addTearDown(identity.close);
+    await session.start();
+    final refresh = session.refreshContext();
+    await gateway.delayedResolveRequested.future;
+    gateway.context = _secondProject;
+    final switched = session.changes.firstWhere(
+      (snapshot) =>
+          snapshot.stage == AppSessionStage.ready &&
+          snapshot.identity?.principal?.externalSubject == 'test-subject',
+    );
+    await identity.signIn(email: 'next@example.test', password: 'ignored');
+    await switched;
+    gateway.completeDelayed(
+      const SessionContextSuccess(syntheticSessionContext),
+    );
+
+    expect(await refresh, isA<SessionContextRejected>());
+    expect(
+      session.current.identity?.principal?.externalSubject,
+      'test-subject',
+    );
+    expect(session.current.context, same(_secondProject));
+  });
+
+  test('并发强制刷新由最新 generation 获胜', () async {
+    final identity = FakeIdentitySession(initial: _signedInIdentity());
+    final gateway = _RefreshRaceGateway();
+    final session = AppSession(
+      identitySession: identity,
+      contextGateway: gateway,
+    );
+    addTearDown(session.close);
+    addTearDown(identity.close);
+    await session.start();
+    final olderRefresh = session.refreshContext();
+    await gateway.delayedResolveRequested.future;
+    gateway.context = _secondProject;
+
+    final latestResult = await session.refreshContext();
+    gateway.completeDelayed(
+      const SessionContextSuccess(syntheticSessionContext),
+    );
+
+    expect(latestResult, isA<SessionContextSuccess>());
+    expect(await olderRefresh, isA<SessionContextRejected>());
+    expect(session.current.context, same(_secondProject));
+  });
+
   test('同次登录 token 更新保留 ready 上下文与离线 PII 授权时间', () async {
     final identity = FakeIdentitySession(
       initial: _signedInIdentity(
@@ -1153,6 +1286,45 @@ final class _DelayedGateway implements SessionContextGateway {
   Future<SessionContextResult> resolve(IdentityAccessToken accessToken) {
     requested.complete();
     return _result.future;
+  }
+
+  @override
+  Future<SessionContextResult> selectProject(
+    IdentityAccessToken accessToken,
+    String projectId,
+  ) async =>
+      const SessionContextRejected(SessionContextFailureCode.serverRejected);
+
+  @override
+  Future<SessionContextResult> createPersonalProject(
+    IdentityAccessToken accessToken,
+    String displayName,
+  ) async =>
+      const SessionContextRejected(SessionContextFailureCode.serverRejected);
+}
+
+final class _RefreshRaceGateway implements SessionContextGateway {
+  final delayedResolveRequested = Completer<void>();
+  final _delayedResolveResult = Completer<SessionContextResult>();
+  final receivedTokens = <IdentityAccessToken>[];
+  var _resolveCount = 0;
+  TrustedSessionContext context = syntheticSessionContext;
+
+  void completeDelayed(SessionContextResult result) =>
+      _delayedResolveResult.complete(result);
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  Future<SessionContextResult> resolve(IdentityAccessToken accessToken) {
+    receivedTokens.add(accessToken);
+    _resolveCount += 1;
+    if (_resolveCount == 2) {
+      delayedResolveRequested.complete();
+      return _delayedResolveResult.future;
+    }
+    return Future.value(SessionContextSuccess(context));
   }
 
   @override

@@ -32,6 +32,7 @@ import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
 import 'package:tongxingzhe_app/project_settings/http_personal_follow_up_consent_opt_in_gateway.dart';
 import 'package:tongxingzhe_app/project_settings/personal_follow_up_consent_opt_in.dart';
 import 'package:tongxingzhe_app/targets/http_promotion_target_gateway.dart';
+import 'package:tongxingzhe_app/targets/personal_pii_export_gateway.dart';
 import 'package:tongxingzhe_app/targets/personal_target_csv_import.dart';
 import 'package:tongxingzhe_app/targets/promotion_target.dart';
 
@@ -83,6 +84,10 @@ void main() {
       isA<DeferredPersonalTargetCsvImportGateway>(),
     );
     expect(
+      ready.personalPiiExportGateway,
+      isA<DeferredPersonalPiiExportGateway>(),
+    );
+    expect(
       ready.followUpConsentRatioReportGateway,
       isA<DeferredFollowUpConsentRatioReportGateway>(),
     );
@@ -123,6 +128,37 @@ void main() {
       ready.organizationShareableJoinGateway,
       isA<DeferredOrganizationShareableJoinGateway>(),
     );
+  });
+
+  test('composition root 使用启动身份装配并释放个人 PII 导出 gateway', () async {
+    final database = LocalDatabase(NativeDatabase.memory());
+    final identity = FakeIdentitySession();
+    final gateway = _TrackingPersonalPiiExportGateway();
+    IdentitySession? receivedIdentity;
+    final dependencies = AppDependencies(
+      databaseFactory: SingleDatabaseFactory(database),
+      clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+      idGenerator: CountingIdGenerator(),
+      identitySessionFactory: FakeIdentitySessionFactory(identity),
+      sessionContextGateway: FakeSessionContextGateway(),
+      platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+      personalPiiExportGatewayBuilder: (value) {
+        receivedIdentity = value;
+        return gateway;
+      },
+    );
+
+    final startup = await dependencies.start();
+
+    expect(startup, isA<AppStartupReady>());
+    final ready = startup as AppStartupReady;
+    expect(identical(receivedIdentity, identity), isTrue);
+    expect(identical(ready.personalPiiExportGateway, gateway), isTrue);
+    await ready.personalPiiExportGateway.close();
+    expect(gateway.closeCount, 1);
+    await ready.appSession.close();
+    await ready.identitySession.close();
+    await database.close();
   });
 
   test('composition root 装配并释放后续联系同意占比 gateway', () async {
@@ -997,6 +1033,21 @@ final class _MemorySecureValueStore implements SecureValueStore {
 
   @override
   Future<void> write(String key, String value) async => values[key] = value;
+}
+
+final class _TrackingPersonalPiiExportGateway
+    implements PersonalPiiExportGateway {
+  var closeCount = 0;
+
+  @override
+  Future<PersonalPiiExportResult> export({
+    required bool Function() requestIsCurrent,
+  }) async => const PersonalPiiExportRejected(
+    PersonalPiiExportFailure.networkUnavailable,
+  );
+
+  @override
+  Future<void> close() async => closeCount++;
 }
 
 final class _TrackingManagementReportGateway

@@ -43,6 +43,7 @@ import 'package:tongxingzhe_app/screens/production_home_shell.dart';
 import 'package:tongxingzhe_app/sync/sync_models.dart';
 import 'package:tongxingzhe_app/sync/sync_transport.dart';
 import 'package:tongxingzhe_app/targets/personal_target_csv_import.dart';
+import 'package:tongxingzhe_app/targets/personal_pii_export_gateway.dart';
 
 import '../support/fake_identity_session.dart';
 import '../support/fake_platform_capabilities.dart';
@@ -58,6 +59,7 @@ void main() {
     final selfLeaveGateway = _TrackingOrganizationMembershipSelfLeaveGateway();
     final shareableJoinGateway = _TrackingOrganizationShareableJoinGateway();
     final csvImportGateway = _TrackingPersonalTargetCsvImportGateway();
+    final piiExportGateway = _TrackingPersonalPiiExportGateway();
     var builderCalls = 0;
     final dependencies = AppDependencies(
       databaseFactory: SingleDatabaseFactory(database),
@@ -74,6 +76,7 @@ void main() {
       organizationMembershipSelfLeaveGatewayBuilder: (_) => selfLeaveGateway,
       organizationShareableJoinGatewayBuilder: (_) => shareableJoinGateway,
       personalTargetCsvImportGatewayBuilder: (_) => csvImportGateway,
+      personalPiiExportGatewayBuilder: (_) => piiExportGateway,
     );
     addTearDown(database.close);
 
@@ -93,6 +96,7 @@ void main() {
     expect(selfLeaveGateway.closeCount, 1);
     expect(shareableJoinGateway.closeCount, 1);
     expect(csvImportGateway.closeCount, 1);
+    expect(piiExportGateway.closeCount, 1);
   });
 
   testWidgets('移除 TongxingzheApp 后关闭组织 gateways 恰好一次', (tester) async {
@@ -102,6 +106,7 @@ void main() {
     final selfLeaveGateway = _TrackingOrganizationMembershipSelfLeaveGateway();
     final shareableJoinGateway = _TrackingOrganizationShareableJoinGateway();
     final csvImportGateway = _TrackingPersonalTargetCsvImportGateway();
+    final piiExportGateway = _TrackingPersonalPiiExportGateway();
     final identity = FakeIdentitySession();
     IdentitySession? csvImportIdentity;
     final dependencies = AppDependencies(
@@ -119,6 +124,7 @@ void main() {
         csvImportIdentity = session;
         return csvImportGateway;
       },
+      personalPiiExportGatewayBuilder: (_) => piiExportGateway,
     );
     addTearDown(database.close);
 
@@ -133,6 +139,7 @@ void main() {
     expect(shareableJoinGateway.closeCount, 1);
     expect(identical(csvImportIdentity, identity), isTrue);
     expect(csvImportGateway.closeCount, 1);
+    expect(piiExportGateway.closeCount, 1);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
@@ -141,6 +148,7 @@ void main() {
     expect(selfLeaveGateway.closeCount, 1);
     expect(shareableJoinGateway.closeCount, 1);
     expect(csvImportGateway.closeCount, 1);
+    expect(piiExportGateway.closeCount, 1);
   });
 
   testWidgets('启动尚未完成时移除 App 仍关闭后来取得的 owner transfer gateway 一次', (
@@ -1001,7 +1009,10 @@ void main() {
       clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
       idGenerator: CountingIdGenerator(),
       identitySessionFactory: FakeIdentitySessionFactory(identity),
-      sessionContextGateway: FakeSessionContextGateway(),
+      sessionContextGateway: FakeSessionContextGateway(
+        context: _personalPiiExportSessionContext,
+        availableContexts: const [_personalPiiExportSessionContext],
+      ),
       platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
       questionnaireRemoteSourceBuilder: (_) =>
           const _EmptyPublishedQuestionnaireSource(),
@@ -1029,6 +1040,13 @@ void main() {
     expect(find.text('分析'), findsOneWidget);
     expect(find.text('记录接触'), findsOneWidget);
     expect(find.text('正式认证尚未配置'), findsNothing);
+
+    await tester.tap(find.text('对象'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('prepare-personal-pii-export')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('分析'));
     await tester.pumpAndSettle();
@@ -3379,6 +3397,21 @@ final class _TrackingFollowUpConsentRatioReportGateway
   }
 }
 
+final class _TrackingPersonalPiiExportGateway
+    implements PersonalPiiExportGateway {
+  var closeCount = 0;
+
+  @override
+  Future<PersonalPiiExportResult> export({
+    required bool Function() requestIsCurrent,
+  }) async => const PersonalPiiExportRejected(
+    PersonalPiiExportFailure.networkUnavailable,
+  );
+
+  @override
+  Future<void> close() async => closeCount++;
+}
+
 final class _TrackingPersonalTargetCsvImportGateway
     implements PersonalTargetCsvImportGateway {
   var closeCount = 0;
@@ -4053,6 +4086,28 @@ bool _containsPrimaryFocus(WidgetTester tester, Finder finder) {
   });
   return contains;
 }
+
+const _personalPiiExportSessionContext = TrustedSessionContext(
+  appUserId: '11111111-1111-4111-8111-111111111111',
+  workspace: WorkspaceContext(
+    id: '22222222-2222-4222-8222-222222222222',
+    kind: WorkspaceKind.personal,
+    name: '个人空间',
+  ),
+  project: ProjectContext(
+    id: '33333333-3333-4333-8333-333333333333',
+    name: '我的推广项目',
+  ),
+  questionnaireVersion: QuestionnaireVersionContext(
+    id: '44444444-4444-4444-8444-444444444444',
+    versionNumber: 1,
+  ),
+  capabilities: {
+    'record_contact',
+    'export_target_pii',
+    'view_assigned_target_pii',
+  },
+);
 
 const _organizationSessionContext = TrustedSessionContext(
   appUserId: '11111111-1111-4111-8111-111111111111',

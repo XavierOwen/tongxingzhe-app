@@ -1,13 +1,23 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
+import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
 import 'package:file_selector/file_selector.dart';
+import 'package:tongxingzhe_app/app_session/app_session.dart';
+import 'package:tongxingzhe_app/app_session/session_context_gateway.dart';
 import 'package:tongxingzhe_app/features/targets/promotion_target_directory_page.dart';
 import 'package:tongxingzhe_app/foundation/runtime_values.dart';
+import 'package:tongxingzhe_app/identity/identity_session.dart';
 import 'package:tongxingzhe_app/l10n/app_strings.dart';
+import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
+import 'package:tongxingzhe_app/targets/personal_pii_export_gateway.dart';
 import 'package:tongxingzhe_app/targets/personal_target_csv_import.dart';
 import 'package:tongxingzhe_app/targets/promotion_target.dart';
+
+import '../../support/fake_identity_session.dart';
+import '../../support/fake_session_context_gateway.dart';
 
 void main() {
   testWidgets(
@@ -58,6 +68,267 @@ void main() {
   });
 
   testWidgets(
+    'personal PII export requires password reauthentication and fresh context',
+    (tester) async {
+      final harness = await _ExportHarness.start();
+      final exporter = _MemoryPersonalPiiExportGateway();
+      addTearDown(harness.close);
+      await tester.pumpWidget(
+        _app(
+          _MemoryGateway(),
+          identitySession: harness.identity,
+          appSession: harness.appSession,
+          exportGateway: exporter,
+          canExport: true,
+          scopeKey: harness.scopeKey,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('prepare-personal-pii-export')),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.textContaining('姓名和联系方式'), findsOneWidget);
+      await tester.tap(
+        find.byKey(const ValueKey('cancel-personal-pii-export')),
+      );
+      await tester.pumpAndSettle();
+      expect(exporter.calls, 0);
+
+      harness.identity.rejectNextWith = const IdentityFailure(
+        code: IdentityFailureCode.invalidCredentials,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('prepare-personal-pii-export')),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.enterText(
+        find.byKey(const ValueKey('personal-pii-export-password')),
+        'wrong-password',
+      );
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey('confirm-personal-pii-export')),
+      );
+      await tester.pumpAndSettle();
+      expect(exporter.calls, 0);
+      expect(find.textContaining('密码验证未完成'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('prepare-personal-pii-export')),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.enterText(
+        find.byKey(const ValueKey('personal-pii-export-password')),
+        'correct-private-password',
+      );
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey('confirm-personal-pii-export')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(exporter.calls, 1);
+      expect(harness.contextGateway.receivedTokens, hasLength(2));
+      expect(
+        find.byKey(const ValueKey('personal-pii-export-artifact')),
+        findsOneWidget,
+      );
+      expect(find.text('correct-private-password'), findsNothing);
+      expect(find.textContaining('尚未保存、打开或分享'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('prepare-personal-pii-export')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('personal-pii-export-artifact')),
+        findsNothing,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('cancel-personal-pii-export')),
+      );
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
+    'missing email or revoked capability stops before the export GET',
+    (tester) async {
+      final harness = await _ExportHarness.start();
+      final exporter = _MemoryPersonalPiiExportGateway();
+      addTearDown(harness.close);
+      await tester.pumpWidget(
+        _app(
+          _MemoryGateway(),
+          identitySession: harness.identity,
+          appSession: harness.appSession,
+          exportGateway: exporter,
+          canExport: true,
+          scopeKey: harness.scopeKey,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      harness.identity.emit(
+        IdentitySnapshot(
+          stage: IdentityStage.signedIn,
+          principal: const IdentityPrincipal(
+            externalSubject: 'test-subject',
+            email: null,
+          ),
+          expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey('prepare-personal-pii-export')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('personal-pii-export-password')),
+        findsNothing,
+      );
+      expect(exporter.calls, 0);
+
+      harness.identity.emit(_signedInSnapshot('test-subject'));
+      await tester.pump();
+      harness.contextGateway.context = _exportContextWithoutCapability;
+
+      await tester.tap(
+        find.byKey(const ValueKey('prepare-personal-pii-export')),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.enterText(
+        find.byKey(const ValueKey('personal-pii-export-password')),
+        'private-password',
+      );
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey('confirm-personal-pii-export')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(exporter.calls, 0);
+      expect(
+        find.byKey(const ValueKey('personal-pii-export-artifact')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets('offline cached context cannot start personal PII export', (
+    tester,
+  ) async {
+    final harness = await _ExportHarness.startOffline();
+    final exporter = _MemoryPersonalPiiExportGateway();
+    addTearDown(harness.close);
+    expect(harness.appSession.current.fromOfflineCache, isTrue);
+    await tester.pumpWidget(
+      _app(
+        _MemoryGateway(),
+        identitySession: harness.identity,
+        appSession: harness.appSession,
+        exportGateway: exporter,
+        canExport: true,
+        scopeKey: harness.scopeKey,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('prepare-personal-pii-export')));
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('personal-pii-export-password')),
+      findsNothing,
+    );
+    expect(exporter.calls, 0);
+  });
+
+  testWidgets('account ABA invalidates a late export result', (tester) async {
+    final harness = await _ExportHarness.start();
+    final exporter = _MemoryPersonalPiiExportGateway(pending: true);
+    addTearDown(harness.close);
+    await tester.pumpWidget(
+      _app(
+        _MemoryGateway(),
+        identitySession: harness.identity,
+        appSession: harness.appSession,
+        exportGateway: exporter,
+        canExport: true,
+        scopeKey: harness.scopeKey,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('prepare-personal-pii-export')));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.enterText(
+      find.byKey(const ValueKey('personal-pii-export-password')),
+      'private-password',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('confirm-personal-pii-export')));
+    await tester.pump();
+    await tester.pump();
+    expect(exporter.calls, 1);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('prepare-personal-pii-export')),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    harness.identity.emit(_signedInSnapshot('other-subject'));
+    harness.identity.emit(_signedInSnapshot('test-subject'));
+    await tester.pump();
+    exporter.complete();
+    await tester.pumpAndSettle();
+
+    expect(exporter.calls, 1);
+    expect(
+      find.byKey(const ValueKey('personal-pii-export-artifact')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('disposing the page drops a late export result', (tester) async {
+    final harness = await _ExportHarness.start();
+    final exporter = _MemoryPersonalPiiExportGateway(pending: true);
+    addTearDown(harness.close);
+    await tester.pumpWidget(
+      _app(
+        _MemoryGateway(),
+        identitySession: harness.identity,
+        appSession: harness.appSession,
+        exportGateway: exporter,
+        canExport: true,
+        scopeKey: harness.scopeKey,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('prepare-personal-pii-export')));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.enterText(
+      find.byKey(const ValueKey('personal-pii-export-password')),
+      'private-password',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('confirm-personal-pii-export')));
+    await tester.pump();
+    await tester.pump();
+    expect(exporter.calls, 1);
+
+    await tester.pumpWidget(const SizedBox());
+    exporter.complete();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
     'current assignee can revise relationship stage and shared note',
     (tester) async {
       final gateway = _MemoryGateway()..targets.add(_targetWithRelationship());
@@ -95,6 +366,10 @@ void main() {
       _app(_MemoryGateway(), importGateway: importer, canImport: false),
     );
     await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('prepare-personal-pii-export')),
+      findsNothing,
+    );
     expect(
       find.byKey(const ValueKey('import-promotion-target-csv')),
       findsNothing,
@@ -724,28 +999,208 @@ void main() {
 Widget _app(
   PromotionTargetGateway gateway, {
   AppClock? clock,
+  IdentitySession? identitySession,
+  AppSession? appSession,
+  PersonalPiiExportGateway? exportGateway,
   PersonalTargetCsvImportGateway? importGateway,
   bool canImport = false,
+  bool canExport = false,
   Future<XFile?> Function()? pickCsvFile,
   String scopeKey = 'workspace-1/project-1',
-}) => MaterialApp(
-  home: Scaffold(
-    body: PromotionTargetDirectoryPage(
-      text: const AppStrings('zh'),
-      gateway: gateway,
-      idGenerator: _FixedIds(),
-      clock: clock ?? _FixedClock(DateTime.utc(2026, 8, 6, 13)),
-      scopeKey: scopeKey,
-      importGateway:
-          importGateway ?? const DeferredPersonalTargetCsvImportGateway(),
-      canImport: canImport,
-      pickCsvFile: pickCsvFile,
-      canCreate: true,
-      canConfigureStageAliases: true,
-      canManageRelationship: true,
-      canManageInstitutionRelationships: true,
+}) {
+  final identity = identitySession ?? const UnavailableIdentitySession();
+  return MaterialApp(
+    home: Scaffold(
+      body: PromotionTargetDirectoryPage(
+        text: const AppStrings('zh'),
+        gateway: gateway,
+        identitySession: identity,
+        appSession:
+            appSession ??
+            AppSession(
+              identitySession: identity,
+              contextGateway: const UnavailableSessionContextGateway(),
+            ),
+        exportGateway:
+            exportGateway ?? const DeferredPersonalPiiExportGateway(),
+        idGenerator: _FixedIds(),
+        clock: clock ?? _FixedClock(DateTime.utc(2026, 8, 6, 13)),
+        scopeKey: scopeKey,
+        importGateway:
+            importGateway ?? const DeferredPersonalTargetCsvImportGateway(),
+        canImport: canImport,
+        canExport: canExport,
+        pickCsvFile: pickCsvFile,
+        canCreate: true,
+        canConfigureStageAliases: true,
+        canManageRelationship: true,
+        canManageInstitutionRelationships: true,
+      ),
     ),
+  );
+}
+
+final class _ExportHarness {
+  _ExportHarness(this.identity, this.contextGateway, this.appSession);
+
+  final FakeIdentitySession identity;
+  final FakeSessionContextGateway contextGateway;
+  final AppSession appSession;
+
+  String get scopeKey =>
+      '${_exportContext.appUserId}/${_exportContext.workspace.id}/'
+      '${_exportContext.project.id}';
+
+  static Future<_ExportHarness> start() async {
+    final identity = FakeIdentitySession(
+      initial: _signedInSnapshot('test-subject'),
+      externalSubject: 'test-subject',
+    );
+    final contextGateway = FakeSessionContextGateway(
+      context: _exportContext,
+      availableContexts: const [_exportContext],
+    );
+    final appSession = AppSession(
+      identitySession: identity,
+      contextGateway: contextGateway,
+    );
+    await appSession.start();
+    return _ExportHarness(identity, contextGateway, appSession);
+  }
+
+  static Future<_ExportHarness> startOffline() async {
+    final identity = FakeIdentitySession(
+      initial: _signedInSnapshot('test-subject'),
+      externalSubject: 'test-subject',
+    );
+    final vault = OfflinePiiVault(
+      secureStore: _MemorySecureValueStore(),
+      lockStore: _MemoryOfflinePiiLockStore(),
+      clock: _FixedClock(DateTime.utc(2030, 1, 2, 13)),
+      installationId: 'installation-1',
+    );
+    await vault.replace(
+      externalSubject: 'test-subject',
+      context: _exportContext,
+      assignedTargets: const [],
+      authorizedAtUtc: DateTime.utc(2030, 1, 2, 12),
+    );
+    final contextGateway = FakeSessionContextGateway(
+      context: _exportContext,
+      availableContexts: const [_exportContext],
+      rejectWith: SessionContextFailureCode.networkUnavailable,
+    );
+    final appSession = AppSession(
+      identitySession: identity,
+      contextGateway: contextGateway,
+      offlinePiiVault: vault,
+    );
+    await appSession.start();
+    return _ExportHarness(identity, contextGateway, appSession);
+  }
+
+  Future<void> close() async {
+    await appSession.close();
+    await identity.close();
+  }
+}
+
+final class _MemoryPersonalPiiExportGateway
+    implements PersonalPiiExportGateway {
+  _MemoryPersonalPiiExportGateway({bool pending = false})
+    : _pending = pending ? Completer<PersonalPiiExportResult>() : null;
+
+  final Completer<PersonalPiiExportResult>? _pending;
+  var calls = 0;
+
+  PersonalPiiExportResult get _ready => PersonalPiiExportReady(
+    PersonalPiiExportArtifact(bytes: const [123, 125]),
+  );
+
+  @override
+  Future<PersonalPiiExportResult> export({
+    required bool Function() requestIsCurrent,
+  }) {
+    calls++;
+    return _pending?.future ?? Future.value(_ready);
+  }
+
+  void complete() => _pending!.complete(_ready);
+
+  @override
+  Future<void> close() async {}
+}
+
+final class _MemorySecureValueStore implements SecureValueStore {
+  final values = <String, String>{};
+
+  @override
+  Future<void> delete(String key) async => values.remove(key);
+
+  @override
+  Future<String?> read(String key) async => values[key];
+
+  @override
+  Future<void> write(String key, String value) async => values[key] = value;
+}
+
+final class _MemoryOfflinePiiLockStore implements OfflinePiiLockStore {
+  final locks = <String, OfflinePiiLock>{};
+
+  @override
+  Future<void> clear(String scopeKey) async => locks.remove(scopeKey);
+
+  @override
+  Future<OfflinePiiLock?> read(String scopeKey) async => locks[scopeKey];
+
+  @override
+  Future<void> write(String scopeKey, OfflinePiiLock lock) async =>
+      locks[scopeKey] = lock;
+}
+
+IdentitySnapshot _signedInSnapshot(String subject) => IdentitySnapshot(
+  stage: IdentityStage.signedIn,
+  principal: IdentityPrincipal(
+    externalSubject: subject,
+    email: 'owner@example.test',
   ),
+  expiresAt: DateTime.utc(2030, 1, 2, 4, 4),
+);
+
+const _exportContext = TrustedSessionContext(
+  appUserId: '11111111-1111-4111-8111-111111111111',
+  workspace: WorkspaceContext(
+    id: '22222222-2222-4222-8222-222222222222',
+    kind: WorkspaceKind.personal,
+    name: '个人空间',
+  ),
+  project: ProjectContext(
+    id: '33333333-3333-4333-8333-333333333333',
+    name: '当前项目',
+  ),
+  questionnaireVersion: QuestionnaireVersionContext(
+    id: '44444444-4444-4444-8444-444444444444',
+    versionNumber: 1,
+  ),
+  capabilities: {'export_target_pii', 'view_assigned_target_pii'},
+);
+
+const _exportContextWithoutCapability = TrustedSessionContext(
+  appUserId: '11111111-1111-4111-8111-111111111111',
+  workspace: WorkspaceContext(
+    id: '22222222-2222-4222-8222-222222222222',
+    kind: WorkspaceKind.personal,
+    name: '个人空间',
+  ),
+  project: ProjectContext(
+    id: '33333333-3333-4333-8333-333333333333',
+    name: '当前项目',
+  ),
+  questionnaireVersion: QuestionnaireVersionContext(
+    id: '44444444-4444-4444-8444-444444444444',
+    versionNumber: 1,
+  ),
+  capabilities: {'view_assigned_target_pii'},
 );
 
 final class _FixedIds implements IdGenerator {
