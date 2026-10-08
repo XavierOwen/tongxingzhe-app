@@ -2030,6 +2030,16 @@ unknown 结果仍只能重试原邀请或经过确认停止重试。重试得到
 
 `TEST-138` 在文档层逐项检查 `ORG-041`–`ORG-048`、Slice 7 current status 与本节是否一致，并运行 Markdown links、diff 和 no-slop 检查。通过这些检查只证明文档合同可追溯；不证明 PostgreSQL 状态机、HTTP 授权、Flutter 行为、真实清除、备份恢复、部署或真人平台。
 
+### 3.53 删除入口与终结清除的当前接线（ADR-0189–0192）
+
+7CT 合同仍以上节为准；实现细节见 [ADR-0189](../adr/0189-organization-deletion-entry-is-owner-scoped.md)。实现另外提供 owner-only `GET /v1/organizations/deletion-eligibility`：服务端以 exact identity 和同一数据库快照读取当前 active owner 的未删除组织 UUID；Flutter 只把这些 UUID 与普通组织目录按 UUID 取交集显示删除入口。读取失败时隐藏入口，POST 仍在治理锁后重验 owner、状态与 request UUID。提交前先清理该组织在本机的离线 PII；清理失败不发送 POST。网络结果不确定时保留原 request UUID 重试，不能换 UUID 猜测提交结果。实现见 [eligibility SQL](../../backend/database/migrations/0106_organization_deletion_eligibility.sql)、[eligibility catalog check](../../backend/database/checks/verify_organization_deletion_eligibility.sql)、[HTTP/runtime](../../backend/server/src/organization-deletion-lifecycle.ts)、[Flutter 目录](../../lib/features/organization_directory/organization_directory_dialog.dart) 与[申请对话框](../../lib/features/organization_directory/organization_deletion_request_dialog.dart)。
+
+Flutter 将 eligibility 结果绑定到目录读取 generation，并在回包时重新检查当前可信身份；换身份、会话失效或关闭后，旧回包不能恢复旧组织状态。删除成功关闭、owner transfer 对话框关闭及恢复成功后都会重新读取目录和 eligibility。相应测试在 [目录接线测试](../../test/features/organization_directory/organization_directory_dialog_test.dart) 与 [HTTP gateway 测试](../../test/organization_deletion_recovery/http_organization_deletion_recovery_gateway_test.dart)。
+
+0108 建立私有逐行 DELETE 授权与终结 UUID ledger；旧 `release_management_report_snapshot_v1` 的 UUID 重放也受终结 ledger 检查。0109 的 `app_private.finalize_organization_purge_v1` 是受控 finalizer：按 request family 顺序取锁，固定选择并校验归属，再用同一 workspace／deletion-cycle 事务删除业务行、写完成 ledger 并删 workspace；失败必须完整 `ROLLBACK`，之后另开事务以最小 value-free 数据记录 `purge_failed`。成功结果只返回删除 request UUID 与完成时间；terminal retry 只能凭 ledger 确认该 UUID 已结束，不能重验 workspace 与旧 cycle 的绑定，也不能重建业务 receipt。它没有授予 runtime `EXECUTE`，也没有 HTTP 或调度入口。合同见 [ADR-0190](../adr/0190-management-report-request-locks-precede-authorization-locks.md)、[ADR-0191](../adr/0191-organization-purge-uses-exact-row-transaction-authorizations.md)、[ADR-0192](../adr/0192-organization-purge-finalizer-atomic-scope-and-completion.md)；代码见 [0108](../../backend/database/migrations/0108_organization_purge_foundation.sql)、[0109](../../backend/database/migrations/0109_organization_purge_finalizer.sql)、[finalizer check](../../backend/database/checks/verify_organization_purge_finalizer.sql)、[真实并发脚本](../../tool/verify_organization_purge_finalizer_concurrency.sh)。
+
+0109 fixture 的 171 行、86 个 relation 和 21 个 UUID family（28 个 UUID）包含被明确移植的历史合成组织图；contact、questionnaire 与 target 的实际 writers 仍是 personal-only，组织／报告／UUID writers 才来自真实调用。fixture 验证删除、保留与注入故障后的回滚，不证明开放了组织业务写入，也不证明自动调度、production 或外部 warehouse／backup 已清除。定向入口检查：`flutter test test/features/organization_directory/organization_directory_dialog_test.dart`、`flutter test test/organization_deletion_recovery/http_organization_deletion_recovery_gateway_test.dart`；PostgreSQL finalizer 并发检查需设置 `DATABASE_URL` 后运行 `./tool/verify_organization_purge_finalizer_concurrency.sh`。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
