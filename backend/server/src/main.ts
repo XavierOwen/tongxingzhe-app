@@ -39,6 +39,9 @@ import { PostgresQuestionnaireStore } from "./questionnaire-catalog.js";
 import { PostgresQuestionnaireAdministrationStore } from "./questionnaire-administration.js";
 import { PostgresQuestionnaireMetricCompatibilityStore } from "./questionnaire-metric-compatibility.js";
 import { PostgresPromotionTargetStore } from "./promotion-targets.js";
+import {
+  PostgresPersonalTargetCsvImportStore,
+} from "./personal-target-csv-import.js";
 import { PostgresTargetInstitutionRelationshipStore } from "./target-institution-relationships.js";
 import { PostgresPersonalActionPlanStore } from "./personal-action-plans.js";
 import { PostgresPersonalActionReminderStore } from "./personal-action-reminders.js";
@@ -123,6 +126,8 @@ const questionnaireAdministrationStore =
 const questionnaireMetricCompatibilityStore =
   new PostgresQuestionnaireMetricCompatibilityStore(query);
 const promotionTargetStore = new PostgresPromotionTargetStore(query);
+const personalTargetCsvImportStore =
+  new PostgresPersonalTargetCsvImportStore(query);
 const targetInstitutionRelationshipStore =
   new PostgresTargetInstitutionRelationshipStore(query);
 const personalActionPlanStore = new PostgresPersonalActionPlanStore(query);
@@ -213,6 +218,7 @@ const server = createBackendServer({
   questionnaireMetricCompatibilityStore,
   promotionTargetStore,
   promotionTargetRetentionStore: promotionTargetStore,
+  personalTargetCsvImportStore,
   targetInstitutionRelationshipStore,
   personalActionPlanStore,
   personalActionReminderStore,

@@ -175,7 +175,8 @@ target_type,display_name,phone,email
 
 预览和确认分别追加 value-free 审计。审计只保存 actor、workspace、request／preview ID、phase、outcome、行数、提示数、建立数、`source_kind = csv` 和数据库时间。原文件名、CSV bytes、字段值、错误行内容、姓名、电话和 email 不进入审计、日志或错误。
 
-本节是 7DN／#527 的文档合同。它不表示 CSV parser、数据库 writer、HTTP 或 Flutter 已经实现。
+本节的数据库 preview／confirm writer 与 Backend CSV／HTTP 边界已实现。
+Flutter 文件选择、预览界面与真人六平台运行时仍未实现或验证。
 
 ## HTTP 与权限边界
 
@@ -183,6 +184,8 @@ target_type,display_name,phone,email
 | --- | --- | --- |
 | `GET /v1/promotion-targets` | 返回当前分配对象、当前项目关系和历史 | `view_assigned_target_pii` |
 | `POST /v1/promotion-targets` | 建立对象和初始分配 | `create_target` + 查看能力 |
+| `POST /v1/promotion-targets/imports/csv/preview` | 解码有界 CSV，返回规范化行、疑似重复提示与限时 receipt | `import_target_pii`，且当前为本人拥有的个人空间 |
+| `POST /v1/promotion-targets/imports/csv/confirm` | 重验 receipt、完整行与 actions，原子建立全部已选对象 | `import_target_pii`，且 PostgreSQL 重验 exact identity owner |
 | `GET /v1/promotion-target-retention-tasks` | 返回不含姓名和联系方式的到期前复核任务 | `manage_assigned_target_follow_up` + 查看能力 |
 | `POST /v1/promotion-targets/:id/retention` | 明确续期或不可逆匿名化 | `manage_assigned_target_follow_up` + 查看能力，且数据库仍有当前分配 |
 | `PATCH /v1/promotion-targets/:id/relationship` | 追加关系修订或明确解决冲突 | `manage_assigned_target_follow_up` + 查看能力，且数据库仍有当前分配 |

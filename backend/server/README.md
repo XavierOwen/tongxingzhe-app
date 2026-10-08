@@ -324,6 +324,16 @@ Backend 不接受客户端提供的用户、空间或项目范围。每次请求
 
 `GET /v1/promotion-targets` 只返回当前分配给使用者的对象。`POST /v1/promotion-targets` 建立个人或机构对象，并在同一事务中把建立者设为初始跟进人。建立需要 `create_target` 和 `view_assigned_target_pii`；列表需要后一项能力。
 
+`POST /v1/promotion-targets/imports/csv/preview` 接受最多 1 MiB 的
+`text/csv` raw body；`POST /v1/promotion-targets/imports/csv/confirm` 接受同样有界的
+JSON。两者都先验证 Bearer identity、当前个人空间与
+`import_target_pii`，再读取 PII body。客户端不传 actor、workspace、project
+或 capability。preview 严格解码 UTF-8/RFC 4180 四列合同，最多 500 行，
+返回规范化行和 value-free PostgreSQL receipt；confirm 重交 receipt、行、
+actions 和 request UUID。stale preview 返回 `409` 及可重放 receipt。所有
+响应均为 JSON UTF-8 且 `Cache-Control: no-store`；未授权请求不读取上传体，
+错误不回显 CSV 值或 PostgreSQL 原文。
+
 客户端不提交用户、空间、项目或对象 ID。PostgreSQL 生成对象 UUID，并用已验证使用者与 request ID 保护重试。当前对象资料只在线读取，不进入 Flutter 本地库、接触同步 command 或 warehouse。
 
 接触同步可以携带零到多条 `target_links`。非空关联要求 `view_assigned_target_pii`，只接受当前分配、同空间的对象；payload 保存对象 ID、类型、可选当次反应和后续联系同意，不携带姓名、电话或邮箱。机构反应还要求明确确认回应者代表机构。PostgreSQL v3 包装函数把对象校验、可选阶段 0 项目关系和接触 revision 原子提交。
