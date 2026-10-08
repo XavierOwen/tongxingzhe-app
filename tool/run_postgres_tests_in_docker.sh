@@ -11289,6 +11289,7 @@ docker run \
        dist/test/personal-follow-up-consent-ratio.integration.js \
        dist/test/personal-follow-up-consent-opt-in.integration.js \
        dist/test/personal-target-csv-import.integration.js \
+       dist/test/personal-target-pii-export.integration.js \
        dist/test/management-current-city-report-snapshots.integration.js \
        dist/test/management-current-city-report-snapshot-directory.integration.js \
        dist/test/management-interest-report-snapshots.integration.js \

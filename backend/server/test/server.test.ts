@@ -376,6 +376,151 @@ test("HTTP management snapshot export rejects query, body, and missing store", a
   });
 });
 
+test("HTTP personal target PII export waits for exact database bytes", async () => {
+  const authenticatedAt = Math.floor(Date.now() / 1000);
+  const identity = {
+    issuer: "https://personal-export.example.test/auth/v1",
+    subject: "personal-export-owner",
+    passwordAuthenticatedAtUnixSeconds: authenticatedAt,
+  };
+  const bytes = Buffer.from(
+    '{"export_contract_id":"personal_promotion_target_pii_export_v1","targets":[{"display_name":"张三"}]}',
+    "utf8",
+  );
+  let finishExport: (() => void) | undefined;
+  const exportGate = new Promise<void>((resolve) => {finishExport = resolve;});
+  const server = createBackendServer({
+    identityVerifier: {verify: async () => identity},
+    contextStore: {
+      loadOrCreate: async () => ({
+        appUserId: "11111111-1111-4111-8111-111111111111",
+        current: {
+          workspace: {
+            id: "22222222-2222-4222-8222-222222222222",
+            kind: "personal",
+            name: "个人空间",
+          },
+          project: {
+            id: "33333333-3333-4333-8333-333333333333",
+            name: "校园推广",
+          },
+          questionnaireVersion: {
+            id: "44444444-4444-4444-8444-444444444444",
+            versionNumber: 1,
+          },
+        },
+        capabilities: ["export_target_pii", "view_assigned_target_pii"],
+      }),
+    },
+    personalTargetPiiExportStore: {
+      prepare: async (receivedIdentity, projectId, receivedAuthenticatedAt) => {
+        assert.equal(receivedIdentity, identity);
+        assert.equal(projectId, "33333333-3333-4333-8333-333333333333");
+        assert.equal(receivedAuthenticatedAt, authenticatedAt);
+        await exportGate;
+        return bytes;
+      },
+    },
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  test.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+
+  let responseSettled = false;
+  const responsePromise = fetch(
+    `http://127.0.0.1:${address.port}/v1/promotion-targets/export`,
+    {headers: {authorization: "Bearer token"}},
+  ).then((response) => {
+    responseSettled = true;
+    return response;
+  });
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(responseSettled, false);
+
+  finishExport?.();
+  const response = await responsePromise;
+  assert.equal(response.status, 200);
+  assert.equal(
+    response.headers.get("content-type"),
+    "application/json; charset=utf-8",
+  );
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(
+    response.headers.get("content-disposition"),
+    'attachment; filename="personal-promotion-target-pii-v1.json"',
+  );
+  assert.equal(response.headers.get("content-length"), String(bytes.byteLength));
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()), bytes);
+});
+
+test("HTTP personal target PII export rejects AMR, bare query, and body before context", async () => {
+  let contextCalls = 0;
+  const server = createBackendServer({
+    identityVerifier: {
+      verify: async (token) => token === "missing-password"
+        ? {issuer: "issuer", subject: "subject"}
+        : {
+            issuer: "issuer",
+            subject: "subject",
+            passwordAuthenticatedAtUnixSeconds: Math.floor(Date.now() / 1000),
+          },
+    },
+    contextStore: {
+      loadOrCreate: async () => {
+        contextCalls += 1;
+        throw new Error("context must not be read");
+      },
+    },
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  test.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+  const path = "/v1/promotion-targets/export";
+
+  const missingPassword = await rawHttpRequest(
+    address.port,
+    "GET",
+    `${path}?unexpected=1`,
+    {authorization: "Bearer missing-password"},
+    "",
+  );
+  assert.deepEqual(missingPassword, {
+    status: 403,
+    body: {error: {code: "reauthentication_required"}},
+  });
+
+  const query = await fetch(
+    `http://127.0.0.1:${address.port}${path}?unexpected=1`,
+    {headers: {authorization: "Bearer fresh-password"}},
+  );
+  assert.equal(query.status, 400);
+  assert.equal(query.headers.get("content-disposition"), null);
+  assert.deepEqual(await query.json(), {
+    error: {code: "invalid_personal_target_pii_export_request"},
+  });
+
+  for (const item of [
+    {path: `${path}?`, body: ""},
+    {path, body: "{}"},
+  ]) {
+    const response = await rawHttpRequest(
+      address.port,
+      "GET",
+      item.path,
+      {authorization: "Bearer fresh-password"},
+      item.body,
+    );
+    assert.deepEqual(response, {
+      status: 400,
+      body: {
+        error: {code: "invalid_personal_target_pii_export_request"},
+      },
+    });
+  }
+  assert.equal(contextCalls, 0);
+});
+
 test("HTTP management snapshot directory waits for its committed audit", async () => {
   const projectId = "33333333-3333-4333-8333-333333333333";
   let finishList: (() => void) | undefined;
