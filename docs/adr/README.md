@@ -20,6 +20,8 @@
 | [0025](./0025-use-firebase-authentication-for-production-identity.md) | 已被 ADR-0096 取代 | Slice 0；`AUTH-004`–`AUTH-008` | 保留认证决策历史 |
 | [0040](./0040-require-explicit-capability-for-bulk-pii-export.md) | 已接受，2026-07-31；7DR 于 2026-10-08 细化 | Slice 7DR；Issue #535；`PII-006`、`PII-011`、`TEST-141`、`MANUAL-130` | 个人空间导出使用双 capability、近期 password AMR、固定 JSON 和 value-free 审计；组织不自动继承 |
 | [0041](./0041-imported-target-data-never-creates-contact-facts.md) | 已接受，2026-07-31；7DN 于 2026-10-08 细化 | Slice 7DN；Issue #527；`PII-007`、`PII-010`、`TEST-140`、`MANUAL-129` | CSV v1 只导入个人空间对象；预览、精确重复提示、整批原子确认和 value-free 审计不生成接触事实 |
+| [0042](./0042-never-auto-merge-promotion-targets.md) | 已接受，2026-07-31；7DW 于 2026-10-08 细化 | Slice 7DW；Issue #545；`PII-008`、`PII-013`、`TEST-143`、`MANUAL-132` | 个人空间只提示同类型对象的精确电话或 email 候选；双 capability、15 分钟 receipt 和逐字段来源仍不授权自动合并 |
+| [0043](./0043-promotion-target-merges-are-reversible.md) | 已接受，2026-07-31；7DW 于 2026-10-08 细化 | Slice 7DW；Issue #545；`PII-009`、`PII-013`、`TEST-143`、`MANUAL-132` | 原对象和关系不改写；全部 writer 绑定合并代次，拆分原子分配新事实，较早保留截止约束两端，并固定既有导出边界 |
 | [0067](./0067-anonymous-analytics-prevent-differencing-without-noise.md) | 已被 ADR-0099 取代 | Slice 6；`PRIVACY-001`–`PRIVACY-011` | 原“防相减”表述不再是当前保证 |
 | [0096](./0096-use-supabase-auth-with-cognito-fallback.md) | 已接受，2026-07-31 | Slice 0／发布门槛；`AUTH-004`–`AUTH-008` | Supabase Auth 首选，Cognito 后备 |
 | [0097](./0097-use-supabase-postgresql-for-the-initial-stage.md) | 已接受，2026-07-31 | Slice 0／发布门槛；`ARCH-003`–`ARCH-010` | 首阶段数据库与发布前复审 |
