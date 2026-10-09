@@ -99,6 +99,14 @@ rollback fixture 覆盖合法 activation、exact replay（包括 receipt 删除�
 
 通过只证明 synthetic PostgreSQL 中本票覆盖的 DB-only 合同和锁序；不证明 runtime activation、Backend／HTTP／Flutter、完整 cleanup SLA、production identity 或真实 PII。
 
+## 7ED：独立结束个人对象 assignment
+
+0118 新增 `app_private.personal_target_assignment_end_events_v1` 与 `app_data.end_personal_target_assignment_v1(actor, workspace, project, assignment)`。函数只允许可信当前个人空间上下文结束调用者自己的活动 assignment；assignment UUID 是一次性幂等标识，精确重放返回原时间，身份或上下文漂移拒绝。value-free event 只保存 actor、workspace、project、assignment、固定 `user_requested` 原因与数据库结束时间，并由触发器阻止改写或删除。
+
+writer 在 0114 private generation fence 内依次锁定 fence、target 和 assignment，避免与 0116 retention writer 或 0117 activation 形成反向锁序。active merge member 若结束后会失去最后一条活动 assignment，操作以 `55000` 失败；其他有效 assignment 可以正常结束。函数和 event table 均未授予 `PUBLIC` 或 `tongxingzhe_runtime`，不构成 runtime、Backend、HTTP 或 Flutter 能力。
+
+runner 自动发现 0118 structural check、rollback fixture 与 `verify_personal_target_assignment_end_concurrency.sh`。专用 0117→0118 upgrade fixture 先创建真实 preview 和 activation，再验证 target、assignment、retention、preview、generation、activation 数据完整保留及 checksum replay；常规 dump／restore 自动流程继续执行。并发脚本覆盖同 assignment 双调用只写一条 event 且时间一致，以及 end-first／activation-first 两种 fence 顺序。通过只证明 synthetic PostgreSQL DB-only 合同，不证明生产身份、部署、完整 merge／split 或真实 PII。
+
 ## 7AH：可分享加入链接的数据库创建与预览
 
 0092 实现 Issue #358 的 link-only 子集。
