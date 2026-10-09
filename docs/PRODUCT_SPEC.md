@@ -332,7 +332,9 @@ active merge 期间，手动匿名化任一成员、结束其最后 active assig
 
 merge 与 split 各使用客户端 request UUID 和固定 canonical payload。相同请求精确重放首次结果；载荷漂移、stale receipt、同对象、跨空间、跨类型、并发 merge／split、撤权或不完整分配返回稳定失败，并且不留部分状态。merge ledger 只保存 opaque 对象／事实 ID、合并代次、字段来源指针和拆分分配状态。PII 与事实值仍在各自受保留规则约束的权威表中；ledger 不复制或散列这些值。独立不可变 audit 只保存 event、actor、workspace、request、operation、outcome、计数和数据库时间，不保存姓名、电话、email、备注、接触内容或错误原文。
 
-0113 已提供未向 runtime 开放的数据库已知对象对验证／预览、15 分钟 receipt、private validator 与受控 cleanup 原语。它不发现、枚举或推荐目录候选；当前产品仍没有 Backend／HTTP／Flutter 入口、清理调度、active merge 或 split，也未证明生产授权、真实 PII、部署或到期后 60 分钟物理删除 SLA。
+0113 已提供未向 runtime 开放的数据库已知对象对验证／预览、15 分钟 receipt、private validator 与受控 cleanup 原语。0114 增加 private generation／member ledger，并为 contact link、项目关系和关系 revision 建立代次 fence。既有事实不回填。新事实在受控 synthetic active generation 中由数据库绑定代次，caller 不能伪造或覆盖。activation 与三类 writer 共用 private 串行化边界。
+
+0114 没有向 runtime 授予 activation 或 ledger 权限，也不消费 receipt。个人—机构关系、retention／assignment writer、合并投影和 split 尚未加入该边界，因此产品不得建立 active merge。当前实现也不发现、枚举或推荐目录候选，不证明 Backend／HTTP／Flutter、清理调度、生产授权、真实 PII、部署或到期后 60 分钟物理删除 SLA。
 
 ### 5.7 组织治理与生命周期
 
@@ -3245,6 +3247,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-131` | 学习文档说明个人空间 PII JSON 导出的服务端准备／审计、客户端内存 artifact 与 Web 浏览器下载请求的区别。第二次明确操作传递原始 bytes、固定 MIME 和文件名；失败重试不重新 GET 或新增审计，状态只表示“已请求下载”。Web 请求不证明保存，原生保存／分享和生产 Supabase password AMR 尚未验证。 |
 | `MANUAL-132` | 学习文档说明个人空间疑似重复对象与可逆合并 v1：双 capability、同空间同类型的精确候选、15 分钟 opaque receipt、双对象上限、保留对象和逐字段来源、原事实保留、来源分开的项目关系、合并代次 writer 约束、全有或全无拆分、较早保留截止、到期双端匿名化和既有 PII 导出边界。它明确当前产品尚未实现候选目录、合并或拆分。 |
 | `MANUAL-133` | 学习文档说明 0113 只提供调用方已知双 UUID 的 DB-only preview：单 command snapshot 绑定授权、revision、assignment、匹配信号和 retention 截止，签发 15 分钟 value-free receipt，并提供 private validator 与固定批量 cleanup。runtime 权限保持关闭；本票不证明候选发现、清理调度／60 分钟 SLA、Backend／HTTP／Flutter、active merge／split、生产授权或真实 PII。 |
+| `MANUAL-134` | 学习文档说明 0114 的 private generation／member ledger、contact／项目关系事实代次绑定、caller 伪造拒绝和 activation／writer 串行化边界。它明确既有事实不回填，runtime 无 activation 权限，个人—机构、retention／assignment、receipt consumption、合并投影与 split 仍未交付。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3567,6 +3570,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-142` | 7DV 覆盖 artifact 未准备时阻止 delivery、准备后不自动下载、第二次明确操作传递原始 bytes／固定 MIME／文件名、无第二次 export GET、双击去重、失败后同 artifact 重试、非 Web unavailable，以及身份／上下文／capability／在线状态／页面生命周期／请求代次变化后的迟到结果隔离。Web adapter 另覆盖 anchor 与 object URL 清理；既有管理报告行为必须保持。测试只证明浏览器下载请求，不证明文件保存、生产 AMR 或原生交付。 |
 | `TEST-143` | 7DW 只验证文档合同：Product Spec 的 `PII-008`／`PII-009`／`PII-013`、ADR-0042／0043 与说明书 `MANUAL-132` 逐项覆盖个人／组织边界、双 capability、精确候选、15 分钟 receipt、双对象上限、逐字段来源、原事实保留、合并代次 writer 约束、来源分开的项目关系、原子拆分、较早保留截止、到期双端匿名化、既有 PII 导出和 value-free audit。运行 Markdown links、diff 和 no-slop 检查；本票不证明 DB、Backend、Flutter、生产授权、真实 PII、并发安全或部署。 |
 | `TEST-144` | 7DX 从真实 0112 baseline 升级 0113，保留旧资料、CSV import／PII export 行为及 context 函数 OID／owner／ACL；fresh check／fixture 与独立会话脚本覆盖资料 revision、exact identity、双 assignment、同空间／类型、精确信号、单 command snapshot、15 分钟半开 receipt、漂移 validator、value-free audit、固定 100 行 cleanup、runtime 最小 ACL、checksum 和 restore。合成 PostgreSQL 证据不证明候选发现、调度／60 分钟 SLA、Backend／HTTP／Flutter、active merge／split、生产授权或真实 PII。 |
+| `TEST-145` | 7DZ 从真实 0113 baseline 升级 0114，保留 preview／validator／cleanup 函数 OID／owner／ACL、既有 receipt、target、contact link、项目关系／revision 及 CSV import／PII export 行为。fresh check／fixture 覆盖 value-free immutable ledger、runtime ACL、无 active generation 的旧 writer 结果、受控 generation 的唯一绑定、multi-target、void 复制、caller 伪造和失败零部分写入。四场独立会话竞争核对 exact blocker／waiter 与 activation／writer 两种线性化结果。完整套件另覆盖 checksum、organization purge FK inventory 和 dump／restore。合成 PostgreSQL 证据不证明 receipt consumption、runtime active merge、个人—机构或 retention／assignment fence、合并投影、split、Backend／HTTP／Flutter、生产授权、真实 PII 或部署。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3975,6 +3979,8 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 7DW／#545 固定个人空间疑似重复对象与可逆合并／拆分合同：两项 capability 和两端 active assignment 才能处理同空间、同类型的精确电话／email 候选。一次 active merge 只含两个对象，保留原事实并记录逐字段来源；全部相关 writer 绑定合并代次，拆分完整分配来源不明事实并原子生效。自动到期、来源分开的同项目关系和既有 PII 导出边界也已固定。本票只交付文档合同，不证明 DB、Backend、Flutter、生产授权、真实 PII 或部署。
 
 7DX／#547 增加未向 runtime 开放的数据库双对象验证／预览原语：调用方必须给出两个已知 UUID；0113 在单 command snapshot 中绑定授权、两端 revision／assignment、精确匹配信号和 retention 截止，原子签发 15 分钟 receipt、访问记录与 value-free audit，并提供 private validator 和固定批量 cleanup。它不发现候选，也不交付调度、Backend／HTTP／Flutter、active merge 或 split。
+
+7DZ／#550 增加 0114 private merge generation ledger 和 contact／项目关系事实代次 fence。trigger 以原 target ID 解析 active generation，并拒绝 caller 伪造或改写代次。activation 与三类 writer 共用 private 串行化边界。runtime 没有 activation 或 ledger 权限。其余 writer fence、receipt consumption、合并投影和 split 完成前，产品不得建立 active merge。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 

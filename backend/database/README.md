@@ -49,6 +49,18 @@ private validator 在后续 writer 的单个 statement snapshot 内重验 receip
 
 完整 runner 自动发现 0113 migration、structural check、rollback fixture 和独立会话并发脚本，并另从真实 0112 baseline 证明既有 CSV import、PII export、数据及函数 OID／owner／ACL 保持。通过只证明 synthetic PostgreSQL 原语；不证明候选发现、清理调度、runtime／Backend／HTTP／Flutter、active merge／split、生产授权或真实 PII。
 
+## 7DZ：contact 与项目关系的 merge 代次 fence
+
+0114 建立 private generation／member 历史和 active-member 映射。ledger 只保存 opaque ID、workspace、对象类型、actor 和数据库时间，不复制 PII 或 contact／关系事实值。历史 generation 和 member 行不可改写。
+
+`contact_target_links`、`promotion_target_project_relationships` 和 `promotion_target_relationship_revisions` 的 `BEFORE INSERT` trigger 由数据库解析 active generation。调用方不能提供或改写代次 ID。没有 active generation 时，既有 writer 保持原结果。受控 synthetic activation 存在时，新 contact link、项目关系和关系 revision 绑定同一 generation。既有事实不回填。
+
+activation 与三类 writer 先更新同一 private fence 行。这个边界使等待者只能在 activation 前完整提交未绑定事实，或在 activation 后提交已绑定事实。单例 fence 是当前的明确吞吐上限。只在观察到争用时再改为 workspace 级 fence。
+
+`PUBLIC` 和 `tongxingzhe_runtime` 不能读写 ledger，也不能执行 activation。0114 不消费 preview receipt，不提供产品 merge 入口。个人—机构关系、retention／assignment fence、合并投影和 split 仍未实现，因此产品不得建立 active merge。
+
+完整 runner 覆盖 0113→0114 升级、结构与 ACL、既有 writer、synthetic activation、四场独立会话竞争、checksum 和 dump／restore。这些合成 PostgreSQL 证据不证明 runtime merge／split、Backend／HTTP／Flutter、保留期处理、生产授权或部署。
+
 ## 7AH：可分享加入链接的数据库创建与预览
 
 0092 实现 Issue #358 的 link-only 子集。

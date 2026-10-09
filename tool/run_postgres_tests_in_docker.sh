@@ -11431,6 +11431,266 @@ fi
 printf '%s\n' "${personal_target_pair_upgrade_replay}"
 echo '0112→0113 import/export、函数身份、既有资料与 checksum 幂等：通过。'
 
+echo '验证 0113→0114 既有 receipt、contact/项目关系事实、函数身份与 import/export 不变。'
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0113_personal_target_merge_generation_fence_live.sql \
+  >/dev/null
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/personal-target-merge-generation-upgrade-only && \
+   cp /workspace/backend/database/migrations/0114_personal_target_merge_generation_fence.sql \
+     /tmp/personal-target-merge-generation-upgrade-only/ && \
+   test \"\$(find /tmp/personal-target-merge-generation-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-target-merge-generation-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_personal_target_merge_generation_fence.sql \
+  --command="
+    DO \$upgrade\$
+    DECLARE
+      current_contact_link jsonb;
+      current_relationship jsonb;
+      current_revisions jsonb;
+      current_receipts jsonb;
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 113
+        OR (SELECT max(left(version, 4))
+            FROM app_migrations.schema_migrations) IS DISTINCT FROM '0114'
+        OR EXISTS (
+          SELECT 1
+          FROM public.fixture_0114_upgrade_catalog AS saved
+          LEFT JOIN pg_catalog.pg_proc AS current_function
+            ON current_function.oid = saved.function_oid
+          WHERE current_function.oid IS NULL
+            OR current_function.oid::regprocedure::text <> saved.function_name
+            OR current_function.proowner <> saved.function_owner
+            OR current_function.proacl IS DISTINCT FROM saved.function_acl
+            OR pg_catalog.pg_get_function_result(current_function.oid)
+              IS DISTINCT FROM saved.function_result
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM public.fixture_0113_upgrade_catalog AS saved
+          LEFT JOIN pg_catalog.pg_proc AS current_function
+            ON current_function.oid = saved.function_oid
+          WHERE current_function.oid IS NULL
+            OR current_function.oid::regprocedure::text <> saved.function_name
+            OR current_function.proowner <> saved.function_owner
+            OR current_function.proacl IS DISTINCT FROM saved.function_acl
+            OR pg_catalog.pg_get_function_result(current_function.oid)
+              IS DISTINCT FROM saved.function_result
+        )
+        OR (SELECT count(*)
+            FROM app_private.personal_target_merge_generations_v1) <> 0
+        OR (SELECT count(*)
+            FROM app_private.personal_target_merge_generation_members_v1) <> 0
+        OR (SELECT count(*)
+            FROM app_private.personal_target_merge_active_members_v1) <> 0
+        OR EXISTS (
+          SELECT 1 FROM app_data.contact_target_links
+          WHERE merge_generation_id IS NOT NULL
+        )
+        OR EXISTS (
+          SELECT 1 FROM app_data.promotion_target_project_relationships
+          WHERE merge_generation_id IS NOT NULL
+        )
+        OR EXISTS (
+          SELECT 1 FROM app_data.promotion_target_relationship_revisions
+          WHERE merge_generation_id IS NOT NULL
+        )
+      THEN
+        RAISE EXCEPTION '0113→0114 catalog, metadata or backfill drift';
+      END IF;
+
+      SELECT to_jsonb(link_row) - 'merge_generation_id'
+      INTO STRICT current_contact_link
+      FROM app_data.contact_target_links AS link_row
+      JOIN public.fixture_0114_upgrade_state AS saved
+        ON saved.first_target_id = link_row.promotion_target_id
+      WHERE link_row.contact_id = 'contact-0114-upgrade-preexisting'
+        AND link_row.revision_number = 1;
+      SELECT to_jsonb(relationship_row) - 'merge_generation_id'
+      INTO STRICT current_relationship
+      FROM app_data.promotion_target_project_relationships AS relationship_row
+      JOIN public.fixture_0114_upgrade_state AS saved
+        ON saved.first_target_id = relationship_row.promotion_target_id
+      JOIN public.fixture_0113_upgrade_context AS context_row
+        ON context_row.project_id = relationship_row.project_id;
+      SELECT jsonb_agg(
+        to_jsonb(revision_row) - 'merge_generation_id'
+        ORDER BY revision_row.revision_number
+      )
+      INTO STRICT current_revisions
+      FROM app_data.promotion_target_relationship_revisions AS revision_row
+      JOIN public.fixture_0114_upgrade_state AS saved
+        ON saved.first_target_id = revision_row.promotion_target_id
+      JOIN public.fixture_0113_upgrade_context AS context_row
+        ON context_row.project_id = revision_row.project_id;
+      SELECT jsonb_agg(to_jsonb(receipt) ORDER BY receipt.preview_id)
+      INTO STRICT current_receipts
+      FROM app_private.personal_target_pair_preview_receipts AS receipt;
+
+      IF current_contact_link IS DISTINCT FROM (
+          SELECT contact_link_document FROM public.fixture_0114_upgrade_state
+        )
+        OR current_relationship IS DISTINCT FROM (
+          SELECT relationship_document FROM public.fixture_0114_upgrade_state
+        )
+        OR current_revisions IS DISTINCT FROM (
+          SELECT revision_documents FROM public.fixture_0114_upgrade_state
+        )
+        OR current_receipts IS DISTINCT FROM (
+          SELECT receipt_documents FROM public.fixture_0114_upgrade_state
+        )
+      THEN
+        RAISE EXCEPTION '0114 changed existing receipt/contact/relationship facts';
+      END IF;
+    END
+    \$upgrade\$;
+
+    BEGIN;
+    DO \$preview_contracts\$
+    DECLARE
+      deleted_count integer;
+    BEGIN
+      IF (
+        SELECT count(*)
+        FROM public.fixture_0114_upgrade_state AS saved
+        CROSS JOIN LATERAL
+          app_private.validate_personal_target_pair_preview_v1(
+            (SELECT app_user_id FROM public.fixture_0113_upgrade_context),
+            (SELECT project_id FROM public.fixture_0113_upgrade_context),
+            saved.live_preview_id,
+            clock_timestamp()
+          )
+      ) <> 1 THEN
+        RAISE EXCEPTION '0114 changed the existing preview validator';
+      END IF;
+      deleted_count :=
+        app_private.cleanup_personal_target_pair_preview_receipts_v1();
+      IF deleted_count <> 1
+        OR EXISTS (
+          SELECT 1
+          FROM app_private.personal_target_pair_preview_receipts
+          WHERE preview_id =
+            '00000000-0114-4000-8000-0000000000e1'::uuid
+        )
+        OR NOT EXISTS (
+          SELECT 1
+          FROM app_private.personal_target_pair_preview_receipts AS receipt
+          JOIN public.fixture_0114_upgrade_state AS saved
+            ON saved.live_preview_id = receipt.preview_id
+        )
+      THEN
+        RAISE EXCEPTION '0114 changed preview cleanup behavior';
+      END IF;
+    END
+    \$preview_contracts\$;
+    ROLLBACK;
+
+    BEGIN;
+    CREATE TEMP TABLE fixture_0114_after_context ON COMMIT DROP AS
+    SELECT project_id FROM public.fixture_0113_upgrade_context;
+    GRANT SELECT ON fixture_0114_after_context TO tongxingzhe_runtime;
+    SET LOCAL ROLE tongxingzhe_runtime;
+    CREATE TEMP TABLE fixture_0114_after_input ON COMMIT DROP AS
+    SELECT jsonb_build_array(jsonb_build_object(
+      'target_type', 'person',
+      'display_name', '0114 upgraded import target',
+      'phone', '+1 312 555 0115',
+      'email', 'upgrade-0114-after@example.test'
+    )) AS rows;
+    CREATE TEMP TABLE fixture_0114_after_preview ON COMMIT DROP AS
+    SELECT preview.*
+    FROM fixture_0114_after_input AS input_row
+    CROSS JOIN LATERAL app_data.preview_personal_target_csv_import_v1(
+      'https://synthetic-0113-upgrade.example.test',
+      'owner',
+      (SELECT project_id FROM fixture_0114_after_context),
+      input_row.rows
+    ) AS preview;
+    CREATE TEMP TABLE fixture_0114_after_confirm ON COMMIT DROP AS
+    SELECT confirmed.*
+    FROM fixture_0114_after_input AS input_row
+    CROSS JOIN fixture_0114_after_preview AS preview_row
+    CROSS JOIN LATERAL app_data.confirm_personal_target_csv_import_v1(
+      'https://synthetic-0113-upgrade.example.test',
+      'owner',
+      (SELECT project_id FROM fixture_0114_after_context),
+      preview_row.preview_id,
+      '00000000-0114-4000-8000-000000000003'::uuid,
+      input_row.rows,
+      '[\"create\"]'::jsonb
+    ) AS confirmed;
+    CREATE TEMP TABLE fixture_0114_after_export ON COMMIT DROP AS
+    SELECT convert_from(
+      app_data.prepare_personal_target_pii_export_v1(
+        'https://synthetic-0113-upgrade.example.test',
+        'owner',
+        (SELECT project_id FROM fixture_0114_after_context),
+        clock_timestamp() - interval '1 minute'
+      ),
+      'UTF8'
+    )::jsonb AS document;
+    DO \$old_apis\$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM fixture_0114_after_confirm
+        WHERE outcome = 'confirmed'
+          AND row_count = 1
+          AND created_count = 1
+      ) OR NOT EXISTS (
+        SELECT 1 FROM fixture_0114_after_export
+        WHERE jsonb_array_length(document->'targets') = 3
+          AND EXISTS (
+            SELECT 1 FROM jsonb_array_elements(document->'targets') AS target
+            WHERE target->>'display_name' = '0112 baseline imported target'
+          )
+          AND EXISTS (
+            SELECT 1 FROM jsonb_array_elements(document->'targets') AS target
+            WHERE target->>'display_name' =
+              '0113 merge generation upgrade peer'
+          )
+          AND EXISTS (
+            SELECT 1 FROM jsonb_array_elements(document->'targets') AS target
+            WHERE target->>'display_name' = '0114 upgraded import target'
+          )
+      ) THEN
+        RAISE EXCEPTION '0114 broke 0111 import or 0112 export behavior';
+      END IF;
+    END
+    \$old_apis\$;
+    ROLLBACK;
+  " \
+  >/dev/null
+personal_target_merge_generation_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/personal-target-merge-generation-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${personal_target_merge_generation_upgrade_replay}" != \
+    *'已验证 0114_personal_target_merge_generation_fence（无需重复执行）'* ]] \
+  || [[ "${personal_target_merge_generation_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0114 migration did not skip its checksum-verified replay.' >&2
+  printf '%s\n' "${personal_target_merge_generation_upgrade_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${personal_target_merge_generation_upgrade_replay}"
+echo '0113→0114 receipt、事实、函数身份、import/export 与 checksum 幂等：通过。'
+
 
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
