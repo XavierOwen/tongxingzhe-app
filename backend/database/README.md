@@ -41,6 +41,14 @@ private writer 以事务时间复核 `-60 seconds <= age < 15 minutes`，锁定 
 
 只调试可丢弃的专用测试库时，先确认 `DATABASE_URL` 不是 production，再依次运行 migration、`backend/database/checks/verify_personal_target_pii_export.sql`、`backend/database/fixtures/0112_personal_target_pii_export.sql` 和 `tool/verify_personal_target_pii_export_concurrency.sh`。并发脚本会保留固定合成数据，每个测试库只运行一次。通过只证明 synthetic PostgreSQL 的可信参数复核、exact bytes、事务锁、value-free audit、ACL、checksum 与 restore；不证明生产 Supabase JWT、Backend HTTP、真实 PII、文件交付或六平台运行时。
 
+## 7DX：个人空间已知疑似重复对象对预览
+
+0113 为 `promotion_targets` 增加不含资料值的单调 revision，并提供调用方已知双 UUID 的 DB-only typed preview。一个 data-modifying CTE command snapshot 同时重验 exact identity、current personal context、两端 active assignment、精确电话／email 信号与 retention 截止，签发 15 分钟 receipt，并追加两条既有 `viewed` event 和一条 value-free audit。
+
+private validator 在后续 writer 的单个 statement snapshot 内重验 receipt；private cleanup 每批最多删除 100 条已到期整行。preview、validator、cleanup 和两张 private 表均未向 `tongxingzhe_runtime` 开放。仓库还没有 maintenance scheduler，因此到期即不可用不等于已满足到期后 60 分钟物理删除 SLA。
+
+完整 runner 自动发现 0113 migration、structural check、rollback fixture 和独立会话并发脚本，并另从真实 0112 baseline 证明既有 CSV import、PII export、数据及函数 OID／owner／ACL 保持。通过只证明 synthetic PostgreSQL 原语；不证明候选发现、清理调度、runtime／Backend／HTTP／Flutter、active merge／split、生产授权或真实 PII。
+
 ## 7AH：可分享加入链接的数据库创建与预览
 
 0092 实现 Issue #358 的 link-only 子集。
