@@ -231,7 +231,11 @@ merge 与 split 分别使用固定 canonical payload 和客户端 request UUID�
 
 关系 create／end 与 activation 复用 0114 的 private fence。现有 0020 单端匿名化只在目标自身是 active member 时失败关闭。目标不是 active member 时，即使关系另一端是 active member，也可结束关系。新 ended revision 记录结束时两端的 active generation。此门禁不提供到期双端清除。0114／0115 的 activation 仍未授予 runtime，用户不能通过 App 建立 active merge。
 
-retention renewal／policy、到期双端清除、独立 assignment end、receipt consumption、runtime merge、合并投影、split、Backend／HTTP／Flutter 和部署仍未交付。以上数据库边界不证明完整保留期处理、到期后 60 分钟物理删除 SLA、生产授权、真实 PII 或用户功能可用。
+7EB／0116 后，仍未交付的是到期双端清除、独立 assignment end、receipt consumption、runtime merge、合并投影、split、Backend／HTTP／Flutter 和部署。以上数据库边界不证明完整到期清除、到期后 60 分钟物理删除 SLA、生产授权、真实 PII 或用户功能可用。
+
+7EB／0116 不新建表，只将新的 retention renewal 与 workspace policy update 纳入 0114 private global fence。已完成的 exact renewal replay 在既有 mutation advisory lock 后返回原结果，不要求 target 仍 active，不追加 event，也不进 fence。新的 renewal 依次取得 mutation advisory lock、global fence 和 target `FOR UPDATE`；完成等待后才读取数据库时间，并重新验证 context、active target、当前 assignment、current due 与当前 policy，再写 event。若等待跨过 cutoff，renewal 失败且不留下 event。policy update 先做既有授权，再取得同一 fence，等待后重新授权；等待期间撤权时不写入。
+
+`promotion_target_review_due_at` 仍以 target 建立、active contact 或最近 renewal 的最晚时间加当前 workspace policy 动态计算。policy 更新会改变 active target 的 current due，但不会改写历史 retention event 或其中的 `review_due_at`。renewal 与 policy update 共用 fence：renewal 先完成时历史 event 保存旧 policy 下的 due，policy 之后只改变 current due；policy 先完成时 renewal event 使用新 policy。activation 与 preview validator 合同不变，validator 依据最新 due 重验；runtime activation 仍关闭。
 
 ## HTTP 与权限边界
 
@@ -469,4 +473,4 @@ CI 的 Linux job 在保留原 App build 后，执行 [`run_linux_offline_pii_dis
 
 ## 当前边界
 
-当前实现完成对象目录、个人或机构资料建立、初始分配、当前分配读取、接触关联、对象当次反应、项目关系阶段、独立生命周期、共享备注历史、显式冲突、阶段显示别名、个人与机构的六类历史关系、十二个月上限的保留复核、明确续期、不可逆匿名化，以及当前分配对象的七十二小时加密只读快照。个人空间 PII 导出 v1 已实现 PostgreSQL 原子文件与审计、Backend AMR／授权／HTTP，以及 Flutter 同账号密码重验、严格内存 artifact 和 Web 浏览器下载请求。浏览器请求不证明文件已保存；原生保存／分享、生产 Supabase AMR、真实 PII 和真人交付证据尚未验证。疑似重复对象已有未开放 runtime 的 preview 和 contact／项目关系代次 fence；个人—机构关系、retention／assignment fence、目录级候选、清理调度、Backend／Flutter、active merge 和 split 尚未实现。组织切片仍需把组织角色和较短保留期的管理界面接入已经存在的策略表。
+当前实现完成对象目录、个人或机构资料建立、初始分配、当前分配读取、接触关联、对象当次反应、项目关系阶段、独立生命周期、共享备注历史、显式冲突、阶段显示别名、个人与机构的六类历史关系、十二个月上限的保留复核、明确续期、不可逆匿名化，以及当前分配对象的七十二小时加密只读快照。个人空间 PII 导出 v1 已实现 PostgreSQL 原子文件与审计、Backend AMR／授权／HTTP，以及 Flutter 同账号密码重验、严格内存 artifact 和 Web 浏览器下载请求。浏览器请求不证明文件已保存；原生保存／分享、生产 Supabase AMR、真实 PII 和真人交付证据尚未验证。疑似重复对象已有未开放 runtime 的 preview、contact／项目关系代次 fence，以及 renewal／workspace policy fence；个人—机构关系的 DB fence 已实现。到期双端清除、独立 assignment end、目录级候选、清理调度、Backend／Flutter、active merge 和 split 尚未实现。组织切片仍需把组织角色和较短保留期的管理界面接入已经存在的策略表。
