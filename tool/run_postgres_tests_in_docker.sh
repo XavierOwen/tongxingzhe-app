@@ -11916,6 +11916,123 @@ fi
 printf '%s\n' "${retention_merge_generation_upgrade_replay}"
 echo '0115→0116 live target/relation/retention/policy preservation and checksum replay: passed.'
 
+echo '验证 0116→0117 既有 preview、generation、关系、retention 与旧函数身份不变。'
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0116_personal_target_merge_receipt_consumption_live.sql \
+  >/dev/null
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/personal-target-merge-receipt-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0117_personal_target_merge_receipt_consumption.sql \\
+     /tmp/personal-target-merge-receipt-upgrade-only/ && \\
+   test \"\$(find /tmp/personal-target-merge-receipt-upgrade-only \\
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-target-merge-receipt-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_personal_target_merge_receipt_consumption.sql
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$upgrade\$
+    DECLARE
+      saved public.fixture_0117_upgrade_state%ROWTYPE;
+    BEGIN
+      SELECT * INTO STRICT saved FROM public.fixture_0117_upgrade_state;
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 116
+        OR (SELECT max(version) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0117_personal_target_merge_receipt_consumption'
+        OR EXISTS (
+          SELECT 1
+          FROM public.fixture_0117_upgrade_catalog AS expected
+          LEFT JOIN pg_catalog.pg_proc AS current_function
+            ON current_function.oid = expected.function_oid
+          WHERE current_function.oid IS NULL
+            OR current_function.oid::regprocedure::text <> expected.function_name
+            OR current_function.proowner <> expected.function_owner
+            OR current_function.proacl IS DISTINCT FROM expected.function_acl
+            OR current_function.prosecdef IS DISTINCT FROM expected.security_definer
+            OR current_function.provolatile IS DISTINCT FROM expected.volatility
+            OR current_function.proconfig IS DISTINCT FROM expected.function_config
+            OR pg_catalog.pg_get_function_result(current_function.oid)
+              IS DISTINCT FROM expected.function_result
+        )
+        OR (SELECT jsonb_agg(to_jsonb(row_value) ORDER BY row_value.preview_id)
+            FROM app_private.personal_target_pair_preview_receipts AS row_value)
+          IS DISTINCT FROM saved.preview_receipts
+        OR (SELECT jsonb_agg(to_jsonb(row_value) ORDER BY row_value.generation_id)
+            FROM app_private.personal_target_merge_generations_v1 AS row_value)
+          IS DISTINCT FROM saved.generations
+        OR (SELECT jsonb_agg(to_jsonb(row_value)
+              ORDER BY row_value.generation_id, row_value.promotion_target_id)
+            FROM app_private.personal_target_merge_generation_members_v1 AS row_value)
+          IS DISTINCT FROM saved.generation_members
+        OR (SELECT jsonb_agg(to_jsonb(row_value)
+              ORDER BY row_value.promotion_target_id)
+            FROM app_private.personal_target_merge_active_members_v1 AS row_value)
+          IS DISTINCT FROM saved.active_members
+        OR (SELECT jsonb_agg(to_jsonb(row_value)
+              ORDER BY row_value.promotion_target_id)
+            FROM app_data.promotion_targets AS row_value)
+          IS DISTINCT FROM saved.targets
+        OR (SELECT jsonb_agg(to_jsonb(row_value)
+              ORDER BY row_value.contact_id, row_value.revision_number,
+                row_value.promotion_target_id)
+            FROM app_data.contact_target_links AS row_value)
+          IS DISTINCT FROM saved.contact_links
+        OR (SELECT jsonb_agg(to_jsonb(row_value)
+              ORDER BY row_value.promotion_target_id, row_value.project_id)
+            FROM app_data.promotion_target_project_relationships AS row_value)
+          IS DISTINCT FROM saved.project_relationships
+        OR (SELECT jsonb_agg(to_jsonb(row_value)
+              ORDER BY row_value.promotion_target_id, row_value.project_id,
+                row_value.revision_number)
+            FROM app_data.promotion_target_relationship_revisions AS row_value)
+          IS DISTINCT FROM saved.project_relationship_revisions
+        OR (SELECT jsonb_agg(to_jsonb(row_value)
+              ORDER BY row_value.promotion_target_id, row_value.event_id)
+            FROM app_data.promotion_target_retention_events AS row_value)
+          IS DISTINCT FROM saved.retention_events
+        OR (SELECT jsonb_agg(to_jsonb(row_value) ORDER BY row_value.workspace_id)
+            FROM app_data.promotion_target_retention_policies AS row_value)
+          IS DISTINCT FROM saved.retention_policies
+      THEN
+        RAISE EXCEPTION '0116→0117 migration changed existing data or function identity';
+      END IF;
+    END
+    \$upgrade\$;
+  " \
+  >/dev/null
+personal_target_merge_receipt_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/personal-target-merge-receipt-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${personal_target_merge_receipt_upgrade_replay}" != \
+    *'已验证 0117_personal_target_merge_receipt_consumption（无需重复执行）'* ]] \
+  || [[ "${personal_target_merge_receipt_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0117 migration did not skip its checksum-verified replay.' >&2
+  printf '%s\n' "${personal_target_merge_receipt_upgrade_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${personal_target_merge_receipt_upgrade_replay}"
+echo '0116→0117 live data/function preservation and checksum replay: passed.'
+
 
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
