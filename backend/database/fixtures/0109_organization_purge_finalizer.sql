@@ -14,6 +14,13 @@ BEGIN
   END LOOP;
 END
 $snapshot$;
+-- The merge fence is a global mutable control; keep its post-seed epoch.
+UPDATE fixture_0109_preserved AS preserved
+SET row_data = current.row_data
+FROM fixture_0109_before AS current
+WHERE preserved.relation_name =
+    'app_private.personal_target_merge_generation_fence_v1'
+  AND current.relation_name = preserved.relation_name;
 CREATE TEMP TABLE fixture_0109_org_rows AS
 TABLE fixture_0109_before EXCEPT TABLE fixture_0109_preserved;
 

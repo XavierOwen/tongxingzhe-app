@@ -221,7 +221,11 @@ Flutter 入口只在当前在线可信个人空间上下文同时有两项 capab
 
 merge 与 split 分别使用固定 canonical payload 和客户端 request UUID。精确重试返回首次结果，载荷漂移或 stale 状态稳定失败。merge ledger 只保存 opaque 对象／事实 ID、合并代次、字段来源指针和拆分分配状态；PII 与事实值留在原权威表，ledger 不复制或散列这些值。独立不可变审计只保存 event、actor、workspace、request、operation、outcome、计数和数据库时间，不保存姓名、电话、email、备注、接触内容或错误原文。
 
-0113 已提供 DB-only 的已知对象对 preview：调用方必须给出两个 UUID；数据库在单 command snapshot 中重验授权、revision、assignment、精确匹配信号与 retention 截止，签发 15 分钟 value-free receipt，并提供 private validator 与固定批量 cleanup。runtime 权限保持关闭。当前仍没有目录级候选发现、清理调度、Backend／HTTP／Flutter 入口、active merge 或 split；该原语也不证明到期后 60 分钟物理删除 SLA、生产授权、真实 PII 或部署。
+0113 已提供 DB-only 的已知对象对 preview：调用方必须给出两个 UUID；数据库在单 command snapshot 中重验授权、revision、assignment、精确匹配信号与 retention 截止，签发 15 分钟 value-free receipt，并提供 private validator 与固定批量 cleanup。runtime 权限保持关闭。
+
+0114 为 contact link、项目关系和关系 revision 增加数据库代次 fence。private ledger 保留 generation 及其两个成员，不复制 PII 或事实值。trigger 按事实中的原 target ID 绑定当前 generation，调用方不能伪造或覆盖。既有事实保持未绑定，既有 writer 在没有 active generation 时保持原结果。activation 与 writer 使用同一 private 串行化边界，不允许 activation 已线性化后再提交无代次的新事实。
+
+0114 的 activation 只是未授权给 runtime 的 private 验证 seam。当前仍没有目录级候选发现、清理调度、receipt consumption、Backend／HTTP／Flutter 入口、合并投影或 split。个人—机构关系、retention 和 assignment writer 也尚未加 fence。这些路径完成前，产品不得建立 active merge。合成 SQL 证据不证明到期后 60 分钟物理删除 SLA、生产授权、真实 PII 或部署。
 
 ## HTTP 与权限边界
 
@@ -459,4 +463,4 @@ CI 的 Linux job 在保留原 App build 后，执行 [`run_linux_offline_pii_dis
 
 ## 当前边界
 
-当前实现完成对象目录、个人或机构资料建立、初始分配、当前分配读取、接触关联、对象当次反应、项目关系阶段、独立生命周期、共享备注历史、显式冲突、阶段显示别名、个人与机构的六类历史关系、十二个月上限的保留复核、明确续期、不可逆匿名化，以及当前分配对象的七十二小时加密只读快照。个人空间 PII 导出 v1 已实现 PostgreSQL 原子文件与审计、Backend AMR／授权／HTTP，以及 Flutter 同账号密码重验、严格内存 artifact 和 Web 浏览器下载请求。浏览器请求不证明文件已保存；原生保存／分享、生产 Supabase AMR、真实 PII 和真人交付证据尚未验证。疑似重复对象已有未开放 runtime 的数据库已知对象对 preview 原语；目录级候选、清理调度、Backend／Flutter、active merge 和 split 尚未实现。组织切片仍需把组织角色和较短保留期的管理界面接入已经存在的策略表。
+当前实现完成对象目录、个人或机构资料建立、初始分配、当前分配读取、接触关联、对象当次反应、项目关系阶段、独立生命周期、共享备注历史、显式冲突、阶段显示别名、个人与机构的六类历史关系、十二个月上限的保留复核、明确续期、不可逆匿名化，以及当前分配对象的七十二小时加密只读快照。个人空间 PII 导出 v1 已实现 PostgreSQL 原子文件与审计、Backend AMR／授权／HTTP，以及 Flutter 同账号密码重验、严格内存 artifact 和 Web 浏览器下载请求。浏览器请求不证明文件已保存；原生保存／分享、生产 Supabase AMR、真实 PII 和真人交付证据尚未验证。疑似重复对象已有未开放 runtime 的 preview 和 contact／项目关系代次 fence；个人—机构关系、retention／assignment fence、目录级候选、清理调度、Backend／Flutter、active merge 和 split 尚未实现。组织切片仍需把组织角色和较短保留期的管理界面接入已经存在的策略表。

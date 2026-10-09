@@ -1,10 +1,12 @@
 \set ON_ERROR_STOP on
 BEGIN;
 
--- Reviewed Slice 7DC inventory, grounded in migrations through 0108.
+-- Reviewed Slice 7DZ inventory, grounded in migrations through 0114.
 -- This is a structural definition baseline, not proof of runtime purge behavior.
 -- Workspaces and projects are shared roots: process rows only when their workspace
 -- is an organization; personal spaces and cross-organization shared roots survive.
+-- Personal merge members are opaque roots without a promotion-target FK; the
+-- three fact bindings therefore do not add organization-owned rows to purge.
 -- RESTRICT/NO ACTION means the finalizer must explicitly order child cleanup;
 -- CASCADE is still reviewed; SET NULL is not permission to retain business payload.
 -- pg_constraint.confdeltype codes: a=NO ACTION, c=CASCADE, d=SET DEFAULT,
@@ -46,6 +48,7 @@ INSERT INTO purge_inventory_expected_fk VALUES
   ('app_data.contact_revisions', 'contact_revisions_revised_by_app_user_id_fkey', 'app_data.app_users', 'r', 'FOREIGN KEY (revised_by_app_user_id) REFERENCES app_data.app_users(app_user_id) ON DELETE RESTRICT'),
   ('app_data.contact_target_links', 'contact_target_links_contact_id_fkey', 'app_data.contacts', 'r', 'FOREIGN KEY (contact_id) REFERENCES app_data.contacts(contact_id) ON DELETE RESTRICT'),
   ('app_data.contact_target_links', 'contact_target_links_contact_id_revision_number_fkey', 'app_data.contact_revisions', 'r', 'FOREIGN KEY (contact_id, revision_number) REFERENCES app_data.contact_revisions(contact_id, revision_number) ON DELETE RESTRICT'),
+  ('app_data.contact_target_links', 'contact_target_links_merge_generation_member_fk', 'app_private.personal_target_merge_generation_members_v1', 'r', 'FOREIGN KEY (merge_generation_id, promotion_target_id) REFERENCES app_private.personal_target_merge_generation_members_v1(generation_id, promotion_target_id) ON DELETE RESTRICT'),
   ('app_data.contact_target_links', 'contact_target_links_promotion_target_id_fkey', 'app_data.promotion_targets', 'r', 'FOREIGN KEY (promotion_target_id) REFERENCES app_data.promotion_targets(promotion_target_id) ON DELETE RESTRICT'),
   ('app_data.contacts', 'contacts_app_user_id_fkey', 'app_data.app_users', 'r', 'FOREIGN KEY (app_user_id) REFERENCES app_data.app_users(app_user_id) ON DELETE RESTRICT'),
   ('app_data.contacts', 'contacts_project_id_fkey', 'app_data.projects', 'r', 'FOREIGN KEY (project_id) REFERENCES app_data.projects(project_id) ON DELETE RESTRICT'),
@@ -89,6 +92,7 @@ INSERT INTO purge_inventory_expected_fk VALUES
   ('app_data.promotion_target_institution_relationships', 'promotion_target_institution_relationships_workspace_id_fkey', 'app_data.workspaces', 'r', 'FOREIGN KEY (workspace_id) REFERENCES app_data.workspaces(workspace_id) ON DELETE RESTRICT'),
   ('app_data.promotion_target_project_relationships', 'promotion_target_project_relati_established_by_app_user_id_fkey', 'app_data.app_users', 'r', 'FOREIGN KEY (established_by_app_user_id) REFERENCES app_data.app_users(app_user_id) ON DELETE RESTRICT'),
   ('app_data.promotion_target_project_relationships', 'promotion_target_project_relationsh_updated_by_app_user_id_fkey', 'app_data.app_users', 'r', 'FOREIGN KEY (updated_by_app_user_id) REFERENCES app_data.app_users(app_user_id) ON DELETE RESTRICT'),
+  ('app_data.promotion_target_project_relationships', 'pt_rel_merge_gen_member_fk', 'app_private.personal_target_merge_generation_members_v1', 'r', 'FOREIGN KEY (merge_generation_id, promotion_target_id) REFERENCES app_private.personal_target_merge_generation_members_v1(generation_id, promotion_target_id) ON DELETE RESTRICT'),
   ('app_data.promotion_target_project_relationships', 'promotion_target_project_relationships_project_id_fkey', 'app_data.projects', 'r', 'FOREIGN KEY (project_id) REFERENCES app_data.projects(project_id) ON DELETE RESTRICT'),
   ('app_data.promotion_target_project_relationships', 'promotion_target_project_relationships_promotion_target_id_fkey', 'app_data.promotion_targets', 'r', 'FOREIGN KEY (promotion_target_id) REFERENCES app_data.promotion_targets(promotion_target_id) ON DELETE RESTRICT'),
   ('app_data.promotion_target_relationship_conflict_resolutions', 'promotion_target_relationship_conf_resolved_by_app_user_id_fkey', 'app_data.app_users', 'r', 'FOREIGN KEY (resolved_by_app_user_id) REFERENCES app_data.app_users(app_user_id) ON DELETE RESTRICT'),
@@ -98,6 +102,7 @@ INSERT INTO purge_inventory_expected_fk VALUES
   ('app_data.promotion_target_relationship_revisions', 'promotion_target_relationship_promotion_target_id_project__fkey', 'app_data.promotion_target_project_relationships', 'r', 'FOREIGN KEY (promotion_target_id, project_id) REFERENCES app_data.promotion_target_project_relationships(promotion_target_id, project_id) ON DELETE RESTRICT'),
   ('app_data.promotion_target_relationship_revisions', 'promotion_target_relationship_revis_changed_by_app_user_id_fkey', 'app_data.app_users', 'r', 'FOREIGN KEY (changed_by_app_user_id) REFERENCES app_data.app_users(app_user_id) ON DELETE RESTRICT'),
   ('app_data.promotion_target_relationship_revisions', 'promotion_target_relationship_revisio_resolved_conflict_id_fkey', 'app_data.promotion_target_relationship_conflicts', 'r', 'FOREIGN KEY (resolved_conflict_id) REFERENCES app_data.promotion_target_relationship_conflicts(conflict_id) ON DELETE RESTRICT'),
+  ('app_data.promotion_target_relationship_revisions', 'ptr_rev_merge_gen_member_fk', 'app_private.personal_target_merge_generation_members_v1', 'r', 'FOREIGN KEY (merge_generation_id, promotion_target_id) REFERENCES app_private.personal_target_merge_generation_members_v1(generation_id, promotion_target_id) ON DELETE RESTRICT'),
   ('app_data.promotion_target_retention_events', 'promotion_target_retention_events_actor_app_user_id_fkey', 'app_data.app_users', 'r', 'FOREIGN KEY (actor_app_user_id) REFERENCES app_data.app_users(app_user_id) ON DELETE RESTRICT'),
   ('app_data.promotion_target_retention_events', 'promotion_target_retention_events_promotion_target_id_fkey', 'app_data.promotion_targets', 'r', 'FOREIGN KEY (promotion_target_id) REFERENCES app_data.promotion_targets(promotion_target_id) ON DELETE RESTRICT'),
   ('app_data.promotion_target_retention_events', 'promotion_target_retention_events_workspace_id_fkey', 'app_data.workspaces', 'r', 'FOREIGN KEY (workspace_id) REFERENCES app_data.workspaces(workspace_id) ON DELETE RESTRICT'),
