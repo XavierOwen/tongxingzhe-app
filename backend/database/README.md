@@ -61,6 +61,16 @@ activation 与三类 writer 先更新同一 private fence 行。这个边界使�
 
 完整 runner 覆盖 0113→0114 升级、结构与 ACL、既有 writer、synthetic activation、四场独立会话竞争、checksum 和 dump／restore。这些合成 PostgreSQL 证据不证明 runtime merge／split、Backend／HTTP／Flutter、保留期处理、生产授权或部署。
 
+## 7EA：个人—机构关系的双端 merge 代次 fence
+
+0115 复用 0114 的 private generation ledger 和全局 fence，为个人—机构关系及其 revision 分别保存 person 与 institution 两端的 generation binding。两端可以都未绑定、仅一端绑定，或分别绑定两个不同 generation。generation 固定单一 target type，因此两端不能绑定同一 generation。绑定按关系中的原 target ID 解析，caller 不能提供或改写。既有关系和 revision 不回填。
+
+新关系及其 created revision 记录写入时两端各自的 active generation。结束关系只追加 ended revision，并记录结束时两端的 active generation；关系事实和 created revision 保留创建时的 binding。成员、workspace 或 target type 不一致，以及不完整或内部不一致的 binding，都使整个 writer 失败且不留下部分关系或 revision。
+
+关系 create／end 与 activation 复用 0114 的 fence。现有 0020 单端匿名化 writer 只在被匿名化的 target 自身属于 active generation 时失败关闭。如果被匿名化 target 不属于 active generation，即使关系另一端属于 active generation，writer 仍可结束关系；新 ended revision 按结束时的两端 active generation 绑定。此门禁不执行到期双端清除。
+
+`PUBLIC` 和 `tongxingzhe_runtime` 仍不能读取或写入 binding，也不能执行 activation。0115 不开放 runtime merge。retention renewal／policy、到期双端清除、独立 assignment end、receipt consumption、合并投影、split、Backend／HTTP／Flutter 和部署仍未交付，产品不得建立 active merge。
+
 ## 7AH：可分享加入链接的数据库创建与预览
 
 0092 实现 Issue #358 的 link-only 子集。

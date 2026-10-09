@@ -225,7 +225,13 @@ merge 与 split 分别使用固定 canonical payload 和客户端 request UUID�
 
 0114 为 contact link、项目关系和关系 revision 增加数据库代次 fence。private ledger 保留 generation 及其两个成员，不复制 PII 或事实值。trigger 按事实中的原 target ID 绑定当前 generation，调用方不能伪造或覆盖。既有事实保持未绑定，既有 writer 在没有 active generation 时保持原结果。activation 与 writer 使用同一 private 串行化边界，不允许 activation 已线性化后再提交无代次的新事实。
 
-0114 的 activation 只是未授权给 runtime 的 private 验证 seam。当前仍没有目录级候选发现、清理调度、receipt consumption、Backend／HTTP／Flutter 入口、合并投影或 split。个人—机构关系、retention 和 assignment writer 也尚未加 fence。这些路径完成前，产品不得建立 active merge。合成 SQL 证据不证明到期后 60 分钟物理删除 SLA、生产授权、真实 PII 或部署。
+7EA／0115 为个人—机构关系及其 revision 分别记录 person 与 institution 两端的 generation binding。generation 固定单一 target type，因此两端只能都未绑定、仅一端绑定，或分别绑定不同 generation。新关系及 created revision 使用创建时两端的 active generation。结束关系只让新 ended revision 使用结束时两端的 active generation，不改写原关系或 created revision。既有关系与 revision 不回填。
+
+数据库按原 target ID 解析两端，并校验 generation member、workspace 和 target type。caller 不能提供、覆盖或事后修改 binding。
+
+关系 create／end 与 activation 复用 0114 的 private fence。现有 0020 单端匿名化只在目标自身是 active member 时失败关闭。目标不是 active member 时，即使关系另一端是 active member，也可结束关系。新 ended revision 记录结束时两端的 active generation。此门禁不提供到期双端清除。0114／0115 的 activation 仍未授予 runtime，用户不能通过 App 建立 active merge。
+
+retention renewal／policy、到期双端清除、独立 assignment end、receipt consumption、runtime merge、合并投影、split、Backend／HTTP／Flutter 和部署仍未交付。以上数据库边界不证明完整保留期处理、到期后 60 分钟物理删除 SLA、生产授权、真实 PII 或用户功能可用。
 
 ## HTTP 与权限边界
 
