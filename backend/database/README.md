@@ -69,7 +69,17 @@ activation 与三类 writer 先更新同一 private fence 行。这个边界使�
 
 关系 create／end 与 activation 复用 0114 的 fence。现有 0020 单端匿名化 writer 只在被匿名化的 target 自身属于 active generation 时失败关闭。如果被匿名化 target 不属于 active generation，即使关系另一端属于 active generation，writer 仍可结束关系；新 ended revision 按结束时的两端 active generation 绑定。此门禁不执行到期双端清除。
 
-`PUBLIC` 和 `tongxingzhe_runtime` 仍不能读取或写入 binding，也不能执行 activation。0115 不开放 runtime merge。retention renewal／policy、到期双端清除、独立 assignment end、receipt consumption、合并投影、split、Backend／HTTP／Flutter 和部署仍未交付，产品不得建立 active merge。
+`PUBLIC` 和 `tongxingzhe_runtime` 仍不能读取或写入 binding，也不能执行 activation。0115 不开放 runtime merge。0116 将 renewal 与 policy update 纳入同一 fence；到期双端清除、独立 assignment end、receipt consumption、合并投影、split、Backend／HTTP／Flutter 和部署仍未交付，产品不得建立 active merge。
+
+## 7EB：保留续期与策略更新的 merge 代次 fence
+
+0116 不新建表，复用 0114 的 private global fence，只替换既有 retention action 与 workspace policy writer，并保留函数签名、OID、owner、ACL、安全属性、返回和稳定错误合同。已完成的 exact renewal replay 在既有 mutation advisory lock 后返回原结果，不要求 target 仍 active，不追加 event，也不取得 generation fence；只有新的 renewal mutation 进入 fence。
+
+新 renewal 依次取得既有 mutation advisory lock、global fence 和 target `FOR UPDATE`。完成所有等待后才读取数据库时间，并重新验证 context、active target、当前 assignment、current due 与当前 policy，再写 renewal event。若等待跨过 cutoff，renewal 稳定失败且不留下 event。policy update 先做既有授权，再取得同一 fence；等待后重新授权，撤权时不写入，仍有权时才 upsert policy。
+
+current due 继续按 target 建立、active contact 或最近 renewal 的最晚时间加当前 workspace policy 动态重算。policy update 会改变 active target 的 current due，但不改写历史 retention event 或其中的 `review_due_at`。renewal 与 policy update 由同一 fence 串行化：renewal 先完成时 event 保存当时 policy 算出的 due，随后 policy 只改变 current due；policy 先完成时 renewal event 使用新 policy。activation 合同不变，receipt validator 按最新 retention 状态验证，旧 receipt 在 due 改变后会失败关闭。runtime activation 仍关闭。
+
+到期双端清除、独立 assignment end、receipt consumption、runtime merge、合并投影、split、Backend／HTTP／Flutter 和部署仍未交付。合成 PostgreSQL 与并发检查不证明完整到期清除、runtime merge／split、生产授权、真实 PII 或物理清理 SLA。
 
 ## 7AH：可分享加入链接的数据库创建与预览
 

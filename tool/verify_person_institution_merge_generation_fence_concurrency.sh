@@ -227,6 +227,53 @@ run_race() {
   echo "${label}: blocker, waiter, and full transaction result verified"
 }
 
+run_writer_race() {
+  local label="$1" holder_sql="$2" waiter_sql="$3" result_sql="$4"
+  local expected_waiter_status="${5:-0}" error_text="${6:-}"
+  local intervene_sql="${7:-}"
+  local gate="0116-fence-${run_token}-${label}"
+  local gate_app="0116-gate-${label}" holder_app="0116-holder-${label}" waiter_app="0116-waiter-${label}"
+  local holder_output="${temporary_directory}/${label}-holder.out" waiter_output="${temporary_directory}/${label}-waiter.out"
+  local race_pgoptions="${PGOPTIONS} -c statement_timeout=20000 -c lock_timeout=12000"
+  gate_name="${gate}"
+  start_gate "${gate}" "${gate_app}"
+  PGAPPNAME="${holder_app}" PGOPTIONS="${race_pgoptions}" "${psql_base[@]}" --quiet --command="BEGIN; ${holder_sql}; SELECT pg_advisory_xact_lock(hashtextextended('${gate}', 0)); COMMIT;" \
+    >"${holder_output}" 2>&1 &
+  local holder_pid=$!
+  child_pids+=("${holder_pid}")
+  wait_for_exact_blocker "${holder_app}" "${gate_app}" "${holder_output}"
+  PGAPPNAME="${waiter_app}" PGOPTIONS="${race_pgoptions}" "${psql_base[@]}" --quiet --command="${waiter_sql}" \
+    >"${waiter_output}" 2>&1 &
+  local waiter_pid=$!
+  child_pids+=("${waiter_pid}")
+  wait_for_exact_blocker "${waiter_app}" "${holder_app}" "${waiter_output}"
+  if [[ -n "${intervene_sql}" ]]; then
+    run_psql --quiet --command="${intervene_sql}" >/dev/null
+  fi
+  release_gate
+
+  local holder_status=0 waiter_status=0 result
+  wait "${holder_pid}" || holder_status=$?
+  wait "${waiter_pid}" || waiter_status=$?
+  if [[ "${holder_status}" -ne 0 || "${waiter_status}" -ne "${expected_waiter_status}" ]]; then
+    echo "${label} race failed: holder=${holder_status}, waiter=${waiter_status}" >&2
+    sed -n '1,100p' "${holder_output}" >&2
+    sed -n '1,100p' "${waiter_output}" >&2
+    exit 1
+  fi
+  if [[ -n "${error_text}" ]] && ! grep -q "${error_text}" "${waiter_output}"; then
+    echo "${label} waiter failed for an unexpected reason." >&2
+    sed -n '1,100p' "${waiter_output}" >&2
+    exit 1
+  fi
+  result="$(run_psql --tuples-only --no-align --command="${result_sql}" | tr -d '[:space:]')"
+  [[ "${result}" == 't' ]] || {
+    echo "${label} ended in an incomplete or incorrect state: ${result}" >&2
+    exit 1
+  }
+  echo "${label}: exact blocker, waiter outcome, and final state verified"
+}
+
 IFS='|' read -r create_activation_person create_activation_peer create_activation_institution create_activation_preview \
   <<<"$(create_pair create-activation-first 1)"
 IFS='|' read -r create_writer_person create_writer_peer create_writer_institution create_writer_preview \
@@ -560,4 +607,114 @@ run_mutation_advisory_activation_time_race end-activation-time \
   "${end_activation_time_sql}" \
   "SELECT relation.ended_at >= generation.activated_at_utc AND ended_revision.changed_at >= generation.activated_at_utc AND ended_revision.person_merge_generation_id = generation.generation_id FROM app_data.promotion_target_institution_relationships relation JOIN app_private.personal_target_merge_active_members_v1 active_member ON active_member.promotion_target_id = relation.person_target_id JOIN app_private.personal_target_merge_generations_v1 generation USING (generation_id) JOIN app_data.promotion_target_institution_relation_revisions ended_revision USING (relationship_id) WHERE relation.relationship_id = '${end_activation_time_relationship}'::uuid AND ended_revision.event_type = 'ended';"
 
-echo '0115 relationship create/end/anonymize activation and row-lock ordering races passed.'
+renew_sql() {
+  local target_id="$1" mutation_id="$2"
+  printf "SET ROLE tongxingzhe_runtime; SELECT result FROM app_data.apply_promotion_target_retention_action('%s'::uuid, '%s'::uuid, '%s'::uuid, '%s'::uuid, 'renew', 'purpose_confirmed', '%s'); RESET ROLE;" \
+    "${app_user_id}" "${workspace_id}" "${project_id}" "${target_id}" "${mutation_id}"
+}
+
+policy_sql() {
+  local months="$1"
+  printf "SET ROLE tongxingzhe_runtime; SELECT app_data.configure_promotion_target_retention_policy('%s'::uuid, '%s'::uuid, '%s'::uuid, %s); RESET ROLE;" \
+    "${app_user_id}" "${workspace_id}" "${project_id}" "${months}"
+}
+
+# Activation owns the fence first; renewal must wait and then commit against
+# the post-activation state.
+IFS='|' read -r activation_renew_person _ _ activation_renew_preview \
+  <<<"$(create_pair activation-renew 15)"
+run_race activation-before-renewal activation "${activation_renew_preview}" \
+  "$(renew_sql "${activation_renew_person}" "0116-${run_token}-activation-renew")" \
+  "SELECT EXISTS (SELECT 1 FROM app_private.personal_target_merge_active_members_v1 WHERE promotion_target_id = '${activation_renew_person}'::uuid) AND (SELECT count(*) = 1 FROM app_data.promotion_target_retention_events WHERE promotion_target_id = '${activation_renew_person}'::uuid AND event_type = 'renewed' AND mutation_id = '0116-${run_token}-activation-renew');"
+
+# Renewal owns the fence first; activation must validate the changed current
+# due and reject the now-stale preview without creating a generation.
+IFS='|' read -r renewal_activation_person _ _ renewal_activation_preview \
+  <<<"$(create_pair renewal-activation 16)"
+renewal_activation_mutation="0116-${run_token}-renewal-activation"
+run_race renewal-before-activation writer "${renewal_activation_preview}" \
+  "$(renew_sql "${renewal_activation_person}" "${renewal_activation_mutation}")" \
+  "SELECT NOT EXISTS (SELECT 1 FROM app_private.personal_target_merge_active_members_v1 WHERE promotion_target_id = '${renewal_activation_person}'::uuid) AND (SELECT count(*) = 1 FROM app_data.promotion_target_retention_events WHERE promotion_target_id = '${renewal_activation_person}'::uuid AND event_type = 'renewed' AND mutation_id = '${renewal_activation_mutation}');" \
+  1 'personal target merge generation activation is forbidden'
+
+# A policy update is linearized with activation in either order. Setting a
+# shorter policy changes the receipt's computed due even while still in date.
+IFS='|' read -r activation_policy_person _ _ activation_policy_preview \
+  <<<"$(create_pair activation-policy 17)"
+run_race activation-before-policy activation "${activation_policy_preview}" \
+  "$(policy_sql 6)" \
+  "SELECT EXISTS (SELECT 1 FROM app_private.personal_target_merge_active_members_v1 WHERE promotion_target_id = '${activation_policy_person}'::uuid) AND (SELECT retention_months = 6 FROM app_data.promotion_target_retention_policies WHERE workspace_id = '${workspace_id}'::uuid);"
+
+run_psql --quiet --command="SET ROLE tongxingzhe_runtime; SELECT app_data.configure_promotion_target_retention_policy('${app_user_id}'::uuid, '${workspace_id}'::uuid, '${project_id}'::uuid, 12); RESET ROLE;" >/dev/null
+IFS='|' read -r policy_activation_person _ _ policy_activation_preview \
+  <<<"$(create_pair policy-activation 18)"
+run_race policy-before-activation writer "${policy_activation_preview}" \
+  "$(policy_sql 6)" \
+  "SELECT NOT EXISTS (SELECT 1 FROM app_private.personal_target_merge_active_members_v1 WHERE promotion_target_id = '${policy_activation_person}'::uuid) AND (SELECT retention_months = 6 FROM app_data.promotion_target_retention_policies WHERE workspace_id = '${workspace_id}'::uuid);" \
+  1 'personal target merge generation activation is forbidden'
+
+# Renewal and policy updates must use one complete policy version. Historical
+# event.review_due_at remains the value captured by the renewal.
+run_psql --quiet --command="SET ROLE tongxingzhe_runtime; SELECT app_data.configure_promotion_target_retention_policy('${app_user_id}'::uuid, '${workspace_id}'::uuid, '${project_id}'::uuid, 12); RESET ROLE;" >/dev/null
+renew_policy_old_person="$(run_psql --tuples-only --no-align --command="SELECT (target->>'target_id')::uuid FROM app_data.create_promotion_target('${app_user_id}'::uuid, '${workspace_id}'::uuid, '${project_id}'::uuid, 'person', '0116 renewal-policy old ${run_token}', NULL, NULL, '0116-${run_token}-renew-policy-old');" | tr -d '[:space:]')"
+renew_policy_old_mutation="0116-${run_token}-renew-policy-old"
+run_writer_race renewal-before-policy \
+  "$(renew_sql "${renew_policy_old_person}" "${renew_policy_old_mutation}")" \
+  "$(policy_sql 6)" \
+  "SELECT event.review_due_at = event.occurred_at + interval '12 months' AND app_data.promotion_target_review_due_at(event.promotion_target_id) = event.occurred_at + interval '6 months' AND (SELECT count(*) = 1 FROM app_data.promotion_target_retention_events WHERE promotion_target_id = event.promotion_target_id AND event_type = 'renewed') FROM app_data.promotion_target_retention_events event WHERE event.promotion_target_id = '${renew_policy_old_person}'::uuid AND event.mutation_id = '${renew_policy_old_mutation}';"
+
+run_psql --quiet --command="SET ROLE tongxingzhe_runtime; SELECT app_data.configure_promotion_target_retention_policy('${app_user_id}'::uuid, '${workspace_id}'::uuid, '${project_id}'::uuid, 12); RESET ROLE;" >/dev/null
+renew_policy_new_person="$(run_psql --tuples-only --no-align --command="SELECT (target->>'target_id')::uuid FROM app_data.create_promotion_target('${app_user_id}'::uuid, '${workspace_id}'::uuid, '${project_id}'::uuid, 'person', '0116 policy-renewal new ${run_token}', NULL, NULL, '0116-${run_token}-policy-renew-new');" | tr -d '[:space:]')"
+renew_policy_new_mutation="0116-${run_token}-policy-renew-new"
+run_writer_race policy-before-renewal \
+  "$(policy_sql 6)" \
+  "$(renew_sql "${renew_policy_new_person}" "${renew_policy_new_mutation}")" \
+  "SELECT event.review_due_at = event.occurred_at + interval '6 months' AND app_data.promotion_target_review_due_at(event.promotion_target_id) = event.review_due_at AND (SELECT count(*) = 1 FROM app_data.promotion_target_retention_events WHERE promotion_target_id = event.promotion_target_id AND event_type = 'renewed') FROM app_data.promotion_target_retention_events event WHERE event.promotion_target_id = '${renew_policy_new_person}'::uuid AND event.mutation_id = '${renew_policy_new_mutation}';"
+
+# Hold the target row until its existing deadline passes. Renewal must wait on
+# that exact row, refresh its event time, and fail with no event after release.
+cutoff_person="$(run_psql --tuples-only --no-align --command="SELECT (target->>'target_id')::uuid FROM app_data.create_promotion_target('${app_user_id}'::uuid, '${workspace_id}'::uuid, '${project_id}'::uuid, 'person', '0116 cutoff ${run_token}', NULL, NULL, '0116-${run_token}-cutoff');" | tr -d '[:space:]')"
+run_psql --quiet --command="UPDATE app_data.promotion_targets SET created_at = clock_timestamp() - interval '12 months' + interval '8 seconds' WHERE promotion_target_id = '${cutoff_person}'::uuid; SET ROLE tongxingzhe_runtime; SELECT app_data.configure_promotion_target_retention_policy('${app_user_id}'::uuid, '${workspace_id}'::uuid, '${project_id}'::uuid, 12); RESET ROLE;" >/dev/null
+cutoff_holder_sql="SELECT promotion_target_id FROM app_data.promotion_targets WHERE promotion_target_id = '${cutoff_person}'::uuid FOR UPDATE;"
+cutoff_mutation="0116-${run_token}-cutoff-renewal"
+cutoff_gate="0116-fence-${run_token}-renewal-crosses-cutoff"
+gate_name="${cutoff_gate}"
+start_gate "${cutoff_gate}" '0116-gate-renewal-cutoff'
+PGAPPNAME='0116-holder-renewal-cutoff' PGOPTIONS="${PGOPTIONS} -c statement_timeout=30000 -c lock_timeout=25000" \
+  "${psql_base[@]}" --quiet --command="BEGIN; ${cutoff_holder_sql} SELECT pg_advisory_xact_lock(hashtextextended('${cutoff_gate}', 0)); COMMIT;" \
+  >"${temporary_directory}/cutoff-holder.out" 2>&1 &
+cutoff_holder_pid=$!
+child_pids+=("${cutoff_holder_pid}")
+wait_for_exact_blocker '0116-holder-renewal-cutoff' '0116-gate-renewal-cutoff' "${temporary_directory}/cutoff-holder.out"
+PGAPPNAME='0116-waiter-renewal-cutoff' PGOPTIONS="${PGOPTIONS} -c statement_timeout=30000 -c lock_timeout=25000" \
+  "${psql_base[@]}" --quiet --command="$(renew_sql "${cutoff_person}" "${cutoff_mutation}")" \
+  >"${temporary_directory}/cutoff-waiter.out" 2>&1 &
+cutoff_waiter_pid=$!
+child_pids+=("${cutoff_waiter_pid}")
+wait_for_exact_blocker '0116-waiter-renewal-cutoff' '0116-holder-renewal-cutoff' "${temporary_directory}/cutoff-waiter.out"
+sleep 9
+release_gate
+cutoff_holder_status=0 cutoff_waiter_status=0
+wait "${cutoff_holder_pid}" || cutoff_holder_status=$?
+wait "${cutoff_waiter_pid}" || cutoff_waiter_status=$?
+if [[ "${cutoff_holder_status}" -ne 0 || "${cutoff_waiter_status}" -eq 0 ]] \
+  || ! grep -q 'promotion target retention already expired' "${temporary_directory}/cutoff-waiter.out"; then
+  echo "renewal-crosses-cutoff failed: holder=${cutoff_holder_status}, waiter=${cutoff_waiter_status}" >&2
+  sed -n '1,100p' "${temporary_directory}/cutoff-waiter.out" >&2
+  exit 1
+fi
+cutoff_result="$(run_psql --tuples-only --no-align --command="SELECT NOT EXISTS (SELECT 1 FROM app_data.promotion_target_retention_events WHERE promotion_target_id = '${cutoff_person}'::uuid AND mutation_id = '${cutoff_mutation}');" | tr -d '[:space:]')"
+[[ "${cutoff_result}" == 't' ]] || { echo 'cutoff renewal left a retention event.' >&2; exit 1; }
+echo 'renewal-crosses-cutoff: exact target-row blocker and post-wait expiry verified'
+
+# Revoke workspace authority while a policy caller waits on the global fence;
+# its post-wait reauthorization must reject the update.
+run_writer_race policy-rechecks-authorization \
+  "UPDATE app_private.personal_target_merge_generation_fence_v1 SET epoch = epoch + 1 WHERE fence_key;" \
+  "$(policy_sql 5)" \
+  "SELECT NOT EXISTS (SELECT 1 FROM app_data.promotion_target_retention_policies WHERE workspace_id = '${workspace_id}'::uuid AND retention_months = 5);" \
+  1 'promotion target retention policy is forbidden' \
+  "UPDATE app_data.workspaces SET deleted_at = clock_timestamp() WHERE workspace_id = '${workspace_id}'::uuid;"
+run_psql --quiet --command="UPDATE app_data.workspaces SET deleted_at = NULL WHERE workspace_id = '${workspace_id}'::uuid;" >/dev/null
+
+echo '0115 relationship and 0116 retention activation/fence ordering races passed.'

@@ -334,7 +334,9 @@ merge 与 split 各使用客户端 request UUID 和固定 canonical payload。�
 
 0113 已提供未向 runtime 开放的数据库已知对象对验证／预览、15 分钟 receipt、private validator 与受控 cleanup 原语。0114 增加 private generation／member ledger，并为 contact link、项目关系和关系 revision 建立代次 fence。既有事实不回填。新事实在受控 synthetic active generation 中由数据库绑定代次，caller 不能伪造或覆盖。activation 与三类 writer 共用 private 串行化边界。
 
-0114 没有向 runtime 授予 activation 或 ledger 权限，也不消费 receipt。个人—机构关系、retention／assignment writer、合并投影和 split 尚未加入该边界，因此产品不得建立 active merge。当前实现也不发现、枚举或推荐目录候选，不证明 Backend／HTTP／Flutter、清理调度、生产授权、真实 PII、部署或到期后 60 分钟物理删除 SLA。
+0115 为个人—机构关系及 revision 分别绑定 person 与 institution 两端代次，并让既有单端匿名化在目标本身属于 active generation 时失败关闭。0116 把新 renewal 与 workspace policy update 纳入同一 global fence：current due 按当前 policy 重算，历史 retention event 与其 `review_due_at` 不改写。
+
+0114 至 0116 均未向 runtime 授予 activation 或 ledger 权限，也不消费 receipt。到期双端清除、独立 assignment end、合并投影和 split 尚未加入该边界，因此产品不得建立 active merge。当前实现也不发现、枚举或推荐目录候选，不证明 Backend／HTTP／Flutter、清理调度、生产授权、真实 PII、部署或到期后 60 分钟物理删除 SLA。
 
 ### 5.7 组织治理与生命周期
 
@@ -3248,7 +3250,8 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-132` | 学习文档说明个人空间疑似重复对象与可逆合并 v1：双 capability、同空间同类型的精确候选、15 分钟 opaque receipt、双对象上限、保留对象和逐字段来源、原事实保留、来源分开的项目关系、合并代次 writer 约束、全有或全无拆分、较早保留截止、到期双端匿名化和既有 PII 导出边界。它明确当前产品尚未实现候选目录、合并或拆分。 |
 | `MANUAL-133` | 学习文档说明 0113 只提供调用方已知双 UUID 的 DB-only preview：单 command snapshot 绑定授权、revision、assignment、匹配信号和 retention 截止，签发 15 分钟 value-free receipt，并提供 private validator 与固定批量 cleanup。runtime 权限保持关闭；本票不证明候选发现、清理调度／60 分钟 SLA、Backend／HTTP／Flutter、active merge／split、生产授权或真实 PII。 |
 | `MANUAL-134` | 学习文档说明 0114 的 private generation／member ledger、contact／项目关系事实代次绑定、caller 伪造拒绝和 activation／writer 串行化边界。它明确既有事实不回填，runtime 无 activation 权限，个人—机构、retention／assignment、receipt consumption、合并投影与 split 仍未交付。 |
-| `MANUAL-135` | 学习文档说明 0115 为个人—机构关系与 revision 分别保存 person／institution generation binding；generation 固定单一 target type，因此两端只能都未绑定、仅一端绑定或分别绑定不同 generation。新关系和 created revision 使用创建时两端代次，ended revision 使用结束时两端代次，既有历史不回填。单端匿名化仅在目标自身为 active member 时失败关闭；若只有关系另一端为 active member，仍结束关系并记录该端代次。runtime 仍无 activation。retention renewal／policy、到期双端清除、独立 assignment end、receipt consumption、runtime merge、投影、split、Backend／Flutter／部署仍未交付。 |
+| `MANUAL-135` | 学习文档说明 0115 为个人—机构关系与 revision 分别保存 person／institution generation binding；generation 固定单一 target type，因此两端只能都未绑定、仅一端绑定或分别绑定不同 generation。新关系和 created revision 使用创建时两端代次，ended revision 使用结束时两端代次，既有历史不回填。单端匿名化仅在目标自身为 active member 时失败关闭；若只有关系另一端为 active member，仍结束关系并记录该端代次。runtime 仍无 activation。该 7EA 记录之后，7EB／0116 已完成 renewal／policy fence；到期双端清除、独立 assignment end、receipt consumption、runtime merge、投影、split、Backend／Flutter／部署仍未交付。 |
+| `MANUAL-136` | 学习文档说明 0116 不新建表，将新的 retention renewal 与 workspace policy update 纳入 0114 global fence；已完成 exact replay 只在 mutation advisory lock 后返回原结果，不要求 target 仍 active，也不进 fence。新 renewal 按 mutation lock、global fence、target row lock 顺序执行，等待后取时并重验；policy update 等待后重授权。current due 按当前 policy 动态重算，历史 retention event 的 `review_due_at` 不改。runtime activation 仍关闭；到期双端清除、独立 assignment end、receipt consumption、合并投影、split、Backend／HTTP／Flutter 与部署仍未交付。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3573,6 +3576,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-144` | 7DX 从真实 0112 baseline 升级 0113，保留旧资料、CSV import／PII export 行为及 context 函数 OID／owner／ACL；fresh check／fixture 与独立会话脚本覆盖资料 revision、exact identity、双 assignment、同空间／类型、精确信号、单 command snapshot、15 分钟半开 receipt、漂移 validator、value-free audit、固定 100 行 cleanup、runtime 最小 ACL、checksum 和 restore。合成 PostgreSQL 证据不证明候选发现、调度／60 分钟 SLA、Backend／HTTP／Flutter、active merge／split、生产授权或真实 PII。 |
 | `TEST-145` | 7DZ 从真实 0113 baseline 升级 0114，保留 preview／validator／cleanup 函数 OID／owner／ACL、既有 receipt、target、contact link、项目关系／revision 及 CSV import／PII export 行为。fresh check／fixture 覆盖 value-free immutable ledger、runtime ACL、无 active generation 的旧 writer 结果、受控 generation 的唯一绑定、multi-target、void 复制、caller 伪造和失败零部分写入。四场独立会话竞争核对 exact blocker／waiter 与 activation／writer 两种线性化结果。完整套件另覆盖 checksum、organization purge FK inventory 和 dump／restore。合成 PostgreSQL 证据不证明 receipt consumption、runtime active merge、个人—机构或 retention／assignment fence、合并投影、split、Backend／HTTP／Flutter、生产授权、真实 PII 或部署。 |
 | `TEST-146` | 7EA 的 0114→0115 验证应保留旧关系／revision、retention 历史、preview／generation 函数 OID／owner／ACL 与 CSV import／PII export 行为，并覆盖既有历史不回填、新关系及 created revision 的创建时双端 binding、ended revision 的结束时双端 binding、两端属于不同 generation、caller 篡改／错误 member／workspace／type 拒绝、整笔零部分状态、匿名化 active member 失败关闭、匿名化非 member 时结束关系并绑定另一端代次，以及 activation／writer／匿名化并发。还应验证 runtime 无 activation／binding 权限、checksum 与 restore。合成 SQL 证据不证明 retention renewal／policy、到期双端清除、独立 assignment end、receipt consumption、runtime merge、合并投影、split、Backend／HTTP／Flutter、生产授权、真实 PII 或部署。 |
+| `TEST-147` | 7EB 从真实 0115 baseline 升级 0116，保留 target、关系／revision、retention event、policy、preview／generation 函数及被替换函数的 OID／owner／ACL、历史 event JSON、既有 CSV import／PII export 行为；覆盖无 active generation 时的 renewal、anonymization、policy、稳定错误与 exact replay 结果，并证明 exact replay 不进 fence。独立会话验证 activation／renewal、activation／policy 与 renewal／policy 的两种顺序，锁后取时和跨 cutoff 失败、等待后重授权、current due 按当前 policy 更新而历史 `review_due_at` 不变、失败零部分状态、runtime 无 activation 权限、checksum 与 restore。Markdown links 与 `git diff --check` 通过；合成 SQL 证据不证明到期双端清除、独立 assignment end、receipt consumption、runtime merge／split、Backend／HTTP／Flutter、生产授权、真实 PII、部署或物理清理 SLA。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -3986,7 +3990,9 @@ builder 与 `AppStartupReady` 使用同一个 `IdentitySession` 和同一个 gat
 
 7EA／#552 将 0115 扩展到个人—机构关系。person 与 institution 两端分别绑定 generation。generation 固定单一 target type，因此两端只能都未绑定、仅一端绑定或分别绑定不同 generation。新关系和 created revision 绑定创建时两端代次；结束旧关系只让新 ended revision 记录结束时两端代次。历史不回填。
 
-现有单端匿名化仅在被匿名化的 target 自身属于 active generation 时失败关闭。若被匿名化 target 不是 active member，即使关系另一端属于 active generation，仍可结束关系；ended revision 记录结束时另一端的代次。此 DB-only 边界仍不授予 runtime activation，也不开放用户功能。retention renewal／policy、到期双端清除、独立 assignment end、receipt consumption、runtime merge、合并投影、split、Backend／Flutter／部署仍未交付。
+现有单端匿名化仅在被匿名化的 target 自身属于 active generation 时失败关闭。若被匿名化 target 不是 active member，即使关系另一端属于 active generation，仍可结束关系；ended revision 记录结束时另一端的代次。此 DB-only 边界仍不授予 runtime activation，也不开放用户功能。7EB／#554 已将新的 retention renewal 与 workspace policy update 纳入 0114 global fence；到期双端清除、独立 assignment end、receipt consumption、runtime merge、合并投影、split、Backend／Flutter／部署仍未交付。
+
+7EB／#554 以 0116 在既有 private global fence 内串行化新 renewal 与 policy update。exact renewal replay 在 mutation advisory lock 后返回原历史结果，不要求 target 仍 active，也不进 fence；新 renewal 在锁后取时并重验，policy update 等待后重授权。current due 按当前 workspace policy 动态重算，历史 retention event 的 `review_due_at` 不改。runtime activation 仍关闭；本票不交付到期双端清除或独立 assignment end，也不开放产品 merge。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 
