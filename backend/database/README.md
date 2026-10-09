@@ -81,6 +81,24 @@ current due 继续按 target 建立、active contact 或最近 renewal 的最晚
 
 到期双端清除、独立 assignment end、receipt consumption、runtime merge、合并投影、split、Backend／HTTP／Flutter 和部署仍未交付。合成 PostgreSQL 与并发检查不证明完整到期清除、runtime merge／split、生产授权、真实 PII 或物理清理 SLA。
 
+## 7EC：消费 merge preview receipt 并精确重放 generation activation
+
+0117 增加 private v2 activation。它以 actor 与 request UUID 唯一记录 preview、保留对象、字段来源对象、generation 和数据库时间。字段来源分别对应 `display_name`、`phone` 和 `email`。request result 与 audit 只存 opaque UUID 和 operation 结果，不复制 PII。request result 只关联 generation，不引用可能被 cleanup 删除的 preview receipt。
+
+相同 actor、request UUID 和 canonical selectors 返回首次 generation；payload drift 与已消费 receipt 返回稳定冲突。current auth 仍在 exact replay 前重验。首次请求依次取得 request advisory lock、global fence 和 receipt 行锁，再运行 receipt validator。v1 入口保留。v1/v2 均不向 `PUBLIC` 或 `tongxingzhe_runtime` 授权，产品仍不得建立 active merge。
+
+完整 Docker runner 自动发现 0117 migration、结构 check 和 rollback fixture。
+0116 baseline 升级检查验证旧 preview、generation、member、active member、关系、retention 数据及受保护函数身份不变。
+runner 还验证 0117 checksum replay、dump／restore 与独立会话并发脚本。
+rollback fixture 覆盖合法 activation、exact replay（包括 receipt 删除后）、payload drift 和 receipt 复用。
+它也覆盖非 receipt member selector、current actor 授权、最小 ACL 与 append-only。可运行：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+通过只证明 synthetic PostgreSQL 中本票覆盖的 DB-only 合同和锁序；不证明 runtime activation、Backend／HTTP／Flutter、完整 cleanup SLA、production identity 或真实 PII。
+
 ## 7AH：可分享加入链接的数据库创建与预览
 
 0092 实现 Issue #358 的 link-only 子集。
