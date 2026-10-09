@@ -1,12 +1,12 @@
 \set ON_ERROR_STOP on
 BEGIN;
 
--- Reviewed Slice 7DZ inventory, grounded in migrations through 0114.
+-- Reviewed Slice 7DZ inventory, grounded in migrations through 0115.
 -- This is a structural definition baseline, not proof of runtime purge behavior.
 -- Workspaces and projects are shared roots: process rows only when their workspace
 -- is an organization; personal spaces and cross-organization shared roots survive.
 -- Personal merge members are opaque roots without a promotion-target FK; the
--- three fact bindings therefore do not add organization-owned rows to purge.
+-- these fact bindings therefore do not add organization-owned rows to purge.
 -- RESTRICT/NO ACTION means the finalizer must explicitly order child cleanup;
 -- CASCADE is still reviewed; SET NULL is not permission to retain business payload.
 -- pg_constraint.confdeltype codes: a=NO ACTION, c=CASCADE, d=SET DEFAULT,
@@ -89,6 +89,8 @@ INSERT INTO purge_inventory_expected_fk VALUES
   ('app_data.promotion_target_institution_relationships', 'promotion_target_institution_relati_updated_by_app_user_id_fkey', 'app_data.app_users', 'r', 'FOREIGN KEY (updated_by_app_user_id) REFERENCES app_data.app_users(app_user_id) ON DELETE RESTRICT'),
   ('app_data.promotion_target_institution_relationships', 'promotion_target_institution_relatio_institution_target_id_fkey', 'app_data.promotion_targets', 'r', 'FOREIGN KEY (institution_target_id) REFERENCES app_data.promotion_targets(promotion_target_id) ON DELETE RESTRICT'),
   ('app_data.promotion_target_institution_relationships', 'promotion_target_institution_relationship_person_target_id_fkey', 'app_data.promotion_targets', 'r', 'FOREIGN KEY (person_target_id) REFERENCES app_data.promotion_targets(promotion_target_id) ON DELETE RESTRICT'),
+  ('app_data.promotion_target_institution_relationships', 'pt_institution_relation_person_merge_member_fk', 'app_private.personal_target_merge_generation_members_v1', 'r', 'FOREIGN KEY (person_merge_generation_id, person_target_id) REFERENCES app_private.personal_target_merge_generation_members_v1(generation_id, promotion_target_id) ON DELETE RESTRICT'),
+  ('app_data.promotion_target_institution_relationships', 'pt_institution_relation_institution_merge_member_fk', 'app_private.personal_target_merge_generation_members_v1', 'r', 'FOREIGN KEY (institution_merge_generation_id, institution_target_id) REFERENCES app_private.personal_target_merge_generation_members_v1(generation_id, promotion_target_id) ON DELETE RESTRICT'),
   ('app_data.promotion_target_institution_relationships', 'promotion_target_institution_relationships_workspace_id_fkey', 'app_data.workspaces', 'r', 'FOREIGN KEY (workspace_id) REFERENCES app_data.workspaces(workspace_id) ON DELETE RESTRICT'),
   ('app_data.promotion_target_project_relationships', 'promotion_target_project_relati_established_by_app_user_id_fkey', 'app_data.app_users', 'r', 'FOREIGN KEY (established_by_app_user_id) REFERENCES app_data.app_users(app_user_id) ON DELETE RESTRICT'),
   ('app_data.promotion_target_project_relationships', 'promotion_target_project_relationsh_updated_by_app_user_id_fkey', 'app_data.app_users', 'r', 'FOREIGN KEY (updated_by_app_user_id) REFERENCES app_data.app_users(app_user_id) ON DELETE RESTRICT'),

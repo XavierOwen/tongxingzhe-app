@@ -11691,6 +11691,118 @@ fi
 printf '%s\n' "${personal_target_merge_generation_upgrade_replay}"
 echo '0113→0114 receipt、事实、函数身份、import/export 与 checksum 幂等：通过。'
 
+echo '验证 0114→0115 既有个人—机构关系、revision 与 retention 历史升级。'
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0114_person_institution_merge_generation_live.sql \
+  >/dev/null
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/personal-target-institution-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0115_person_institution_merge_generation_fence.sql \\
+     /tmp/personal-target-institution-upgrade-only/ && \\
+   test \"\$(find /tmp/personal-target-institution-upgrade-only \\
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-target-institution-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_person_institution_merge_generation_fence.sql
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$upgrade\$
+    DECLARE
+      current_relationship jsonb;
+      current_revisions jsonb;
+      current_retention jsonb;
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 114
+        OR (SELECT max(left(version, 4)) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0115'
+        OR EXISTS (
+          SELECT 1
+          FROM public.fixture_0115_upgrade_catalog AS saved
+          LEFT JOIN pg_catalog.pg_proc AS current_function
+            ON current_function.oid = saved.function_oid
+          WHERE current_function.oid IS NULL
+            OR current_function.oid::regprocedure::text <> saved.function_name
+            OR current_function.proowner <> saved.function_owner
+            OR current_function.proacl IS DISTINCT FROM saved.function_acl
+            OR pg_catalog.pg_get_function_result(current_function.oid)
+              IS DISTINCT FROM saved.function_result
+        )
+        OR EXISTS (
+          SELECT 1 FROM app_data.promotion_target_institution_relationships
+          WHERE person_merge_generation_id IS NOT NULL
+             OR institution_merge_generation_id IS NOT NULL
+        )
+        OR EXISTS (
+          SELECT 1 FROM app_data.promotion_target_institution_relation_revisions
+          WHERE person_merge_generation_id IS NOT NULL
+             OR institution_merge_generation_id IS NOT NULL
+        )
+      THEN
+        RAISE EXCEPTION '0114→0115 catalog, binding or backfill drift';
+      END IF;
+
+      SELECT to_jsonb(row_value) - 'person_merge_generation_id'
+        - 'institution_merge_generation_id'
+      INTO STRICT current_relationship
+      FROM app_data.promotion_target_institution_relationships AS row_value
+      JOIN public.fixture_0115_upgrade_state AS saved USING (relationship_id);
+      SELECT jsonb_agg(to_jsonb(row_value) - 'person_merge_generation_id'
+        - 'institution_merge_generation_id' ORDER BY row_value.revision_number)
+      INTO STRICT current_revisions
+      FROM app_data.promotion_target_institution_relation_revisions AS row_value
+      JOIN public.fixture_0115_upgrade_state AS saved USING (relationship_id);
+      SELECT jsonb_agg(to_jsonb(row_value)
+        ORDER BY row_value.occurred_at, row_value.event_id)
+      INTO STRICT current_retention
+      FROM app_data.promotion_target_retention_events AS row_value
+      JOIN public.fixture_0115_upgrade_state AS saved
+        ON saved.institution_target_id = row_value.promotion_target_id;
+      IF current_relationship IS DISTINCT FROM (
+          SELECT relationship_document FROM public.fixture_0115_upgrade_state
+        ) OR current_revisions IS DISTINCT FROM (
+          SELECT revision_documents FROM public.fixture_0115_upgrade_state
+        ) OR current_retention IS DISTINCT FROM (
+          SELECT retention_documents FROM public.fixture_0115_upgrade_state
+        ) THEN
+        RAISE EXCEPTION '0115 changed preexisting relationship or retention history';
+      END IF;
+    END
+    \$upgrade\$;
+  " \
+  >/dev/null
+personal_target_institution_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/personal-target-institution-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${personal_target_institution_upgrade_replay}" != \
+    *'已验证 0115_person_institution_merge_generation_fence（无需重复执行）'* ]] \
+  || [[ "${personal_target_institution_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0115 migration did not skip its checksum-verified replay.' >&2
+  printf '%s\n' "${personal_target_institution_upgrade_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${personal_target_institution_upgrade_replay}"
+echo '0114→0115 live relation/revision/retention preservation and checksum replay: passed.'
+
 
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
