@@ -40,6 +40,7 @@ project_assignment_upgrade_database='tongxingzhe_project_assignment_upgrade'
 directory_upgrade_database='tongxingzhe_application_directory_upgrade'
 organization_deletion_upgrade_database='tongxingzhe_organization_deletion_upgrade'
 organization_deletion_preflight_database='tongxingzhe_organization_deletion_preflight'
+personal_target_pair_upgrade_database='tongxingzhe_personal_target_pair_upgrade'
 database_url="postgresql://postgres:postgres@127.0.0.1:5432/${test_database}"
 upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${upgrade_database}"
 ownerless_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${ownerless_upgrade_database}"
@@ -70,6 +71,7 @@ project_assignment_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${
 directory_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${directory_upgrade_database}"
 organization_deletion_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${organization_deletion_upgrade_database}"
 organization_deletion_preflight_url="postgresql://postgres:postgres@127.0.0.1:5432/${organization_deletion_preflight_database}"
+personal_target_pair_upgrade_url="postgresql://postgres:postgres@127.0.0.1:5432/${personal_target_pair_upgrade_database}"
 container_started=0
 restore_container_started=0
 restore_temporary_directory=''
@@ -11194,6 +11196,240 @@ docker exec "${container_name}" psql -U postgres -d "${organization_deletion_upg
   --command='ROLLBACK;'
 printf '%s\n' "${original_region_project_uuid_upgrade_replay}"
 echo '0109→0110 committed report/receipt preserved, hex UUID release/replay, no-op checksum replay：通过。'
+
+echo '验证 0112→0113 既有 import/export、函数身份与对象资料不变。'
+docker exec "${container_name}" createdb \
+  -U postgres \
+  "${personal_target_pair_upgrade_database}"
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/personal-target-pair-upgrade-baseline && \
+   find /workspace/backend/database/migrations \
+     -maxdepth 1 -type f \
+     \( -name '000[1-9]_*.sql' -o -name '00[1-9][0-9]_*.sql' \
+        -o -name '010[0-9]_*.sql' -o -name '011[0-2]_*.sql' \) \
+     -exec cp {} /tmp/personal-target-pair-upgrade-baseline/ \; && \
+   test \"\$(find /tmp/personal-target-pair-upgrade-baseline \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 111"
+docker exec \
+  --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-target-pair-upgrade-baseline \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh \
+  >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$baseline\$
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 111
+        OR (SELECT max(left(version, 4))
+            FROM app_migrations.schema_migrations) IS DISTINCT FROM '0112'
+        OR to_regclass(
+          'app_private.personal_target_pair_preview_receipts'
+        ) IS NOT NULL
+        OR EXISTS (
+          SELECT 1
+          FROM pg_catalog.pg_attribute AS attribute_row
+          WHERE attribute_row.attrelid = 'app_data.promotion_targets'::regclass
+            AND attribute_row.attname = 'profile_revision'
+            AND NOT attribute_row.attisdropped
+        )
+      THEN
+        RAISE EXCEPTION '0112 personal target pair upgrade baseline drift';
+      END IF;
+    END
+    \$baseline\$;
+  " \
+  --file=/workspace/backend/database/fixtures/upgrade/0112_personal_target_pair_preview_live.sql \
+  >/dev/null
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/personal-target-pair-upgrade-only && \
+   cp /workspace/backend/database/migrations/0113_personal_target_pair_preview.sql \
+     /tmp/personal-target-pair-upgrade-only/ && \
+   test \"\$(find /tmp/personal-target-pair-upgrade-only \
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-target-pair-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_personal_target_pair_preview.sql \
+  --command="
+    DO \$upgrade\$
+    DECLARE
+      current_target jsonb;
+      current_assignments jsonb;
+    BEGIN
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 112
+        OR (SELECT max(left(version, 4))
+            FROM app_migrations.schema_migrations) IS DISTINCT FROM '0113'
+        OR EXISTS (
+          SELECT 1
+          FROM public.fixture_0113_upgrade_catalog AS saved
+          LEFT JOIN pg_catalog.pg_proc AS current_function
+            ON current_function.oid = saved.function_oid
+          WHERE current_function.oid IS NULL
+            OR current_function.oid::regprocedure::text <> saved.function_name
+            OR current_function.proowner <> saved.function_owner
+            OR current_function.proacl IS DISTINCT FROM saved.function_acl
+            OR pg_catalog.pg_get_function_result(current_function.oid)
+              IS DISTINCT FROM saved.function_result
+        )
+        OR NOT EXISTS (
+          SELECT 1
+          FROM public.fixture_0113_upgrade_capabilities AS saved
+          CROSS JOIN LATERAL app_data.list_personal_project_contexts(
+            'https://synthetic-0113-upgrade.example.test', 'owner'
+          ) AS current_context
+          WHERE current_context.is_current
+            AND current_context.capabilities @> saved.capabilities
+            AND cardinality(current_context.capabilities) =
+              cardinality(saved.capabilities) + 1
+            AND 'manage_assigned_target_merges' =
+              ANY(current_context.capabilities)
+        )
+        OR (SELECT count(*)
+            FROM app_private.personal_target_pair_preview_receipts) <> 0
+        OR (SELECT count(*)
+            FROM app_private.personal_target_pair_preview_audit_events) <> 0
+      THEN
+        RAISE EXCEPTION '0112→0113 catalog, capability or metadata drift';
+      END IF;
+
+      SELECT to_jsonb(target_row) - 'profile_revision'
+      INTO STRICT current_target
+      FROM app_data.promotion_targets AS target_row
+      JOIN public.fixture_0113_upgrade_state AS saved
+        ON saved.promotion_target_id = target_row.promotion_target_id
+      WHERE target_row.profile_revision = 1;
+      SELECT jsonb_agg(to_jsonb(assignment_row)
+        ORDER BY assignment_row.assignment_id)
+      INTO STRICT current_assignments
+      FROM app_data.promotion_target_assignments AS assignment_row
+      JOIN public.fixture_0113_upgrade_state AS saved
+        ON saved.promotion_target_id = assignment_row.promotion_target_id;
+      IF current_target IS DISTINCT FROM (
+          SELECT target_document FROM public.fixture_0113_upgrade_state
+        )
+        OR current_assignments IS DISTINCT FROM (
+          SELECT assignment_documents FROM public.fixture_0113_upgrade_state
+        )
+        OR (SELECT count(*)
+            FROM app_private.personal_target_csv_import_previews) <>
+          (SELECT import_preview_count
+           FROM public.fixture_0113_upgrade_state)
+        OR (SELECT count(*)
+            FROM app_private.personal_target_csv_import_request_claims) <>
+          (SELECT import_claim_count
+           FROM public.fixture_0113_upgrade_state)
+        OR (SELECT count(*)
+            FROM app_private.personal_target_csv_import_audit_events) <>
+          (SELECT import_audit_count
+           FROM public.fixture_0113_upgrade_state)
+        OR (SELECT count(*)
+            FROM app_private.personal_target_pii_export_events) <>
+          (SELECT export_audit_count
+           FROM public.fixture_0113_upgrade_state)
+      THEN
+        RAISE EXCEPTION '0113 changed existing target/import/export state';
+      END IF;
+    END
+    \$upgrade\$;
+
+    BEGIN;
+    CREATE TEMP TABLE fixture_0113_after_context ON COMMIT DROP AS
+    SELECT project_id FROM public.fixture_0113_upgrade_context;
+    GRANT SELECT ON fixture_0113_after_context TO tongxingzhe_runtime;
+    SET LOCAL ROLE tongxingzhe_runtime;
+    CREATE TEMP TABLE fixture_0113_after_input ON COMMIT DROP AS
+    SELECT jsonb_build_array(jsonb_build_object(
+      'target_type', 'person',
+      'display_name', '0113 upgraded import target',
+      'phone', '+1 312 555 0114',
+      'email', 'upgrade-0113-after@example.test'
+    )) AS rows;
+    CREATE TEMP TABLE fixture_0113_after_preview ON COMMIT DROP AS
+    SELECT preview.*
+    FROM fixture_0113_after_input AS input_row
+    CROSS JOIN LATERAL app_data.preview_personal_target_csv_import_v1(
+      'https://synthetic-0113-upgrade.example.test',
+      'owner',
+      (SELECT project_id FROM fixture_0113_after_context),
+      input_row.rows
+    ) AS preview;
+    CREATE TEMP TABLE fixture_0113_after_confirm ON COMMIT DROP AS
+    SELECT confirmed.*
+    FROM fixture_0113_after_input AS input_row
+    CROSS JOIN fixture_0113_after_preview AS preview_row
+    CROSS JOIN LATERAL app_data.confirm_personal_target_csv_import_v1(
+      'https://synthetic-0113-upgrade.example.test',
+      'owner',
+      (SELECT project_id FROM fixture_0113_after_context),
+      preview_row.preview_id,
+      '00000000-0113-4000-8000-000000000002'::uuid,
+      input_row.rows,
+      '[\"create\"]'::jsonb
+    ) AS confirmed;
+    CREATE TEMP TABLE fixture_0113_after_export ON COMMIT DROP AS
+    SELECT convert_from(
+      app_data.prepare_personal_target_pii_export_v1(
+        'https://synthetic-0113-upgrade.example.test',
+        'owner',
+        (SELECT project_id FROM fixture_0113_after_context),
+        clock_timestamp() - interval '1 minute'
+      ),
+      'UTF8'
+    )::jsonb AS document;
+    DO \$old_apis\$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM fixture_0113_after_confirm
+        WHERE outcome = 'confirmed'
+          AND row_count = 1
+          AND created_count = 1
+      ) OR NOT EXISTS (
+        SELECT 1 FROM fixture_0113_after_export
+        WHERE jsonb_array_length(document->'targets') = 2
+          AND EXISTS (
+            SELECT 1 FROM jsonb_array_elements(document->'targets') AS target
+            WHERE target->>'display_name' = '0112 baseline imported target'
+          )
+          AND EXISTS (
+            SELECT 1 FROM jsonb_array_elements(document->'targets') AS target
+            WHERE target->>'display_name' = '0113 upgraded import target'
+          )
+      ) THEN
+        RAISE EXCEPTION '0113 broke 0111 import or 0112 export behavior';
+      END IF;
+    END
+    \$old_apis\$;
+    ROLLBACK;
+  " \
+  >/dev/null
+personal_target_pair_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/personal-target-pair-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${personal_target_pair_upgrade_replay}" != \
+    *'已验证 0113_personal_target_pair_preview（无需重复执行）'* ]] \
+  || [[ "${personal_target_pair_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0113 migration did not skip its checksum-verified replay.' >&2
+  printf '%s\n' "${personal_target_pair_upgrade_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${personal_target_pair_upgrade_replay}"
+echo '0112→0113 import/export、函数身份、既有资料与 checksum 幂等：通过。'
 
 
 echo '第一次执行 migration：从空库建立全部 schema。'
