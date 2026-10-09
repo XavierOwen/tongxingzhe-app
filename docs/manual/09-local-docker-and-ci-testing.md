@@ -2740,6 +2740,18 @@ main CI run35245849666实际出现 `0086 detached replay wrote transfer facts`�
 
 `TEST-111`随现有完整runner执行。最终owner integration包含全部正反向检查；完整套件还须通过原并发、checksum与独立恢复。scoped零副作用只表示本fixture关联事实，不能替代新业务路径的独立observer对账；合成Node24／Docker／CI不证明生产身份或部署。
 
+### 7.4 个人对象 assignment end 与 merge activation 的并发检查（Issue #558）
+
+从仓库根目录运行 `./tool/run_postgres_tests_in_docker.sh`。runner 会自动发现 0118 check、行为 fixture 和 `verify_personal_target_assignment_end_concurrency.sh`；它还会在专用升级库先建立真实 0117 preview／activation 数据，再单独应用 0118，比较 target、assignment、retention、preview、generation 与 activation 历史，并验证 migration checksum replay。全套完成后，既有 dump／restore 流程会在恢复库重跑 check 与 fixture。
+
+需要单独调查并发脚本时，应使用完整 runner 保留的测试库并设置 `DATABASE_URL`，再运行：
+
+```bash
+./tool/verify_personal_target_assignment_end_concurrency.sh
+```
+
+脚本使用独立 PostgreSQL 会话和 0117 的精确等待／gate 模式，检查同 assignment 双调用的单一 event 与一致时间，以及 end-first、activation-first 两种结果。它不适用于空库；并发脚本会提交 synthetic 测试记录。通过只证明当前 PostgreSQL 数据库合同，不证明 runtime 执行权、Backend／HTTP／Flutter、生产身份或部署。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：
