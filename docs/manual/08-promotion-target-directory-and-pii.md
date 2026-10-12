@@ -249,6 +249,12 @@ manifest 只摘要五类历史绑定事实的复合键、原对象来源、revis
 
 MANUAL-139 与 TEST-150 覆盖这一有限状态和验证入口。known-source end 不提供完整 split、待分配事实、逐项分配、current-contact projection、runtime／Backend／HTTP／Flutter、目录投影或到期双端清除；不能据此开放产品 active merge。结构检查、行为／升级 fixture 与独立会话并发只证明 synthetic PostgreSQL DB-only 合同，不证明生产身份、真实 PII 或用户体验。
 
+7EF／0120 在同一 end event 表中增加 known-source generation expiry。它只允许当前个人 owner 手动处理单个 active generation。两端必须仍 active，并仍分配给 actor。函数锁后取一次数据库时间，比较两端 current due 的较早值。达到该截止时，同一事务结束 generation，并复用既有内部匿名化逻辑处理两端，即使另一端自己的 due 较晚。
+
+expiry event 使用固定的 `personal_target_known_source_merge_expire` operation 和 `retention_expired` reason。事件表也保留 0119 普通结束的固定组合，不新增表。generation end、两端匿名化及两条 retention event 共用一个结束时间。source manifest 不一致、授权失效、未到期或任一端处理失败时，不留下部分变更。精确 actor／request／context／generation replay 返回首次时间，不再次匿名化；普通 end 与 expiry 的 receipt 不互通。
+
+MANUAL-140 与 TEST-151 说明这只是单 generation 的 DB-only 到期出口。它没有 batch 统一预锁、dispatcher、scheduler、生产部署或 60 分钟物理清理 SLA，也不提供用户功能、来源未知事实分配或完整 split。runtime 权限保持关闭；不得据此开放产品 active merge。合成测试不证明生产授权或真实 PII 清除。
+
 7EB／0116 不新建表，只将新的 retention renewal 与 workspace policy update 纳入 0114 private global fence。已完成的 exact renewal replay 在既有 mutation advisory lock 后返回原结果，不要求 target 仍 active，不追加 event，也不进 fence。新的 renewal 依次取得 mutation advisory lock、global fence 和 target `FOR UPDATE`；完成等待后才读取数据库时间，并重新验证 context、active target、当前 assignment、current due 与当前 policy，再写 event。若等待跨过 cutoff，renewal 失败且不留下 event。policy update 先做既有授权，再取得同一 fence，等待后重新授权；等待期间撤权时不写入。
 
 `promotion_target_review_due_at` 仍以 target 建立、active contact 或最近 renewal 的最晚时间加当前 workspace policy 动态计算。policy 更新会改变 active target 的 current due，但不会改写历史 retention event 或其中的 `review_due_at`。renewal 与 policy update 共用 fence：renewal 先完成时历史 event 保存旧 policy 下的 due，policy 之后只改变 current due；policy 先完成时 renewal event 使用新 policy。activation 与 preview validator 合同不变，validator 依据最新 due 重验；runtime activation 仍关闭。
@@ -489,4 +495,12 @@ CI 的 Linux job 在保留原 App build 后，执行 [`run_linux_offline_pii_dis
 
 ## 当前边界
 
-当前实现完成对象目录、个人或机构资料建立、初始分配、当前分配读取、接触关联、对象当次反应、项目关系阶段、独立生命周期、共享备注历史、显式冲突、阶段显示别名、个人与机构的六类历史关系、十二个月上限的保留复核、明确续期、不可逆匿名化，以及当前分配对象的七十二小时加密只读快照。个人空间 PII 导出 v1 已实现 PostgreSQL 原子文件与审计、Backend AMR／授权／HTTP，以及 Flutter 同账号密码重验、严格内存 artifact 和 Web 浏览器下载请求。浏览器请求不证明文件已保存；原生保存／分享、生产 Supabase AMR、真实 PII 和真人交付证据尚未验证。疑似重复对象已有未开放 runtime 的 preview、contact／项目关系代次 fence、renewal／workspace policy fence，以及由 0117 private activation v2 实现的 receipt 消费与 exact replay。个人—机构关系的 DB fence 已实现；0118 新增未向 runtime 授权的 DB-only assignment end writer，0119 新增只适用于五类历史事实均有明确原来源的 DB-only generation end。后者只移除 active mappings 并保留业务事实及旧 binding，不是完整 split。到期双端清除、runtime／用户可用 assignment end、目录级候选、清理调度、Backend／Flutter、runtime merge、合并投影、待分配事实与完整 split 尚未实现。组织切片仍需把组织角色和较短保留期的管理界面接入已经存在的策略表。
+当前实现包含对象目录、个人和机构资料建立、初始分配、当前分配读取、接触关联、对象当次反应、项目关系阶段和独立生命周期。共享备注、显式冲突、阶段别名、六类个人—机构历史关系、十二个月复核、明确续期和不可逆匿名化也已实现。当前分配对象支持七十二小时加密只读快照。
+
+个人空间 PII 导出 v1 已实现 PostgreSQL 原子文件与审计，以及 Backend AMR／授权／HTTP。Flutter 支持同账号密码重验、内存 artifact 和 Web 浏览器下载请求。浏览器请求不证明文件已保存。原生保存／分享、生产 Supabase AMR、真实 PII 和真人交付证据尚未验证。
+
+疑似重复对象已有未向 runtime 开放的 preview，以及 contact／项目关系代次 fence 和 renewal／workspace policy fence。0117 private activation v2 消费 preview receipt 并支持 exact replay。个人与机构关系的 DB fence 也已实现。
+
+0118 提供 DB-only assignment end。0119 提供只处理五类明确来源事实的 generation end。0120 提供当前 owner 手动处理单个 generation 的 DB-only expiry。
+
+0120 复用 0119 end event 表，在一个事务中结束代次、移除 active mappings 并匿名化两端。它没有 batch 预锁、dispatcher、scheduler、部署或 60 分钟物理清理 SLA，也不开放 runtime 或产品 active merge。目录候选、Backend／Flutter、runtime merge、合并投影、待分配事实与完整 split 尚未实现。组织切片仍需把组织角色和较短保留期的管理界面接入现有策略表。

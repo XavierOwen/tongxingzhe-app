@@ -117,6 +117,14 @@ manifest 指纹只覆盖五类已绑定事实的复合键、原对象来源、re
 
 此边界只结束已有明确原来源的 generation，不是完整 split；没有待分配事实存储、逐项分配或 current-contact projection，也没有 runtime／Backend／HTTP／Flutter 或部署接线。因此它不开放产品 active merge。MANUAL-139 与 TEST-150 记录在推广对象手册和 Docker／CI 测试章节。通过只证明 synthetic PostgreSQL 中的 DB-only known-source end 合同，不证明生产身份、真实 PII 或用户功能。
 
+## 7EF：到期结束已知来源的个人对象合并代次
+
+0120 复用 0119 end event 表，增加 private 单代次 expiry writer。首次处理仍要求当前个人 owner、两端 active 且分配给 actor，并核对 generation members 与 active mappings 恰好匹配。锁序为 request advisory lock、global generation fence、按 `(created_at, promotion_target_id)` 锁两端 target，再锁 actor assignments。
+
+全部锁后，writer 以一次数据库时间判断两端 current due 中较早的一端。未到期时稳定拒绝且不写入。已到期时，它重算 known-source manifest，原子删除两条 active mapping，复用既有内部匿名化函数处理两个 target，并为两端追加同一时间的 retention events。任一步失败都回滚。事件表只接受普通结束的 `personal_target_known_source_merge_end`／`known_source_split` 或到期结束的 `personal_target_known_source_merge_expire`／`retention_expired` 组合；不新建历史表。
+
+expiry 的 actor/request/context/generation 精确重放返回首次时间，不重复匿名化。普通 end 与 expiry 的 receipt 互不重放。此入口只处理当前 owner 发起的单一 generation，不提供 batch 预锁、dispatcher、scheduler、部署或 60 分钟物理清理 SLA，也不开放产品 active merge。MANUAL-140 与 TEST-151 记录在推广对象手册、产品规格和 Docker／CI 测试章节。验证只证明 synthetic PostgreSQL 合同，不证明生产身份或真实 PII。
+
 ## 7AH：可分享加入链接的数据库创建与预览
 
 0092 实现 Issue #358 的 link-only 子集。
