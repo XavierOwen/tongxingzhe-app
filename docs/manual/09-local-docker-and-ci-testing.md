@@ -2770,6 +2770,28 @@ TEST-150 的结构检查核对 migration 记录、value-free 事件表、约束�
 
 这些检查只证明五类已有明确来源事实条件下的 synthetic PostgreSQL DB-only generation end。它们不证明完整 split、待分配事实、current-contact projection、runtime／Backend／HTTP／Flutter、生产身份、真实 PII 或部署。
 
+### 7.6 已知来源合并代次到期结束（Issue #562）
+
+从仓库根目录运行 `./tool/run_postgres_tests_in_docker.sh`。runner 自动发现 0120 migration、MANUAL-140 结构检查和回滚行为 fixture。它也自动发现并执行 `verify_personal_target_known_source_merge_expiry_concurrency.sh`。
+
+runner 通过专用接线调用 0119→0120 upgrade fixture。该 fixture 不属于自动发现项。它从真实 0119 历史数据升级，并核对旧数据与 checksum。
+
+需要单独检查时，在完整 runner 保留的测试库中设置 `DATABASE_URL`，再运行：
+
+```bash
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_personal_target_known_source_merge_expiry.sql
+./tool/verify_personal_target_known_source_merge_expiry_concurrency.sh
+```
+
+TEST-151 核对 end event 的两种 operation／reason 组合和旧 end receipt replay。它也检查 expiry 函数 owner、ACL、签名与锁序。
+
+回滚 fixture 覆盖较早截止、时间边界、双端原子匿名化、旧 binding 保留和失败整笔回滚。它也检查精确 replay 与 end／expiry 交叉请求冲突。
+
+独立会话记录具体 PID、等待锁和最终状态。它覆盖两个 expiry 竞争，以及 expiry 与 renewal、policy、known-source end、事实 writer 和 PII export 的锁序。
+
+这些检查只证明当前个人 owner 手动处理单个 generation 的 synthetic PostgreSQL DB-only expiry。它们不证明 batch dispatcher、scheduler、生产部署、到期后 60 分钟物理删除 SLA、完整 split、runtime／Backend／HTTP／Flutter 或真实 PII。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：

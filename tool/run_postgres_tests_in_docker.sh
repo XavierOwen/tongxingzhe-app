@@ -12267,6 +12267,151 @@ fi
 printf '%s\n' "${personal_target_known_source_end_upgrade_replay}"
 echo '0118→0119 five-source facts/history preservation, known-source end and checksum replay: passed.'
 
+echo '验证 0119→0120 保留普通 end receipt、五类来源事实及旧函数身份。'
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0119_personal_target_known_source_merge_expiry_live.sql \
+  >/dev/null
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/personal-target-known-source-expiry-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0120_personal_target_known_source_merge_expiry.sql \\
+     /tmp/personal-target-known-source-expiry-upgrade-only/ && \\
+   test \"\$(find /tmp/personal-target-known-source-expiry-upgrade-only \\
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-target-known-source-expiry-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_personal_target_known_source_merge_expiry.sql
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$upgrade\$
+    DECLARE
+      saved public.fixture_0120_upgrade_state%ROWTYPE;
+      expired_at_value timestamptz;
+    BEGIN
+      SELECT * INTO STRICT saved FROM public.fixture_0120_upgrade_state;
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 119
+        OR (SELECT max(version) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0120_personal_target_known_source_merge_expiry'
+        OR NOT EXISTS (SELECT 1 FROM pg_proc p
+          WHERE p.oid = saved.end_function_oid
+            AND p.proowner = saved.end_function_owner
+            AND p.proacl IS NOT DISTINCT FROM saved.end_function_acl
+            AND p.proconfig IS NOT DISTINCT FROM saved.end_function_config)
+        OR (SELECT jsonb_agg(to_jsonb(r) ORDER BY promotion_target_id)
+            FROM app_data.promotion_targets r) IS DISTINCT FROM saved.targets
+        OR (SELECT jsonb_agg(to_jsonb(r) ORDER BY assignment_id)
+            FROM app_data.promotion_target_assignments r) IS DISTINCT FROM saved.assignments
+        OR (SELECT jsonb_agg(to_jsonb(r) ORDER BY promotion_target_id,event_id)
+            FROM app_data.promotion_target_retention_events r) IS DISTINCT FROM saved.retention_events
+        OR (SELECT jsonb_agg(to_jsonb(r) ORDER BY workspace_id)
+            FROM app_data.promotion_target_retention_policies r) IS DISTINCT FROM saved.retention_policies
+        OR (SELECT jsonb_agg(to_jsonb(r) ORDER BY contact_id)
+            FROM app_data.contacts r) IS DISTINCT FROM saved.contacts
+        OR (SELECT jsonb_agg(to_jsonb(r) ORDER BY contact_id,revision_number)
+            FROM app_data.contact_revisions r) IS DISTINCT FROM saved.contact_revisions
+        OR (SELECT jsonb_agg(to_jsonb(r) ORDER BY contact_id,revision_number,promotion_target_id)
+            FROM app_data.contact_target_links r) IS DISTINCT FROM saved.contact_links
+        OR (SELECT jsonb_agg(to_jsonb(r) ORDER BY promotion_target_id,project_id)
+            FROM app_data.promotion_target_project_relationships r) IS DISTINCT FROM saved.project_relationships
+        OR (SELECT jsonb_agg(to_jsonb(r) ORDER BY promotion_target_id,project_id,revision_number)
+            FROM app_data.promotion_target_relationship_revisions r) IS DISTINCT FROM saved.relationship_revisions
+        OR (SELECT jsonb_agg(to_jsonb(r) ORDER BY relationship_id)
+            FROM app_data.promotion_target_institution_relationships r) IS DISTINCT FROM saved.institution_relationships
+        OR (SELECT jsonb_agg(to_jsonb(r) ORDER BY relationship_id,revision_number)
+            FROM app_data.promotion_target_institution_relation_revisions r) IS DISTINCT FROM saved.institution_relation_revisions
+        OR (SELECT jsonb_agg(to_jsonb(r) ORDER BY preview_id)
+            FROM app_private.personal_target_pair_preview_receipts r) IS DISTINCT FROM saved.preview_receipts
+        OR (SELECT jsonb_agg(to_jsonb(r) ORDER BY generation_id)
+            FROM app_private.personal_target_merge_generations_v1 r) IS DISTINCT FROM saved.generations
+        OR (SELECT jsonb_agg(to_jsonb(r) ORDER BY generation_id,promotion_target_id)
+            FROM app_private.personal_target_merge_generation_members_v1 r) IS DISTINCT FROM saved.generation_members
+        OR (SELECT jsonb_agg(to_jsonb(r) ORDER BY promotion_target_id)
+            FROM app_private.personal_target_merge_active_members_v1 r) IS DISTINCT FROM saved.active_members
+        OR (SELECT jsonb_agg(to_jsonb(r) ORDER BY actor_app_user_id,request_id)
+            FROM app_private.personal_target_merge_activation_requests_v1 r) IS DISTINCT FROM saved.activation_requests
+        OR (SELECT jsonb_agg(to_jsonb(r) ORDER BY actor_app_user_id,request_id)
+            FROM app_private.personal_target_merge_activation_audit_v1 r) IS DISTINCT FROM saved.activation_audit
+        OR (SELECT jsonb_agg(to_jsonb(r) ORDER BY assignment_id)
+            FROM app_private.personal_target_assignment_end_events_v1 r) IS DISTINCT FROM saved.assignment_end_events
+        OR (SELECT jsonb_agg(to_jsonb(r) ORDER BY generation_id)
+            FROM app_private.personal_target_merge_end_events_v1 r) IS DISTINCT FROM saved.end_events
+      THEN
+        RAISE EXCEPTION '0119→0120 migration changed existing facts, receipt or function identity';
+      END IF;
+
+      IF app_private.end_known_source_personal_target_merge_generation_v1(
+          saved.app_user_id,saved.workspace_id,saved.project_id,saved.ordinary_end_request_id,
+          saved.ordinary_end_generation_id,saved.ordinary_end_fingerprint)
+        IS DISTINCT FROM saved.ordinary_end_at_utc
+      THEN
+        RAISE EXCEPTION '0120 changed historical known-source end replay';
+      END IF;
+
+      UPDATE app_data.promotion_targets
+      SET created_at = clock_timestamp() - interval '2 years'
+      WHERE promotion_target_id = '7efa0000-0000-4000-8000-000000000001';
+      expired_at_value := app_private.expire_known_source_personal_target_merge_generation_v1(
+        saved.app_user_id,saved.workspace_id,saved.project_id,
+        '7efa0000-0000-4000-8000-000000000032',saved.active_generation_id
+      );
+      IF (SELECT count(*) FROM app_data.promotion_targets
+          WHERE promotion_target_id IN ('7efa0000-0000-4000-8000-000000000001',
+            '7efa0000-0000-4000-8000-000000000002')
+            AND status = 'anonymized' AND phone IS NULL AND email IS NULL
+            AND anonymized_at = expired_at_value
+            AND anonymization_reason = 'retention_expired') <> 2
+        OR EXISTS (SELECT 1 FROM app_private.personal_target_merge_active_members_v1
+          WHERE generation_id = saved.active_generation_id)
+        OR NOT EXISTS (SELECT 1 FROM app_private.personal_target_merge_end_events_v1
+          WHERE generation_id = saved.active_generation_id
+            AND operation = 'personal_target_known_source_merge_expire'
+            AND reason = 'retention_expired' AND target_count = 2
+            AND fact_count = 8 AND ended_at_utc = expired_at_value)
+        OR (SELECT count(*) FROM app_data.promotion_target_retention_events
+          WHERE mutation_id IN (
+            'merge-expired:7efa0000-0000-4000-8000-000000000032:7efa0000-0000-4000-8000-000000000001',
+            'merge-expired:7efa0000-0000-4000-8000-000000000032:7efa0000-0000-4000-8000-000000000002')
+            AND event_type = 'anonymized' AND reason = 'retention_expired'
+            AND occurred_at = expired_at_value) <> 2
+      THEN
+        RAISE EXCEPTION '0120 upgrade did not atomically expire both original members';
+      END IF;
+    END
+    \$upgrade\$;
+  " \
+  >/dev/null
+personal_target_known_source_expiry_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/personal-target-known-source-expiry-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${personal_target_known_source_expiry_upgrade_replay}" != \
+    *'已验证 0120_personal_target_known_source_merge_expiry（无需重复执行）'* ]] \
+  || [[ "${personal_target_known_source_expiry_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0120 migration did not skip its checksum-verified replay.' >&2
+  printf '%s\n' "${personal_target_known_source_expiry_upgrade_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${personal_target_known_source_expiry_upgrade_replay}"
+echo '0119→0120 facts/receipt/function preservation, atomic pair expiry and checksum replay: passed.'
+
 
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
