@@ -233,7 +233,13 @@ merge 与 split 分别使用固定 canonical payload 和客户端 request UUID�
 
 7EC／0117 增加 private activation v2：首次成功激活在同一事务中消费 preview receipt，并记录 request 与审计；相同 actor／request 的精确重放返回原 generation，即使 receipt 已由 cleanup 删除；不同 request 不能重复消费同一 receipt。receipt 行锁与 cleanup 的 `SKIP LOCKED` 使并发按先后顺序线性化。0117 仍未授予 runtime activation 权限。
 
-到期双端清除、独立 assignment end、runtime merge、合并投影、split、Backend／HTTP／Flutter 和部署仍未交付。以上数据库边界不证明完整到期清除、到期后 60 分钟物理删除 SLA、生产授权、真实 PII 或用户功能可用。
+到期双端清除、runtime assignment end、用户可用的 assignment end、runtime merge、合并投影、split、Backend／HTTP／Flutter 和部署仍未交付。以上数据库边界不证明完整到期清除、到期后 60 分钟物理删除 SLA、生产授权、真实 PII 或用户功能可用。
+
+7ED／0118 增加独立的 assignment end 数据库 writer。调用者提交 actor、workspace、project 和已知 assignment UUID；数据库重新验证当前个人空间授权。assignment UUID 是一次性操作标识：精确重放返回原 `ended_at`，不能以不同身份或上下文重用；事件只保存 actor、workspace、project、assignment、固定的 `user_requested` 原因和结束时间，不复制 PII。
+
+结束分配与 merge activation 共用 0114 private generation fence。若对象属于 active merge generation，只有在结束这条分配后仍有另一条活动分配时才允许结束；结束最后一条活动分配必须先完成 split。end 先线性化时，0117 preview 绑定的 assignment 已失效，activation 失败且不创建 generation／activation event；activation 先线性化时，结束最后 assignment 失败且不写 end event。runtime role 没有此函数的执行权；本切片没有 Backend、HTTP、Flutter 或部署接线，不能据此提供用户操作。
+
+0118 migration、结构检查、升级 fixture 和独立会话并发脚本只证明 synthetic PostgreSQL 中的数据库授权、幂等、append-only、锁顺序及 0117 历史数据保留。它们不证明 runtime／生产身份、实际用户体验、完整 merge／split、到期双端清除或真实 PII 处理。
 
 7EB／0116 不新建表，只将新的 retention renewal 与 workspace policy update 纳入 0114 private global fence。已完成的 exact renewal replay 在既有 mutation advisory lock 后返回原结果，不要求 target 仍 active，不追加 event，也不进 fence。新的 renewal 依次取得 mutation advisory lock、global fence 和 target `FOR UPDATE`；完成等待后才读取数据库时间，并重新验证 context、active target、当前 assignment、current due 与当前 policy，再写 event。若等待跨过 cutoff，renewal 失败且不留下 event。policy update 先做既有授权，再取得同一 fence，等待后重新授权；等待期间撤权时不写入。
 
@@ -475,4 +481,4 @@ CI 的 Linux job 在保留原 App build 后，执行 [`run_linux_offline_pii_dis
 
 ## 当前边界
 
-当前实现完成对象目录、个人或机构资料建立、初始分配、当前分配读取、接触关联、对象当次反应、项目关系阶段、独立生命周期、共享备注历史、显式冲突、阶段显示别名、个人与机构的六类历史关系、十二个月上限的保留复核、明确续期、不可逆匿名化，以及当前分配对象的七十二小时加密只读快照。个人空间 PII 导出 v1 已实现 PostgreSQL 原子文件与审计、Backend AMR／授权／HTTP，以及 Flutter 同账号密码重验、严格内存 artifact 和 Web 浏览器下载请求。浏览器请求不证明文件已保存；原生保存／分享、生产 Supabase AMR、真实 PII 和真人交付证据尚未验证。疑似重复对象已有未开放 runtime 的 preview、contact／项目关系代次 fence、renewal／workspace policy fence，以及由 0117 private activation v2 实现的 receipt 消费与 exact replay。个人—机构关系的 DB fence 已实现。到期双端清除、独立 assignment end、目录级候选、清理调度、Backend／Flutter、runtime merge、合并投影和 split 尚未实现。组织切片仍需把组织角色和较短保留期的管理界面接入已经存在的策略表。
+当前实现完成对象目录、个人或机构资料建立、初始分配、当前分配读取、接触关联、对象当次反应、项目关系阶段、独立生命周期、共享备注历史、显式冲突、阶段显示别名、个人与机构的六类历史关系、十二个月上限的保留复核、明确续期、不可逆匿名化，以及当前分配对象的七十二小时加密只读快照。个人空间 PII 导出 v1 已实现 PostgreSQL 原子文件与审计、Backend AMR／授权／HTTP，以及 Flutter 同账号密码重验、严格内存 artifact 和 Web 浏览器下载请求。浏览器请求不证明文件已保存；原生保存／分享、生产 Supabase AMR、真实 PII 和真人交付证据尚未验证。疑似重复对象已有未开放 runtime 的 preview、contact／项目关系代次 fence、renewal／workspace policy fence，以及由 0117 private activation v2 实现的 receipt 消费与 exact replay。个人—机构关系的 DB fence 已实现；0118 也新增未向 runtime 授权的 DB-only assignment end writer。到期双端清除、runtime／用户可用 assignment end、目录级候选、清理调度、Backend／Flutter、runtime merge、合并投影和 split 尚未实现。组织切片仍需把组织角色和较短保留期的管理界面接入已经存在的策略表。

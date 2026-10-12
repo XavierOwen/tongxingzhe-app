@@ -12033,6 +12033,108 @@ fi
 printf '%s\n' "${personal_target_merge_receipt_upgrade_replay}"
 echo '0116→0117 live data/function preservation and checksum replay: passed.'
 
+echo '验证 0117→0118 保留既有 target、assignment、retention、preview、generation 与 activation。'
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0117_personal_target_assignment_end_live.sql \
+  >/dev/null
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/personal-target-assignment-end-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0118_personal_target_assignment_end.sql \\
+     /tmp/personal-target-assignment-end-upgrade-only/ && \\
+   test \"\$(find /tmp/personal-target-assignment-end-upgrade-only \\
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-target-assignment-end-upgrade-only \
+  "${container_name}" \
+  bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_personal_target_assignment_end.sql
+docker exec "${container_name}" psql \
+  -U postgres \
+  -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc \
+  --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$upgrade\$
+    DECLARE
+      saved public.fixture_0118_upgrade_state%ROWTYPE;
+    BEGIN
+      SELECT * INTO STRICT saved FROM public.fixture_0118_upgrade_state;
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> 117
+        OR (SELECT max(version) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0118_personal_target_assignment_end'
+        OR (SELECT jsonb_agg(to_jsonb(row_value)
+              ORDER BY row_value.promotion_target_id)
+            FROM app_data.promotion_targets AS row_value)
+          IS DISTINCT FROM saved.targets
+        OR (SELECT jsonb_agg(to_jsonb(row_value)
+              ORDER BY row_value.assignment_id)
+            FROM app_data.promotion_target_assignments AS row_value)
+          IS DISTINCT FROM saved.assignments
+        OR (SELECT jsonb_agg(to_jsonb(row_value)
+              ORDER BY row_value.promotion_target_id, row_value.event_id)
+            FROM app_data.promotion_target_retention_events AS row_value)
+          IS DISTINCT FROM saved.retention_events
+        OR (SELECT jsonb_agg(to_jsonb(row_value)
+              ORDER BY row_value.workspace_id)
+            FROM app_data.promotion_target_retention_policies AS row_value)
+          IS DISTINCT FROM saved.retention_policies
+        OR (SELECT jsonb_agg(to_jsonb(row_value) ORDER BY row_value.preview_id)
+            FROM app_private.personal_target_pair_preview_receipts AS row_value)
+          IS DISTINCT FROM saved.preview_receipts
+        OR (SELECT jsonb_agg(to_jsonb(row_value)
+              ORDER BY row_value.generation_id)
+            FROM app_private.personal_target_merge_generations_v1 AS row_value)
+          IS DISTINCT FROM saved.generations
+        OR (SELECT jsonb_agg(to_jsonb(row_value)
+              ORDER BY row_value.generation_id, row_value.promotion_target_id)
+            FROM app_private.personal_target_merge_generation_members_v1 AS row_value)
+          IS DISTINCT FROM saved.generation_members
+        OR (SELECT jsonb_agg(to_jsonb(row_value)
+              ORDER BY row_value.promotion_target_id)
+            FROM app_private.personal_target_merge_active_members_v1 AS row_value)
+          IS DISTINCT FROM saved.active_members
+        OR (SELECT jsonb_agg(to_jsonb(row_value)
+              ORDER BY row_value.actor_app_user_id, row_value.request_id)
+            FROM app_private.personal_target_merge_activation_requests_v1 AS row_value)
+          IS DISTINCT FROM saved.activation_requests
+        OR (SELECT jsonb_agg(to_jsonb(row_value)
+              ORDER BY row_value.actor_app_user_id, row_value.request_id)
+            FROM app_private.personal_target_merge_activation_audit_v1 AS row_value)
+          IS DISTINCT FROM saved.activation_audit
+      THEN
+        RAISE EXCEPTION '0117→0118 migration changed existing target or merge state';
+      END IF;
+    END
+    \$upgrade\$;
+  " \
+  >/dev/null
+personal_target_assignment_end_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/personal-target-assignment-end-upgrade-only \
+    "${container_name}" \
+    bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${personal_target_assignment_end_upgrade_replay}" != \
+    *'已验证 0118_personal_target_assignment_end（无需重复执行）'* ]] \
+  || [[ "${personal_target_assignment_end_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0118 migration did not skip its checksum-verified replay.' >&2
+  printf '%s\n' "${personal_target_assignment_end_upgrade_replay}" >&2
+  exit 1
+fi
+printf '%s\n' "${personal_target_assignment_end_upgrade_replay}"
+echo '0117→0118 target/assignment/retention/preview/generation/activation preservation and checksum replay: passed.'
+
 
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
