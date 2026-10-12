@@ -340,6 +340,12 @@ merge 与 split 各使用客户端 request UUID 和固定 canonical payload。�
 
 0118 增加独立 assignment end DB-only writer，以 assignment UUID 精确幂等并复用 0114 generation fence；active merge member 结束最后 assignment 前必须先 split。它没有 runtime 执行权，也没有用户可用的 Backend／HTTP／Flutter 路径。到期双端清除、合并投影和 split 尚未加入该边界，因此产品仍不得建立 active merge。当前实现也不发现、枚举或推荐目录候选，不证明 Backend／HTTP／Flutter、清理调度、生产授权、真实 PII、部署或到期后 60 分钟物理删除 SLA。
 
+0119 增加 DB-only known-source generation end。首次执行要求当前个人 owner、两端 active 且未到期、actor 对两端的 active assignment，以及恰为同一对的 generation members 与 active mappings。锁序为 request advisory lock、既有 global fence、按 `(created_at, promotion_target_id)` 排序的两端 target、actor assignments；等待后重取时间、重验授权并重算历史来源 manifest。
+
+manifest 仅摘要五类历史事实的复合键、原对象来源、revision 和必要的 `updated_at` 变化标记，不读取或散列 PII、备注、接触内容、阶段或反应值。成功原子删除该 generation 的两条 active mapping，并追加一条 value-free end event；两个 target、assignment、retention、generation／member、activation 历史及全部业务事实与旧 binding 保持不变。精确 replay 核对 actor、request、context、generation 和 fingerprint，返回首次结束时间，不影响之后新建的 generation；trigger 禁止旧 generation 复活。
+
+0119 只结束已有明确来源的代次，不负责完整 split、待分配事实或逐项分配，也不增加 current-contact projection、runtime／Backend／HTTP／Flutter 或部署能力。runtime 与 PUBLIC 不获新执行或直写权限。产品仍不得开放 active merge；本边界和对应 synthetic 测试不证明生产授权、真实 PII 或用户功能。
+
 ### 5.7 组织治理与生命周期
 
 | ID | 需求 |
@@ -3256,6 +3262,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-136` | 学习文档说明 0116 不新建表，将新的 retention renewal 与 workspace policy update 纳入 0114 global fence；已完成 exact replay 只在 mutation advisory lock 后返回原结果，不要求 target 仍 active，也不进 fence。新 renewal 按 mutation lock、global fence、target row lock 顺序执行，等待后取时并重验；policy update 等待后重授权。current due 按当前 policy 动态重算，历史 retention event 的 `review_due_at` 不改。runtime activation 仍关闭；到期双端清除、独立 assignment end、receipt consumption、合并投影、split、Backend／HTTP／Flutter 与部署仍未交付。 |
 | `MANUAL-137` | 学习文档说明 0117 private activation v2 原子消费 preview receipt、actor/request exact replay 可在 receipt cleanup 后返回原 generation、不同 request 不能重复消费同一 receipt，以及 activation／cleanup 的行锁与 `SKIP LOCKED` 线性化边界。明确 runtime activation 仍关闭；到期双端清除、独立 assignment end、runtime merge、合并投影、split、Backend／HTTP／Flutter 与部署仍未交付。 |
 | `MANUAL-138` | 学习文档说明 0118 的 `app_data.end_personal_target_assignment_v1` 是未授权 runtime 的 DB-only writer：assignment UUID 精确幂等，value-free append-only event 固定为 `user_requested`，writer 按 fence→target→assignment 顺序复验并加锁；active merge member 结束最后 assignment 前必须先 split。文档记录 0117→0118 upgrade 对 target／assignment／retention／preview／generation／activation 的保留断言、同 assignment 双调用和 activation 两种锁顺序，并明确不证明 runtime、Backend／HTTP／Flutter、生产身份、部署或真实 PII。 |
+| `MANUAL-139` | 学习文档说明 0119 DB-only known-source generation end 的授权、manifest、fence 与 target／assignment 锁序、value-free end event、原对象和五类事实及旧 binding 保留、精确 replay 与旧 generation 防复活；明确不提供完整 split、待分配事实、current-contact projection、runtime／Backend／HTTP／Flutter 或产品 active merge。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3583,6 +3590,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-147` | 7EB 从真实 0115 baseline 升级 0116，保留 target、关系／revision、retention event、policy、preview／generation 函数及被替换函数的 OID／owner／ACL、历史 event JSON、既有 CSV import／PII export 行为；覆盖无 active generation 时的 renewal、anonymization、policy、稳定错误与 exact replay 结果，并证明 exact replay 不进 fence。独立会话验证 activation／renewal、activation／policy 与 renewal／policy 的两种顺序，锁后取时和跨 cutoff 失败、等待后重授权、current due 按当前 policy 更新而历史 `review_due_at` 不变、失败零部分状态、runtime 无 activation 权限、checksum 与 restore。Markdown links 与 `git diff --check` 通过；合成 SQL 证据不证明到期双端清除、独立 assignment end、receipt consumption、runtime merge／split、Backend／HTTP／Flutter、生产授权、真实 PII、部署或物理清理 SLA。 |
 | `TEST-148` | 7EC 从真实 0116 baseline 升级 0117，保留旧 preview／validator／cleanup／activation 函数 OID、owner 与 ACL、既有 receipt 和历史；fresh／upgrade checks 覆盖 request exact replay、actor/request 隔离、receipt 单次消费、cleanup 后 replay、失败零部分状态、runtime ACL、checksum 与 restore。独立会话验证同 request replay、不同 request 竞争同 receipt、activation／cleanup 两种顺序及 activation／既有 fenced writer 两种顺序，并核对精确 blocker／waiter。Markdown links 与 `git diff --check` 通过；合成数据库证据不证明 runtime merge、到期双端清除、独立 assignment end、合并投影、split、Backend／HTTP／Flutter、生产授权、真实 PII 或部署。 |
 | `TEST-149` | 7ED 的 0117→0118 upgrade fixture 在真实 0117 baseline 建立 preview／activation，再校验 target、assignment、retention、preview、generation、activation 历史保持不变，runner 验证 0118 checksum replay。Fresh check／rollback fixture 覆盖函数与 event table 的最小 ACL、append-only、身份／workspace／project 授权、last-assignment merge 拒绝、exact replay／身份漂移、单一 event，以及失败不改 target／retention；独立会话脚本核对同 assignment 双调用一致时间和 end-first／activation-first 的精确等待、零副作用。全套恢复流程沿用 runner 既有 dump／restore；这些 synthetic PostgreSQL 证据不证明 runtime 执行权、Backend／HTTP／Flutter、生产身份、部署或真实 PII。 |
+| `TEST-150` | 0118→0119 专用 upgrade fixture 从真实 0118 历史数据升级并核对五类来源事实、target、assignment、retention、preview 与 merge history 保留及 checksum replay。结构检查与 rollback fixture 覆盖 manifest、12 列 value-free event、owner／ACL／immutability、安全属性和锁序；独立会话覆盖双 end、事实 writer 与 end、activation／assignment end，以及 PII export 的 target 锁顺序。全套恢复流程重跑结构检查与 fixture；synthetic PostgreSQL 证据不证明完整 split、runtime／Backend／HTTP／Flutter、生产授权、真实 PII 或部署。 |
 
 ## 9. UI、视觉与可访问性
 

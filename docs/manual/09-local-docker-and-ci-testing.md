@@ -2752,6 +2752,24 @@ main CI run35245849666实际出现 `0086 detached replay wrote transfer facts`�
 
 脚本使用独立 PostgreSQL 会话和 0117 的精确等待／gate 模式，检查同 assignment 双调用的单一 event 与一致时间，以及 end-first、activation-first 两种结果。它不适用于空库；并发脚本会提交 synthetic 测试记录。通过只证明当前 PostgreSQL 数据库合同，不证明 runtime 执行权、Backend／HTTP／Flutter、生产身份或部署。
 
+### 7.5 已知原来源合并代次结束（Issue #560）
+
+从仓库根目录运行 `./tool/run_postgres_tests_in_docker.sh`。runner 自动发现 0119 migration、MANUAL-139 结构检查、回滚行为 fixture 和 `verify_personal_target_known_source_merge_end_concurrency.sh`。0118→0119 升级 fixture 由 runner 的专用升级接线调用，不是自动发现项；它从真实 0118 历史数据继续应用 0119，并检查 checksum 与独立 dump／restore。
+
+需要单独调查时，在完整 runner 保留的测试库中设置 `DATABASE_URL`，再运行：
+
+```bash
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_personal_target_known_source_merge_end.sql
+./tool/verify_personal_target_known_source_merge_end_concurrency.sh
+```
+
+TEST-150 的结构检查核对 migration 记录、value-free 事件表、约束、owner／ACL、函数签名与安全属性，以及 fence、target、assignment 的锁序。行为与升级 fixture 核对授权、manifest 漂移、精确 replay、两条 active mapping 删除、五类业务事实和旧 binding 保留、旧 generation 不复活及 0118 最后 assignment 门禁。
+
+独立会话脚本记录具体 PID、等待锁与最终状态，覆盖双 end、事实 writer 与 end 两种顺序、end 与 activation／assignment end 的竞争及 PII export 的 target 锁序。并发脚本会提交 synthetic 数据，只能在专用测试库运行。
+
+这些检查只证明五类已有明确来源事实条件下的 synthetic PostgreSQL DB-only generation end。它们不证明完整 split、待分配事实、current-contact projection、runtime／Backend／HTTP／Flutter、生产身份、真实 PII 或部署。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：
