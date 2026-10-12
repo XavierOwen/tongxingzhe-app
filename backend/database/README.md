@@ -107,6 +107,16 @@ writer 在 0114 private generation fence 内依次锁定 fence、target 和 assi
 
 runner 自动发现 0118 structural check、rollback fixture 与 `verify_personal_target_assignment_end_concurrency.sh`。专用 0117→0118 upgrade fixture 先创建真实 preview 和 activation，再验证 target、assignment、retention、preview、generation、activation 数据完整保留及 checksum replay；常规 dump／restore 自动流程继续执行。并发脚本覆盖同 assignment 双调用只写一条 event 且时间一致，以及 end-first／activation-first 两种 fence 顺序。通过只证明 synthetic PostgreSQL DB-only 合同，不证明生产身份、部署、完整 merge／split 或真实 PII。
 
+## 7EE：结束已有明确来源的个人对象合并代次
+
+0119 增加 private manifest helper 与 known-source generation end writer。首次结束要求锁后仍是当前个人 workspace owner，且两端对象 active、未到期、仍分配给 actor；历史 generation members 与 active mappings 必须恰好是同一对。锁序为 request advisory lock、既有 global fence、按 `(created_at, promotion_target_id)` 排序的两个 target、actor assignments；等待后重取数据库时间、重验授权与 manifest。
+
+manifest 指纹只覆盖五类已绑定事实的复合键、原对象来源、revision 与必要的 `updated_at`，不读取或散列 PII、备注、接触内容、阶段或反应值。等待 fence 后发生事实清单变化时请求冲突，不写结束事件。
+
+成功事务只移除该 generation 的两条 active mapping，并追加一条 value-free end event；保留两个原对象、assignment、retention、generation／member、activation 历史、业务事实及其旧 binding。相同 actor/request/context/generation/fingerprint 精确重放返回原结束时间，不会结束后来建立的新 generation。触发器拒绝把已结束 generation 放回 active mapping。所有新表和函数仍由受控 owner 持有，PUBLIC 与 runtime 无新权限。
+
+此边界只结束已有明确原来源的 generation，不是完整 split；没有待分配事实存储、逐项分配或 current-contact projection，也没有 runtime／Backend／HTTP／Flutter 或部署接线。因此它不开放产品 active merge。MANUAL-139 与 TEST-150 记录在推广对象手册和 Docker／CI 测试章节。通过只证明 synthetic PostgreSQL 中的 DB-only known-source end 合同，不证明生产身份、真实 PII 或用户功能。
+
 ## 7AH：可分享加入链接的数据库创建与预览
 
 0092 实现 Issue #358 的 link-only 子集。
