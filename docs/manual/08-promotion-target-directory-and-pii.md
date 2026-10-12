@@ -255,6 +255,14 @@ expiry event 使用固定的 `personal_target_known_source_merge_expire` operati
 
 MANUAL-140 与 TEST-151 说明这只是单 generation 的 DB-only 到期出口。它没有 batch 统一预锁、dispatcher、scheduler、生产部署或 60 分钟物理清理 SLA，也不提供用户功能、来源未知事实分配或完整 split。runtime 权限保持关闭；不得据此开放产品 active merge。合成测试不证明生产授权或真实 PII 清除。
 
+7EG／0121 为满足完整 v2 字段来源选择的 active generation 增加 private、只读 JSON 投影。一个 SQL command snapshot 返回授权、原始资料、当前截止和来源事实。读取不加行锁、不写审计或 generation fence，也不调用写入型或自动 expiry 的列表入口。
+
+投影只使用 v2 activation 保存的保留对象、姓名、电话和 email 来源 ID。旧 v1 代次没有这些选择，数据库会稳定拒绝；残缺选择或来源不属于这对对象时也会拒绝。选定来源的 NULL 保持 NULL，不回退到另一端。
+
+投影保留两个原对象及其事实。两端各自显示当前项目关系、符合 actor／workspace／project 与 current-revision 条件的 contact links，以及满足既有双端分配规则的个人与机构关系。项目关系阶段、生命周期、备注、revision 和 aliases 不合并；个人与机构关系不附带 partner profile。
+
+投影只保证单次数据库 command snapshot 内一致。返回后授权或事实可以变化；后续在线入口仍须重验身份和 capability。该私有 SQL 函数不改变旧目录或 PII export，不接 runtime、Backend、HTTP、Flutter、界面或缓存，也不开放产品 active merge。MANUAL-141 与 TEST-152 说明这项边界；合成测试不证明生产授权、真实 PII 或用户体验。
+
 7EB／0116 不新建表，只将新的 retention renewal 与 workspace policy update 纳入 0114 private global fence。已完成的 exact renewal replay 在既有 mutation advisory lock 后返回原结果，不要求 target 仍 active，不追加 event，也不进 fence。新的 renewal 依次取得 mutation advisory lock、global fence 和 target `FOR UPDATE`；完成等待后才读取数据库时间，并重新验证 context、active target、当前 assignment、current due 与当前 policy，再写 event。若等待跨过 cutoff，renewal 失败且不留下 event。policy update 先做既有授权，再取得同一 fence，等待后重新授权；等待期间撤权时不写入。
 
 `promotion_target_review_due_at` 仍以 target 建立、active contact 或最近 renewal 的最晚时间加当前 workspace policy 动态计算。policy 更新会改变 active target 的 current due，但不会改写历史 retention event 或其中的 `review_due_at`。renewal 与 policy update 共用 fence：renewal 先完成时历史 event 保存旧 policy 下的 due，policy 之后只改变 current due；policy 先完成时 renewal event 使用新 policy。activation 与 preview validator 合同不变，validator 依据最新 due 重验；runtime activation 仍关闭。

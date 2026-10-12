@@ -941,11 +941,36 @@ FROM app_private.management_interest_report_release_attempts AS attempt
 WHERE attempt.release_request_id =
   '6b800000-0000-4000-8000-000000000002'::uuid;
 
-CREATE TEMP TABLE fixture_6ba_counts AS
+-- Follow fixture identities into generated personal contexts; concurrent
+-- bootstraps for unrelated identities are outside this bridge's side effects.
+CREATE TEMP VIEW fixture_6ba_application_counts AS
+WITH fixture_users AS (
+  SELECT app_user_id FROM app_data.app_users
+  WHERE app_user_id IN (
+    '6b110000-0000-4000-8000-000000000001'::uuid,
+    '6b110000-0000-4000-8000-000000000002'::uuid,
+    '6b110000-0000-4000-8000-000000000003'::uuid,
+    '6b110000-0000-4000-8000-000000000004'::uuid
+  ) OR app_user_id IN (
+    SELECT app_user_id FROM app_data.external_identities
+    WHERE issuer IN (
+      'https://directory-interest.synthetic/auth/v1',
+      ' https://directory-interest.synthetic/auth/v1 '
+    )
+  )
+), fixture_workspaces AS (
+  SELECT workspace_id FROM app_data.workspaces
+  WHERE workspace_id = '6b120000-0000-4000-8000-000000000001'::uuid
+    OR personal_owner_app_user_id IN (SELECT app_user_id FROM fixture_users)
+)
 SELECT
-  (SELECT count(*) FROM app_data.app_users) AS app_users,
-  (SELECT count(*) FROM app_data.workspaces) AS workspaces,
-  (SELECT count(*) FROM app_data.projects) AS projects;
+  (SELECT count(*) FROM fixture_users) AS app_users,
+  (SELECT count(*) FROM fixture_workspaces) AS workspaces,
+  (SELECT count(*) FROM app_data.projects
+    WHERE workspace_id IN (SELECT workspace_id FROM fixture_workspaces)) AS projects;
+
+CREATE TEMP TABLE fixture_6ba_counts AS
+SELECT * FROM fixture_6ba_application_counts;
 
 SET LOCAL ROLE tongxingzhe_runtime;
 
@@ -1132,10 +1157,7 @@ DECLARE
   audit_event_id_value uuid;
 BEGIN
   SELECT * INTO STRICT expected_counts FROM fixture_6ba_counts;
-  SELECT
-    (SELECT count(*) FROM app_data.app_users) AS app_users,
-    (SELECT count(*) FROM app_data.workspaces) AS workspaces,
-    (SELECT count(*) FROM app_data.projects) AS projects
+  SELECT * FROM fixture_6ba_application_counts
   INTO STRICT actual_counts;
   IF actual_counts.app_users IS DISTINCT FROM expected_counts.app_users
     OR actual_counts.workspaces IS DISTINCT FROM expected_counts.workspaces

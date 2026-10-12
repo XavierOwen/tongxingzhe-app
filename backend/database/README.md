@@ -125,6 +125,14 @@ manifest 指纹只覆盖五类已绑定事实的复合键、原对象来源、re
 
 expiry 的 actor/request/context/generation 精确重放返回首次时间，不重复匿名化。普通 end 与 expiry 的 receipt 互不重放。此入口只处理当前 owner 发起的单一 generation，不提供 batch 预锁、dispatcher、scheduler、部署或 60 分钟物理清理 SLA，也不开放产品 active merge。MANUAL-140 与 TEST-151 记录在推广对象手册、产品规格和 Docker／CI 测试章节。验证只证明 synthetic PostgreSQL 合同，不证明生产身份或真实 PII。
 
+## 7EG：已知来源合并代次的私有只读投影
+
+0121 增加 private、STABLE 的 JSON projection reader，不新增表、审计、缓存或 runtime 权限。单条 SQL command snapshot 同时读取 context、ledger、原资料、动态 due 与当前事实。它不取行锁、不写 generation fence，也不调用写入型或自动 expiry helper。
+
+只有 v2 activation 保存的四个字段来源指针可以决定保留对象及姓名、电话和 email。NULL 保持 NULL；旧 v1 代次、残缺选择或指向 pair 外对象的来源稳定失败，不猜测默认来源。两端的项目关系和当前事实仍按原对象分别返回，不合并阶段、备注、revision 或 aliases。
+
+响应提供两端原对象资料、各自当前项目关系、有效 contact links 和符合双端分配可见性规则的个人与机构关系，并使用两端 current due 的较早值。该 snapshot 只描述本次 command，不保证返回后授权或事实仍未变化。它不改变目录或 PII export，不接 runtime、Backend、HTTP、Flutter、缓存或 UI，也不开放 active merge。MANUAL-141 与 TEST-152 记录该边界。
+
 ## 7AH：可分享加入链接的数据库创建与预览
 
 0092 实现 Issue #358 的 link-only 子集。
