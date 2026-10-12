@@ -2792,6 +2792,21 @@ TEST-151 核对 end event 的两种 operation／reason 组合和旧 end receipt 
 
 这些检查只证明当前个人 owner 手动处理单个 generation 的 synthetic PostgreSQL DB-only expiry。它们不证明 batch dispatcher、scheduler、生产部署、到期后 60 分钟物理删除 SLA、完整 split、runtime／Backend／HTTP／Flutter 或真实 PII。
 
+### 7.7 已知来源合并视图（Issue #564）
+
+从仓库根目录运行 `./tool/run_postgres_tests_in_docker.sh`。需要单独检查时，在测试库设置 `DATABASE_URL`，再执行：
+
+```bash
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_personal_target_known_source_merge_projection.sql
+```
+
+TEST-152 核对 migration、函数签名、owner／ACL 和 STABLE／SECURITY DEFINER 属性。它也检查单条只读 snapshot 查询、v2 来源选择、响应键及 helper 不写入的边界。
+
+行为与升级 fixture 覆盖完整来源选择、NULL、旧 v1 和错误来源拒绝、两个原对象各自的关系与当前事实、context／assignment／due／终结状态，以及 0120 历史保留。并发测试检查 snapshot 内部一致性和下一次读取观察的新状态；它不要求 writer fence，也不应阻塞写入。
+
+这些测试只证明 synthetic PostgreSQL 中的 private DB-only snapshot。它们不证明返回后的授权仍有效，不证明 runtime、Backend、HTTP、Flutter、用户界面、缓存或生产部署，也不开放产品 active merge。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：

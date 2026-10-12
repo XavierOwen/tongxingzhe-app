@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import {randomUUID} from "node:crypto";
 import {readFileSync} from "node:fs";
 import {dirname, resolve} from "node:path";
 import {fileURLToPath} from "node:url";
+import test from "node:test";
 import {Pool} from "pg";
 
 import {
@@ -101,3 +103,52 @@ try {
     await pool.end();
   }
 }
+
+test("0065 bootstrap side-effect check scopes concurrent commits to its identities", async (t) => {
+  const regressionPool = new Pool({connectionString: databaseUrl});
+  try {
+    for (const related of [false, true]) {
+      await t.test(related ? "fixture bootstrap is detected" : "unrelated bootstrap is ignored", async () => {
+        const fixtureIssuer = `https://directory-interest-${randomUUID()}.synthetic/auth/v1`;
+        const regressionFixture = fixture.replaceAll(identity.issuer, fixtureIssuer);
+        const boundary = regressionFixture.indexOf(
+          "SET LOCAL ROLE tongxingzhe_runtime;",
+          regressionFixture.indexOf("CREATE TEMP TABLE fixture_6ba_counts AS"),
+        );
+        assert.ok(boundary > 0);
+        const fixtureClient = await regressionPool.connect();
+        try {
+          await fixtureClient.query("BEGIN");
+          await fixtureClient.query(regressionFixture.slice(0, boundary));
+          await (related ? fixtureClient : regressionPool).query(
+            "SELECT * FROM app_data.bootstrap_personal_context($1, $2)",
+            related
+              ? [fixtureIssuer, "unknown-reader"]
+              : [`https://unrelated-directory-${randomUUID()}.example.test`, "owner"],
+          );
+          if (related) {
+            const counts = await fixtureClient.query(`
+              SELECT actual.app_users = saved.app_users + 1
+                AND actual.workspaces = saved.workspaces + 1
+                AND actual.projects = saved.projects + 1 AS detected
+              FROM fixture_6ba_application_counts actual CROSS JOIN fixture_6ba_counts saved
+            `);
+            assert.equal(counts.rows[0]?.detected, true);
+            await assert.rejects(
+              fixtureClient.query(regressionFixture.slice(boundary)),
+              (error: unknown) => error instanceof Error &&
+                error.message === "6BA unknown identity bootstrapped application rows",
+            );
+          } else {
+            await fixtureClient.query(regressionFixture.slice(boundary));
+          }
+        } finally {
+          await fixtureClient.query("ROLLBACK");
+          fixtureClient.release();
+        }
+      });
+    }
+  } finally {
+    await regressionPool.end();
+  }
+});
