@@ -529,4 +529,4 @@ CI 的 Linux job 在保留原 App build 后，执行 [`run_linux_offline_pii_dis
 
 0120 复用 0119 end event 表，在一个事务中结束代次、移除 active mappings 并匿名化两端。它没有 batch 预锁、dispatcher、scheduler、部署或 60 分钟物理清理 SLA，也不开放 runtime 或产品 active merge。
 
-0121 的投影和 0122 的授权审计读取核心仍为 private。0123 只开放两个窄 runtime bridge，并接入专用 Backend 读取 API。普通目录合并、Flutter／UI、runtime merge、待分配事实与完整 split 尚未实现。组织切片仍需把组织角色和较短保留期的管理界面接入现有策略表。synthetic 测试不证明生产用户可用。
+0121 的投影和 0122 的授权审计读取核心仍为 private。0123 只开放两个窄 runtime bridge，并接入专用 Backend 读取 API。7EJ 增加独立 Flutter typed gateway／DTO 与 headless read-controller，但未接入启动装配、UI 或普通目录；读取仍只针对已知 generation，不开放 runtime merge、待分配事实或完整 split。controller 的资格变化会清除其内存引用并使迟到请求失效；这不证明物理抹除或撤回外部副本。组织切片仍需把组织角色和较短保留期的管理界面接入现有策略表。synthetic Flutter／HTTP 测试不证明生产用户、真实界面或部署可用。

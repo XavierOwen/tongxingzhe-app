@@ -2830,6 +2830,19 @@ Backend 单元测试核对缺 capability 时不调用审计 bridge，以及各�
 
 这些检查只证明 synthetic PostgreSQL、Backend 和 HTTP 合同，不证明生产身份、真实 PII、客户端收到响应、生产用户可用性或清理 SLA。
 
+### 7.10 Flutter 已知来源合并投影读取（Issue #570）
+
+从仓库根目录运行 focused tests：
+
+```bash
+flutter test test/targets/http_personal_target_merge_projection_gateway_test.dart \
+  test/features/targets/personal_target_merge_projection_read_controller_test.dart
+```
+
+gateway tests 检查固定 GET 的响应合同、严格 JSON／UTF-8／no-store 验证、畸形响应、一次 401 重试、不可变结果、身份 subject ABA 和关闭后的失效。controller tests 检查内存资格门禁、scope／selector 变更后的清除与请求代次隔离、会话流 error／done、相同 subject 的 token 元数据更新，以及只关闭自有订阅并保留借用资源。
+
+这些 synthetic Flutter／HTTP tests 不证明应用启动或 UI 接线、生产身份、真实 PII 或部署可用性；内存引用撤下也不等于物理抹除或收回外部副本。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：
