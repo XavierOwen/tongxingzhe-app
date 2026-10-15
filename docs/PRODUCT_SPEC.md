@@ -372,7 +372,27 @@ runtime 只获得这两个函数的 EXECUTE。0121／0122、表和既有 merge w
 
 Backend 的专用 GET 路由先验证 identity，再检查 UUID、调用资格 reader、核对两项 capability，然后调用审计 reader。第二次调用重新授权；缺 capability 不进入审计调用，两步间撤权会被数据库拒绝。严格 parser验证并原样返回 0121 projection。数据库提交审计后 parser／HTTP 仍可失败，因此 `viewed` 只证明数据库授权读取，不证明客户端收到资料。
 
-current personal project 资格独立于组织管理分析导航选择（ADR-0107）。这条 API 只读取已知 generation，不发现或创建 merge，不开放产品 active merge、目录替换、PII export 变更、Flutter、UI、缓存或部署；#549 preview 阻挡不变。证据限于 synthetic JWT、PostgreSQL 和 HTTP，不证明生产身份、真实 PII 或用户端可用性。
+current personal project 资格独立于组织管理分析导航选择（ADR-0107）。这条 API 只读取已知 generation，不发现或创建 merge，不开放产品 active merge、目录替换、PII export 变更、UI、缓存或部署；#549 preview 阻挡不变。证据限于 synthetic JWT、PostgreSQL 和 HTTP，不证明生产身份、真实 PII 或用户端可用性。
+
+7EJ／#570 增加独立 Flutter typed DTO、只读 gateway 和 headless read-controller。
+gateway 只调用 0123 专用 GET，并严格验证原生 JSON 结构。
+它保留 0121 定义的字段值、NULL、来源与两端事实。
+DTO 不暴露原始 Map，嵌套列表不可变。
+
+HTTP adapter 在 await 前后重验身份 subject 和调用方 request fence。
+401 最多刷新重试一次。
+响应必须符合 no-store JSON／UTF-8 合同，错误不得包含响应正文或字段值。
+
+controller 只在内存持有一个投影、selector、loading 和固定 failure。
+读取要求 ready、非 offline-cache、两会话属于同一 signed-in subject、personal context，以及查看和 merge 管理两项 capability。
+身份、actor、workspace、project、任一 capability、offline 资格或 selector 变化，都会撤下引用并退役请求。
+相关会话流 error／done 和 close 也会使旧请求失效。
+
+相同 subject 的普通 token 元数据更新不视为换号。
+controller 只关闭自己的订阅，不关闭借用资源。
+它不调用会 bootstrap／修复 context 的 `AppSession.refreshContext()`。
+
+这项读取不接入启动装配、UI、导航、离线或持久缓存、Vault／Drift／Outbox、自动发现、导出或 writer，也不开放 active merge。撤下 controller 持有的引用不证明物理抹除、外部副本撤回或返回后的持续授权。MANUAL-144 与 TEST-155 记录范围；证据限 synthetic Flutter／HTTP，不证明生产身份、真实界面或部署。
 
 ### 5.7 组织治理与生命周期
 
@@ -3295,6 +3315,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-141` | 学习文档说明 0121 private、单 command snapshot 的已知来源合并投影。记录 v2 字段来源选择、NULL 不回退、两端当前项目关系与事实分别呈现、partner visibility 和返回后的失效边界；明确不改变普通目录或 PII export，不接应用层或缓存，也不开放产品 active merge。 |
 | `MANUAL-142` | 学习文档说明 0122 private 授权读取器按原始 issuer／subject 精确映射 active app user 与个人 owner，复用两项 capability，并在一个 command 内调用 0121 一次且为两个返回来源各追加 `viewed` 审计。记录原子回滚、VOLATILE／STABLE 区别和最小 ACL；明确没有应用层接线或产品 active merge，也不证明生产用户可用或清理 SLA。 |
 | `MANUAL-143` | 学习文档说明 0123 只向 runtime 开放两个 `app_data` 读取 bridge：STABLE 零写入的 personal owner／current project 资格读取，以及重新授权并调用 private 0122 的 VOLATILE 审计读取。记录最小 EXECUTE ACL、个人 current project 与管理分析导航分离、已知 generation 限定，以及 API 不开放普通目录合并、产品 active merge 或 UI。synthetic 证据不证明生产身份、真实 PII 或用户交付。 |
+| `MANUAL-144` | 学习文档说明 7EJ 的独立 Flutter DTO、只读 gateway 与 headless controller：固定 0123 GET、严格解析与不可变结果、身份及 request fence、有限 401 重试、内存资格门禁和失效规则。记录借用资源所有权、无 `refreshContext()`、不接 UI／启动／缓存／writer，以及撤下内存引用不等于物理抹除。synthetic Flutter／HTTP 证据不证明生产身份、真实界面或部署。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3627,6 +3648,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-152` | 0120→0121 专用 upgrade fixture 保留 activation 来源指针、end／expiry event 与既有历史并验证 checksum replay。结构与行为检查覆盖只读 snapshot、v2 来源选择、NULL／旧 v1／错误来源、context／assignment／due／终结拒绝、两端关系和 current facts；独立会话核对 snapshot 一致性与下一次读取，不要求 fence 阻塞。synthetic PostgreSQL 证据不证明返回后的授权、runtime、应用层、缓存、部署或真实 PII。 |
 | `TEST-153` | 0121→0122 专用 upgrade fixture 保留 0121 与既有历史并验证 checksum replay。结构、行为和并发检查覆盖 exact 外部身份映射、active personal owner、两项 capability、单 command 调用 0121 一次、两条来源 `viewed` 审计及任一失败时全回滚，并验证上层 VOLATILE、下层 STABLE 零写入、PUBLIC／runtime 无 EXECUTE 和既有 JSON／NULL 合同。证据限于 synthetic PostgreSQL，不证明生产身份、生产用户功能或清理 SLA。 |
 | `TEST-154` | 0122→0123 upgrade 保留私有 reader 与既有历史并验证 checksum／restore。DB 与 Backend integration 覆盖精确身份、零 bootstrap／修复、personal current project、最小 runtime EXECUTE ACL、两步授权、缺 capability 不调用审计 bridge、两步间撤权、strict parser、auth-first 与 UUID-only route、no-store 和错误脱敏。也验证 DB 审计提交后 parser／HTTP 失败仍可留有两条 `viewed`。synthetic JWT／PostgreSQL／HTTP 证据不证明生产身份、真实 PII、客户端收件或 SLA。 |
+| `TEST-155` | Flutter focused tests 覆盖 0123 GET 的严格 JSON／UTF-8／no-store 合同、畸形响应、一次 401、不可变 DTO、取 token 与响应期间的身份 ABA 和 close；controller tests 覆盖资格门禁、selector 与 scope 变化时清除结果、请求代次隔离、会话流 error／done、同 subject token 更新及保留借用资源。synthetic Flutter／HTTP 证据不证明生产身份、UI 接线、真实 PII 或部署。 |
 
 ## 9. UI、视觉与可访问性
 
