@@ -327,6 +327,18 @@ metadata 只返回来源、事实标识和 revision metadata。当前合同将 T
 
 集合 GET 仅接受可选单个 `after`，禁止其它 query／body，全部响应 no-store。Backend 用同一原始身份先资格读取、再调用重新授权的 bridge；审计提交后 parser 或 HTTP 仍可能失败，因此 `viewed` 不证明送达。MANUAL-148 与 TEST-159 覆盖此链路；没有手填 UUID、创建合并、拆分、导出、普通目录替换或产品 active merge，#549 阻挡不变。合成数据、浏览器或 widget 测试不证明生产身份、真实 PII、native 设备认证或部署。
 
+### 0127 待分配接触关联的私有基础层（Issue #580）
+
+“待分配”指本次合并期间新增、尚未归属两个原对象之一的接触关联，不是对既有事实提出归属争议。0127 只支持这一种未知来源事实。联系人 revision 必须已在本代次期间建立，属于当前 actor／个人空间／项目，contact active，且没有绑定任一 member 的同 revision link；登记不改原 contact、revision、link 或来源。
+
+private header 保存 pending UUID、request、代次、contact／revision、type、actor／scope 和数据库时间。反应、联系同意与确认值由调用方明确给出，保存在独立 typed 业务表，不复制或散列进 ledger；登记不推导同意，也不创建任何源对象关联。request advisory 后使用既有 generation fence，锁后重验当前个人 owner、项目、双端 assignment 和当前时钟 due。live pending 内只有完全相同请求可精确重放；终结后不能靠已清除值推断重放。
+
+私有预检为 STABLE、单 command、真实 READ ONLY，返回 `known_source_plan`、`pending_contacts`、`pending_count`、`pending_fingerprint`。known-source plan 保持 0124 原样，pending 每项仅有 `pending_fact_id`、`contact_id`、`revision_number`、`target_type`、六位微秒 UTC `staged_at_utc`，按 pending UUID 排序。当前项目只作资格门禁：代次属于空间，预检包含它在各项目登记的全部 pending，登记项目与真实 contact scope 一致。切换当前项目不能导致遗漏或误报损坏。fingerprint 只覆盖这些 metadata；预检不读取业务值，不写审计或 fence，也不保存资格。TEXT contact ID 仍可能敏感，不能因此宣称数据匿名。
+
+旧 known-source end 若遇未处置 pending，会拒绝并全回滚；不能只处理已知 manifest 就绕过它们。旧 expiry 在原事务中登记不可变 purge metadata、删除该代次 payload，并继续匿名化两端。删除抑制、计数不符或后续匿名化失败都会回滚整次 expiry。header／purge history 只追加，payload 不可更新，仅真实 expiry receipt 允许删除；不影响其他代次。
+
+所有新表、函数和 trigger 均关闭 PUBLIC／runtime，旧函数 body／OID／ACL 和 manifest 不变。MANUAL-149 与 TEST-160 记录这份第一层交付；它没有逐项分配或最终确认 writer，也没有其他未知事实类型、Backend／HTTP／UI、生产合并、部署或定时清理 SLA。最终写回还须保持 contact revision、warehouse 与 sync 一致，不能用分配标签代替真实归属改变。
+
 ## HTTP 与权限边界
 
 | 方法与路径 | 用途 | Backend capability |

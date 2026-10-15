@@ -1,8 +1,9 @@
 \set ON_ERROR_STOP on
 BEGIN;
 
--- Reviewed Slice 7DZ inventory, grounded in migrations through 0115.
+-- Reviewed Slice 7DZ inventory, grounded in migrations through 0127.
 -- This is a structural definition baseline, not proof of runtime purge behavior.
+-- 0127 staging is personal-only; shared workspace/project roots remain structurally scanned.
 -- Workspaces and projects are shared roots: process rows only when their workspace
 -- is an organization; personal spaces and cross-organization shared roots survive.
 -- Personal merge members are opaque roots without a promotion-target FK; the
@@ -72,6 +73,7 @@ INSERT INTO purge_inventory_expected_fk VALUES
   ('app_data.personal_action_reminders', 'personal_action_reminders_app_user_id_fkey', 'app_data.app_users', 'r', 'FOREIGN KEY (app_user_id) REFERENCES app_data.app_users(app_user_id) ON DELETE RESTRICT'),
   ('app_data.personal_action_reminders', 'personal_action_reminders_project_id_fkey', 'app_data.projects', 'r', 'FOREIGN KEY (project_id) REFERENCES app_data.projects(project_id) ON DELETE RESTRICT'),
   ('app_data.personal_action_reminders', 'personal_action_reminders_workspace_id_fkey', 'app_data.workspaces', 'r', 'FOREIGN KEY (workspace_id) REFERENCES app_data.workspaces(workspace_id) ON DELETE RESTRICT'),
+  ('app_data.personal_merge_unassigned_contact_facts_v1', 'personal_merge_unassigned_contact_facts_v1_pending_fact_id_fkey', 'app_private.personal_merge_unassigned_contact_requests_v1', 'a', 'FOREIGN KEY (pending_fact_id) REFERENCES app_private.personal_merge_unassigned_contact_requests_v1(pending_fact_id)'),
   ('app_data.project_memberships', 'project_memberships_organization_membership_id_fkey', 'app_data.organization_memberships', 'r', 'FOREIGN KEY (organization_membership_id) REFERENCES app_data.organization_memberships(organization_membership_id) ON DELETE RESTRICT'),
   ('app_data.project_memberships', 'project_memberships_project_id_fkey', 'app_data.projects', 'r', 'FOREIGN KEY (project_id) REFERENCES app_data.projects(project_id) ON DELETE RESTRICT'),
   ('app_data.projects', 'projects_workspace_id_fkey', 'app_data.workspaces', 'r', 'FOREIGN KEY (workspace_id) REFERENCES app_data.workspaces(workspace_id) ON DELETE RESTRICT'),
@@ -325,6 +327,13 @@ INSERT INTO purge_inventory_expected_fk VALUES
   ('app_private.management_report_snapshots', 'management_report_snapshots_created_by_app_user_id_fkey', 'app_data.app_users', 'a', 'FOREIGN KEY (created_by_app_user_id) REFERENCES app_data.app_users(app_user_id)'),
   ('app_private.management_report_snapshots', 'management_report_snapshots_previous_snapshot_id_fkey', 'app_private.management_report_snapshots', 'a', 'FOREIGN KEY (previous_snapshot_id) REFERENCES app_private.management_report_snapshots(snapshot_id)'),
   ('app_private.management_report_snapshots', 'management_report_snapshots_project_id_fkey', 'app_data.projects', 'a', 'FOREIGN KEY (project_id) REFERENCES app_data.projects(project_id)'),
+  ('app_private.personal_merge_unassigned_contact_requests_v1', 'personal_merge_unassigned_conta_contact_id_revision_number_fkey', 'app_data.contact_revisions', 'a', 'FOREIGN KEY (contact_id, revision_number) REFERENCES app_data.contact_revisions(contact_id, revision_number)'),
+  ('app_private.personal_merge_unassigned_contact_requests_v1', 'personal_merge_unassigned_contact_reques_actor_app_user_id_fkey', 'app_data.app_users', 'a', 'FOREIGN KEY (actor_app_user_id) REFERENCES app_data.app_users(app_user_id)'),
+  ('app_private.personal_merge_unassigned_contact_requests_v1', 'personal_merge_unassigned_contact_requests_v1_project_id_fkey', 'app_data.projects', 'a', 'FOREIGN KEY (project_id) REFERENCES app_data.projects(project_id)'),
+  ('app_private.personal_merge_unassigned_contact_requests_v1', 'personal_merge_unassigned_contact_requests_v1_workspace_id_fkey', 'app_data.workspaces', 'a', 'FOREIGN KEY (workspace_id) REFERENCES app_data.workspaces(workspace_id)'),
+  ('app_private.personal_merge_unassigned_contact_requests_v1', 'personal_merge_unassigned_contact_requests_v_generation_id_fkey', 'app_private.personal_target_merge_generations_v1', 'a', 'FOREIGN KEY (generation_id) REFERENCES app_private.personal_target_merge_generations_v1(generation_id)'),
+  ('app_private.personal_merge_unassigned_contact_purges_v1', 'personal_merge_unassigned_con_pending_fact_id_generation_i_fkey', 'app_private.personal_merge_unassigned_contact_requests_v1', 'a', 'FOREIGN KEY (pending_fact_id, generation_id) REFERENCES app_private.personal_merge_unassigned_contact_requests_v1(pending_fact_id, generation_id)'),
+  ('app_private.personal_merge_unassigned_contact_purges_v1', 'personal_merge_unassigned_contact_purges_v1_generation_id_fkey', 'app_private.personal_target_merge_end_events_v1', 'a', 'FOREIGN KEY (generation_id) REFERENCES app_private.personal_target_merge_end_events_v1(generation_id)'),
   ('app_private.project_follow_up_consent_opt_in_versions', 'project_follow_up_consent_opt_in_version_actor_app_user_id_fkey', 'app_data.app_users', 'r', 'FOREIGN KEY (actor_app_user_id) REFERENCES app_data.app_users(app_user_id) ON DELETE RESTRICT'),
   ('app_private.project_follow_up_consent_opt_in_versions', 'project_follow_up_consent_opt_in_versions_project_id_fkey', 'app_data.projects', 'r', 'FOREIGN KEY (project_id) REFERENCES app_data.projects(project_id) ON DELETE RESTRICT'),
   ('app_private.project_reporting_time_zone_versions', 'project_reporting_time_zone_versi_requested_by_app_user_id_fkey', 'app_data.app_users', 'a', 'FOREIGN KEY (requested_by_app_user_id) REFERENCES app_data.app_users(app_user_id)'),

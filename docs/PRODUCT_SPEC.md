@@ -428,6 +428,16 @@ GET `/v1/projects/:projectId/promotion-target-merges` 只接受可选单个 `aft
 
 本片不提供创建合并、未知来源分配、完整 split、业务 writer、导出或产品 active merge，#549 与生产部署阻挡不变。MANUAL-148／TEST-159 记录目录、装配与选择；synthetic PostgreSQL／HTTP／Flutter 和浏览器证据不证明生产身份、真实 PII、native 设备认证、部署或清理 SLA。
 
+7EO／#580 为完整拆分交付首个未知来源存储层，仅支持合并期间新增的待分配接触关联。它不质疑或改写既有绑定，不把 NULL binding 当作未知。0127 的 private header 保存 pending／request／代次／联系人 revision 等标识和数据库时间，独立 `app_data` 表保存明确提供的反应、同意及确认值；ledger 不复制或散列业务值，登记也不建立源对象 link。
+
+private stage 只接受当前个人 owner、当前项目、完整 active generation、两端 assignment 和尚未到期的请求。request advisory 后取得既有 generation fence，锁后重新授权并按数据库时钟检查 due；联系人及 revision 必须属于同 actor／workspace／project，contact active，revision 不早于本代次激活，且两端不存在该 revision 的来源 link。同一 live pending 请求仅允许上下文、事实标识和业务值完全相同的重放；漂移冲突，终结或清除后不凭已消失 payload 推断重放。
+
+private STABLE 预检在单 command snapshot 中返回 0124 原 known-source plan、按 pending UUID 排序的 metadata 清单、count 和 metadata fingerprint。当前项目只作资格门禁，预检包括同代次的全部跨项目 pending；登记项目保留作来源，与真实 contact scope 一致，不强制等于当前项目。清单只含 pending／contact 标识、revision、type 和登记时间，不含业务值，不写审计或 fence，不保存资格。TEXT 标识可能敏感，metadata 不等于匿名数据。
+
+未处置 pending 存在时，旧 known-source end 被 end-event guard 拒绝并全回滚。原 expiry 在同一事务登记 value-free purge history、删除该代次业务 payload，再按既有规则匿名化两个成员；任何抑制、计数不符或清除失败使整次 expiry 回滚。header／purge history 只追加，payload 不可更新，只有真实 expiry receipt 允许删除。旧函数 body／OID／ACL、manifest 和既有读取合同不变，全部新对象继续关闭 PUBLIC／runtime。
+
+MANUAL-149／TEST-160 记录这一基础层。它没有逐项分配或最终原子确认 writer，不支持其余未知来源事实类型；后续写回须处理 contact revision、warehouse 和 sync 一致性，不能只贴分配标签。它不提供 Backend／HTTP／UI、产品 active merge、生产部署、定时清理或 SLA。
+
 ### 5.7 组织治理与生命周期
 
 | ID | 需求 |
@@ -3354,6 +3364,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-146` | 学习文档说明 0125 受控预检读取的 exact-identity／current-project 双重授权、两端原子 `viewed`、最小 runtime EXECUTE、固定 GET 与严格原生 plan parser。记录七种 metadata、跨项目历史、数据库原顺序与 opaque fingerprint、Flutter immutable DTO 和在途身份围栏；明确没有结果持有 controller、UI、完整 split、writer 或产品 active merge，审计不证明送达或持续授权。 |
 | `MANUAL-147` | 学习文档说明独立只读 projection panel 的明确读取、controller／借用资源所有权、换代或依赖变化时退役、字段来源与 NULL 不回退、原对象分组和 Material 内容展开。记录无自动读取／refreshContext、无 App 入口或 writer、snapshot 与物理抹除的边界；不把该组件或 synthetic 渲染称为产品 active merge、生产授权或 native 设备认证。 |
 | `MANUAL-148` | 学习文档说明受控 v2 代次目录的固定二十条 UUID 游标分页、失格省略和每实际 member 的 viewed 审计。记录个人在线双 capability 入口、显式目录读取／选择／资料读取、翻页或资格变化清除、App 资源所有权、零 bootstrap／修复及无持久缓存；不开放业务 merge／split 或生产部署。 |
+| `MANUAL-149` | 学习文档说明合并期间新增待分配接触关联的 typed 业务存储、仅标识 ledger、私有登记与 metadata-only 预检。记录 live 精确重放、旧 end 防绕过、expiry 处置与全回滚，以及无最终分配／确认 writer、其他未知事实类型、runtime／HTTP／UI 或产品 active merge 的边界。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3691,6 +3702,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-157` | 0124→0125 upgrade 保留旧函数、事实、manifest／plan 和 end／expiry replay，验证 checksum／restore。结构、行为与独立会话检查覆盖单 command 资格／plan／双审计、任一审计失败全回滚、exact identity 零 bootstrap、最小 ACL、上下层 volatility 和事实／撤权 snapshot。Backend unit 与真实 JWT／runtime HTTP 核对 auth-first、两步间撤权、七种 metadata、跨项目历史、重复键、parser／提交失败及旧 projection；Flutter VM／Chrome tests 核对不可变 DTO、原字符串／顺序、scope／caller／ABA 围栏、401 与 close。synthetic 证据不证明生产身份、真实 PII、UI、部署或完整 split。 |
 | `TEST-158` | 独立 projection panel widget tests 核对首次零请求、明确读取、loading／失败／重试／资格失效、generation／依赖替换和借用资源未关闭。验证字段来源、NULL 不回退、两端独立 stage／alias／note／facts、旧／NULL binding、empty、person／institution、中英文、窄屏大字、键盘展开与 Reduce Motion，以及无编辑／拆分／导出动作。VM／Chrome、全量 Flutter 与有界真实渲染核对布局；synthetic 证据不证明生产身份、真实 PII、native 设备认证或部署。 |
 | `TEST-159` | 0126 fresh／upgrade／checksum／restore 与 exact PID 并发测试验证 20／21／多页、nil／max、资格过滤、零 bootstrap／修复、每实际 member 审计及全回滚，保留旧读取与终结重放。Backend 真 HTTP 与 Flutter 原生 wire 对账；gateway／controller／panel 的 VM／Chrome、入口门禁、App 资源关闭和有界渲染验证仅当前页选择、无自动 PII 读取、翻页／刷新／资格失效清除及无持久缓存。 |
+| `TEST-160` | 0127 fresh／upgrade／checksum／独立恢复核对所有旧函数／读取／历史不变，新增业务值与 ledger 分离、资格、live 精确重放／漂移、metadata-only READ ONLY 预检、未知不从旧 binding 推断、旧 end 拒绝，以及 expiry 清除和故障全回滚。exact PID 并发覆盖 stage／end／expiry、相同 request 漂移和锁后撤权，验证来源事实不改写、失败无部分状态及仅处置当前代次。 |
 
 ## 9. UI、视觉与可访问性
 

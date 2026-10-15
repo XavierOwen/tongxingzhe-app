@@ -2909,6 +2909,20 @@ flutter test --platform chrome test/targets/http_personal_target_merge_directory
 
 检查初次零请求、仅当前页选择、选择不自动读 PII、翻页／刷新／资格变化清除和迟到请求退役。入口测试核对个人在线双 capability、组织／离线／注销／缺单项能力隐藏，以及 route 返回不关闭借用资源；App 测试核对 production builders 和失败／正常／迟到启动的恰好一次关闭。原生 Backend bytes 通过生产 Flutter gateway 对账后，合成验证页作有界宽／窄屏、中英文、大字和键盘选择检查，不加入 production。此证据不替代 native 设备、生产身份、真实 PII、部署或清理 SLA。
 
+### 7.15 待分配接触关联的私有基础层（Issue #580）
+
+运行 `./tool/run_postgres_tests_in_docker.sh`。自动发现的 0127 检查应验证 typed payload／仅标识 ledger 分离、所有新对象 PUBLIC／runtime 封闭、stage 锁后门禁、person／institution、NULL response、精确 TEXT ID、live 重放与漂移，以及失败零变更。私有 plan 必须为 metadata-only、单 command、STABLE READ ONLY；不能把 NULL binding 或既有 source link 改称未知。
+
+新表虽然只服务个人流程，其外键仍从共享 workspace／project 根进入组织清理的结构扫描；`verify_organization_purge_dependency_inventory.sql` 必须登记这 8 条精确外键。该清单不证明运行时清理行为。
+
+fresh／rollback 核对未处置 pending 阻止旧 end；expiry 只处置当前代次，删除 payload、保留不可变 purge metadata 并匿名化两端。第二项抑制、计数不符或清除／匿名化失败使全部回滚。真实 0126→0127 upgrade 保护所有旧 pg_proc 完整定义／ACL／OID、目录／投影／split plan、manifest、历史和终结重放，再检查 checksum 与独立 dump-restore。
+
+独立会话捕获 exact waiter／holder PID 后才释放 request／generation fence。覆盖 stage-first 阻止旧 end、end／expiry-first 阻止迟到 stage、stage 后到期清除、同 request payload 漂移，以及锁后 actor 撤权；失败 waiter 的全业务状态应与 holder 提交前的完整预期快照一致。stage 后到期测试使用明确的 synthetic due 变更，不将它称为真实生产时钟或 scheduler 证据。
+
+跨项目回归先在 A 登记，切到 B 后预检仍包含 A 项；再在 B 登记，返回 A 或 B 都必须得到完整两项。当前项目只作授权门禁，不能过滤同一空间级代次的来源事实。
+
+此片只交付存储、登记、预检和生命周期保护。测试不证明逐项分配／最终写回、其他未知事实类型、生产身份、真实 PII、部署或清理 SLA。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：
