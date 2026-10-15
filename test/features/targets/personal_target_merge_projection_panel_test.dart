@@ -96,6 +96,79 @@ void main() {
     );
   });
 
+  testWidgets(
+    'matches UUID source selectors across case and preserves their text',
+    (tester) async {
+      const workspaceId = '7ea00000-0000-4000-8000-000000000001';
+      const projectId = '7ea00000-0000-4000-8000-000000000002';
+      const generationId = '7ea00000-0000-4000-8000-000000000003';
+      const firstId = '7ea00000-0000-4000-8000-000000000011';
+      const secondId = '7EA00000-0000-4000-8000-000000000012';
+      final h = await _Harness.start(
+        context: TrustedSessionContext(
+          appUserId: syntheticSessionContext.appUserId,
+          workspace: const WorkspaceContext(
+            id: workspaceId,
+            kind: WorkspaceKind.personal,
+            name: 'Synthetic workspace',
+          ),
+          project: const ProjectContext(
+            id: projectId,
+            name: 'Synthetic project',
+          ),
+          questionnaireVersion: syntheticSessionContext.questionnaireVersion,
+          capabilities: _context().capabilities,
+        ),
+      );
+      addTearDown(h.close);
+      await tester.pumpWidget(h.widget(generationId: generationId));
+      await h.read(tester);
+      h.gateway.requests.single.result.complete(
+        PersonalTargetMergeProjectionReady(
+          PersonalTargetMergeProjection(
+            generationId: generationId,
+            workspaceId: workspaceId,
+            projectId: projectId,
+            targetType: PromotionTargetType.person,
+            retainedTargetId: firstId,
+            displayNameSourceTargetId: firstId.toUpperCase(),
+            phoneSourceTargetId: secondId.toLowerCase(),
+            emailSourceTargetId: firstId.toUpperCase(),
+            displayName: 'Synthetic UUID source',
+            phone: null,
+            email: 'first@example.test',
+            reviewDueAtUtc: DateTime.utc(2027),
+            sources: [
+              for (final id in [firstId, secondId])
+                PersonalTargetMergeProjectionSource(
+                  targetId: id,
+                  profile: PersonalTargetMergeSourceProfile(
+                    targetId: id,
+                    targetType: PromotionTargetType.person,
+                    displayName: 'Synthetic UUID source',
+                    phone: id == firstId ? 'first-phone' : null,
+                    email: id == firstId ? 'first@example.test' : null,
+                    createdAtUtc: DateTime.utc(2026),
+                  ),
+                  reviewDueAtUtc: DateTime.utc(2027),
+                  projectRelationship: null,
+                  contactLinks: const [],
+                  institutionRelationships: const [],
+                ),
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('来源 1 · ${firstId.toUpperCase()}'), findsNWidgets(2));
+      expect(find.text('来源 2 · ${secondId.toLowerCase()}'), findsOneWidget);
+      expect(find.textContaining('来源 0 ·'), findsNothing);
+      expect(find.text('原对象 ID: $firstId'), findsOneWidget);
+      expect(find.text('原对象 ID: $secondId'), findsOneWidget);
+      expect(find.text('电话: 未提供'), findsNWidgets(2));
+    },
+  );
+
   testWidgets('discloses source facts in server order without partner lookup', (
     tester,
   ) async {
@@ -562,10 +635,13 @@ final class _Harness {
   final AppStrings text;
   final gateway = _Gateway();
 
-  static Future<_Harness> start({String locale = 'zh'}) async {
+  static Future<_Harness> start({
+    String locale = 'zh',
+    TrustedSessionContext? context,
+  }) async {
     final identity = FakeIdentitySession(initial: _identity());
     final contexts = FakeSessionContextGateway(
-      context: _context(),
+      context: context ?? _context(),
       selectedContexts: {},
     );
     final session = AppSession(

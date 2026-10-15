@@ -191,7 +191,7 @@ final class _PersonalTargetMergeProjectionPanelState
     String sourceId,
   ) {
     final index = projection.sources.indexWhere(
-      (source) => source.targetId == sourceId,
+      (source) => source.targetId.toLowerCase() == sourceId.toLowerCase(),
     );
     return Padding(
       padding: const EdgeInsets.only(top: 12),
