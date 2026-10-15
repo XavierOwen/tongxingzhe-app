@@ -324,20 +324,64 @@ UPDATE app_data.app_users
 SET status = 'deleted'
 WHERE app_user_id = '00000000-0089-0000-0000-000000000006'::uuid;
 
+-- Follow identities and their actual relationships, including generated descendants.
+CREATE FUNCTION pg_temp.fixture_0089_lineage_counts()
+RETURNS TABLE (
+  app_user_count bigint,
+  identity_count bigint,
+  workspace_count bigint,
+  project_count bigint,
+  organization_membership_count bigint,
+  owner_assignment_count bigint,
+  project_membership_count bigint,
+  capability_count bigint
+)
+LANGUAGE sql STABLE
+SET search_path = pg_catalog, app_data
+AS $function$
+  WITH RECURSIVE fixture_users AS (
+    SELECT app_user_id FROM app_data.external_identities
+    WHERE issuer = 'https://synthetic-0089.example/auth/v1'
+    UNION
+    SELECT peer.app_user_id
+    FROM fixture_users actor
+    JOIN app_data.organization_memberships membership USING (app_user_id)
+    JOIN app_data.organization_memberships peer
+      ON peer.organization_workspace_id = membership.organization_workspace_id
+  ), fixture_workspaces AS (
+    SELECT workspace_id FROM app_data.workspaces
+    WHERE personal_owner_app_user_id IN (SELECT app_user_id FROM fixture_users)
+      OR workspace_id IN (
+        SELECT organization_workspace_id FROM app_data.organization_memberships
+        WHERE app_user_id IN (SELECT app_user_id FROM fixture_users))
+  ), fixture_memberships AS (
+    SELECT organization_membership_id FROM app_data.organization_memberships
+    WHERE app_user_id IN (SELECT app_user_id FROM fixture_users)
+      OR organization_workspace_id IN (SELECT workspace_id FROM fixture_workspaces)
+  ), fixture_projects AS (
+    SELECT project_id FROM app_data.projects
+    WHERE workspace_id IN (SELECT workspace_id FROM fixture_workspaces)
+  ), fixture_project_memberships AS (
+    SELECT project_membership_id FROM app_data.project_memberships
+    WHERE organization_membership_id IN (SELECT organization_membership_id FROM fixture_memberships)
+      OR project_id IN (SELECT project_id FROM fixture_projects)
+  )
+  SELECT
+    (SELECT count(*) FROM app_data.app_users WHERE app_user_id IN (SELECT app_user_id FROM fixture_users)),
+    (SELECT count(*) FROM app_data.external_identities
+      WHERE issuer = 'https://synthetic-0089.example/auth/v1' OR app_user_id IN (SELECT app_user_id FROM fixture_users)),
+    (SELECT count(*) FROM fixture_workspaces),
+    (SELECT count(*) FROM fixture_projects),
+    (SELECT count(*) FROM fixture_memberships),
+    (SELECT count(*) FROM app_data.organization_owner_assignments
+      WHERE organization_membership_id IN (SELECT organization_membership_id FROM fixture_memberships)),
+    (SELECT count(*) FROM fixture_project_memberships),
+    (SELECT count(*) FROM app_data.management_report_capability_grants
+      WHERE project_membership_id IN (SELECT project_membership_id FROM fixture_project_memberships))
+$function$;
+
 CREATE TEMP TABLE fixture_0089_counts_before ON COMMIT DROP AS
-SELECT
-  (SELECT count(*) FROM app_data.app_users) AS app_user_count,
-  (SELECT count(*) FROM app_data.external_identities) AS identity_count,
-  (SELECT count(*) FROM app_data.workspaces) AS workspace_count,
-  (SELECT count(*) FROM app_data.projects) AS project_count,
-  (SELECT count(*) FROM app_data.organization_memberships)
-    AS organization_membership_count,
-  (SELECT count(*) FROM app_data.organization_owner_assignments)
-    AS owner_assignment_count,
-  (SELECT count(*) FROM app_data.project_memberships)
-    AS project_membership_count,
-  (SELECT count(*) FROM app_data.management_report_capability_grants)
-    AS capability_count;
+SELECT * FROM pg_temp.fixture_0089_lineage_counts();
 
 CREATE TEMP TABLE fixture_0089_main_directory (
   result_ordinal bigint,
@@ -608,16 +652,7 @@ DECLARE
 BEGIN
   SELECT * INTO STRICT before_counts FROM fixture_0089_counts_before;
 
-  SELECT
-    (SELECT count(*) FROM app_data.app_users),
-    (SELECT count(*) FROM app_data.external_identities),
-    (SELECT count(*) FROM app_data.workspaces),
-    (SELECT count(*) FROM app_data.projects),
-    (SELECT count(*) FROM app_data.organization_memberships),
-    (SELECT count(*) FROM app_data.organization_owner_assignments),
-    (SELECT count(*) FROM app_data.project_memberships),
-    (SELECT count(*) FROM app_data.management_report_capability_grants)
-  INTO after_counts;
+  SELECT * INTO STRICT after_counts FROM pg_temp.fixture_0089_lineage_counts();
 
   IF after_counts IS DISTINCT FROM before_counts THEN
     RAISE EXCEPTION
