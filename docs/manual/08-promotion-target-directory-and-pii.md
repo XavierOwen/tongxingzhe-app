@@ -269,6 +269,16 @@ MANUAL-140 与 TEST-151 说明这只是单 generation 的 DB-only 到期出口�
 
 0122 保留 0121 的 JSON／NULL、当前事实、双端分配和 due 合同，不接 Backend／HTTP／Flutter、缓存、普通目录替换或导出，也不开放产品 active merge。MANUAL-142 与 TEST-153 记录这一边界。测试只证明 synthetic PostgreSQL 合同，不证明生产身份、用户功能或清理 SLA。
 
+7EI／#568 以 0123 增加两个 `app_data` runtime 函数。资格 reader `app_data.read_personal_merge_projection_context_v1(text,text,uuid)` 为 STABLE、零写入。它按未经归一化的 issuer／subject 读取 active app user、personal owner、current personal project，以及 `view_assigned_target_pii` 和 `manage_assigned_target_merges`。它不 bootstrap 或修复 context。
+
+审计 reader `app_data.read_personal_known_source_merge_projection_v1(text,text,uuid,uuid)` 为 VOLATILE。它调用 private 0122，在同一 command 中重新授权并为两端追加 `viewed` 审计。本切片只为 runtime 新增这两个函数的 EXECUTE，不开放 0121／0122、涉及的底表、ledger 或其他 merge writer。
+
+新增 Backend API 为 `GET /v1/projects/:projectId/promotion-target-merges/:generationId`。它只接受 UUID 路径，不接受 query 或 body；先验证身份，再验证 UUID。专用 store 先检查资格 reader 返回的两项 capability，再调用审计 bridge。第二次 SQL 调用重新授权；缺 capability 不触发审计调用，两步间撤权会被拒绝。
+
+Backend 严格验证 0121 原 JSON shape，成功时在 `{ "projection": ... }` 中原样返回。未认证或无效 token 返回 `401`，非法请求返回 `400`，已验证身份的资格或授权拒绝返回 `403`，依赖或合同错误返回 `503`。所有响应 `no-store`，错误不回显 PII 或数据库原文。数据库提交审计后，Backend 解析或 HTTP 仍可能失败并留下两条 `viewed`。该审计只证明数据库授权读取，不证明用户收到了响应。
+
+资格绑定 current personal project，组织管理分析导航选择仍按 ADR-0107 独立处理。读取只支持已知 generation；不发现、创建、确认、结束或拆分 merge，不改变普通目录与 PII export，不开放产品 active merge、Flutter、UI、缓存或部署。#549 preview 阻挡不变。测试限于 synthetic JWT／PostgreSQL／HTTP，不证明生产身份、真实 PII 或用户可用性。MANUAL-143 与 TEST-154 记录这些边界。
+
 7EB／0116 不新建表，只将新的 retention renewal 与 workspace policy update 纳入 0114 private global fence。已完成的 exact renewal replay 在既有 mutation advisory lock 后返回原结果，不要求 target 仍 active，不追加 event，也不进 fence。新的 renewal 依次取得 mutation advisory lock、global fence 和 target `FOR UPDATE`；完成等待后才读取数据库时间，并重新验证 context、active target、当前 assignment、current due 与当前 policy，再写 event。若等待跨过 cutoff，renewal 失败且不留下 event。policy update 先做既有授权，再取得同一 fence，等待后重新授权；等待期间撤权时不写入。
 
 `promotion_target_review_due_at` 仍以 target 建立、active contact 或最近 renewal 的最晚时间加当前 workspace policy 动态计算。policy 更新会改变 active target 的 current due，但不会改写历史 retention event 或其中的 `review_due_at`。renewal 与 policy update 共用 fence：renewal 先完成时历史 event 保存旧 policy 下的 due，policy 之后只改变 current due；policy 先完成时 renewal event 使用新 policy。activation 与 preview validator 合同不变，validator 依据最新 due 重验；runtime activation 仍关闭。
@@ -517,4 +527,6 @@ CI 的 Linux job 在保留原 App build 后，执行 [`run_linux_offline_pii_dis
 
 0118 提供 DB-only assignment end。0119 提供只处理五类明确来源事实的 generation end。0120 提供当前 owner 手动处理单个 generation 的 DB-only expiry。
 
-0120 复用 0119 end event 表，在一个事务中结束代次、移除 active mappings 并匿名化两端。它没有 batch 预锁、dispatcher、scheduler、部署或 60 分钟物理清理 SLA，也不开放 runtime 或产品 active merge。0121 提供 private 零写入投影，0122 增加按原始外部身份重新授权并原子记录双端查看审计的 private 读取核心；二者尚未接入在线入口。目录候选、Backend／Flutter、runtime merge、待分配事实与完整 split 尚未实现。组织切片仍需把组织角色和较短保留期的管理界面接入现有策略表。
+0120 复用 0119 end event 表，在一个事务中结束代次、移除 active mappings 并匿名化两端。它没有 batch 预锁、dispatcher、scheduler、部署或 60 分钟物理清理 SLA，也不开放 runtime 或产品 active merge。
+
+0121 的投影和 0122 的授权审计读取核心仍为 private。0123 只开放两个窄 runtime bridge，并接入专用 Backend 读取 API。普通目录合并、Flutter／UI、runtime merge、待分配事实与完整 split 尚未实现。组织切片仍需把组织角色和较短保留期的管理界面接入现有策略表。synthetic 测试不证明生产用户可用。

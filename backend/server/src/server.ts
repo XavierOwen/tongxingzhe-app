@@ -54,6 +54,10 @@ import {
   type PersonalTargetPiiExportStore,
 } from "./personal-target-pii-export.js";
 import {
+  readPersonalTargetMergeProjection,
+  type PersonalTargetMergeProjectionStore,
+} from "./personal-target-merge-projection.js";
+import {
   createTargetInstitutionRelationship,
   endTargetInstitutionRelationship,
   listTargetInstitutionRelationships,
@@ -203,6 +207,7 @@ export interface BackendServerDependencies
   readonly promotionTargetRetentionStore?: PromotionTargetRetentionStore;
   readonly personalTargetCsvImportStore?: PersonalTargetCsvImportStore;
   readonly personalTargetPiiExportStore?: PersonalTargetPiiExportStore;
+  readonly personalTargetMergeProjectionStore?: PersonalTargetMergeProjectionStore;
   readonly targetInstitutionRelationshipStore?:
     TargetInstitutionRelationshipStore;
   readonly personalActionPlanStore?: PersonalActionPlanStore;
@@ -1229,6 +1234,30 @@ export function createBackendServer(
       } catch (error) {
         writeBodyError(response, error);
       }
+      return;
+    }
+
+    const personalMergeProjectionMatch = requestUrl.pathname.match(
+      /^\/v1\/projects\/([^/]+)\/promotion-target-merges\/([^/]+)$/,
+    );
+    if (request.method === "GET" && personalMergeProjectionMatch !== null) {
+      const result = await readPersonalTargetMergeProjection(
+        {
+          authorization: request.headers.authorization,
+          projectId: personalMergeProjectionMatch[1] ?? "",
+          generationId: personalMergeProjectionMatch[2] ?? "",
+          hasQuery: (request.url ?? "").includes("?"),
+          hasBody: requestDeclaresBody(request.headers),
+        },
+        {
+          identityVerifier: dependencies.identityVerifier,
+          ...(dependencies.personalTargetMergeProjectionStore === undefined
+            ? {}
+            : {projectionStore: dependencies.personalTargetMergeProjectionStore}),
+        },
+      );
+      response.statusCode = result.status;
+      response.end(JSON.stringify(result.body));
       return;
     }
 

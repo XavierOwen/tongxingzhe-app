@@ -372,6 +372,24 @@ Node 测试使用 synthetic 已签名 JWT、HTTP server 和 PostgreSQL runtime r
 
 读取需要 `view_assigned_target_pii`；建立和结束另需 `manage_assigned_target_relations`。Backend 不接受 workspace、project、操作者、开始或结束时间。PostgreSQL 用可信服务器时间，检查一端是个人、另一端是机构、两端属于同一 workspace，且调用者当前同时获分配两端。相同 mutation 精确重放不会增加历史；改写重放、活动关系重复和并发失败返回 `409`。
 
+## 已知来源合并投影读取 API
+
+7EI／#568 增加固定入口：
+
+```text
+GET /v1/projects/:projectId/promotion-target-merges/:generationId
+```
+
+请求只接受路径中的 project 与 generation UUID，不接受 query 或 body。命中路由后先验证 Bearer identity，再校验 UUID。专用 store 保留 `VerifiedIdentity` 的 issuer／subject 原值，先调用 0123 资格 reader，核对当前 personal project 与 `view_assigned_target_pii`、`manage_assigned_target_merges`，再以同一身份和显式 project／generation 调用 0123 审计 bridge。它不调用 `SessionContextStore` 或 `loadOrCreate`。资格结果不是凭证；审计 bridge 会再次授权。缺 capability 时 Backend 不调用审计 bridge；两步之间撤权时，数据库拒绝读取。
+
+资格 reader 只读取既有身份、personal owner、当前 personal project 和 capability，不创建或修复 context。个人当前项目与管理分析导航 context 独立（ADR-0107）；用户当前选中的组织报告不能使有效的个人 project 资格失效。
+
+Backend 对 0121 原 JSON 执行严格 shape 验证，检查字段来源、NULL、pair 内来源、较早 current due、project／workspace 对应和来源事实。成功响应为 `{ "projection": <原始 JSON> }`，不重塑 projection；所有响应使用 `Cache-Control: no-store`。未认证或 token 无效返回 `401`，非法请求返回 `400`，已验证身份的资格或授权拒绝返回 `403`，依赖或返回合同错误返回 `503`。error code 以 `personal_target_merge_projection_` 为前缀。本入口不记录 PII、数据库错误原文或外部身份原值，失败响应也不携带这些值。
+
+数据库提交两条 `viewed` 审计后，Backend parser 或 HTTP 仍可能失败；此时审计可以保留。它只证明数据库完成授权读取，不证明用户收到响应。API 只审查已知 generation，不发现、创建、确认、结束或拆分 merge，也不替换普通目录或修改 PII export。它不开放产品 active merge、Flutter、UI 或缓存；#549 preview 阻挡保持原状。
+
+Node 和 PostgreSQL integration 使用 synthetic JWT、身份与资料。它们不证明生产身份、真实 PII、用户端可用性或清理 SLA。
+
 ## 私人行动计划合同
 
 私人周计划只使用已验证 identity 对应的当前个人空间和项目：

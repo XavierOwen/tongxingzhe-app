@@ -45,6 +45,9 @@ import {
 import {
   PostgresPersonalTargetPiiExportStore,
 } from "./personal-target-pii-export.js";
+import {
+  PostgresPersonalTargetMergeProjectionStore,
+} from "./personal-target-merge-projection.js";
 import { PostgresTargetInstitutionRelationshipStore } from "./target-institution-relationships.js";
 import { PostgresPersonalActionPlanStore } from "./personal-action-plans.js";
 import { PostgresPersonalActionReminderStore } from "./personal-action-reminders.js";
@@ -133,6 +136,9 @@ const personalTargetCsvImportStore =
   new PostgresPersonalTargetCsvImportStore(query);
 const personalTargetPiiExportStore =
   new PostgresPersonalTargetPiiExportStore(query);
+// The audited query must commit before its projection reaches HTTP.
+const personalTargetMergeProjectionStore =
+  new PostgresPersonalTargetMergeProjectionStore(query);
 const targetInstitutionRelationshipStore =
   new PostgresTargetInstitutionRelationshipStore(query);
 const personalActionPlanStore = new PostgresPersonalActionPlanStore(query);
@@ -225,6 +231,7 @@ const server = createBackendServer({
   promotionTargetRetentionStore: promotionTargetStore,
   personalTargetCsvImportStore,
   personalTargetPiiExportStore,
+  personalTargetMergeProjectionStore,
   targetInstitutionRelationshipStore,
   personalActionPlanStore,
   personalActionReminderStore,
