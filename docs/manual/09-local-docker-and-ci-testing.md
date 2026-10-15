@@ -2937,6 +2937,16 @@ person／institution、NULL response、原样 TEXT contact ID、两个来源及�
 
 此片不验证完整历史／多项拆分、Backend／HTTP／UI、外部消费者、设备同步、生产部署或清理 SLA。MANUAL-150 与 TEST-161 记录这一范围。
 
+### 7.17 历史、多项和当前来源候选的私有预检（Issue #585）
+
+运行 `./tool/run_postgres_tests_in_docker.sh`，自动发现 0129 check／fixture 和 `verify_personal_merge_contact_resolution_plan_concurrency.sh`。结构检查固定七键合同、STABLE／SECURITY DEFINER／owner／封闭 ACL，无新表或 runtime bridge。行为覆盖历史／多项、同／异来源、已有当前关联、NULL／真实旧 generation binding、raw TEXT、person／institution、A pending／B current、规范化映射、空清单及错误零变更。每项业务值仍留在原表，不进入候选清单或新指纹。
+
+真实 0128 baseline 先 seed 旧数据与完整 pg_proc 定义／OID／owner／ACL，再正式升级到 0129，校验原数据和旧读取、checksum 重放及独立 dump-restore。0128 对历史／多项的拒绝仍应保留，不将新预检当作完整 writer 或绕过 pending guard 的通道。此片没有新外键，不改变严格组织清理 inventory。
+
+独立会话在 READ ONLY／READ COMMITTED 中，于同一 command snapshot 建立后等待测试专用 advisory gate；观察 exact reader／holder PID 后，普通 revise 或 actor 撤权必须能先提交。释放 gate 后读取应返回完整旧 snapshot，且不改变 writer 提交后的全业务状态。下一 command 要么返回 current revision 改变的新 resolution 指纹（旧 known／pending 指纹不变），要么因撤权拒绝。reader 不得取得业务行锁或 generation fence，测试 gate 不是生产 reader 的锁。
+
+MANUAL-151／TEST-162 只证明 synthetic PostgreSQL 中的冲突预检；不证明最终历史写回、实际来源分配、生产身份、真实 PII、HTTP／UI、部署、外部消费者或设备同步。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：

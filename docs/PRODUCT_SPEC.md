@@ -446,6 +446,12 @@ MANUAL-149／TEST-160 记录这一基础层。它没有逐项分配或最终原�
 
 MANUAL-150／TEST-161 记录此有界 writer。它保持 PUBLIC／runtime 封闭，不提供历史／多项／冲突的完整拆分、Backend／HTTP／UI、产品 active merge、部署或真实清理 SLA；#582 的剩余合同与 #549 的部署阻挡不变。synthetic PostgreSQL 的 revision／pull／outbox 证据不证明生产身份、真实 PII、外部消费者或设备端同步。
 
+7ER／#585 推进 #582 的历史、多项与当前关联冲突预检。0129 的 private STABLE reader 在同一 SQL command snapshot 中复用原 0127 资格和完整清单，校验 known／pending 两指纹及覆盖全部跨项目 pending 的两键来源映射；空映射只在没有 pending 时有效。输入 shape／重复项拒绝 22023，集合、来源或预期指纹漂移拒绝 23505。PUBLIC／runtime 仍封闭，真实 READ ONLY，无写入、行锁、审计或 fence。
+
+固定七键输出保留原 `known_source_plan` 与 `pending_fingerprint`，另含合同 ID、contacts、source_slots、conflict_count 和 metadata-only `resolution_fingerprint`。每个 contact 保留原项目、current revision、按原 revision／pending UUID 排序的全部历史候选，以及当前 revision 的原 pair links；NULL／旧 generation binding 原样保留。按 contact/source 分槽，候选数为 pending 项数加当前关联数，大于一即要求选择，不比较反应／同意等业务值，不选赢家。raw TEXT contact 按 C 顺序、来源按 UUID 排序；完整映射和当前 revision／项目／binding 都进入新指纹，因此普通修订即使不改变旧两指纹，也会使处置预检变化。
+
+MANUAL-151／TEST-162 记录这份可执行预检。推荐的历史事实与当前投影分离方向见 ADR 0193；最终原子 writer 的 revision 编排仍待验证。此片不应用来源、不消费 pending、不结束代次，也不放宽 0128 或关闭 #582；单候选仍不是写回授权。它不接 Backend／HTTP／UI，不开放生产合并或部署，#549 阻挡不变。synthetic 数据库证据不证明生产身份、真实 PII、外部消费者或设备同步。
+
 ### 5.7 组织治理与生命周期
 
 | ID | 需求 |
@@ -3374,6 +3380,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-148` | 学习文档说明受控 v2 代次目录的固定二十条 UUID 游标分页、失格省略和每实际 member 的 viewed 审计。记录个人在线双 capability 入口、显式目录读取／选择／资料读取、翻页或资格变化清除、App 资源所有权、零 bootstrap／修复及无持久缓存；不开放业务 merge／split 或生产部署。 |
 | `MANUAL-149` | 学习文档说明合并期间新增待分配接触关联的 typed 业务存储、仅标识 ledger、私有登记与 metadata-only 预检。记录 live 精确重放、旧 end 防绕过、expiry 处置与全回滚，以及无最终分配／确认 writer、其他未知事实类型、runtime／HTTP／UI 或产品 active merge 的边界。 |
 | `MANUAL-150` | 说明 0128 当前单项 pending 的私有原子确认、完整跨项目映射、原 v3 新 revision 写回、实际应用证据、payload 消费与终结重放；明确历史／多项／原 pair 既有关联整批拒绝、普通 writer 不变、权限封闭及非完整拆分的边界。 |
+| `MANUAL-151` | 说明历史、多项 pending 与已有当前来源关联的私有处置预检、候选冲突、稳定顺序及覆盖 current revision／binding 的 metadata 指纹；明确不选赢家、不写回、不消费或结束代次，不改变 0128 限制或生产边界。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3713,6 +3720,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-159` | 0126 fresh／upgrade／checksum／restore 与 exact PID 并发测试验证 20／21／多页、nil／max、资格过滤、零 bootstrap／修复、每实际 member 审计及全回滚，保留旧读取与终结重放。Backend 真 HTTP 与 Flutter 原生 wire 对账；gateway／controller／panel 的 VM／Chrome、入口门禁、App 资源关闭和有界渲染验证仅当前页选择、无自动 PII 读取、翻页／刷新／资格失效清除及无持久缓存。 |
 | `TEST-160` | 0127 fresh／upgrade／checksum／独立恢复核对所有旧函数／读取／历史不变，新增业务值与 ledger 分离、资格、live 精确重放／漂移、metadata-only READ ONLY 预检、未知不从旧 binding 推断、旧 end 拒绝，以及 expiry 清除和故障全回滚。exact PID 并发覆盖 stage／end／expiry、相同 request 漂移和锁后撤权，验证来源事实不改写、失败无部分状态及仅处置当前代次。 |
 | `TEST-161` | 0128 fresh、真实 0127→0128 upgrade、checksum 与独立恢复验证旧 writer／读取／历史和 guard OID／ACL 保留；覆盖双类型、raw TEXT、NULL、两来源、A 写回／B 当前、实际 pull／去标识 outbox、终结精确重放及全输入／冲突／确认不足拒绝。故障与 exact PID 并发核对全业务状态回滚、预锁后 pending 增长、ordinary revise／stage／expiry 顺序、请求漂移及锁后撤权。 |
+| `TEST-162` | 0129 fresh／真实 0128 upgrade／checksum／独立恢复核对原函数、权限与数据不变；验证历史、多项同／异来源、已有同源冲突／异源保留、NULL／旧 binding、跨项目、规范化映射与严格 shape。READ ONLY／READ COMMITTED exact-PID 竞争验证单 command snapshot、零写入和无行锁，普通修订仅改变新指纹，撤权后的新 command 拒绝。 |
 
 ## 9. UI、视觉与可访问性
 
