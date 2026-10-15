@@ -351,6 +351,16 @@ private header 保存 pending UUID、request、代次、contact／revision、typ
 
 MANUAL-150／TEST-161 覆盖此有界能力。所有新对象仍关闭 PUBLIC／runtime，不接 Backend／HTTP／UI，不支持历史、多项或冲突的完整拆分，不开放生产合并、部署、scheduler 或真实清理 SLA。#582 与 #549 的剩余阻挡不变；合成数据库测试不证明生产身份、真实 PII、外部消费者或设备端同步。
 
+### 0129 历史、多项与当前关联的私有冲突预检（Issue #585）
+
+`plan_unassigned_personal_merge_contact_resolutions_v1` 接受 actor／workspace／当前项目／代次、known／pending 两指纹和完整两键 pending→source 映射。它复用原 0127 资格，覆盖同代次跨项目全部 pending，不因 revision 陈旧或同一 contact 多项而省略。空映射只在没有 pending 时允许；不完整映射、来源越界或预期指纹漂移拒绝，不能返回部分计划。
+
+固定七键结果保留原 known plan 和 pending 指纹。contacts 列出原项目、current revision、按原 revision／UUID 排序的历史候选，以及当前 revision 的原 pair links，NULL／旧 binding 原样保留。source_slots 按 contact／来源分组，记录 pending IDs、已有当前关联、候选数及是否多候选。多项即冲突，不比较业务值或自动选最新；单项也不构成未来写回授权。
+
+新 resolution 指纹覆盖完整映射及所有输出 metadata，包括 current revision、原项目和当前来源 binding。普通 revise 可能不改变旧 known／pending 两指纹，却使当前投影候选的依据变化，所以后续确认不能仅重验旧指纹。读取使用单 command snapshot，STABLE、真实 READ ONLY，无业务／审计／receipt／fence 写入或行锁；不保存资格。metadata 和 raw TEXT 标识不等于匿名数据。
+
+MANUAL-151／TEST-162 覆盖这一层。ADR 0193 记录历史事实与当前投影分离的推荐方向，最终 writer 仍待验证。此预检不建立实际归属、不消费 payload、不结束代次，不放宽 0128，不关闭 #582，也不接 Backend／HTTP／UI 或生产部署。
+
 ## HTTP 与权限边界
 
 | 方法与路径 | 用途 | Backend capability |
