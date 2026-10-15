@@ -149,6 +149,21 @@ expiry 的 actor/request/context/generation 精确重放返回首次时间，不
 
 0123 保持普通目录和 PII export 不变，也不开放候选发现、active merge、split 或 UI。数据库测试使用 synthetic 身份与资料，不证明生产用户可用、HTTP 已交付资料或清理 SLA。MANUAL-143 与 TEST-154 记录这些边界。
 
+## 7EK：已知来源合并代次的拆分预检
+
+0124 增加 private、STABLE 的事实目录 helper 和只读预检 reader。新 migration 让 0119 manifest 委托该目录。该委托保留原函数 OID、owner、ACL、count 和 fingerprint 字节合同，历史 migration 不变。0119 end、0120 expiry 与其 replay 语义不变。
+
+预检在一个 command snapshot 内重验 active personal owner 和当前 active personal project。
+它还核验代次两端的 active member 与 actor assignment、代次未结束和较早的 current due。
+它支持 v1、v2 generation，不读取 v2 profile 字段来决定来源。
+调用不写业务、审计、receipt、ledger、fence 或 context，不取行锁，也不调用写入或 expiry helper；PUBLIC 与 runtime 没有新权限。
+
+固定 JSON 返回 `generation_id`、`workspace_id`、`project_id`、`target_type`、排序的 `member_target_ids`、六位微秒 UTC 的 `review_due_at_utc`、`fact_count`、0119 原 `fact_fingerprint` 和排序的 `facts`。每项 fact 只有 `source_target_id` 与 `metadata`。
+目录覆盖五类历史事实：contact link、project relationship、project revision、institution relationship 和 institution revision。七种 metadata variant 为 `contact_link`、`project_relationship`、`project_revision`、`institution_relationship_person`、`institution_relationship_institution`、`institution_revision_person` 和 `institution_revision_institution`。
+它包含全部 generation binding 历史，包括旧 revision 与已结束关系，不按 current contact 过滤。metadata 仅返回来源、事实标识和 revision metadata；当前合同将 TEXT `contact_id` 作为事实标识。reader 不读取业务资料或事实值。
+
+NULL merge binding 不表示来源未知。预检不创建待分配记录，也不锁定返回后的授权或事实。来源或 manifest 在预检后变化时，旧 fingerprint 仍由 0119 的锁后确认拒绝；新预检返回当时的完整目录。0124 不提供完整 split、HTTP／Flutter 接线、产品 active merge、部署或 SLA。MANUAL-145 与 TEST-156 记录该边界；synthetic PostgreSQL 证据不证明生产身份、真实 PII 或用户可用性。
+
 ## 7AH：可分享加入链接的数据库创建与预览
 
 0092 实现 Issue #358 的 link-only 子集。

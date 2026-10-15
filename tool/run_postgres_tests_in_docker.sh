@@ -12783,6 +12783,143 @@ docker exec "${container_name}" psql \
 printf '%s\n' "${personal_target_projection_read_api_upgrade_replay}"
 echo '0122→0123 private-core/history preservation, runtime read bridges and checksum replay: passed.'
 
+echo '验证 0123→0124 保留历史 metadata 指纹、私有确认与在线读取合同。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0123_personal_target_merge_split_plan_live.sql \
+  >/dev/null
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/personal-target-merge-split-plan-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0124_personal_target_merge_split_plan.sql \\
+     /tmp/personal-target-merge-split-plan-upgrade-only/ && \\
+   test \"\$(find /tmp/personal-target-merge-split-plan-upgrade-only \\
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-target-merge-split-plan-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_personal_target_merge_split_plan.sql \
+  --file=/workspace/backend/database/checks/verify_personal_target_known_source_merge_end.sql \
+  --file=/workspace/backend/database/checks/verify_personal_target_known_source_merge_expiry.sql \
+  --file=/workspace/backend/database/checks/verify_personal_target_merge_projection_read_api.sql
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$upgrade\$
+    DECLARE
+      saved public.fixture_0124_upgrade_state%ROWTYPE;
+      requested_generation uuid;
+      plan jsonb;
+      old_manifest jsonb;
+    BEGIN
+      SELECT * INTO STRICT saved FROM public.fixture_0124_upgrade_state;
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> saved.migration_count + 1
+        OR (SELECT max(version) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0124_personal_target_merge_split_plan'
+        OR public.fixture_0124_business_state(saved.workspace_id) IS DISTINCT FROM saved.business_state
+        OR public.fixture_0124_function_catalog() IS DISTINCT FROM saved.function_catalog
+        OR public.fixture_0124_manifests(saved.workspace_id) IS DISTINCT FROM saved.manifests
+        OR (SELECT count(*) FROM app_data.promotion_target_access_events WHERE workspace_id = saved.workspace_id)
+          <> saved.access_event_count
+      THEN RAISE EXCEPTION '0123→0124 changed facts, audit, original manifest bytes or protected function identity'; END IF;
+
+      FOREACH requested_generation IN ARRAY ARRAY[saved.active_generation_id,saved.v1_generation_id] LOOP
+        plan := app_private.read_known_source_personal_merge_split_plan_v1(
+          saved.app_user_id,saved.workspace_id,saved.project_id,requested_generation);
+        SELECT value INTO STRICT old_manifest FROM jsonb_array_elements(saved.manifests)
+          WHERE value->>'generation_id' = requested_generation::text;
+        IF plan->>'fact_fingerprint' IS DISTINCT FROM old_manifest->>'fact_fingerprint'
+          OR plan->'fact_count' IS DISTINCT FROM old_manifest->'fact_count'
+          OR jsonb_array_length(plan->'facts') <> (plan->>'fact_count')::bigint
+          OR plan->>'workspace_id' IS DISTINCT FROM saved.workspace_id::text
+          OR plan->>'project_id' IS DISTINCT FROM saved.project_id::text
+          OR plan->>'generation_id' IS DISTINCT FROM requested_generation::text
+        THEN RAISE EXCEPTION '0124 upgraded v1/v2 preflight drifted from original manifest'; END IF;
+      END LOOP;
+      FOREACH requested_generation IN ARRAY ARRAY[saved.ordinary_end_generation_id,saved.expiry_generation_id] LOOP
+        BEGIN
+          PERFORM app_private.read_known_source_personal_merge_split_plan_v1(
+            saved.app_user_id,saved.workspace_id,saved.project_id,requested_generation);
+          RAISE EXCEPTION '0124 preflight accepted a terminal generation';
+        EXCEPTION WHEN insufficient_privilege THEN NULL;
+        END;
+      END LOOP;
+      IF public.fixture_0124_business_state(saved.workspace_id) IS DISTINCT FROM saved.business_state
+        OR (SELECT count(*) FROM app_data.promotion_target_access_events WHERE workspace_id = saved.workspace_id)
+          <> saved.access_event_count
+      THEN RAISE EXCEPTION '0124 upgraded preflight left writes'; END IF;
+
+      IF app_private.end_known_source_personal_target_merge_generation_v1(
+          saved.app_user_id,saved.workspace_id,saved.project_id,saved.ordinary_end_request_id,
+          saved.ordinary_end_generation_id,saved.ordinary_end_fingerprint) IS DISTINCT FROM saved.ordinary_end_at_utc
+        OR app_private.expire_known_source_personal_target_merge_generation_v1(
+          saved.app_user_id,saved.workspace_id,saved.project_id,saved.expiry_request_id,
+          saved.expiry_generation_id) IS DISTINCT FROM saved.expiry_at_utc
+        OR public.fixture_0124_business_state(saved.workspace_id) IS DISTINCT FROM saved.business_state
+      THEN RAISE EXCEPTION '0124 changed historical end/expiry replay'; END IF;
+
+      IF app_data.read_personal_merge_projection_context_v1(
+          saved.trusted_issuer,saved.trusted_subject,saved.project_id) IS DISTINCT FROM saved.context_document
+        OR app_data.read_personal_known_source_merge_projection_v1(
+          saved.trusted_issuer,saved.trusted_subject,saved.project_id,saved.active_generation_id)
+          IS DISTINCT FROM saved.projection_document
+      THEN RAISE EXCEPTION '0124 changed the existing read API result'; END IF;
+      BEGIN
+        PERFORM app_data.read_personal_merge_projection_context_v1(saved.unknown_issuer,saved.unknown_subject,saved.project_id);
+        RAISE EXCEPTION '0124 upgrade accepted an unknown identity';
+      EXCEPTION WHEN insufficient_privilege THEN NULL;
+      END;
+      BEGIN
+        PERFORM app_data.read_personal_known_source_merge_projection_v1(
+          saved.unknown_issuer,saved.unknown_subject,saved.project_id,saved.active_generation_id);
+        RAISE EXCEPTION '0124 upgraded read API accepted an unknown identity';
+      EXCEPTION WHEN insufficient_privilege THEN NULL;
+      END;
+      IF public.fixture_0124_business_state(saved.workspace_id) IS DISTINCT FROM saved.business_state
+        OR public.fixture_0124_function_catalog() IS DISTINCT FROM saved.function_catalog
+        OR public.fixture_0124_manifests(saved.workspace_id) IS DISTINCT FROM saved.manifests
+        OR (SELECT count(*) FROM app_data.external_identities WHERE issuer = saved.trusted_issuer) <> saved.identity_count
+        OR EXISTS (SELECT 1 FROM app_data.external_identities
+          WHERE issuer = saved.unknown_issuer AND subject = saved.unknown_subject)
+        OR (SELECT count(*) FROM app_data.promotion_target_access_events WHERE workspace_id = saved.workspace_id)
+          <> saved.access_event_count + 2
+      THEN RAISE EXCEPTION '0124 upgrade changed old facts, replay, identity or two-source audit behavior'; END IF;
+    END
+    \$upgrade\$;
+  " >/dev/null
+personal_target_split_plan_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/personal-target-merge-split-plan-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${personal_target_split_plan_upgrade_replay}" != \
+    *'已验证 0124_personal_target_merge_split_plan（无需重复执行）'* ]] \
+  || [[ "${personal_target_split_plan_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0124 migration did not skip its checksum-verified replay.' >&2
+  printf '%s\n' "${personal_target_split_plan_upgrade_replay}" >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="DO \$replay\$ DECLARE saved public.fixture_0124_upgrade_state%ROWTYPE; BEGIN
+    SELECT * INTO STRICT saved FROM public.fixture_0124_upgrade_state;
+    IF public.fixture_0124_business_state(saved.workspace_id) IS DISTINCT FROM saved.business_state
+      OR public.fixture_0124_function_catalog() IS DISTINCT FROM saved.function_catalog
+      OR public.fixture_0124_manifests(saved.workspace_id) IS DISTINCT FROM saved.manifests
+      OR (SELECT count(*) FROM app_data.promotion_target_access_events WHERE workspace_id = saved.workspace_id)
+        <> saved.access_event_count + 2
+    THEN RAISE EXCEPTION '0124 migration checksum replay changed state'; END IF;
+  END \$replay\$;" >/dev/null
+printf '%s\n' "${personal_target_split_plan_upgrade_replay}"
+echo '0123→0124 original manifests, v1/v2 preflight, read API, end/expiry replay and checksum replay: passed.'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 

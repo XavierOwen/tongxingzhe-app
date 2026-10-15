@@ -283,6 +283,18 @@ Backend 严格验证 0121 原 JSON shape，成功时在 `{ "projection": ... }` 
 
 `promotion_target_review_due_at` 仍以 target 建立、active contact 或最近 renewal 的最晚时间加当前 workspace policy 动态计算。policy 更新会改变 active target 的 current due，但不会改写历史 retention event 或其中的 `review_due_at`。renewal 与 policy update 共用 fence：renewal 先完成时历史 event 保存旧 policy 下的 due，policy 之后只改变 current due；policy 先完成时 renewal event 使用新 policy。activation 与 preview validator 合同不变，validator 依据最新 due 重验；runtime activation 仍关闭。
 
+### 0124 已知来源合并代次拆分预检（Issue #572）
+
+0124 为已有明确来源的个人合并代次提供私有只读预检。它在单个数据库 command snapshot 中重验 active personal owner、当前 active personal project、两个精确 active members、actor 对两端的 active assignment、代次未结束和较早的 current due。v1 与 v2 generation 均可读取；来源选择不依赖 v2 profile 字段。
+
+返回固定 JSON：`generation_id`、`workspace_id`、`project_id`、`target_type`、排序的 `member_target_ids`、六位微秒 UTC `review_due_at_utc`、`fact_count`、0119 的原 `fact_fingerprint`，以及排序的 `facts`。每项 fact 只有 `source_target_id` 和 `metadata`。
+五类事实是 contact link、project relationship、project revision、institution relationship 与 institution revision。机构两端分别编码，因此共有七种 metadata variant。清单覆盖全部历史 binding，包括旧 revision 与 ended relationship，不限于 current contact。
+metadata 只返回来源、事实标识和 revision metadata。当前合同将 TEXT `contact_id` 作为事实标识；reader 不读取业务资料或事实值。
+
+预检不写业务、审计、receipt、ledger、fence 或当前项目，不取行锁，也不调用写入型或 expiry helper。它不保存资格，NULL merge binding 也不表示来源未知。返回后授权或事实可以变化；若 manifest 漂移，后续 0119 锁后确认仍按原 fingerprint 拒绝，新预检才返回新的完整清单。
+
+此预检不是完整 split，也没有待分配事实存储或逐项分配。它不增加 PUBLIC／runtime 权限，不接 Backend、HTTP 或 Flutter，不开放产品 active merge、部署或 SLA。synthetic PostgreSQL 证据不证明生产身份、真实 PII 或用户可用性。
+
 ## HTTP 与权限边界
 
 | 方法与路径 | 用途 | Backend capability |

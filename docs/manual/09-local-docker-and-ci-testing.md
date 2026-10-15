@@ -2843,6 +2843,21 @@ gateway tests 检查固定 GET 的响应合同、严格 JSON／UTF-8／no-store 
 
 这些 synthetic Flutter／HTTP tests 不证明应用启动或 UI 接线、生产身份、真实 PII 或部署可用性；内存引用撤下也不等于物理抹除或收回外部副本。
 
+### 7.11 已知来源合并代次拆分预检（Issue #572）
+
+从仓库根目录运行完整 PostgreSQL 套件：
+
+```bash
+./tool/run_postgres_tests_in_docker.sh
+```
+
+0124 的检查应覆盖真实 0123→0124 upgrade、fresh 与 rollback fixture、checksum replay 和 dump／restore。独立会话还要比较预检 snapshot 与旧 fingerprint 确认的并发结果。预检读取不得写业务、审计、receipt、ledger、fence 或 context，也不得取得行锁。
+
+升级验证应保留 0119 manifest 函数 OID、owner、ACL、count 与 fingerprint 字节合同，以及 0119 end／0120 expiry replay 行为。reader 验证应包含 v1／v2 generation、NULL merge binding、五类事实与七种 metadata variant、全部历史 revision、两个 assignment 和较早 current due 门禁。
+旧 fingerprint 在事实变化后必须继续由锁后确认拒绝，新预检返回新的完整清单。metadata 只返回来源、事实标识和 revision metadata；检查应确认 reader 不读取业务资料或事实值。
+
+这些检查只证明 synthetic PostgreSQL 中的只读预检和迁移合同。它们不证明完整 split、待分配事实存储、Backend／HTTP／Flutter、生产身份、真实 PII、产品功能或部署。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：

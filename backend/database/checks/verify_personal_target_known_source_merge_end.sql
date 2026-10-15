@@ -109,6 +109,14 @@ BEGIN
   THEN RAISE EXCEPTION '0119 source manifest indexes drift'; END IF;
 
   SELECT pg_get_functiondef(manifest_function) INTO manifest_definition;
+  IF to_regprocedure('app_private.personal_target_merge_known_source_fact_catalog_v1(uuid)') IS NOT NULL THEN
+    IF strpos(manifest_definition,'personal_target_merge_known_source_fact_catalog_v1(') = 0 THEN
+      RAISE EXCEPTION '0119 manifest must use the shared fact catalog when present';
+    END IF;
+    manifest_definition := manifest_definition || pg_get_functiondef(
+      'app_private.personal_target_merge_known_source_fact_catalog_v1(uuid)'::regprocedure
+    );
+  END IF;
   IF strpos(manifest_definition,'app_data.contact_target_links') = 0
     OR strpos(manifest_definition,'app_data.promotion_target_project_relationships') = 0
     OR strpos(manifest_definition,'app_data.promotion_target_relationship_revisions') = 0

@@ -394,6 +394,18 @@ controller 只关闭自己的订阅，不关闭借用资源。
 
 这项读取不接入启动装配、UI、导航、离线或持久缓存、Vault／Drift／Outbox、自动发现、导出或 writer，也不开放 active merge。撤下 controller 持有的引用不证明物理抹除、外部副本撤回或返回后的持续授权。MANUAL-144 与 TEST-155 记录范围；证据限 synthetic Flutter／HTTP，不证明生产身份、真实界面或部署。
 
+7EK／#572 增加 private、STABLE 的已知来源拆分预检。0124 抽取 private fact-catalog helper，并让 0119 manifest 委托它。新 migration 保留原 manifest 的 OID、owner、ACL、count 与 fingerprint 字节合同，不修改历史 migration。0119 end、0120 expiry 和 replay 语义不变。
+
+预检重验 active personal owner 和当前 active personal project。
+它还核验两端 active member 与 actor assignment、代次未结束和两端较早的 current due。
+它支持 v1／v2 generation，不依赖 v2 profile 字段选择。
+固定输出包含 generation、workspace、project、target 标识和成员 ID，以及六位微秒 UTC `review_due_at_utc`、count、0119 原 fingerprint 和每项 fact 的 `source_target_id`、`metadata`。
+
+目录包含五类事实：contact link、project relationship、project revision、institution relationship 和 institution revision。机构两端分别编码，因此共有七种 metadata variant。目录覆盖全部历史 binding，包括旧 revision 与 ended relationship，不限定 current contact。
+metadata 只返回来源、事实标识和 revision metadata。当前合同将 TEXT `contact_id` 作为事实标识；reader 不读取业务资料或事实值。NULL merge binding 不表示来源未知。
+
+0124 reader 是真实 READ ONLY：不写业务、审计、receipt、ledger、fence 或 context，不取行锁，也不调用写入或 expiry helper。它不保存预检资格。预检后授权变化由既有锁后门禁拒绝；manifest metadata 漂移使旧 fingerprint 冲突，后续预检返回新目录。此切片不增加 PUBLIC／runtime 权限，不提供待分配存储、完整 split、Backend／HTTP／Flutter 接线、产品 active merge、部署或 SLA。MANUAL-145 与 TEST-156 记录范围；synthetic PostgreSQL 证据不证明生产身份、真实 PII 或用户功能。
+
 ### 5.7 组织治理与生命周期
 
 | ID | 需求 |
@@ -3316,6 +3328,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-142` | 学习文档说明 0122 private 授权读取器按原始 issuer／subject 精确映射 active app user 与个人 owner，复用两项 capability，并在一个 command 内调用 0121 一次且为两个返回来源各追加 `viewed` 审计。记录原子回滚、VOLATILE／STABLE 区别和最小 ACL；明确没有应用层接线或产品 active merge，也不证明生产用户可用或清理 SLA。 |
 | `MANUAL-143` | 学习文档说明 0123 只向 runtime 开放两个 `app_data` 读取 bridge：STABLE 零写入的 personal owner／current project 资格读取，以及重新授权并调用 private 0122 的 VOLATILE 审计读取。记录最小 EXECUTE ACL、个人 current project 与管理分析导航分离、已知 generation 限定，以及 API 不开放普通目录合并、产品 active merge 或 UI。synthetic 证据不证明生产身份、真实 PII 或用户交付。 |
 | `MANUAL-144` | 学习文档说明 7EJ 的独立 Flutter DTO、只读 gateway 与 headless controller：固定 0123 GET、严格解析与不可变结果、身份及 request fence、有限 401 重试、内存资格门禁和失效规则。记录借用资源所有权、无 `refreshContext()`、不接 UI／启动／缓存／writer，以及撤下内存引用不等于物理抹除。synthetic Flutter／HTTP 证据不证明生产身份、真实界面或部署。 |
+| `MANUAL-145` | [学习文档](manual/08-promotion-target-directory-and-pii.md#0124-已知来源合并代次拆分预检issue-572)说明 0124 的 private STABLE 只读预检、v1／v2 支持、五类事实与七种 metadata variant、历史 revision／ended relationship 覆盖、原 fingerprint 与返回后漂移拒绝，以及 NULL merge binding 不等于来源未知。明确没有待分配存储、完整 split、runtime／Backend／HTTP／Flutter 接线、产品 active merge 或部署。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3649,6 +3662,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-153` | 0121→0122 专用 upgrade fixture 保留 0121 与既有历史并验证 checksum replay。结构、行为和并发检查覆盖 exact 外部身份映射、active personal owner、两项 capability、单 command 调用 0121 一次、两条来源 `viewed` 审计及任一失败时全回滚，并验证上层 VOLATILE、下层 STABLE 零写入、PUBLIC／runtime 无 EXECUTE 和既有 JSON／NULL 合同。证据限于 synthetic PostgreSQL，不证明生产身份、生产用户功能或清理 SLA。 |
 | `TEST-154` | 0122→0123 upgrade 保留私有 reader 与既有历史并验证 checksum／restore。DB 与 Backend integration 覆盖精确身份、零 bootstrap／修复、personal current project、最小 runtime EXECUTE ACL、两步授权、缺 capability 不调用审计 bridge、两步间撤权、strict parser、auth-first 与 UUID-only route、no-store 和错误脱敏。也验证 DB 审计提交后 parser／HTTP 失败仍可留有两条 `viewed`。synthetic JWT／PostgreSQL／HTTP 证据不证明生产身份、真实 PII、客户端收件或 SLA。 |
 | `TEST-155` | Flutter focused tests 覆盖 0123 GET 的严格 JSON／UTF-8／no-store 合同、畸形响应、一次 401、不可变 DTO、取 token 与响应期间的身份 ABA 和 close；controller tests 覆盖资格门禁、selector 与 scope 变化时清除结果、请求代次隔离、会话流 error／done、同 subject token 更新及保留借用资源。synthetic Flutter／HTTP 证据不证明生产身份、UI 接线、真实 PII 或部署。 |
+| `TEST-156` | 0123→0124 upgrade 保留旧历史与 0119 manifest 函数身份／权限，核对原 fingerprint 字节合同和 checksum replay。Fresh／rollback fixture 与独立会话检查覆盖 v1／v2、NULL binding、五类事实／七种 metadata variant、全部历史 revision、owner／current project／两端 assignment／due／ended 门禁、只读 snapshot 与旧 fingerprint 的锁后冲突拒绝、最小 ACL 和 dump／restore。synthetic PostgreSQL 证据不证明生产身份、真实 PII、完整 split 或用户功能。 |
 
 ## 9. UI、视觉与可访问性
 
