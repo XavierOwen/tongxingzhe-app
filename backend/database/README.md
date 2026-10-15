@@ -133,6 +133,14 @@ expiry 的 actor/request/context/generation 精确重放返回首次时间，不
 
 响应提供两端原对象资料、各自当前项目关系、有效 contact links 和符合双端分配可见性规则的个人与机构关系，并使用两端 current due 的较早值。该 snapshot 只描述本次 command，不保证返回后授权或事实仍未变化。它不改变目录或 PII export，不接 runtime、Backend、HTTP、Flutter、缓存或 UI，也不开放 active merge。MANUAL-141 与 TEST-152 记录该边界。
 
+## 7EH：按外部身份授权读取已知来源合并投影
+
+0122 增加 private `app_private.read_authorized_known_source_personal_merge_projection_v1(text,text,uuid,uuid)`。它用原始 issuer／subject 精确映射 active app user 和未删除的 personal owner workspace，再从该 owner 身份派生既有查看与合并管理 capability。该 reader 不调用会写 context 或 bootstrap 的 helper。
+
+一个 SQL command snapshot 只调用 0121 一次。每次成功正好追加两条既有 `viewed` 审计，每个实际返回来源一条；审计失败时整条 command 回滚。上层函数为 VOLATILE；下层 0121 仍为 STABLE 且零写入。PUBLIC 和 runtime 均无新执行权。
+
+0122 不改变 0121 的 JSON／NULL、当前事实、双端分配或 due 合同，也不接 Backend／HTTP／Flutter、缓存、目录替换或导出，不开放 active merge。MANUAL-142 与 TEST-153 记录此边界。证据限于 synthetic PostgreSQL，不证明生产用户可用、生产授权或清理 SLA。
+
 ## 7AH：可分享加入链接的数据库创建与预览
 
 0092 实现 Issue #358 的 link-only 子集。

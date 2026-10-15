@@ -2807,6 +2807,21 @@ TEST-152 核对 migration、函数签名、owner／ACL 和 STABLE／SECURITY DEF
 
 这些测试只证明 synthetic PostgreSQL 中的 private DB-only snapshot。它们不证明返回后的授权仍有效，不证明 runtime、Backend、HTTP、Flutter、用户界面、缓存或生产部署，也不开放产品 active merge。
 
+### 7.8 授权读取已知来源合并视图（Issue #566）
+
+从仓库根目录运行 `./tool/run_postgres_tests_in_docker.sh`。runner 会自动发现 0122 migration、对应结构检查和 `backend/database/fixtures/0122_personal_target_authorized_known_source_merge_projection.sql` 行为 fixture。它也会运行 `tool/verify_personal_target_authorized_known_source_merge_projection_concurrency.sh`。
+
+单独检查时，在测试库设置 `DATABASE_URL`，再执行：
+
+```bash
+psql "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file backend/database/checks/verify_personal_target_authorized_known_source_merge_projection.sql
+```
+
+TEST-153 核对 0121→0122 升级历史与 checksum replay、精确身份映射、owner 和 capability 授权、0121 单次 snapshot 调用、双端 `viewed` 审计及整体回滚。它还检查上下层函数的 volatility、PUBLIC／runtime ACL、既有响应合同和独立会话并发。
+
+这些检查只证明 synthetic PostgreSQL 合同。它们不证明生产身份、生产用户功能、应用层接线或清理 SLA。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：
