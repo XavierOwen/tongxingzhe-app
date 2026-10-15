@@ -263,6 +263,12 @@ MANUAL-140 与 TEST-151 说明这只是单 generation 的 DB-only 到期出口�
 
 投影只保证单次数据库 command snapshot 内一致。返回后授权或事实可以变化；后续在线入口仍须重验身份和 capability。该私有 SQL 函数不改变旧目录或 PII export，不接 runtime、Backend、HTTP、Flutter、界面或缓存，也不开放产品 active merge。MANUAL-141 与 TEST-152 说明这项边界；合成测试不证明生产授权、真实 PII 或用户体验。
 
+7EH／0122 增加 private 授权读取器 `app_private.read_authorized_known_source_personal_merge_projection_v1(text,text,uuid,uuid)`。它按未经归一化的 issuer／subject 精确映射 active app user 和未删除的 personal owner workspace，再从该 owner 身份派生既有查看及合并管理 capability。它不调用会写 context 或 bootstrap 的 helper。
+
+读取器在一个 SQL command snapshot 内调用 0121 一次。每次成功正好追加两条现有 `viewed` 审计，每个实际返回来源一条；任一失败都使整条 command 回滚。0122 为 VOLATILE，0121 仍为 STABLE 且零写入。PUBLIC 和 runtime 没有新 EXECUTE 权限。
+
+0122 保留 0121 的 JSON／NULL、当前事实、双端分配和 due 合同，不接 Backend／HTTP／Flutter、缓存、普通目录替换或导出，也不开放产品 active merge。MANUAL-142 与 TEST-153 记录这一边界。测试只证明 synthetic PostgreSQL 合同，不证明生产身份、用户功能或清理 SLA。
+
 7EB／0116 不新建表，只将新的 retention renewal 与 workspace policy update 纳入 0114 private global fence。已完成的 exact renewal replay 在既有 mutation advisory lock 后返回原结果，不要求 target 仍 active，不追加 event，也不进 fence。新的 renewal 依次取得 mutation advisory lock、global fence 和 target `FOR UPDATE`；完成等待后才读取数据库时间，并重新验证 context、active target、当前 assignment、current due 与当前 policy，再写 event。若等待跨过 cutoff，renewal 失败且不留下 event。policy update 先做既有授权，再取得同一 fence，等待后重新授权；等待期间撤权时不写入。
 
 `promotion_target_review_due_at` 仍以 target 建立、active contact 或最近 renewal 的最晚时间加当前 workspace policy 动态计算。policy 更新会改变 active target 的 current due，但不会改写历史 retention event 或其中的 `review_due_at`。renewal 与 policy update 共用 fence：renewal 先完成时历史 event 保存旧 policy 下的 due，policy 之后只改变 current due；policy 先完成时 renewal event 使用新 policy。activation 与 preview validator 合同不变，validator 依据最新 due 重验；runtime activation 仍关闭。
@@ -511,4 +517,4 @@ CI 的 Linux job 在保留原 App build 后，执行 [`run_linux_offline_pii_dis
 
 0118 提供 DB-only assignment end。0119 提供只处理五类明确来源事实的 generation end。0120 提供当前 owner 手动处理单个 generation 的 DB-only expiry。
 
-0120 复用 0119 end event 表，在一个事务中结束代次、移除 active mappings 并匿名化两端。它没有 batch 预锁、dispatcher、scheduler、部署或 60 分钟物理清理 SLA，也不开放 runtime 或产品 active merge。目录候选、Backend／Flutter、runtime merge、合并投影、待分配事实与完整 split 尚未实现。组织切片仍需把组织角色和较短保留期的管理界面接入现有策略表。
+0120 复用 0119 end event 表，在一个事务中结束代次、移除 active mappings 并匿名化两端。它没有 batch 预锁、dispatcher、scheduler、部署或 60 分钟物理清理 SLA，也不开放 runtime 或产品 active merge。0121 提供 private 零写入投影，0122 增加按原始外部身份重新授权并原子记录双端查看审计的 private 读取核心；二者尚未接入在线入口。目录候选、Backend／Flutter、runtime merge、待分配事实与完整 split 尚未实现。组织切片仍需把组织角色和较短保留期的管理界面接入现有策略表。

@@ -12560,6 +12560,111 @@ fi
 printf '%s\n' "${personal_target_known_source_projection_upgrade_replay}"
 echo '0120→0121 facts/receipts/read-export preservation, source projection and checksum replay: passed.'
 
+echo '验证 0121→0122 保留旧只读投影，并原子审计授权读取的两个来源。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0121_personal_target_authorized_known_source_merge_projection_live.sql \
+  >/dev/null
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/personal-target-authorized-projection-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0122_personal_target_authorized_known_source_merge_projection.sql \\
+     /tmp/personal-target-authorized-projection-upgrade-only/ && \\
+   test \"\$(find /tmp/personal-target-authorized-projection-upgrade-only \\
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-target-authorized-projection-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_personal_target_authorized_known_source_merge_projection.sql
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$upgrade\$
+    DECLARE
+      saved public.fixture_0122_upgrade_state%ROWTYPE;
+      projection jsonb;
+      terminal_generation uuid;
+    BEGIN
+      SELECT * INTO STRICT saved FROM public.fixture_0122_upgrade_state;
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> saved.migration_count + 1
+        OR (SELECT max(version) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0122_personal_target_authorized_known_source_merge_projection'
+        OR public.fixture_0122_business_state(saved.workspace_id) IS DISTINCT FROM saved.business_state
+        OR public.fixture_0122_function_catalog() IS DISTINCT FROM saved.function_catalog
+        OR (SELECT count(*) FROM app_data.promotion_target_access_events WHERE workspace_id = saved.workspace_id)
+          <> saved.access_event_count
+      THEN RAISE EXCEPTION '0121→0122 migration changed business facts, audits or existing functions'; END IF;
+
+      projection := app_private.read_authorized_known_source_personal_merge_projection_v1(
+        saved.trusted_issuer,saved.trusted_subject,saved.project_id,saved.active_generation_id);
+      IF projection IS DISTINCT FROM saved.projection_document
+        OR (SELECT count(*) FROM app_data.promotion_target_access_events WHERE workspace_id = saved.workspace_id)
+          <> saved.access_event_count + 2
+        OR public.fixture_0122_business_state(saved.workspace_id) IS DISTINCT FROM saved.business_state
+      THEN RAISE EXCEPTION '0122 upgraded reader must preserve projection and only append two source audits'; END IF;
+
+      BEGIN
+        PERFORM app_private.read_authorized_known_source_personal_merge_projection_v1(
+          saved.unknown_issuer,saved.unknown_subject,saved.project_id,saved.active_generation_id);
+        RAISE EXCEPTION '0122 upgraded reader accepted an unknown exact identity';
+      EXCEPTION WHEN insufficient_privilege THEN NULL;
+      END;
+      FOREACH terminal_generation IN ARRAY ARRAY[saved.ordinary_end_generation_id,saved.expiry_generation_id] LOOP
+        BEGIN
+          PERFORM app_private.read_authorized_known_source_personal_merge_projection_v1(
+            saved.trusted_issuer,saved.trusted_subject,saved.project_id,terminal_generation);
+          RAISE EXCEPTION '0122 upgraded reader returned a terminal generation';
+        EXCEPTION WHEN insufficient_privilege THEN NULL;
+        END;
+      END LOOP;
+      IF public.fixture_0122_business_state(saved.workspace_id) IS DISTINCT FROM saved.business_state
+        OR public.fixture_0122_function_catalog() IS DISTINCT FROM saved.function_catalog
+        OR EXISTS (SELECT 1 FROM app_data.external_identities
+          WHERE issuer = saved.unknown_issuer AND subject = saved.unknown_subject)
+        OR (SELECT count(*) FROM app_data.external_identities WHERE issuer = saved.trusted_issuer)
+          <> saved.identity_count
+        OR (SELECT count(*) FROM app_data.app_users WHERE app_user_id = saved.app_user_id)
+          <> saved.app_user_count
+        OR (SELECT count(*) FROM app_data.workspaces WHERE personal_owner_app_user_id = saved.app_user_id)
+          <> saved.workspace_count
+        OR (SELECT count(*) FROM app_data.user_current_projects WHERE app_user_id = saved.app_user_id)
+          <> saved.current_project_count
+        OR (SELECT count(*) FROM app_data.promotion_target_access_events WHERE workspace_id = saved.workspace_id)
+          <> saved.access_event_count + 2
+      THEN RAISE EXCEPTION '0122 rejected reads changed audits or bootstrapped identity/context'; END IF;
+    END
+    \$upgrade\$;
+  " >/dev/null
+personal_target_authorized_projection_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/personal-target-authorized-projection-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${personal_target_authorized_projection_upgrade_replay}" != \
+    *'已验证 0122_personal_target_authorized_known_source_merge_projection（无需重复执行）'* ]] \
+  || [[ "${personal_target_authorized_projection_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0122 migration did not skip its checksum-verified replay.' >&2
+  printf '%s\n' "${personal_target_authorized_projection_upgrade_replay}" >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="DO \$replay\$ BEGIN
+    IF (SELECT count(*) FROM app_data.promotion_target_access_events event
+        JOIN public.fixture_0122_upgrade_state saved ON saved.workspace_id = event.workspace_id)
+      <> (SELECT access_event_count + 2 FROM public.fixture_0122_upgrade_state)
+    THEN RAISE EXCEPTION '0122 migration replay appended access audits'; END IF;
+  END \$replay\$;" >/dev/null
+printf '%s\n' "${personal_target_authorized_projection_upgrade_replay}"
+echo '0121→0122 identity/projection/audit preservation and checksum replay: passed.'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 

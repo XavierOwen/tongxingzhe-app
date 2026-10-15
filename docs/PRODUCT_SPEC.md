@@ -358,6 +358,10 @@ manifest 仅摘要五类历史事实的复合键、原对象来源、revision �
 
 结果只在本次 command snapshot 内一致。函数返回后 context 或事实仍可变化；后续在线入口必须重新落实身份与 capability。0121 不改普通目录或 PII export，不接 runtime、Backend、HTTP、Flutter、缓存或部署，不开放产品 active merge。
 
+7EH／#566 以 0122 增加 private `app_private.read_authorized_known_source_personal_merge_projection_v1(text,text,uuid,uuid)`，按原始 issuer／subject 精确解析 active app user 与未删除的 personal owner workspace，并从该 owner 身份派生既有查看及合并管理 capability。它不调用会写 context 或 bootstrap 的 helper。
+
+reader 在一个 SQL command snapshot 内调用 0121 一次。每次成功正好追加两条既有 `viewed` 审计，每个实际返回来源一条；任一审计失败时整条 command 回滚。0122 为 VOLATILE；0121 仍为 STABLE、零写入。PUBLIC 与 runtime 均无新执行权。JSON／NULL、当前事实、双端分配和 due 合同沿用 0121；没有 Backend／HTTP／Flutter、缓存、普通目录替换、导出改变或 active merge 开放。证据只限 synthetic PostgreSQL，不证明生产用户可用或清理 SLA。
+
 ### 5.7 组织治理与生命周期
 
 | ID | 需求 |
@@ -3277,6 +3281,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-139` | 学习文档说明 0119 DB-only known-source generation end 的授权、manifest、fence 与 target／assignment 锁序、value-free end event、原对象和五类事实及旧 binding 保留、精确 replay 与旧 generation 防复活；明确不提供完整 split、待分配事实、current-contact projection、runtime／Backend／HTTP／Flutter 或产品 active merge。 |
 | `MANUAL-140` | 学习文档说明 0120 只提供当前个人 owner 手动结束单个已知来源 generation 的 DB-only 到期出口。说明以两端较早 current due 为准、复用既有双端匿名化、共享结束时间、operation／reason、精确 replay 和全有或全无边界；明确不提供 batch 预锁、dispatcher、scheduler、生产 60 分钟清理 SLA、runtime 或产品 active merge。 |
 | `MANUAL-141` | 学习文档说明 0121 private、单 command snapshot 的已知来源合并投影。记录 v2 字段来源选择、NULL 不回退、两端当前项目关系与事实分别呈现、partner visibility 和返回后的失效边界；明确不改变普通目录或 PII export，不接应用层或缓存，也不开放产品 active merge。 |
+| `MANUAL-142` | 学习文档说明 0122 private 授权读取器按原始 issuer／subject 精确映射 active app user 与个人 owner，复用两项 capability，并在一个 command 内调用 0121 一次且为两个返回来源各追加 `viewed` 审计。记录原子回滚、VOLATILE／STABLE 区别和最小 ACL；明确没有应用层接线或产品 active merge，也不证明生产用户可用或清理 SLA。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3607,6 +3612,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-150` | 0118→0119 专用 upgrade fixture 从真实 0118 历史数据升级并核对五类来源事实、target、assignment、retention、preview 与 merge history 保留及 checksum replay。结构检查与 rollback fixture 覆盖 manifest、12 列 value-free event、owner／ACL／immutability、安全属性和锁序；独立会话覆盖双 end、事实 writer 与 end、activation／assignment end，以及 PII export 的 target 锁顺序。全套恢复流程重跑结构检查与 fixture；synthetic PostgreSQL 证据不证明完整 split、runtime／Backend／HTTP／Flutter、生产授权、真实 PII 或部署。 |
 | `TEST-151` | 0119→0120 专用 upgrade fixture 保留旧 end event、五类来源事实、target、assignment、retention、preview 与 merge history，并验证 checksum replay。结构检查和 rollback fixture 覆盖互斥 operation／reason、旧 end replay、minDue 截止、双端原子匿名化、同时间 retention events、manifest、权限与失败回滚；独立会话核对竞争及与 renewal、policy、known-source end、事实 writer 和 PII export 的锁序。synthetic PostgreSQL 证据不证明 batch dispatcher、scheduler、生产 SLA、完整 split、runtime 或真实 PII。 |
 | `TEST-152` | 0120→0121 专用 upgrade fixture 保留 activation 来源指针、end／expiry event 与既有历史并验证 checksum replay。结构与行为检查覆盖只读 snapshot、v2 来源选择、NULL／旧 v1／错误来源、context／assignment／due／终结拒绝、两端关系和 current facts；独立会话核对 snapshot 一致性与下一次读取，不要求 fence 阻塞。synthetic PostgreSQL 证据不证明返回后的授权、runtime、应用层、缓存、部署或真实 PII。 |
+| `TEST-153` | 0121→0122 专用 upgrade fixture 保留 0121 与既有历史并验证 checksum replay。结构、行为和并发检查覆盖 exact 外部身份映射、active personal owner、两项 capability、单 command 调用 0121 一次、两条来源 `viewed` 审计及任一失败时全回滚，并验证上层 VOLATILE、下层 STABLE 零写入、PUBLIC／runtime 无 EXECUTE 和既有 JSON／NULL 合同。证据限于 synthetic PostgreSQL，不证明生产身份、生产用户功能或清理 SLA。 |
 
 ## 9. UI、视觉与可访问性
 
