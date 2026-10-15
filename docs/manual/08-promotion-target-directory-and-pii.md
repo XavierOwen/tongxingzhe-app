@@ -339,6 +339,18 @@ private header 保存 pending UUID、request、代次、contact／revision、typ
 
 所有新表、函数和 trigger 均关闭 PUBLIC／runtime，旧函数 body／OID／ACL 和 manifest 不变。MANUAL-149 与 TEST-160 记录这份第一层交付；它没有逐项分配或最终确认 writer，也没有其他未知事实类型、Backend／HTTP／UI、生产合并、部署或定时清理 SLA。最终写回还须保持 contact revision、warehouse 与 sync 一致，不能用分配标签代替真实归属改变。
 
+### 0128 当前单项待分配关联的私有确认（Issue #583）
+
+`app_private.confirm_unassigned_personal_merge_contacts_v1(actor, workspace, current_project, request, generation, known_fingerprint, pending_fingerprint, assignments)` 返回结束时间。assignments 是非空数组，每项只含 `pending_fact_id` 和 `source_target_id`；恰好覆盖该代次的全部跨项目 pending，来源必须是两个原对象之一。UUID 按数据库值比较，顺序或大小写不影响请求含义。
+
+每个 contact 只能有一项 pending，登记 revision 必须仍为 current，且任意历史 revision 均无原 pair link；陈旧、多项或既有关联整批拒绝，保留全部清单。通过原 `apply_contact_revise_v3` 新增 revision，不给旧 revision 补 link。原项目、原事件时间、answers、其他 links 和历史保留，当前项目不切换。保存的反应／同意／确认原样写回；`confirmed_project_entry` 是 wire `confirmStageZero` 的既有存储名，不是新的确认选项，不自动补足关系或机构代表确认。
+
+先批量取得 child command 与 contact 锁，再取得既有 generation fence，锁后重验当前 owner／项目、双端 assignment、due、完整集合及两 fingerprint。新增未预锁 contact 时整次拒绝，避免在 fence 下补 contact 锁。预占 child command 不能冒充应用成功。每项必须实际生成 accepted command、新 revision／current projection、原 generation link、feed、audit 和去标识 outbox；重新计算 known manifest 后调用原 end。真实应用和结束收据齐备才消费业务 payload，ledger 仅保留标识、revision、指纹和时间。
+
+相同 actor/request 的 context、generation、两指纹和完整来源映射一致，才返回原结束时间，且仍通过原 end 的当前授权门禁。映射或请求漂移冲突，不能追加第二批写入。任一非 accepted、证据缺失、计数不符、end 或消费失败，回滚全部业务和 ledger。新 0128 只扩展原 pending end／payload guard，保留 OID／owner／ACL 与原 expiry 分支，不改普通 writer 或历史 migration。
+
+MANUAL-150／TEST-161 覆盖此有界能力。所有新对象仍关闭 PUBLIC／runtime，不接 Backend／HTTP／UI，不支持历史、多项或冲突的完整拆分，不开放生产合并、部署、scheduler 或真实清理 SLA。#582 与 #549 的剩余阻挡不变；合成数据库测试不证明生产身份、真实 PII、外部消费者或设备端同步。
+
 ## HTTP 与权限边界
 
 | 方法与路径 | 用途 | Backend capability |

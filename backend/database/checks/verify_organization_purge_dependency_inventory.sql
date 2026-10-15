@@ -1,9 +1,9 @@
 \set ON_ERROR_STOP on
 BEGIN;
 
--- Reviewed Slice 7DZ inventory, grounded in migrations through 0127.
+-- Reviewed Slice 7DZ inventory, grounded in migrations through 0128.
 -- This is a structural definition baseline, not proof of runtime purge behavior.
--- 0127 staging is personal-only; shared workspace/project roots remain structurally scanned.
+-- Personal staging and confirmation still enter this scan through shared workspace/project roots.
 -- Workspaces and projects are shared roots: process rows only when their workspace
 -- is an organization; personal spaces and cross-organization shared roots survive.
 -- Personal merge members are opaque roots without a promotion-target FK; the
@@ -327,6 +327,15 @@ INSERT INTO purge_inventory_expected_fk VALUES
   ('app_private.management_report_snapshots', 'management_report_snapshots_created_by_app_user_id_fkey', 'app_data.app_users', 'a', 'FOREIGN KEY (created_by_app_user_id) REFERENCES app_data.app_users(app_user_id)'),
   ('app_private.management_report_snapshots', 'management_report_snapshots_previous_snapshot_id_fkey', 'app_private.management_report_snapshots', 'a', 'FOREIGN KEY (previous_snapshot_id) REFERENCES app_private.management_report_snapshots(snapshot_id)'),
   ('app_private.management_report_snapshots', 'management_report_snapshots_project_id_fkey', 'app_data.projects', 'a', 'FOREIGN KEY (project_id) REFERENCES app_data.projects(project_id)'),
+  ('app_private.personal_merge_contact_applications_v1', 'personal_merge_contact_applic_actor_app_user_id_request_id_fkey', 'app_private.personal_merge_contact_confirmation_requests_v1', 'a', 'FOREIGN KEY (actor_app_user_id, request_id) REFERENCES app_private.personal_merge_contact_confirmation_requests_v1(actor_app_user_id, request_id)'),
+  ('app_private.personal_merge_contact_applications_v1', 'personal_merge_contact_applic_contact_id_from_revision_num_fkey', 'app_data.contact_revisions', 'a', 'FOREIGN KEY (contact_id, from_revision_number) REFERENCES app_data.contact_revisions(contact_id, revision_number)'),
+  ('app_private.personal_merge_contact_applications_v1', 'personal_merge_contact_applic_contact_id_to_revision_numbe_fkey', 'app_data.contact_target_links', 'a', 'FOREIGN KEY (contact_id, to_revision_number, source_target_id) REFERENCES app_data.contact_target_links(contact_id, revision_number, promotion_target_id)'),
+  ('app_private.personal_merge_contact_applications_v1', 'personal_merge_contact_applications_v1_pending_fact_id_fkey', 'app_private.personal_merge_unassigned_contact_requests_v1', 'a', 'FOREIGN KEY (pending_fact_id) REFERENCES app_private.personal_merge_unassigned_contact_requests_v1(pending_fact_id)'),
+  ('app_private.personal_merge_contact_confirmation_requests_v1', 'personal_merge_contact_confir_actor_app_user_id_request_id_fkey', 'app_private.personal_target_merge_end_events_v1', 'a', 'FOREIGN KEY (actor_app_user_id, request_id) REFERENCES app_private.personal_target_merge_end_events_v1(actor_app_user_id, request_id) DEFERRABLE INITIALLY DEFERRED'),
+  ('app_private.personal_merge_contact_confirmation_requests_v1', 'personal_merge_contact_confirmation_requ_actor_app_user_id_fkey', 'app_data.app_users', 'a', 'FOREIGN KEY (actor_app_user_id) REFERENCES app_data.app_users(app_user_id)'),
+  ('app_private.personal_merge_contact_confirmation_requests_v1', 'personal_merge_contact_confirmation_requests__workspace_id_fkey', 'app_data.workspaces', 'a', 'FOREIGN KEY (workspace_id) REFERENCES app_data.workspaces(workspace_id)'),
+  ('app_private.personal_merge_contact_confirmation_requests_v1', 'personal_merge_contact_confirmation_requests_generation_id_fkey', 'app_private.personal_target_merge_generations_v1', 'a', 'FOREIGN KEY (generation_id) REFERENCES app_private.personal_target_merge_generations_v1(generation_id)'),
+  ('app_private.personal_merge_contact_confirmation_requests_v1', 'personal_merge_contact_confirmation_requests_v1_project_id_fkey', 'app_data.projects', 'a', 'FOREIGN KEY (project_id) REFERENCES app_data.projects(project_id)'),
   ('app_private.personal_merge_unassigned_contact_requests_v1', 'personal_merge_unassigned_conta_contact_id_revision_number_fkey', 'app_data.contact_revisions', 'a', 'FOREIGN KEY (contact_id, revision_number) REFERENCES app_data.contact_revisions(contact_id, revision_number)'),
   ('app_private.personal_merge_unassigned_contact_requests_v1', 'personal_merge_unassigned_contact_reques_actor_app_user_id_fkey', 'app_data.app_users', 'a', 'FOREIGN KEY (actor_app_user_id) REFERENCES app_data.app_users(app_user_id)'),
   ('app_private.personal_merge_unassigned_contact_requests_v1', 'personal_merge_unassigned_contact_requests_v1_project_id_fkey', 'app_data.projects', 'a', 'FOREIGN KEY (project_id) REFERENCES app_data.projects(project_id)'),
