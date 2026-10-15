@@ -96,22 +96,7 @@ implements PersonalTargetMergeProjectionStore {
          ) AS context_result`,
         [issuer, subject, projectId],
       );
-      const context = singleResult(contextResult.rows, "context_result");
-      exactKeys(context, [
-        "app_user_id", "workspace_id", "workspace_kind", "project_id", "capabilities",
-      ]);
-      uuid(context.app_user_id);
-      const workspaceId = uuid(context.workspace_id);
-      if (context.workspace_kind !== "personal" ||
-          uuid(context.project_id) !== projectId.toLowerCase() ||
-          !Array.isArray(context.capabilities) ||
-          context.capabilities.some((capability) => typeof capability !== "string")) {
-        throw unavailable();
-      }
-      if (!context.capabilities.includes("view_assigned_target_pii") ||
-          !context.capabilities.includes("manage_assigned_target_merges")) {
-        throw new PersonalTargetMergeProjectionStoreError("forbidden");
-      }
+      const workspaceId = parseMergeContext(contextResult.rows, projectId);
 
       // The eligibility result is not a credential; the bridge rechecks the same raw identity.
       const result = await this.query(
@@ -139,6 +124,166 @@ export class PersonalTargetMergeProjectionStoreError extends Error {
     super(code);
     this.name = "PersonalTargetMergeProjectionStoreError";
   }
+}
+
+export type PersonalTargetMergeSplitPlan = Readonly<Record<string, unknown>>;
+export type PersonalTargetMergeSplitPlanRequest = PersonalTargetMergeProjectionRequest;
+export type PersonalTargetMergeSplitPlanHttpResult = PersonalTargetMergeProjectionHttpResult;
+export type PersonalTargetMergeSplitPlanQuery = PersonalTargetMergeProjectionQuery;
+
+export interface PersonalTargetMergeSplitPlanStore {
+  read(identity: VerifiedIdentity, projectId: string, generationId: string): Promise<PersonalTargetMergeSplitPlan>;
+}
+
+export interface PersonalTargetMergeSplitPlanDependencies {
+  readonly identityVerifier: IdentityVerifier;
+  readonly splitPlanStore?: PersonalTargetMergeSplitPlanStore;
+}
+
+export async function readPersonalTargetMergeSplitPlan(
+  request: PersonalTargetMergeSplitPlanRequest,
+  dependencies: PersonalTargetMergeSplitPlanDependencies,
+): Promise<PersonalTargetMergeSplitPlanHttpResult> {
+  const accessToken = bearerToken(request.authorization);
+  if (accessToken === null) return splitPlanFailure(401, "unauthenticated");
+  let identity: VerifiedIdentity;
+  try {
+    identity = await dependencies.identityVerifier.verify(accessToken);
+  } catch (error) {
+    return error instanceof IdentityVerificationError && error.category === "unauthenticated"
+      ? splitPlanFailure(401, "unauthenticated") : splitPlanFailure(503, "unavailable");
+  }
+  if (!uuidPattern.test(request.projectId) || !uuidPattern.test(request.generationId) ||
+      request.hasQuery || request.hasBody) {
+    return splitPlanFailure(400, "invalid_request");
+  }
+  if (dependencies.splitPlanStore === undefined) return splitPlanFailure(503, "unavailable");
+  try {
+    const splitPlan = await dependencies.splitPlanStore.read(identity, request.projectId, request.generationId);
+    return {status: 200, body: {split_plan: splitPlan}};
+  } catch (error) {
+    return error instanceof PersonalTargetMergeSplitPlanStoreError && error.code === "forbidden"
+      ? splitPlanFailure(403, "forbidden") : splitPlanFailure(503, "unavailable");
+  }
+}
+
+export class PostgresPersonalTargetMergeSplitPlanStore implements PersonalTargetMergeSplitPlanStore {
+  constructor(private readonly query: PersonalTargetMergeSplitPlanQuery) {}
+
+  async read(identity: VerifiedIdentity, projectId: string, generationId: string): Promise<PersonalTargetMergeSplitPlan> {
+    const {issuer, subject} = identity;
+    try {
+      const context = await this.query(
+        `SELECT app_data.read_personal_merge_projection_context_v1(
+           $1::text, $2::text, $3::uuid
+         ) AS context_result`,
+        [issuer, subject, projectId],
+      );
+      const workspaceId = parseMergeContext(context.rows, projectId);
+      const result = await this.query(
+        `SELECT app_data.read_personal_known_source_merge_split_plan_v1(
+           $1::text, $2::text, $3::uuid, $4::uuid
+         ) AS split_plan`,
+        [issuer, subject, projectId, generationId],
+      );
+      return parseSplitPlan(singleResult(result.rows, "split_plan"), projectId, generationId, workspaceId);
+    } catch (error) {
+      const forbidden = error instanceof PersonalTargetMergeProjectionStoreError && error.code === "forbidden" ||
+        typeof error === "object" && error !== null && "code" in error && error.code === "42501";
+      throw new PersonalTargetMergeSplitPlanStoreError(forbidden ? "forbidden" : "unavailable");
+    }
+  }
+}
+
+export class PersonalTargetMergeSplitPlanStoreError extends Error {
+  constructor(readonly code: "forbidden" | "unavailable") {
+    super(code);
+    this.name = "PersonalTargetMergeSplitPlanStoreError";
+  }
+}
+
+function parseMergeContext(rows: readonly unknown[], projectId: string): string {
+  const context = singleResult(rows, "context_result");
+  exactKeys(context, ["app_user_id", "workspace_id", "workspace_kind", "project_id", "capabilities"]);
+  uuid(context.app_user_id);
+  const workspaceId = uuid(context.workspace_id);
+  if (context.workspace_kind !== "personal" || uuid(context.project_id) !== projectId.toLowerCase() ||
+      !Array.isArray(context.capabilities) || context.capabilities.some((capability) => typeof capability !== "string")) {
+    throw unavailable();
+  }
+  if (!context.capabilities.includes("view_assigned_target_pii") ||
+      !context.capabilities.includes("manage_assigned_target_merges")) {
+    throw new PersonalTargetMergeProjectionStoreError("forbidden");
+  }
+  return workspaceId;
+}
+
+function parseSplitPlan(
+  root: Record<string, unknown>, projectId: string, generationId: string, workspaceId: string,
+): PersonalTargetMergeSplitPlan {
+  exactKeys(root, ["generation_id", "workspace_id", "project_id", "target_type", "member_target_ids",
+    "review_due_at_utc", "fact_count", "fact_fingerprint", "facts"]);
+  if (uuid(root.project_id) !== projectId.toLowerCase() || uuid(root.generation_id) !== generationId.toLowerCase() ||
+      uuid(root.workspace_id) !== workspaceId || !oneOf(root.target_type, ["person", "institution"]) ||
+      !Array.isArray(root.member_target_ids) || root.member_target_ids.length !== 2 ||
+      !Number.isSafeInteger(root.fact_count) || Number(root.fact_count) < 0 ||
+      !Array.isArray(root.facts) || root.fact_count !== root.facts.length ||
+      typeof root.fact_fingerprint !== "string" || !/^[0-9a-f]{64}$/.test(root.fact_fingerprint)) {
+    throw unavailable();
+  }
+  const members = root.member_target_ids.map(uuid);
+  if (members[0]! >= members[1]!) throw unavailable();
+  dueTimestamp(root.review_due_at_utc);
+  const keys = new Set<string>();
+  for (const value of root.facts) {
+    const fact = object(value);
+    exactKeys(fact, ["source_target_id", "metadata"]);
+    const source = uuid(fact.source_target_id);
+    if (!members.includes(source) || !Array.isArray(fact.metadata)) throw unavailable();
+    // A structured tuple preserves arbitrary TEXT contact IDs without delimiter collisions.
+    const key = JSON.stringify(splitFactKey(fact.metadata, source, members, root.target_type));
+    if (keys.has(key)) throw unavailable();
+    keys.add(key);
+  }
+  return root;
+}
+
+function splitFactKey(metadata: unknown[], source: string, members: readonly string[], targetType: unknown): readonly unknown[] {
+  const tag = metadata[0];
+  if (tag === "contact_link") {
+    if (metadata.length !== 4 || typeof metadata[1] !== "string" || uuid(metadata[3]) !== source) throw unavailable();
+    positiveInteger(metadata[2]);
+    return [tag, metadata[1], metadata[2], source];
+  }
+  if (tag === "project_relationship" || tag === "project_revision") {
+    if (metadata.length !== (tag === "project_relationship" ? 5 : 4) || uuid(metadata[1]) !== source) throw unavailable();
+    const factProject = uuid(metadata[2]);
+    positiveInteger(metadata[3]);
+    if (tag === "project_relationship") {
+      dueTimestamp(metadata[4]);
+      return [tag, source, factProject];
+    }
+    return [tag, source, factProject, metadata[3]];
+  }
+  if (!oneOf(tag, ["institution_relationship_person", "institution_relationship_institution",
+    "institution_revision_person", "institution_revision_institution"])) throw unavailable();
+  const isRevision = String(tag).startsWith("institution_revision_");
+  const personSide = String(tag).endsWith("_person");
+  if (metadata.length !== (isRevision ? 6 : 7) || targetType !== (personSide ? "person" : "institution")) throw unavailable();
+  const relationshipId = uuid(metadata[1]);
+  const personId = uuid(metadata[isRevision ? 3 : 2]);
+  const institutionId = uuid(metadata[isRevision ? 4 : 3]);
+  const otherEndpoint = personSide ? institutionId : personId;
+  if ((personSide ? personId : institutionId) !== source || members.includes(otherEndpoint)) throw unavailable();
+  positiveInteger(metadata[isRevision ? 2 : 4]);
+  if (!isRevision) dueTimestamp(metadata[5]);
+  const otherBinding = metadata[isRevision ? 5 : 6];
+  if (otherBinding !== null) uuid(otherBinding);
+  return isRevision ? [tag, relationshipId, metadata[2]] : [tag, relationshipId];
+}
+
+function splitPlanFailure(status: number, suffix: string): PersonalTargetMergeSplitPlanHttpResult {
+  return {status, body: {error: {code: `personal_target_merge_split_plan_${suffix}`}}};
 }
 
 function parseProjection(

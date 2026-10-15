@@ -406,6 +406,14 @@ metadata 只返回来源、事实标识和 revision metadata。当前合同将 T
 
 0124 reader 是真实 READ ONLY：不写业务、审计、receipt、ledger、fence 或 context，不取行锁，也不调用写入或 expiry helper。它不保存预检资格。预检后授权变化由既有锁后门禁拒绝；manifest metadata 漂移使旧 fingerprint 冲突，后续预检返回新目录。此切片不增加 PUBLIC／runtime 权限，不提供待分配存储、完整 split、Backend／HTTP／Flutter 接线、产品 active merge、部署或 SLA。MANUAL-145 与 TEST-156 记录范围；synthetic PostgreSQL 证据不证明生产身份、真实 PII 或用户功能。
 
+7EL／#574 为预检增加受控在线读取链路。0125 的 private 审计 core 在一个 SQL command 内复用 0123 exact-identity／current-personal-project 资格、调用 0124 一次，并为两个 member 各写一条 `viewed`；失败或条数不等于二时全回滚。runtime 只获新 `app_data.read_personal_known_source_merge_split_plan_v1(text,text,uuid,uuid)` 的 EXECUTE；private schema、catalog、0124、底表及 merge writer 仍关闭。上层为 VOLATILE，0124 保持 STABLE 零写入。
+
+专用 GET `/v1/projects/:projectId/promotion-target-merges/:generationId/split-plan` 先验证身份，只接受两个 UUID，无 query／body。Backend 先检查既有 context 与两项 capability，再用同一原始身份调用重新授权的 bridge；提交审计后才交付 `{ "split_plan": <原生 plan> }`。严格 parser 核对九键与七种 metadata variant，保留历史、跨项目事实、TEXT ID、NULL／旧 binding 和原数据库顺序，不重算 PostgreSQL fingerprint。错误固定为 401／400／403／503 且 value-free，全部响应 no-store。
+
+独立 Flutter gateway 返回不可变 typed plan，只保护在途请求的 subject／scope／generation 与 caller fence；身份 ABA、流 error／done、关闭及跨 await 失效会退役请求，401 最多强刷一次。它没有持有已返回结果的 controller。返回后的引用与资格由未来调用方管理，审计也不证明送达或持续授权。
+
+本片不接 AppDependencies、启动、UI、导航、离线或持久缓存，不提供未知来源分配、完整 split、writer、产品 active merge、部署或 SLA，#549 阻挡不变。MANUAL-146 与 TEST-157 记录范围；synthetic 证据不证明生产身份、真实 PII 或用户界面。
+
 ### 5.7 组织治理与生命周期
 
 | ID | 需求 |
@@ -3329,6 +3337,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-143` | 学习文档说明 0123 只向 runtime 开放两个 `app_data` 读取 bridge：STABLE 零写入的 personal owner／current project 资格读取，以及重新授权并调用 private 0122 的 VOLATILE 审计读取。记录最小 EXECUTE ACL、个人 current project 与管理分析导航分离、已知 generation 限定，以及 API 不开放普通目录合并、产品 active merge 或 UI。synthetic 证据不证明生产身份、真实 PII 或用户交付。 |
 | `MANUAL-144` | 学习文档说明 7EJ 的独立 Flutter DTO、只读 gateway 与 headless controller：固定 0123 GET、严格解析与不可变结果、身份及 request fence、有限 401 重试、内存资格门禁和失效规则。记录借用资源所有权、无 `refreshContext()`、不接 UI／启动／缓存／writer，以及撤下内存引用不等于物理抹除。synthetic Flutter／HTTP 证据不证明生产身份、真实界面或部署。 |
 | `MANUAL-145` | [学习文档](manual/08-promotion-target-directory-and-pii.md#0124-已知来源合并代次拆分预检issue-572)说明 0124 的 private STABLE 只读预检、v1／v2 支持、五类事实与七种 metadata variant、历史 revision／ended relationship 覆盖、原 fingerprint 与返回后漂移拒绝，以及 NULL merge binding 不等于来源未知。明确没有待分配存储、完整 split、runtime／Backend／HTTP／Flutter 接线、产品 active merge 或部署。 |
+| `MANUAL-146` | 学习文档说明 0125 受控预检读取的 exact-identity／current-project 双重授权、两端原子 `viewed`、最小 runtime EXECUTE、固定 GET 与严格原生 plan parser。记录七种 metadata、跨项目历史、数据库原顺序与 opaque fingerprint、Flutter immutable DTO 和在途身份围栏；明确没有结果持有 controller、UI、完整 split、writer 或产品 active merge，审计不证明送达或持续授权。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3663,6 +3672,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-154` | 0122→0123 upgrade 保留私有 reader 与既有历史并验证 checksum／restore。DB 与 Backend integration 覆盖精确身份、零 bootstrap／修复、personal current project、最小 runtime EXECUTE ACL、两步授权、缺 capability 不调用审计 bridge、两步间撤权、strict parser、auth-first 与 UUID-only route、no-store 和错误脱敏。也验证 DB 审计提交后 parser／HTTP 失败仍可留有两条 `viewed`。synthetic JWT／PostgreSQL／HTTP 证据不证明生产身份、真实 PII、客户端收件或 SLA。 |
 | `TEST-155` | Flutter focused tests 覆盖 0123 GET 的严格 JSON／UTF-8／no-store 合同、畸形响应、一次 401、不可变 DTO、取 token 与响应期间的身份 ABA 和 close；controller tests 覆盖资格门禁、selector 与 scope 变化时清除结果、请求代次隔离、会话流 error／done、同 subject token 更新及保留借用资源。synthetic Flutter／HTTP 证据不证明生产身份、UI 接线、真实 PII 或部署。 |
 | `TEST-156` | 0123→0124 upgrade 保留旧历史与 0119 manifest 函数身份／权限，核对原 fingerprint 字节合同和 checksum replay。Fresh／rollback fixture 与独立会话检查覆盖 v1／v2、NULL binding、五类事实／七种 metadata variant、全部历史 revision、owner／current project／两端 assignment／due／ended 门禁、只读 snapshot 与旧 fingerprint 的锁后冲突拒绝、最小 ACL 和 dump／restore。synthetic PostgreSQL 证据不证明生产身份、真实 PII、完整 split 或用户功能。 |
+| `TEST-157` | 0124→0125 upgrade 保留旧函数、事实、manifest／plan 和 end／expiry replay，验证 checksum／restore。结构、行为与独立会话检查覆盖单 command 资格／plan／双审计、任一审计失败全回滚、exact identity 零 bootstrap、最小 ACL、上下层 volatility 和事实／撤权 snapshot。Backend unit 与真实 JWT／runtime HTTP 核对 auth-first、两步间撤权、七种 metadata、跨项目历史、重复键、parser／提交失败及旧 projection；Flutter VM／Chrome tests 核对不可变 DTO、原字符串／顺序、scope／caller／ABA 围栏、401 与 close。synthetic 证据不证明生产身份、真实 PII、UI、部署或完整 split。 |
 
 ## 9. UI、视觉与可访问性
 

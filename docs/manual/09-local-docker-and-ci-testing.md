@@ -2866,6 +2866,23 @@ gateway tests 检查固定 GET 的响应合同、严格 JSON／UTF-8／no-store 
 
 这些检查只证明 synthetic PostgreSQL 中的只读预检和迁移合同。它们不证明完整 split、待分配事实存储、Backend／HTTP／Flutter、生产身份、真实 PII、产品功能或部署。
 
+### 7.12 已知来源拆分预检的在线读取（Issue #574）
+
+完整 PostgreSQL 套件继续使用 `./tool/run_postgres_tests_in_docker.sh`。0125 的结构与行为检查核对 exact identity、零 bootstrap／修复、双 member 审计及全回滚、最小 runtime ACL、上下层 volatility 和 READ ONLY 区别。真实 0124→0125 upgrade 保留 catalog／manifest／plan、旧 projection API、历史事实和 end／expiry replay，并验证 checksum 与独立恢复。
+
+独立会话在预检已形成、首条审计插入前暂停 reader，捕获精确 reader／blocker PID 后提交事实变化或 actor 撤权。原 command 应保持完整旧 plan 和两条审计；fresh read 应看到新事实或拒绝撤权后的读取，而非混合 snapshot。
+
+Backend 单测验证七种 native metadata、跨项目历史、重复复合键、错误脱敏、auth-first、两步授权和原生顺序。既有 `personal-target-merge-projection.integration.ts` 增补真实 signed-JWT／runtime-role split-plan HTTP，核对两条提交审计、未知身份零 bootstrap、两步间撤权、parser 失败与提交失败，旧 projection 仍按原合同读取。
+
+Flutter focused tests：
+
+```bash
+flutter test test/targets/http_personal_target_merge_split_plan_gateway_test.dart
+flutter test --platform chrome test/targets/http_personal_target_merge_split_plan_gateway_test.dart
+```
+
+这些 tests 核对 immutable typed metadata、原始 TEXT ID／微秒、HTTP 合同、身份和 caller fence、ABA、一次 401 与 close。gateway 只退役在途请求，不负责已返回结果的长期持有或清除。synthetic 数据和一次真实 Backend wire 对账不证明生产身份、真实 PII、UI、部署或完整 split。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：
