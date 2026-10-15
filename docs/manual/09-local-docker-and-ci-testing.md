@@ -2883,6 +2883,19 @@ flutter test --platform chrome test/targets/http_personal_target_merge_split_pla
 
 这些 tests 核对 immutable typed metadata、原始 TEXT ID／微秒、HTTP 合同、身份和 caller fence、ABA、一次 401 与 close。gateway 只退役在途请求，不负责已返回结果的长期持有或清除。synthetic 数据和一次真实 Backend wire 对账不证明生产身份、真实 PII、UI、部署或完整 split。
 
+### 7.13 独立只读投影展示组件（Issue #575）
+
+运行 focused widget tests：
+
+```bash
+flutter test test/features/targets/personal_target_merge_projection_panel_test.dart
+flutter test --platform chrome test/features/targets/personal_target_merge_projection_panel_test.dart
+```
+
+测试核对初次挂载零请求、明确读取与重读、loading 撤下旧 PII、固定失败与重试、controller 资格失效、generation 或借用依赖替换后的旧请求退役，以及不关闭借用资源。内容检查应包含字段来源、选定 NULL 不回退、两端独立 stage／alias／note、contact 与 institution facts 的来源和顺序、旧／NULL binding、空列表与缺项目关系。
+
+中英文、person／institution、长 ID／备注、窄屏大字、light／dark、键盘展开和 Reduce Motion 均按实际组件验证。合成 harness 只用于有界渲染与交互检查，不加入 production 入口。浏览器截图与 widget tests 不替代 native 设备的权限、认证、系统返回或真实触控检查，也不证明生产身份、真实 PII 或部署。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：
