@@ -202,12 +202,122 @@ export class PersonalTargetMergeSplitPlanStoreError extends Error {
   }
 }
 
-function parseMergeContext(rows: readonly unknown[], projectId: string): string {
+export type PersonalTargetMergeDirectory = Readonly<Record<string, unknown>>;
+export type PersonalTargetMergeDirectoryHttpResult = PersonalTargetMergeProjectionHttpResult;
+export type PersonalTargetMergeDirectoryQuery = PersonalTargetMergeProjectionQuery;
+
+export interface PersonalTargetMergeDirectoryStore {
+  read(identity: VerifiedIdentity, projectId: string, afterGenerationId: string | null): Promise<PersonalTargetMergeDirectory>;
+}
+
+export interface PersonalTargetMergeDirectoryRequest {
+  readonly authorization: string | undefined;
+  readonly projectId: string;
+  readonly query: URLSearchParams;
+  readonly hasBody: boolean;
+}
+
+export interface PersonalTargetMergeDirectoryDependencies {
+  readonly identityVerifier: IdentityVerifier;
+  readonly directoryStore?: PersonalTargetMergeDirectoryStore;
+}
+
+export async function readPersonalTargetMergeDirectory(
+  request: PersonalTargetMergeDirectoryRequest,
+  dependencies: PersonalTargetMergeDirectoryDependencies,
+): Promise<PersonalTargetMergeDirectoryHttpResult> {
+  const accessToken = bearerToken(request.authorization);
+  if (accessToken === null) return directoryFailure(401, "unauthenticated");
+  let identity: VerifiedIdentity;
+  try {
+    identity = await dependencies.identityVerifier.verify(accessToken);
+  } catch (error) {
+    return error instanceof IdentityVerificationError && error.category === "unauthenticated"
+      ? directoryFailure(401, "unauthenticated") : directoryFailure(503, "unavailable");
+  }
+  const parameters = [...request.query];
+  const afterGenerationId = parameters[0]?.[1] ?? null;
+  if (!directoryUuidPattern.test(request.projectId) || request.hasBody || parameters.length > 1 ||
+      parameters.some(([key, value]) => key !== "after" || !directoryUuidPattern.test(value))) {
+    return directoryFailure(400, "invalid_request");
+  }
+  if (dependencies.directoryStore === undefined) return directoryFailure(503, "unavailable");
+  try {
+    const directory = await dependencies.directoryStore.read(identity, request.projectId, afterGenerationId);
+    return {status: 200, body: {directory}};
+  } catch (error) {
+    return error instanceof PersonalTargetMergeDirectoryStoreError && error.code === "forbidden"
+      ? directoryFailure(403, "forbidden") : directoryFailure(503, "unavailable");
+  }
+}
+
+export class PersonalTargetMergeDirectoryStoreError extends Error {
+  constructor(readonly code: "forbidden" | "unavailable") {
+    super(code);
+    this.name = "PersonalTargetMergeDirectoryStoreError";
+  }
+}
+
+export class PostgresPersonalTargetMergeDirectoryStore implements PersonalTargetMergeDirectoryStore {
+  constructor(private readonly query: PersonalTargetMergeDirectoryQuery) {}
+
+  async read(identity: VerifiedIdentity, projectId: string, afterGenerationId: string | null): Promise<PersonalTargetMergeDirectory> {
+    const {issuer, subject} = identity;
+    try {
+      const context = await this.query(
+        `SELECT app_data.read_personal_merge_projection_context_v1(
+           $1::text, $2::text, $3::uuid
+         ) AS context_result`,
+        [issuer, subject, projectId],
+      );
+      const workspaceId = parseMergeContext(context.rows, projectId, directoryUuid);
+      const result = await this.query(
+        `SELECT app_data.read_personal_merge_directory_v1(
+           $1::text, $2::text, $3::uuid, $4::uuid
+         ) AS directory`,
+        [issuer, subject, projectId, afterGenerationId],
+      );
+      return parseMergeDirectory(singleResult(result.rows, "directory"), projectId, workspaceId, afterGenerationId);
+    } catch (error) {
+      const forbidden = error instanceof PersonalTargetMergeProjectionStoreError && error.code === "forbidden" ||
+        typeof error === "object" && error !== null && "code" in error && error.code === "42501";
+      throw new PersonalTargetMergeDirectoryStoreError(forbidden ? "forbidden" : "unavailable");
+    }
+  }
+}
+
+function parseMergeDirectory(
+  root: Record<string, unknown>, projectId: string, workspaceId: string, afterGenerationId: string | null,
+): PersonalTargetMergeDirectory {
+  exactKeys(root, ["workspace_id", "project_id", "items", "next_cursor"]);
+  if (directoryUuid(root.workspace_id) !== workspaceId || directoryUuid(root.project_id) !== projectId.toLowerCase() ||
+      !Array.isArray(root.items) || root.items.length > 20) throw unavailable();
+  let previous = afterGenerationId === null ? null : directoryUuid(afterGenerationId);
+  for (const value of root.items) {
+    const item = object(value);
+    exactKeys(item, ["generation_id", "target_type", "retained_target_id", "member_target_ids", "review_due_at_utc"]);
+    const generation = directoryUuid(item.generation_id);
+    if (previous !== null && generation <= previous || !oneOf(item.target_type, ["person", "institution"]) ||
+        !Array.isArray(item.member_target_ids) || item.member_target_ids.length !== 2) throw unavailable();
+    const members = item.member_target_ids.map(directoryUuid);
+    if (members[0]! >= members[1]! || !members.includes(directoryUuid(item.retained_target_id))) throw unavailable();
+    dueTimestamp(item.review_due_at_utc);
+    previous = generation;
+  }
+  if (root.next_cursor !== null && (root.items.length !== 20 || directoryUuid(root.next_cursor) !== previous)) throw unavailable();
+  return root;
+}
+
+function directoryFailure(status: number, suffix: string): PersonalTargetMergeDirectoryHttpResult {
+  return {status, body: {error: {code: `personal_target_merge_directory_${suffix}`}}};
+}
+
+function parseMergeContext(rows: readonly unknown[], projectId: string, readUuid = uuid): string {
   const context = singleResult(rows, "context_result");
   exactKeys(context, ["app_user_id", "workspace_id", "workspace_kind", "project_id", "capabilities"]);
-  uuid(context.app_user_id);
-  const workspaceId = uuid(context.workspace_id);
-  if (context.workspace_kind !== "personal" || uuid(context.project_id) !== projectId.toLowerCase() ||
+  readUuid(context.app_user_id);
+  const workspaceId = readUuid(context.workspace_id);
+  if (context.workspace_kind !== "personal" || readUuid(context.project_id) !== projectId.toLowerCase() ||
       !Array.isArray(context.capabilities) || context.capabilities.some((capability) => typeof capability !== "string")) {
     throw unavailable();
   }
@@ -443,6 +553,11 @@ function uuid(value: unknown): string {
   return value.toLowerCase();
 }
 
+function directoryUuid(value: unknown): string {
+  if (typeof value !== "string" || !directoryUuidPattern.test(value)) throw unavailable();
+  return value.toLowerCase();
+}
+
 function text(value: unknown, maxLength: number): void {
   if (typeof value !== "string") throw unavailable();
   const length = [...value.replace(/^ +| +$/g, "")].length;
@@ -495,5 +610,6 @@ function failure(status: number, suffix: string): PersonalTargetMergeProjectionH
 }
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const directoryUuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const timestampPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.(\d{1,6}))?(?:Z|[+-]\d{2}:\d{2})$/;
 const duePattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;

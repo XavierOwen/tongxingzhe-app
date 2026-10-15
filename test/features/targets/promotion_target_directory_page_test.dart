@@ -15,12 +15,184 @@ import 'package:tongxingzhe_app/management_reports/management_report_export_deli
 import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
 import 'package:tongxingzhe_app/targets/personal_pii_export_gateway.dart';
 import 'package:tongxingzhe_app/targets/personal_target_csv_import.dart';
+import 'package:tongxingzhe_app/targets/personal_target_merge_directory.dart';
+import 'package:tongxingzhe_app/targets/personal_target_merge_projection.dart';
+import 'package:tongxingzhe_app/targets/http_personal_target_merge_directory_gateway.dart';
+import 'package:tongxingzhe_app/targets/http_personal_target_merge_projection_gateway.dart';
 import 'package:tongxingzhe_app/targets/promotion_target.dart';
 
 import '../../support/fake_identity_session.dart';
 import '../../support/fake_session_context_gateway.dart';
 
 void main() {
+  testWidgets(
+    'merge review entry opens without reads and borrows its gateways',
+    (tester) async {
+      final harness = await _ExportHarness.start(
+        context: _mergeReviewContext(),
+      );
+      addTearDown(harness.close);
+      final directory = _MergeDirectoryGateway();
+      final projection = _MergeProjectionGateway();
+      await tester.pumpWidget(
+        _app(
+          _MemoryGateway(),
+          identitySession: harness.identity,
+          appSession: harness.appSession,
+          mergeDirectoryGateway: directory,
+          mergeProjectionGateway: projection,
+          scopeKey: harness.scopeKey,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final entry = find.byKey(const ValueKey('open-merge-source-review'));
+      expect(entry, findsOneWidget);
+      expect(tester.widget<OutlinedButton>(entry).onPressed, isNotNull);
+      await tester.tap(entry);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('merge-directory-panel')),
+        findsOneWidget,
+      );
+      expect(directory.calls, 0);
+      expect(projection.calls, 0);
+      expect(find.byType(TextField), findsNothing);
+      expect(
+        find.byKey(const ValueKey('create-promotion-target')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('import-promotion-target-csv')),
+        findsNothing,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('merge-directory-read')));
+      await tester.pumpAndSettle();
+      expect(directory.calls, 1);
+      expect(directory.subject, 'test-subject');
+      expect(directory.workspaceId, _exportContext.workspace.id);
+      expect(directory.projectId, _exportContext.project.id);
+      expect(projection.calls, 0);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(entry, findsOneWidget);
+      expect(find.byKey(const ValueKey('merge-directory-panel')), findsNothing);
+      expect(directory.closed, isFalse);
+      expect(projection.closed, isFalse);
+      expect(harness.identity.isClosed, isFalse);
+      expect(harness.contextGateway.isClosed, isFalse);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  for (final entry in <String, TrustedSessionContext>{
+    'organization': _mergeReviewContext(kind: WorkspaceKind.organization),
+    'missing view capability': _mergeReviewContext(
+      capabilities: {'manage_assigned_target_merges'},
+    ),
+    'missing merge capability': _mergeReviewContext(
+      capabilities: {'view_assigned_target_pii'},
+    ),
+  }.entries) {
+    testWidgets('merge entry follows streamed ${entry.key} eligibility', (
+      tester,
+    ) async {
+      final harness = await _ExportHarness.start(context: entry.value);
+      addTearDown(harness.close);
+      final directory = _MergeDirectoryGateway();
+      final projection = _MergeProjectionGateway();
+      await tester.pumpWidget(
+        _app(
+          _MemoryGateway(),
+          identitySession: harness.identity,
+          appSession: harness.appSession,
+          mergeDirectoryGateway: directory,
+          mergeProjectionGateway: projection,
+          scopeKey: harness.scopeKey,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final button = find.byKey(const ValueKey('open-merge-source-review'));
+      expect(button, findsNothing);
+      harness.contextGateway.context = _mergeReviewContext();
+      await harness.appSession.refreshContext();
+      await tester.pumpAndSettle();
+      expect(button, findsOneWidget);
+      harness.contextGateway.context = entry.value;
+      await harness.appSession.refreshContext();
+      await tester.pumpAndSettle();
+      expect(button, findsNothing);
+      expect(directory.calls, 0);
+      expect(projection.calls, 0);
+    });
+  }
+
+  testWidgets(
+    'merge entry hides on sign-out and returns only with a ready signed-in session',
+    (tester) async {
+      final harness = await _ExportHarness.start(
+        context: _mergeReviewContext(),
+      );
+      addTearDown(harness.close);
+      final directory = _MergeDirectoryGateway();
+      final projection = _MergeProjectionGateway();
+      await tester.pumpWidget(
+        _app(
+          _MemoryGateway(),
+          identitySession: harness.identity,
+          appSession: harness.appSession,
+          mergeDirectoryGateway: directory,
+          mergeProjectionGateway: projection,
+          scopeKey: harness.scopeKey,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final entry = find.byKey(const ValueKey('open-merge-source-review'));
+      expect(entry, findsOneWidget);
+      harness.identity.emit(const IdentitySnapshot.signedOut());
+      await tester.pumpAndSettle();
+      expect(entry, findsNothing);
+      harness.identity.emit(_signedInSnapshot('test-subject'));
+      await tester.pumpAndSettle();
+      expect(entry, findsOneWidget);
+      expect(directory.calls, 0);
+      expect(projection.calls, 0);
+    },
+  );
+
+  testWidgets(
+    'merge entry rejects offline-cache context despite both capabilities',
+    (tester) async {
+      final harness = await _ExportHarness.startOffline(
+        context: _mergeReviewContext(),
+      );
+      addTearDown(harness.close);
+      expect(harness.appSession.current.fromOfflineCache, isTrue);
+      final directory = _MergeDirectoryGateway();
+      final projection = _MergeProjectionGateway();
+      await tester.pumpWidget(
+        _app(
+          _MemoryGateway(),
+          identitySession: harness.identity,
+          appSession: harness.appSession,
+          mergeDirectoryGateway: directory,
+          mergeProjectionGateway: projection,
+          scopeKey: harness.scopeKey,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final entry = find.byKey(const ValueKey('open-merge-source-review'));
+      expect(entry, findsNothing);
+      harness.contextGateway.rejectWith = null;
+      await harness.appSession.refreshContext();
+      await tester.pumpAndSettle();
+      expect(harness.appSession.current.fromOfflineCache, isFalse);
+      expect(entry, findsOneWidget);
+      expect(directory.calls, 0);
+      expect(projection.calls, 0);
+    },
+  );
+
   testWidgets(
     'anonymous contact remains available when the directory is empty',
     (tester) async {
@@ -1309,6 +1481,8 @@ Widget _app(
   PersonalPiiExportGateway? exportGateway,
   ManagementReportExportDelivery? exportDelivery,
   PersonalTargetCsvImportGateway? importGateway,
+  PersonalTargetMergeDirectoryGateway? mergeDirectoryGateway,
+  PersonalTargetMergeProjectionGateway? mergeProjectionGateway,
   bool canImport = false,
   bool canExport = false,
   Future<XFile?> Function()? pickCsvFile,
@@ -1347,6 +1521,12 @@ Widget _app(
         canConfigureStageAliases: true,
         canManageRelationship: true,
         canManageInstitutionRelationships: true,
+        mergeDirectoryGateway:
+            mergeDirectoryGateway ??
+            const DeferredPersonalTargetMergeDirectoryGateway(),
+        mergeProjectionGateway:
+            mergeProjectionGateway ??
+            const DeferredPersonalTargetMergeProjectionGateway(),
       ),
     ),
   );
@@ -1370,14 +1550,16 @@ final class _ExportHarness {
       '${_exportContext.appUserId}/${_exportContext.workspace.id}/'
       '${_exportContext.project.id}';
 
-  static Future<_ExportHarness> start() async {
+  static Future<_ExportHarness> start({
+    TrustedSessionContext context = _exportContext,
+  }) async {
     final identity = FakeIdentitySession(
       initial: _signedInSnapshot('test-subject'),
       externalSubject: 'test-subject',
     );
     final contextGateway = FakeSessionContextGateway(
-      context: _exportContext,
-      availableContexts: const [_exportContext],
+      context: context,
+      availableContexts: [context],
     );
     final appSession = AppSession(
       identitySession: identity,
@@ -1387,7 +1569,9 @@ final class _ExportHarness {
     return _ExportHarness(identity, contextGateway, appSession);
   }
 
-  static Future<_ExportHarness> startOffline() async {
+  static Future<_ExportHarness> startOffline({
+    TrustedSessionContext context = _exportContext,
+  }) async {
     final identity = FakeIdentitySession(
       initial: _signedInSnapshot('test-subject'),
       externalSubject: 'test-subject',
@@ -1400,13 +1584,13 @@ final class _ExportHarness {
     );
     await vault.replace(
       externalSubject: 'test-subject',
-      context: _exportContext,
+      context: context,
       assignedTargets: const [],
       authorizedAtUtc: DateTime.utc(2030, 1, 2, 12),
     );
     final contextGateway = FakeSessionContextGateway(
-      context: _exportContext,
-      availableContexts: const [_exportContext],
+      context: context,
+      availableContexts: [context],
       rejectWith: SessionContextFailureCode.networkUnavailable,
     );
     final appSession = AppSession(
@@ -1421,6 +1605,83 @@ final class _ExportHarness {
   Future<void> close() async {
     await appSession.close();
     await identity.close();
+  }
+}
+
+TrustedSessionContext _mergeReviewContext({
+  WorkspaceKind kind = WorkspaceKind.personal,
+  Set<String> capabilities = const {
+    'view_assigned_target_pii',
+    'manage_assigned_target_merges',
+  },
+}) => TrustedSessionContext(
+  appUserId: _exportContext.appUserId,
+  workspace: WorkspaceContext(
+    id: _exportContext.workspace.id,
+    kind: kind,
+    name: 'Synthetic workspace',
+  ),
+  project: _exportContext.project,
+  questionnaireVersion: _exportContext.questionnaireVersion,
+  capabilities: capabilities,
+);
+
+final class _MergeDirectoryGateway
+    implements PersonalTargetMergeDirectoryGateway {
+  int calls = 0;
+  bool closed = false;
+  String? subject;
+  String? workspaceId;
+  String? projectId;
+  @override
+  Future<PersonalTargetMergeDirectoryResult> read({
+    required String expectedSubject,
+    required String workspaceId,
+    required String projectId,
+    String? afterGenerationId,
+    required bool Function() requestIsCurrent,
+  }) async {
+    calls++;
+    subject = expectedSubject;
+    this.workspaceId = workspaceId;
+    this.projectId = projectId;
+    return PersonalTargetMergeDirectoryReady(
+      PersonalTargetMergeDirectory(
+        workspaceId: workspaceId,
+        projectId: projectId,
+        items: const [],
+        nextCursor: null,
+      ),
+    );
+  }
+
+  @override
+  Future<void> close() async {
+    closed = true;
+  }
+}
+
+final class _MergeProjectionGateway
+    implements PersonalTargetMergeProjectionGateway {
+  int calls = 0;
+  bool closed = false;
+  @override
+  Future<PersonalTargetMergeProjectionResult> read({
+    required String expectedSubject,
+    required String workspaceId,
+    required String projectId,
+    required String generationId,
+    required bool Function() requestIsCurrent,
+  }) async {
+    calls++;
+    return const PersonalTargetMergeProjectionRejected(
+      PersonalTargetMergeProjectionFailure.serviceUnavailable,
+    );
+  }
+
+  @override
+  Future<void> close() async {
+    closed = true;
   }
 }
 

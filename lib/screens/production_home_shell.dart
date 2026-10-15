@@ -55,6 +55,10 @@ import '../sync/sync_engine_factory.dart';
 import '../targets/personal_target_csv_import.dart';
 import '../targets/personal_pii_export_gateway.dart';
 import '../targets/promotion_target.dart';
+import '../targets/personal_target_merge_directory.dart';
+import '../targets/personal_target_merge_projection.dart';
+import '../targets/http_personal_target_merge_directory_gateway.dart';
+import '../targets/http_personal_target_merge_projection_gateway.dart';
 
 /// 正式产品的四项主框架。
 ///
@@ -77,6 +81,10 @@ final class ProductionHomeShell extends StatefulWidget {
     required this.contactPageClosedEvents,
     required this.questionnaireAdministration,
     required this.promotionTargetGateway,
+    this.personalTargetMergeDirectoryGateway =
+        const DeferredPersonalTargetMergeDirectoryGateway(),
+    this.personalTargetMergeProjectionGateway =
+        const DeferredPersonalTargetMergeProjectionGateway(),
     required this.personalPiiExportGateway,
     required this.personalTargetCsvImportGateway,
     required this.personalActionPlanGateway,
@@ -125,6 +133,9 @@ final class ProductionHomeShell extends StatefulWidget {
   final ValueListenable<ContactPageClosedEvent> contactPageClosedEvents;
   final QuestionnaireAdministrationGateway questionnaireAdministration;
   final PromotionTargetGateway promotionTargetGateway;
+  final PersonalTargetMergeDirectoryGateway personalTargetMergeDirectoryGateway;
+  final PersonalTargetMergeProjectionGateway
+  personalTargetMergeProjectionGateway;
   final PersonalPiiExportGateway personalPiiExportGateway;
   final PersonalTargetCsvImportGateway personalTargetCsvImportGateway;
   final PersonalActionPlanGateway personalActionPlanGateway;
@@ -318,6 +329,8 @@ final class _ProductionHomeShellState extends State<ProductionHomeShell>
       PromotionTargetDirectoryPage(
         text: strings,
         gateway: widget.promotionTargetGateway,
+        mergeDirectoryGateway: widget.personalTargetMergeDirectoryGateway,
+        mergeProjectionGateway: widget.personalTargetMergeProjectionGateway,
         identitySession: widget.identitySession,
         appSession: widget.appSession,
         exportGateway: widget.personalPiiExportGateway,

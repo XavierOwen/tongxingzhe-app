@@ -50,6 +50,19 @@ const List<int> attitudeLevels = [-2, -1, 0, 1, 2];
 
 const Map<String, Map<String, String>> _strings = {
   'zh': {
+    'mergeDirectoryTitle': '合并来源审查',
+    'mergeDirectoryHelp':
+        '只列出当前项目仍可审查的已知来源合并，每页最多 20 条。不含姓名或联系方式；选中代次后，再单独读取资料。',
+    'mergeDirectoryRead': '读取代次目录',
+    'mergeDirectoryRefresh': '从头刷新目录',
+    'mergeDirectoryNext': '下一页',
+    'mergeDirectorySelect': '选择当前页的合并代次',
+    'mergeDirectoryLoading': '正在读取代次目录…',
+    'mergeDirectoryEmpty': '当前页没有可审查的合并代次。',
+    'mergeDirectoryNotRead': '尚未读取目录。目录和资料均仅在线读取，不在本机缓存。',
+    'mergeDirectoryFailed': '无法读取目录。请检查当前登录、项目权限或网络后重试。',
+    'mergeDirectoryInvalidated': '读取资格已变化，目录与选择已清除。请重新读取。',
+    'mergeDirectorySnapshotHelp': '每次翻页或刷新都是新快照，会清除旧选择与资料。目录中的复核时间不代表持续授权。',
     'mergeProjectionTitle': '已知来源合并投影（只读）',
     'mergeProjectionSnapshotHelp':
         '仅为本次在线读取快照，各来源事实分开保留。复核时间不代表续期，也不证明读取后的持续授权。',
@@ -1739,6 +1752,23 @@ const Map<String, Map<String, String>> _strings = {
     'questionnaireMetricOperationProportion': '比例',
   },
   'en': {
+    'mergeDirectoryTitle': 'Merge source review',
+    'mergeDirectoryHelp':
+        'Lists up to 20 readable known-source merges in this project per page. No names or contact details. Select a generation, then read its details separately.',
+    'mergeDirectoryRead': 'Read generation directory',
+    'mergeDirectoryRefresh': 'Refresh from first page',
+    'mergeDirectoryNext': 'Next page',
+    'mergeDirectorySelect': 'Select a merge generation on this page',
+    'mergeDirectoryLoading': 'Reading generation directory…',
+    'mergeDirectoryEmpty': 'No readable merge generations on this page.',
+    'mergeDirectoryNotRead':
+        'Directory not read. The directory and details are online-only and are not cached on this device.',
+    'mergeDirectoryFailed':
+        'Cannot read the directory. Check your sign-in, project permissions, or connection and retry.',
+    'mergeDirectoryInvalidated':
+        'Read access changed. The directory and selection were cleared. Read again to continue.',
+    'mergeDirectorySnapshotHelp':
+        'Each page or refresh is a new snapshot and clears the previous selection and details. Review dates do not grant ongoing access.',
     'mergeProjectionTitle': 'Known-source merge projection (read-only)',
     'mergeProjectionSnapshotHelp':
         'A snapshot from this online read. Each source keeps its facts. Review dates do not confirm renewal or continued authorization after the read.',

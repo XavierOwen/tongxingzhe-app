@@ -49,6 +49,8 @@ import '../sync/sync_engine_factory.dart';
 import '../targets/personal_target_csv_import.dart';
 import '../targets/personal_pii_export_gateway.dart';
 import '../targets/promotion_target.dart';
+import '../targets/personal_target_merge_directory.dart';
+import '../targets/personal_target_merge_projection.dart';
 import 'app_dependencies.dart';
 import 'private_session_data_guard.dart';
 
@@ -90,6 +92,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
   QuestionnaireCatalog? _questionnaireCatalog;
   QuestionnaireAdministrationGateway? _questionnaireAdministration;
   PromotionTargetGateway? _promotionTargetGateway;
+  PersonalTargetMergeDirectoryGateway? _personalTargetMergeDirectoryGateway;
+  PersonalTargetMergeProjectionGateway? _personalTargetMergeProjectionGateway;
   PersonalPiiExportGateway? _personalPiiExportGateway;
   PersonalTargetCsvImportGateway? _personalTargetCsvImportGateway;
   PersonalActionPlanGateway? _personalActionPlanGateway;
@@ -138,6 +142,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       :final questionnaireCatalog,
       :final questionnaireAdministration,
       :final promotionTargetGateway,
+      :final personalTargetMergeDirectoryGateway,
+      :final personalTargetMergeProjectionGateway,
       :final personalPiiExportGateway,
       :final personalTargetCsvImportGateway,
       :final personalActionPlanGateway,
@@ -174,6 +180,10 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       _questionnaireCatalog = questionnaireCatalog;
       _questionnaireAdministration = questionnaireAdministration;
       _promotionTargetGateway = promotionTargetGateway;
+      _personalTargetMergeDirectoryGateway =
+          personalTargetMergeDirectoryGateway;
+      _personalTargetMergeProjectionGateway =
+          personalTargetMergeProjectionGateway;
       _personalPiiExportGateway = personalPiiExportGateway;
       _personalTargetCsvImportGateway = personalTargetCsvImportGateway;
       _personalActionPlanGateway = personalActionPlanGateway;
@@ -213,6 +223,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
       startup.questionnaireCatalog.close(),
       startup.questionnaireAdministration.close(),
       startup.promotionTargetGateway.close(),
+      startup.personalTargetMergeDirectoryGateway.close(),
+      startup.personalTargetMergeProjectionGateway.close(),
       startup.personalPiiExportGateway.close(),
       startup.personalTargetCsvImportGateway.close(),
       startup.personalActionPlanGateway.close(),
@@ -249,6 +261,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
     unawaited(_questionnaireCatalog?.close());
     unawaited(_questionnaireAdministration?.close());
     unawaited(_promotionTargetGateway?.close());
+    unawaited(_personalTargetMergeDirectoryGateway?.close());
+    unawaited(_personalTargetMergeProjectionGateway?.close());
     unawaited(_personalPiiExportGateway?.close());
     unawaited(_personalTargetCsvImportGateway?.close());
     unawaited(_personalActionPlanGateway?.close());
@@ -296,6 +310,8 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
             :final questionnaireCatalog,
             :final questionnaireAdministration,
             :final promotionTargetGateway,
+            :final personalTargetMergeDirectoryGateway,
+            :final personalTargetMergeProjectionGateway,
             :final personalPiiExportGateway,
             :final personalTargetCsvImportGateway,
             :final personalActionPlanGateway,
@@ -337,6 +353,10 @@ class _TongxingzheAppState extends State<TongxingzheApp> {
               questionnaireCatalog: questionnaireCatalog,
               questionnaireAdministration: questionnaireAdministration,
               promotionTargetGateway: promotionTargetGateway,
+              personalTargetMergeDirectoryGateway:
+                  personalTargetMergeDirectoryGateway,
+              personalTargetMergeProjectionGateway:
+                  personalTargetMergeProjectionGateway,
               personalPiiExportGateway: personalPiiExportGateway,
               personalTargetCsvImportGateway: personalTargetCsvImportGateway,
               personalActionPlanGateway: personalActionPlanGateway,
@@ -400,6 +420,8 @@ class _ReadyApp extends StatefulWidget {
     required this.questionnaireCatalog,
     required this.questionnaireAdministration,
     required this.promotionTargetGateway,
+    required this.personalTargetMergeDirectoryGateway,
+    required this.personalTargetMergeProjectionGateway,
     required this.personalPiiExportGateway,
     required this.personalTargetCsvImportGateway,
     required this.personalActionPlanGateway,
@@ -442,6 +464,9 @@ class _ReadyApp extends StatefulWidget {
   final QuestionnaireCatalog questionnaireCatalog;
   final QuestionnaireAdministrationGateway questionnaireAdministration;
   final PromotionTargetGateway promotionTargetGateway;
+  final PersonalTargetMergeDirectoryGateway personalTargetMergeDirectoryGateway;
+  final PersonalTargetMergeProjectionGateway
+  personalTargetMergeProjectionGateway;
   final PersonalPiiExportGateway personalPiiExportGateway;
   final PersonalTargetCsvImportGateway personalTargetCsvImportGateway;
   final PersonalActionPlanGateway personalActionPlanGateway;
@@ -543,6 +568,10 @@ final class _ReadyAppState extends State<_ReadyApp> {
         contactPageClosedEvents: contactPageClosedEvents,
         questionnaireAdministration: widget.questionnaireAdministration,
         promotionTargetGateway: widget.promotionTargetGateway,
+        personalTargetMergeDirectoryGateway:
+            widget.personalTargetMergeDirectoryGateway,
+        personalTargetMergeProjectionGateway:
+            widget.personalTargetMergeProjectionGateway,
         personalPiiExportGateway: widget.personalPiiExportGateway,
         personalTargetCsvImportGateway: widget.personalTargetCsvImportGateway,
         personalActionPlanGateway: widget.personalActionPlanGateway,

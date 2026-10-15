@@ -10,6 +10,7 @@ import {createSupabaseIdentityVerifier} from "../src/identity.js";
 import {
   PostgresPersonalTargetMergeProjectionStore,
   PostgresPersonalTargetMergeSplitPlanStore,
+  PostgresPersonalTargetMergeDirectoryStore,
 } from "../src/personal-target-merge-projection.js";
 import {createBackendServer} from "../src/server.js";
 
@@ -180,7 +181,8 @@ test("known-source HTTP reads reauthorize exact identity and commit source audit
     const query = async (text: string, values: readonly unknown[]) => {
       databaseCalls++;
       const auditRead = text.includes("read_personal_known_source_merge_projection_v1")
-        || text.includes("read_personal_known_source_merge_split_plan_v1");
+        || text.includes("read_personal_known_source_merge_split_plan_v1")
+        || text.includes("read_personal_merge_directory_v1");
       if (revokeBeforeAudit && auditRead) {
         revokeBeforeAudit = false;
         await pool.query("UPDATE app_data.app_users SET status = 'deletion_pending' WHERE app_user_id = $1::uuid", [context.app_user_id]);
@@ -189,7 +191,8 @@ test("known-source HTTP reads reauthorize exact identity and commit source audit
       try {
         const result = await runtimeClient.query(text, [...values]);
         if (corruptResult && auditRead) {
-          const field = text.includes("split_plan_v1") ? "split_plan" : "projection";
+          const field = text.includes("split_plan_v1") ? "split_plan"
+            : text.includes("merge_directory_v1") ? "directory" : "projection";
           return {rows: [{[field]: {...result.rows[0][field], unexpected_profile: "sensitive result"}}]};
         }
         return result;
@@ -214,6 +217,7 @@ test("known-source HTTP reads reauthorize exact identity and commit source audit
       }},
       personalTargetMergeProjectionStore: new PostgresPersonalTargetMergeProjectionStore(query),
       personalTargetMergeSplitPlanStore: new PostgresPersonalTargetMergeSplitPlanStore(query),
+      personalTargetMergeDirectoryStore: new PostgresPersonalTargetMergeDirectoryStore(query),
     });
     await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve));
     const address = server.address() as AddressInfo;
@@ -360,6 +364,94 @@ test("known-source HTTP reads reauthorize exact identity and commit source audit
       corruptResult = false;
     }
 
+    const directoryEndpoint = endpoint.slice(0, -(generationId.length + 1));
+    const directoryItems = [
+      {generation_id: generationId, target_type: "person", retained_target_id: firstTarget,
+        member_target_ids: personPlan.member_target_ids, review_due_at_utc: personPlan.review_due_at_utc},
+      {generation_id: institutionGenerationId, target_type: "institution", retained_target_id: institutionTarget,
+        member_target_ids: institutionPlan.member_target_ids, review_due_at_utc: institutionPlan.review_due_at_utc},
+    ].sort((left, right) => left.generation_id < right.generation_id ? -1 : 1);
+    const expectedDirectory = (items = directoryItems) => ({
+      workspace_id: context.workspace_id, project_id: context.project_id, items, next_cursor: null,
+    });
+    const beforeDirectory = await auditCount();
+    const beforeDirectoryCalls = databaseCalls;
+    for (const url of [directoryEndpoint, directoryEndpoint]) {
+      const baseline = await auditCount();
+      const result = await read(url);
+      assert.equal(result.response.status, 200);
+      assert.equal(result.response.headers.get("cache-control"), "no-store");
+      assert.deepEqual(result.body, {directory: expectedDirectory()});
+      assert.equal(await auditCount(), baseline + 2 * directoryItems.length);
+    }
+    assert.equal(databaseCalls, beforeDirectoryCalls + 4);
+    const afterFirst = await read(`${directoryEndpoint}?after=${directoryItems[0]!.generation_id.toUpperCase()}`);
+    assert.equal(afterFirst.response.status, 200);
+    assert.deepEqual(afterFirst.body, {directory: expectedDirectory(directoryItems.slice(1))});
+    assert.equal(await auditCount(), beforeDirectory + 10);
+    for (const after of [directoryItems[1]!.generation_id, "ffffffff-ffff-ffff-ffff-ffffffffffff"]) {
+      const result = await read(`${directoryEndpoint}?after=${after}`);
+      assert.equal(result.response.status, 200);
+      assert.deepEqual(result.body, {directory: expectedDirectory([])});
+      assert.equal(await auditCount(), beforeDirectory + 10);
+    }
+    const afterNil = await read(`${directoryEndpoint}?after=00000000-0000-0000-0000-000000000000`);
+    assert.equal(afterNil.response.status, 200);
+    assert.deepEqual(afterNil.body, {directory: expectedDirectory()});
+    assert.equal(await auditCount(), beforeDirectory + 14);
+
+    const beforeDirectoryDenied = await auditCount();
+    const directoryIdentity = await identityState();
+    const beforeDirectoryUnauthenticated = databaseCalls;
+    assertError(await read(directoryEndpoint.replace(context.project_id, "malformed"), "invalid-token"), 401, "unauthenticated", "directory");
+    assert.equal(databaseCalls, beforeDirectoryUnauthenticated);
+    for (const query of ["after=bad", "limit=20", `after=${generationId}&after=${generationId}`, "workspace=private"]) {
+      assertError(await read(`${directoryEndpoint}?${query}`), 400, "invalid_request", "directory");
+    }
+    assert.deepEqual(await readWithBody(directoryEndpoint), {
+      status: 400, body: {error: {code: "personal_target_merge_directory_invalid_request"}},
+    });
+    assertError(await read(directoryEndpoint, await tokenFor("never-known")), 403, "forbidden", "directory");
+    assertError(await read(directoryEndpoint, await tokenFor(subject.trim())), 403, "forbidden", "directory");
+    assertError(await read(directoryEndpoint.replace(context.project_id, randomUUID())), 403, "forbidden", "directory");
+    assert.equal(await auditCount(), beforeDirectoryDenied);
+    assert.deepEqual(await identityState(), directoryIdentity);
+
+    await pool.query("DELETE FROM app_data.user_current_projects WHERE app_user_id = $1::uuid", [context.app_user_id]);
+    const directoryMissingCurrent = await identityState();
+    try {
+      assertError(await read(directoryEndpoint), 403, "forbidden", "directory");
+      assert.deepEqual(await identityState(), directoryMissingCurrent);
+      assert.equal(await auditCount(), beforeDirectoryDenied);
+    } finally {
+      await pool.query("INSERT INTO app_data.user_current_projects(app_user_id,project_id) VALUES ($1::uuid,$2::uuid)", [context.app_user_id, context.project_id]);
+    }
+    await pool.query("UPDATE app_data.app_users SET status = 'deletion_pending' WHERE app_user_id = $1::uuid", [context.app_user_id]);
+    try {
+      const beforeCalls = databaseCalls;
+      assertError(await read(directoryEndpoint), 403, "forbidden", "directory");
+      assert.equal(databaseCalls, beforeCalls + 1);
+      assert.equal(await auditCount(), beforeDirectoryDenied);
+    } finally {
+      await pool.query("UPDATE app_data.app_users SET status = 'active' WHERE app_user_id = $1::uuid", [context.app_user_id]);
+    }
+    revokeBeforeAudit = true;
+    try {
+      const beforeCalls = databaseCalls;
+      assertError(await read(directoryEndpoint), 403, "forbidden", "directory");
+      assert.equal(databaseCalls, beforeCalls + 2);
+      assert.equal(await auditCount(), beforeDirectoryDenied);
+    } finally {
+      await pool.query("UPDATE app_data.app_users SET status = 'active' WHERE app_user_id = $1::uuid", [context.app_user_id]);
+    }
+    corruptResult = true;
+    try {
+      assertError(await read(directoryEndpoint), 503, "unavailable", "directory");
+      assert.equal(await auditCount(), beforeDirectoryDenied + 4);
+    } finally {
+      corruptResult = false;
+    }
+
     // A deferred failure occurs at implicit commit, after the function has made its result.
     const beforeCommitFailure = await auditCount();
     await pool.query(`CREATE FUNCTION public.${triggerName}() RETURNS trigger LANGUAGE plpgsql AS $body$
@@ -374,9 +466,10 @@ test("known-source HTTP reads reauthorize exact identity and commit source audit
     triggerInstalled = true;
     assertError(await read(), 503, "unavailable");
     assertError(await read(splitEndpoint), 503, "unavailable", "split_plan");
+    assertError(await read(directoryEndpoint), 503, "unavailable", "directory");
     assert.equal(await auditCount(), beforeCommitFailure);
     assert.equal(contextCalls, 0);
-    process.stdout.write("Known-source merge projection and split plan runtime JWT/HTTP integration: passed\n");
+    process.stdout.write("Known-source merge projection, split plan and directory runtime JWT/HTTP integration: passed\n");
   } finally {
     try {
       if (server !== undefined) {

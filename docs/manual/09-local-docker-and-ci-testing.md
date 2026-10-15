@@ -2896,6 +2896,19 @@ flutter test --platform chrome test/features/targets/personal_target_merge_proje
 
 中英文、person／institution、长 ID／备注、窄屏大字、light／dark、键盘展开和 Reduce Motion 均按实际组件验证。合成 harness 只用于有界渲染与交互检查，不加入 production 入口。浏览器截图与 widget tests 不替代 native 设备的权限、认证、系统返回或真实触控检查，也不证明生产身份、真实 PII 或部署。
 
+### 7.14 受控已知代次目录与选择（Issue #578）
+
+完整 Docker 套件自动发现 0126 migration、结构与行为 fixture 和目录并发脚本；真实 0125→0126 upgrade 保留旧函数 OID／body／ACL、原 projection／split plan、manifest、历史及终结重放，验证 checksum 和独立恢复。分页应包含 20／21、超过两页、nil／max／不存在 cursor、空页和失格过滤。每实际返回 member 精确一条 `viewed`，第 21 项不审计；第二条插入失败或抑制都全回滚。READ ONLY 即使空页也拒绝，未知身份不 bootstrap，无 current pointer 时不修复。
+
+独立会话在首条审计前阻塞，捕获精确 reader／blocker PID，再提交 assignment 结束或 actor 撤权。原 command 仍返回完整旧页与双 member 审计；fresh read 分别为空页或 42501，业务状态不漂移。Backend 真 HTTP 核对原生 JSON、no-store、两步间撤权、parser 失败后的已提交审计和 commit 失败后的零审计，保留旧读取接口。
+
+```bash
+flutter test test/targets/http_personal_target_merge_directory_gateway_test.dart test/features/targets/personal_target_merge_directory_read_controller_test.dart test/features/targets/personal_target_merge_directory_panel_test.dart
+flutter test --platform chrome test/targets/http_personal_target_merge_directory_gateway_test.dart test/features/targets/personal_target_merge_directory_read_controller_test.dart test/features/targets/personal_target_merge_directory_panel_test.dart
+```
+
+检查初次零请求、仅当前页选择、选择不自动读 PII、翻页／刷新／资格变化清除和迟到请求退役。入口测试核对个人在线双 capability、组织／离线／注销／缺单项能力隐藏，以及 route 返回不关闭借用资源；App 测试核对 production builders 和失败／正常／迟到启动的恰好一次关闭。原生 Backend bytes 通过生产 Flutter gateway 对账后，合成验证页作有界宽／窄屏、中英文、大字和键盘选择检查，不加入 production。此证据不替代 native 设备、生产身份、真实 PII、部署或清理 SLA。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：

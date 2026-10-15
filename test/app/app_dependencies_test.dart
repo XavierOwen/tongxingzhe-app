@@ -32,6 +32,10 @@ import 'package:tongxingzhe_app/privacy/offline_pii_vault.dart';
 import 'package:tongxingzhe_app/project_settings/http_personal_follow_up_consent_opt_in_gateway.dart';
 import 'package:tongxingzhe_app/project_settings/personal_follow_up_consent_opt_in.dart';
 import 'package:tongxingzhe_app/targets/http_promotion_target_gateway.dart';
+import 'package:tongxingzhe_app/targets/http_personal_target_merge_directory_gateway.dart';
+import 'package:tongxingzhe_app/targets/http_personal_target_merge_projection_gateway.dart';
+import 'package:tongxingzhe_app/targets/personal_target_merge_directory.dart';
+import 'package:tongxingzhe_app/targets/personal_target_merge_projection.dart';
 import 'package:tongxingzhe_app/targets/personal_pii_export_gateway.dart';
 import 'package:tongxingzhe_app/targets/personal_target_csv_import.dart';
 import 'package:tongxingzhe_app/targets/promotion_target.dart';
@@ -42,6 +46,70 @@ import '../support/fake_runtime_values.dart';
 import '../support/fake_session_context_gateway.dart';
 
 void main() {
+  test('production builders construct configured merge readers', () async {
+    final dependencies = AppDependencies.production();
+    final identity = FakeIdentitySession();
+    final directory = dependencies.personalTargetMergeDirectoryGatewayBuilder!(
+      identity,
+    );
+    final projection =
+        dependencies.personalTargetMergeProjectionGatewayBuilder!(identity);
+    addTearDown(directory.close);
+    addTearDown(projection.close);
+    addTearDown(identity.close);
+    const backendUrl = String.fromEnvironment('BACKEND_BASE_URL');
+    if (backendUrl.trim().isEmpty) {
+      expect(directory, isA<DeferredPersonalTargetMergeDirectoryGateway>());
+      expect(projection, isA<DeferredPersonalTargetMergeProjectionGateway>());
+    } else {
+      expect(directory, isA<HttpPersonalTargetMergeDirectoryGateway>());
+      expect(projection, isA<HttpPersonalTargetMergeProjectionGateway>());
+    }
+    expect(identity.isClosed, isFalse);
+  });
+
+  test(
+    'merge reader builders share the startup identity and retain injected gateways',
+    () async {
+      final database = LocalDatabase(NativeDatabase.memory());
+      final identity = FakeIdentitySession();
+      final directory = _TrackingMergeDirectoryGateway();
+      final projection = _TrackingMergeProjectionGateway();
+      final received = <IdentitySession>[];
+      final dependencies = AppDependencies(
+        databaseFactory: SingleDatabaseFactory(database),
+        clock: FixedClock(DateTime.utc(2030, 1, 2, 3, 4)),
+        idGenerator: CountingIdGenerator(),
+        identitySessionFactory: FakeIdentitySessionFactory(identity),
+        sessionContextGateway: FakeSessionContextGateway(),
+        platformCapabilitiesProvider: const FakePlatformCapabilitiesProvider(),
+        personalTargetMergeDirectoryGatewayBuilder: (session) {
+          received.add(session);
+          return directory;
+        },
+        personalTargetMergeProjectionGatewayBuilder: (session) {
+          received.add(session);
+          return projection;
+        },
+      );
+      final startup = await dependencies.start();
+      expect(startup, isA<AppStartupReady>());
+      final ready = startup as AppStartupReady;
+      expect(received, [same(identity), same(identity)]);
+      expect(ready.personalTargetMergeDirectoryGateway, same(directory));
+      expect(ready.personalTargetMergeProjectionGateway, same(projection));
+      expect(directory.closeCount, 0);
+      expect(projection.closeCount, 0);
+      await directory.close();
+      await projection.close();
+      expect(directory.closeCount, 1);
+      expect(projection.closeCount, 1);
+      await ready.appSession.close();
+      await identity.close();
+      await database.close();
+    },
+  );
+
   test('正式启动直接提供显示设置且不读取 legacy 表', () async {
     final database = LocalDatabase(NativeDatabase.memory());
     final dependencies = AppDependencies(
@@ -62,6 +130,14 @@ void main() {
     addTearDown(ready.database.close);
     expect(ready.localeCode, 'zh');
     expect(ready.themeMode, ThemeMode.system);
+    expect(
+      ready.personalTargetMergeDirectoryGateway,
+      isA<DeferredPersonalTargetMergeDirectoryGateway>(),
+    );
+    expect(
+      ready.personalTargetMergeProjectionGateway,
+      isA<DeferredPersonalTargetMergeProjectionGateway>(),
+    );
     expect(await database.select(database.dbUsers).get(), isEmpty);
     expect(
       await database.select(database.dbConversationRecords).get(),
@@ -719,6 +795,8 @@ void main() {
 
   test('composition root 在后续启动失败时关闭已经装配的 gateways', () async {
     final database = LocalDatabase(NativeDatabase.memory());
+    final mergeDirectoryGateway = _TrackingMergeDirectoryGateway();
+    final mergeProjectionGateway = _TrackingMergeProjectionGateway();
     final gateway = _TrackingManagementReportGateway();
     final currentCityGateway = _TrackingCurrentCityReportGateway();
     final interestGateway = _TrackingInterestReportGateway();
@@ -763,12 +841,17 @@ void main() {
           organizationProjectMembershipAssignmentGateway,
       organizationShareableJoinGatewayBuilder: (_) =>
           organizationShareableJoinGateway,
+      personalTargetMergeDirectoryGatewayBuilder: (_) => mergeDirectoryGateway,
+      personalTargetMergeProjectionGatewayBuilder: (_) =>
+          mergeProjectionGateway,
       reminderSchedulerBuilder: (_) => throw StateError('synthetic failure'),
     );
 
     final startup = await dependencies.start();
 
     expect(startup, isA<AppStartupFailed>());
+    expect(mergeDirectoryGateway.closeCount, 1);
+    expect(mergeProjectionGateway.closeCount, 1);
     expect(gateway.closeCount, 1);
     expect(currentCityGateway.closeCount, 1);
     expect(interestGateway.closeCount, 1);
@@ -965,6 +1048,26 @@ const _offlineCapableContext = TrustedSessionContext(
   ),
   capabilities: {'record_contact', 'view_assigned_target_pii'},
 );
+
+final class _TrackingMergeDirectoryGateway
+    implements PersonalTargetMergeDirectoryGateway {
+  var closeCount = 0;
+  @override
+  Future<void> close() async => closeCount++;
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('unused merge directory method');
+}
+
+final class _TrackingMergeProjectionGateway
+    implements PersonalTargetMergeProjectionGateway {
+  var closeCount = 0;
+  @override
+  Future<void> close() async => closeCount++;
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('unused merge projection method');
+}
 
 final class _SingleIdentitySessionFactory implements IdentitySessionFactory {
   const _SingleIdentitySessionFactory(this.session);
