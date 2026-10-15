@@ -13196,6 +13196,128 @@ docker exec "${container_name}" psql \
 printf '%s\n' "${personal_target_merge_directory_upgrade_replay}"
 echo '0125→0126 directory, original read contracts/functions, member audits, terminal replay and checksum replay: passed.'
 
+echo '验证 0126→0127 旧函数与读取合同、pending staging 和终结重放。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0126_personal_merge_unassigned_contacts_live.sql >/dev/null
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/personal-merge-unassigned-contacts-upgrade-only && \
+   cp /workspace/backend/database/migrations/0127_personal_merge_unassigned_contacts.sql \
+     /tmp/personal-merge-unassigned-contacts-upgrade-only/"
+docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-merge-unassigned-contacts-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_personal_merge_unassigned_contacts.sql
+docker exec -i "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 >/dev/null <<'SQL'
+BEGIN;
+DO $upgrade$
+DECLARE saved public.fixture_0127_upgrade_state%ROWTYPE; document jsonb; pending uuid; before_end jsonb;
+BEGIN
+  SELECT * INTO STRICT saved FROM public.fixture_0127_upgrade_state;
+  IF (SELECT count(*) FROM app_migrations.schema_migrations) <> saved.migration_count + 1
+    OR (SELECT max(version) FROM app_migrations.schema_migrations) <> '0127_personal_merge_unassigned_contacts'
+    OR public.fixture_0127_business_state(saved.workspace_id) IS DISTINCT FROM saved.business_state
+    OR public.fixture_0127_function_catalog() IS DISTINCT FROM saved.function_catalog
+    OR public.fixture_0127_manifests(saved.workspace_id) IS DISTINCT FROM saved.manifests
+    OR (SELECT count(*) FROM app_data.promotion_target_access_events WHERE workspace_id = saved.workspace_id) <> saved.access_event_count
+  THEN RAISE EXCEPTION '0127 upgrade changed existing functions, permissions, facts or audit'; END IF;
+  IF app_private.read_known_source_personal_target_merge_projection_v1(
+      saved.app_user_id,saved.workspace_id,saved.project_id,saved.active_generation_id) IS DISTINCT FROM saved.projection_document
+    OR app_private.read_known_source_personal_merge_split_plan_v1(
+      saved.app_user_id,saved.workspace_id,saved.project_id,saved.active_generation_id) IS DISTINCT FROM saved.split_plan_document
+    OR app_private.read_known_source_personal_merge_split_plan_v1(
+      saved.app_user_id,saved.workspace_id,saved.project_id,saved.v1_generation_id) IS DISTINCT FROM saved.v1_split_plan_document
+    OR app_data.read_personal_merge_projection_context_v1(saved.trusted_issuer,saved.trusted_subject,saved.project_id)
+      IS DISTINCT FROM saved.context_document
+    OR app_private.end_known_source_personal_target_merge_generation_v1(
+      saved.app_user_id,saved.workspace_id,saved.project_id,saved.ordinary_end_request_id,
+      saved.ordinary_end_generation_id,saved.ordinary_end_fingerprint) IS DISTINCT FROM saved.ordinary_end_at_utc
+    OR app_private.expire_known_source_personal_target_merge_generation_v1(
+      saved.app_user_id,saved.workspace_id,saved.project_id,saved.expiry_request_id,
+      saved.expiry_generation_id) IS DISTINCT FROM saved.expiry_at_utc
+  THEN RAISE EXCEPTION '0127 upgrade changed old plans/context or terminal replay'; END IF;
+  SET LOCAL ROLE tongxingzhe_runtime;
+  document := app_data.read_personal_merge_directory_v1(saved.trusted_issuer,saved.trusted_subject,saved.project_id,NULL);
+  RESET ROLE;
+  IF document IS DISTINCT FROM saved.directory_document THEN RAISE EXCEPTION '0127 changed the directory wire'; END IF;
+  SET LOCAL ROLE tongxingzhe_runtime;
+  document := app_data.read_personal_known_source_merge_projection_v1(
+    saved.trusted_issuer,saved.trusted_subject,saved.project_id,saved.active_generation_id);
+  RESET ROLE;
+  IF document IS DISTINCT FROM saved.projection_document THEN RAISE EXCEPTION '0127 changed projection wire'; END IF;
+  SET LOCAL ROLE tongxingzhe_runtime;
+  document := app_data.read_personal_known_source_merge_split_plan_v1(
+    saved.trusted_issuer,saved.trusted_subject,saved.project_id,saved.active_generation_id);
+  RESET ROLE;
+  IF document IS DISTINCT FROM saved.split_plan_document THEN RAISE EXCEPTION '0127 changed split-plan wire'; END IF;
+  SET LOCAL ROLE tongxingzhe_runtime;
+  document := app_data.read_personal_known_source_merge_split_plan_v1(
+    saved.trusted_issuer,saved.trusted_subject,saved.project_id,saved.v1_generation_id);
+  RESET ROLE;
+  IF document IS DISTINCT FROM saved.v1_split_plan_document
+    OR (SELECT count(*) FROM app_data.promotion_target_access_events WHERE workspace_id = saved.workspace_id) <> saved.access_event_count + 8
+  THEN RAISE EXCEPTION '0127 changed old v1 wire or controlled read audits'; END IF;
+  document := app_private.read_personal_merge_unassigned_contact_plan_v1(
+    saved.app_user_id,saved.workspace_id,saved.project_id,saved.active_generation_id);
+  IF document->'known_source_plan' IS DISTINCT FROM saved.split_plan_document
+    OR document->'pending_contacts' IS DISTINCT FROM '[]'::jsonb OR document->>'pending_count' <> '0'
+  THEN RAISE EXCEPTION '0127 inferred pending facts from existing links or NULL binding'; END IF;
+  pending := app_private.stage_unassigned_personal_merge_contact_v1(
+    saved.app_user_id,saved.workspace_id,saved.project_id,'7f278000-0000-4000-8000-000000000099',
+    saved.active_generation_id,'0126-upgrade-projection-contact',2,NULL,'unknown',false,true);
+  IF app_private.stage_unassigned_personal_merge_contact_v1(
+      saved.app_user_id,saved.workspace_id,saved.project_id,'7f278000-0000-4000-8000-000000000099',
+      saved.active_generation_id,'0126-upgrade-projection-contact',2,NULL,'unknown',false,true) IS DISTINCT FROM pending
+    OR public.fixture_0127_manifests(saved.workspace_id) IS DISTINCT FROM saved.manifests
+    OR public.fixture_0127_function_catalog() IS DISTINCT FROM saved.function_catalog
+  THEN RAISE EXCEPTION '0127 staging replay changed known facts or legacy functions'; END IF;
+  before_end := public.fixture_0127_business_state(saved.workspace_id);
+  BEGIN
+    PERFORM app_private.end_known_source_personal_target_merge_generation_v1(
+      saved.app_user_id,saved.workspace_id,saved.project_id,'7f278000-0000-4000-8000-000000000098',
+      saved.active_generation_id,saved.split_plan_document->>'fact_fingerprint');
+    RAISE EXCEPTION '0127 old end bypassed pending facts';
+  EXCEPTION WHEN SQLSTATE '55000' THEN NULL;
+  END;
+  IF public.fixture_0127_business_state(saved.workspace_id) IS DISTINCT FROM before_end
+  THEN RAISE EXCEPTION '0127 rejected old end left writes'; END IF;
+END
+$upgrade$;
+ROLLBACK;
+SQL
+personal_merge_unassigned_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/personal-merge-unassigned-contacts-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${personal_merge_unassigned_upgrade_replay}" != \
+    *'已验证 0127_personal_merge_unassigned_contacts（无需重复执行）'* ]] \
+  || [[ "${personal_merge_unassigned_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0127 migration did not skip its checksum-verified replay.' >&2
+  exit 1
+fi
+docker exec -i "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 >/dev/null <<'SQL'
+DO $replay$
+DECLARE saved public.fixture_0127_upgrade_state%ROWTYPE;
+BEGIN
+  SELECT * INTO STRICT saved FROM public.fixture_0127_upgrade_state;
+  IF public.fixture_0127_business_state(saved.workspace_id) IS DISTINCT FROM saved.business_state
+    OR public.fixture_0127_function_catalog() IS DISTINCT FROM saved.function_catalog
+    OR public.fixture_0127_manifests(saved.workspace_id) IS DISTINCT FROM saved.manifests
+    OR (SELECT count(*) FROM app_data.promotion_target_access_events WHERE workspace_id = saved.workspace_id) <> saved.access_event_count
+    OR EXISTS (SELECT 1 FROM app_private.personal_merge_unassigned_contact_requests_v1 WHERE workspace_id = saved.workspace_id)
+    OR EXISTS (SELECT 1 FROM app_data.external_identities WHERE issuer = saved.unknown_issuer AND subject = saved.unknown_subject)
+  THEN RAISE EXCEPTION '0127 checksum replay changed legacy state or retained rolled-back pending facts'; END IF;
+END
+$replay$;
+SQL
+printf '%s\n' "${personal_merge_unassigned_upgrade_replay}"
+echo '0126→0127 legacy function/OID/ACL, facts/read wires, staging/end guard, terminal replay and checksum replay: passed.'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 
