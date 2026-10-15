@@ -295,6 +295,18 @@ metadata 只返回来源、事实标识和 revision metadata。当前合同将 T
 
 此预检不是完整 split，也没有待分配事实存储或逐项分配。它不增加 PUBLIC／runtime 权限，不接 Backend、HTTP 或 Flutter，不开放产品 active merge、部署或 SLA。synthetic PostgreSQL 证据不证明生产身份、真实 PII 或用户可用性。
 
+### 0125 已知来源拆分预检的在线读取（Issue #574）
+
+0125 在同一个 SQL command 中复用 0123 的 exact-identity／current-personal-project 资格 reader、调用 0124 一次，并为两个 member 各追加一条 `viewed` 审计。成功返回原 plan，任一审计失败或条数不等于二时全回滚。private core 与窄 runtime wrapper 为 VOLATILE，READ ONLY 调用会失败；0124 仍为 STABLE、零写入。runtime 只获新 wrapper 的 EXECUTE，不获 private schema、catalog、底表或 merge writer 权限。
+
+专用 GET 为 `/v1/projects/:projectId/promotion-target-merges/:generationId/split-plan`，只收两个 UUID 路径，不收 query 或 body。Backend 先验证 identity、资格与查看／合并管理两项 capability，再以同一原始身份调用重新授权的审计 bridge。成功为 `{ "split_plan": ... }`，所有响应 `no-store`。固定错误为 401／400／403／503，不含字段值；审计提交先于 HTTP 返回，`viewed` 不证明送达。
+
+严格 parser 保留九键 plan 和七种 metadata variant。TEXT contact ID 可以含空格或分隔符；历史 revision、ended relationship、NULL／旧另一端 binding 和跨项目事实仍属于清单。header project 只限制当前上下文。Backend 与 Flutter 均不重排数据库 facts 或重算原 fingerprint，也不把 fingerprint 当授权 token。
+
+独立 Flutter typed gateway 保留原字符串与不可变嵌套列表，核对 subject／workspace／project／generation 和 caller fence。每次 await 前后检查身份与请求是否仍有效，401 最多强刷一次；身份 ABA、流 error／done 和关闭会退役在途请求。它不包含持有结果的 controller，已返回 plan 的引用及失效由未来调用方负责。
+
+这条链路不接 App 启动、UI、导航、离线或持久缓存，也不提供未知来源分配、完整 split、writer、产品 active merge、部署或 SLA。MANUAL-146 与 TEST-157 记录范围；synthetic 测试不证明生产身份、真实 PII、用户界面或部署。
+
 ## HTTP 与权限边界
 
 | 方法与路径 | 用途 | Backend capability |

@@ -9,6 +9,7 @@ import test from "node:test";
 import {createSupabaseIdentityVerifier} from "../src/identity.js";
 import {
   PostgresPersonalTargetMergeProjectionStore,
+  PostgresPersonalTargetMergeSplitPlanStore,
 } from "../src/personal-target-merge-projection.js";
 import {createBackendServer} from "../src/server.js";
 
@@ -46,7 +47,7 @@ test("known-source HTTP reads reauthorize exact identity and commit source audit
       [issuer, subject],
     );
     const targets: string[] = [];
-    for (const type of ["person", "person", "institution"]) {
+    for (const type of ["person", "person", "institution", "institution"]) {
       const result = await pool.query(
         `SELECT target FROM app_data.create_promotion_target(
           $1::uuid,$2::uuid,$3::uuid,$4::text,$5::text,$6::text,$7::text,$8::text)`,
@@ -56,7 +57,7 @@ test("known-source HTTP reads reauthorize exact identity and commit source audit
       );
       targets.push(String(result.rows[0].target.target_id));
     }
-    const [firstTarget, secondTarget, institutionTarget] = targets as [string, string, string];
+    const [firstTarget, secondTarget, institutionTarget, secondInstitution] = targets as [string, string, string, string];
     const submit = async (label: string, linkedTargets: readonly string[]) => {
       const contactId = `7ei-http-${label}-${suffix}`;
       const result = await pool.query(
@@ -86,18 +87,19 @@ test("known-source HTTP reads reauthorize exact identity and commit source audit
         }],
       );
       assert.equal(result.rows[0].result_code, "accepted");
+      return contactId;
     };
-    const activate = async () => {
+    const activate = async (first = firstTarget, second = secondTarget) => {
       const preview = await pool.query(
         `SELECT preview_id FROM app_data.preview_personal_target_pair_v1(
           $1::text,$2::text,$3::uuid,$4::uuid,$5::uuid)`,
-        [issuer, subject, context.project_id, firstTarget, secondTarget],
+        [issuer, subject, context.project_id, first, second],
       );
       const activation = await pool.query(
         `SELECT app_private.activate_personal_target_merge_generation_v2(
           $1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::uuid,$7::uuid,$8::uuid) AS generation_id`,
         [context.app_user_id, context.project_id, randomUUID(), preview.rows[0].preview_id,
-          firstTarget, secondTarget, firstTarget, firstTarget],
+          first, second, first, first],
       );
       return String(activation.rows[0].generation_id);
     };
@@ -111,12 +113,40 @@ test("known-source HTTP reads reauthorize exact identity and commit source audit
       [context.app_user_id, context.workspace_id, context.project_id, randomUUID(), oldGeneration],
     );
     const generationId = await activate();
-    await submit("current", [firstTarget, secondTarget]);
+    const institutionGenerationId = await activate(institutionTarget, secondInstitution);
+    const currentContact = await submit("current|\"", [firstTarget, secondTarget]);
+    for (const revision of [1, 2]) {
+      const revisionResult = await pool.query(
+        `SELECT result_code FROM app_data.apply_contact_revise_v3(
+          $1::uuid,$2::text,1,'contact.revise.v1','7el-http-device',$3::text,$4::integer,
+          (SELECT snapshot || jsonb_build_object('reason','synthetic historical revision')
+           FROM app_data.contact_revisions WHERE contact_id=$3::text AND revision_number=$4::integer))`,
+        [context.app_user_id, `${currentContact}-revise-${revision}`, currentContact, revision],
+      );
+      assert.equal(revisionResult.rows[0].result_code, "accepted");
+    }
+    const alternateProject = randomUUID();
     await pool.query(
+      "INSERT INTO app_data.projects(project_id,workspace_id,display_name) VALUES ($1::uuid,$2::uuid,'synthetic historical project')",
+      [alternateProject, context.workspace_id],
+    );
+    await pool.query(
+      `INSERT INTO app_data.promotion_target_project_relationships(
+        promotion_target_id,project_id,current_stage,established_by_app_user_id,established_at,updated_by_app_user_id,updated_at)
+       VALUES ($1::uuid,$2::uuid,2,$3::uuid,clock_timestamp(),$3::uuid,clock_timestamp())`,
+      [firstTarget, alternateProject, context.app_user_id],
+    );
+    const relation = await pool.query(
       `SELECT * FROM app_data.create_target_institution_relationship(
         $1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,'partnership_service','synthetic role',$6::text)`,
       [context.app_user_id, context.workspace_id, context.project_id,
         firstTarget, institutionTarget, randomUUID()],
+    );
+    const relationshipId = relation.rows[0].result.relationship.relationship_id as string;
+    await pool.query(
+      `SELECT result FROM app_data.end_target_institution_relationship(
+        $1::uuid,$2::uuid,$3::uuid,$4::uuid,1,$5::text)`,
+      [context.app_user_id, context.workspace_id, context.project_id, relationshipId, randomUUID()],
     );
     await pool.query("UPDATE app_data.promotion_targets SET phone = NULL WHERE promotion_target_id = $1::uuid", [firstTarget]);
     const expectedResult = await pool.query(
@@ -125,6 +155,13 @@ test("known-source HTTP reads reauthorize exact identity and commit source audit
       [context.app_user_id, context.workspace_id, context.project_id, generationId],
     );
     const expected = expectedResult.rows[0].projection as Record<string, unknown>;
+    const expectedPlan = async (generation: string) => (await pool.query(
+      `SELECT app_private.read_known_source_personal_merge_split_plan_v1(
+        $1::uuid,$2::uuid,$3::uuid,$4::uuid) AS split_plan`,
+      [context.app_user_id, context.workspace_id, context.project_id, generation],
+    )).rows[0].split_plan as Record<string, unknown>;
+    const personPlan = await expectedPlan(generationId);
+    const institutionPlan = await expectedPlan(institutionGenerationId);
     const auditCount = async () => Number((await pool.query(
       "SELECT count(*)::integer AS n FROM app_data.promotion_target_access_events WHERE workspace_id = $1::uuid",
       [context.workspace_id],
@@ -142,15 +179,18 @@ test("known-source HTTP reads reauthorize exact identity and commit source audit
     )).rows[0].state;
     const query = async (text: string, values: readonly unknown[]) => {
       databaseCalls++;
-      if (revokeBeforeAudit && text.includes("read_personal_known_source_merge_projection_v1")) {
+      const auditRead = text.includes("read_personal_known_source_merge_projection_v1")
+        || text.includes("read_personal_known_source_merge_split_plan_v1");
+      if (revokeBeforeAudit && auditRead) {
         revokeBeforeAudit = false;
         await pool.query("UPDATE app_data.app_users SET status = 'deletion_pending' WHERE app_user_id = $1::uuid", [context.app_user_id]);
       }
       await runtimeClient.query("SET ROLE tongxingzhe_runtime");
       try {
         const result = await runtimeClient.query(text, [...values]);
-        if (corruptResult && text.includes("read_personal_known_source_merge_projection_v1")) {
-          return {rows: [{projection: {...result.rows[0].projection, unexpected_profile: "sensitive result"}}]};
+        if (corruptResult && auditRead) {
+          const field = text.includes("split_plan_v1") ? "split_plan" : "projection";
+          return {rows: [{[field]: {...result.rows[0][field], unexpected_profile: "sensitive result"}}]};
         }
         return result;
       } finally {
@@ -173,6 +213,7 @@ test("known-source HTTP reads reauthorize exact identity and commit source audit
         throw new Error("merge reads must not bootstrap context");
       }},
       personalTargetMergeProjectionStore: new PostgresPersonalTargetMergeProjectionStore(query),
+      personalTargetMergeSplitPlanStore: new PostgresPersonalTargetMergeSplitPlanStore(query),
     });
     await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve));
     const address = server.address() as AddressInfo;
@@ -181,9 +222,9 @@ test("known-source HTTP reads reauthorize exact identity and commit source audit
       const response = await fetch(url, {headers: {authorization: `Bearer ${accessToken}`}});
       return {response, body: await response.json() as Record<string, unknown>};
     };
-    const assertError = (result: Awaited<ReturnType<typeof read>>, status: number, code: string) => {
+    const assertError = (result: Awaited<ReturnType<typeof read>>, status: number, code: string, kind = "projection") => {
       assert.equal(result.response.status, status);
-      assert.deepEqual(result.body, {error: {code: `personal_target_merge_projection_${code}`}});
+      assert.deepEqual(result.body, {error: {code: `personal_target_merge_${kind}_${code}`}});
       assert.equal(result.response.headers.get("cache-control"), "no-store");
     };
 
@@ -205,8 +246,8 @@ test("known-source HTTP reads reauthorize exact identity and commit source audit
     assert.equal(databaseCalls, beforeUnauthenticatedCalls);
     assertError(await read(endpoint.replace(generationId, "malformed")), 400, "invalid_request");
     assertError(await read(`${endpoint}?debug=1`), 400, "invalid_request");
-    const bodyRejection = await new Promise<{status: number | undefined; body: unknown}>((resolve, reject) => {
-      const request = requestHttp(endpoint, {
+    const readWithBody = (url: string) => new Promise<{status: number | undefined; body: unknown}>((resolve, reject) => {
+      const request = requestHttp(url, {
         method: "GET", headers: {authorization: `Bearer ${token}`, "content-length": "1"},
       }, (response) => {
         let body = "";
@@ -217,6 +258,7 @@ test("known-source HTTP reads reauthorize exact identity and commit source audit
       request.on("error", reject);
       request.end("x");
     });
+    const bodyRejection = await readWithBody(endpoint);
     assert.equal(bodyRejection.status, 400);
     assert.deepEqual(bodyRejection.body, {error: {code: "personal_target_merge_projection_invalid_request"}});
     assertError(await read(endpoint, await tokenFor("never-known")), 403, "forbidden");
@@ -251,7 +293,75 @@ test("known-source HTTP reads reauthorize exact identity and commit source audit
       corruptResult = false;
     }
 
+    const splitEndpoint = `${endpoint}/split-plan`;
+    const beforePlanAudits = await auditCount();
+    let expectedPlanAudits = beforePlanAudits;
+    for (const [url, expectedPlan] of [
+      [splitEndpoint, personPlan],
+      [splitEndpoint, personPlan],
+      [splitEndpoint.replace(generationId, institutionGenerationId), institutionPlan],
+    ] as const) {
+      const result = await read(url);
+      assert.equal(result.response.status, 200);
+      assert.equal(result.response.headers.get("cache-control"), "no-store");
+      assert.deepEqual(result.body, {split_plan: expectedPlan});
+      expectedPlanAudits += 2;
+      assert.equal(await auditCount(), expectedPlanAudits);
+    }
+    assert.equal(await auditCount(), beforePlanAudits + 6);
+    const metadata = [personPlan, institutionPlan].flatMap((plan) =>
+      (plan.facts as {metadata: unknown[]}[]).map((fact) => fact.metadata));
+    assert.deepEqual(new Set(metadata.map((fact) => fact[0])), new Set([
+      "contact_link", "project_relationship", "project_revision", "institution_relationship_person",
+      "institution_relationship_institution", "institution_revision_person", "institution_revision_institution",
+    ]));
+    assert.ok(metadata.some((fact) => fact[0] === "project_relationship" && fact[2] === alternateProject));
+    assert.deepEqual(new Set(metadata.filter((fact) => fact[0] === "contact_link" && fact[1] === currentContact)
+      .map((fact) => fact[2])), new Set([1, 2, 3]));
+    assert.ok(metadata.some((fact) => fact[0] === "institution_revision_person" && fact[1] === relationshipId && fact[2] === 2));
+
+    const beforeSplitDenied = await auditCount();
+    const splitIdentity = await identityState();
+    const beforeSplitUnauthenticatedCalls = databaseCalls;
+    assertError(await read(splitEndpoint.replace(generationId, "malformed"), "invalid-token"), 401, "unauthenticated", "split_plan");
+    assert.equal(databaseCalls, beforeSplitUnauthenticatedCalls);
+    assertError(await read(splitEndpoint.replace(generationId, "malformed")), 400, "invalid_request", "split_plan");
+    assertError(await read(`${splitEndpoint}?debug=1`), 400, "invalid_request", "split_plan");
+    assert.deepEqual(await readWithBody(splitEndpoint), {
+      status: 400, body: {error: {code: "personal_target_merge_split_plan_invalid_request"}},
+    });
+    assertError(await read(splitEndpoint, await tokenFor("never-known")), 403, "forbidden", "split_plan");
+    assertError(await read(splitEndpoint, await tokenFor(subject.trim())), 403, "forbidden", "split_plan");
+    assertError(await read(splitEndpoint.replace(generationId, randomUUID())), 403, "forbidden", "split_plan");
+    assertError(await read(splitEndpoint.replace(generationId, oldGeneration)), 403, "forbidden", "split_plan");
+    assert.equal(await auditCount(), beforeSplitDenied);
+    assert.deepEqual(await identityState(), splitIdentity);
+    await pool.query("DELETE FROM app_data.user_current_projects WHERE app_user_id = $1::uuid", [context.app_user_id]);
+    const splitMissingCurrent = await identityState();
+    try {
+      assertError(await read(splitEndpoint), 403, "forbidden", "split_plan");
+      assert.deepEqual(await identityState(), splitMissingCurrent);
+      assert.equal(await auditCount(), beforeSplitDenied);
+    } finally {
+      await pool.query("INSERT INTO app_data.user_current_projects(app_user_id,project_id) VALUES ($1::uuid,$2::uuid)", [context.app_user_id, context.project_id]);
+    }
+    revokeBeforeAudit = true;
+    try {
+      assertError(await read(splitEndpoint), 403, "forbidden", "split_plan");
+      assert.equal(await auditCount(), beforeSplitDenied);
+    } finally {
+      await pool.query("UPDATE app_data.app_users SET status = 'active' WHERE app_user_id = $1::uuid", [context.app_user_id]);
+    }
+    corruptResult = true;
+    try {
+      assertError(await read(splitEndpoint), 503, "unavailable", "split_plan");
+      assert.equal(await auditCount(), beforeSplitDenied + 2);
+    } finally {
+      corruptResult = false;
+    }
+
     // A deferred failure occurs at implicit commit, after the function has made its result.
+    const beforeCommitFailure = await auditCount();
     await pool.query(`CREATE FUNCTION public.${triggerName}() RETURNS trigger LANGUAGE plpgsql AS $body$
       BEGIN
         IF NEW.workspace_id = '${context.workspace_id}'::uuid AND NEW.action = 'viewed' THEN
@@ -263,9 +373,10 @@ test("known-source HTTP reads reauthorize exact identity and commit source audit
         DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.${triggerName}();`);
     triggerInstalled = true;
     assertError(await read(), 503, "unavailable");
-    assert.equal(await auditCount(), beforeDenied + 2);
+    assertError(await read(splitEndpoint), 503, "unavailable", "split_plan");
+    assert.equal(await auditCount(), beforeCommitFailure);
     assert.equal(contextCalls, 0);
-    process.stdout.write("Known-source merge projection runtime JWT/HTTP integration: passed\n");
+    process.stdout.write("Known-source merge projection and split plan runtime JWT/HTTP integration: passed\n");
   } finally {
     try {
       if (server !== undefined) {

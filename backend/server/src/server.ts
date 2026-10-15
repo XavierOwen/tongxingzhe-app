@@ -55,7 +55,9 @@ import {
 } from "./personal-target-pii-export.js";
 import {
   readPersonalTargetMergeProjection,
+  readPersonalTargetMergeSplitPlan,
   type PersonalTargetMergeProjectionStore,
+  type PersonalTargetMergeSplitPlanStore,
 } from "./personal-target-merge-projection.js";
 import {
   createTargetInstitutionRelationship,
@@ -208,6 +210,7 @@ export interface BackendServerDependencies
   readonly personalTargetCsvImportStore?: PersonalTargetCsvImportStore;
   readonly personalTargetPiiExportStore?: PersonalTargetPiiExportStore;
   readonly personalTargetMergeProjectionStore?: PersonalTargetMergeProjectionStore;
+  readonly personalTargetMergeSplitPlanStore?: PersonalTargetMergeSplitPlanStore;
   readonly targetInstitutionRelationshipStore?:
     TargetInstitutionRelationshipStore;
   readonly personalActionPlanStore?: PersonalActionPlanStore;
@@ -1234,6 +1237,30 @@ export function createBackendServer(
       } catch (error) {
         writeBodyError(response, error);
       }
+      return;
+    }
+
+    const personalMergeSplitPlanMatch = requestUrl.pathname.match(
+      /^\/v1\/projects\/([^/]+)\/promotion-target-merges\/([^/]+)\/split-plan$/,
+    );
+    if (request.method === "GET" && personalMergeSplitPlanMatch !== null) {
+      const result = await readPersonalTargetMergeSplitPlan(
+        {
+          authorization: request.headers.authorization,
+          projectId: personalMergeSplitPlanMatch[1] ?? "",
+          generationId: personalMergeSplitPlanMatch[2] ?? "",
+          hasQuery: (request.url ?? "").includes("?"),
+          hasBody: requestDeclaresBody(request.headers),
+        },
+        {
+          identityVerifier: dependencies.identityVerifier,
+          ...(dependencies.personalTargetMergeSplitPlanStore === undefined
+            ? {}
+            : {splitPlanStore: dependencies.personalTargetMergeSplitPlanStore}),
+        },
+      );
+      response.statusCode = result.status;
+      response.end(JSON.stringify(result.body));
       return;
     }
 

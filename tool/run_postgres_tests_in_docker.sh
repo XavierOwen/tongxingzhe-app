@@ -12920,6 +12920,132 @@ docker exec "${container_name}" psql \
 printf '%s\n' "${personal_target_split_plan_upgrade_replay}"
 echo '0123→0124 original manifests, v1/v2 preflight, read API, end/expiry replay and checksum replay: passed.'
 
+echo '验证 0124→0125 原 plan、在线审计读取与私有确认重放。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0124_personal_target_authorized_merge_split_plan_live.sql \
+  >/dev/null
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/personal-target-authorized-split-plan-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0125_personal_target_authorized_merge_split_plan.sql \\
+     /tmp/personal-target-authorized-split-plan-upgrade-only/ && \\
+   test \"\$(find /tmp/personal-target-authorized-split-plan-upgrade-only \\
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec \
+  --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-target-authorized-split-plan-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_personal_target_authorized_merge_split_plan.sql \
+  --file=/workspace/backend/database/checks/verify_personal_target_merge_split_plan.sql
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="
+    DO \$upgrade\$
+    DECLARE
+      saved public.fixture_0125_upgrade_state%ROWTYPE;
+      requested_generation uuid;
+      plan jsonb;
+      expected_plan jsonb;
+    BEGIN
+      SELECT * INTO STRICT saved FROM public.fixture_0125_upgrade_state;
+      IF (SELECT count(*) FROM app_migrations.schema_migrations) <> saved.migration_count + 1
+        OR (SELECT max(version) FROM app_migrations.schema_migrations)
+          IS DISTINCT FROM '0125_personal_target_authorized_merge_split_plan'
+        OR public.fixture_0125_business_state(saved.workspace_id) IS DISTINCT FROM saved.business_state
+        OR public.fixture_0125_function_catalog() IS DISTINCT FROM saved.function_catalog
+        OR public.fixture_0125_manifests(saved.workspace_id) IS DISTINCT FROM saved.manifests
+        OR (SELECT count(*) FROM app_data.promotion_target_access_events WHERE workspace_id = saved.workspace_id)
+          <> saved.access_event_count
+      THEN RAISE EXCEPTION '0124→0125 changed old facts, audit, plan/catalog definitions or permissions'; END IF;
+      FOREACH requested_generation IN ARRAY ARRAY[saved.active_generation_id,saved.v1_generation_id] LOOP
+        expected_plan := CASE WHEN requested_generation = saved.active_generation_id
+          THEN saved.split_plan_document ELSE saved.v1_split_plan_document END;
+        IF app_private.read_known_source_personal_merge_split_plan_v1(
+          saved.app_user_id,saved.workspace_id,saved.project_id,requested_generation) IS DISTINCT FROM expected_plan
+        THEN RAISE EXCEPTION '0125 changed the original unaudited v1/v2 plan'; END IF;
+        SET LOCAL ROLE tongxingzhe_runtime;
+        plan := app_data.read_personal_known_source_merge_split_plan_v1(
+          saved.trusted_issuer,saved.trusted_subject,saved.project_id,requested_generation);
+        RESET ROLE;
+        IF plan IS DISTINCT FROM expected_plan THEN RAISE EXCEPTION '0125 audited bridge changed the original plan'; END IF;
+      END LOOP;
+      IF (SELECT count(*) FROM app_data.promotion_target_access_events WHERE workspace_id = saved.workspace_id)
+        <> saved.access_event_count + 4 THEN RAISE EXCEPTION '0125 v1/v2 reads must append two member audits each'; END IF;
+      FOREACH requested_generation IN ARRAY ARRAY[saved.ordinary_end_generation_id,saved.expiry_generation_id] LOOP
+        BEGIN
+          SET LOCAL ROLE tongxingzhe_runtime;
+          PERFORM app_data.read_personal_known_source_merge_split_plan_v1(
+            saved.trusted_issuer,saved.trusted_subject,saved.project_id,requested_generation);
+          RAISE EXCEPTION '0125 upgraded bridge accepted a terminal generation';
+        EXCEPTION WHEN insufficient_privilege THEN NULL;
+        END;
+        RESET ROLE;
+      END LOOP;
+      BEGIN
+        SET LOCAL ROLE tongxingzhe_runtime;
+        PERFORM app_data.read_personal_known_source_merge_split_plan_v1(
+          saved.unknown_issuer,saved.unknown_subject,saved.project_id,saved.active_generation_id);
+        RAISE EXCEPTION '0125 upgraded bridge accepted an unknown identity';
+      EXCEPTION WHEN insufficient_privilege THEN NULL;
+      END;
+      RESET ROLE;
+      IF app_private.end_known_source_personal_target_merge_generation_v1(
+          saved.app_user_id,saved.workspace_id,saved.project_id,saved.ordinary_end_request_id,
+          saved.ordinary_end_generation_id,saved.ordinary_end_fingerprint) IS DISTINCT FROM saved.ordinary_end_at_utc
+        OR app_private.expire_known_source_personal_target_merge_generation_v1(
+          saved.app_user_id,saved.workspace_id,saved.project_id,saved.expiry_request_id,
+          saved.expiry_generation_id) IS DISTINCT FROM saved.expiry_at_utc
+        OR app_data.read_personal_merge_projection_context_v1(
+          saved.trusted_issuer,saved.trusted_subject,saved.project_id) IS DISTINCT FROM saved.context_document
+        OR app_data.read_personal_known_source_merge_projection_v1(
+          saved.trusted_issuer,saved.trusted_subject,saved.project_id,saved.active_generation_id)
+          IS DISTINCT FROM saved.projection_document
+      THEN RAISE EXCEPTION '0125 changed end/expiry replay or existing projection read API'; END IF;
+      IF public.fixture_0125_business_state(saved.workspace_id) IS DISTINCT FROM saved.business_state
+        OR public.fixture_0125_function_catalog() IS DISTINCT FROM saved.function_catalog
+        OR public.fixture_0125_manifests(saved.workspace_id) IS DISTINCT FROM saved.manifests
+        OR (SELECT count(*) FROM app_data.external_identities WHERE issuer = saved.trusted_issuer) <> saved.identity_count
+        OR EXISTS (SELECT 1 FROM app_data.external_identities
+          WHERE issuer = saved.unknown_issuer AND subject = saved.unknown_subject)
+        OR (SELECT count(*) FROM app_data.promotion_target_access_events WHERE workspace_id = saved.workspace_id)
+          <> saved.access_event_count + 6
+      THEN RAISE EXCEPTION '0125 upgrade changed business/context/history or audit count'; END IF;
+    END
+    \$upgrade\$;
+  " >/dev/null
+personal_target_authorized_split_plan_upgrade_replay="$(
+  docker exec \
+    --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/personal-target-authorized-split-plan-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${personal_target_authorized_split_plan_upgrade_replay}" != \
+    *'已验证 0125_personal_target_authorized_merge_split_plan（无需重复执行）'* ]] \
+  || [[ "${personal_target_authorized_split_plan_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0125 migration did not skip its checksum-verified replay.' >&2
+  printf '%s\n' "${personal_target_authorized_split_plan_upgrade_replay}" >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" \
+  --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command="DO \$replay\$ DECLARE saved public.fixture_0125_upgrade_state%ROWTYPE; BEGIN
+    SELECT * INTO STRICT saved FROM public.fixture_0125_upgrade_state;
+    IF public.fixture_0125_business_state(saved.workspace_id) IS DISTINCT FROM saved.business_state
+      OR public.fixture_0125_function_catalog() IS DISTINCT FROM saved.function_catalog
+      OR public.fixture_0125_manifests(saved.workspace_id) IS DISTINCT FROM saved.manifests
+      OR (SELECT count(*) FROM app_data.promotion_target_access_events WHERE workspace_id = saved.workspace_id)
+        <> saved.access_event_count + 6
+    THEN RAISE EXCEPTION '0125 migration checksum replay changed state or audit'; END IF;
+  END \$replay\$;" >/dev/null
+printf '%s\n' "${personal_target_authorized_split_plan_upgrade_replay}"
+echo '0124→0125 original plans/functions, runtime member audits, terminal replay and checksum replay: passed.'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 

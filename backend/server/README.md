@@ -390,6 +390,16 @@ Backend 对 0121 原 JSON 执行严格 shape 验证，检查字段来源、NULL�
 
 Node 和 PostgreSQL integration 使用 synthetic JWT、身份与资料。它们不证明生产身份、真实 PII、用户端可用性或清理 SLA。
 
+## 已知来源拆分预检读取 API
+
+7EL／#574 增加 `GET /v1/projects/:projectId/promotion-target-merges/:generationId/split-plan`。请求不接受 query 或 body，先验证 identity，再检查两个 UUID。store 复用 0123 的零写入资格 reader 和两项 capability，以同一原始 issuer／subject 调用 0125 审计 bridge。第二次 SQL 调用重新授权；审计提交先于 HTTP 返回。
+
+成功响应为 `{ "split_plan": <0124 原生 JSON> }`。parser 核对固定九键、排序的同类型 member pair、scope、六位微秒 UTC、count、opaque fingerprint 和七种 metadata variant，并拒绝重复复合事实键。TEXT contact ID、历史 revision、ended relationship、NULL／旧另一端 binding 与跨项目事实均按数据库合同保留。header project 是当前上下文门禁，不要求每项 fact 属于该项目。
+
+Backend 不重排 facts，也不重算 PostgreSQL fingerprint。SQL `42501` 映射为 forbidden，其他数据库或合同失败映射为 unavailable；固定错误前缀为 `personal_target_merge_split_plan_`，状态为 `401`／`400`／`403`／`503`，全部响应 `no-store` 且不回显字段值。数据库已提交后 parser 或 HTTP 仍可失败，留下两条 `viewed`；审计不是送达证明或后续操作凭证。
+
+此入口不改变旧 projection route，不提供发现、确认、结束、拆分、UI、缓存或产品 active merge；#549 preview 阻挡保持不变。独立 Flutter gateway 只保护在途请求，返回后的引用和失效由未来调用方管理。synthetic JWT／PostgreSQL／HTTP／Flutter 验证不证明生产身份、真实 PII 或部署。
+
 ## 私人行动计划合同
 
 私人周计划只使用已验证 identity 对应的当前个人空间和项目：

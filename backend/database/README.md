@@ -164,6 +164,14 @@ expiry 的 actor/request/context/generation 精确重放返回首次时间，不
 
 NULL merge binding 不表示来源未知。预检不创建待分配记录，也不锁定返回后的授权或事实。来源或 manifest 在预检后变化时，旧 fingerprint 仍由 0119 的锁后确认拒绝；新预检返回当时的完整目录。0124 不提供完整 split、HTTP／Flutter 接线、产品 active merge、部署或 SLA。MANUAL-145 与 TEST-156 记录该边界；synthetic PostgreSQL 证据不证明生产身份、真实 PII 或用户可用性。
 
+## 7EL：已知来源拆分预检的授权审计读取
+
+0125 保留 0124 的只读 reader，另加 private `app_private.read_authorized_known_source_merge_split_plan_v1(text,text,uuid,uuid)`。它在同一个 SQL command 中按原始 issuer／subject 复用 0123 的零写入资格检查、调用 0124 一次，并为两个 member 各插入一条既有 `viewed` 审计。任一失败或审计条数不等于二时整条 command 回滚；成功原样返回 plan。
+
+runtime 只新增 `app_data.read_personal_known_source_merge_split_plan_v1(text,text,uuid,uuid)` 的 EXECUTE。此 wrapper 仅调用一次 private core；PUBLIC、private schema、catalog、0124、底表和所有 merge writer 权限不变。审计层为 VOLATILE，不能在 READ ONLY 事务中调用；0124 仍为 STABLE、零写入。重复成功读取各追加两条审计，审计提交不证明 HTTP 已交付或返回后仍有资格。
+
+Backend 与独立 Flutter gateway 只提供已知 generation 的在线预检读取，不增加 split writer、待分配事实、UI、启动装配、缓存、产品 active merge 或部署。MANUAL-146 与 TEST-157 记录合同；synthetic 证据不证明生产身份、真实 PII 或用户功能。
+
 ## 7AH：可分享加入链接的数据库创建与预览
 
 0092 实现 Issue #358 的 link-only 子集。
