@@ -307,6 +307,16 @@ metadata 只返回来源、事实标识和 revision metadata。当前合同将 T
 
 这条链路不接 App 启动、UI、导航、离线或持久缓存，也不提供未知来源分配、完整 split、writer、产品 active merge、部署或 SLA。MANUAL-146 与 TEST-157 记录范围；synthetic 测试不证明生产身份、真实 PII、用户界面或部署。
 
+### 独立只读投影展示组件（Issue #575）
+
+`PersonalTargetMergeProjectionPanel` 接收已知 generation ID、`AppStrings` 与借用的 identity／AppSession／projection gateway，复用既有 headless controller。组件首次挂载不自动请求；用户明确读取后才发起受控 GET。重读先撤下旧资料，generation 或借用依赖变化时退役旧 controller；卸载只 dispose 自己的 controller，不关闭借用资源，也不调用 `refreshContext()`。
+
+显示字段注明选自哪一来源。选定来源为 NULL 时显示未提供，不借用另一端的电话或邮箱。两个原对象分别呈现自己的资料、due、当前项目 stage／alias／lifecycle／note／revision；contact links 与 institution relationships 仍按 source 分组。对侧只用已有 endpoint ID，不额外查资料。NULL binding 只表示无合并绑定，不表示来源未知；关系 DTO 没有 revision history，组件不伪造历史列表。
+
+事实默认收起，通过 Material 内容展开查看；刷新或换代会重置展开状态，Reduce Motion 关闭动画。loading、固定失败和资格失效均撤下旧 PII。snapshot 只对应本次读取，不保存后续资格；内存引用撤下不是物理抹除或外部副本撤回。
+
+组件沿用现有 Material 3 与中英文文案，但没有接入 App 入口、导航、普通目录、手填 UUID、copy／export 或业务写入。它不展示 split plan，不开放 active merge，#549 阻挡不变。MANUAL-147 与 TEST-158 记录范围；synthetic widget／浏览器渲染不证明生产身份、真实 PII、native 设备认证或部署。
+
 ## HTTP 与权限边界
 
 | 方法与路径 | 用途 | Backend capability |
