@@ -141,6 +141,14 @@ expiry 的 actor/request/context/generation 精确重放返回首次时间，不
 
 0122 不改变 0121 的 JSON／NULL、当前事实、双端分配或 due 合同，也不接 Backend／HTTP／Flutter、缓存、目录替换或导出，不开放 active merge。MANUAL-142 与 TEST-153 记录此边界。证据限于 synthetic PostgreSQL，不证明生产用户可用、生产授权或清理 SLA。
 
+## 7EI：已知来源合并投影的 runtime 读取 bridge
+
+0123 增加两个 `app_data` 窄函数。`app_data.read_personal_merge_projection_context_v1(text,text,uuid)` 是 STABLE、零写入 reader；它按 raw issuer／subject 精确解析 active app user、未删除的 personal owner workspace 与显式 current personal project，并返回固定五键 owner context 和既有 `view_assigned_target_pii`、`manage_assigned_target_merges` capability。它不 bootstrap 或修复当前项目。组织管理分析导航选择不改变此个人项目资格。
+
+`app_data.read_personal_known_source_merge_projection_v1(text,text,uuid,uuid)` 是 VOLATILE bridge；它调用仍为 private 的 0122 审计 reader，由数据库重新授权并原子记录两个来源的 `viewed` 审计。两次调用之间撤权时，bridge 拒绝且不追加审计。runtime 只获得这两个函数的 EXECUTE；PUBLIC、0121、0122、ledger、底表及 preview／activation／end／expiry writer 权限均无新权限。
+
+0123 保持普通目录和 PII export 不变，也不开放候选发现、active merge、split 或 UI。数据库测试使用 synthetic 身份与资料，不证明生产用户可用、HTTP 已交付资料或清理 SLA。MANUAL-143 与 TEST-154 记录这些边界。
+
 ## 7AH：可分享加入链接的数据库创建与预览
 
 0092 实现 Issue #358 的 link-only 子集。

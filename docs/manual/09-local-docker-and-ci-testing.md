@@ -2822,6 +2822,14 @@ TEST-153 核对 0121→0122 升级历史与 checksum replay、精确身份映射
 
 这些检查只证明 synthetic PostgreSQL 合同。它们不证明生产身份、生产用户功能、应用层接线或清理 SLA。
 
+### 7.9 已知来源合并投影读取 API（Issue #568）
+
+从仓库根目录运行 `./tool/run_postgres_tests_in_docker.sh`。0123 的 migration、`backend/database/checks/verify_personal_target_merge_projection_read_api.sql`、行为 fixture `backend/database/fixtures/0123_personal_target_merge_projection_read_api.sql` 和升级 fixture `backend/database/fixtures/upgrade/0122_personal_target_merge_projection_read_api_live.sql` 由该 runner 验证。升级检查覆盖 0122→0123 历史保留、checksum replay 和 restore。
+
+Backend 单元测试核对缺 capability 时不调用审计 bridge，以及各层严格响应 parser。integration `backend/server/test/personal-target-merge-projection.integration.ts` 以 synthetic JWT 和 `tongxingzhe_runtime` 核对 HTTP route、两步间撤权、未知身份不 bootstrap、已提交审计后的 parser 拒绝，以及 deferred commit 失败时不交付投影。
+
+这些检查只证明 synthetic PostgreSQL、Backend 和 HTTP 合同，不证明生产身份、真实 PII、客户端收到响应、生产用户可用性或清理 SLA。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：

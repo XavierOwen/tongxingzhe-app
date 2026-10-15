@@ -362,6 +362,18 @@ manifest 仅摘要五类历史事实的复合键、原对象来源、revision �
 
 reader 在一个 SQL command snapshot 内调用 0121 一次。每次成功正好追加两条既有 `viewed` 审计，每个实际返回来源一条；任一审计失败时整条 command 回滚。0122 为 VOLATILE；0121 仍为 STABLE、零写入。PUBLIC 与 runtime 均无新执行权。JSON／NULL、当前事实、双端分配和 due 合同沿用 0121；没有 Backend／HTTP／Flutter、缓存、普通目录替换、导出改变或 active merge 开放。证据只限 synthetic PostgreSQL，不证明生产用户可用或清理 SLA。
 
+7EI／#568 以 0123 增加两个 `app_data` runtime bridge。
+
+资格 reader 为 STABLE 且零写入。它按原始 issuer／subject 核对 active app user、personal owner 与 current personal project。它返回既有 `view_assigned_target_pii` 和 `manage_assigned_target_merges` capability。
+
+审计 reader 为 VOLATILE，调用 private 0122 并原子记录两端 `viewed`。
+
+runtime 只获得这两个函数的 EXECUTE。0121／0122、表和既有 merge writer 权限不变。
+
+Backend 的专用 GET 路由先验证 identity，再检查 UUID、调用资格 reader、核对两项 capability，然后调用审计 reader。第二次调用重新授权；缺 capability 不进入审计调用，两步间撤权会被数据库拒绝。严格 parser验证并原样返回 0121 projection。数据库提交审计后 parser／HTTP 仍可失败，因此 `viewed` 只证明数据库授权读取，不证明客户端收到资料。
+
+current personal project 资格独立于组织管理分析导航选择（ADR-0107）。这条 API 只读取已知 generation，不发现或创建 merge，不开放产品 active merge、目录替换、PII export 变更、Flutter、UI、缓存或部署；#549 preview 阻挡不变。证据限于 synthetic JWT、PostgreSQL 和 HTTP，不证明生产身份、真实 PII 或用户端可用性。
+
 ### 5.7 组织治理与生命周期
 
 | ID | 需求 |
@@ -3282,6 +3294,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-140` | 学习文档说明 0120 只提供当前个人 owner 手动结束单个已知来源 generation 的 DB-only 到期出口。说明以两端较早 current due 为准、复用既有双端匿名化、共享结束时间、operation／reason、精确 replay 和全有或全无边界；明确不提供 batch 预锁、dispatcher、scheduler、生产 60 分钟清理 SLA、runtime 或产品 active merge。 |
 | `MANUAL-141` | 学习文档说明 0121 private、单 command snapshot 的已知来源合并投影。记录 v2 字段来源选择、NULL 不回退、两端当前项目关系与事实分别呈现、partner visibility 和返回后的失效边界；明确不改变普通目录或 PII export，不接应用层或缓存，也不开放产品 active merge。 |
 | `MANUAL-142` | 学习文档说明 0122 private 授权读取器按原始 issuer／subject 精确映射 active app user 与个人 owner，复用两项 capability，并在一个 command 内调用 0121 一次且为两个返回来源各追加 `viewed` 审计。记录原子回滚、VOLATILE／STABLE 区别和最小 ACL；明确没有应用层接线或产品 active merge，也不证明生产用户可用或清理 SLA。 |
+| `MANUAL-143` | 学习文档说明 0123 只向 runtime 开放两个 `app_data` 读取 bridge：STABLE 零写入的 personal owner／current project 资格读取，以及重新授权并调用 private 0122 的 VOLATILE 审计读取。记录最小 EXECUTE ACL、个人 current project 与管理分析导航分离、已知 generation 限定，以及 API 不开放普通目录合并、产品 active merge 或 UI。synthetic 证据不证明生产身份、真实 PII 或用户交付。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3613,6 +3626,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-151` | 0119→0120 专用 upgrade fixture 保留旧 end event、五类来源事实、target、assignment、retention、preview 与 merge history，并验证 checksum replay。结构检查和 rollback fixture 覆盖互斥 operation／reason、旧 end replay、minDue 截止、双端原子匿名化、同时间 retention events、manifest、权限与失败回滚；独立会话核对竞争及与 renewal、policy、known-source end、事实 writer 和 PII export 的锁序。synthetic PostgreSQL 证据不证明 batch dispatcher、scheduler、生产 SLA、完整 split、runtime 或真实 PII。 |
 | `TEST-152` | 0120→0121 专用 upgrade fixture 保留 activation 来源指针、end／expiry event 与既有历史并验证 checksum replay。结构与行为检查覆盖只读 snapshot、v2 来源选择、NULL／旧 v1／错误来源、context／assignment／due／终结拒绝、两端关系和 current facts；独立会话核对 snapshot 一致性与下一次读取，不要求 fence 阻塞。synthetic PostgreSQL 证据不证明返回后的授权、runtime、应用层、缓存、部署或真实 PII。 |
 | `TEST-153` | 0121→0122 专用 upgrade fixture 保留 0121 与既有历史并验证 checksum replay。结构、行为和并发检查覆盖 exact 外部身份映射、active personal owner、两项 capability、单 command 调用 0121 一次、两条来源 `viewed` 审计及任一失败时全回滚，并验证上层 VOLATILE、下层 STABLE 零写入、PUBLIC／runtime 无 EXECUTE 和既有 JSON／NULL 合同。证据限于 synthetic PostgreSQL，不证明生产身份、生产用户功能或清理 SLA。 |
+| `TEST-154` | 0122→0123 upgrade 保留私有 reader 与既有历史并验证 checksum／restore。DB 与 Backend integration 覆盖精确身份、零 bootstrap／修复、personal current project、最小 runtime EXECUTE ACL、两步授权、缺 capability 不调用审计 bridge、两步间撤权、strict parser、auth-first 与 UUID-only route、no-store 和错误脱敏。也验证 DB 审计提交后 parser／HTTP 失败仍可留有两条 `viewed`。synthetic JWT／PostgreSQL／HTTP 证据不证明生产身份、真实 PII、客户端收件或 SLA。 |
 
 ## 9. UI、视觉与可访问性
 
