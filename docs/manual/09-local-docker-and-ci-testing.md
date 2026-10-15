@@ -2740,6 +2740,14 @@ main CI run35245849666实际出现 `0086 detached replay wrote transfer facts`�
 
 `TEST-111`随现有完整runner执行。最终owner integration包含全部正反向检查；完整套件还须通过原并发、checksum与独立恢复。scoped零副作用只表示本fixture关联事实，不能替代新业务路径的独立observer对账；合成Node24／Docker／CI不证明生产身份或部署。
 
+#### 0089 组织目录 fixture 的同类误报（Issue #572）
+
+0089 原先也用两次全库计数判断目录读取是否写入。完整并行套件出现 `0089 organization directory wrote business facts` 时，必须先区分目录副作用与其他连接的合法提交。确定性回归在 before／after 之间用独立物理连接提交 bootstrap、组织、项目、成员与 capability，原 fixture 的八项计数随之变化并触发同一 P0001。
+
+before／after 现共用一个事务内的 scoped-counts helper。作用域从 fixture issuer 的身份出发，包含相连组织成员及其个人空间、组织空间、项目和授权后代，不只筛固定 UUID。无关提交检查继续通过；五组相关生成事实仍必须触发 P0001，并核对原八项计数的精确 delta，防止收窄范围时漏检 bootstrap 或跨 issuer 的同账号后代。
+
+这些回归随原 `organization-directory.integration.ts` 运行。它们不改产品 reader、migration、runtime ACL、READ COMMITTED 或整套并行方式；锁等待通过精确 PID 与 advisory key 证明，不用固定休眠猜测提交顺序。
+
 ### 7.4 个人对象 assignment end 与 merge activation 的并发检查（Issue #558）
 
 从仓库根目录运行 `./tool/run_postgres_tests_in_docker.sh`。runner 会自动发现 0118 check、行为 fixture 和 `verify_personal_target_assignment_end_concurrency.sh`；它还会在专用升级库先建立真实 0117 preview／activation 数据，再单独应用 0118，比较 target、assignment、retention、preview、generation 与 activation 历史，并验证 migration checksum replay。全套完成后，既有 dump／restore 流程会在恢复库重跑 check 与 fixture。
