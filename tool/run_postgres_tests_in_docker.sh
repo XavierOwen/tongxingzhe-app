@@ -13318,6 +13318,38 @@ SQL
 printf '%s\n' "${personal_merge_unassigned_upgrade_replay}"
 echo '0126→0127 legacy function/OID/ACL, facts/read wires, staging/end guard, terminal replay and checksum replay: passed.'
 
+echo '验证 0127→0128 旧函数/OID/ACL、pending 确认与真实 revision 回执。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0127_personal_merge_unassigned_contact_confirmation_live.sql >/dev/null
+docker exec "${container_name}" bash -lc \
+  "mkdir /tmp/personal-merge-contact-confirmation-upgrade-only && \
+   cp /workspace/backend/database/migrations/0128_personal_merge_unassigned_contact_confirmation.sql \
+     /tmp/personal-merge-contact-confirmation-upgrade-only/"
+docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-merge-contact-confirmation-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_personal_merge_unassigned_contact_confirmation.sql \
+  --command='BEGIN; SELECT public.fixture_0128_assert_upgrade(); ROLLBACK;' >/dev/null
+personal_merge_confirmation_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/personal-merge-contact-confirmation-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${personal_merge_confirmation_upgrade_replay}" != \
+    *'已验证 0128_personal_merge_unassigned_contact_confirmation（无需重复执行）'* ]] \
+  || [[ "${personal_merge_confirmation_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0128 migration did not skip its checksum-verified replay.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command='BEGIN; SELECT public.fixture_0128_assert_upgrade(); ROLLBACK;' >/dev/null
+printf '%s\n' "${personal_merge_confirmation_upgrade_replay}"
+echo '0127→0128 legacy pg_proc/OID/ACL, pending application, original history and checksum replay: passed.'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 

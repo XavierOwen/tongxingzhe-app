@@ -2923,6 +2923,20 @@ fresh／rollback 核对未处置 pending 阻止旧 end；expiry 只处置当前�
 
 此片只交付存储、登记、预检和生命周期保护。测试不证明逐项分配／最终写回、其他未知事实类型、生产身份、真实 PII、部署或清理 SLA。
 
+### 7.16 当前单项待分配关联的私有确认（Issue #583）
+
+运行 `./tool/run_postgres_tests_in_docker.sh`，自动发现 0128 check／fixture 和 `verify_personal_merge_unassigned_contact_confirmation_concurrency.sh`。验证私有 ACL、严格两键 assignment、非空完整跨项目集合、仅 metadata receipt，以及单项／current／无任何历史 pair link 的受限合同。无效输入、陈旧、多项、既有关联、预占 child command、确认不足、due 或资格失效均应拒绝。
+
+person／institution、NULL response、原样 TEXT contact ID、两个来源及非 retained 来源都须实际进入新 revision。先在 A 登记、切到 B 后确认，核对 current 仍是 B、revision／feed／pull／outbox 属于 A，旧 revision、事件时间、answers 和其他 link 不变。staged `confirmed_project_entry=false` 不得被默认改成 true：缺少项目关系时整批失败，已有关系时原样成功。outbox 只含既有去标识 facts，不泄露对象 ID、原 targetLinks 或 location。
+
+真实 0127 baseline 先 seed live pending、旧 end／expiry 及原读取，再经正式 runner 升到 0128。除两个扩展 guard 的 body 外，保留全部旧 pg_proc 定义；guard 的 OID、owner、ACL 与其余属性也不变。验证新确认、旧读取／manifest／终结重放及 expiry，再执行 checksum 重放和独立 dump-restore。严格组织清理 inventory 登记新增 9 条实际外键，不弱化目录差集或负面探针。
+
+注入 revision 应用证据、application receipt、end 或 payload 删除抑制，比较全部 `app_data`／`app_private` 状态，包括 fence、commands、revision、feed、audit、outbox 和 ledger；失败必须零部分结果。只有实际应用与真实结束收据才允许消费 payload，假 header 或部分 application 不得绕过旧 end。
+
+独立会话先观察精确 waiter／holder PID 及锁等待再释放事务，覆盖 ordinary-revise-first 的 stale 拒绝、confirm-first 后普通协议的同字段 conflict 与不同字段自动合并、迟到 stage、预锁后新增 pending contact、expiry 两个顺序、相同 request 的终结重放／映射漂移及锁后 actor 撤权。普通协议诊断在断言原来源保留后回滚；其余拒绝 waiter 与 holder 预期全状态快照一致。到期使用明确 synthetic due 变更，不充作真实 scheduler 或生产时钟证据。
+
+此片不验证完整历史／多项拆分、Backend／HTTP／UI、外部消费者、设备同步、生产部署或清理 SLA。MANUAL-150 与 TEST-161 记录这一范围。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：
