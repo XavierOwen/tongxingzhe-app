@@ -70,7 +70,11 @@ import '../sync/http_sync_transport.dart';
 import '../sync/sync_engine_factory.dart';
 import '../sync/sync_transport.dart';
 import '../targets/http_promotion_target_gateway.dart';
+import '../targets/http_personal_target_merge_directory_gateway.dart';
+import '../targets/http_personal_target_merge_projection_gateway.dart';
 import '../targets/offline_promotion_target_gateway.dart';
+import '../targets/personal_target_merge_directory.dart';
+import '../targets/personal_target_merge_projection.dart';
 import '../targets/personal_pii_export_gateway.dart';
 import '../targets/personal_target_csv_import.dart';
 import '../targets/promotion_target.dart';
@@ -97,6 +101,8 @@ final class AppDependencies {
     this.questionnaireRemoteSourceBuilder,
     this.questionnaireAdministrationBuilder,
     this.promotionTargetGatewayBuilder,
+    this.personalTargetMergeDirectoryGatewayBuilder,
+    this.personalTargetMergeProjectionGatewayBuilder,
     this.personalPiiExportGatewayBuilder,
     this.personalTargetCsvImportGatewayBuilder,
     this.personalActionPlanGatewayBuilder,
@@ -142,6 +148,10 @@ final class AppDependencies {
       questionnaireRemoteSourceBuilder: productionQuestionnaireRemoteSource,
       questionnaireAdministrationBuilder: productionQuestionnaireAdministration,
       promotionTargetGatewayBuilder: productionPromotionTargetGateway,
+      personalTargetMergeDirectoryGatewayBuilder:
+          productionPersonalTargetMergeDirectoryGateway,
+      personalTargetMergeProjectionGatewayBuilder:
+          productionPersonalTargetMergeProjectionGateway,
       personalPiiExportGatewayBuilder: productionPersonalPiiExportGateway,
       personalTargetCsvImportGatewayBuilder:
           productionPersonalTargetCsvImportGateway,
@@ -200,6 +210,10 @@ final class AppDependencies {
   questionnaireAdministrationBuilder;
   final PromotionTargetGateway Function(IdentitySession)?
   promotionTargetGatewayBuilder;
+  final PersonalTargetMergeDirectoryGateway Function(IdentitySession)?
+  personalTargetMergeDirectoryGatewayBuilder;
+  final PersonalTargetMergeProjectionGateway Function(IdentitySession)?
+  personalTargetMergeProjectionGatewayBuilder;
   final PersonalPiiExportGateway Function(IdentitySession)?
   personalPiiExportGatewayBuilder;
   final PersonalTargetCsvImportGateway Function(IdentitySession)?
@@ -264,6 +278,8 @@ final class AppDependencies {
     QuestionnaireCatalog? questionnaireCatalog;
     QuestionnaireAdministrationGateway? questionnaireAdministration;
     PromotionTargetGateway? promotionTargetGateway;
+    PersonalTargetMergeDirectoryGateway? personalTargetMergeDirectoryGateway;
+    PersonalTargetMergeProjectionGateway? personalTargetMergeProjectionGateway;
     PersonalPiiExportGateway? personalPiiExportGateway;
     PersonalTargetCsvImportGateway? personalTargetCsvImportGateway;
     PersonalActionPlanGateway? personalActionPlanGateway;
@@ -428,6 +444,12 @@ final class AppDependencies {
       final remoteTargetGateway =
           promotionTargetGatewayBuilder?.call(identitySession) ??
           const DeferredPromotionTargetGateway();
+      personalTargetMergeDirectoryGateway =
+          personalTargetMergeDirectoryGatewayBuilder?.call(identitySession) ??
+          const DeferredPersonalTargetMergeDirectoryGateway();
+      personalTargetMergeProjectionGateway =
+          personalTargetMergeProjectionGatewayBuilder?.call(identitySession) ??
+          const DeferredPersonalTargetMergeProjectionGateway();
       promotionTargetGateway = offlinePiiVault == null
           ? remoteTargetGateway
           : OfflinePromotionTargetGateway(
@@ -548,6 +570,10 @@ final class AppDependencies {
         questionnaireCatalog: questionnaireCatalog,
         questionnaireAdministration: questionnaireAdministration,
         promotionTargetGateway: promotionTargetGateway,
+        personalTargetMergeDirectoryGateway:
+            personalTargetMergeDirectoryGateway,
+        personalTargetMergeProjectionGateway:
+            personalTargetMergeProjectionGateway,
         personalPiiExportGateway: personalPiiExportGateway,
         personalTargetCsvImportGateway: personalTargetCsvImportGateway,
         personalActionPlanGateway: personalActionPlanGateway,
@@ -592,6 +618,8 @@ final class AppDependencies {
       await questionnaireCatalog?.close();
       await questionnaireAdministration?.close();
       await promotionTargetGateway?.close();
+      await personalTargetMergeDirectoryGateway?.close();
+      await personalTargetMergeProjectionGateway?.close();
       await personalPiiExportGateway?.close();
       await personalTargetCsvImportGateway?.close();
       await personalActionPlanGateway?.close();
@@ -654,6 +682,10 @@ final class AppStartupReady extends AppStartupResult {
     required this.questionnaireCatalog,
     required this.questionnaireAdministration,
     required this.promotionTargetGateway,
+    this.personalTargetMergeDirectoryGateway =
+        const DeferredPersonalTargetMergeDirectoryGateway(),
+    this.personalTargetMergeProjectionGateway =
+        const DeferredPersonalTargetMergeProjectionGateway(),
     required this.personalPiiExportGateway,
     required this.personalTargetCsvImportGateway,
     required this.personalActionPlanGateway,
@@ -701,6 +733,9 @@ final class AppStartupReady extends AppStartupResult {
   final QuestionnaireCatalog questionnaireCatalog;
   final QuestionnaireAdministrationGateway questionnaireAdministration;
   final PromotionTargetGateway promotionTargetGateway;
+  final PersonalTargetMergeDirectoryGateway personalTargetMergeDirectoryGateway;
+  final PersonalTargetMergeProjectionGateway
+  personalTargetMergeProjectionGateway;
   final PersonalPiiExportGateway personalPiiExportGateway;
   final PersonalTargetCsvImportGateway personalTargetCsvImportGateway;
   final PersonalActionPlanGateway personalActionPlanGateway;

@@ -420,6 +420,14 @@ metadata 只返回来源、事实标识和 revision metadata。当前合同将 T
 
 loading、失败或资格失效时不保留旧 PII；错误和恢复动作使用固定中英文文案。view 是本次读取 snapshot，不保证持续授权；撤下引用不是物理抹除。组件不接启动装配、导航或普通目录，不提供手填 UUID、split-plan 展示、copy／export／业务 writer 或产品 active merge；#549 阻挡不变。MANUAL-147 与 TEST-158 记录范围；synthetic widget／浏览器渲染不证明生产身份、真实 PII、native 设备认证或部署。
 
+7EN／#578 将既有只读投影接入受控代次目录。0126 的 private core 与 runtime wrapper 在一个 SQL command 中读取 exact identity／current-personal-project 资格、筛选满足 0121 双端 active／assignment／due／完整 v2 来源选择的代次，并为实际返回的每个 member 追加一条 `viewed`。按 UUID 升序固定二十条，额外一条仅判断下一页，不审计未返回成员；失败或审计计数不符时全回滚。目录不读取姓名、联系方式、备注或事实值，v1、终结、到期或不完整代次被省略，不返回失格数量或原因。
+
+GET `/v1/projects/:projectId/promotion-target-merges` 只接受可选单个 `after=<UUID>`，任意 canonical PostgreSQL UUID 都是合法边界，包括 nil／max。Backend 捕获同一原始外部身份，先核对两项 capability，再调用重验资格的 bridge；提交审计后才返回 `{ "directory": ... }`。严格四键目录及五键 item 保留原字符串，UUID 比较不区分大小写，不按客户端时钟授权；所有响应 no-store。cursor 不保存资格，也不冻结跨页 snapshot。
+
+正式装配拥有目录与投影两个在线 gateway，不使用离线包装器。在线 ready 的个人双 capability 用户可从目标页进入“合并来源审查”；进入零请求，明确读取目录后仅能选择当前页代次，再明确读取资料。翻页、刷新、身份／项目／权限变化或会话流失效都撤下旧页、选择和资料。组件借用 gateway，App 统一关闭自有资源，不调用 `refreshContext()`，不持久缓存，不替换普通对象目录。
+
+本片不提供创建合并、未知来源分配、完整 split、业务 writer、导出或产品 active merge，#549 与生产部署阻挡不变。MANUAL-148／TEST-159 记录目录、装配与选择；synthetic PostgreSQL／HTTP／Flutter 和浏览器证据不证明生产身份、真实 PII、native 设备认证、部署或清理 SLA。
+
 ### 5.7 组织治理与生命周期
 
 | ID | 需求 |
@@ -3345,6 +3353,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-145` | [学习文档](manual/08-promotion-target-directory-and-pii.md#0124-已知来源合并代次拆分预检issue-572)说明 0124 的 private STABLE 只读预检、v1／v2 支持、五类事实与七种 metadata variant、历史 revision／ended relationship 覆盖、原 fingerprint 与返回后漂移拒绝，以及 NULL merge binding 不等于来源未知。明确没有待分配存储、完整 split、runtime／Backend／HTTP／Flutter 接线、产品 active merge 或部署。 |
 | `MANUAL-146` | 学习文档说明 0125 受控预检读取的 exact-identity／current-project 双重授权、两端原子 `viewed`、最小 runtime EXECUTE、固定 GET 与严格原生 plan parser。记录七种 metadata、跨项目历史、数据库原顺序与 opaque fingerprint、Flutter immutable DTO 和在途身份围栏；明确没有结果持有 controller、UI、完整 split、writer 或产品 active merge，审计不证明送达或持续授权。 |
 | `MANUAL-147` | 学习文档说明独立只读 projection panel 的明确读取、controller／借用资源所有权、换代或依赖变化时退役、字段来源与 NULL 不回退、原对象分组和 Material 内容展开。记录无自动读取／refreshContext、无 App 入口或 writer、snapshot 与物理抹除的边界；不把该组件或 synthetic 渲染称为产品 active merge、生产授权或 native 设备认证。 |
+| `MANUAL-148` | 学习文档说明受控 v2 代次目录的固定二十条 UUID 游标分页、失格省略和每实际 member 的 viewed 审计。记录个人在线双 capability 入口、显式目录读取／选择／资料读取、翻页或资格变化清除、App 资源所有权、零 bootstrap／修复及无持久缓存；不开放业务 merge／split 或生产部署。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3681,6 +3690,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-156` | 0123→0124 upgrade 保留旧历史与 0119 manifest 函数身份／权限，核对原 fingerprint 字节合同和 checksum replay。Fresh／rollback fixture 与独立会话检查覆盖 v1／v2、NULL binding、五类事实／七种 metadata variant、全部历史 revision、owner／current project／两端 assignment／due／ended 门禁、只读 snapshot 与旧 fingerprint 的锁后冲突拒绝、最小 ACL 和 dump／restore。synthetic PostgreSQL 证据不证明生产身份、真实 PII、完整 split 或用户功能。 |
 | `TEST-157` | 0124→0125 upgrade 保留旧函数、事实、manifest／plan 和 end／expiry replay，验证 checksum／restore。结构、行为与独立会话检查覆盖单 command 资格／plan／双审计、任一审计失败全回滚、exact identity 零 bootstrap、最小 ACL、上下层 volatility 和事实／撤权 snapshot。Backend unit 与真实 JWT／runtime HTTP 核对 auth-first、两步间撤权、七种 metadata、跨项目历史、重复键、parser／提交失败及旧 projection；Flutter VM／Chrome tests 核对不可变 DTO、原字符串／顺序、scope／caller／ABA 围栏、401 与 close。synthetic 证据不证明生产身份、真实 PII、UI、部署或完整 split。 |
 | `TEST-158` | 独立 projection panel widget tests 核对首次零请求、明确读取、loading／失败／重试／资格失效、generation／依赖替换和借用资源未关闭。验证字段来源、NULL 不回退、两端独立 stage／alias／note／facts、旧／NULL binding、empty、person／institution、中英文、窄屏大字、键盘展开与 Reduce Motion，以及无编辑／拆分／导出动作。VM／Chrome、全量 Flutter 与有界真实渲染核对布局；synthetic 证据不证明生产身份、真实 PII、native 设备认证或部署。 |
+| `TEST-159` | 0126 fresh／upgrade／checksum／restore 与 exact PID 并发测试验证 20／21／多页、nil／max、资格过滤、零 bootstrap／修复、每实际 member 审计及全回滚，保留旧读取与终结重放。Backend 真 HTTP 与 Flutter 原生 wire 对账；gateway／controller／panel 的 VM／Chrome、入口门禁、App 资源关闭和有界渲染验证仅当前页选择、无自动 PII 读取、翻页／刷新／资格失效清除及无持久缓存。 |
 
 ## 9. UI、视觉与可访问性
 

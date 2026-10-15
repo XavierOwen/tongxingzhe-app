@@ -44,11 +44,33 @@ import 'package:tongxingzhe_app/sync/sync_models.dart';
 import 'package:tongxingzhe_app/sync/sync_transport.dart';
 import 'package:tongxingzhe_app/targets/personal_target_csv_import.dart';
 import 'package:tongxingzhe_app/targets/personal_pii_export_gateway.dart';
+import 'package:tongxingzhe_app/targets/personal_target_merge_directory.dart';
+import 'package:tongxingzhe_app/targets/personal_target_merge_projection.dart';
 
 import '../support/fake_identity_session.dart';
 import '../support/fake_platform_capabilities.dart';
 import '../support/fake_runtime_values.dart';
 import '../support/fake_session_context_gateway.dart';
+
+final class _TrackingMergeDirectoryGateway
+    implements PersonalTargetMergeDirectoryGateway {
+  var closeCount = 0;
+  @override
+  Future<void> close() async => closeCount++;
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('unused merge directory method');
+}
+
+final class _TrackingMergeProjectionGateway
+    implements PersonalTargetMergeProjectionGateway {
+  var closeCount = 0;
+  @override
+  Future<void> close() async => closeCount++;
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('unused merge projection method');
+}
 
 void main() {
   testWidgets('启动尚未完成时移除 App 仍关闭后来取得的组织 gateways 一次', (tester) async {
@@ -60,6 +82,8 @@ void main() {
     final shareableJoinGateway = _TrackingOrganizationShareableJoinGateway();
     final csvImportGateway = _TrackingPersonalTargetCsvImportGateway();
     final piiExportGateway = _TrackingPersonalPiiExportGateway();
+    final mergeDirectoryGateway = _TrackingMergeDirectoryGateway();
+    final mergeProjectionGateway = _TrackingMergeProjectionGateway();
     var builderCalls = 0;
     final dependencies = AppDependencies(
       databaseFactory: SingleDatabaseFactory(database),
@@ -77,6 +101,9 @@ void main() {
       organizationShareableJoinGatewayBuilder: (_) => shareableJoinGateway,
       personalTargetCsvImportGatewayBuilder: (_) => csvImportGateway,
       personalPiiExportGatewayBuilder: (_) => piiExportGateway,
+      personalTargetMergeDirectoryGatewayBuilder: (_) => mergeDirectoryGateway,
+      personalTargetMergeProjectionGatewayBuilder: (_) =>
+          mergeProjectionGateway,
     );
     addTearDown(database.close);
 
@@ -97,6 +124,12 @@ void main() {
     expect(shareableJoinGateway.closeCount, 1);
     expect(csvImportGateway.closeCount, 1);
     expect(piiExportGateway.closeCount, 1);
+    expect(mergeDirectoryGateway.closeCount, 1);
+    expect(mergeProjectionGateway.closeCount, 1);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    expect(mergeDirectoryGateway.closeCount, 1);
+    expect(mergeProjectionGateway.closeCount, 1);
   });
 
   testWidgets('移除 TongxingzheApp 后关闭组织 gateways 恰好一次', (tester) async {
@@ -107,6 +140,8 @@ void main() {
     final shareableJoinGateway = _TrackingOrganizationShareableJoinGateway();
     final csvImportGateway = _TrackingPersonalTargetCsvImportGateway();
     final piiExportGateway = _TrackingPersonalPiiExportGateway();
+    final mergeDirectoryGateway = _TrackingMergeDirectoryGateway();
+    final mergeProjectionGateway = _TrackingMergeProjectionGateway();
     final identity = FakeIdentitySession();
     IdentitySession? csvImportIdentity;
     final dependencies = AppDependencies(
@@ -125,6 +160,9 @@ void main() {
         return csvImportGateway;
       },
       personalPiiExportGatewayBuilder: (_) => piiExportGateway,
+      personalTargetMergeDirectoryGatewayBuilder: (_) => mergeDirectoryGateway,
+      personalTargetMergeProjectionGatewayBuilder: (_) =>
+          mergeProjectionGateway,
     );
     addTearDown(database.close);
 
@@ -140,6 +178,8 @@ void main() {
     expect(identical(csvImportIdentity, identity), isTrue);
     expect(csvImportGateway.closeCount, 1);
     expect(piiExportGateway.closeCount, 1);
+    expect(mergeDirectoryGateway.closeCount, 1);
+    expect(mergeProjectionGateway.closeCount, 1);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
@@ -149,6 +189,8 @@ void main() {
     expect(shareableJoinGateway.closeCount, 1);
     expect(csvImportGateway.closeCount, 1);
     expect(piiExportGateway.closeCount, 1);
+    expect(mergeDirectoryGateway.closeCount, 1);
+    expect(mergeProjectionGateway.closeCount, 1);
   });
 
   testWidgets('启动尚未完成时移除 App 仍关闭后来取得的 owner transfer gateway 一次', (

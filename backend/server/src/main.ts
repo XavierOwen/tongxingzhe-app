@@ -48,6 +48,7 @@ import {
 import {
   PostgresPersonalTargetMergeProjectionStore,
   PostgresPersonalTargetMergeSplitPlanStore,
+  PostgresPersonalTargetMergeDirectoryStore,
 } from "./personal-target-merge-projection.js";
 import { PostgresTargetInstitutionRelationshipStore } from "./target-institution-relationships.js";
 import { PostgresPersonalActionPlanStore } from "./personal-action-plans.js";
@@ -142,6 +143,8 @@ const personalTargetMergeProjectionStore =
   new PostgresPersonalTargetMergeProjectionStore(query);
 const personalTargetMergeSplitPlanStore =
   new PostgresPersonalTargetMergeSplitPlanStore(query);
+const personalTargetMergeDirectoryStore =
+  new PostgresPersonalTargetMergeDirectoryStore(query);
 const targetInstitutionRelationshipStore =
   new PostgresTargetInstitutionRelationshipStore(query);
 const personalActionPlanStore = new PostgresPersonalActionPlanStore(query);
@@ -236,6 +239,7 @@ const server = createBackendServer({
   personalTargetPiiExportStore,
   personalTargetMergeProjectionStore,
   personalTargetMergeSplitPlanStore,
+  personalTargetMergeDirectoryStore,
   targetInstitutionRelationshipStore,
   personalActionPlanStore,
   personalActionReminderStore,

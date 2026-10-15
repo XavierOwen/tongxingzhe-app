@@ -14,6 +14,11 @@ import '../../targets/personal_pii_export_gateway.dart';
 import '../../targets/personal_target_csv_file.dart';
 import '../../targets/personal_target_csv_import.dart';
 import '../../targets/promotion_target.dart';
+import '../../targets/personal_target_merge_directory.dart';
+import '../../targets/personal_target_merge_projection.dart';
+import '../../targets/http_personal_target_merge_directory_gateway.dart';
+import '../../targets/http_personal_target_merge_projection_gateway.dart';
+import 'personal_target_merge_directory_panel.dart';
 import 'target_institution_relationship_panel.dart';
 
 final class PromotionTargetDirectoryPage extends StatefulWidget {
@@ -36,6 +41,10 @@ final class PromotionTargetDirectoryPage extends StatefulWidget {
     required this.canConfigureStageAliases,
     required this.canManageRelationship,
     required this.canManageInstitutionRelationships,
+    this.mergeDirectoryGateway =
+        const DeferredPersonalTargetMergeDirectoryGateway(),
+    this.mergeProjectionGateway =
+        const DeferredPersonalTargetMergeProjectionGateway(),
   });
 
   final AppStrings text;
@@ -55,6 +64,8 @@ final class PromotionTargetDirectoryPage extends StatefulWidget {
   final bool canConfigureStageAliases;
   final bool canManageRelationship;
   final bool canManageInstitutionRelationships;
+  final PersonalTargetMergeDirectoryGateway mergeDirectoryGateway;
+  final PersonalTargetMergeProjectionGateway mergeProjectionGateway;
 
   @override
   State<PromotionTargetDirectoryPage> createState() =>
@@ -202,6 +213,15 @@ final class _PromotionTargetDirectoryPageState
         ),
         const SizedBox(height: 6),
         Text(text.t('targetsPrivacyHelp')),
+        if (_canReviewMerges) ...[
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            key: const ValueKey('open-merge-source-review'),
+            onPressed: _openMergeSourceReview,
+            icon: const Icon(Icons.source_outlined),
+            label: Text(text.t('mergeDirectoryTitle')),
+          ),
+        ],
         if (widget.canExport) ...[
           const SizedBox(height: 16),
           FilledButton.tonalIcon(
@@ -507,6 +527,7 @@ final class _PromotionTargetDirectoryPageState
   }
 
   void _identityChanged(IdentitySnapshot identity) {
+    if (mounted) setState(() {});
     final subject = _exportSubject;
     if ((_exportBusy || _exportArtifact != null) &&
         (identity.stage != IdentityStage.signedIn ||
@@ -515,7 +536,48 @@ final class _PromotionTargetDirectoryPageState
     }
   }
 
+  bool get _canReviewMerges {
+    final identity = widget.identitySession.current;
+    final session = widget.appSession.current;
+    final context = session.context;
+    return identity.stage == IdentityStage.signedIn &&
+        session.stage == AppSessionStage.ready &&
+        !session.fromOfflineCache &&
+        session.identity?.stage == IdentityStage.signedIn &&
+        session.identity?.principal?.externalSubject ==
+            identity.principal?.externalSubject &&
+        identity.principal?.externalSubject != null &&
+        context != null &&
+        context.workspace.kind == WorkspaceKind.personal &&
+        context.capabilities.contains('view_assigned_target_pii') &&
+        context.capabilities.contains('manage_assigned_target_merges');
+  }
+
+  Future<void> _openMergeSourceReview() async {
+    if (!_canReviewMerges) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          appBar: AppBar(title: Text(widget.text.t('mergeDirectoryTitle'))),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: PersonalTargetMergeDirectoryPanel(
+                text: widget.text,
+                identitySession: widget.identitySession,
+                appSession: widget.appSession,
+                directoryGateway: widget.mergeDirectoryGateway,
+                projectionGateway: widget.mergeProjectionGateway,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _appSessionChanged(AppSessionSnapshot snapshot) {
+    if (mounted) setState(() {});
     final subject = _exportSubject;
     if ((_exportBusy || _exportArtifact != null) &&
         (subject == null || !_eligibleSession(snapshot, subject))) {

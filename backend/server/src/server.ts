@@ -56,8 +56,10 @@ import {
 import {
   readPersonalTargetMergeProjection,
   readPersonalTargetMergeSplitPlan,
+  readPersonalTargetMergeDirectory,
   type PersonalTargetMergeProjectionStore,
   type PersonalTargetMergeSplitPlanStore,
+  type PersonalTargetMergeDirectoryStore,
 } from "./personal-target-merge-projection.js";
 import {
   createTargetInstitutionRelationship,
@@ -211,6 +213,7 @@ export interface BackendServerDependencies
   readonly personalTargetPiiExportStore?: PersonalTargetPiiExportStore;
   readonly personalTargetMergeProjectionStore?: PersonalTargetMergeProjectionStore;
   readonly personalTargetMergeSplitPlanStore?: PersonalTargetMergeSplitPlanStore;
+  readonly personalTargetMergeDirectoryStore?: PersonalTargetMergeDirectoryStore;
   readonly targetInstitutionRelationshipStore?:
     TargetInstitutionRelationshipStore;
   readonly personalActionPlanStore?: PersonalActionPlanStore;
@@ -1237,6 +1240,29 @@ export function createBackendServer(
       } catch (error) {
         writeBodyError(response, error);
       }
+      return;
+    }
+
+    const personalMergeDirectoryMatch = requestUrl.pathname.match(
+      /^\/v1\/projects\/([^/]+)\/promotion-target-merges$/,
+    );
+    if (request.method === "GET" && personalMergeDirectoryMatch !== null) {
+      const result = await readPersonalTargetMergeDirectory(
+        {
+          authorization: request.headers.authorization,
+          projectId: personalMergeDirectoryMatch[1] ?? "",
+          query: requestUrl.searchParams,
+          hasBody: requestDeclaresBody(request.headers),
+        },
+        {
+          identityVerifier: dependencies.identityVerifier,
+          ...(dependencies.personalTargetMergeDirectoryStore === undefined
+            ? {}
+            : {directoryStore: dependencies.personalTargetMergeDirectoryStore}),
+        },
+      );
+      response.statusCode = result.status;
+      response.end(JSON.stringify(result.body));
       return;
     }
 

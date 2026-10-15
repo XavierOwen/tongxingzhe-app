@@ -317,10 +317,21 @@ metadata 只返回来源、事实标识和 revision metadata。当前合同将 T
 
 组件沿用现有 Material 3 与中英文文案，但没有接入 App 入口、导航、普通目录、手填 UUID、copy／export 或业务写入。它不展示 split plan，不开放 active merge，#549 阻挡不变。MANUAL-147 与 TEST-158 记录范围；synthetic widget／浏览器渲染不证明生产身份、真实 PII、native 设备认证或部署。
 
+### 0126 受控已知代次目录与选择（Issue #578）
+
+目标页的“合并来源审查”只对在线 ready、当前个人项目且同时具备 `view_assigned_target_pii`／`manage_assigned_target_merges` 的当前登录主体显示。进入页面不请求数据；先明确读取目录，只能选择当前页代次，再单独读取资料。翻页与刷新先清除旧页、选择及资料，身份、项目、权限、在线资格或会话流变化同样退役旧结果。读取不刷新或修复 context，不在本地持久缓存；App 拥有并关闭两个 gateway，页面只拥有 controller。
+
+目录只包含满足既有投影资格的 active v2 代次，不返回姓名、联系方式、备注或事实值，也不报告被省略代次的数量或原因。每项五键为 `generation_id`、`target_type`、`retained_target_id`、两个排序的 `member_target_ids` 和较早 `review_due_at_utc`。目录四键为 `workspace_id`、`project_id`、`items`、`next_cursor`。固定最多二十项，UUID 升序、严格大于 `after`；有更多项时 cursor 才是本页末项，否则为 NULL。nil、max 或不存在的 canonical UUID 都能作边界，cursor 不是资格凭证，各页是独立 snapshot。
+
+0126 private core 在一个 SQL command 中重新核对 exact identity／current-personal-project、形成目录并为每个实际返回 member 写一条 `viewed`，每页零至四十条。第 21 项仅判下一页，不写该项审计；重复读取再次审计。审计条数不符或任一插入失败时全回滚。它为 VOLATILE，READ ONLY 会失败，即使空页；runtime 仅获新 wrapper 的 EXECUTE，private schema／表／writer 仍关闭。
+
+集合 GET 仅接受可选单个 `after`，禁止其它 query／body，全部响应 no-store。Backend 用同一原始身份先资格读取、再调用重新授权的 bridge；审计提交后 parser 或 HTTP 仍可能失败，因此 `viewed` 不证明送达。MANUAL-148 与 TEST-159 覆盖此链路；没有手填 UUID、创建合并、拆分、导出、普通目录替换或产品 active merge，#549 阻挡不变。合成数据、浏览器或 widget 测试不证明生产身份、真实 PII、native 设备认证或部署。
+
 ## HTTP 与权限边界
 
 | 方法与路径 | 用途 | Backend capability |
 | --- | --- | --- |
+| `GET /v1/projects/:projectId/promotion-target-merges` | 当前可审查 v2 代次的受控游标目录，不含资料字段 | `manage_assigned_target_merges` + `view_assigned_target_pii`，且当前为本人拥有的个人项目 |
 | `GET /v1/promotion-targets` | 返回当前分配对象、当前项目关系和历史 | `view_assigned_target_pii` |
 | `POST /v1/promotion-targets` | 建立对象和初始分配 | `create_target` + 查看能力 |
 | `POST /v1/promotion-targets/imports/csv/preview` | 解码有界 CSV，返回规范化行、疑似重复提示与限时 receipt | `import_target_pii`，且当前为本人拥有的个人空间 |
@@ -563,4 +574,4 @@ CI 的 Linux job 在保留原 App build 后，执行 [`run_linux_offline_pii_dis
 
 0120 复用 0119 end event 表，在一个事务中结束代次、移除 active mappings 并匿名化两端。它没有 batch 预锁、dispatcher、scheduler、部署或 60 分钟物理清理 SLA，也不开放 runtime 或产品 active merge。
 
-0121 的投影和 0122 的授权审计读取核心仍为 private。0123 只开放两个窄 runtime bridge，并接入专用 Backend 读取 API。7EJ 增加独立 Flutter typed gateway／DTO 与 headless read-controller，但未接入启动装配、UI 或普通目录；读取仍只针对已知 generation，不开放 runtime merge、待分配事实或完整 split。controller 的资格变化会清除其内存引用并使迟到请求失效；这不证明物理抹除或撤回外部副本。组织切片仍需把组织角色和较短保留期的管理界面接入现有策略表。synthetic Flutter／HTTP 测试不证明生产用户、真实界面或部署可用。
+0121 的投影和 0122 的授权审计读取核心仍为 private。0123 开放窄 runtime 读取 bridge；7EN 的 0126 进一步提供现有 v2 代次目录，并把独立 Flutter gateway／controller／panel 接入目标页的只读审查入口，不替换普通目录资料合同。它不开放 runtime merge、待分配事实或完整 split。controller 的资格变化会清除其内存引用并使迟到请求失效；这不证明物理抹除或撤回外部副本。组织切片仍需把组织角色和较短保留期的管理界面接入现有策略表。synthetic Flutter／HTTP 测试不证明生产用户、真实 PII 或部署可用。

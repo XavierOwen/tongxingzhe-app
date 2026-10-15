@@ -101,7 +101,11 @@ _Avoid_: 新推广对象、原对象改写、统一项目阶段
 专用 Backend 先按原始外部身份读取个人 owner 的当前项目与两项 capability，再调用数据库审计读取桥；桥会重新授权并为两个来源追加 `viewed` 记录。资格读取不 bootstrap 或修复 context。个人当前项目与组织管理分析导航选择分开；读取审计证明数据库授权读取，不证明 HTTP 已交付资料。
 _Avoid_: 普通目录合并、缓存副本、读取审计等于用户收到
 
-Flutter 通过独立 typed gateway 与 headless controller 在线读取该投影。controller 仅在内存中持有一个投影；身份、个人项目、任一 capability、在线资格或 selector 变化会撤下结果并使旧请求失效。它不接入普通目录或应用启动，不持久缓存，也不调用会 bootstrap／修复 context 的 `refreshContext()`。撤下引用不等于物理抹除或收回外部副本。
+Flutter 通过 typed gateway 与 controller 在线读取该投影。controller 仅在内存中持有一个投影；身份、个人项目、任一 capability、在线资格或 selector 变化会撤下结果并使旧请求失效。7EN 将它接入目标页的独立只读审查入口，不改变普通目录的资料合同，不持久缓存，也不调用会 bootstrap／修复 context 的 `refreshContext()`。撤下引用不等于物理抹除或收回外部副本。
+
+**已知合并代次目录**:
+当前个人 owner 在当前项目下可读取的既有 v2 合并代次，固定每页最多二十条，以 UUID 游标向后读取；只含代次、类型、成员与保留对象 ID 和较早复核时间。每个实际返回成员追加 `viewed` 审计；选择不自动读取资料，每次翻页、刷新或资格变化都清除旧选择与资料。
+_Avoid_: 普通对象目录、创建合并、缓存授权、目录复核时间等于持续授权
 
 **推广对象合并代次**:
 一次 active merge 的稳定标识；合并期间的新增或修订事实必须绑定该标识，使拆分能区分合并前事实和本次合并期间事实。
