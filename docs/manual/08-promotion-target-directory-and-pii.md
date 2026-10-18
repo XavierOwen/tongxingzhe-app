@@ -395,6 +395,16 @@ request 与 unit 回执只保存 typed metadata，写入后不可变。精确 re
 
 MANUAL-153／TEST-164 只覆盖当前 owner 的私有数据库合同。旧自动目录／复核接线和普通 writer 不变，不承诺全库无 deadlock。不接 runtime、Backend／HTTP／UI 或 scheduler，不部署生产，不证明真实 PII、外部消费者或到期后 60 分钟物理清理 SLA。
 
+### 0132 历史确认的隔离级别门禁（Issue #591）
+
+`confirm_personal_merge_contact_resolutions_v1` 的首次确认和 terminal replay 仅允许 READ COMMITTED。其他模式在输入形状校验后、授权与父请求锁及回执读取前，返回 `0A000 pending contact resolution confirmation requires read committed`。函数不修改调用方的事务隔离级别。
+
+REPEATABLE READ 的后续 SQL 仍使用事务旧快照，不能靠取锁后的新语句刷新授权。真实探针已复现：另一会话撤销 current project 后，旧快照仍能确认。此门禁关闭该确认入口，不将限制扩大到其他旧私有入口或普通 writer。
+
+0132 在原函数 body 的唯一父锁锚点前插入检查，并核对去掉门禁后与旧 body 完全一致，OID、签名、owner、ACL 和其余 pg_proc metadata 不变。旧迁移不改校验值，不新增表、回执或外键。升级保留既有历史应用与终结回执，READ COMMITTED 下仍可精确重放。
+
+MANUAL-154／TEST-165 覆盖此修正。来源映射、显式 current 选择、完整历史应用与 payload 消费合同不变；PUBLIC／runtime 仍封闭，不接 Backend／HTTP／UI、scheduler 或生产部署，#549 的人工门槛不变。
+
 ## HTTP 与权限边界
 
 | 方法与路径 | 用途 | Backend capability |

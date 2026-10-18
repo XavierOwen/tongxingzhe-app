@@ -472,6 +472,10 @@ MANUAL-153／TEST-164 记录此私有数据库能力。旧目录自动到期 hel
 
 新入口首次调用与 replay 都只允许 READ COMMITTED；其他隔离级别在授权、取锁和写入前以固定 `0A000` 拒绝，不在函数内改事务模式。REPEATABLE READ 下的新 SQL 仍可能读取撤权前的事务快照，不能据此承诺锁后最新授权。
 
+7EU／#591 为 0130 的历史、多项确认补上同一隔离级别门禁。首次确认和 terminal replay 仅允许 READ COMMITTED；完成输入形状校验后，在授权、父请求锁和回执读取前，以固定 `0A000 pending contact resolution confirmation requires read committed` 拒绝其他模式。0132 只在该函数原 body 插入门禁，保留 OID、owner、ACL、签名与其余实现，旧迁移校验值不变。
+
+MANUAL-154／TEST-165 覆盖此修正。真实 0131 baseline 的历史应用、终结回执和全部旧业务数据在升级后保留；正常确认及精确重放继续有效。该限制不扩展到其他旧私有入口或普通 writer，不改变事务模式、来源选择、历史应用、payload 消费和既有生产边界。
+
 ### 5.7 组织治理与生命周期
 
 | ID | 需求 |
@@ -3403,6 +3407,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-151` | 说明历史、多项 pending 与已有当前来源关联的私有处置预检、候选冲突、稳定顺序及覆盖 current revision／binding 的 metadata 指纹；明确不选赢家、不写回、不消费或结束代次，不改变 0128 限制或生产边界。 |
 | `MANUAL-152` | 说明 0130 为每项历史 pending 追加实际应用、每个来源槽明确选择 current、全部回执 proof 后才结束并消费 payload。记录固定问卷版本、完整事实与原项目、完整预锁集合、三指纹、终结重放及失败全回滚；保留旧 0128 和普通 writer，不开放生产、runtime、Backend／HTTP／UI。 |
 | `MANUAL-153` | 说明 0131 当前 owner 私有批量到期的固定候选、普通／双端单元、完整预锁和独立 child key；记录逐项子事务失败可见、系统错误整批回滚、实际清除证明及精确／空重放。保留旧普通接线，不接 runtime、Backend／HTTP／UI、scheduler 或生产部署。 |
+| `MANUAL-154` | 说明 0132 仅为 0130 历史确认的首次与终结重放增加 READ COMMITTED 门禁，在授权、父锁和回执读取前拒绝其他隔离级别。保留原函数身份、权限、其余 body、全部旧业务数据和迁移校验值，不修改其他旧私有入口或普通 writer。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3745,6 +3750,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-162` | 0129 fresh／真实 0128 upgrade／checksum／独立恢复核对原函数、权限与数据不变；验证历史、多项同／异来源、已有同源冲突／异源保留、NULL／旧 binding、跨项目、规范化映射与严格 shape。READ ONLY／READ COMMITTED exact-PID 竞争验证单 command snapshot、零写入和无行锁，普通修订仅改变新指纹，撤权后的新 command 拒绝。 |
 | `TEST-163` | 0130 fresh／真实 0129 upgrade／checksum／独立恢复验证旧函数及数据保留、最小 ACL 和 17 条精确 FK。覆盖双类型、历史多项、同／异源冲突、显式 older／current、旧问卷与 answers、跨项目、原 binding、全部实际应用及 current 恢复、精确重放和漂移。故障注入及 exact-PID 并发核对完整预锁、pending 增长、普通 revise／stage／expiry、锁后撤权、child 预占和全业务状态回滚。 |
 | `TEST-164` | 0131 fresh／真实 0130 upgrade／checksum／独立恢复核对旧函数与全部旧数据不变、私有 ACL、typed 不可变回执和六条精确 FK。混合普通／多 pair、较早端到期、pending 与第二端失败、清除抑制、精确／空重放、新请求重试及 child 预占验证逐项结果；非 RC 的首次与重放零写入拒绝。exact PID 并发覆盖完整预锁、旧／新 batch、renewal／policy／assignment／confirm／expiry、撤权和真实 55P03，40P01 注入须整批传播，不伪称真实 deadlock 复现。 |
+| `TEST-165` | 0132 fresh／真实 0131 upgrade／checksum／独立恢复验证 confirmer 仅增加隔离门禁，OID／owner／ACL／其余 metadata 与全部旧业务数据保留。REPEATABLE READ、SERIALIZABLE、READ UNCOMMITTED 的首次与真实 terminal replay 均拒绝固定 0A000 且零写入；READ COMMITTED 的实际历史确认、原回执重放及原 14 项 exact-PID 并发继续通过。 |
 
 ## 9. UI、视觉与可访问性
 

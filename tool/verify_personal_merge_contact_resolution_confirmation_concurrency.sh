@@ -18,7 +18,7 @@ cleanup() {
     if kill -0 "$pid" >/dev/null 2>&1; then kill "$pid" >/dev/null 2>&1 || true; fi
     wait "$pid" >/dev/null 2>&1 || true
   done
-  rm -f "$temporary_directory/holder.fifo" "$temporary_directory/holder.out" "$temporary_directory/waiter.out"
+  rm -f "$temporary_directory/holder.fifo" "$temporary_directory/holder.out" "$temporary_directory/waiter.out" "$temporary_directory/isolation.out"
   rmdir "$temporary_directory"
 }
 trap cleanup EXIT
@@ -278,4 +278,39 @@ for child_kind in pending current; do
     "$confirm_sql" 23505 "$app_user_id:$occupied_child"
 done
 
-echo '0130 concurrency passed: revision ordering, fixed prelocks, pending growth, stage/expiry, replay/drift, revocation and occupied child commands.'
+expect_isolation_rejection() {
+  local label="$1" isolation="$2" before_state status=0 error_line
+  before_state="$(business_state)"
+  set +e
+  run_psql --quiet --command="BEGIN ISOLATION LEVEL $isolation; $confirm_sql COMMIT;" >"$temporary_directory/isolation.out" 2>&1
+  status=$?
+  set -e
+  error_line="$(sed -n '/^ERROR:/p' "$temporary_directory/isolation.out" | head -n 1)"
+  [[ "$status" -ne 0 && "$error_line" == 'ERROR:  0A000: pending contact resolution confirmation requires read committed' ]] || {
+    echo "0132 $label expected exact 0A000 isolation error; status $status: $error_line" >&2
+    sed -n '/^ERROR:/p' "$temporary_directory/isolation.out" >&2
+    exit 1
+  }
+  [[ "$(business_state)" == "$before_state" ]] || { echo "0132 $label changed app_data/app_private state." >&2; exit 1; }
+}
+
+for isolation in 'REPEATABLE READ' SERIALIZABLE 'READ UNCOMMITTED'; do
+  label="first-${isolation// /-}"
+  new_generation "$label"
+  expect_isolation_rejection "$label" "$isolation"
+done
+
+new_generation isolation-rc-history
+rc_confirmed_at="$(run_psql --tuples-only --no-align --command="SELECT extract(epoch FROM (${confirm_sql%;}));" | tr -d '[:space:]')"
+[[ -n "$rc_confirmed_at" ]] || { echo '0132 read committed history confirmation returned no receipt.' >&2; exit 1; }
+rc_state="$(business_state)"
+assert_true read-committed-exact-replay "SELECT extract(epoch FROM app_private.confirm_personal_merge_contact_resolutions_v1(
+  '$app_user_id','$workspace_id','$project_id','$request_id','$generation_id',
+  '$known_fingerprint','$pending_fingerprint','$resolution_fingerprint','$assignments'::jsonb,'$current_choices'::jsonb))=$rc_confirmed_at;"
+[[ "$(business_state)" == "$rc_state" ]] || { echo '0132 read committed exact replay changed app_data/app_private state.' >&2; exit 1; }
+
+for isolation in 'REPEATABLE READ' SERIALIZABLE 'READ UNCOMMITTED'; do
+  expect_isolation_rejection "terminal-replay-${isolation// /-}" "$isolation"
+done
+
+echo '0130 concurrency passed; 0132 non-RC first calls and terminal replays reject exactly with 0A000 and no app_data/app_private changes; RC confirmation/replay passed.'

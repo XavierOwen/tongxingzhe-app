@@ -2979,6 +2979,16 @@ MANUAL-152／TEST-163 不证明生产身份、真实 PII、外部消费者、设
 
 MANUAL-153／TEST-164 不证明全库无 deadlock、inactive-owner 清理、runtime、Backend／HTTP／UI、scheduler、生产部署或真实物理删除 SLA。旧普通目录接线保持不变，#549 的人工门槛不变。
 
+### 7.20 历史确认的事务隔离门禁（Issue #591）
+
+标准 `./tool/run_postgres_tests_in_docker.sh` 自动发现 0132 structural check，并继续执行原 0130 rollback fixture。检查只允许原 confirmer 增加一次 READ COMMITTED 门禁，位置在父请求锁和回执读取前；私有 owner、封闭 ACL、签名、返回值、VOLATILE 与固定 search path 不变。没有新增表或外键，不改变组织清理 inventory。
+
+原确认并发脚本保留 14 项 exact-PID 场景，另增六项隔离级别断言：REPEATABLE READ、SERIALIZABLE、READ UNCOMMITTED 下分别测试首次调用与真实终结回执 replay。每项必须拒绝固定 `0A000` 和错误消息，并比较完整业务状态；READ COMMITTED 下实际历史确认与精确重放继续通过。非 RC 的零写入拒绝不等于证明其他私有入口也使用最新授权。
+
+真实 0131 baseline 先创建历史、多项确认及终结回执，再保存全部旧业务数据和完整 pg_proc。正式迁移到 0132 后，除指定 confirmer 的精确插入外，旧函数目录与数据必须不变；剥离门禁应还原原 body，OID、owner、ACL 等 metadata 必须一致。原终结回执须在 READ COMMITTED 下零写入重放，随后校验 checksum。完整 runner 最后在独立 cluster 恢复后重跑 structural check 与原 rollback fixture。
+
+MANUAL-154／TEST-165 不开放生产、runtime、Backend／HTTP／UI 或 scheduler，不改变普通 writer，不证明真实身份、PII、外部消费者、设备同步或清理 SLA。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：
