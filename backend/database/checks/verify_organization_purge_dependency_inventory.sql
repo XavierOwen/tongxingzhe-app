@@ -1,7 +1,7 @@
 \set ON_ERROR_STOP on
 BEGIN;
 
--- Reviewed Slice 7DZ inventory, grounded in migrations through 0130.
+-- Reviewed Slice 7DZ inventory, grounded in migrations through 0131.
 -- This is a structural definition baseline, not proof of runtime purge behavior.
 -- Personal staging and confirmation still enter this scan through shared workspace/project roots.
 -- Workspaces and projects are shared roots: process rows only when their workspace
@@ -23,6 +23,12 @@ CREATE TEMP TABLE purge_inventory_expected_fk (
   PRIMARY KEY (child_relation, constraint_name)
 );
 INSERT INTO purge_inventory_expected_fk VALUES
+  ('app_private.personal_target_expiry_dispatch_requests_v1', 'personal_target_expiry_dispatch_requests_actor_app_user_id_fkey', 'app_data.app_users', 'a', 'FOREIGN KEY (actor_app_user_id) REFERENCES app_data.app_users(app_user_id)'),
+  ('app_private.personal_target_expiry_dispatch_requests_v1', 'personal_target_expiry_dispatch_requests_v1_project_id_fkey', 'app_data.projects', 'a', 'FOREIGN KEY (project_id) REFERENCES app_data.projects(project_id)'),
+  ('app_private.personal_target_expiry_dispatch_requests_v1', 'personal_target_expiry_dispatch_requests_v1_workspace_id_fkey', 'app_data.workspaces', 'a', 'FOREIGN KEY (workspace_id) REFERENCES app_data.workspaces(workspace_id)'),
+  ('app_private.personal_target_expiry_dispatch_units_v1', 'personal_target_expiry_dispatch_units_v1_generation_id_fkey', 'app_private.personal_target_merge_generations_v1', 'a', 'FOREIGN KEY (generation_id) REFERENCES app_private.personal_target_merge_generations_v1(generation_id)'),
+  ('app_private.personal_target_expiry_dispatch_units_v1', 'personal_target_expiry_dispatch_units__promotion_target_id_fkey', 'app_data.promotion_targets', 'a', 'FOREIGN KEY (promotion_target_id) REFERENCES app_data.promotion_targets(promotion_target_id)'),
+  ('app_private.personal_target_expiry_dispatch_units_v1', 'pted_unit_request_fk', 'app_private.personal_target_expiry_dispatch_requests_v1', 'a', 'FOREIGN KEY (actor_app_user_id, request_id) REFERENCES app_private.personal_target_expiry_dispatch_requests_v1(actor_app_user_id, request_id)'),
   ('app_data.change_feed', 'change_feed_app_user_id_fkey', 'app_data.app_users', 'r', 'FOREIGN KEY (app_user_id) REFERENCES app_data.app_users(app_user_id) ON DELETE RESTRICT'),
   ('app_data.change_feed', 'change_feed_project_id_fkey', 'app_data.projects', 'r', 'FOREIGN KEY (project_id) REFERENCES app_data.projects(project_id) ON DELETE RESTRICT'),
   ('app_data.change_feed', 'change_feed_workspace_id_fkey', 'app_data.workspaces', 'r', 'FOREIGN KEY (workspace_id) REFERENCES app_data.workspaces(workspace_id) ON DELETE RESTRICT'),

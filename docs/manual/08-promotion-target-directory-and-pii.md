@@ -375,6 +375,24 @@ metadata 回执只保存 request、原／实际／最终 revision、来源和候
 
 MANUAL-152／TEST-163 覆盖此私有数据库能力。0128 受限 writer、普通 writer 和只读 0129 不变，两个 pending guard 仅新增完整证明分支。PUBLIC／runtime 仍封闭，不接 Backend／HTTP／UI，不部署生产；不证明外部消费者、设备同步、真实 PII 或清理 SLA。
 
+### 0131 当前 owner 的私有批量到期分派（Issue #589）
+
+`dispatch_assigned_personal_target_expiry_v1(actor, workspace, current_project, request)` 固定首次调用时已到期、仍 active 且分配给当前 owner 的候选。普通对象为一项，active merge 的两端只形成一个 generation 单元；较早端到期即可处理整对，不要求两端分别到期。随后新增的候选留待新 request，不扫描其他 owner 或 inactive 账号。
+
+返回按 `unit_kind` 的 C 顺序和 UUID 排列，字段固定为 `unit_kind`、`unit_id`、`outcome`、`failure_code`、`failure_sqlstate`、`processed_at_utc`。
+
+`expired` 必须对应真实匿名化、assignment 结束和 retention receipt；双端项还须有真实 end 与完整 pending payload 清除。`skipped` 表示锁后未到期、单元／assignment 失效或分类改变；`failed` 表示单元清除／完整性失败，保留固定原因与 SQLSTATE，不保存错误原文。两种未成功结果的处理时间均为 NULL。
+
+request 与 unit 回执只保存 typed metadata，写入后不可变。精确 replay 仍要求当前 owner／current project 有效，再返回首次完整结果，包括空批次和失败；不会在原请求内悄悄重试。要重试失败或处理后来候选，使用新 request。
+
+锁序为 parent request、全部实际 child key、generation fence、全批 target、全部 active assignment。child 在 fence 前按 C 顺序取得；target 按创建时间和 UUID，assignment 按 target 和 assignment UUID 排序。锁后分类改变的单元延期，不在 fence 下补 child、contact 或 target。
+
+普通项用 `owner-expiry-v1:` child，pair 用独立 UUID，避免与旧自动 batch 的 `retention-expired:` family 相交。
+
+普通项调用原 retention action，pair 调用 0120，每单元使用独立子事务。精确 `55000` 或约束错误使该单元回滚并报告 failed，其他单元继续。未知程序、整体撤权、deadlock、serialization、连接／资源／锁／语句超时或 dispatcher 自身回执失败使整条调用回滚。PostgreSQL 的 `55000` 条件名也匹配整个 55 类，handler 必须另核对实际 SQLSTATE，不能吞掉 `55P03`。
+
+MANUAL-153／TEST-164 只覆盖当前 owner 的私有数据库合同。旧自动目录／复核接线和普通 writer 不变，不承诺全库无 deadlock。不接 runtime、Backend／HTTP／UI 或 scheduler，不部署生产，不证明真实 PII、外部消费者或到期后 60 分钟物理清理 SLA。
+
 ## HTTP 与权限边界
 
 | 方法与路径 | 用途 | Backend capability |
@@ -621,5 +639,7 @@ CI 的 Linux job 在保留原 App build 后，执行 [`run_linux_offline_pii_dis
 0118 提供 DB-only assignment end。0119 提供只处理五类明确来源事实的 generation end。0120 提供当前 owner 手动处理单个 generation 的 DB-only expiry。
 
 0120 复用 0119 end event 表，在一个事务中结束代次、移除 active mappings 并匿名化两端。它没有 batch 预锁、dispatcher、scheduler、部署或 60 分钟物理清理 SLA，也不开放 runtime 或产品 active merge。
+
+0131 另增当前 owner 的 private batch dispatcher，处理固定普通／双端单元并隔离单元清除失败。它没有替换普通目录的自动到期路径，也没有 scheduler 或生产执行能力。
 
 0121 的投影和 0122 的授权审计读取核心仍为 private。0123 开放窄 runtime 读取 bridge；7EN 的 0126 进一步提供现有 v2 代次目录，并把独立 Flutter gateway／controller／panel 接入目标页的只读审查入口，不替换普通目录资料合同。它不开放 runtime merge、待分配事实或完整 split。controller 的资格变化会清除其内存引用并使迟到请求失效；这不证明物理抹除或撤回外部副本。组织切片仍需把组织角色和较短保留期的管理界面接入现有策略表。synthetic Flutter／HTTP 测试不证明生产用户、真实 PII 或部署可用。
