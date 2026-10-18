@@ -3031,6 +3031,8 @@ CI 会在临时目录重新生成 v19 snapshot 和 migration helper，并与仓�
 
 CI 的 PostgreSQL job 在 Linux runner 上执行同一个 Docker runner。默认会拉取 `postgres:16` 和 `node:24-bookworm`，在临时容器中运行 `psql`、Backend build 和 runner 明确列出的全部 Backend integration；它不需要 runner 上的 PostgreSQL service，也不占用本机端口。两条路径执行相同的 migration、check、fixture、Backend 对账和并发脚本。
 
+该 job 的总限时为 40 分钟。完整套件曾在恢复库后段触及原 20 分钟上限而被 GitHub 取消，未报告 SQL 断言失败；这里只扩大整套执行预算，不改变各脚本的 statement／lock timeout，也不跳过测试。
+
 本机通过是提交前证据。远端 CI 通过是干净环境证据。合并前应同时检查两者，不能根据本机结果推断 GitHub 已通过。
 
 ## 11. 常见失败怎样定位
