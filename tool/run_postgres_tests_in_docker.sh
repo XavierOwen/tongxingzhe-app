@@ -13446,6 +13446,38 @@ docker exec "${container_name}" psql \
 printf '%s\n' "${personal_target_expiry_dispatch_upgrade_replay}"
 echo '0130→0131 frozen legacy catalog/state, expiry batch and checksum replay: passed.'
 
+echo '验证 0131→0132 private confirmation isolation upgrade 与 checksum replay。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0131_personal_merge_contact_resolution_isolation_live.sql >/dev/null
+docker exec "${container_name}" sh -ceu \
+  "mkdir /tmp/personal-merge-contact-resolution-isolation-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0132_personal_merge_contact_resolution_isolation.sql \\
+     /tmp/personal-merge-contact-resolution-isolation-upgrade-only/"
+docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-merge-contact-resolution-isolation-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_personal_merge_contact_resolution_isolation.sql \
+  --command='BEGIN; SELECT public.fixture_0131_resolution_isolation_assert_upgrade(); ROLLBACK;' >/dev/null
+personal_merge_contact_resolution_isolation_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/personal-merge-contact-resolution-isolation-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${personal_merge_contact_resolution_isolation_upgrade_replay}" != \
+    *'已验证 0132_personal_merge_contact_resolution_isolation（无需重复执行）'* ]] \
+  || [[ "${personal_merge_contact_resolution_isolation_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0132 migration did not skip its checksum-verified replay.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command='BEGIN; SELECT public.fixture_0131_resolution_isolation_assert_upgrade(); ROLLBACK;' >/dev/null
+printf '%s\n' "${personal_merge_contact_resolution_isolation_upgrade_replay}"
+echo '0131→0132 legacy confirmation metadata/OID, isolated guard and checksum replay: passed.'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 
