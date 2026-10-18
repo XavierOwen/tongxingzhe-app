@@ -470,6 +470,8 @@ MANUAL-152／TEST-163 记录此私有数据库结果。旧 0128 函数、表、p
 
 MANUAL-153／TEST-164 记录此私有数据库能力。旧目录自动到期 helper、普通 writer 和 runtime 接线不变。新入口保持 PUBLIC／runtime 封闭，不接 Backend／HTTP／UI 或 scheduler，不部署生产，也不改变 #549 的真实清理 SLA 门槛。
 
+新入口首次调用与 replay 都只允许 READ COMMITTED；其他隔离级别在授权、取锁和写入前以固定 `0A000` 拒绝，不在函数内改事务模式。REPEATABLE READ 下的新 SQL 仍可能读取撤权前的事务快照，不能据此承诺锁后最新授权。
+
 ### 5.7 组织治理与生命周期
 
 | ID | 需求 |
@@ -3742,7 +3744,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-161` | 0128 fresh、真实 0127→0128 upgrade、checksum 与独立恢复验证旧 writer／读取／历史和 guard OID／ACL 保留；覆盖双类型、raw TEXT、NULL、两来源、A 写回／B 当前、实际 pull／去标识 outbox、终结精确重放及全输入／冲突／确认不足拒绝。故障与 exact PID 并发核对全业务状态回滚、预锁后 pending 增长、ordinary revise／stage／expiry 顺序、请求漂移及锁后撤权。 |
 | `TEST-162` | 0129 fresh／真实 0128 upgrade／checksum／独立恢复核对原函数、权限与数据不变；验证历史、多项同／异来源、已有同源冲突／异源保留、NULL／旧 binding、跨项目、规范化映射与严格 shape。READ ONLY／READ COMMITTED exact-PID 竞争验证单 command snapshot、零写入和无行锁，普通修订仅改变新指纹，撤权后的新 command 拒绝。 |
 | `TEST-163` | 0130 fresh／真实 0129 upgrade／checksum／独立恢复验证旧函数及数据保留、最小 ACL 和 17 条精确 FK。覆盖双类型、历史多项、同／异源冲突、显式 older／current、旧问卷与 answers、跨项目、原 binding、全部实际应用及 current 恢复、精确重放和漂移。故障注入及 exact-PID 并发核对完整预锁、pending 增长、普通 revise／stage／expiry、锁后撤权、child 预占和全业务状态回滚。 |
-| `TEST-164` | 0131 fresh／真实 0130 upgrade／checksum／独立恢复核对旧函数与全部旧数据不变、私有 ACL、typed 不可变回执和六条精确 FK。混合普通／多 pair、较早端到期、pending 与第二端失败、清除抑制、精确／空重放、新请求重试及 child 预占验证逐项结果；exact PID 并发覆盖完整预锁、旧／新 batch、renewal／policy／assignment／confirm／expiry、撤权和真实 55P03，40P01 注入须整批传播，不伪称真实 deadlock 复现。 |
+| `TEST-164` | 0131 fresh／真实 0130 upgrade／checksum／独立恢复核对旧函数与全部旧数据不变、私有 ACL、typed 不可变回执和六条精确 FK。混合普通／多 pair、较早端到期、pending 与第二端失败、清除抑制、精确／空重放、新请求重试及 child 预占验证逐项结果；非 RC 的首次与重放零写入拒绝。exact PID 并发覆盖完整预锁、旧／新 batch、renewal／policy／assignment／confirm／expiry、撤权和真实 55P03，40P01 注入须整批传播，不伪称真实 deadlock 复现。 |
 
 ## 9. UI、视觉与可访问性
 

@@ -161,6 +161,9 @@ BEGIN
     OR trusted_project_id IS NULL OR requested_request_id IS NULL THEN
     RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'invalid personal target expiry dispatch request';
   END IF;
+  IF current_setting('transaction_isolation') <> 'read committed' THEN
+    RAISE EXCEPTION USING ERRCODE = '0A000', MESSAGE = 'personal target expiry dispatch requires read committed';
+  END IF;
   IF NOT app_data.promotion_target_context_authorized(trusted_app_user_id, trusted_workspace_id, trusted_project_id)
     OR NOT EXISTS (SELECT 1 FROM app_data.user_current_projects current_project
       WHERE current_project.app_user_id = trusted_app_user_id AND current_project.project_id = trusted_project_id) THEN

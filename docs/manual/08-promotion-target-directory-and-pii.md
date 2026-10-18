@@ -379,6 +379,8 @@ MANUAL-152／TEST-163 覆盖此私有数据库能力。0128 受限 writer、普�
 
 `dispatch_assigned_personal_target_expiry_v1(actor, workspace, current_project, request)` 固定首次调用时已到期、仍 active 且分配给当前 owner 的候选。普通对象为一项，active merge 的两端只形成一个 generation 单元；较早端到期即可处理整对，不要求两端分别到期。随后新增的候选留待新 request，不扫描其他 owner 或 inactive 账号。
 
+首次与 replay 都要求 READ COMMITTED。其他隔离级别在授权、parent 锁和读取回执前返回 `0A000 personal target expiry dispatch requires read committed`。REPEATABLE READ 的新 SQL 仍可读旧事务快照，不能据此承诺锁后最新授权；本限制只用于新入口，不修改旧 writer 或事务模式。
+
 返回按 `unit_kind` 的 C 顺序和 UUID 排列，字段固定为 `unit_kind`、`unit_id`、`outcome`、`failure_code`、`failure_sqlstate`、`processed_at_utc`。
 
 `expired` 必须对应真实匿名化、assignment 结束和 retention receipt；双端项还须有真实 end 与完整 pending payload 清除。`skipped` 表示锁后未到期、单元／assignment 失效或分类改变；`failed` 表示单元清除／完整性失败，保留固定原因与 SQLSTATE，不保存错误原文。两种未成功结果的处理时间均为 NULL。

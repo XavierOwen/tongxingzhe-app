@@ -2973,6 +2973,8 @@ MANUAL-152／TEST-163 不证明生产身份、真实 PII、外部消费者、设
 
 依赖函数的锁序以最后生效定义为准。0115 已替换 0018 的项目关系 writer，先取得 fence 再锁关系行；只读初始 migration 会误判锁序。
 
+首次与 terminal replay 都必须在非 READ COMMITTED 模式下零写入拒绝 `0A000`。分别检查 REPEATABLE READ、SERIALIZABLE 和 READ UNCOMMITTED，不把 READ COMMITTED 下的新语句快照规则套用到旧事务快照；已建立旧快照后撤销 current project 的真实探针曾证明该授权缺口。
+
 真实 0130 baseline 保存全部旧函数目录和业务状态。仅运行 0131 后，旧函数 body／OID／owner／ACL 与数据须完全一致，再运行新批次、精确 replay 与 checksum。完整 runner 最后在独立 cluster 恢复后重跑 check 和 rollback fixture，不在恢复库重跑会提交 synthetic 状态的并发脚本。
 
 MANUAL-153／TEST-164 不证明全库无 deadlock、inactive-owner 清理、runtime、Backend／HTTP／UI、scheduler、生产部署或真实物理删除 SLA。旧普通目录接线保持不变，#549 的人工门槛不变。

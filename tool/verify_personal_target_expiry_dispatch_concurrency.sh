@@ -378,4 +378,24 @@ run_race infrastructure-lock-timeout "SELECT 1 FROM app_data.promotion_target_pr
   WHERE promotion_target_id='$late_target' AND project_id='$project_id' FOR UPDATE;" \
   "BEGIN; SET LOCAL lock_timeout='3000ms'; $dispatch_sql COMMIT;" 55P03 '' '' true
 
-echo '0131 concurrency passed: fixed prelocks, overlapping batches, legacy keys, writer ordering, locked revocation and infrastructure rollback.'
+reject_isolation() {
+  local isolation="$1" phase="$2" before_state status=0
+  before_state="$(business_state)"
+  run_psql --quiet --tuples-only --no-align --command="BEGIN ISOLATION LEVEL $isolation; $dispatch_sql COMMIT;" \
+    >"$temporary_directory/waiter.out" 2>&1 || status=$?
+  if [[ "$status" -eq 0 ]] || ! grep -q 'ERROR:  0A000: personal target expiry dispatch requires read committed' "$temporary_directory/waiter.out"; then
+    echo "0131 $phase $isolation must reject with 0A000。" >&2
+    sed -n '/ERROR:/p' "$temporary_directory/waiter.out" >&2
+    exit 1
+  fi
+  [[ "$before_state" == "$(business_state)" ]] || { echo "0131 $phase $isolation changed persistent state。" >&2; exit 1; }
+  echo "0131 $phase $isolation rejected with 0A000 and unchanged business state."
+}
+new_case isolation-contract pair
+for isolation in 'REPEATABLE READ' SERIALIZABLE 'READ UNCOMMITTED'; do reject_isolation "$isolation" first-call; done
+run_psql --quiet --command="$dispatch_sql" >/dev/null
+assert_true read-committed-terminal "SELECT unit_count=3 AND expired_count=3 AND skipped_count=0 AND failed_count=0
+  FROM app_private.personal_target_expiry_dispatch_requests_v1 WHERE actor_app_user_id='$app_user_id' AND request_id='$request_id';"
+for isolation in 'REPEATABLE READ' SERIALIZABLE 'READ UNCOMMITTED'; do reject_isolation "$isolation" terminal-replay; done
+
+echo '0131 concurrency passed: fixed prelocks, writer ordering, infrastructure rollback and six non-READ-COMMITTED first-call/replay rejections.'
