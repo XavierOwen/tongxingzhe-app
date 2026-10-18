@@ -13414,6 +13414,38 @@ docker exec "${container_name}" psql \
 printf '%s\n' "${personal_merge_resolution_confirmation_upgrade_replay}"
 echo '0129→0130 legacy functions/OID/ACL, historical facts, explicit current choice and checksum replay: passed.'
 
+echo '验证 0130→0131 expiry dispatch live upgrade、私有对象合同与 checksum replay。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0130_personal_target_expiry_dispatch_live.sql >/dev/null
+docker exec "${container_name}" sh -ceu \
+  "mkdir /tmp/personal-target-expiry-dispatch-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0131_personal_target_expiry_dispatch.sql \\
+     /tmp/personal-target-expiry-dispatch-upgrade-only/"
+docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-target-expiry-dispatch-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_personal_target_expiry_dispatch.sql \
+  --command='BEGIN; SELECT public.fixture_0130_expiry_assert_upgrade(); ROLLBACK;' >/dev/null
+personal_target_expiry_dispatch_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/personal-target-expiry-dispatch-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${personal_target_expiry_dispatch_upgrade_replay}" != \
+    *'已验证 0131_personal_target_expiry_dispatch（无需重复执行）'* ]] \
+  || [[ "${personal_target_expiry_dispatch_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0131 migration did not skip its checksum-verified replay.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command='BEGIN; SELECT public.fixture_0130_expiry_assert_upgrade(); ROLLBACK;' >/dev/null
+printf '%s\n' "${personal_target_expiry_dispatch_upgrade_replay}"
+echo '0130→0131 frozen legacy catalog/state, expiry batch and checksum replay: passed.'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 

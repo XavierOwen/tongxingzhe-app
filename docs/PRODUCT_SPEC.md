@@ -462,6 +462,16 @@ MANUAL-151／TEST-162 记录这份可执行预检，历史事实与当前投影�
 
 MANUAL-152／TEST-163 记录此私有数据库结果。旧 0128 函数、表、proof 与普通 writer 不变，仅两个 pending guard 纳入新证明。PUBLIC／runtime 仍封闭，不接 Backend／HTTP／UI，不开放生产合并、部署或清理 SLA。合成数据库的 revision／feed／outbox 一致性不证明生产身份、真实 PII、外部消费者或设备同步；#549 的人工部署门槛不变。
 
+7ET／#589 增加当前 owner 的私有批量到期分派。首次 request 固定当前本人个人空间内仍 active、已分配且已到期的候选；普通 target 独立成一项，active generation 去重为一个双端单元，以两端较早 current due 决定。首次选定后出现的其他对象留待新 request，不是后台全局扫描。typed metadata-only request／unit 回执保存完整结果，空批次也有回执；相同 request 重新授权后返回首次结果，新 request 才重试失败或后来出现的候选。
+
+完整 child 在 fence 前按 C 顺序预锁，再按 `(created_at, target UUID)` 锁全批 targets，随后锁全部 active assignments。普通 child 使用独立 `owner-expiry-v1:` 命名空间，不复用旧自动 batch 的 `retention-expired:` key。锁后重验资格、单元、状态、assignment 与 current due；分类改变的对象延期，不在 fence 后补锁。普通项复用原 retention action，双端项复用 0120，0127 仍负责本代次 pending payload 清除，不复制匿名化实现。
+
+每单元在独立子事务中写入并核对实际匿名化、assignment 与 retention receipt；generation 另须有真实 expiry end、两端处理和完整 payload 清除。可识别的未到期、失效或拓扑变化返回固定 skipped 原因。约束或精确 `55000` 的清除／完整性失败回滚该单元，返回 failed、固定原因与 SQLSTATE，继续无关单元；不返回错误原文。整体撤权、未知程序错误、deadlock、serialization、连接、资源、锁／语句超时或 dispatcher 回执失败使整条调用回滚，不能把整个 55 类错误当作可隔离的 `55000`。
+
+MANUAL-153／TEST-164 记录此私有数据库能力。旧目录自动到期 helper、普通 writer 和 runtime 接线不变。新入口保持 PUBLIC／runtime 封闭，不接 Backend／HTTP／UI 或 scheduler，不部署生产，也不改变 #549 的真实清理 SLA 门槛。
+
+新入口首次调用与 replay 都只允许 READ COMMITTED；其他隔离级别在授权、取锁和写入前以固定 `0A000` 拒绝，不在函数内改事务模式。REPEATABLE READ 下的新 SQL 仍可能读取撤权前的事务快照，不能据此承诺锁后最新授权。
+
 ### 5.7 组织治理与生命周期
 
 | ID | 需求 |
@@ -3392,6 +3402,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-150` | 说明 0128 当前单项 pending 的私有原子确认、完整跨项目映射、原 v3 新 revision 写回、实际应用证据、payload 消费与终结重放；明确历史／多项／原 pair 既有关联整批拒绝、普通 writer 不变、权限封闭及非完整拆分的边界。 |
 | `MANUAL-151` | 说明历史、多项 pending 与已有当前来源关联的私有处置预检、候选冲突、稳定顺序及覆盖 current revision／binding 的 metadata 指纹；明确不选赢家、不写回、不消费或结束代次，不改变 0128 限制或生产边界。 |
 | `MANUAL-152` | 说明 0130 为每项历史 pending 追加实际应用、每个来源槽明确选择 current、全部回执 proof 后才结束并消费 payload。记录固定问卷版本、完整事实与原项目、完整预锁集合、三指纹、终结重放及失败全回滚；保留旧 0128 和普通 writer，不开放生产、runtime、Backend／HTTP／UI。 |
+| `MANUAL-153` | 说明 0131 当前 owner 私有批量到期的固定候选、普通／双端单元、完整预锁和独立 child key；记录逐项子事务失败可见、系统错误整批回滚、实际清除证明及精确／空重放。保留旧普通接线，不接 runtime、Backend／HTTP／UI、scheduler 或生产部署。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3733,6 +3744,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-161` | 0128 fresh、真实 0127→0128 upgrade、checksum 与独立恢复验证旧 writer／读取／历史和 guard OID／ACL 保留；覆盖双类型、raw TEXT、NULL、两来源、A 写回／B 当前、实际 pull／去标识 outbox、终结精确重放及全输入／冲突／确认不足拒绝。故障与 exact PID 并发核对全业务状态回滚、预锁后 pending 增长、ordinary revise／stage／expiry 顺序、请求漂移及锁后撤权。 |
 | `TEST-162` | 0129 fresh／真实 0128 upgrade／checksum／独立恢复核对原函数、权限与数据不变；验证历史、多项同／异来源、已有同源冲突／异源保留、NULL／旧 binding、跨项目、规范化映射与严格 shape。READ ONLY／READ COMMITTED exact-PID 竞争验证单 command snapshot、零写入和无行锁，普通修订仅改变新指纹，撤权后的新 command 拒绝。 |
 | `TEST-163` | 0130 fresh／真实 0129 upgrade／checksum／独立恢复验证旧函数及数据保留、最小 ACL 和 17 条精确 FK。覆盖双类型、历史多项、同／异源冲突、显式 older／current、旧问卷与 answers、跨项目、原 binding、全部实际应用及 current 恢复、精确重放和漂移。故障注入及 exact-PID 并发核对完整预锁、pending 增长、普通 revise／stage／expiry、锁后撤权、child 预占和全业务状态回滚。 |
+| `TEST-164` | 0131 fresh／真实 0130 upgrade／checksum／独立恢复核对旧函数与全部旧数据不变、私有 ACL、typed 不可变回执和六条精确 FK。混合普通／多 pair、较早端到期、pending 与第二端失败、清除抑制、精确／空重放、新请求重试及 child 预占验证逐项结果；非 RC 的首次与重放零写入拒绝。exact PID 并发覆盖完整预锁、旧／新 batch、renewal／policy／assignment／confirm／expiry、撤权和真实 55P03，40P01 注入须整批传播，不伪称真实 deadlock 复现。 |
 
 ## 9. UI、视觉与可访问性
 

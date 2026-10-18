@@ -2963,6 +2963,22 @@ PG16 函数计数应证明一次确认只执行三次全批 proof，不按 paylo
 
 MANUAL-152／TEST-163 不证明生产身份、真实 PII、外部消费者、设备同步、Backend／HTTP／UI、部署或清理 SLA。所有新能力继续关闭 PUBLIC／runtime，普通 writer 与旧 0128 的受限合同不变。
 
+### 7.19 私有批量到期分派与单元隔离（Issue #589）
+
+标准 `./tool/run_postgres_tests_in_docker.sh` 自动发现 0131 check／fixture 与 `verify_personal_target_expiry_dispatch_concurrency.sh`。结构检查核对两张 typed metadata-only 不可变表、即时 FK、私有 owner／ACL、固定 search path 和函数返回形态。六条新增 FK 纳入严格组织清理清单，不放宽集合或负探针；该清单不证明运行时组织删除。
+
+行为 fixture 混合普通对象、不同类型的多组 pair、仅较早端到期、跨项目来源和待分配 payload。第二端异常或 pending purge 抑制必须恢复整对全部业务状态，同时无关单元仍成功；实际匿名化被抑制不得计为 expired。核对结果逐列对应不可变回执与实际 end／retention event，覆盖精确／空重放、context 漂移、新 request 重试、child 预占、metadata 抑制和不可变性。
+
+并发脚本在实际 child／fence／target／assignment key 上观察指定 holder、waiter、blocker PID，再释放 FIFO。验证完整预锁、交叠 batch、旧 0020 自动 child 共存、单项先后、renewal／policy／assignment／confirm／expiry 与锁后撤权。真实关系行等待触发 `55P03` 时，必须传播原 SQLSTATE 并回滚全批；fixture 的显式 `40P01` 注入也须传播，但不能记为真实 deadlock 复现。精确 `55000` 与其他 55 类必须区分。
+
+依赖函数的锁序以最后生效定义为准。0115 已替换 0018 的项目关系 writer，先取得 fence 再锁关系行；只读初始 migration 会误判锁序。
+
+首次与 terminal replay 都必须在非 READ COMMITTED 模式下零写入拒绝 `0A000`。分别检查 REPEATABLE READ、SERIALIZABLE 和 READ UNCOMMITTED，不把 READ COMMITTED 下的新语句快照规则套用到旧事务快照；已建立旧快照后撤销 current project 的真实探针曾证明该授权缺口。
+
+真实 0130 baseline 保存全部旧函数目录和业务状态。仅运行 0131 后，旧函数 body／OID／owner／ACL 与数据须完全一致，再运行新批次、精确 replay 与 checksum。完整 runner 最后在独立 cluster 恢复后重跑 check 和 rollback fixture，不在恢复库重跑会提交 synthetic 状态的并发脚本。
+
+MANUAL-153／TEST-164 不证明全库无 deadlock、inactive-owner 清理、runtime、Backend／HTTP／UI、scheduler、生产部署或真实物理删除 SLA。旧普通目录接线保持不变，#549 的人工门槛不变。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：
@@ -3014,6 +3030,8 @@ CI 会在临时目录重新生成 v19 snapshot 和 migration helper，并与仓�
 | Build Android／Web／Linux／iOS／macOS／Windows | 六个平台独立 build |
 
 CI 的 PostgreSQL job 在 Linux runner 上执行同一个 Docker runner。默认会拉取 `postgres:16` 和 `node:24-bookworm`，在临时容器中运行 `psql`、Backend build 和 runner 明确列出的全部 Backend integration；它不需要 runner 上的 PostgreSQL service，也不占用本机端口。两条路径执行相同的 migration、check、fixture、Backend 对账和并发脚本。
+
+该 job 的总限时为 40 分钟。完整套件曾在恢复库后段触及原 20 分钟上限而被 GitHub 取消，未报告 SQL 断言失败；这里只扩大整套执行预算，不改变各脚本的 statement／lock timeout，也不跳过测试。
 
 本机通过是提交前证据。远端 CI 通过是干净环境证据。合并前应同时检查两者，不能根据本机结果推断 GitHub 已通过。
 
