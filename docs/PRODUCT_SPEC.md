@@ -450,7 +450,17 @@ MANUAL-150／TEST-161 记录此有界 writer。它保持 PUBLIC／runtime 封闭
 
 固定七键输出保留原 `known_source_plan` 与 `pending_fingerprint`，另含合同 ID、contacts、source_slots、conflict_count 和 metadata-only `resolution_fingerprint`。每个 contact 保留原项目、current revision、按原 revision／pending UUID 排序的全部历史候选，以及当前 revision 的原 pair links；NULL／旧 generation binding 原样保留。按 contact/source 分槽，候选数为 pending 项数加当前关联数，大于一即要求选择，不比较反应／同意等业务值，不选赢家。raw TEXT contact 按 C 顺序、来源按 UUID 排序；完整映射和当前 revision／项目／binding 都进入新指纹，因此普通修订即使不改变旧两指纹，也会使处置预检变化。
 
-MANUAL-151／TEST-162 记录这份可执行预检。推荐的历史事实与当前投影分离方向见 ADR 0193；最终原子 writer 的 revision 编排仍待验证。此片不应用来源、不消费 pending、不结束代次，也不放宽 0128 或关闭 #582；单候选仍不是写回授权。它不接 Backend／HTTP／UI，不开放生产合并或部署，#549 阻挡不变。synthetic 数据库证据不证明生产身份、真实 PII、外部消费者或设备同步。
+MANUAL-151／TEST-162 记录这份可执行预检，历史事实与当前投影分离见 ADR 0193。0129 自身不应用来源、不消费 pending、不结束代次，也不放宽 0128；单候选仍不是写回授权。后续 0130 私有确认单独处理实际应用。此读取层不接 Backend／HTTP／UI，不开放生产合并或部署，#549 阻挡不变。
+
+7ES／#587 为 #582 增加历史、多项与冲突的私有原子确认。输入包括 known、pending、resolution 三份 metadata 指纹、完整来源映射，以及每个 `(contact, source)` 槽位的明确 current 选择。选择对象固定四键：`contact_id`、`source_target_id`、`candidate_kind`、`pending_fact_id`。`current` 候选须已有入口 current link，pending ID 必须为 JSON null；`pending` 候选须指向该槽位的一项真实 pending。单候选也必须选择，不自动取最新或按值合并。
+
+协调器原样调用 v3，按 contact C 顺序、原 revision 和 pending UUID 逐项追加历史完整 snapshot 与明确来源；再为每个 contact 追加一次最终 current。最终普通字段、事件时间、answers 和非 pair links 来自进入前 current，pair links 来自显式候选。原历史行不变，未选作 current 的 pending 仍有独立实际应用 revision。新 binding 由原 trigger 分配，修订与审计时间使用真实确认时间。contact 固定问卷版本不随项目新发布版本变化；历史 snapshot 的版本不一致时提前拒绝，不迁移答案或静默改标。
+
+新增 typed metadata-only request、历史 application、最终 revision 和 choice 回执，不复制或散列业务值。proof 逐项核对完整 snapshot、实际 answers／地点 provenance、连续 revision 链、accepted command、原项目 feed、audit 与去标识 warehouse。完整证明后调用原 end，再逐项验证实际应用值与精确 receipt 后消费 payload，消费后再次完整证明。任一非 accepted、缺证据、抑制、计数不符或结束／消费失败，回滚全部业务和回执。原关联不满足现有 writer 的资格或校验时同样整批拒绝，不丢关联或补造项目进入、同意或代表确认。
+
+锁序固定为父请求、完整 child 集合、完整 contact 集合、generation fence、两端 target、active assignment。锁后重验授权、三指纹、完整 pending 集合和数据库时钟 due；新增同 contact 或其他 contact 的 pending 均拒绝，不在 fence 后补锁。所有 child 在写前必须没有 processed command，不将 duplicate 当成本次应用。terminal replay 从不可变回执重建映射与选择，核对 context、代次及三指纹，再走原 end 的当前授权门禁；不重新读取已结束的 active planner。
+
+MANUAL-152／TEST-163 记录此私有数据库结果。旧 0128 函数、表、proof 与普通 writer 不变，仅两个 pending guard 纳入新证明。PUBLIC／runtime 仍封闭，不接 Backend／HTTP／UI，不开放生产合并、部署或清理 SLA。合成数据库的 revision／feed／outbox 一致性不证明生产身份、真实 PII、外部消费者或设备同步；#549 的人工部署门槛不变。
 
 ### 5.7 组织治理与生命周期
 
@@ -3381,6 +3391,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-149` | 学习文档说明合并期间新增待分配接触关联的 typed 业务存储、仅标识 ledger、私有登记与 metadata-only 预检。记录 live 精确重放、旧 end 防绕过、expiry 处置与全回滚，以及无最终分配／确认 writer、其他未知事实类型、runtime／HTTP／UI 或产品 active merge 的边界。 |
 | `MANUAL-150` | 说明 0128 当前单项 pending 的私有原子确认、完整跨项目映射、原 v3 新 revision 写回、实际应用证据、payload 消费与终结重放；明确历史／多项／原 pair 既有关联整批拒绝、普通 writer 不变、权限封闭及非完整拆分的边界。 |
 | `MANUAL-151` | 说明历史、多项 pending 与已有当前来源关联的私有处置预检、候选冲突、稳定顺序及覆盖 current revision／binding 的 metadata 指纹；明确不选赢家、不写回、不消费或结束代次，不改变 0128 限制或生产边界。 |
+| `MANUAL-152` | 说明 0130 为每项历史 pending 追加实际应用、每个来源槽明确选择 current、全部回执 proof 后才结束并消费 payload。记录固定问卷版本、完整事实与原项目、完整预锁集合、三指纹、终结重放及失败全回滚；保留旧 0128 和普通 writer，不开放生产、runtime、Backend／HTTP／UI。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3721,6 +3732,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-160` | 0127 fresh／upgrade／checksum／独立恢复核对所有旧函数／读取／历史不变，新增业务值与 ledger 分离、资格、live 精确重放／漂移、metadata-only READ ONLY 预检、未知不从旧 binding 推断、旧 end 拒绝，以及 expiry 清除和故障全回滚。exact PID 并发覆盖 stage／end／expiry、相同 request 漂移和锁后撤权，验证来源事实不改写、失败无部分状态及仅处置当前代次。 |
 | `TEST-161` | 0128 fresh、真实 0127→0128 upgrade、checksum 与独立恢复验证旧 writer／读取／历史和 guard OID／ACL 保留；覆盖双类型、raw TEXT、NULL、两来源、A 写回／B 当前、实际 pull／去标识 outbox、终结精确重放及全输入／冲突／确认不足拒绝。故障与 exact PID 并发核对全业务状态回滚、预锁后 pending 增长、ordinary revise／stage／expiry 顺序、请求漂移及锁后撤权。 |
 | `TEST-162` | 0129 fresh／真实 0128 upgrade／checksum／独立恢复核对原函数、权限与数据不变；验证历史、多项同／异来源、已有同源冲突／异源保留、NULL／旧 binding、跨项目、规范化映射与严格 shape。READ ONLY／READ COMMITTED exact-PID 竞争验证单 command snapshot、零写入和无行锁，普通修订仅改变新指纹，撤权后的新 command 拒绝。 |
+| `TEST-163` | 0130 fresh／真实 0129 upgrade／checksum／独立恢复验证旧函数及数据保留、最小 ACL 和 17 条精确 FK。覆盖双类型、历史多项、同／异源冲突、显式 older／current、旧问卷与 answers、跨项目、原 binding、全部实际应用及 current 恢复、精确重放和漂移。故障注入及 exact-PID 并发核对完整预锁、pending 增长、普通 revise／stage／expiry、锁后撤权、child 预占和全业务状态回滚。 |
 
 ## 9. UI、视觉与可访问性
 

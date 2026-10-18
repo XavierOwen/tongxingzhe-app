@@ -2947,6 +2947,22 @@ person／institution、NULL response、原样 TEXT contact ID、两个来源及�
 
 MANUAL-151／TEST-162 只证明 synthetic PostgreSQL 中的冲突预检；不证明最终历史写回、实际来源分配、生产身份、真实 PII、HTTP／UI、部署、外部消费者或设备同步。
 
+### 7.18 历史、多项与冲突的私有原子确认（Issue #587）
+
+运行 `./tool/run_postgres_tests_in_docker.sh`，自动发现 0130 check／fixture 和 `verify_personal_merge_contact_resolution_confirmation_concurrency.sh`。结构检查核对私有 owner、固定 search path、两个 STABLE proof、VOLATILE confirmer、四张 typed metadata-only 不可变回执表，以及 deferred request／end FK。17 条精确新增 FK 必须纳入组织清理结构清单；这不证明运行时清理或生产删除。
+
+fixture 使用 person／institution、跨项目 contact、不同历史 revision 的多项 pending、同／异源冲突，以及显式 older／current 选择。真实发布新必填问卷后，旧 contact 的历史及最终 answers 仍引用其固定版本；版本不一致提前拒绝。核对原普通字段、事件时间、非 pair 关联、NULL／真实旧 binding 原行、每项独立应用和最终 current，以及原项目 feed／audit／去标识 outbox。相同值不能折叠应用。
+
+所有形状、完整映射、槽位、候选、三指纹、child 预占和资格错误都比较全业务状态。注入后续 contact／最后 current child 非 accepted、metadata INSERT、provenance 缺行、end 与 payload DELETE 抑制，以及 end receipt 后的 final child 破坏，确认 revisions、answers、links、feed、audit、outbox、回执及 pending 全部回滚。
+
+PG16 函数计数应证明一次确认只执行三次全批 proof，不按 payload 数重复。终结精确重放应返回原时间且零写入，各载荷漂移拒绝；旧 0127／0128／0129 fixture 继续通过。
+
+真实 0129 baseline 捕获旧表数据及完整 pg_proc／OID／owner／ACL。升级仅允许两个 pending guard 的 body 增加新证明分支，其余全部函数 metadata 不变。正式 runner 执行 0130 后核对实际历史应用、显式旧候选、payload 消费和终结收据，再验证 checksum replay 与独立 dump-restore。
+
+并发测试使用指定 holder／waiter PID 和精确 blocker 后释放 FIFO。核对所有 child／contact 在 fence 前预锁、同 contact 或新增 contact 的 pending 增长整批拒绝、普通修订先后、stage／expiry 双向、同请求重放／漂移，以及 target／assignment 等待后的撤权。失败状态必须等于 holder 提交后的完整预期状态，不以未观察到任意全库 waiter 代替实际锁证据。
+
+MANUAL-152／TEST-163 不证明生产身份、真实 PII、外部消费者、设备同步、Backend／HTTP／UI、部署或清理 SLA。所有新能力继续关闭 PUBLIC／runtime，普通 writer 与旧 0128 的受限合同不变。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：

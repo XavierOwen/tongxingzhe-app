@@ -13382,6 +13382,38 @@ docker exec "${container_name}" psql \
 printf '%s\n' "${personal_merge_resolution_upgrade_replay}"
 echo '0128→0129 complete legacy pg_proc/OID/ACL, original data, readonly plan and checksum replay: passed.'
 
+echo '验证 0129→0130 历史应用、明确当前选择与 checksum replay。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0129_personal_merge_contact_resolution_confirmation_live.sql >/dev/null
+docker exec "${container_name}" sh -ceu \
+  "mkdir /tmp/personal-merge-contact-resolution-confirmation-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0130_personal_merge_contact_resolution_confirmation.sql \\
+     /tmp/personal-merge-contact-resolution-confirmation-upgrade-only/"
+docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-merge-contact-resolution-confirmation-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_personal_merge_contact_resolution_confirmation.sql \
+  --command='BEGIN; SELECT public.fixture_0130_assert_upgrade(); ROLLBACK;' >/dev/null
+personal_merge_resolution_confirmation_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/personal-merge-contact-resolution-confirmation-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${personal_merge_resolution_confirmation_upgrade_replay}" != \
+    *'已验证 0130_personal_merge_contact_resolution_confirmation（无需重复执行）'* ]] \
+  || [[ "${personal_merge_resolution_confirmation_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0130 migration did not skip its checksum-verified replay.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command='BEGIN; SELECT public.fixture_0130_assert_upgrade(); ROLLBACK;' >/dev/null
+printf '%s\n' "${personal_merge_resolution_confirmation_upgrade_replay}"
+echo '0129→0130 legacy functions/OID/ACL, historical facts, explicit current choice and checksum replay: passed.'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 
