@@ -359,7 +359,21 @@ MANUAL-150／TEST-161 覆盖此有界能力。所有新对象仍关闭 PUBLIC／
 
 新 resolution 指纹覆盖完整映射及所有输出 metadata，包括 current revision、原项目和当前来源 binding。普通 revise 可能不改变旧 known／pending 两指纹，却使当前投影候选的依据变化，所以后续确认不能仅重验旧指纹。读取使用单 command snapshot，STABLE、真实 READ ONLY，无业务／审计／receipt／fence 写入或行锁；不保存资格。metadata 和 raw TEXT 标识不等于匿名数据。
 
-MANUAL-151／TEST-162 覆盖这一层。ADR 0193 记录历史事实与当前投影分离的推荐方向，最终 writer 仍待验证。此预检不建立实际归属、不消费 payload、不结束代次，不放宽 0128，不关闭 #582，也不接 Backend／HTTP／UI 或生产部署。
+MANUAL-151／TEST-162 覆盖这一层。ADR 0193 固定历史事实与当前投影分离；0130 私有确认另行负责实际应用。此预检本身不建立归属、不消费 payload、不结束代次，不放宽 0128，也不接 Backend／HTTP／UI 或生产部署。
+
+### 0130 历史、多项与冲突的私有原子确认（Issue #587）
+
+`confirm_personal_merge_contact_resolutions_v1` 接受完整来源映射、0129 的三份 metadata 指纹，以及全部来源槽的明确 current 选择。每项选择只含 `contact_id`、`source_target_id`、`candidate_kind` 和 `pending_fact_id`。选择原 current 时，pending ID 必须是 JSON null；选择 pending 时，它必须属于该 contact 和已分配来源。单候选也不能省略。漏项、重复、额外槽位、错误候选或指纹漂移均不能部分确认。
+
+每个 pending 都通过原 v3 追加一份原历史 snapshot 与明确来源，然后每个 contact 再追加一次最终 current。历史事实不因未被选作 current 而消失。最终普通字段、事件时间、answers 和非 pair links 使用进入前 current，pair links 使用明确候选；不自动取最新或按值相等合并。新增 revision 的 binding 沿用普通 trigger，原历史 binding 不改。
+
+contact 仍使用其固定问卷版本，项目后来发布的新问卷不替换它。协调器先检查所有历史及入口 current snapshot 的版本，避免原 writer 静默改标兼容答案。实际 answers 行必须与各自原 revision 一致。事件发生时间保留，修订与审计时间使用本次真实时间。旧关联若不满足普通 writer 的当前资格、地点或答案校验，整批拒绝并保留 pending，不丢关联或补造确认。
+
+metadata 回执只保存 request、原／实际／最终 revision、来源和候选指针。proof 核对每项真实应用、answers／地点 provenance、连续 revision 链、最终 current、accepted command、原项目 feed、audit 与去标识 outbox。结束前、end guard 与消费后各做一次完整证明；每项删除还须匹配实际应用值和精确 end receipt，不逐项重跑全批。任一非 accepted、回执抑制、计数不符或结束／消费失败，整批回滚。
+
+父请求之后，所有 child command 和 contact 在 fence 前按固定顺序预锁。pending 集合增加时拒绝重取，不能持 fence 补锁；锁后重验资格、三指纹和 due。terminal replay 从不可变回执重建映射与选择，再调用原 end 的授权与精确收据，不依赖已经结束的 active planner。
+
+MANUAL-152／TEST-163 覆盖此私有数据库能力。0128 受限 writer、普通 writer 和只读 0129 不变，两个 pending guard 仅新增完整证明分支。PUBLIC／runtime 仍封闭，不接 Backend／HTTP／UI，不部署生产；不证明外部消费者、设备同步、真实 PII 或清理 SLA。
 
 ## HTTP 与权限边界
 
