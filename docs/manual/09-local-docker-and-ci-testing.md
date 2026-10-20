@@ -2989,6 +2989,16 @@ MANUAL-153／TEST-164 不证明全库无 deadlock、inactive-owner 清理、runt
 
 MANUAL-154／TEST-165 不开放生产、runtime、Backend／HTTP／UI 或 scheduler，不改变普通 writer，不证明真实身份、PII、外部消费者、设备同步或清理 SLA。
 
+### 7.21 账号删除申请与期限内恢复（Issue #593）
+
+标准 `./tool/run_postgres_tests_in_docker.sh` 自动发现 0133 check、rollback fixture 和独立并发脚本。它们检查本人申请与恢复的固定结果、独立 family、720 小时／DST／截止点、current-cycle replay、旧请求拒绝、sole-owner 与组织恢复期，以及原关系和业务事实不变。状态、claim 或 audit 注入失败必须整笔回滚；三个非 READ COMMITTED 模式均在首次和重放时零写入拒绝。
+
+并发通过指定 physical PID、实际 request／user／governance key 与 blocker 证明等待，再释放 FIFO。重点是同 request 只写一次、同账号不同 request 串行、两个 owner 不能一起 pending，以及等待期间发生的 owner／membership／status 变化和恢复 deadline 必须被重新检查。正确结果不能替代精确等待证据。
+
+真实 0132 live 数据保存全部旧表内容和关系／函数 catalog，再仅应用 0133；旧 OID、owner、ACL、定义和业务状态必须原样保留。template clone 的 pending 负向库须拒绝固定 provenance 错误，且无新对象、migration 记录或业务变化；不能改 pending 的开始时间让升级通过。正式升级和 checksum 重放后，再跑新入口行为；独立 cluster 的 dump／restore 重跑所有 check 与 rollback fixture。
+
+MANUAL-155／TEST-166 只证明 private PostgreSQL 核心。未开放 runtime、Backend／HTTP／UI 或生产执行，不证明外部认证身份、本地缓存、全部旧入口并发冻结、个人数据期满清除、组织作者不可反查或完整账号删除。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：

@@ -2040,6 +2040,24 @@ Flutter 将 eligibility 结果绑定到目录读取 generation，并在回包时
 
 0109 fixture 的 171 行、86 个 relation 和 21 个 UUID family（28 个 UUID）包含被明确移植的历史合成组织图；contact、questionnaire 与 target 的实际 writers 仍是 personal-only，组织／报告／UUID writers 才来自真实调用。fixture 验证删除、保留与注入故障后的回滚，不证明开放了组织业务写入，也不证明自动调度、production 或外部 warehouse／backup 已清除。定向入口检查：`flutter test test/features/organization_directory/organization_directory_dialog_test.dart`、`flutter test test/organization_deletion_recovery/http_organization_deletion_recovery_gateway_test.dart`；PostgreSQL finalizer 并发检查需设置 `DATABASE_URL` 后运行 `./tool/verify_organization_purge_finalizer_concurrency.sh`。
 
+### 3.54 账号删除申请与期限内恢复（Issue #593，MANUAL-155）
+
+0133 只提供私有数据库核心。组织删除的对象是整个协作空间；账号删除的对象是本人账号及未来要清除的个人数据，两者的 cycle 和 deadline 独立。此时没有账号删除页面、外部认证商操作或生产调用入口，不能据此说明用户已能完成账号删除。
+
+可信内部用户调用 `app_private.request_account_deletion_v1(user UUID, request UUID)`。首次成功把 active 变为 deletion_pending，并返回固定 contract、deletion request、effective time 和 deadline。数据库在最后一个等待锁之后取墙钟；deadline 恰好晚 720 小时。不能用客户端时间、当前事务开始时间、本地日历月或重试时刻重新计算。
+
+恢复使用 `app_private.restore_account_v1(user UUID, restore request UUID, expected deletion request UUID)`。它只接受本人的当前 pending cycle，且数据库时刻位于半开恢复窗口。到达 deadline 本身便拒绝；失败不会延长期限。成功返回 restore contract、原 deletion request 和恢复时间。
+
+申请不结束成员、owner、capability 或跟进分配，恢复也不新建这些关系。恢复 active 后，只有仍在原有效期内的关系重新参与授权；已经结束或到期的关系不能复活。恢复账号不撤销组织本身的删除申请。申请、恢复及成功审计任一步失败，整个调用的状态和回执一起回滚，个人和组织业务事实不被清除。
+
+两条路径均只接受 READ COMMITTED。它们先取本操作的 request lock，再锁本人账号，最后按 UUID 排序锁定本人全部历史组织 membership 涉及的组织治理。申请前必须确认每个仍物理存在的组织还有另一位 current active owner，包括组织恢复期。治理锁之后不反向锁对方账号；两个 owner 同时申请时不能一起成功。既有提交时 owner 约束保留，不能用首次检查取代它。
+
+同一申请只在当前、未到期 pending cycle 中返回原 receipt。成功恢复后，旧申请不能再次删除账号；要再次申请必须使用新 UUID。恢复的精确重放要求当前仍是同一个 restored cycle 且账号 active，可以在原期限之后返回已完成的 receipt。旧恢复请求不能撤回下一轮删除。selector、actor 或去关联漂移返回 conflict；缺失或不一致的 lifecycle 来源返回 unavailable，不尝试修复。
+
+四张 private 表保存 current、独立申请／恢复 claims 和不含 actor、外部身份、组织或业务正文的 audit。claims 不可改绑，仅未来终结删除允许解除 actor 引用。迁移前已有无来源 pending 账号时，迁移失败且不回填开始时间；既有 deleted 账号原样保留。PUBLIC／runtime 无表权限或函数执行权。
+
+合同见 [ADR-0194](../adr/0194-account-deletion-recovery-is-cycle-bound-and-preserves-relationships.md)，实现见 [0133](../../backend/database/migrations/0133_account_deletion_recovery_core.sql)。结构、行为、升级、并发、checksum 与恢复验证见[测试说明](09-local-docker-and-ci-testing.md#721-账号删除申请与期限内恢复issue-593)。它们不证明所有旧业务入口已与账号状态并发冻结，也不证明外部 Auth、本地缓存、期满个人清除或组织作者去关联。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：

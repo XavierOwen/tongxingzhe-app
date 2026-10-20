@@ -119,6 +119,7 @@
 | [0190](./0190-management-report-request-locks-precede-authorization-locks.md) | 已接受，2026-10-07 | Slice 7DI；Issue #514 | 管理报告 writer 先取 request lock，再取授权层级锁；仅替代 ADR-0104／0162 的锁顺序子句，原授权、隐私和 receipt 合同继续有效 |
 | [0191](./0191-organization-purge-uses-exact-row-transaction-authorizations.md) | 已接受，2026-10-07 | Slice 7DJ／DB-only；Issue #516 | 私有事务级 DELETE proof 仅授权当前事务、backend、relation 与完整行主键；0108 提供 foundation，不选择或执行清除 |
 | [0192](./0192-organization-purge-finalizer-atomic-scope-and-completion.md) | 已接受，2026-10-07 | DB0109／DB-only；Issue #509 | 私有 finalizer 在固定范围内原子删除并写 value-free completion ledger；失败先完整回滚，再由独立最小事务记录 `purge_failed` |
+| [0194](./0194-account-deletion-recovery-is-cycle-bound-and-preserves-relationships.md) | 已接受，2026-10-20 | Slice 7EV／private DB-only；Issue #593 | 本人账号申请与恢复使用独立 720 小时周期；只改账号状态，保留原关系，旧 cycle 不能改变新周期 |
 
 ## 按主题查找
 
