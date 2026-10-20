@@ -2,6 +2,8 @@
 \set ON_ERROR_STOP on
 BEGIN;
 SET LOCAL TIME ZONE 'UTC';
+CREATE TEMP TABLE fixture_0136_existing_payloads AS
+SELECT * FROM app_data.personal_merge_unassigned_project_relationship_facts_v1;
 CREATE FUNCTION pg_temp.assert_0136(condition boolean,label text) RETURNS void LANGUAGE plpgsql AS $function$
 BEGIN
   IF condition IS DISTINCT FROM true THEN RAISE EXCEPTION '0136 %',label; END IF;
@@ -266,7 +268,14 @@ SELECT pg_temp.assert_0136((SELECT count(*)=2 FROM fixture_0136_batch)
   AND NOT EXISTS(SELECT 1 FROM app_private.personal_target_merge_end_events_v1 WHERE generation_id=(SELECT generation_id FROM fixture_0136_pairs WHERE kind='institution')),
   'failed project payload purge leaked pair changes or blocked the unrelated expiry unit');
 SELECT result.* FROM fixture_0136_context c,LATERAL app_private.dispatch_assigned_personal_target_expiry_v1(c.app_user_id,c.workspace_id,c.project_id,gen_random_uuid()) result;
-SELECT pg_temp.assert_0136(NOT EXISTS(SELECT 1 FROM app_data.personal_merge_unassigned_project_relationship_facts_v1), 'retry did not clear the failed pair payload');
+SELECT pg_temp.assert_0136(NOT EXISTS(SELECT 1 FROM app_data.personal_merge_unassigned_project_relationship_facts_v1 fact
+  JOIN app_private.personal_merge_unassigned_project_relationship_requests_v1 header USING(pending_fact_id)
+  JOIN fixture_0136_pairs pair USING(generation_id)), 'retry did not clear the failed pair payload');
+SELECT pg_temp.assert_0136(NOT EXISTS(
+  (TABLE fixture_0136_existing_payloads EXCEPT TABLE app_data.personal_merge_unassigned_project_relationship_facts_v1)
+  UNION ALL
+  (TABLE app_data.personal_merge_unassigned_project_relationship_facts_v1 EXCEPT TABLE fixture_0136_existing_payloads)
+), 'pair expiry changed another context pending payload');
 SELECT pg_temp.assert_0136(NOT has_function_privilege('tongxingzhe_runtime','app_private.stage_unassigned_personal_merge_project_relationship_v1(uuid,uuid,uuid,uuid,uuid,integer,text,text,text,text)','EXECUTE')
   AND NOT has_function_privilege('public','app_private.read_personal_merge_unassigned_project_relationship_plan_v1(uuid,uuid,uuid,uuid)','EXECUTE'), 'new stage or reader ACL is open');
 ROLLBACK;
