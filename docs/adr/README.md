@@ -125,6 +125,7 @@
 | [0197](./0197-unknown-project-relationship-facts-stay-pending-until-assigned.md) | 已接受，2026-10-20 | Slice 7EY／private DB-only；Issue #598 | 未知来源项目关系事件独立登记，metadata 只读，未分配不能结束代次，到期原子清除敏感载荷，不改已知来源事实 |
 | [0198](./0198-project-relationship-resolution-plans-list-metadata-candidates.md) | 已接受，2026-10-20 | Slice 7EZ／private DB-only；Issue #600 | 完整拟议来源绑定两指纹，按原项目列出 pending／current metadata 候选，不写事实或自动选择 |
 | [0199](./0199-existing-project-relationship-resolution-keeps-history-and-explicit-current.md) | 已接受，2026-10-20 | Slice 7FA／private DB-only；Issue #601 | 已有关系逐项保留待分配历史，逐槽明确选择当前；proof、end 与消费原子成功，缺关系及混合 pending 拒绝 |
+| [0200](./0200-other-reason-details-use-a-fixed-redaction-placeholder.md) | 已接受，2026-10-20 | Slice 7FB／DB 修复；Issue #603 | other 历史原因详情匿名化为固定无业务占位值，保留原因事实和必填 CHECK，不再阻断清除 |
 
 ## 按主题查找
 

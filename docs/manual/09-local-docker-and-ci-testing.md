@@ -3063,6 +3063,16 @@ exact-PID／lock 独立会话覆盖同请求、普通关系更新、stage 增长
 
 MANUAL-160／TEST-171 不证明缺关系初始化、接触／项目混合确认、完整拆分、生产身份、真实 PII 或设备验收。无 runtime、Backend／HTTP／UI、scheduler 或生产执行。
 
+### 7.27 other 原因详情的匿名化回归（Issue #603）
+
+0139 只改共享匿名化函数的 revision 清除子句。fixture 从真实普通 writer 的 other／non-other 历史和真实 0138 确认的 other pending 验证撤回或到期清除：other 详情为固定 `[已匿名化]`，其余详情及所有 note／requested note 为 NULL，冲突 proposed note／detail 仍为 NULL。原值、哈希或派生文本不得进入 metadata，也不能由精确重放恢复。
+
+缺 other 详情的正常写入仍拒绝，清除故障整批回滚。检查原原因、阶段、revision、操作者、时间、binding、接触和其他上下文仍按原合同保留；不把固定占位值当原业务内容或公开匿名证明。
+
+真实 0138 升级保留全部旧 rows，catalog 只允许唯一 SET 子句变化，函数 OID／owner／ACL／config 与其余 body 原样。没有新表、函数或 FK；checksum、完整 Docker、既有并发和独立恢复继续运行，不新增锁协议测试脚本。
+
+MANUAL-161／TEST-172 不证明备份、本机设备、真实 PII 或部署擦除。production、runtime 权限和既有人工验收门槛不变。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：

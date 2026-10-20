@@ -1,6 +1,6 @@
 # 推广对象资料保留与匿名化威胁模型
 
-状态：截至 2026-08-06，与 Slice 4F 实现一致。
+状态：基础模型沿用 2026-08-06 的 Slice 4F；2026-10-20 仅补充 Slice 7FB 的 other 原因详情清除规则，未重新验收设备与部署边界。
 
 适用需求：`PII-003`、`PII-004`、`PII-005`、`TARGET-008`、`AUTHZ-005`、`AUTHZ-006`、`TEST-002`、`TEST-006`
 
@@ -44,6 +44,8 @@ flowchart LR
 
 历史表通常只追加。隐私擦除是唯一允许改写敏感文本的路径。私有安全函数在 transaction 内设置目标范围标记；runtime role 不能直接更新这些表，也不能执行私有匿名化 helper。
 
+原因为 other 的历史 revision 仍受详情非 NULL 的 CHECK 约束。0139 将详情替换为固定 `[已匿名化]`，其他原因详情仍为 NULL，原敏感文本全部移除；占位值不含原文、哈希或原文长度。普通 writer 的必填规则不变，冲突 proposed detail 继续清空。见 [ADR-0200](../adr/0200-other-reason-details-use-a-fixed-redaction-placeholder.md)。
+
 mutation ID 与操作者组成唯一键。精确重放返回第一次结果。相同 ID 改写动作、原因、workspace 或对象会冲突。对象行锁保证两个不同 mutation 并发匿名化时只有一个成功。
 
 ## 威胁、控制与残余风险
@@ -65,3 +67,5 @@ mutation ID 与操作者组成唯一键。精确重放返回第一次结果。�
 [`0020_promotion_target_retention.sql`](../../backend/database/migrations/0020_promotion_target_retention.sql) 固定策略、到期计算、匿名化 transaction、权限和重放合同。[`verify_promotion_target_retention.sql`](../../backend/database/checks/verify_promotion_target_retention.sql) 检查 schema 与最小权限；[`0020` fixture](../../backend/database/fixtures/0020_promotion_target_retention.sql) 验证续期、自动到期、明确撤回、跨空间拒绝、历史文本清除和接触事实保留。
 
 [`verify_promotion_target_retention_concurrency.sh`](../../tool/verify_promotion_target_retention_concurrency.sh) 使用两个独立数据库会话同时匿名化同一对象，要求只有一个请求成功，且最终只有一条匿名化审计。[`promotion-targets.test.ts`](../../backend/server/test/promotion-targets.test.ts) 固定 HTTP 输入和无 PII 响应。[`offline_promotion_target_gateway_test.dart`](../../test/targets/offline_promotion_target_gateway_test.dart) 与 [`promotion_target_directory_page_test.dart`](../../test/features/targets/promotion_target_directory_page_test.dart) 固定本机清除、通用复核提示和二次确认。
+
+[`0139` fixture](../../backend/database/fixtures/0139_other_relationship_reason_redaction.sql) 用于验证普通及已确认 pending 的 other 历史不再阻断清除、原文不可恢复、故障回滚和精确重放；其数据库证据不扩展为设备或生产验收。

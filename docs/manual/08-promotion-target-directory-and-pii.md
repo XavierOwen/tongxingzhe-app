@@ -64,6 +64,8 @@ PostgreSQL 生成对象 UUID。客户端无需先猜测或保留对象 ID。相�
 - 写入不含 PII 的匿名化审计事件；
 - 保留接触、接触 revision、对象关联、场次、触达人数、对象当次反应和去标识统计。
 
+0139 修复原因是 `other` 的旧清除约束冲突：这类历史的原因详情仅保留固定 `[已匿名化]`，不保留原文或其哈希；其他原因详情仍为 NULL，所有当前／历史共享备注仍清空。普通写入的 other 详情依然必填，表 CHECK 不放宽。合同见 [ADR-0200](../adr/0200-other-reason-details-use-a-fixed-redaction-placeholder.md)，验证见[测试说明](09-local-docker-and-ci-testing.md#727-other-原因详情的匿名化回归issue-603)。
+
 匿名化不是物理删除接触。历史接触继续证明一次行动发生过，但不能从对象表恢复原姓名、电话、邮箱或敏感备注。精确重放同一 mutation ID 返回第一次结果；改写重放、伪造空间、未分配请求和并发第二次匿名化都会拒绝。
 
 完整的数据流、攻击面和残余风险见[对象资料保留与匿名化威胁模型](../security/promotion-target-anonymization-threat-model.md)。

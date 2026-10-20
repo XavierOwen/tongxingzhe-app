@@ -496,6 +496,8 @@ MANUAL-158／TEST-169 只覆盖这一私有层，不提供普通关系写回资�
 
 7FA／#601 的 0138 只确认已有原关系的项目 pending。每项原始事件追加来源分配 revision，不逐项改变当前投影或冒充阶段推进；最后逐槽按明确 current／pending 选择追加当前选择 revision。三个 private metadata 表与完整 proof 绑定既有 end receipt，全部成功才消费载荷；缺关系或同代次还有接触 pending 时零写拒绝，不称完整 mixed split。
 
+7FB／#603 修复普通关系历史 `other` 原因阻断匿名化的旧约束冲突。0139 只让共享匿名化函数把这类详情替换为固定 `[已匿名化]`，其余原因详情仍为 NULL；所有原敏感文本都移除，不放宽普通 writer 或表 CHECK 的必填规则。没有新表、函数、权限或入口，原函数身份及其余实现不变。
+
 ### 5.7 组织治理与生命周期
 
 | ID | 需求 |
@@ -3444,6 +3446,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-158` | 说明未知来源项目关系事件的私有登记、typed 载荷与仅标识 ledger、锁后授权／期限、live replay、metadata-only READ ONLY 预检、旧 split 门禁及原子到期清除；明确未交付分配／完整 split 或生产 active merge。 |
 | `MANUAL-159` | 说明项目关系处置预检的完整拟议映射、两指纹、按 source／原项目的 pending／current 候选、canonical metadata 和 resolution fingerprint；解释单候选不授权、同值不合并，以及不写回／不保留资格的边界。 |
 | `MANUAL-160` | 说明已有关系确认的完整分配与逐槽明确选择、历史 marker 和真实当前变化的区别、raw 值／原时间保留、三指纹、锁序、精确重放和 proof／end／消费原子性。缺关系和接触 pending 整批拒绝；不改普通 writer 或 initial revision 合同，不开放生产入口。 |
+| `MANUAL-161` | 说明 other 原因历史匿名化后仅保留固定无业务占位详情，其余详情／备注仍为 NULL；区别已移除的原文与结构化原因事实。只修共享清除子句，不放宽必填 CHECK、改变身份／锁序／重放或增加生产入口。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3793,6 +3796,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-169` | 0136 验证真实 activation／两类 pair、多事件不去重、精确 live replay／typed 漂移、完整授权／分配／retention、header／payload 故障回滚、metadata 无业务值／业务哈希且真正 READ ONLY。旧 end／接触确认因新 pending 零写拒绝；真实 pair expiry、精确 receipt、删除故障全回滚与 mixed batch 无关项继续。精确 PID／request／fence 并发覆盖 stage 与 split／expiry 两序、撤权和等待后到期，三个非 RC 模式首次／重放拒绝；严格七条 FK、真实 0135 升级、checksum、完整 Docker 与独立恢复保留旧事实及函数身份。 |
 | `TEST-170` | 0137 用真实两类 pair／多项目／多 pending 验证已有和无当前关系、完整 JSON、canonical UUID／顺序、同值不去重、metadata-only hash 和空集。shape／遗漏／重复／foreign source、stale known／pending、缺少 current revision 或非法 generation member 零写拒绝。合并前 NULL 关系的真实 ordinary revision 可绑定当前代次，旧指纹失效、刷新后返回真实 revision binding；synthetic 业务值变化不改变 metadata 指纹。READ ONLY 实际成功，全部旧业务、audit、context、fence 与函数 catalog 保留；真实 0136 升级、checksum、完整 Docker 和独立恢复继续验证。 |
 | `TEST-171` | 0138 验证双类型、多项目／来源、多项同值历史、current／older pending 明确选择、raw 值／原时间与旧历史／parent binding 保留。缺关系、接触 pending、形状／完整集／三指纹／选择／资格／due 拒绝均零写；精确重放和逐步故障回滚覆盖 metadata、history、current、end 与 payload。指定 PID／锁覆盖普通 writer、stage、expiry 和锁后变化，三个非 RC 模式首次／重放拒绝。真实 0137 升级、严格 FK、checksum、完整 Docker 与独立恢复保留旧事实及除两项必要 guard 外的函数定义。 |
+| `TEST-172` | 0139 用普通 other 历史和真实 0138 已确认的 other pending 验证撤回／到期匿名化成功、仅固定占位详情残留、原敏感文本清除、其余事实与上下文保留及精确重放。non-other 仍 NULL，缺 other 详情仍拒绝，清除故障全回滚。真实 0138 升级逐值保留旧数据，唯一匿名化子句之外的函数 body／OID／owner／ACL／config 不变；checksum、完整 Docker、既有并发与独立恢复继续验证。 |
 
 ## 9. UI、视觉与可访问性
 
