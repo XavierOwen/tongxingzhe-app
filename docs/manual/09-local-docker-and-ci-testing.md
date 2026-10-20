@@ -3025,6 +3025,20 @@ MANUAL-156／TEST-167 只覆盖封闭 private PostgreSQL。未验证 runtime、B
 
 MANUAL-157／TEST-168 仅证明这一私有来源去关联步骤。它不代表 production、外部 Auth、个人账号 purge、全部组织作者匿名化、不可重识别或客户端缓存清除。
 
+### 7.24 未知来源项目关系事实登记与到期清除（Issue #598）
+
+0136 check 固定三表、五函数、typed 载荷与仅标识 header／purge、封闭 owner／ACL、七条即时 RESTRICT FK 和触发器。严格 inventory 从 356 增至 363，不放宽旧集合或负向探针。新 fixture 使用真实对象／分配、receipt activation、旧关系和接触 writer；多 pending 不按值去重，不得改变普通关系、revision、feed 或旧 binding。
+
+验证固定结果、typed 漂移、active scope／capability／assignment／current due、原子 header／payload 故障及不可变门禁。完整 metadata JSON 与按数组重算的 fingerprint 不得有业务值或业务哈希；在 READ ONLY transaction 实际调用 reader 并比较前后状态，不能只凭 STABLE 标记称只读。
+
+旧 end 和可到达的接触确认须因新 pending 整次回滚。真实 pair expiry 验证全部载荷清除和 exact purge／end／时间；DELETE 故障须回滚 pending、两端对象、mapping、end 与 retention。mixed batch 保留单元失败可见及无关项继续，不能吞掉其他 SQLSTATE。
+
+独立会话按 physical PID、blocker、request／global fence 验证 stage 与 split／expiry 两序、同 request 漂移、撤权和等待后到期；三个非 RC 模式首次与 live replay 均零写拒绝。
+
+真实 0135 live upgrade 冻结旧业务数据与完整函数／表 catalog，迁移不改旧 OID、owner、ACL、定义、约束或事实。stage 的既有 fence epoch 副作用及真实 expiry 的授权变更分别核算，不能借排除范围掩盖其他漂移。checksum 和独立 cluster dump／restore 继续重跑 check／rollback fixture。
+
+MANUAL-158／TEST-169 只提供 synthetic 私有 PostgreSQL 证据，不证明完整 mixed split、生产 active merge、真实 PII、外部同步或清理 SLA。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：

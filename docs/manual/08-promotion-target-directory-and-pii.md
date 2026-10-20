@@ -405,6 +405,20 @@ REPEATABLE READ 的后续 SQL 仍使用事务旧快照，不能靠取锁后的�
 
 MANUAL-154／TEST-165 覆盖此修正。来源映射、显式 current 选择、完整历史应用与 payload 消费合同不变；PUBLIC／runtime 仍封闭，不接 Backend／HTTP／UI、scheduler 或生产部署，#549 的人工门槛不变。
 
+### 0136 未知来源项目关系事实的私有登记（Issue #598）
+
+`app_private.stage_unassigned_personal_merge_project_relationship_v1` 接收可信 user／personal workspace／project、request／generation UUID 及 stage、lifecycle、可空 note、reason code／detail。它只登记新增且无原对象来源的项目关系事件，不写普通关系／revision，不覆盖已有阶段、生命周期或备注。每个 request 是独立事件，不按值去重。
+
+header 只保存标识、派生 target type 和数据库 staged time，业务值在独立 typed payload，不进入 ledger 或 fingerprint。note 最多 4000 字、detail 最多 1000 字，非空文本不能全空白，`other` 必须有 detail。事件时间由锁后数据库签发，不回填合并前历史。
+
+登记只接受 READ COMMITTED，取独立 actor／request lock 和 generation fence，经 known-source plan 重验两项 capability、本人 scope、活动项目、两端分配／target／current due。live 精确重放仍需当前资格，返回原 contract／pending UUID／时间；context 或 typed 值漂移 conflict。代次结束或载荷已清除不重建。既有 fence epoch 按锁协议更新，普通业务事实不变。
+
+`app_private.read_personal_merge_unassigned_project_relationship_plan_v1` 只返回 known-source plan、pending metadata 数组、数量和 metadata fingerprint。数组只有 pending／project UUID、target type 和 UTC staged time；缺载荷或归属漂移失败关闭，不含或散列业务值。它真正 READ ONLY，不写 audit、receipt、fence 或 context，不取行锁，也不保存确认资格。
+
+新 pending 阻止所有 known_source_split，包括 0119、0128 和 0130，失败回滚旧 confirmer 此前全部写入。到期由真实 pair expiry 在同一事务先写精确 purge 标识，再删全部载荷；来源、数量或删除失败使整对回滚，旧 batch 仍继续无关项。直接 UPDATE 或无 receipt DELETE 拒绝。
+
+合同见 [ADR-0197](../adr/0197-unknown-project-relationship-facts-stay-pending-until-assigned.md)，实现见 [0136](../../backend/database/migrations/0136_personal_merge_unassigned_project_relationships.sql)，验证见[测试说明](09-local-docker-and-ci-testing.md#724-未知来源项目关系事实登记与到期清除issue-598)。本片不实现分配／消费、当前候选、历史应用或完整混合 split，不开放 runtime、Backend／HTTP／UI、scheduler、产品 active merge 或生产执行。
+
 ## HTTP 与权限边界
 
 | 方法与路径 | 用途 | Backend capability |
