@@ -13656,7 +13656,6 @@ docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
 docker exec "${container_name}" psql \
   -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file=/workspace/backend/database/checks/verify_personal_merge_unassigned_project_relationships.sql \
-  --file=/workspace/backend/database/checks/verify_organization_purge_dependency_inventory.sql \
   --command='BEGIN; SELECT public.fixture_0135_project_assert_upgrade(); ROLLBACK;' >/dev/null
 personal_merge_unassigned_project_relationships_upgrade_replay="$(
   docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
@@ -13707,6 +13706,7 @@ docker exec "${container_name}" psql \
 printf '%s\n' "${personal_merge_project_relationship_resolution_plan_upgrade_replay}"
 echo '0136→0137 old rows/catalog, canonical complete metadata, conflicts, stale selectors, READ ONLY and checksum replay: passed.'
 
+# The complete FK inventory now includes 0138; validate it after this transition.
 echo '验证 0137→0138 existing project relationship confirmation live upgrade。'
 docker exec "${container_name}" psql \
   -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
