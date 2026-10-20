@@ -78,7 +78,22 @@ BEGIN
       AND revision.revision_number = relationship.current_revision
     WHERE pending.generation_id = requested_generation_id
       AND (revision.revision_number IS NULL
-        OR revision.merge_generation_id IS DISTINCT FROM relationship.merge_generation_id)
+        OR EXISTS (
+          SELECT 1
+          FROM (VALUES (relationship.merge_generation_id), (revision.merge_generation_id)) AS binding(generation_id)
+          WHERE binding.generation_id IS NOT NULL AND NOT EXISTS (
+            SELECT 1
+            FROM app_private.personal_target_merge_generations_v1 AS generation
+            JOIN app_private.personal_target_merge_generation_members_v1 AS member
+              ON member.generation_id = generation.generation_id
+              AND member.workspace_id = generation.workspace_id
+              AND member.target_type = generation.target_type
+            WHERE generation.generation_id = binding.generation_id
+              AND generation.workspace_id = trusted_workspace_id
+              AND generation.target_type = read_plan->'known_source_plan'->>'target_type'
+              AND member.promotion_target_id = relationship.promotion_target_id
+          )
+        ))
   ) THEN
     RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'pending project relationship current revision or context is inconsistent';
   END IF;
@@ -98,14 +113,18 @@ BEGIN
         FROM pending WHERE pending.project_id = slots.project_id
           AND pending.source_target_id = slots.source_target_id) AS pending_fact_ids,
       CASE WHEN relationship.promotion_target_id IS NOT NULL THEN jsonb_build_object(
-        'revision_number', relationship.current_revision,
-        'merge_generation_id', relationship.merge_generation_id
+        'revision_number', revision.revision_number,
+        'merge_generation_id', revision.merge_generation_id
       ) END AS current_relationship,
       relationship.promotion_target_id IS NOT NULL AS has_current_relationship
     FROM slots
     LEFT JOIN app_data.promotion_target_project_relationships AS relationship
       ON relationship.project_id = slots.project_id
       AND relationship.promotion_target_id = slots.source_target_id
+    LEFT JOIN app_data.promotion_target_relationship_revisions AS revision
+      ON revision.promotion_target_id = relationship.promotion_target_id
+      AND revision.project_id = relationship.project_id
+      AND revision.revision_number = relationship.current_revision
   )
   SELECT
     (SELECT coalesce(jsonb_agg(jsonb_build_object(

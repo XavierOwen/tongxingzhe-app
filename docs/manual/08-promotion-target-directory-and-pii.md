@@ -423,7 +423,7 @@ header 只保存标识、派生 target type 和数据库 staged time，业务值
 
 `app_private.plan_personal_merge_project_relationship_resolutions_v1` 接收可信 user／workspace／project／generation、expected known／pending fingerprint，以及本类全部 pending 的拟议来源映射。每项精确两个 string 键 `pending_fact_id`／`source_target_id`，UUID 大小写及输入顺序归一；遗漏、重复、其他代次或非两原对象 source 拒绝，不保存任何分配。
 
-每个受影响的 source／原项目槽列出按 staged time／UUID 排序的 pending ID，以及可空的已有当前关系 revision／binding。current pointer 必须有真实 revision 且与当前行 binding 一致；合法 NULL／旧代次 binding 不改称未知。候选数和 requires_choice 描述冲突，单候选也不意味着已经选择。同值事件保留，不自动取最新。
+每个受影响的 source／原项目槽列出按 staged time／UUID 排序的 pending ID，以及可空的真实 current revision number／binding。关系创建时的 binding 与当前 revision 可以不同，分别校验其非 NULL generation member 的原对象、空间和类型，不回填或改称未知。合并前 NULL 关系在合并期间正常修订为当前代次是合法历史。候选数和 requires_choice 描述冲突，单候选也不意味着已经选择。同值事件保留，不自动取最新。
 
 结果为固定七键和 metadata-only resolution fingerprint；既有关系的业务值、pending stage／note／reason 不返回、读取或散列。current revision 推进、known／pending 指纹或完整清单漂移会使旧预检冲突。header 完整但当前关系 head 不可信时 unavailable，不能补造关系。
 

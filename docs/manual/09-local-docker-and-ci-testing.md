@@ -3043,7 +3043,7 @@ MANUAL-158／TEST-169 只提供 synthetic 私有 PostgreSQL 证据，不证明�
 
 0137 只新增一个 STABLE／SECURITY DEFINER／pg_catalog、owner-only 的 JSONB 函数，不新增表、FK 或 inventory 条目。fixture 从真实两类 pair、contact entry／普通关系修订和 0136 stage 建立多项目、多事件候选，核对完整七键、slots、canonical assignments、conflict count 与前六 metadata JSON 的 SHA-256。
 
-验证 UUID 大小写／顺序等价、同值 pending 不合并、已有／无当前关系、两原来源与空集。shape、遗漏／重复／foreign source、stale known／pending、缺少 current revision 或 binding 漂移须零写拒绝。真实普通关系 revision 推进后旧指纹失效；仅 synthetic 修改业务值不改变 metadata fingerprint，不能因此推导写回资格。
+验证 UUID 大小写／顺序等价、同值 pending 不合并、已有／无当前关系、两原来源与空集。shape、遗漏／重复／foreign source、stale known／pending、缺少 current revision 或非法 generation member 须零写拒绝。合并前创建的 NULL 关系在合并期间真实修订后，parent 保持 NULL、current revision 绑定当前代次；旧指纹失效，刷新后成功并返回真实 revision binding。仅 synthetic 修改业务值不改变 metadata fingerprint，不能因此推导写回资格。
 
 在 READ ONLY transaction 实际调用并比较全部旧表，包括 fence、audit 和 context；STABLE 标记本身不算执行证据。该纯 reader 不新增并发写协议或调度脚本，既有相关并发脚本由完整 runner 继续执行。
 

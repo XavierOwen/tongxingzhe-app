@@ -17,7 +17,9 @@
 
 ## 候选与指纹
 
-每个受拟议分配影响的 `(source target, original project)` 槽只含项目／来源 ID、按 staged time 和 UUID 排序的 pending ID，以及可空的已有当前关系指针。有当前关系时，只返回 revision number 和 generation binding，并验证真实 current revision 存在且 binding 与当前行一致。NULL 或旧代次 binding 可以是合法历史来源，不要求等于本次 generation。
+每个受拟议分配影响的 `(source target, original project)` 槽只含项目／来源 ID、按 staged time 和 UUID 排序的 pending ID，以及可空的已有当前关系指针。有当前关系时，只返回真实 current revision 的 number 和 generation binding；关系创建时的 binding 与各次 revision 的 binding 分别形成，可以不同。
+
+合并前创建的关系可以保持 NULL binding，而合并期间的普通修订绑定当前代次。两列均不回填；分别校验非 NULL binding 对应原对象、空间和类型的合法 generation member，允许旧代次。缺少真实 current revision 或 binding 来源矛盾才拒绝。
 
 `candidate_count` 为 pending 数加已有当前关系的零或一，`requires_choice` 只描述是否有多候选冲突；即使它为 false，未来写入仍须明确选择。同值 pending 不合并，多个事件不自动取最新，不读取或比较阶段、生命周期、备注或原因来替用户决定。
 

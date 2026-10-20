@@ -121,8 +121,10 @@ BEGIN
     SELECT coalesce(jsonb_agg(pending.pending_fact_id ORDER BY header.staged_at_utc,pending.pending_fact_id),'[]'::jsonb) INTO expected_ids
     FROM fixture_0137_pending pending JOIN app_private.personal_merge_unassigned_project_relationship_requests_v1 header USING(pending_fact_id)
     WHERE pending.kind=$2 AND pending.project_id=(slot->>'project_id')::uuid AND pending.source_target_id=(slot->>'source_target_id')::uuid;
-    SELECT jsonb_build_object('revision_number',relation.current_revision,'merge_generation_id',relation.merge_generation_id) INTO current_pointer
-    FROM app_data.promotion_target_project_relationships relation WHERE relation.project_id=(slot->>'project_id')::uuid
+    SELECT jsonb_build_object('revision_number',relation.current_revision,'merge_generation_id',revision.merge_generation_id) INTO current_pointer
+    FROM app_data.promotion_target_project_relationships relation JOIN app_data.promotion_target_relationship_revisions revision
+      ON revision.promotion_target_id=relation.promotion_target_id AND revision.project_id=relation.project_id AND revision.revision_number=relation.current_revision
+    WHERE relation.project_id=(slot->>'project_id')::uuid
       AND relation.promotion_target_id=(slot->>'source_target_id')::uuid;
     PERFORM pg_temp.assert_0137(ARRAY(SELECT jsonb_object_keys(slot) ORDER BY 1)=ARRAY['candidate_count','current_relationship','pending_fact_ids','project_id','requires_choice','source_target_id']
       AND jsonb_array_length(expected_ids)>0 AND slot->'pending_fact_ids'=expected_ids
@@ -209,8 +211,10 @@ END $corrupt$ $statement$);
 SELECT pg_temp.expect_0137_failure('55000','pending project relationship current revision or context is inconsistent',$statement$
 DO $corrupt$ BEGIN
   SET LOCAL session_replication_role=replica;
-  UPDATE app_data.promotion_target_project_relationships SET merge_generation_id=(SELECT generation_id FROM fixture_0137_pairs WHERE kind='person')
-    WHERE promotion_target_id=(SELECT first_target FROM fixture_0137_pairs WHERE kind='person') AND project_id=(SELECT project_id FROM fixture_0137_projects WHERE name='a');
+  UPDATE app_data.promotion_target_relationship_revisions SET merge_generation_id=(SELECT generation_id FROM fixture_0137_pairs WHERE kind='institution')
+    WHERE promotion_target_id=(SELECT first_target FROM fixture_0137_pairs WHERE kind='person') AND project_id=(SELECT project_id FROM fixture_0137_projects WHERE name='a')
+      AND revision_number=(SELECT current_revision FROM app_data.promotion_target_project_relationships WHERE promotion_target_id=(SELECT first_target FROM fixture_0137_pairs WHERE kind='person')
+        AND project_id=(SELECT project_id FROM fixture_0137_projects WHERE name='a'));
   SET LOCAL session_replication_role=origin;
   UPDATE fixture_0137_plans p SET original=app_private.read_personal_merge_unassigned_project_relationship_plan_v1(c.app_user_id,c.workspace_id,b.project_id,p.generation_id)
     FROM fixture_0137_context c,fixture_0137_projects b WHERE b.name='b' AND p.kind='person';
@@ -229,6 +233,26 @@ UPDATE fixture_0137_plans p SET original=app_private.read_personal_merge_unassig
 SELECT pg_temp.assert_shape_0137(pg_temp.read_0137('person'),'person');
 SELECT pg_temp.assert_0137(pg_temp.read_0137('person')->>'resolution_fingerprint'<>(SELECT document->>'resolution_fingerprint' FROM fixture_0137_initial WHERE kind='person')
   AND pg_temp.read_0137('person')->>'pending_fingerprint'=(SELECT document->>'pending_fingerprint' FROM fixture_0137_initial WHERE kind='person'), 'real revision changed the wrong metadata fingerprint');
+SELECT count(*) FROM app_data.select_personal_project_context('https://synthetic-0137.example.test','owner',(SELECT project_id FROM fixture_0137_projects WHERE name='a'));
+SELECT result FROM fixture_0137_context c,fixture_0137_projects a,fixture_0137_pairs pair,
+  LATERAL app_data.update_promotion_target_relationship(c.app_user_id,c.workspace_id,a.project_id,pair.first_target,1,1,'active',
+    '0137 revised preactivation relationship','progress_update',NULL,'0137-real-preactivation-relationship-revision',NULL) updated WHERE a.name='a' AND pair.kind='person';
+SELECT count(*) FROM app_data.select_personal_project_context('https://synthetic-0137.example.test','owner',(SELECT project_id FROM fixture_0137_projects WHERE name='b'));
+SELECT relation.current_revision,relation.merge_generation_id AS parent_merge_generation_id,revision.merge_generation_id AS current_revision_merge_generation_id,pair.generation_id
+FROM app_data.promotion_target_project_relationships relation JOIN app_data.promotion_target_relationship_revisions revision
+  ON revision.promotion_target_id=relation.promotion_target_id AND revision.project_id=relation.project_id AND revision.revision_number=relation.current_revision
+JOIN fixture_0137_pairs pair ON pair.first_target=relation.promotion_target_id
+WHERE pair.kind='person' AND relation.project_id=(SELECT project_id FROM fixture_0137_projects WHERE name='a');
+SELECT pg_temp.assert_0137(EXISTS(SELECT 1 FROM app_data.promotion_target_project_relationships relation
+  JOIN app_data.promotion_target_relationship_revisions revision ON revision.promotion_target_id=relation.promotion_target_id
+    AND revision.project_id=relation.project_id AND revision.revision_number=relation.current_revision
+  JOIN fixture_0137_pairs pair ON pair.first_target=relation.promotion_target_id
+  WHERE pair.kind='person' AND relation.project_id=(SELECT project_id FROM fixture_0137_projects WHERE name='a')
+    AND relation.current_revision=2 AND relation.merge_generation_id IS NULL AND revision.merge_generation_id=pair.generation_id),
+  'ordinary revision did not retain the preactivation parent and bind the real new head');
+UPDATE fixture_0137_plans p SET original=app_private.read_personal_merge_unassigned_project_relationship_plan_v1(c.app_user_id,c.workspace_id,b.project_id,p.generation_id)
+  FROM fixture_0137_context c,fixture_0137_projects b WHERE b.name='b' AND p.kind='person';
+SELECT pg_temp.assert_shape_0137(pg_temp.read_0137('person'),'person');
 SELECT pg_temp.stage_0137('b','person',1);
 SELECT pg_temp.expect_0137_failure('23505','pending project relationship resolution inventory or source assignment changed','SELECT pg_temp.read_0137(''person'')');
 UPDATE fixture_0137_plans p SET original=app_private.read_personal_merge_unassigned_project_relationship_plan_v1(c.app_user_id,c.workspace_id,b.project_id,p.generation_id),

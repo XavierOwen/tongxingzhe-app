@@ -1,9 +1,15 @@
 \set ON_ERROR_STOP on
 BEGIN;
 SET LOCAL TIME ZONE 'UTC';
+CREATE TABLE public.fixture_0136_resolution_targets AS
+SELECT choice.ordinal, (created.target->>'target_id')::uuid AS target_id
+FROM public.fixture_0135_project_context c CROSS JOIN (VALUES (1), (2)) choice(ordinal)
+CROSS JOIN LATERAL app_data.create_promotion_target(c.app_user_id, c.workspace_id, c.project_id, 'person',
+  '0136 resolution target ' || choice.ordinal, '+1 312 555 0137', '0137-source@example.test',
+  '0136-resolution-target-' || choice.ordinal) created;
 CREATE TABLE public.fixture_0136_resolution_contact AS
 SELECT result.result_code FROM public.fixture_0135_project_context c
-JOIN public.fixture_0135_project_targets target ON target.ordinal = 1
+JOIN public.fixture_0136_resolution_targets target ON target.ordinal = 1
 CROSS JOIN LATERAL app_data.apply_contact_submit_v3(c.app_user_id, '0136-resolution-entry-submit',
   1, 'contact.submit.v1', '0136-resolution-device', '0136-resolution-entry', 0,
   jsonb_build_object('contactId', '0136-resolution-entry', 'workspaceId', c.workspace_id,
@@ -13,14 +19,23 @@ CROSS JOIN LATERAL app_data.apply_contact_submit_v3(c.app_user_id, '0136-resolut
     'answers', '[]'::jsonb, 'targetLinks', jsonb_build_array(jsonb_build_object(
       'targetId', target.target_id, 'targetType', 'person', 'responseLevel', NULL,
       'followUpConsent', 'unknown', 'institutionRepresentativeConfirmed', false, 'confirmStageZero', true)))) result;
+CREATE TABLE public.fixture_0136_resolution_generation AS
+SELECT app_private.activate_personal_target_merge_generation_v2(c.app_user_id, c.project_id,
+  '7f360100-0000-4000-8000-000000000004', preview.preview_id, first.target_id, second.target_id,
+  first.target_id, second.target_id) AS generation_id
+FROM public.fixture_0135_project_context c
+JOIN public.fixture_0136_resolution_targets first ON first.ordinal = 1
+JOIN public.fixture_0136_resolution_targets second ON second.ordinal = 2
+CROSS JOIN LATERAL app_data.preview_personal_target_pair_v1('https://0135-project-upgrade.example.test',
+  'owner', c.project_id, first.target_id, second.target_id) preview;
 SELECT result FROM public.fixture_0135_project_context c
-JOIN public.fixture_0135_project_targets target ON target.ordinal = 1
+JOIN public.fixture_0136_resolution_targets target ON target.ordinal = 1
 CROSS JOIN LATERAL app_data.update_promotion_target_relationship(c.app_user_id, c.workspace_id, c.project_id,
   target.target_id, 1, 1, 'active', '0136 existing private note', 'progress_update', NULL,
   '0136-resolution-ordinary-update', NULL);
 CREATE TABLE public.fixture_0136_resolution_pending AS
 SELECT choice.ordinal, staged.* FROM public.fixture_0135_project_context c
-CROSS JOIN public.fixture_0135_project_generation g
+CROSS JOIN public.fixture_0136_resolution_generation g
 CROSS JOIN (VALUES (1, '7f360100-0000-4000-8000-000000000001'::uuid),
   (2, '7f360100-0000-4000-8000-000000000002'::uuid)) choice(ordinal, request_id)
 CROSS JOIN LATERAL app_private.stage_unassigned_personal_merge_project_relationship_v1(c.app_user_id, c.workspace_id,
@@ -29,7 +44,7 @@ CROSS JOIN LATERAL app_private.stage_unassigned_personal_merge_project_relations
 CREATE TABLE public.fixture_0136_resolution_other_project AS
 SELECT * FROM app_data.create_personal_project_context('https://0135-project-upgrade.example.test', 'owner', '0136 original second project');
 INSERT INTO public.fixture_0136_resolution_pending
-SELECT 3, staged.* FROM public.fixture_0136_resolution_other_project c CROSS JOIN public.fixture_0135_project_generation g
+SELECT 3, staged.* FROM public.fixture_0136_resolution_other_project c CROSS JOIN public.fixture_0136_resolution_generation g
 CROSS JOIN LATERAL app_private.stage_unassigned_personal_merge_project_relationship_v1(c.app_user_id, c.workspace_id,
   c.project_id, '7f360100-0000-4000-8000-000000000003', g.generation_id, 4, 'ended', NULL, 'target_request', NULL) staged;
 SELECT selected.* FROM public.fixture_0135_project_context c CROSS JOIN LATERAL
@@ -37,7 +52,7 @@ SELECT selected.* FROM public.fixture_0135_project_context c CROSS JOIN LATERAL
 CREATE TABLE public.fixture_0136_resolution_assignments AS
 SELECT pending.pending_fact_id, target.target_id AS source_target_id
 FROM public.fixture_0136_resolution_pending pending
-JOIN public.fixture_0135_project_targets target ON target.ordinal = CASE WHEN pending.ordinal = 3 THEN 2 ELSE 1 END;
+JOIN public.fixture_0136_resolution_targets target ON target.ordinal = CASE WHEN pending.ordinal = 3 THEN 2 ELSE 1 END;
 
 CREATE TABLE public.fixture_0136_resolution_legacy_relations AS
 SELECT c.oid, n.nspname, c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -81,11 +96,14 @@ WITH selected AS (
 ), slots AS (
   SELECT grouped.project_id, grouped.source_target_id, grouped.pending_fact_ids,
     CASE WHEN relationship.promotion_target_id IS NOT NULL THEN jsonb_build_object(
-      'revision_number', relationship.current_revision, 'merge_generation_id', relationship.merge_generation_id) END AS current_relationship,
+      'revision_number', revision.revision_number, 'merge_generation_id', revision.merge_generation_id) END AS current_relationship,
     grouped.pending_count + CASE WHEN relationship.promotion_target_id IS NOT NULL THEN 1 ELSE 0 END AS candidate_count,
     grouped.pending_count + CASE WHEN relationship.promotion_target_id IS NOT NULL THEN 1 ELSE 0 END > 1 AS requires_choice
   FROM grouped LEFT JOIN app_data.promotion_target_project_relationships relationship
     ON relationship.promotion_target_id = grouped.source_target_id AND relationship.project_id = grouped.project_id
+  LEFT JOIN app_data.promotion_target_relationship_revisions revision
+    ON revision.promotion_target_id = relationship.promotion_target_id AND revision.project_id = relationship.project_id
+      AND revision.revision_number = relationship.current_revision
 ), metadata AS (
   SELECT c.app_user_id, c.workspace_id, c.project_id, g.generation_id,
     app_private.read_personal_merge_unassigned_project_relationship_plan_v1(c.app_user_id, c.workspace_id, c.project_id, g.generation_id) AS pending_plan,
@@ -95,7 +113,7 @@ WITH selected AS (
       'project_id', project_id) ORDER BY pending_fact_id) FROM selected) AS canonical_assignments,
     (SELECT jsonb_agg(to_jsonb(slot) ORDER BY project_id, source_target_id) FROM slots slot) AS source_slots,
     (SELECT count(*) FROM slots WHERE requires_choice) AS conflict_count
-  FROM public.fixture_0135_project_context c CROSS JOIN public.fixture_0135_project_generation g
+  FROM public.fixture_0135_project_context c CROSS JOIN public.fixture_0136_resolution_generation g
 )
 SELECT metadata.*, jsonb_build_object('contract_id', 'personal_merge_project_relationship_resolution_plan_v1',
     'known_source_plan', pending_plan->'known_source_plan', 'pending_fingerprint', pending_plan->>'pending_fingerprint',
@@ -111,13 +129,17 @@ BEGIN
     OR (SELECT result_code FROM public.fixture_0136_resolution_contact) IS DISTINCT FROM 'accepted'
     OR (SELECT count(*) FROM public.fixture_0136_resolution_pending) <> 3
     OR NOT EXISTS (SELECT 1 FROM app_data.promotion_target_project_relationships relationship
-      JOIN public.fixture_0135_project_targets target ON target.target_id = relationship.promotion_target_id AND target.ordinal = 1
+      JOIN public.fixture_0136_resolution_targets target ON target.target_id = relationship.promotion_target_id AND target.ordinal = 1
       JOIN public.fixture_0135_project_context c ON c.project_id = relationship.project_id
       JOIN app_data.promotion_target_relationship_revisions revision
         ON revision.promotion_target_id = relationship.promotion_target_id AND revision.project_id = relationship.project_id
         AND revision.revision_number = relationship.current_revision
       WHERE relationship.current_revision = 2 AND relationship.current_stage = 1
-        AND revision.merge_generation_id IS NOT DISTINCT FROM relationship.merge_generation_id)
+        AND relationship.merge_generation_id IS NULL
+        AND revision.merge_generation_id = (SELECT generation_id FROM public.fixture_0136_resolution_generation)
+        AND EXISTS (SELECT 1 FROM app_data.promotion_target_relationship_revisions initial
+          WHERE initial.promotion_target_id = relationship.promotion_target_id AND initial.project_id = relationship.project_id
+            AND initial.revision_number = 1 AND initial.merge_generation_id IS NULL))
     OR (SELECT pending_plan->>'pending_count' FROM public.fixture_0136_resolution_state) IS DISTINCT FROM '3'
     OR (SELECT conflict_count FROM public.fixture_0136_resolution_state) <> 1
     OR (SELECT jsonb_array_length(source_slots) FROM public.fixture_0136_resolution_state) <> 2
