@@ -2058,6 +2058,22 @@ Flutter 将 eligibility 结果绑定到目录读取 generation，并在回包时
 
 合同见 [ADR-0194](../adr/0194-account-deletion-recovery-is-cycle-bound-and-preserves-relationships.md)，实现见 [0133](../../backend/database/migrations/0133_account_deletion_recovery_core.sql)。结构、行为、升级、并发、checksum 与恢复验证见[测试说明](09-local-docker-and-ci-testing.md#721-账号删除申请与期限内恢复issue-593)。它们不证明所有旧业务入口已与账号状态并发冻结，也不证明外部 Auth、本地缓存、期满个人清除或组织作者去关联。
 
+### 3.55 个人历史贡献核心副本（Issue #595，MANUAL-156）
+
+0134 只提供封闭的私有数据库合同。个人接触仍归属原个人空间；加入组织或切换项目不会移动它。当前组织与项目成员可以明确预览并确认本人历史记录，生成目标组织项目拥有的独立核心副本，但现有接触列表、同步和管理报告不会读取该副本。
+
+`app_private.preview_personal_history_contribution_v1(user UUID, source contact text, target project UUID)` 返回 preview contract、preview UUID、source revision、目标项目、签发／截止时刻及五项核心事实：`occurred_at_utc`、`occurred_time_zone`、`channel`、`reach_count`、`interest_level`。数据库只接受本人有效个人接触，来源项目可以归档；当前 projection 必须与当前 submitted／corrected revision 的五项 typed 值一致。时区必须存在于数据库目录中，不接受自由文本。
+
+预览签发后有效 15 分钟；首次确认使用 `app_private.confirm_personal_history_contribution_v1(user UUID, request UUID, preview UUID)`，在锁后重新核对来源 revision、半开期限和当前目标资格。来源修订或作废便需重新预览。同一 contact 对同一组织项目只贡献一次，不能靠多个预览或新的修订重复计入。副本和确认 receipt 同事务提交，返回 confirmation contract、副本 UUID、目标项目和确认时间。
+
+精确确认重放仍需 active user、当前两级成员、active target project，且组织不处于删除周期；它返回原 receipt，不要求旧预览仍有效，也不改写已经冻结的副本。个人来源后续修订或作废不撤回组织副本。换 actor／preview、重复贡献或首次确认过期为 conflict；无来源或目标资格为 forbidden；核心来源／receipt 不一致为 unavailable。三个错误均不写入半套结果。
+
+确认先取独立 request lock，再与预览共用本人 user row、组织 governance、两级 membership、project status fence 和 contact lock，最后取数据库墙钟重验。三个非 READ COMMITTED 模式在授权、锁和读取前拒绝。PUBLIC／runtime 不可执行四个新函数或直接访问三张 private 表。
+
+复制不包含作者、对象与同意关系、坐标和区域、渠道详情、问卷答案、原因、笔记或反思。preview／confirmation 仍有受限来源引用，用于贡献审计；只允许终结处理解除引用，不允许重绑。时间与核心事实仍可能关联到个人，不能把“没有作者字段”表述为公开匿名。
+
+组织终结清除先删除本组织 confirmation，再删除 preview 与 copy，同时写独立 confirmation UUID tombstone；它不删个人来源或其他组织副本。任一来源冲突或中途失败都使整笔清除回滚。合同见 [ADR-0195](../adr/0195-personal-history-contributions-copy-only-core-facts.md)，实现见 [0134](../../backend/database/migrations/0134_personal_history_contribution.sql)，验证见[测试说明](09-local-docker-and-ci-testing.md#722-个人历史贡献核心副本issue-595)。本片不开放 Backend／HTTP／UI 或生产，不提供贡献撤回、账号期满清除或统计接入。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：
