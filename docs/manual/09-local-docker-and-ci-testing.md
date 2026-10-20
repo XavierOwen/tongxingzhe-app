@@ -3073,6 +3073,18 @@ MANUAL-160／TEST-171 不证明缺关系初始化、接触／项目混合确认�
 
 MANUAL-161／TEST-172 不证明备份、本机设备、真实 PII 或部署擦除。production、runtime 权限和既有人工验收门槛不变。
 
+### 7.28 显式项目进入与待分配处置（Issue #605）
+
+0140 fixture 覆盖 person／institution、多原项目、已有与缺失槽混合及全已有空 acknowledgements。核对缺失槽只有明确确认才建立真实阶段 0／active／无备注 revision 1，actor／锁后时间／binder／origin 均精确；没有新增接触、同意或 retention 续期。全部同值 raw pending 仍独立进入历史，current 或较早 pending 只按明确选择生效。
+
+形状、UUID、完整集、三指纹、来源、acknowledgement／选择不匹配、归档非当前原项目、撤权、due 与接触 pending 均零写拒绝。逐步注入新增关系／初始 revision／metadata／内部历史／current／end／消费的报错或抑制，并伪造 origin 验证 proof；规范化精确重放在普通编辑和匿名化后不重复写入或恢复文本。
+
+`verify_explicit_project_entry_relationship_resolution_concurrency.sh` 以真实 ordinary contact entry 覆盖项目进入两序，再用 exact-PID／lock 验证普通更新、stage 增长、expiry、同请求、等待后 actor／scope／due。非 RC 首次及重放均须在读取请求、授权与锁前拒绝；不以 sleep 或仅看到任意 blocker 算通过。
+
+真实 0139 baseline 冻结旧 rows、全函数与旧表／约束／trigger／index catalog，只迁移 0140 后先逐值核对不变，再执行真实缺失槽确认与 canonical replay。八条新增 FK 使严格 inventory 为 385；latest inventory 只在 0140 后运行，各中间版本专用检查保留。fresh、checksum、完整 Docker 和独立 cluster 恢复继续运行。
+
+MANUAL-162／TEST-173 仅提供 synthetic 私有数据库证据，不证明混合完整拆分、生产身份、真实 PII、部署、HTTP／UI 或设备同步。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：
