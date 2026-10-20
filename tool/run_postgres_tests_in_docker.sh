@@ -13740,6 +13740,38 @@ docker exec "${container_name}" psql \
 printf '%s\n' "${personal_merge_project_relationship_resolution_confirmation_upgrade_replay}"
 echo '0137→0138 old rows/catalog, exact guard deltas, raw histories, explicit current, end/payload and checksum replay: passed.'
 
+echo '验证 0138→0139 other relationship reason redaction live upgrade。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0138_other_relationship_reason_redaction_live.sql >/dev/null
+docker exec "${container_name}" sh -ceu \
+  "mkdir /tmp/other-relationship-reason-redaction-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0139_other_relationship_reason_redaction.sql \\
+     /tmp/other-relationship-reason-redaction-upgrade-only/"
+docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/other-relationship-reason-redaction-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_other_relationship_reason_redaction.sql \
+  --command='BEGIN; SELECT public.fixture_0138_redaction_assert_upgrade(); ROLLBACK;' >/dev/null
+other_relationship_reason_redaction_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/other-relationship-reason-redaction-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${other_relationship_reason_redaction_upgrade_replay}" != \
+    *'已验证 0139_other_relationship_reason_redaction（无需重复执行）'* ]] \
+  || [[ "${other_relationship_reason_redaction_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0139 migration did not skip its checksum-verified replay.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command='BEGIN; SELECT public.fixture_0138_redaction_assert_upgrade(); ROLLBACK;' >/dev/null
+printf '%s\n' "${other_relationship_reason_redaction_upgrade_replay}"
+echo '0138→0139 old rows/catalog, exact SET clause, ordinary/confirmed other redaction, unrelated facts and checksum replay: passed.'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 
