@@ -443,6 +443,16 @@ header 只保存标识、派生 target type 和数据库 staged time，业务值
 
 合同见 [ADR-0199](../adr/0199-existing-project-relationship-resolution-keeps-history-and-explicit-current.md)，实现见 [0138](../../backend/database/migrations/0138_personal_merge_project_relationship_resolution_confirmation.sql)，验证见[测试说明](09-local-docker-and-ci-testing.md#726-已有项目关系历史与当前选择原子确认issue-601)。不改普通 writer 或初始关系合同，不是完整 mixed split；PUBLIC／runtime、Backend／HTTP／UI 和生产入口仍关闭。
 
+### 0140 显式项目进入与待分配处置（Issue #605）
+
+私有 v2 接收原 known／pending／resolution 三指纹、完整来源分配和当前选择，另须明确确认每个缺失关系的来源现在进入原项目。acknowledgements 精确覆盖原预检的无 current 槽，并指向该槽已分配且明确选中的 pending；已有槽不得附带，多余、遗漏、重复或异槽均拒绝。原项目须仍在本人有效 personal workspace 且 active；已有关系的旧 v1 合同不变。
+
+数据库以真实 actor 和全部等待后的时间，通过原初始 trigger 建立阶段 0、active、无备注的 revision 1，然后重算内部指纹并调用未修改的 0138。初始进入不回填过去，不制造接触／同意，不续期；全部 raw pending 继续独立保留，最终值仍须明确选择。
+
+两张不可变 private metadata 表保存原／内部指纹和真实进入 origin，deferred inner-request FK 与完整 proof 绑定内部确认和 end。任何步骤失败全部回滚；规范化精确重放只返回原时间，不再进入、重复应用或恢复匿名化文本。接触 pending 仍使整批失败，不是完整 mixed split。
+
+合同见 [ADR-0201](../adr/0201-missing-project-relationships-require-explicit-entry.md)，实现见 [0140](../../backend/database/migrations/0140_explicit_project_entry_relationship_resolution.sql)，验证见[测试说明](09-local-docker-and-ci-testing.md#728-显式项目进入与待分配处置issue-605)。PUBLIC／runtime、Backend／HTTP／UI、scheduler 和生产入口仍关闭。
+
 ## HTTP 与权限边界
 
 | 方法与路径 | 用途 | Backend capability |

@@ -13706,7 +13706,6 @@ docker exec "${container_name}" psql \
 printf '%s\n' "${personal_merge_project_relationship_resolution_plan_upgrade_replay}"
 echo '0136→0137 old rows/catalog, canonical complete metadata, conflicts, stale selectors, READ ONLY and checksum replay: passed.'
 
-# The complete FK inventory now includes 0138; validate it after this transition.
 echo '验证 0137→0138 existing project relationship confirmation live upgrade。'
 docker exec "${container_name}" psql \
   -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
@@ -13721,7 +13720,6 @@ docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
 docker exec "${container_name}" psql \
   -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file=/workspace/backend/database/checks/verify_personal_merge_project_relationship_resolution_confirmation.sql \
-  --file=/workspace/backend/database/checks/verify_organization_purge_dependency_inventory.sql \
   --command='BEGIN; SELECT public.fixture_0137_confirmation_assert_upgrade(); ROLLBACK;' >/dev/null
 personal_merge_project_relationship_resolution_confirmation_upgrade_replay="$(
   docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
@@ -13771,6 +13769,40 @@ docker exec "${container_name}" psql \
   --command='BEGIN; SELECT public.fixture_0138_redaction_assert_upgrade(); ROLLBACK;' >/dev/null
 printf '%s\n' "${other_relationship_reason_redaction_upgrade_replay}"
 echo '0138→0139 old rows/catalog, exact SET clause, ordinary/confirmed other redaction, unrelated facts and checksum replay: passed.'
+
+echo '验证 0139→0140 explicit project entry relationship resolution live upgrade。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0139_explicit_project_entry_relationship_resolution_live.sql >/dev/null
+docker exec "${container_name}" sh -ceu \
+  "mkdir /tmp/explicit-project-entry-relationship-resolution-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0140_explicit_project_entry_relationship_resolution.sql \\
+     /tmp/explicit-project-entry-relationship-resolution-upgrade-only/"
+docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/explicit-project-entry-relationship-resolution-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+# The complete FK inventory includes 0140; older transitions retain their own checks.
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_explicit_project_entry_relationship_resolution.sql \
+  --file=/workspace/backend/database/checks/verify_organization_purge_dependency_inventory.sql \
+  --command='BEGIN; SELECT public.fixture_0139_entry_assert_upgrade(); ROLLBACK;' >/dev/null
+explicit_project_entry_relationship_resolution_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/explicit-project-entry-relationship-resolution-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${explicit_project_entry_relationship_resolution_upgrade_replay}" != \
+    *'已验证 0140_explicit_project_entry_relationship_resolution（无需重复执行）'* ]] \
+  || [[ "${explicit_project_entry_relationship_resolution_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0140 migration did not skip its checksum-verified replay.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command='BEGIN; SELECT public.fixture_0139_entry_assert_upgrade(); ROLLBACK;' >/dev/null
+printf '%s\n' "${explicit_project_entry_relationship_resolution_upgrade_replay}"
+echo '0139→0140 old rows/catalog, explicit stage-zero entry, raw histories, no contact/consent, exact replay and checksum: passed.'
 
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
