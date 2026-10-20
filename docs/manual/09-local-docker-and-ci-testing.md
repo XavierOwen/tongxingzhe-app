@@ -3039,6 +3039,18 @@ MANUAL-157／TEST-168 仅证明这一私有来源去关联步骤。它不代表 
 
 MANUAL-158／TEST-169 只提供 synthetic 私有 PostgreSQL 证据，不证明完整 mixed split、生产 active merge、真实 PII、外部同步或清理 SLA。
 
+### 7.25 项目关系待分配事实只读冲突预检（Issue #600）
+
+0137 只新增一个 STABLE／SECURITY DEFINER／pg_catalog、owner-only 的 JSONB 函数，不新增表、FK 或 inventory 条目。fixture 从真实两类 pair、contact entry／普通关系修订和 0136 stage 建立多项目、多事件候选，核对完整七键、slots、canonical assignments、conflict count 与前六 metadata JSON 的 SHA-256。
+
+验证 UUID 大小写／顺序等价、同值 pending 不合并、已有／无当前关系、两原来源与空集。shape、遗漏／重复／foreign source、stale known／pending、缺少 current revision 或 binding 漂移须零写拒绝。真实普通关系 revision 推进后旧指纹失效；仅 synthetic 修改业务值不改变 metadata fingerprint，不能因此推导写回资格。
+
+在 READ ONLY transaction 实际调用并比较全部旧表，包括 fence、audit 和 context；STABLE 标记本身不算执行证据。该纯 reader 不新增并发写协议或调度脚本，既有相关并发脚本由完整 runner 继续执行。
+
+真实 0136 live upgrade 冻结全部旧数据和函数／表 catalog，仅应用 0137 后逐值保留旧 rows、OID、owner、ACL、约束、触发器及定义。新只读结果、拒绝路径、checksum 和独立 cluster dump／restore 均继续验证。
+
+MANUAL-159／TEST-170 不证明来源已经写回、当前候选已经确认、payload 已消费、完整 mixed split、生产身份或真实 PII。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：
