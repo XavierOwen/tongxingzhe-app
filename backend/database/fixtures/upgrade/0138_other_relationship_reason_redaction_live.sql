@@ -79,7 +79,7 @@ BEGIN
         ELSIF relation.relname='promotion_target_relationship_conflicts' THEN
           expression:=format('CASE WHEN r.promotion_target_id=%L::uuid THEN to_jsonb(r)-ARRAY[''proposed_follow_up_note'',''proposed_reason_detail''] ELSE to_jsonb(r) END',selected_target);
         ELSIF relation.relname='promotion_targets' THEN
-          expression:=format('CASE WHEN r.promotion_target_id=%L::uuid THEN to_jsonb(r)-ARRAY[''display_name'',''phone'',''email'',''status'',''anonymized_at'',''anonymization_reason''] ELSE to_jsonb(r) END',selected_target);
+          expression:=format('CASE WHEN r.promotion_target_id=%L::uuid THEN to_jsonb(r)-ARRAY[''display_name'',''phone'',''email'',''status'',''anonymized_at'',''anonymization_reason'',''profile_revision''] ELSE to_jsonb(r) END',selected_target);
         ELSIF relation.relname='promotion_target_project_relationships' THEN
           expression:=format('CASE WHEN r.promotion_target_id=%L::uuid THEN to_jsonb(r)-ARRAY[''current_lifecycle_status'',''current_follow_up_note'',''current_revision'',''updated_by_app_user_id'',''updated_at''] ELSE to_jsonb(r) END',selected_target);
         ELSIF relation.relname='promotion_target_assignments' THEN
@@ -152,7 +152,10 @@ BEGIN
       AND (r.proposed_follow_up_note IS NOT NULL OR r.proposed_reason_detail IS NOT NULL))
     OR NOT EXISTS(SELECT 1 FROM app_data.promotion_targets t WHERE t.promotion_target_id=c.target_id
       AND t.display_name='已匿名化对象' AND t.phone IS NULL AND t.email IS NULL AND t.status='anonymized'
-      AND t.anonymized_at=event_time AND t.anonymization_reason='withdrawal')
+      AND t.anonymized_at=event_time AND t.anonymization_reason='withdrawal'
+      AND t.profile_revision=(SELECT (original->>'profile_revision')::integer+1
+        FROM jsonb_array_elements(saved.business_state->'app_data.promotion_targets') original
+        WHERE original->>'promotion_target_id'=c.target_id::text))
     OR EXISTS(SELECT 1 FROM app_data.promotion_target_assignments a WHERE a.promotion_target_id=c.target_id
       AND (a.ended_at IS DISTINCT FROM event_time OR a.end_reason IS DISTINCT FROM 'target_anonymized'))
     OR (SELECT count(*) FROM app_data.promotion_target_relationship_revisions WHERE promotion_target_id=c.target_id)
