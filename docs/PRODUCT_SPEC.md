@@ -274,6 +274,10 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `PII-011` | 个人空间 PII 导出 v1 同时要求 `export_target_pii` 与 `view_assigned_target_pii`，并只接受已验签 JWT 中 15 分钟内的 `password` AMR。导出只包含同一事务内仍分配给当前账号的 active 对象，使用固定 canonical JSON，并追加不含对象资料的不可变导出审计。 |
 | `PII-012` | 个人空间 PII JSON 导出分为 artifact 准备与 Web 浏览器下载请求两步。准备完成只在当前页面内存保留已验证的原始 bytes、固定 MIME 和文件名；只有用户再次明确操作才请求下载。失败重试复用同一 artifact，不重新请求导出、不重新序列化或新增服务端审计；非 Web 明确 unavailable。成功只表示浏览器已接受请求，不证明文件已保存、打开或保留。 |
 | `PII-013` | 个人空间疑似重复对象合并 v1 要求 `view_assigned_target_pii` 与独立 `manage_assigned_target_merges`。候选只来自同空间、同类型、当前可见且仍获分配的 active 对象，并只使用精确电话或 email 信号。一次 active merge 只含两个对象，保留原对象与来源，并以合并代次约束全部相关 writer。拆分必须完整分配本代次内来源不明的事实，并在一个事务中全部生效或零变更。合并不续期；较早的成员截止控制复核，到期未续期或拆分时原子结束 merge 并匿名化两端及本代次敏感事实。 |
+| `PII-014` | 合并期间新增的未知来源项目关系事件显式登记到独立待分配区，不从 NULL generation binding 推断，不创建普通关系／revision。每个 request 是独立事件，时间由锁后数据库签发，不回填合并前历史，不按值去重或自动取最新。 |
+| `PII-015` | 私有登记重验本人 personal scope、active project、查看／管理合并两项 capability、两端活动分配及未到期代次；live 精确重放返回原结果，context／typed payload 漂移 conflict。metadata-only READ ONLY 预检不返回或散列阶段、备注等业务值，不保存确认资格。 |
+| `PII-016` | 本类 pending 未处理时，所有 known_source_split 整次拒绝，既有接触确认不得绕过。pair expiry 原子写精确 purge 标识并清除全部 typed 载荷；来源、完整性或删除失败使整对回滚，既有 batch 无关项继续。 |
+| `PII-017` | 首片只交付登记、只读 metadata、结束门禁与到期清除，不交付分配／消费、当前候选、完整混合 split 或普通 writer 改写；PUBLIC／runtime 关闭，无 Backend／HTTP／UI、scheduler 或生产 active merge。 |
 
 #### 5.6.3 个人空间 CSV 导入 v1
 
@@ -481,6 +485,10 @@ MANUAL-153／TEST-164 记录此私有数据库能力。旧目录自动到期 hel
 7EU／#591 为 0130 的历史、多项确认补上同一隔离级别门禁。首次确认和 terminal replay 仅允许 READ COMMITTED；完成输入形状校验后，在授权、父请求锁和回执读取前，以固定 `0A000 pending contact resolution confirmation requires read committed` 拒绝其他模式。0132 只在该函数原 body 插入门禁，保留 OID、owner、ACL、签名与其余实现，旧迁移校验值不变。
 
 MANUAL-154／TEST-165 覆盖此修正。真实 0131 baseline 的历史应用、终结回执和全部旧业务数据在升级后保留；正常确认及精确重放继续有效。该限制不扩展到其他旧私有入口或普通 writer，不改变事务模式、来源选择、历史应用、payload 消费和既有生产边界。
+
+7EY／#598 为合并期间新增的未知来源项目关系事件增加独立 typed 待分配层。0136 header 只含标识与数据库时间，业务值单独保存；同值也不自动合并。metadata-only 预检真正 READ ONLY，旧 end／接触确认不能漏过此类 pending 而结束代次，pair expiry 原子清除全部敏感载荷。五类已知来源事实不重写。
+
+MANUAL-158／TEST-169 只覆盖这一私有层，不提供普通关系写回资格、来源分配、当前候选、历史应用或完整混合 split；runtime、Backend／HTTP／UI、scheduler、生产 active merge 与 #549 人工门槛不变。
 
 ### 5.7 组织治理与生命周期
 
@@ -3427,6 +3435,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-155` | 说明账号申请／恢复的独立 720 小时周期、私有接口、current-cycle 重放、原关系保留、全部组织治理锁与 sole-owner 拒绝。明确迁移不回填 pending 来源，未交付终结清除、外部 Auth、本地缓存或旧入口并发冻结，不把 synthetic PostgreSQL 通过称为完整账号删除。 |
 | `MANUAL-156` | 说明历史贡献私有预览／确认的五字段 allowlist、15 分钟 revision 绑定、一份来源／目标副本、冻结重放、当前目标授权与固定锁序；明确来源引用、组织 purge/tombstone、统计未接入及非公开匿名边界。 |
 | `MANUAL-157` | 说明期满账号历史贡献来源去关联的私有接口、exact pending cycle／deadline、两列引用闭包、预锁与晚到重试、原子 value-free completion 及精确重放；保留核心副本和个人事实，明确非账号 purge 或全部作者匿名化。 |
+| `MANUAL-158` | 说明未知来源项目关系事件的私有登记、typed 载荷与仅标识 ledger、锁后授权／期限、live replay、metadata-only READ ONLY 预检、旧 split 门禁及原子到期清除；明确未交付分配／完整 split 或生产 active merge。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3773,6 +3782,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-166` | 0133 验证账号申请／恢复、精确与旧 cycle 重放、720 小时／DST／截止点、未知／deleted／无来源 pending、sole-owner／组织恢复期、多 owner、原关系及个人／组织事实不变、不可变 claims／audit、故障全回滚与封闭 ACL。指定 PID／精确锁覆盖同 request、同账号不同 request、双 owner、owner／membership／status 变化和恢复等待后到期；三个非 RC 模式的首次与重放均零写入拒绝。真实 0132 upgrade 冻结旧数据与函数 OID／owner／ACL／定义，无来源 pending 的失败迁移零残留；checksum、完整 Docker 与独立恢复继续验证。 |
 | `TEST-167` | 0134 用真实 personal writer、邀请接受与项目分配验证五字段 allowlist、合法时区、revision／projection 一致、预览期限、来源修订／作废、一次贡献及冻结重放；PII／答案／地点／文本不复制，旧表逐值不变。指定 PID／精确锁覆盖双 request、撤权、归档、账号／组织删除、来源变更和等待后到期；三个非 RC 模式均零写拒绝。验证写入故障、不可变／解除引用、两组织 purge 保留与失败回滚、UUID tombstone、严格 FK inventory、真实 0133 升级、checksum 和独立恢复。 |
 | `TEST-168` | 0135 验证 due pending cycle、多组织与未确认 preview、单边引用、空集及精确重放；期限前／restored／旧 cycle／状态和来源矛盾零写拒绝。UPDATE／completion 故障须全回滚，核心副本及其余旧事实逐值不变，解除后组织 purge 继续成功。精确 PID／锁覆盖 cycle、request→user→governance、等待后状态／期限、晚到范围重试及 purge 两序；三个非 RC 模式首次／重放拒绝。真实 0134 升级不改旧 OID／owner／ACL／定义或事实，checksum、完整 Docker 与独立恢复继续验证。 |
+| `TEST-169` | 0136 验证真实 activation／两类 pair、多事件不去重、精确 live replay／typed 漂移、完整授权／分配／retention、header／payload 故障回滚、metadata 无业务值／业务哈希且真正 READ ONLY。旧 end／接触确认因新 pending 零写拒绝；真实 pair expiry、精确 receipt、删除故障全回滚与 mixed batch 无关项继续。精确 PID／request／fence 并发覆盖 stage 与 split／expiry 两序、撤权和等待后到期，三个非 RC 模式首次／重放拒绝；严格七条 FK、真实 0135 升级、checksum、完整 Docker 与独立恢复保留旧事实及函数身份。 |
 
 ## 9. UI、视觉与可访问性
 

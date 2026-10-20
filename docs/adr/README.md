@@ -122,6 +122,7 @@
 | [0194](./0194-account-deletion-recovery-is-cycle-bound-and-preserves-relationships.md) | 已接受，2026-10-20 | Slice 7EV／private DB-only；Issue #593 | 本人账号申请与恢复使用独立 720 小时周期；只改账号状态，保留原关系，旧 cycle 不能改变新周期 |
 | [0195](./0195-personal-history-contributions-copy-only-core-facts.md) | 已接受，2026-10-20 | Slice 7EW／private DB-only；Issue #595 | 历史贡献以 revision-bound 预览及确认生成五字段核心副本，个人来源不变，独立于现有统计并接入组织终结清除 |
 | [0196](./0196-due-accounts-unlink-historical-contribution-sources.md) | 已接受，2026-10-20 | Slice 7EX／private DB-only；Issue #597 | 当前 due pending cycle 原子解除历史贡献来源引用，保留组织副本和个人事实，value-free completion 不代表完整账号清除 |
+| [0197](./0197-unknown-project-relationship-facts-stay-pending-until-assigned.md) | 已接受，2026-10-20 | Slice 7EY／private DB-only；Issue #598 | 未知来源项目关系事件独立登记，metadata 只读，未分配不能结束代次，到期原子清除敏感载荷，不改已知来源事实 |
 
 ## 按主题查找
 

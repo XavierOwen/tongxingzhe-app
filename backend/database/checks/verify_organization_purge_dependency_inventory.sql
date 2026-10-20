@@ -23,6 +23,13 @@ CREATE TEMP TABLE purge_inventory_expected_fk (
   PRIMARY KEY (child_relation, constraint_name)
 );
 INSERT INTO purge_inventory_expected_fk VALUES
+  ('app_private.personal_merge_unassigned_project_relationship_requests_v1', 'pmupr_request_actor_fk', 'app_data.app_users', 'r', 'FOREIGN KEY (actor_app_user_id) REFERENCES app_data.app_users(app_user_id) ON DELETE RESTRICT'),
+  ('app_private.personal_merge_unassigned_project_relationship_requests_v1', 'pmupr_request_workspace_fk', 'app_data.workspaces', 'r', 'FOREIGN KEY (workspace_id) REFERENCES app_data.workspaces(workspace_id) ON DELETE RESTRICT'),
+  ('app_private.personal_merge_unassigned_project_relationship_requests_v1', 'pmupr_request_project_fk', 'app_data.projects', 'r', 'FOREIGN KEY (project_id) REFERENCES app_data.projects(project_id) ON DELETE RESTRICT'),
+  ('app_private.personal_merge_unassigned_project_relationship_requests_v1', 'pmupr_request_generation_fk', 'app_private.personal_target_merge_generations_v1', 'r', 'FOREIGN KEY (generation_id) REFERENCES app_private.personal_target_merge_generations_v1(generation_id) ON DELETE RESTRICT'),
+  ('app_data.personal_merge_unassigned_project_relationship_facts_v1', 'pmupr_payload_request_fk', 'app_private.personal_merge_unassigned_project_relationship_requests_v1', 'r', 'FOREIGN KEY (pending_fact_id) REFERENCES app_private.personal_merge_unassigned_project_relationship_requests_v1(pending_fact_id) ON DELETE RESTRICT'),
+  ('app_private.personal_merge_unassigned_project_relationship_purges_v1', 'pmupr_purge_generation_fk', 'app_private.personal_target_merge_end_events_v1', 'r', 'FOREIGN KEY (generation_id) REFERENCES app_private.personal_target_merge_end_events_v1(generation_id) ON DELETE RESTRICT'),
+  ('app_private.personal_merge_unassigned_project_relationship_purges_v1', 'pmupr_purge_request_fk', 'app_private.personal_merge_unassigned_project_relationship_requests_v1', 'r', 'FOREIGN KEY (pending_fact_id, generation_id) REFERENCES app_private.personal_merge_unassigned_project_relationship_requests_v1(pending_fact_id, generation_id) ON DELETE RESTRICT'),
   ('app_private.personal_history_contribution_previews_v1', 'phc_preview_actor_fk', 'app_data.app_users', 'n', 'FOREIGN KEY (actor_app_user_id) REFERENCES app_data.app_users(app_user_id) ON DELETE SET NULL'),
   ('app_private.personal_history_contribution_previews_v1', 'phc_preview_source_fk', 'app_data.contacts', 'n', 'FOREIGN KEY (source_contact_id) REFERENCES app_data.contacts(contact_id) ON DELETE SET NULL'),
   ('app_private.personal_history_contribution_previews_v1', 'phc_preview_project_fk', 'app_data.projects', 'r', 'FOREIGN KEY (target_project_id) REFERENCES app_data.projects(project_id) ON DELETE RESTRICT'),

@@ -13642,6 +13642,39 @@ docker exec "${container_name}" psql \
 printf '%s\n' "${account_history_contribution_unlink_upgrade_replay}"
 echo '0134→0135 frozen old rows/OID/owner/ACL/definitions, unlink-only provenance, exact replay and checksum replay: passed.'
 
+echo '验证 0135→0136 pending project relationship live upgrade、旧事实与到期清除。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0135_personal_merge_unassigned_project_relationships_live.sql >/dev/null
+docker exec "${container_name}" sh -ceu \
+  "mkdir /tmp/personal-merge-unassigned-project-relationships-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0136_personal_merge_unassigned_project_relationships.sql \\
+     /tmp/personal-merge-unassigned-project-relationships-upgrade-only/"
+docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-merge-unassigned-project-relationships-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_personal_merge_unassigned_project_relationships.sql \
+  --file=/workspace/backend/database/checks/verify_organization_purge_dependency_inventory.sql \
+  --command='BEGIN; SELECT public.fixture_0135_project_assert_upgrade(); ROLLBACK;' >/dev/null
+personal_merge_unassigned_project_relationships_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/personal-merge-unassigned-project-relationships-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${personal_merge_unassigned_project_relationships_upgrade_replay}" != \
+    *'已验证 0136_personal_merge_unassigned_project_relationships（无需重复执行）'* ]] \
+  || [[ "${personal_merge_unassigned_project_relationships_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0136 migration did not skip its checksum-verified replay.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command='BEGIN; SELECT public.fixture_0135_project_assert_upgrade(); ROLLBACK;' >/dev/null
+printf '%s\n' "${personal_merge_unassigned_project_relationships_upgrade_replay}"
+echo '0135→0136 old data/OID/owner/ACL/definitions, stage/replay, metadata, blocked split, expiry and checksum replay: passed.'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 
