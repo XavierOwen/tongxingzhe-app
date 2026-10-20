@@ -3051,6 +3051,18 @@ MANUAL-158／TEST-169 只提供 synthetic 私有 PostgreSQL 证据，不证明�
 
 MANUAL-159／TEST-170 不证明来源已经写回、当前候选已经确认、payload 已消费、完整 mixed split、生产身份或真实 PII。
 
+### 7.26 已有项目关系历史与当前选择原子确认（Issue #601）
+
+0138 fixture 用真实 contact 进入和 ordinary writer 建立两类型、多个原项目与两来源的既有关系，再登记多项同值 pending。核对每项原值／原时间进入独立历史、历史 marker 不冒充 stage 变化、原 current 到明确所选值的最终 revision、全部旧历史和 parent binding 保留。缺关系、接触 pending、输入／完整集／三指纹／选择／资格和 due 失败都须零写。
+
+注入 history、metadata、final current、end 和 payload 的报错／抑制，证明整批回滚；直接 end 或消费不能借不完整 proof 绕过。精确重放、UUID 大小写／顺序等价和请求漂移分别核对原回执与零重复写入。
+
+exact-PID／lock 独立会话覆盖同请求、普通关系更新、stage 增长、expiry、等待后资格与期限；三个非 RC 模式的首次／重放均先拒绝。只有实际锁观察与最终全状态符合时才算并发通过。
+
+真实 0137 升级冻结全部旧 rows 与完整函数／关系 catalog，仅允许两项 0136 guard 的必要 body 扩展，保留其 OID／owner／ACL。新增严格 FK、真实确认、checksum、完整 Docker 和独立恢复继续验证；测试须保留其他上下文的数据，不假定全库为空。
+
+MANUAL-160／TEST-171 不证明缺关系初始化、接触／项目混合确认、完整拆分、生产身份、真实 PII 或设备验收。无 runtime、Backend／HTTP／UI、scheduler 或生产执行。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：

@@ -199,7 +199,7 @@ BEGIN
 END $faults$;
 SELECT pg_temp.expect_0136_failure('55000','pending project relationship facts cannot be updated',
   'UPDATE app_data.personal_merge_unassigned_project_relationship_facts_v1 SET new_stage=new_stage');
-SELECT pg_temp.expect_0136_failure('42501','pending project relationship deletion requires expiry receipt',
+SELECT pg_temp.expect_0136_failure('42501','pending project relationship deletion requires expiry or applied confirmation receipt',
   'DELETE FROM app_data.personal_merge_unassigned_project_relationship_facts_v1');
 SELECT pg_temp.expect_0136_failure('55000',NULL,'DELETE FROM app_private.personal_merge_unassigned_project_relationship_requests_v1');
 SELECT pg_temp.expect_0136_failure('55000',NULL,'UPDATE app_private.personal_merge_unassigned_project_relationship_requests_v1 SET request_id=request_id');

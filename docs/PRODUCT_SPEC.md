@@ -279,6 +279,7 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `PII-016` | 本类 pending 未处理时，所有 known_source_split 整次拒绝，既有接触确认不得绕过。pair expiry 原子写精确 purge 标识并清除全部 typed 载荷；来源、完整性或删除失败使整对回滚，既有 batch 无关项继续。 |
 | `PII-017` | 首片只交付登记、只读 metadata、结束门禁与到期清除，不交付分配／消费、当前候选、完整混合 split 或普通 writer 改写；PUBLIC／runtime 关闭，无 Backend／HTTP／UI、scheduler 或生产 active merge。 |
 | `PII-018` | 项目关系待分配处置预检只接受绑定当前 known／pending 指纹的完整拟议来源映射；按 source／原项目列出全部 pending 与已有当前 revision／binding 候选。同值不去重，不自动取最新或选赢家；metadata-only 指纹和 READ ONLY 结果不保存分配或写回资格。 |
+| `PII-019` | 已有项目关系的私有确认须绑定完整来源映射、逐槽明确当前选择与三项 metadata 指纹。每项 pending 独立保留原值和原时间的来源分配历史；只在最终明确选择时改变当前投影。同值不去重，缺关系或同代次未处理的接触 pending 整批拒绝；历史、当前、回执、代次结束与 payload 消费全部原子成功。 |
 
 #### 5.6.3 个人空间 CSV 导入 v1
 
@@ -492,6 +493,8 @@ MANUAL-154／TEST-165 覆盖此修正。真实 0131 baseline 的历史应用、�
 MANUAL-158／TEST-169 只覆盖这一私有层，不提供普通关系写回资格、来源分配、当前候选、历史应用或完整混合 split；runtime、Backend／HTTP／UI、scheduler、生产 active merge 与 #549 人工门槛不变。
 
 7EZ／#600 以 0137 增加项目关系 pending 的只读冲突预检。完整拟议映射绑定 known／pending 两指纹，当前关系指针再进入 resolution fingerprint；候选与同值事件均完整保留。无新表、事实、audit、context 或 fence 写入，不选定 current，不消费 payload，不提供完整 mixed split 或生产入口。
+
+7FA／#601 的 0138 只确认已有原关系的项目 pending。每项原始事件追加来源分配 revision，不逐项改变当前投影或冒充阶段推进；最后逐槽按明确 current／pending 选择追加当前选择 revision。三个 private metadata 表与完整 proof 绑定既有 end receipt，全部成功才消费载荷；缺关系或同代次还有接触 pending 时零写拒绝，不称完整 mixed split。
 
 ### 5.7 组织治理与生命周期
 
@@ -3440,6 +3443,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-157` | 说明期满账号历史贡献来源去关联的私有接口、exact pending cycle／deadline、两列引用闭包、预锁与晚到重试、原子 value-free completion 及精确重放；保留核心副本和个人事实，明确非账号 purge 或全部作者匿名化。 |
 | `MANUAL-158` | 说明未知来源项目关系事件的私有登记、typed 载荷与仅标识 ledger、锁后授权／期限、live replay、metadata-only READ ONLY 预检、旧 split 门禁及原子到期清除；明确未交付分配／完整 split 或生产 active merge。 |
 | `MANUAL-159` | 说明项目关系处置预检的完整拟议映射、两指纹、按 source／原项目的 pending／current 候选、canonical metadata 和 resolution fingerprint；解释单候选不授权、同值不合并，以及不写回／不保留资格的边界。 |
+| `MANUAL-160` | 说明已有关系确认的完整分配与逐槽明确选择、历史 marker 和真实当前变化的区别、raw 值／原时间保留、三指纹、锁序、精确重放和 proof／end／消费原子性。缺关系和接触 pending 整批拒绝；不改普通 writer 或 initial revision 合同，不开放生产入口。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3788,6 +3792,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-168` | 0135 验证 due pending cycle、多组织与未确认 preview、单边引用、空集及精确重放；期限前／restored／旧 cycle／状态和来源矛盾零写拒绝。UPDATE／completion 故障须全回滚，核心副本及其余旧事实逐值不变，解除后组织 purge 继续成功。精确 PID／锁覆盖 cycle、request→user→governance、等待后状态／期限、晚到范围重试及 purge 两序；三个非 RC 模式首次／重放拒绝。真实 0134 升级不改旧 OID／owner／ACL／定义或事实，checksum、完整 Docker 与独立恢复继续验证。 |
 | `TEST-169` | 0136 验证真实 activation／两类 pair、多事件不去重、精确 live replay／typed 漂移、完整授权／分配／retention、header／payload 故障回滚、metadata 无业务值／业务哈希且真正 READ ONLY。旧 end／接触确认因新 pending 零写拒绝；真实 pair expiry、精确 receipt、删除故障全回滚与 mixed batch 无关项继续。精确 PID／request／fence 并发覆盖 stage 与 split／expiry 两序、撤权和等待后到期，三个非 RC 模式首次／重放拒绝；严格七条 FK、真实 0135 升级、checksum、完整 Docker 与独立恢复保留旧事实及函数身份。 |
 | `TEST-170` | 0137 用真实两类 pair／多项目／多 pending 验证已有和无当前关系、完整 JSON、canonical UUID／顺序、同值不去重、metadata-only hash 和空集。shape／遗漏／重复／foreign source、stale known／pending、缺少 current revision 或非法 generation member 零写拒绝。合并前 NULL 关系的真实 ordinary revision 可绑定当前代次，旧指纹失效、刷新后返回真实 revision binding；synthetic 业务值变化不改变 metadata 指纹。READ ONLY 实际成功，全部旧业务、audit、context、fence 与函数 catalog 保留；真实 0136 升级、checksum、完整 Docker 和独立恢复继续验证。 |
+| `TEST-171` | 0138 验证双类型、多项目／来源、多项同值历史、current／older pending 明确选择、raw 值／原时间与旧历史／parent binding 保留。缺关系、接触 pending、形状／完整集／三指纹／选择／资格／due 拒绝均零写；精确重放和逐步故障回滚覆盖 metadata、history、current、end 与 payload。指定 PID／锁覆盖普通 writer、stage、expiry 和锁后变化，三个非 RC 模式首次／重放拒绝。真实 0137 升级、严格 FK、checksum、完整 Docker 与独立恢复保留旧事实及除两项必要 guard 外的函数定义。 |
 
 ## 9. UI、视觉与可访问性
 
