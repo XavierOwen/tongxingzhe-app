@@ -11,7 +11,7 @@
 
 0138 v1 仍拒绝缺失原关系的槽。0140 新增私有 v2 wrapper，只在调用者明确确认来源现在进入原项目时初始化，再委托未修改的 v1 完成历史归属、当前选择、代次结束与 payload 消费。不复制旧 writer，也不改普通创建路径、表约束或初始 revision trigger。
 
-v2 接收原三项 metadata 指纹、完整 assignments／current choices，以及 `project_entry_acknowledgements`。每项 acknowledgement 精确包含 project、source 和 pending UUID；规范化大小写与顺序，拒绝重复。其集合须精确覆盖原 0137 预检中没有 current 的槽，pending 必须等于该槽已分配并明确选择的候选。已有槽不得 acknowledgement；全已有时允许空集。
+v2 接收原三项 metadata 指纹、完整 assignments／current choices，以及 `project_entry_acknowledgements`。每项 acknowledgement 精确包含 project、source 和 pending UUID；规范化大小写与顺序，拒绝重复。其集合须精确覆盖原 0137 预检中没有 current 的槽，pending 必须等于该槽已分配并明确选择的候选。已有关系的槽不得附带进入确认；全部槽都已有关系时，允许空集。
 
 ## 进入不是历史回填
 
