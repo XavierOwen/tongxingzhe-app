@@ -419,6 +419,18 @@ header 只保存标识、派生 target type 和数据库 staged time，业务值
 
 合同见 [ADR-0197](../adr/0197-unknown-project-relationship-facts-stay-pending-until-assigned.md)，实现见 [0136](../../backend/database/migrations/0136_personal_merge_unassigned_project_relationships.sql)，验证见[测试说明](09-local-docker-and-ci-testing.md#724-未知来源项目关系事实登记与到期清除issue-598)。本片不实现分配／消费、当前候选、历史应用或完整混合 split，不开放 runtime、Backend／HTTP／UI、scheduler、产品 active merge 或生产执行。
 
+### 0137 项目关系待分配事实的只读冲突预检（Issue #600）
+
+`app_private.plan_personal_merge_project_relationship_resolutions_v1` 接收可信 user／workspace／project／generation、expected known／pending fingerprint，以及本类全部 pending 的拟议来源映射。每项精确两个 string 键 `pending_fact_id`／`source_target_id`，UUID 大小写及输入顺序归一；遗漏、重复、其他代次或非两原对象 source 拒绝，不保存任何分配。
+
+每个受影响的 source／原项目槽列出按 staged time／UUID 排序的 pending ID，以及可空的真实 current revision number／binding。关系创建时的 binding 与当前 revision 可以不同，分别校验其非 NULL generation member 的原对象、空间和类型，不回填或改称未知。合并前 NULL 关系在合并期间正常修订为当前代次是合法历史。候选数和 requires_choice 描述冲突，单候选也不意味着已经选择。同值事件保留，不自动取最新。
+
+结果为固定七键和 metadata-only resolution fingerprint；既有关系的业务值、pending stage／note／reason 不返回、读取或散列。current revision 推进、known／pending 指纹或完整清单漂移会使旧预检冲突。header 完整但当前关系 head 不可信时 unavailable，不能补造关系。
+
+它是单个 STABLE、SECURITY DEFINER／pg_catalog 私有函数，没有新表或 FK，在 READ ONLY transaction 中可实际执行。不写业务、request、audit、context 或 fence，不取行锁，也不保留后续资格。普通 writer 的无变化拒绝与真实关系创建前提仍在，预检不消费 payload 或执行完整 split。
+
+合同见 [ADR-0198](../adr/0198-project-relationship-resolution-plans-list-metadata-candidates.md)，实现见 [0137](../../backend/database/migrations/0137_personal_merge_project_relationship_resolution_plan.sql)，验证见[测试说明](09-local-docker-and-ci-testing.md#725-项目关系待分配事实只读冲突预检issue-600)。PUBLIC／runtime 关闭，无 Backend／HTTP／UI、scheduler 或生产 active merge。
+
 ## HTTP 与权限边界
 
 | 方法与路径 | 用途 | Backend capability |
