@@ -453,6 +453,14 @@ header 只保存标识、派生 target type 和数据库 staged time，业务值
 
 合同见 [ADR-0201](../adr/0201-missing-project-relationships-require-explicit-entry.md)，实现见 [0140](../../backend/database/migrations/0140_explicit_project_entry_relationship_resolution.sql)，验证见[测试说明](09-local-docker-and-ci-testing.md#728-显式项目进入与待分配处置issue-605)。PUBLIC／runtime、Backend／HTTP／UI、scheduler 和生产入口仍关闭。
 
+### 0141 两类待分配事实的同快照只读预检（Issue #607）
+
+同时有接触和项目关系 pending 时，私有 `plan_personal_merge_mixed_resolutions_v1` 接收共同 known 指纹、两类 pending 指纹及各自完整拟议来源映射。两个映射数组均须非空；单类场景仍用原预检。函数在同一 command snapshot 内调用未修改的 0129／0137，保留其完整候选、排序、精确 TEXT ID、canonical UUID 和 current／缺关系 metadata，不展平或自动选定。
+
+结果只有 contract ID、两份原生 nested plan 和复合 resolution fingerprint；指纹是前三键 metadata JSONB text／UTF-8 的 SHA-256。它不是授权 token，不保留下一次调用的范围或期限，也不保存分配、当前选择或项目进入。真实 writer 可在读取期间提交；当前 command 返回完整旧 snapshot，下一 command 必须刷新或拒绝陈旧输入。
+
+合同见 [ADR-0202](../adr/0202-mixed-resolution-preflight-keeps-both-plans-in-one-snapshot.md)，实现见 [0141](../../backend/database/migrations/0141_personal_merge_mixed_resolution_plan.sql)，验证见[测试说明](09-local-docker-and-ci-testing.md#729-两类待分配事实的同快照只读预检issue-607)。只有一个 STABLE owner-only 函数，无表、FK、业务锁或写入；旧 confirmer 门禁与锁序不改，不据此串联混合 writer。PUBLIC／runtime、Backend／HTTP／UI、scheduler 和生产入口仍关闭。
+
 ## HTTP 与权限边界
 
 | 方法与路径 | 用途 | Backend capability |

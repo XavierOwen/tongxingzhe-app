@@ -127,6 +127,7 @@
 | [0199](./0199-existing-project-relationship-resolution-keeps-history-and-explicit-current.md) | 已接受，2026-10-20 | Slice 7FA／private DB-only；Issue #601 | 已有关系逐项保留待分配历史，逐槽明确选择当前；proof、end 与消费原子成功，缺关系及混合 pending 拒绝 |
 | [0200](./0200-other-reason-details-use-a-fixed-redaction-placeholder.md) | 已接受，2026-10-20 | Slice 7FB／DB 修复；Issue #603 | other 历史原因详情匿名化为固定无业务占位值，保留原因事实和必填 CHECK，不再阻断清除 |
 | [0201](./0201-missing-project-relationships-require-explicit-entry.md) | 已接受，2026-10-20 | Slice 7FC／private DB-only；Issue #605 | 缺失关系须明确确认真实阶段 0 进入，再复用历史与当前确认；原／内部指纹及 origin 原子绑定，无接触或同意推导 |
+| [0202](./0202-mixed-resolution-preflight-keeps-both-plans-in-one-snapshot.md) | 已接受，2026-10-20 | Slice 7FD／private DB-only；Issue #607 | 同一快照保留两类完整候选计划并生成复合 metadata 指纹；不写事实或保留混合确认资格 |
 
 ## 按主题查找
 

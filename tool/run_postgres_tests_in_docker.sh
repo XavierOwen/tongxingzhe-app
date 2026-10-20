@@ -13804,6 +13804,38 @@ docker exec "${container_name}" psql \
 printf '%s\n' "${explicit_project_entry_relationship_resolution_upgrade_replay}"
 echo '0139→0140 old rows/catalog, explicit stage-zero entry, raw histories, no contact/consent, exact replay and checksum: passed.'
 
+echo '验证 0140→0141 personal merge mixed resolution plan live upgrade 与 READ ONLY。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0140_personal_merge_mixed_resolution_plan_live.sql >/dev/null
+docker exec "${container_name}" sh -ceu \
+  "mkdir /tmp/personal-merge-mixed-resolution-plan-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0141_personal_merge_mixed_resolution_plan.sql \\
+     /tmp/personal-merge-mixed-resolution-plan-upgrade-only/"
+docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-merge-mixed-resolution-plan-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_personal_merge_mixed_resolution_plan.sql \
+  --command='BEGIN READ ONLY; SELECT public.fixture_0140_mixed_assert_upgrade(); ROLLBACK;' >/dev/null
+personal_merge_mixed_resolution_plan_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/personal-merge-mixed-resolution-plan-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${personal_merge_mixed_resolution_plan_upgrade_replay}" != \
+    *'已验证 0141_personal_merge_mixed_resolution_plan（无需重复执行）'* ]] \
+  || [[ "${personal_merge_mixed_resolution_plan_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0141 migration did not skip its checksum-verified replay.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command='BEGIN READ ONLY; SELECT public.fixture_0140_mixed_assert_upgrade(); ROLLBACK;' >/dev/null
+printf '%s\n' "${personal_merge_mixed_resolution_plan_upgrade_replay}"
+echo '0140→0141 old rows/catalog, exact same-command standalone metadata, mixed digest, canonical replay and READ ONLY: passed.'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 
