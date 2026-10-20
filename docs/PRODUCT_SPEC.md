@@ -529,6 +529,12 @@ MANUAL-154／TEST-165 覆盖此修正。真实 0131 baseline 的历史应用、�
 | `ORG-047` | 当数据库 UTC 到达或超过 deadline 后，组织不可恢复，状态只能进入 `purge_due` 及其终结路径；任何恢复 request、旧 live claim 或普通目录读取都不得重新开放组织或延长期限。`purged` 只由墓碑证明，不由业务目录返回。 |
 | `ORG-048` | 终结 purge 只能通过受控 immutable-delete 例外执行；资格、锁、约束、存储或清除任一步失败都必须使业务清除事务整体回滚，不得留下部分清除。回滚后，独立最小生命周期事务可记录不含底层原文或业务内容的 `purge_failed`；只有受控 finalizer 可重试，不能恢复组织。终结后只保留最小 value-free tombstone（仅防重放所需的 family、request UUID 与 `purge_completed_at_utc`），不保留组织名称、成员、报告、PII 或数据库原文。 |
 | `ORG-049` | 删除申请入口只向资格读取快照中的 current active owner 显示。独立 exact-identity reader 仅返回未删除、lifecycle current 不存在或为 restored 的组织 workspace UUID；普通目录合同不增加 owner 标志。Flutter 与当前普通目录按 UUID 取交集，资格读取失败时隐藏入口并可重读，不保存长期授权。POST 仍锁后重验；当前成员但非 owner 不显示入口，避免其在首次拒绝前清除离线资料。 |
+| `ORG-050` | 账号删除申请的私有核心只接受可信内部 app_user_id 本人的 active 账号。锁后数据库墙钟固定 effective time 与晚连续 720 小时的 deadline；申请只把账号置为 deletion_pending，不删除业务数据或结束原关系。恢复窗口为半开区间，截止点本身不能恢复，不使用客户端时间或事务开始时间。 |
+| `ORG-051` | 账号申请与恢复使用独立于组织的 request family。申请 UUID 同时是 opaque deletion cycle；恢复显式绑定当前 cycle。申请重放仅限该 actor 的当前未到期 pending cycle；恢复重放仅限该 actor 的当前 restored cycle 且账号 active，可返回原期限之前已完成的 receipt。精确重放不写事实、不延长期限；旧 cycle、selector／actor 漂移或去关联均 conflict，不能复活或撤销下一轮。 |
+| `ORG-052` | 两个账号 writer 只允许 READ COMMITTED，在授权、锁和写入前拒绝其他隔离模式。锁序是本操作 request、本人 user row、本人所有历史组织 membership 涉及的 governance UUID 升序；锁后重读状态、current 与原申请 receipt。不反向锁其他 owner 的 user row，不补造缺失生命周期。 |
+| `ORG-053` | 首次账号申请在改变状态前，须证明所有相关、仍物理存在的组织都有另一位 current active owner，包括组织删除恢复期。既有 deferred owner 不变量继续生效。恢复只把当前未到期 pending 账号变回 active，不重新创建、延长或复活 membership、owner、capability、跟进分配，也不撤回组织删除。 |
+| `ORG-054` | 账号 current、申请／恢复 claim 与 audit 使用 typed private 存储。claims 追加不可变，仅未来终结删除可解除 actor 引用；audit 不含 actor、外部身份、组织、业务值或自由文本。状态、claim 或 audit 任一步失败均整笔回滚。迁移遇到无来源 pending 账号须失败，不回填申请时间；既有 deleted 账号保留且不能申请／恢复。 |
+| `ORG-055` | 0133 账号核心的 PUBLIC／runtime 权限保持关闭，不增加外部身份 bridge、Backend、HTTP、UI、scheduler 或生产部署。普通 writer 与 bootstrap 不变；现有 active-user 拒绝不等于所有旧业务入口的并发冻结证明。外部认证身份、期满个人数据、组织作者不可反查去关联、本地缓存与终结 claims 的清除另行交付。 |
 
 #### Slice 7B Spec：固定组织原子创建与首位所有者合同
 
@@ -3408,6 +3414,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-152` | 说明 0130 为每项历史 pending 追加实际应用、每个来源槽明确选择 current、全部回执 proof 后才结束并消费 payload。记录固定问卷版本、完整事实与原项目、完整预锁集合、三指纹、终结重放及失败全回滚；保留旧 0128 和普通 writer，不开放生产、runtime、Backend／HTTP／UI。 |
 | `MANUAL-153` | 说明 0131 当前 owner 私有批量到期的固定候选、普通／双端单元、完整预锁和独立 child key；记录逐项子事务失败可见、系统错误整批回滚、实际清除证明及精确／空重放。保留旧普通接线，不接 runtime、Backend／HTTP／UI、scheduler 或生产部署。 |
 | `MANUAL-154` | 说明 0132 仅为 0130 历史确认的首次与终结重放增加 READ COMMITTED 门禁，在授权、父锁和回执读取前拒绝其他隔离级别。保留原函数身份、权限、其余 body、全部旧业务数据和迁移校验值，不修改其他旧私有入口或普通 writer。 |
+| `MANUAL-155` | 说明账号申请／恢复的独立 720 小时周期、私有接口、current-cycle 重放、原关系保留、全部组织治理锁与 sole-owner 拒绝。明确迁移不回填 pending 来源，未交付终结清除、外部 Auth、本地缓存或旧入口并发冻结，不把 synthetic PostgreSQL 通过称为完整账号删除。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3751,6 +3758,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-163` | 0130 fresh／真实 0129 upgrade／checksum／独立恢复验证旧函数及数据保留、最小 ACL 和 17 条精确 FK。覆盖双类型、历史多项、同／异源冲突、显式 older／current、旧问卷与 answers、跨项目、原 binding、全部实际应用及 current 恢复、精确重放和漂移。故障注入及 exact-PID 并发核对完整预锁、pending 增长、普通 revise／stage／expiry、锁后撤权、child 预占和全业务状态回滚。 |
 | `TEST-164` | 0131 fresh／真实 0130 upgrade／checksum／独立恢复核对旧函数与全部旧数据不变、私有 ACL、typed 不可变回执和六条精确 FK。混合普通／多 pair、较早端到期、pending 与第二端失败、清除抑制、精确／空重放、新请求重试及 child 预占验证逐项结果；非 RC 的首次与重放零写入拒绝。exact PID 并发覆盖完整预锁、旧／新 batch、renewal／policy／assignment／confirm／expiry、撤权和真实 55P03，40P01 注入须整批传播，不伪称真实 deadlock 复现。 |
 | `TEST-165` | 0132 fresh／真实 0131 upgrade／checksum／独立恢复验证 confirmer 仅增加隔离门禁，OID／owner／ACL／其余 metadata 与全部旧业务数据保留。REPEATABLE READ、SERIALIZABLE、READ UNCOMMITTED 的首次与真实 terminal replay 均拒绝固定 0A000 且零写入；READ COMMITTED 的实际历史确认、原回执重放及原 14 项 exact-PID 并发继续通过。 |
+| `TEST-166` | 0133 验证账号申请／恢复、精确与旧 cycle 重放、720 小时／DST／截止点、未知／deleted／无来源 pending、sole-owner／组织恢复期、多 owner、原关系及个人／组织事实不变、不可变 claims／audit、故障全回滚与封闭 ACL。指定 PID／精确锁覆盖同 request、同账号不同 request、双 owner、owner／membership／status 变化和恢复等待后到期；三个非 RC 模式的首次与重放均零写入拒绝。真实 0132 upgrade 冻结旧数据与函数 OID／owner／ACL／定义，无来源 pending 的失败迁移零残留；checksum、完整 Docker 与独立恢复继续验证。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -4177,6 +4185,8 @@ actor／request 的精确重放先返回历史 generation，即使 receipt 已�
 7ED／#558 以 0118 增加独立的个人对象 assignment end DB writer。assignment UUID 是固定的一次性操作标识；精确重放返回原结束时间，身份／workspace／project 漂移拒绝。writer 在现有 0114 private generation fence 内，按 fence→target row→assignment row 的顺序锁定并重验。非 active merge member 的有效 assignment 可结束；active merge member 只有在仍保留另一活动 assignment 时可结束，否则必须先 split。value-free、append-only event 保存操作者、workspace、project、assignment、固定 `user_requested` 原因和结束时间。
 
 并发合同覆盖同 assignment 双调用只产生一条 event 且回传相同时间；end 先行后，0117 activation 因绑定 assignment 已结束而失败且没有 activation 副作用；activation 先行后，最后 assignment end 失败且没有 end event。0117→0118 upgrade fixture 保留既有 target、assignment、retention、preview、generation 和 activation 数据；migration checksum 继续使用 runner 的现有自动验证流程。0118 只交付 DB-only 数据库合同，不授予 runtime 执行权，也不增加 Backend、HTTP、Flutter、生产身份或部署证据。只有 migration、check、fixture、并发、checksum 和独立 dump／restore 在 synthetic PostgreSQL 中通过后，才能报告该合同成立。
+
+7EV／#593 在私有数据库内提供本人账号删除申请与期限内恢复。独立 cycle 固定连续 720 小时，只改变账号状态并保留原关系；旧请求不能改变新 cycle，sole owner 即使在组织恢复期也不能申请。四张 metadata 表与状态、claim、audit 原子提交。PUBLIC／runtime 保持关闭，不接 Backend／HTTP／UI、外部 Auth、scheduler 或生产部署；期满清除和组织作者去关联尚未交付，不勾选 ORG-005 的完整产品验收。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 

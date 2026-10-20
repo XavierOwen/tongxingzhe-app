@@ -13478,6 +13478,106 @@ docker exec "${container_name}" psql \
 printf '%s\n' "${personal_merge_contact_resolution_isolation_upgrade_replay}"
 echo '0131→0132 legacy confirmation metadata/OID, isolated guard and checksum replay: passed.'
 
+echo '验证 0132→0133 account deletion live upgrade、未知 pending 预检与 checksum replay。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0132_account_deletion_recovery_core_live.sql >/dev/null
+docker exec "${container_name}" sh -ceu \
+  "mkdir /tmp/account-deletion-recovery-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0133_account_deletion_recovery_core.sql \\
+     /tmp/account-deletion-recovery-upgrade-only/"
+account_deletion_preflight_database='tongxingzhe_account_deletion_preflight'
+account_deletion_preflight_url="postgresql://postgres:postgres@127.0.0.1:5432/${account_deletion_preflight_database}"
+docker exec "${container_name}" createdb -U postgres \
+  --template="${personal_target_pair_upgrade_database}" "${account_deletion_preflight_database}"
+docker exec -i "${container_name}" psql \
+  -U postgres -d "${account_deletion_preflight_database}" --no-psqlrc --set=ON_ERROR_STOP=1 >/dev/null <<'SQL'
+UPDATE app_data.app_users SET status = 'deletion_pending'
+WHERE app_user_id = (SELECT app_user_id FROM public.fixture_0132_account_context WHERE fixture_status = 'active');
+CREATE TABLE public.fixture_0132_account_preflight_state AS
+SELECT public.fixture_0132_account_business_state() AS business_state,
+  public.fixture_0132_account_function_catalog() AS function_catalog,
+  public.fixture_0132_account_relation_catalog() AS relation_catalog,
+  (SELECT count(*) FROM pg_proc WHERE pronamespace IN ('app_data'::regnamespace, 'app_private'::regnamespace)) AS function_count,
+  (SELECT count(*) FROM pg_class WHERE relnamespace IN ('app_data'::regnamespace, 'app_private'::regnamespace)) AS relation_count,
+  (SELECT jsonb_agg(to_jsonb(m) ORDER BY version) FROM app_migrations.schema_migrations m) AS migrations;
+DO $baseline$
+BEGIN
+  IF (SELECT count(*) FROM app_data.app_users WHERE status = 'deletion_pending') <> 1
+    OR (SELECT max(version) FROM app_migrations.schema_migrations) <> '0132_personal_merge_contact_resolution_isolation'
+  THEN RAISE EXCEPTION '0133 provenance preflight requires a real 0132 pending account'; END IF;
+END $baseline$;
+SQL
+if account_deletion_preflight_output="$(
+  docker exec --env DATABASE_URL="${account_deletion_preflight_url}" \
+    --env MIGRATION_DIR=/tmp/account-deletion-recovery-upgrade-only \
+    "${container_name}" bash -c \
+    'psql() { command psql --set=VERBOSITY=verbose "$@"; }; export -f psql; bash /workspace/tool/postgres_migrate.sh' 2>&1
+)"; then
+  echo '0133 migration accepted an account without deletion lifecycle provenance.' >&2
+  exit 1
+fi
+if [[ "${account_deletion_preflight_output}" != \
+    *'55000: account deletion lifecycle provenance unavailable'* ]]; then
+  echo '0133 account deletion provenance preflight returned an unexpected error.' >&2
+  printf '%s\n' "${account_deletion_preflight_output}" >&2
+  exit 1
+fi
+docker exec -i "${container_name}" psql \
+  -U postgres -d "${account_deletion_preflight_database}" --no-psqlrc --set=ON_ERROR_STOP=1 >/dev/null <<'SQL'
+DO $preflight$
+DECLARE saved public.fixture_0132_account_preflight_state%ROWTYPE;
+BEGIN
+  SELECT * INTO STRICT saved FROM public.fixture_0132_account_preflight_state;
+  IF public.fixture_0132_account_business_state() IS DISTINCT FROM saved.business_state
+    OR public.fixture_0132_account_function_catalog() IS DISTINCT FROM saved.function_catalog
+    OR public.fixture_0132_account_relation_catalog() IS DISTINCT FROM saved.relation_catalog
+    OR (SELECT count(*) FROM pg_proc WHERE pronamespace IN ('app_data'::regnamespace, 'app_private'::regnamespace)) <> saved.function_count
+    OR (SELECT count(*) FROM pg_class WHERE relnamespace IN ('app_data'::regnamespace, 'app_private'::regnamespace)) <> saved.relation_count
+    OR (SELECT jsonb_agg(to_jsonb(m) ORDER BY version) FROM app_migrations.schema_migrations m) IS DISTINCT FROM saved.migrations
+    OR to_regclass('app_private.account_deletion_current') IS NOT NULL
+    OR to_regclass('app_private.account_deletion_request_claims') IS NOT NULL
+    OR to_regclass('app_private.account_deletion_restore_claims') IS NOT NULL
+    OR to_regclass('app_private.account_deletion_audit_events') IS NOT NULL
+    OR to_regprocedure('app_private.protect_account_deletion_claim_v1()') IS NOT NULL
+    OR to_regprocedure('app_private.request_account_deletion_v1(uuid,uuid)') IS NOT NULL
+    OR to_regprocedure('app_private.restore_account_v1(uuid,uuid,uuid)') IS NOT NULL
+  THEN RAISE EXCEPTION '0133 failed provenance preflight changed old rows, catalogs or migration receipts'; END IF;
+END $preflight$;
+UPDATE app_data.app_users SET status = 'active'
+WHERE app_user_id = (SELECT app_user_id FROM public.fixture_0132_account_context WHERE fixture_status = 'active');
+SQL
+docker exec --env DATABASE_URL="${account_deletion_preflight_url}" \
+  --env MIGRATION_DIR=/tmp/account-deletion-recovery-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh >/dev/null
+docker exec "${container_name}" psql \
+  -U postgres -d "${account_deletion_preflight_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_account_deletion_recovery_core.sql \
+  --command='BEGIN; SELECT public.fixture_0132_account_assert_upgrade(); ROLLBACK;' >/dev/null
+docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/account-deletion-recovery-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_account_deletion_recovery_core.sql \
+  --command='BEGIN; SELECT public.fixture_0132_account_assert_upgrade(); ROLLBACK;' >/dev/null
+account_deletion_recovery_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/account-deletion-recovery-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${account_deletion_recovery_upgrade_replay}" != \
+    *'已验证 0133_account_deletion_recovery_core（无需重复执行）'* ]] \
+  || [[ "${account_deletion_recovery_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0133 migration did not skip its checksum-verified replay.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command='BEGIN; SELECT public.fixture_0132_account_assert_upgrade(); ROLLBACK;' >/dev/null
+printf '%s\n' "${account_deletion_recovery_upgrade_replay}"
+echo '0132→0133 old data/OID/owner/ACL/definitions, request/restore, atomic provenance failure and checksum replay: passed.'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 
