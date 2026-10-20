@@ -121,6 +121,7 @@
 | [0192](./0192-organization-purge-finalizer-atomic-scope-and-completion.md) | 已接受，2026-10-07 | DB0109／DB-only；Issue #509 | 私有 finalizer 在固定范围内原子删除并写 value-free completion ledger；失败先完整回滚，再由独立最小事务记录 `purge_failed` |
 | [0194](./0194-account-deletion-recovery-is-cycle-bound-and-preserves-relationships.md) | 已接受，2026-10-20 | Slice 7EV／private DB-only；Issue #593 | 本人账号申请与恢复使用独立 720 小时周期；只改账号状态，保留原关系，旧 cycle 不能改变新周期 |
 | [0195](./0195-personal-history-contributions-copy-only-core-facts.md) | 已接受，2026-10-20 | Slice 7EW／private DB-only；Issue #595 | 历史贡献以 revision-bound 预览及确认生成五字段核心副本，个人来源不变，独立于现有统计并接入组织终结清除 |
+| [0196](./0196-due-accounts-unlink-historical-contribution-sources.md) | 已接受，2026-10-20 | Slice 7EX／private DB-only；Issue #597 | 当前 due pending cycle 原子解除历史贡献来源引用，保留组织副本和个人事实，value-free completion 不代表完整账号清除 |
 
 ## 按主题查找
 
