@@ -23,6 +23,15 @@ CREATE TEMP TABLE purge_inventory_expected_fk (
   PRIMARY KEY (child_relation, constraint_name)
 );
 INSERT INTO purge_inventory_expected_fk VALUES
+  ('app_private.personal_history_contribution_previews_v1', 'phc_preview_actor_fk', 'app_data.app_users', 'n', 'FOREIGN KEY (actor_app_user_id) REFERENCES app_data.app_users(app_user_id) ON DELETE SET NULL'),
+  ('app_private.personal_history_contribution_previews_v1', 'phc_preview_source_fk', 'app_data.contacts', 'n', 'FOREIGN KEY (source_contact_id) REFERENCES app_data.contacts(contact_id) ON DELETE SET NULL'),
+  ('app_private.personal_history_contribution_previews_v1', 'phc_preview_project_fk', 'app_data.projects', 'r', 'FOREIGN KEY (target_project_id) REFERENCES app_data.projects(project_id) ON DELETE RESTRICT'),
+  ('app_private.organization_historical_contact_copies_v1', 'phc_copy_project_fk', 'app_data.projects', 'r', 'FOREIGN KEY (target_project_id) REFERENCES app_data.projects(project_id) ON DELETE RESTRICT'),
+  ('app_private.personal_history_contribution_confirmations_v1', 'phc_confirm_actor_fk', 'app_data.app_users', 'n', 'FOREIGN KEY (actor_app_user_id) REFERENCES app_data.app_users(app_user_id) ON DELETE SET NULL'),
+  ('app_private.personal_history_contribution_confirmations_v1', 'phc_confirm_source_fk', 'app_data.contacts', 'n', 'FOREIGN KEY (source_contact_id) REFERENCES app_data.contacts(contact_id) ON DELETE SET NULL'),
+  ('app_private.personal_history_contribution_confirmations_v1', 'phc_confirm_project_fk', 'app_data.projects', 'r', 'FOREIGN KEY (target_project_id) REFERENCES app_data.projects(project_id) ON DELETE RESTRICT'),
+  ('app_private.personal_history_contribution_confirmations_v1', 'phc_confirm_preview_fk', 'app_private.personal_history_contribution_previews_v1', 'r', 'FOREIGN KEY (preview_id) REFERENCES app_private.personal_history_contribution_previews_v1(preview_id) ON DELETE RESTRICT'),
+  ('app_private.personal_history_contribution_confirmations_v1', 'phc_confirm_copy_fk', 'app_private.organization_historical_contact_copies_v1', 'r', 'FOREIGN KEY (copy_id) REFERENCES app_private.organization_historical_contact_copies_v1(copy_id) ON DELETE RESTRICT'),
   ('app_private.personal_target_expiry_dispatch_requests_v1', 'personal_target_expiry_dispatch_requests_actor_app_user_id_fkey', 'app_data.app_users', 'a', 'FOREIGN KEY (actor_app_user_id) REFERENCES app_data.app_users(app_user_id)'),
   ('app_private.personal_target_expiry_dispatch_requests_v1', 'personal_target_expiry_dispatch_requests_v1_project_id_fkey', 'app_data.projects', 'a', 'FOREIGN KEY (project_id) REFERENCES app_data.projects(project_id)'),
   ('app_private.personal_target_expiry_dispatch_requests_v1', 'personal_target_expiry_dispatch_requests_v1_workspace_id_fkey', 'app_data.workspaces', 'a', 'FOREIGN KEY (workspace_id) REFERENCES app_data.workspaces(workspace_id)'),

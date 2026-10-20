@@ -104,6 +104,12 @@
 | `CTX-004` | App 顶部持续显示“个人空间或组织 → 当前推广项目”，并允许有权用户切换。 |
 | `CTX-005` | 草稿与接触创建后固定原项目归属；切换上下文不会静默搬移数据。 |
 | `CTX-006` | 个人历史只能通过明确预览与确认的“历史贡献”产生组织项目的去身份化副本，原记录不移动。 |
+| `CTX-007` | 首片私有历史贡献只接受本人个人空间的有效接触及显式组织项目；锁后重新确认 active user、活动目标项目、组织及项目成员资格，组织删除周期内禁止贡献与重放。 |
+| `CTX-008` | 预览绑定当前 source revision 与目标项目，有效期为锁后数据库墙钟起 15 分钟；首次确认必须仍在半开窗口内且来源未修订或作废。相同 source contact 对同一目标项目只产生一份副本。 |
+| `CTX-009` | 预览和核心副本只包含发生时间、数据库目录认可的时区、有限渠道类别、触达人数与兴趣度；不复制作者、对象及同意关系、地点、渠道详情、问卷答案或自由文本。原记录和全部修订不改变。 |
+| `CTX-010` | 确认使用独立 request UUID，原子创建副本与不可变 receipt。精确重放仍需当前目标授权，但返回原结果，不因预览到期或后续个人修订／作废改写副本；actor、selector 或重复贡献漂移 conflict。 |
+| `CTX-011` | preview 与 confirmation 保留私有来源引用，仅允许终结处理解除 actor／source 引用，不可重绑。组织终结清除同时清除目标项目全部副本和来源 metadata，保留个人来源及其他组织事实，并阻止已清除 request UUID 再用。 |
+| `CTX-012` | 首片核心副本是封闭私有的未聚合事实，不接现有接触、同步、报告或 contributor 计数，也不代表公开匿名。runtime、Backend／HTTP／UI、账号期满清除、贡献撤回和统计披露须另行交付。 |
 
 ### 4.2 稳定主导航
 
@@ -3415,6 +3421,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-153` | 说明 0131 当前 owner 私有批量到期的固定候选、普通／双端单元、完整预锁和独立 child key；记录逐项子事务失败可见、系统错误整批回滚、实际清除证明及精确／空重放。保留旧普通接线，不接 runtime、Backend／HTTP／UI、scheduler 或生产部署。 |
 | `MANUAL-154` | 说明 0132 仅为 0130 历史确认的首次与终结重放增加 READ COMMITTED 门禁，在授权、父锁和回执读取前拒绝其他隔离级别。保留原函数身份、权限、其余 body、全部旧业务数据和迁移校验值，不修改其他旧私有入口或普通 writer。 |
 | `MANUAL-155` | 说明账号申请／恢复的独立 720 小时周期、私有接口、current-cycle 重放、原关系保留、全部组织治理锁与 sole-owner 拒绝。明确迁移不回填 pending 来源，未交付终结清除、外部 Auth、本地缓存或旧入口并发冻结，不把 synthetic PostgreSQL 通过称为完整账号删除。 |
+| `MANUAL-156` | 说明历史贡献私有预览／确认的五字段 allowlist、15 分钟 revision 绑定、一份来源／目标副本、冻结重放、当前目标授权与固定锁序；明确来源引用、组织 purge/tombstone、统计未接入及非公开匿名边界。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3759,6 +3766,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-164` | 0131 fresh／真实 0130 upgrade／checksum／独立恢复核对旧函数与全部旧数据不变、私有 ACL、typed 不可变回执和六条精确 FK。混合普通／多 pair、较早端到期、pending 与第二端失败、清除抑制、精确／空重放、新请求重试及 child 预占验证逐项结果；非 RC 的首次与重放零写入拒绝。exact PID 并发覆盖完整预锁、旧／新 batch、renewal／policy／assignment／confirm／expiry、撤权和真实 55P03，40P01 注入须整批传播，不伪称真实 deadlock 复现。 |
 | `TEST-165` | 0132 fresh／真实 0131 upgrade／checksum／独立恢复验证 confirmer 仅增加隔离门禁，OID／owner／ACL／其余 metadata 与全部旧业务数据保留。REPEATABLE READ、SERIALIZABLE、READ UNCOMMITTED 的首次与真实 terminal replay 均拒绝固定 0A000 且零写入；READ COMMITTED 的实际历史确认、原回执重放及原 14 项 exact-PID 并发继续通过。 |
 | `TEST-166` | 0133 验证账号申请／恢复、精确与旧 cycle 重放、720 小时／DST／截止点、未知／deleted／无来源 pending、sole-owner／组织恢复期、多 owner、原关系及个人／组织事实不变、不可变 claims／audit、故障全回滚与封闭 ACL。指定 PID／精确锁覆盖同 request、同账号不同 request、双 owner、owner／membership／status 变化和恢复等待后到期；三个非 RC 模式的首次与重放均零写入拒绝。真实 0132 upgrade 冻结旧数据与函数 OID／owner／ACL／定义，无来源 pending 的失败迁移零残留；checksum、完整 Docker 与独立恢复继续验证。 |
+| `TEST-167` | 0134 用真实 personal writer、邀请接受与项目分配验证五字段 allowlist、合法时区、revision／projection 一致、预览期限、来源修订／作废、一次贡献及冻结重放；PII／答案／地点／文本不复制，旧表逐值不变。指定 PID／精确锁覆盖双 request、撤权、归档、账号／组织删除、来源变更和等待后到期；三个非 RC 模式均零写拒绝。验证写入故障、不可变／解除引用、两组织 purge 保留与失败回滚、UUID tombstone、严格 FK inventory、真实 0133 升级、checksum 和独立恢复。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -4187,6 +4195,8 @@ actor／request 的精确重放先返回历史 generation，即使 receipt 已�
 并发合同覆盖同 assignment 双调用只产生一条 event 且回传相同时间；end 先行后，0117 activation 因绑定 assignment 已结束而失败且没有 activation 副作用；activation 先行后，最后 assignment end 失败且没有 end event。0117→0118 upgrade fixture 保留既有 target、assignment、retention、preview、generation 和 activation 数据；migration checksum 继续使用 runner 的现有自动验证流程。0118 只交付 DB-only 数据库合同，不授予 runtime 执行权，也不增加 Backend、HTTP、Flutter、生产身份或部署证据。只有 migration、check、fixture、并发、checksum 和独立 dump／restore 在 synthetic PostgreSQL 中通过后，才能报告该合同成立。
 
 7EV／#593 在私有数据库内提供本人账号删除申请与期限内恢复。独立 cycle 固定连续 720 小时，只改变账号状态并保留原关系；旧请求不能改变新 cycle，sole owner 即使在组织恢复期也不能申请。四张 metadata 表与状态、claim、audit 原子提交。PUBLIC／runtime 保持关闭，不接 Backend／HTTP／UI、外部 Auth、scheduler 或生产部署；期满清除和组织作者去关联尚未交付，不勾选 ORG-005 的完整产品验收。
+
+7EW／#595 在私有数据库内把本人明确预览与确认的个人历史接触复制为独立组织项目核心事实。预览绑定 revision 与 15 分钟期限；副本只保留五项核心字段，不改变个人来源，不接现有报告或 contributor 计数。三张 private 表同时纳入组织终结清除，新增 confirmation tombstone 防止清除后重用 UUID。PUBLIC／runtime 保持封闭，不接 Backend／HTTP／UI、scheduler 或生产部署；不称为完整历史贡献、公开匿名或账号期满清除。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 

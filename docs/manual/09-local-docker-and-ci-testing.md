@@ -2999,6 +2999,20 @@ MANUAL-154／TEST-165 不开放生产、runtime、Backend／HTTP／UI 或 schedu
 
 MANUAL-155／TEST-166 只证明 private PostgreSQL 核心。未开放 runtime、Backend／HTTP／UI 或生产执行，不证明外部认证身份、本地缓存、全部旧入口并发冻结、个人数据期满清除、组织作者不可反查或完整账号删除。
 
+### 7.22 个人历史贡献核心副本（Issue #595）
+
+标准 Docker runner 自动发现 0134 的结构 check、两个 rollback fixture 和独立并发脚本。核心 fixture 用真实 personal submit／revise／void 及邀请接受、项目分配创建来源，比较五字段预览／副本完整 JSON，证明答案、PII、地点和自由文本没有复制；全部旧表逐值保持不变。真实旧 revise 接受的非法时区也必须在新预览拒绝，projection 与 revision 同时含非法时区时首次确认仍须零写拒绝。
+
+行为覆盖 source revision 漂移、作废、重复预览、同 contact／target 一次贡献、预览过期、完成后冻结重放、撤权、账号状态、组织删除周期和 projection 漂移。副本或 receipt INSERT 注入失败须整笔回滚；三表不可改绑或任意删除，actor／source 只能解除引用。结构 check 固定四个函数、三表、九条即时 FK、owner、ACL 与唯一约束。
+
+独立会话通过实际 physical PID、blocker 和指定 user／governance／membership／project-status／contact／request 锁证明等待，再由 FIFO 放行。测试同 request 只写一次、同来源不同 request 只成功一份，以及等待中撤权、归档、个人修订／作废、账号 pending、组织删除和预览到期后的重验；三个非 RC 模式分别验证 preview、first confirm 和 confirm replay 零写拒绝。
+
+purge fixture 为两个组织分别生成真实副本与未消费预览。清除一个组织须保留另一组织、个人来源和其他旧事实；晚期 DELETE 故障须完整回滚，跨组织来源漂移须失败关闭。独立 rank 14 的 confirmation request 被收集并留 tombstone，终结重试精确幂等，旧 UUID 不能在其他组织重用。严格 FK inventory 从 347 条增加为 356 条，不放宽原断言。
+
+真实 0133 live 库保留全部旧表与 catalog，应用 0134 后仅两个 purge 函数出现固定新增块、一个 CHECK 增加新 family；其他旧 OID、owner、ACL、约束和定义均不变。checksum 重放与新行为再次检查，独立 cluster dump／restore 重跑所有 check 和 rollback fixture，不重跑会提交 synthetic 行的并发脚本。
+
+MANUAL-156／TEST-167 只覆盖封闭 private PostgreSQL。未验证 runtime、Backend／HTTP／UI、生产身份、公开匿名、统计 contributor、个人账号期满清除或贡献撤回，不能据此宣称完整历史贡献已上线。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：
