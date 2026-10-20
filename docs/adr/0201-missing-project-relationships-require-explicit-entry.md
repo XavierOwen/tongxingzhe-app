@@ -31,4 +31,6 @@ v2 接收原三项 metadata 指纹、完整 assignments／current choices，以�
 
 同代次还有接触 pending 时仍整批拒绝。没有接触、同意、retention 续期、业务哈希或普通 writer 改动；旧 rows、函数及 catalog 不变，新增八条 FK 纳入严格清理 inventory。PUBLIC／runtime 无权限，不接 Backend／HTTP／UI、scheduler 或生产 active merge。
 
+不能顺序嵌套接触确认与本确认来实现 mixed split：两者都会结束代次、消费载荷，且各自 proof 绑定全代次最终 manifest。接触路径先锁 contact／child command 再取 generation fence，项目路径先取 fence；持 fence 后补 contact 锁会形成反向等待。混合确认须另有单次终结、共同最终 manifest 和完整预锁合同，不能靠跳过 guard 或先删另一类 payload 实现。
+
 这是项目 pending 的显式进入与处置，不是接触／项目 mixed split、全部未知事实类型或完整拆分。synthetic fresh、真实版本升级、并发、checksum 和独立恢复不替代生产身份、真实 PII 或设备验收。
