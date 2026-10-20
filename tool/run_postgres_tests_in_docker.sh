@@ -13610,6 +13610,38 @@ docker exec "${container_name}" psql \
 printf '%s\n' "${personal_history_contribution_upgrade_replay}"
 echo '0133→0134 old facts/OID/owner/ACL, exact purge deltas, preview/confirm/replay and checksum replay: passed.'
 
+echo '验证 0134→0135 account contribution unlink live upgrade 与旧事实保留。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0134_account_history_contribution_unlink_live.sql >/dev/null
+docker exec "${container_name}" sh -ceu \
+  "mkdir /tmp/account-history-contribution-unlink-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0135_account_history_contribution_unlink.sql \\
+     /tmp/account-history-contribution-unlink-upgrade-only/"
+docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/account-history-contribution-unlink-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_account_history_contribution_unlink.sql \
+  --command='BEGIN; SELECT public.fixture_0134_unlink_assert_upgrade(); ROLLBACK;' >/dev/null
+account_history_contribution_unlink_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/account-history-contribution-unlink-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${account_history_contribution_unlink_upgrade_replay}" != \
+    *'已验证 0135_account_history_contribution_unlink（无需重复执行）'* ]] \
+  || [[ "${account_history_contribution_unlink_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0135 migration did not skip its checksum-verified replay.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command='BEGIN; SELECT public.fixture_0134_unlink_assert_upgrade(); ROLLBACK;' >/dev/null
+printf '%s\n' "${account_history_contribution_unlink_upgrade_replay}"
+echo '0134→0135 frozen old rows/OID/owner/ACL/definitions, unlink-only provenance, exact replay and checksum replay: passed.'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 

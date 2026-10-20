@@ -3013,6 +3013,18 @@ purge fixture 为两个组织分别生成真实副本与未消费预览。清除
 
 MANUAL-156／TEST-167 只覆盖封闭 private PostgreSQL。未验证 runtime、Backend／HTTP／UI、生产身份、公开匿名、统计 contributor、个人账号期满清除或贡献撤回，不能据此宣称完整历史贡献已上线。
 
+### 7.23 期满账号历史贡献来源去关联（Issue #597）
+
+0135 check 固定新增一表一函数、三字段结果、trusted owner、SECURITY DEFINER／VOLATILE／固定 search path、不可变 value-free completion 和封闭 ACL，确认无新增 FK。rollback fixture 从真实 0134 preview／confirmation 和 0133 申请建立来源，仅 synthetic 时间设置把匹配 current／claim 移至到期边界；不能把伪造到期写成生产演练。
+
+行为验证跨组织 copy 与未确认 preview、单边已解除引用、空范围、截止点、精确重放，以及期限前、恢复后、旧 cycle、状态和来源矛盾的零写拒绝。逐表比较只允许两列引用和新 completion 变化；核心副本、个人原记录与其他事实保留。UPDATE 或 completion INSERT 失败必须全部回滚，已解除来源的副本仍须由组织 finalizer 成功清除。
+
+独立会话使用 physical PID、blocker 与精确 cycle／confirmation／user／governance 锁证明顺序。等待后状态和期限必须重验，晚到 request／组织不能补锁，组织 purge 的两个先后顺序均须安全；三个非 READ COMMITTED 模式的首次与重放均零写拒绝。
+
+真实 0134 live upgrade 冻结全部旧表与函数／表 catalog，0135 只新增封闭对象，不改旧事实、OID、owner、ACL、约束、定义或 purge 范围。首次 unlink 只允许两列变 null；精确重放不再改变状态，checksum 重放后再验证。独立 cluster dump／restore 重跑结构和 rollback fixtures。
+
+MANUAL-157／TEST-168 仅证明这一私有来源去关联步骤。它不代表 production、外部 Auth、个人账号 purge、全部组织作者匿名化、不可重识别或客户端缓存清除。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：

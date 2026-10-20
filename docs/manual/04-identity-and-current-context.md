@@ -2074,6 +2074,18 @@ Flutter 将 eligibility 结果绑定到目录读取 generation，并在回包时
 
 组织终结清除先删除本组织 confirmation，再删除 preview 与 copy，同时写独立 confirmation UUID tombstone；它不删个人来源或其他组织副本。任一来源冲突或中途失败都使整笔清除回滚。合同见 [ADR-0195](../adr/0195-personal-history-contributions-copy-only-core-facts.md)，实现见 [0134](../../backend/database/migrations/0134_personal_history_contribution.sql)，验证见[测试说明](09-local-docker-and-ci-testing.md#722-个人历史贡献核心副本issue-595)。本片不开放 Backend／HTTP／UI 或生产，不提供贡献撤回、账号期满清除或统计接入。
 
+### 3.56 期满账号历史贡献来源去关联（Issue #597，MANUAL-157）
+
+0135 的 `app_private.unlink_due_account_history_contributions_v1(user UUID, expected deletion cycle UUID)` 是可信内部私有步骤，不是 App 账号删除入口。它要求账号仍 pending，0133 current 和原申请均对应同一 actor／cycle／时间／期限，锁后数据库墙钟达到 deadline。期限前返回 not due；旧 cycle 为 conflict，非 pending 或生命周期／贡献来源矛盾为 unavailable。
+
+选择两张历史贡献 provenance 表中 actor 为本人、source 属于本人个人空间的行，并沿 preview UUID 覆盖关联行。即使 actor 已空，只要 source 仍能指向本人就须解除；已合法解除 source 的行也可继续清空 actor。目标、作者或个人 source ownership 矛盾时全批失败，不能把错误来源一并抹去。
+
+成功只清空 preview／confirmation 的 `actor_app_user_id` 和 `source_contact_id`。组织核心副本的五项事实、原 preview／confirmation 其他 metadata、个人接触与修订、成员关系和其他旧事实不改。更新与 value-free completion 同事务提交，返回固定 contract、deletion cycle 和完成时间；空范围也有结果。精确重放返回原 receipt，但仍须当前 due pending cycle 且没有残留归属引用。
+
+锁序为独立 cycle、全部关联 confirmation request UUID 升序、本人 user `FOR NO KEY UPDATE`、相关组织 governance UUID 升序。全部等待后重新收集；晚到 request 或新组织返回 retry required，不能在 user／governance 之后补锁。组织 purge 先完成使集合缩小可以继续；本步骤先完成后，组织 purge 仍能清除已经解除来源的副本。
+
+completion 只有 cycle UUID 和完成时间，没有 actor、source、组织或正文引用，禁止更新／删除。PUBLIC／runtime 无新表或函数权限；旧函数与 purge inventory 不改。合同见 [ADR-0196](../adr/0196-due-accounts-unlink-historical-contribution-sources.md)，实现见 [0135](../../backend/database/migrations/0135_account_history_contribution_unlink.sql)，验证见[测试说明](09-local-docker-and-ci-testing.md#723-期满账号历史贡献来源去关联issue-597)。本步骤不标记账号 deleted，不删除个人空间或成员，不处理外部 Auth、原生组织作者、缓存或统计 contributor，不能称完整账号 purge。
+
 ## 4. PostgreSQL transaction 建立哪些事实
 
 `0002_identity_context.sql` 创建五张最小表：

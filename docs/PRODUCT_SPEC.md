@@ -541,6 +541,10 @@ MANUAL-154／TEST-165 覆盖此修正。真实 0131 baseline 的历史应用、�
 | `ORG-053` | 首次账号申请在改变状态前，须证明所有相关、仍物理存在的组织都有另一位 current active owner，包括组织删除恢复期。既有 deferred owner 不变量继续生效。恢复只把当前未到期 pending 账号变回 active，不重新创建、延长或复活 membership、owner、capability、跟进分配，也不撤回组织删除。 |
 | `ORG-054` | 账号 current、申请／恢复 claim 与 audit 使用 typed private 存储。claims 追加不可变，仅未来终结删除可解除 actor 引用；audit 不含 actor、外部身份、组织、业务值或自由文本。状态、claim 或 audit 任一步失败均整笔回滚。迁移遇到无来源 pending 账号须失败，不回填申请时间；既有 deleted 账号保留且不能申请／恢复。 |
 | `ORG-055` | 0133 账号核心的 PUBLIC／runtime 权限保持关闭，不增加外部身份 bridge、Backend、HTTP、UI、scheduler 或生产部署。普通 writer 与 bootstrap 不变；现有 active-user 拒绝不等于所有旧业务入口的并发冻结证明。外部认证身份、期满个人数据、组织作者不可反查去关联、本地缓存与终结 claims 的清除另行交付。 |
+| `ORG-056` | 账号期满的历史贡献来源去关联仅接受本人当前 pending deletion cycle；锁后证明账号、current 与原申请 actor／时间／720 小时期限完全一致，数据库时刻达到 deadline 本身即可执行，期限前、旧 cycle 或来源矛盾拒绝。 |
+| `ORG-057` | 去关联覆盖 actor 为本人或 source 仍属于本人个人空间的 preview／confirmation 及其关联闭包，只把两列引用解除为 null。单边合法去关联可继续；actor／source ownership 或 preview／confirmation／copy 目标矛盾整批拒绝，核心副本、个人原记录和其他事实逐值保留。 |
+| `ORG-058` | 私有去关联使用 cycle lock、全部 confirmation request UUID 升序、本人 user row、组织 governance UUID 升序；锁后重收集，不得补取晚到 request 锁。新 request／组织范围零写要求重试，组织 purge 导致的范围缩小可接受。所有写入与只含 cycle／时间的不可变 completion 原子提交，空范围与精确重放有固定结果。 |
+| `ORG-059` | 来源去关联不标记账号 deleted，不替换原生组织作者，不改 contributor 统计，不删除个人数据或成员关系；PUBLIC／runtime 封闭，无 Backend／HTTP／UI、scheduler 或生产入口，不能据此称 ORG-005 或全部作者匿名化完成。 |
 
 #### Slice 7B Spec：固定组织原子创建与首位所有者合同
 
@@ -3422,6 +3426,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-154` | 说明 0132 仅为 0130 历史确认的首次与终结重放增加 READ COMMITTED 门禁，在授权、父锁和回执读取前拒绝其他隔离级别。保留原函数身份、权限、其余 body、全部旧业务数据和迁移校验值，不修改其他旧私有入口或普通 writer。 |
 | `MANUAL-155` | 说明账号申请／恢复的独立 720 小时周期、私有接口、current-cycle 重放、原关系保留、全部组织治理锁与 sole-owner 拒绝。明确迁移不回填 pending 来源，未交付终结清除、外部 Auth、本地缓存或旧入口并发冻结，不把 synthetic PostgreSQL 通过称为完整账号删除。 |
 | `MANUAL-156` | 说明历史贡献私有预览／确认的五字段 allowlist、15 分钟 revision 绑定、一份来源／目标副本、冻结重放、当前目标授权与固定锁序；明确来源引用、组织 purge/tombstone、统计未接入及非公开匿名边界。 |
+| `MANUAL-157` | 说明期满账号历史贡献来源去关联的私有接口、exact pending cycle／deadline、两列引用闭包、预锁与晚到重试、原子 value-free completion 及精确重放；保留核心副本和个人事实，明确非账号 purge 或全部作者匿名化。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3767,6 +3772,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-165` | 0132 fresh／真实 0131 upgrade／checksum／独立恢复验证 confirmer 仅增加隔离门禁，OID／owner／ACL／其余 metadata 与全部旧业务数据保留。REPEATABLE READ、SERIALIZABLE、READ UNCOMMITTED 的首次与真实 terminal replay 均拒绝固定 0A000 且零写入；READ COMMITTED 的实际历史确认、原回执重放及原 14 项 exact-PID 并发继续通过。 |
 | `TEST-166` | 0133 验证账号申请／恢复、精确与旧 cycle 重放、720 小时／DST／截止点、未知／deleted／无来源 pending、sole-owner／组织恢复期、多 owner、原关系及个人／组织事实不变、不可变 claims／audit、故障全回滚与封闭 ACL。指定 PID／精确锁覆盖同 request、同账号不同 request、双 owner、owner／membership／status 变化和恢复等待后到期；三个非 RC 模式的首次与重放均零写入拒绝。真实 0132 upgrade 冻结旧数据与函数 OID／owner／ACL／定义，无来源 pending 的失败迁移零残留；checksum、完整 Docker 与独立恢复继续验证。 |
 | `TEST-167` | 0134 用真实 personal writer、邀请接受与项目分配验证五字段 allowlist、合法时区、revision／projection 一致、预览期限、来源修订／作废、一次贡献及冻结重放；PII／答案／地点／文本不复制，旧表逐值不变。指定 PID／精确锁覆盖双 request、撤权、归档、账号／组织删除、来源变更和等待后到期；三个非 RC 模式均零写拒绝。验证写入故障、不可变／解除引用、两组织 purge 保留与失败回滚、UUID tombstone、严格 FK inventory、真实 0133 升级、checksum 和独立恢复。 |
+| `TEST-168` | 0135 验证 due pending cycle、多组织与未确认 preview、单边引用、空集及精确重放；期限前／restored／旧 cycle／状态和来源矛盾零写拒绝。UPDATE／completion 故障须全回滚，核心副本及其余旧事实逐值不变，解除后组织 purge 继续成功。精确 PID／锁覆盖 cycle、request→user→governance、等待后状态／期限、晚到范围重试及 purge 两序；三个非 RC 模式首次／重放拒绝。真实 0134 升级不改旧 OID／owner／ACL／定义或事实，checksum、完整 Docker 与独立恢复继续验证。 |
 
 ## 9. UI、视觉与可访问性
 
@@ -4197,6 +4203,8 @@ actor／request 的精确重放先返回历史 generation，即使 receipt 已�
 7EV／#593 在私有数据库内提供本人账号删除申请与期限内恢复。独立 cycle 固定连续 720 小时，只改变账号状态并保留原关系；旧请求不能改变新 cycle，sole owner 即使在组织恢复期也不能申请。四张 metadata 表与状态、claim、audit 原子提交。PUBLIC／runtime 保持关闭，不接 Backend／HTTP／UI、外部 Auth、scheduler 或生产部署；期满清除和组织作者去关联尚未交付，不勾选 ORG-005 的完整产品验收。
 
 7EW／#595 在私有数据库内把本人明确预览与确认的个人历史接触复制为独立组织项目核心事实。预览绑定 revision 与 15 分钟期限；副本只保留五项核心字段，不改变个人来源，不接现有报告或 contributor 计数。三张 private 表同时纳入组织终结清除，新增 confirmation tombstone 防止清除后重用 UUID。PUBLIC／runtime 保持封闭，不接 Backend／HTTP／UI、scheduler 或生产部署；不称为完整历史贡献、公开匿名或账号期满清除。
+
+7EX／#597 只在私有数据库为当前 due pending 账号解除历史贡献 preview／confirmation 的 actor／source 引用，以 cycle 和完成时间记录原子步骤。跨组织核心副本、个人原记录与成员事实保留；组织 purge 继续清除其副本。它不标记账号 deleted，不处理原生组织作者或统计 contributor，也不开放 runtime、Backend／HTTP／UI、scheduler 或生产。
 
 验收：定向邀请与公开申请链接不能混用；组织始终保有所有者；删除与恢复状态可演练；PII 导出需要独立权限、近期重新认证和审计；合并不会丢失来源且可以拆分。
 
