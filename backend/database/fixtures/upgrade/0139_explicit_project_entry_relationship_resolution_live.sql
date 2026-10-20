@@ -3,6 +3,7 @@ BEGIN;
 SET LOCAL TIME ZONE 'UTC';
 CREATE TABLE public.fixture_0139_entry_context AS
 SELECT * FROM app_data.bootstrap_personal_context('https://0139-entry-upgrade.example.test','owner');
+SELECT count(*) FROM app_data.list_personal_project_contexts('https://0139-entry-upgrade.example.test','owner') WHERE is_current;
 CREATE TABLE public.fixture_0139_entry_targets AS
 SELECT choice.ordinal,(created.target->>'target_id')::uuid AS target_id
 FROM public.fixture_0139_entry_context c CROSS JOIN (VALUES(1),(2)) choice(ordinal)
@@ -129,6 +130,8 @@ DO $baseline$
 BEGIN
   IF (SELECT max(version) FROM app_migrations.schema_migrations)<>'0139_other_relationship_reason_redaction'
     OR (SELECT result_code FROM public.fixture_0139_entry_contact) IS DISTINCT FROM 'accepted'
+    OR NOT EXISTS(SELECT 1 FROM app_data.user_current_projects current_project
+      JOIN public.fixture_0139_entry_context c USING(app_user_id) WHERE current_project.project_id=c.project_id)
     OR (SELECT count(*) FROM public.fixture_0139_entry_parents)<>1
     OR NOT EXISTS(SELECT 1 FROM public.fixture_0139_entry_parents WHERE current_revision=2 AND merge_generation_id IS NULL)
     OR (SELECT count(*) FROM public.fixture_0139_entry_pending)<>3
@@ -263,9 +266,9 @@ BEGIN
     expected_fields:=CASE WHEN slot.ordinal=1 THEN ARRAY['pending_current_selection']::text[]
       ELSE ARRAY['pending_current_selection','stage','lifecycle_status','follow_up_note']::text[] END;
     IF final_row.old_stage IS DISTINCT FROM original_stage OR final_row.old_lifecycle_status IS DISTINCT FROM original_lifecycle
-      OR final_row.new_stage IS DISTINCT FROM CASE WHEN slot.ordinal=1 THEN 1 ELSE 3 END
-      OR final_row.new_lifecycle_status IS DISTINCT FROM CASE WHEN slot.ordinal=1 THEN 'active' ELSE 'paused' END
-      OR final_row.follow_up_note IS DISTINCT FROM CASE WHEN slot.ordinal=1 THEN original_note ELSE '0139 raw shared note' END
+      OR final_row.new_stage IS DISTINCT FROM (CASE WHEN slot.ordinal=1 THEN 1 ELSE 3 END)
+      OR final_row.new_lifecycle_status IS DISTINCT FROM (CASE WHEN slot.ordinal=1 THEN 'active' ELSE 'paused' END)
+      OR final_row.follow_up_note IS DISTINCT FROM (CASE WHEN slot.ordinal=1 THEN original_note ELSE '0139 raw shared note' END)
       OR final_row.changed_fields IS DISTINCT FROM expected_fields OR final_row.reason_code IS DISTINCT FROM 'correction'
       OR final_row.reason_detail IS DISTINCT FROM 'Confirmed pending project relationship current selection'
       OR final_row.changed_at IS DISTINCT FROM inner_request.confirmed_at_utc OR final_row.changed_by_app_user_id IS DISTINCT FROM saved.app_user_id
