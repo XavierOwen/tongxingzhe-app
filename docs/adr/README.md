@@ -124,6 +124,7 @@
 | [0196](./0196-due-accounts-unlink-historical-contribution-sources.md) | 已接受，2026-10-20 | Slice 7EX／private DB-only；Issue #597 | 当前 due pending cycle 原子解除历史贡献来源引用，保留组织副本和个人事实，value-free completion 不代表完整账号清除 |
 | [0197](./0197-unknown-project-relationship-facts-stay-pending-until-assigned.md) | 已接受，2026-10-20 | Slice 7EY／private DB-only；Issue #598 | 未知来源项目关系事件独立登记，metadata 只读，未分配不能结束代次，到期原子清除敏感载荷，不改已知来源事实 |
 | [0198](./0198-project-relationship-resolution-plans-list-metadata-candidates.md) | 已接受，2026-10-20 | Slice 7EZ／private DB-only；Issue #600 | 完整拟议来源绑定两指纹，按原项目列出 pending／current metadata 候选，不写事实或自动选择 |
+| [0199](./0199-existing-project-relationship-resolution-keeps-history-and-explicit-current.md) | 已接受，2026-10-20 | Slice 7FA／private DB-only；Issue #601 | 已有关系逐项保留待分配历史，逐槽明确选择当前；proof、end 与消费原子成功，缺关系及混合 pending 拒绝 |
 
 ## 按主题查找
 

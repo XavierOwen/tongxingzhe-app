@@ -431,6 +431,16 @@ header 只保存标识、派生 target type 和数据库 staged time，业务值
 
 合同见 [ADR-0198](../adr/0198-project-relationship-resolution-plans-list-metadata-candidates.md)，实现见 [0137](../../backend/database/migrations/0137_personal_merge_project_relationship_resolution_plan.sql)，验证见[测试说明](09-local-docker-and-ci-testing.md#725-项目关系待分配事实只读冲突预检issue-600)。PUBLIC／runtime 关闭，无 Backend／HTTP／UI、scheduler 或生产 active merge。
 
+### 0138 已有项目关系的待分配历史与当前选择（Issue #601）
+
+私有 `app_private.confirm_personal_merge_project_relationship_resolutions_v1` 接收 0137 的三项指纹、全部 pending／source 映射和逐 source／原项目的明确 current choice。每槽都须已有真实原关系；缺关系或同代次另有未处理的接触 pending 时，整批零写拒绝，不制造 project_entry。
+
+全部 pending 分别追加来源分配 revision，保留 raw 值、原时间和同值事件，只有 `pending_source_assignment` 标记，不逐项推进当前或计作阶段变化。最后每槽按明确 current／pending 选择追加 `pending_current_selection` revision，只有原 current 到所选值的真实差异标 stage／lifecycle／note；同值选择仍记录。原关系 binding 和旧历史保持不变，新 revision 由现有 binder 绑定真实代次。
+
+请求、应用和最终选择的三个 private 表只含标识与指纹。完整 proof、既有 end receipt、全部 payload 消费同事务成功；任何写入或计数失败全回滚。规范化请求精确重放经现有 end 授权返回原时间，不重写历史。RC-only，固定 request／user／fence／target／assignment／relationship 顺序，等待后重新核对指纹、范围和 due。
+
+合同见 [ADR-0199](../adr/0199-existing-project-relationship-resolution-keeps-history-and-explicit-current.md)，实现见 [0138](../../backend/database/migrations/0138_personal_merge_project_relationship_resolution_confirmation.sql)，验证见[测试说明](09-local-docker-and-ci-testing.md#726-已有项目关系历史与当前选择原子确认issue-601)。不改普通 writer 或初始关系合同，不是完整 mixed split；PUBLIC／runtime、Backend／HTTP／UI 和生产入口仍关闭。
+
 ## HTTP 与权限边界
 
 | 方法与路径 | 用途 | Backend capability |
