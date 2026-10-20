@@ -211,10 +211,22 @@ SELECT pg_temp.expect_0140_failure('23505',NULL,format('SELECT pg_temp.confirm_0
 FROM fixture_0140_plans p,LATERAL(VALUES('[]'::jsonb),
   (jsonb_build_array((p.acknowledgements->0)||jsonb_build_object('pending_fact_id',gen_random_uuid()))),
   (jsonb_build_array((p.acknowledgements->0)||jsonb_build_object('project_id',gen_random_uuid()))),
-  (jsonb_build_array((p.acknowledgements->0)||jsonb_build_object('source_target_id',(SELECT first_target FROM fixture_0140_pairs WHERE kind='institution')))),
-  (p.acknowledgements||jsonb_build_array(jsonb_build_object('project_id',(SELECT project_id FROM fixture_0140_projects WHERE name='a'),
-    'source_target_id',(SELECT first_target FROM fixture_0140_pairs WHERE kind='person'),'pending_fact_id',p.assignments->0->>'pending_fact_id')))
+  (jsonb_build_array((p.acknowledgements->0)||jsonb_build_object('source_target_id',(SELECT first_target FROM fixture_0140_pairs WHERE kind='institution'))))
 ) cases(bad) WHERE p.kind='person';
+DO $extra_existing_ack$
+DECLARE p record; extra jsonb;
+BEGIN
+  SELECT * INTO STRICT p FROM fixture_0140_plans WHERE kind='person';
+  SELECT jsonb_build_object('project_id',slot->>'project_id','source_target_id',slot->>'source_target_id',
+    'pending_fact_id',slot->'pending_fact_ids'->>0) INTO STRICT extra FROM jsonb_array_elements(p.document->'source_slots') slot
+  WHERE slot->>'project_id'=(SELECT project_id::text FROM fixture_0140_projects WHERE name='a')
+    AND slot->>'source_target_id'=(SELECT first_target::text FROM fixture_0140_pairs WHERE kind='person');
+  PERFORM pg_temp.assert_0140(NOT EXISTS(SELECT 1 FROM jsonb_array_elements(p.acknowledgements) ack
+    WHERE (ack->>'project_id'=extra->>'project_id' AND ack->>'source_target_id'=extra->>'source_target_id')
+      OR ack->>'pending_fact_id'=extra->>'pending_fact_id'),'extra existing-slot acknowledgement duplicates a slot or pending ID');
+  PERFORM pg_temp.expect_0140_failure('23505',NULL,format('SELECT pg_temp.confirm_0140(''person'',NULL,NULL,%L::jsonb)',
+    p.acknowledgements||jsonb_build_array(extra)));
+END $extra_existing_ack$;
 SELECT pg_temp.expect_0140_failure('23505',NULL,format('SELECT pg_temp.confirm_0140(''institution'',NULL,NULL,%L::jsonb)',jsonb_build_array(acknowledgements->0)))
 FROM fixture_0140_plans WHERE kind='institution';
 SELECT pg_temp.expect_0140_failure('23505',NULL,format('SELECT pg_temp.confirm_0140(''person'',NULL,%L::jsonb)',(
