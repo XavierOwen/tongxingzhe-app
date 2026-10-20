@@ -35,4 +35,6 @@ header／purge 追加不可变。三表五函数保持 PUBLIC／runtime 封闭�
 
 ## 边界
 
+既有普通关系更新在阶段、生命周期和归一化备注都相同时拒绝追加 revision；换 request 或 reason 不构成事实变化。它也不创建不存在的关系，普通创建路径依赖实际 contact revision。后续历史处置必须明确保存同值事件和关系创建来源，不能把本片登记当作这些前提已经成立。
+
 不创建普通关系／revision，不交付分配／消费、当前候选、其他 unknown 类型或混合事实完整确认。既有只读来源审查不因此获得产品 active merge、runtime、Backend／HTTP／UI、scheduler 或生产权限。synthetic fresh、升级、并发、checksum 和恢复只证明私有 PostgreSQL 合同，不证明真实 PII、设备同步、外部消费者或 #549 生产清理 SLA。

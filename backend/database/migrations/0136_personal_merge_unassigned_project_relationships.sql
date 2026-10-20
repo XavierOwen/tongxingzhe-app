@@ -24,12 +24,12 @@ CREATE TABLE app_data.personal_merge_unassigned_project_relationship_facts_v1 (
   pending_fact_id uuid PRIMARY KEY,
   new_stage integer NOT NULL CHECK (new_stage BETWEEN 0 AND 4),
   new_lifecycle_status text NOT NULL CHECK (new_lifecycle_status IN ('active', 'paused', 'ended')),
-  follow_up_note text CHECK (follow_up_note IS NULL OR length(btrim(follow_up_note)) BETWEEN 1 AND 4000),
+  follow_up_note text CHECK (follow_up_note IS NULL OR (length(follow_up_note) <= 4000 AND follow_up_note ~ '[^[:space:]]')),
   reason_code text NOT NULL CHECK (reason_code IN (
     'project_entry', 'progress_update', 'contact_lost', 'timing_changed',
     'requirements_changed', 'target_request', 'project_change', 'correction', 'other'
   )),
-  reason_detail text CHECK (reason_detail IS NULL OR length(btrim(reason_detail)) BETWEEN 1 AND 1000),
+  reason_detail text CHECK (reason_detail IS NULL OR (length(reason_detail) <= 1000 AND reason_detail ~ '[^[:space:]]')),
   CHECK (reason_code <> 'other' OR reason_detail IS NOT NULL),
   CONSTRAINT pmupr_payload_request_fk FOREIGN KEY (pending_fact_id)
     REFERENCES app_private.personal_merge_unassigned_project_relationship_requests_v1 (pending_fact_id) ON DELETE RESTRICT
@@ -221,12 +221,14 @@ BEGIN
     OR requested_request_id IS NULL OR requested_generation_id IS NULL
     OR requested_new_stage IS NULL OR requested_new_stage NOT BETWEEN 0 AND 4
     OR requested_new_lifecycle_status IS NULL OR requested_new_lifecycle_status NOT IN ('active', 'paused', 'ended')
-    OR (requested_follow_up_note IS NOT NULL AND length(btrim(requested_follow_up_note)) NOT BETWEEN 1 AND 4000)
+    OR (requested_follow_up_note IS NOT NULL
+      AND (length(requested_follow_up_note) > 4000 OR requested_follow_up_note !~ '[^[:space:]]'))
     OR requested_reason_code IS NULL OR requested_reason_code NOT IN (
       'project_entry', 'progress_update', 'contact_lost', 'timing_changed',
       'requirements_changed', 'target_request', 'project_change', 'correction', 'other'
     )
-    OR (requested_reason_detail IS NOT NULL AND length(btrim(requested_reason_detail)) NOT BETWEEN 1 AND 1000)
+    OR (requested_reason_detail IS NOT NULL
+      AND (length(requested_reason_detail) > 1000 OR requested_reason_detail !~ '[^[:space:]]'))
     OR (requested_reason_code = 'other' AND requested_reason_detail IS NULL) THEN
     RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'invalid unassigned project relationship request';
   END IF;

@@ -118,6 +118,22 @@ SET LOCAL session_replication_role=origin;
 SELECT pg_temp.assert_0136(pg_temp.read_0136('person')=(SELECT document FROM fixture_0136_plan),'metadata fingerprint depends on business values');
 ROLLBACK TO payload_hash_probe;
 
+SAVEPOINT raw_text_boundaries;
+CREATE TEMP TABLE fixture_0136_raw_boundary AS SELECT * FROM pg_temp.stage_0136('person',gen_random_uuid(),2,'paused',
+  repeat(' ',3999)||'x','progress_update',repeat(' ',999)||'x');
+SELECT pg_temp.assert_0136((SELECT length(follow_up_note)=4000 AND follow_up_note=repeat(' ',3999)||'x'
+  AND length(reason_detail)=1000 AND reason_detail=repeat(' ',999)||'x'
+  FROM app_data.personal_merge_unassigned_project_relationship_facts_v1
+  WHERE pending_fact_id=(SELECT pending_fact_id FROM fixture_0136_raw_boundary)), 'raw text boundaries were trimmed or rejected');
+ROLLBACK TO raw_text_boundaries;
+RELEASE SAVEPOINT raw_text_boundaries;
+SELECT pg_temp.expect_0136_failure('22023','invalid unassigned project relationship request',command) FROM (VALUES
+  ($test$SELECT * FROM pg_temp.stage_0136('person',gen_random_uuid(),2,'paused',repeat(' ',4000)||'x')$test$),
+  ($test$SELECT * FROM pg_temp.stage_0136('person',gen_random_uuid(),2,'paused',NULL,'progress_update',repeat(' ',1000)||'x')$test$),
+  ($test$SELECT * FROM pg_temp.stage_0136('person',gen_random_uuid(),2,'paused',E'\t\n')$test$),
+  ($test$SELECT * FROM pg_temp.stage_0136('person',gen_random_uuid(),2,'paused',NULL,'progress_update',E'\t\n')$test$)
+) cases(command);
+
 SELECT pg_temp.expect_0136_failure('22023','unassigned project relationship request context changed',
   'SELECT * FROM pg_temp.stage_0136(''institution'',''00000000-0136-1000-8000-000000000001'')');
 SELECT pg_temp.expect_0136_failure('22023','unassigned project relationship request payload changed',command) FROM (VALUES
