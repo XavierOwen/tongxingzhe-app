@@ -13845,11 +13845,9 @@ docker exec "${container_name}" sh -ceu \
 docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
   --env MIGRATION_DIR=/tmp/personal-merge-mixed-resolution-confirmation-upgrade-only \
   "${container_name}" bash /workspace/tool/postgres_migrate.sh
-# The complete FK inventory includes 0142; historical transitions keep their own checks.
 docker exec "${container_name}" psql \
   -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
   --file=/workspace/backend/database/checks/verify_personal_merge_mixed_resolution_confirmation.sql \
-  --file=/workspace/backend/database/checks/verify_organization_purge_dependency_inventory.sql \
   --command='BEGIN; SELECT public.fixture_0141_confirm_assert_upgrade(); ROLLBACK;' >/dev/null
 personal_merge_mixed_resolution_confirmation_upgrade_replay="$(
   docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
@@ -13867,6 +13865,40 @@ docker exec "${container_name}" psql \
   --command='BEGIN; SELECT public.fixture_0141_confirm_assert_upgrade(); ROLLBACK;' >/dev/null
 printf '%s\n' "${personal_merge_mixed_resolution_confirmation_upgrade_replay}"
 echo '0141→0142 exact old catalog deltas, shared final manifest/end, original histories/nonpair links, replay and checksum: passed.'
+
+echo '验证 0142→0143 personal merge mixed explicit project entry live upgrade。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0142_personal_merge_mixed_project_entry_confirmation_live.sql >/dev/null
+docker exec "${container_name}" sh -ceu \
+  "mkdir /tmp/personal-merge-mixed-project-entry-confirmation-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0143_personal_merge_mixed_project_entry_confirmation.sql \\
+     /tmp/personal-merge-mixed-project-entry-confirmation-upgrade-only/"
+docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-merge-mixed-project-entry-confirmation-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+# The complete FK inventory includes 0143; historical transitions keep their own checks.
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_personal_merge_mixed_project_entry_confirmation.sql \
+  --file=/workspace/backend/database/checks/verify_organization_purge_dependency_inventory.sql \
+  --command='BEGIN; SELECT public.fixture_0142_entry_assert_upgrade(); ROLLBACK;' >/dev/null
+personal_merge_mixed_project_entry_confirmation_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/personal-merge-mixed-project-entry-confirmation-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${personal_merge_mixed_project_entry_confirmation_upgrade_replay}" != \
+    *'已验证 0143_personal_merge_mixed_project_entry_confirmation（无需重复执行）'* ]] \
+  || [[ "${personal_merge_mixed_project_entry_confirmation_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0143 migration did not skip its checksum-verified replay.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --command='BEGIN; SELECT public.fixture_0142_entry_assert_upgrade(); ROLLBACK;' >/dev/null
+printf '%s\n' "${personal_merge_mixed_project_entry_confirmation_upgrade_replay}"
+echo '0142→0143 exact initializer extraction, genuine stage-zero entry, mixed final manifest/end, history, replay and checksum: passed.'
 
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations

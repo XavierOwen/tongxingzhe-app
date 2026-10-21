@@ -3107,6 +3107,18 @@ READ ONLY transaction 须真实成功；空单类、非法形状／完整集／s
 
 完整 Docker runner 继续运行 fresh、全部 check／fixture／并发、checksum、Backend PostgreSQL integration 和独立 cluster dump／restore。恢复库不重跑 migration 或会提交 synthetic 数据的并发脚本。MANUAL-164／TEST-175 不证明缺关系混合进入、完整拆分、生产身份、真实 PII、部署、HTTP／UI 或设备同步。
 
+### 7.31 混合显式项目进入（Issue #613）
+
+0143 fixture 使用真实 owner、对象、接触和两类待分配事实，同时保留已有槽与项目 missing 槽。验证双类型、同槽接触／项目、历史／多项／同值、明确旧候选、历史与当前不同的非配对链接，以及全部已有时的空确认集。原事实、答案、地点来源、历史和 binding 保留；只新增明确确认的真实阶段 0、active、无备注 rev1 进入，最终只有一个共同 end。
+
+缺失、多余、重复、错误项目／来源／pending、没有选作当前候选的确认，以及其他缺失关系均须全库零写拒绝。分别在初始化、初始 revision、外层请求／origins、内部两类应用／回执、end 和两个载荷消费处注入故障或抑制；metadata 静默改写、缺少 origin 或内层证明同样全回滚。重放规范化顺序与 UUID 大小写，普通编辑和匿名化后不恢复历史值或重新初始化。
+
+`verify_personal_merge_mixed_project_entry_confirmation_concurrency.sh` 使用真实双会话和精确 PID／锁，验证全部 child／contact 先于代次锁，其他关联对象和已有关系先于初始化。覆盖普通进入／关系写入双向竞争、接触修订、两类 pending 增长、request、撤权、scope、due 和非配对等待。集合变化须拒绝重取，不补反向锁；三种非 RC 的首次及终态重放均先返回固定 0A000，持久状态不变。
+
+真实 0142 基线冻结全部旧数据、函数、约束、索引与触发器，再仅应用 0143。只允许旧 0140 初始化块精确提取并立即共用；其余旧函数及 OID／owner／ACL／config 不变。两张 metadata 表新增八条 FK，严格清单为 396；旧父表新增的 RI triggers 单独逐项核对，最新 inventory 在 0143 后执行。checksum 重放及重复回滚断言保持旧数据。
+
+完整 Docker runner 继续验证空库、全部 fixtures／并发／权限、历史升级、Backend PostgreSQL integration 和独立 cluster restore；恢复库不重复执行迁移或提交并发样本。MANUAL-165／TEST-176 不证明全部未知事实、完整拆分、生产、真实 PII、部署、HTTP／UI 或设备验收。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：
