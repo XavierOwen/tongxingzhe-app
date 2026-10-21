@@ -23,6 +23,9 @@ CREATE TEMP TABLE purge_inventory_expected_fk (
   PRIMARY KEY (child_relation, constraint_name)
 );
 INSERT INTO purge_inventory_expected_fk VALUES
+  ('app_private.personal_merge_mixed_resolution_requests_v1', 'pmmr_generation_fk', 'app_private.personal_target_merge_generations_v1', 'r', 'FOREIGN KEY (generation_id) REFERENCES app_private.personal_target_merge_generations_v1(generation_id) ON DELETE RESTRICT'),
+  ('app_private.personal_merge_mixed_resolution_requests_v1', 'pmmr_contact_request_fk', 'app_private.personal_merge_contact_resolution_requests_v1', 'r', 'FOREIGN KEY (actor_app_user_id, request_id) REFERENCES app_private.personal_merge_contact_resolution_requests_v1(actor_app_user_id, request_id) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED'),
+  ('app_private.personal_merge_mixed_resolution_requests_v1', 'pmmr_project_request_fk', 'app_private.personal_merge_project_relationship_resolution_requests_v1', 'r', 'FOREIGN KEY (actor_app_user_id, request_id) REFERENCES app_private.personal_merge_project_relationship_resolution_requests_v1(actor_app_user_id, request_id) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED'),
   ('app_private.personal_merge_project_entry_resolution_requests_v1', 'pmer_request_actor_fk', 'app_data.app_users', 'r', 'FOREIGN KEY (actor_app_user_id) REFERENCES app_data.app_users(app_user_id) ON DELETE RESTRICT'),
   ('app_private.personal_merge_project_entry_resolution_requests_v1', 'pmer_request_workspace_fk', 'app_data.workspaces', 'r', 'FOREIGN KEY (workspace_id) REFERENCES app_data.workspaces(workspace_id) ON DELETE RESTRICT'),
   ('app_private.personal_merge_project_entry_resolution_requests_v1', 'pmer_request_project_fk', 'app_data.projects', 'r', 'FOREIGN KEY (project_id) REFERENCES app_data.projects(project_id) ON DELETE RESTRICT'),
