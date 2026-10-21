@@ -3085,6 +3085,16 @@ MANUAL-161／TEST-172 不证明备份、本机设备、真实 PII 或部署擦�
 
 MANUAL-162／TEST-173 仅提供 synthetic 私有数据库证据，不证明混合完整拆分、生产身份、真实 PII、部署、HTTP／UI 或设备同步。
 
+### 7.29 两类待分配事实的同快照只读预检（Issue #607）
+
+0141 fixture 用真实 person／institution、历史／多项／同值接触与项目 pending，核对四键、前三键 metadata SHA-256 和两份 nested JSON 与原 0129／0137 一致。验证原项目、current／缺关系、canonical UUID／顺序与原样 TEXT ID；不自动补关系、去重或选赢家。
+
+READ ONLY transaction 须真实成功；空单类、非法形状／完整集／source、陈旧 known／两类 pending 指纹、失效范围与不可用 current 的失败须保留全部业务、audit、context 和 fence。新函数 owner／SECURITY DEFINER／pg_catalog、STABLE 与封闭 ACL 单独核对，无新表或 FK，严格 inventory 仍为 385。
+
+`verify_personal_merge_mixed_resolution_plan_concurrency.sh` 只使用测试 gate 观察 exact reader／holder PID。真实 stage 增长或 actor 撤权须能在 reader 等待 gate 时提交，reader 不得持有业务行锁或 fence；释放后返回完整旧组合，下一 command 刷新或拒绝旧输入。gate 不是生产读取协议。
+
+真实 0140 baseline 初始化 current 后建立独立混合样本，冻结旧 rows 和完整函数／关系 catalog；only 0141 只能增加一个函数，所有旧值与定义不变。checksum、完整 Docker 和独立恢复继续验证。MANUAL-163／TEST-174 不证明混合确认资格、完整拆分、生产身份、真实 PII、部署或设备同步。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：
@@ -3137,7 +3147,7 @@ CI 会在临时目录重新生成 v19 snapshot 和 migration helper，并与仓�
 
 CI 的 PostgreSQL job 在 Linux runner 上执行同一个 Docker runner。默认会拉取 `postgres:16` 和 `node:24-bookworm`，在临时容器中运行 `psql`、Backend build 和 runner 明确列出的全部 Backend integration；它不需要 runner 上的 PostgreSQL service，也不占用本机端口。两条路径执行相同的 migration、check、fixture、Backend 对账和并发脚本。
 
-该 job 的总限时为 40 分钟。完整套件曾在恢复库后段触及原 20 分钟上限而被 GitHub 取消，未报告 SQL 断言失败；这里只扩大整套执行预算，不改变各脚本的 statement／lock timeout，也不跳过测试。
+该 job 的总限时为 50 分钟。完整套件曾在恢复库后段触及原 20 分钟上限；加入 0141 后，[CI 39404312508](https://github.com/XavierOwen/tongxingzhe-app/actions/runs/39404312508) 又在独立恢复的最后一份 fixture 达到 40 分钟上限，被 GitHub 明确判定超时取消，未报告 SQL 断言失败。本地完整 runner 已通过；这里只扩大整套执行预算，不改变各脚本的 statement／lock timeout，也不跳过测试。
 
 本机通过是提交前证据。远端 CI 通过是干净环境证据。合并前应同时检查两者，不能根据本机结果推断 GitHub 已通过。
 
