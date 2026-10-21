@@ -473,6 +473,18 @@ header 只保存标识、派生 target type 和数据库 staged time，业务值
 
 合同见 [ADR-0203](../adr/0203-mixed-resolution-confirmation-uses-one-final-manifest.md)，验证见[测试说明](09-local-docker-and-ci-testing.md#730-已有关系的混合原子确认issue-611)。MANUAL-164／TEST-175 只提供 synthetic 私有数据库证据，不证明真实 PII、部署或设备验收。
 
+### 0143 混合批次的显式项目进入（Issue #613）
+
+两类 pending 都存在时，新私有 v2 接受完整映射、逐槽当前选择、原四项指纹及进入确认。每项确认只包含项目、来源和项目 pending 标识，精确覆盖原项目计划列出的 missing 槽，pending 必须是该槽明确选择的候选。已有槽不得多给确认，全部已有时使用空数组。
+
+先锁全部 child command、contact、代次、历史与当前关联对象／分配和已有关系，等待后重验原集合、计划、权限与期限。只有确认覆盖的项目 missing 槽可以初始化；其他缺失接触或非配对关联仍整批拒绝，不通过删除链接绕过普通 writer 的资格检查。
+
+初始化复用原 0140 的真实进入段，以当前操作者和锁后时间建立阶段 0、active、无备注的 revision 1。它不是回填过去事件，不新增接触或推导同意。重新计算共同 known 与两类原生／混合计划后，委托未修改的 0142 完成共同最终清单、单次 end 和两类原子消费。
+
+外层请求与 origins 只保存 metadata，绑定真实初始进入和内层共同回执；任何错误、抑制、篡改或证明不全都使整个批次回滚。精确重放核对原输入和确认集，再走内部 terminal replay，不重新进入项目，不恢复后来修改或匿名化的数据。
+
+合同见 [ADR-0204](../adr/0204-mixed-project-entry-prelocks-before-one-confirmation.md)，验证见[测试说明](09-local-docker-and-ci-testing.md#731-混合显式项目进入issue-613)。MANUAL-165／TEST-176 仍只提供 synthetic 私有数据库证据，不开放生产、runtime、Backend／HTTP／UI 或 scheduler，不称完整拆分。
+
 ## HTTP 与权限边界
 
 | 方法与路径 | 用途 | Backend capability |

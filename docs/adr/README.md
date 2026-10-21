@@ -129,6 +129,7 @@
 | [0201](./0201-missing-project-relationships-require-explicit-entry.md) | 已接受，2026-10-20 | Slice 7FC／private DB-only；Issue #605 | 缺失关系须明确确认真实阶段 0 进入，再复用历史与当前确认；原／内部指纹及 origin 原子绑定，无接触或同意推导 |
 | [0202](./0202-mixed-resolution-preflight-keeps-both-plans-in-one-snapshot.md) | 已接受，2026-10-20 | Slice 7FD／private DB-only；Issue #607 | 同一快照保留两类完整候选计划并生成复合 metadata 指纹；不写事实或保留混合确认资格 |
 | [0203](./0203-mixed-resolution-confirmation-uses-one-final-manifest.md) | 已接受，2026-10-21 | Slice 7FE／private DB-only；Issue #611 | 已有关系的混合确认统一完整预锁、共同最终清单和单次终结；复用两类应用与事实证明，不开放生产入口 |
+| [0204](./0204-mixed-project-entry-prelocks-before-one-confirmation.md) | 已接受，2026-10-21 | Slice 7FF／private DB-only；Issue #613 | 混合批次逐槽明确确认真实项目进入，先锁全部接触和关系集合，再委托原单次终结；其他缺失关联仍拒绝 |
 
 ## 按主题查找
 
