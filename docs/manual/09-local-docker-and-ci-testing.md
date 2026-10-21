@@ -3095,6 +3095,18 @@ READ ONLY transaction 须真实成功；空单类、非法形状／完整集／s
 
 真实 0140 baseline 初始化 current 后建立独立混合样本，冻结旧 rows 和完整函数／关系 catalog；only 0141 只能增加一个函数，所有旧值与定义不变。checksum、完整 Docker 和独立恢复继续验证。MANUAL-163／TEST-174 不证明混合确认资格、完整拆分、生产身份、真实 PII、部署或设备同步。
 
+### 7.30 已有关系的混合原子确认（Issue #611）
+
+0142 fixture 从真实 person／institution、多个原项目和两类历史／多项／同值 pending 建立完整批次。先通过普通 contact 建立全部受影响关系，包含历史与进入前 current 的 nonpair links。按明确 older／current 选择确认后，核对两类实际历史、answers、地点 provenance、原关系历史和 parent binding，关系集与 project_entry 数量不得增加。
+
+两类完整映射与逐槽选择、known／两类 pending／复合指纹、缺失历史或 current 所需关系、失去资格和 due 均须整批零写。对两类实际应用、当前值、family／共同 metadata、end 和两个 payload 消费逐步注入错误或抑制，证明已做的另一类也回滚；静默改写输入指纹或伪造共同回执不能放行。精确重放检查两类 canonical 映射／选择，普通编辑或匿名化后不重复历史、初始化或恢复文本。
+
+`verify_personal_merge_mixed_resolution_confirmation_concurrency.sh` 使用独立会话与指定 PID／精确锁，核对完整子命令／接触预锁先于代次锁，以及其他关联对象和关系也在应用前取锁。覆盖普通接触修订、关系更新、两类待分配登记、到期处置、同请求、撤权、当前项目和等待后期限。集合增长须拒绝，不补取反向锁。三个非 RC 模式的首次与终结重放均先返回固定 0A000，全部持久状态不变。
+
+真实 0141 基线冻结全部旧数据、函数与关系目录，仅应用 0142。只允许两个确认器的应用段、项目证明委托和项目结束门禁窄分支变化。旧 OID／owner／ACL／config、其余实现与全部旧数据不变；新 FK 在旧父表增加的内部 RI trigger 精确核对，不忽略原触发器。新增共同四列 metadata 表及三条 FK 后，严格依赖 inventory 为 388；各旧版本保留专用检查，最新 inventory 在 0142 后执行。
+
+完整 Docker runner 继续运行 fresh、全部 check／fixture／并发、checksum、Backend PostgreSQL integration 和独立 cluster dump／restore。恢复库不重跑 migration 或会提交 synthetic 数据的并发脚本。MANUAL-164／TEST-175 不证明缺关系混合进入、完整拆分、生产身份、真实 PII、部署、HTTP／UI 或设备同步。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：

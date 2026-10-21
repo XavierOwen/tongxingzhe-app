@@ -282,6 +282,7 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `PII-019` | 已有项目关系的私有确认须绑定完整来源映射、逐槽明确当前选择与三项 metadata 指纹。每项 pending 独立保留原值和原时间的来源分配历史；只在最终明确选择时改变当前投影。同值不去重，缺关系或同代次未处理的接触 pending 整批拒绝；历史、当前、回执、代次结束与 payload 消费全部原子成功。 |
 | `PII-020` | 缺失原关系的项目 pending 只能通过独立私有 v2 确认：请求须逐槽明确确认来源现在进入仍有效的原项目，并选择同槽已分配的 pending。真实 actor／锁后时间初始化阶段 0、active、无备注的普通关系和初始 revision，再复用已有历史／当前确认；完整 acknowledgements、原三指纹、来源与当前选择及初始化 provenance 同事务绑定，失败全部回滚。不得补造接触、同意或过去的进入事实，旧 v1 缺关系拒绝合同不变。 |
 | `PII-021` | 私有混合只读预检须在同一 command snapshot 中组合接触与项目关系两份完整 metadata 计划，绑定共同 known 指纹、两类 pending 指纹和各自完整拟议来源映射。两类均须有 pending；保留原候选、原排序和 TEXT ID，复合指纹只散列 metadata，不写业务或资格。不执行分配、当前选择、项目进入、消费或混合确认。 |
+| `PII-022` | 已有关系的私有混合确认须同时核对两类完整映射、逐槽明确当前选择与 known／两类 pending／复合 resolution 四指纹。全部接触历史、进入前 current 的 pair／nonpair links 及项目 pending 槽都须已有原项目关系；完整预锁后重新验证，应用两类事实并采用共同最终清单，只终结一次，再原子消费两类 payload。任一失败全回滚，不自动补关系、不改普通 writer、不复制或散列业务值；精确重放核对两类 metadata，不恢复后来编辑或匿名化的值。 |
 
 #### 5.6.3 个人空间 CSV 导入 v1
 
@@ -503,6 +504,8 @@ MANUAL-158／TEST-169 只覆盖这一私有层，不提供普通关系写回资�
 7FC／#605 的 0140 为缺失原关系提供显式项目进入确认。acknowledgements 精确覆盖原预检中无 current 的槽，必须与该槽明确选择的 pending 相同；初始化项目仍须属于本人有效 personal workspace 且 active。真实阶段 0 初始化后重算内部 metadata 指纹，调用未改动的 0138；原始指纹与内部指纹分别留存。两张不可变 private metadata 表和 deferred inner-request FK 绑定真实初始关系、revision、所选 pending 与最终回执，精确重放不重新进入、追加历史或恢复匿名化文本。无接触、同意、retention 续期、新权限或入口；同代次接触 pending 仍整批拒绝，不称完整 mixed split。
 
 7FD／#607 的 0141 只增加一个 STABLE 私有读取函数，原样组合 0129 接触处置计划与 0137 项目关系处置计划。两份 known-source JSON 须一致，精确四键结果以复合 metadata 指纹绑定；不展平候选，不自动补关系或选择当前值。READ ONLY 可执行，旧函数与事实不改；旧 snapshot 不保留下一次调用的范围、期限或 mixed writer 资格，无新表、FK、权限或生产入口。
+
+7FE／#611 的 0142 为所有受影响原项目关系已存在的批次增加混合原子确认。两个原应用段抽成共享私有 helper，单类入口保持原校验与终结合同；混合入口共同验证两份原生计划，再应用接触与项目事实。两类 request 共用最终 manifest、context 和确认时间，共同 metadata receipt 绑定完整应用，只调用一次原 end，再消费两类 payload。新的窄证明分支不放宽旧项目 proof；缺关系、漂移、失去资格或任一步失败均全回滚。首版不包含混合项目进入、其他未知事实类型或生产入口，不能称完整拆分。
 
 ### 5.7 组织治理与生命周期
 
@@ -3455,6 +3458,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-161` | 说明 other 原因历史匿名化后仅保留固定无业务占位详情，其余详情／备注仍为 NULL；区别已移除的原文与结构化原因事实。只修共享清除子句，不放宽必填 CHECK、改变身份／锁序／重放或增加生产入口。 |
 | `MANUAL-162` | 说明显式项目进入与自动补关系、真实阶段 0 初始化与待分配历史／当前选择的区别；记录完整 acknowledgement、原／内部三指纹、有效原项目、初始化 provenance、固定锁序、原子失败和精确重放。旧 v1 与普通 writer 不变，接触 pending 仍拒绝，无生产、HTTP 或 UI。 |
 | `MANUAL-163` | 说明混合只读预检的两份原生 nested 计划、共同 snapshot、完整拟议映射、known／两类 pending 指纹及四键复合指纹。只列候选，既不保留授权也不提供 mixed 确认；两类 confirmer 不能据此直接串联，旧单类合同与生产边界不变。 |
+| `MANUAL-164` | 说明已有关系混合确认的两类完整映射与明确选择、四指纹、完整历史／current／nonpair 关系闭包、统一预锁与 READ COMMITTED 门禁。区分共同最终清单、两类原回执和最小共同 receipt，记录窄 proof／单次 end／两类消费原子性及后来编辑后的 metadata 重放；明确缺关系仍拒绝，无生产、runtime、HTTP 或 UI。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3807,6 +3811,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-172` | 0139 用普通 other 历史和真实 0138 已确认的 other pending 验证撤回／到期匿名化成功、仅固定占位详情残留、原敏感文本清除、其余事实与上下文保留及精确重放。non-other 仍 NULL，缺 other 详情仍拒绝，清除故障全回滚。真实 0138 升级逐值保留旧数据，唯一匿名化子句之外的函数 body／OID／owner／ACL／config 不变；checksum、完整 Docker、既有并发与独立恢复继续验证。 |
 | `TEST-173` | 0140 验证 person／institution、多原项目及已有／缺失关系混合、同值 pending、明确 current／pending 与空 acknowledgements。真实初始化须为阶段 0、active、无备注、revision 1、真实 actor／锁后时间及 binder，零新增接触／同意／续期；归档原项目拒绝新进入。输入、原三指纹、acknowledgements、权限／due、接触 pending 及逐步抑制／故障全部零写，伪造 origin 拒绝；普通编辑／匿名化后精确重放不恢复原值。指定 PID／锁覆盖普通真实项目进入、更新、stage、expiry、请求与锁后资格，非 RC 首次／重放拒绝。真实 0139 升级、385 条严格 FK、checksum、完整 Docker 与独立恢复保留旧 rows 和 catalog。 |
 | `TEST-174` | 0141 用真实 person／institution 的历史／多项／同值接触及项目 pending 验证同快照 nested 结果等于原 0129／0137、四键与复合 SHA-256、canonical UUID／顺序和精确 TEXT ID、原项目范围及有无当前关系。READ ONLY 成功，空单类、非法形状／完整集／source、陈旧三指纹及失效范围零写拒绝；全部业务、audit、context、fence 与旧 catalog 保留。exact-PID 测试 gate 证明真实 stage 增长或撤权可先提交、reader 仍返回完整旧 snapshot，下一 command 刷新或拒绝。真实 0140 升级、checksum、完整 Docker 与独立恢复继续验证，无新 FK。 |
+| `TEST-175` | 0142 验证两类对象、多原项目、历史／多项／同值 pending、明确 older／current、原 answers／provenance／nonpair links／关系历史和 binding 保留，无新关系或 project_entry。缺关系、两类输入与四指纹、资格／due、任一步故障或抑制均全回滚，伪造共同 receipt 不放行；两类 canonical 重放及普通编辑／匿名化后重放不恢复旧值。指定 PID／锁验证完整预锁、ordinary／两类 stage／expiry／request／撤权／scope／due 与 nonpair 等待，非 RC 首次／重放先拒绝。真实 0141 升级仅四个必要旧函数 body 精确变动，旧 rows／catalog 和新 FK 的 RI trigger 分别核对；严格 inventory 为 388，checksum、完整 Docker 与独立恢复通过。 |
 
 ## 9. UI、视觉与可访问性
 

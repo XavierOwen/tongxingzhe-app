@@ -461,6 +461,18 @@ header 只保存标识、派生 target type 和数据库 staged time，业务值
 
 合同见 [ADR-0202](../adr/0202-mixed-resolution-preflight-keeps-both-plans-in-one-snapshot.md)，实现见 [0141](../../backend/database/migrations/0141_personal_merge_mixed_resolution_plan.sql)，验证见[测试说明](09-local-docker-and-ci-testing.md#729-两类待分配事实的同快照只读预检issue-607)。只有一个 STABLE owner-only 函数，无表、FK、业务锁或写入；旧 confirmer 门禁与锁序不改，不据此串联混合 writer。PUBLIC／runtime、Backend／HTTP／UI、scheduler 和生产入口仍关闭。
 
+### 0142 已有关系的混合原子确认（Issue #611）
+
+同一代次的两类 pending 须一起提交完整来源映射、逐槽明确当前选择，以及 known、两类 pending 和混合 resolution 四项 metadata 指纹。确认会在锁后重验 0141 计划；预检结果本身仍不保留资格。单候选也须选择，同值历史不去重。
+
+首版要求完整关系集已存在：包括项目 pending 槽、每项接触历史和进入前 current 的全部 pair／nonpair links。缺一项即零写拒绝，不调用 0140 自动初始化。按统一顺序预锁全部 child command、contact、代次、相关对象／分配与关系，等待后再验集合、权限和两端期限，不在代次锁后补取反向接触锁。
+
+两类事实应用完后共用最终清单和原子回执，只结束一次代次，再消费两类载荷；任何一步失败，另一类已做的变更也全部回滚。原历史、answers、地点来源、nonpair links 和关系创建 binding 保留。共同 ledger 只有标识与 metadata 指纹，不复制或散列业务值。
+
+精确重放同时核对两类映射和选择，再验证当前资格并返回原结束时间。后来普通编辑或匿名化不触发重做，也不恢复原文本。旧单类 live 入口仍不能完成混合确认，PUBLIC／runtime、生产、Backend／HTTP／UI 与 scheduler 均关闭；缺关系混合进入和完整拆分另行交付。
+
+合同见 [ADR-0203](../adr/0203-mixed-resolution-confirmation-uses-one-final-manifest.md)，验证见[测试说明](09-local-docker-and-ci-testing.md#730-已有关系的混合原子确认issue-611)。MANUAL-164／TEST-175 只提供 synthetic 私有数据库证据，不证明真实 PII、部署或设备验收。
+
 ## HTTP 与权限边界
 
 | 方法与路径 | 用途 | Backend capability |
