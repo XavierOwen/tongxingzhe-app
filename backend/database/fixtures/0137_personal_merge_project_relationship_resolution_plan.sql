@@ -6,24 +6,16 @@ CREATE FUNCTION pg_temp.assert_0137(condition boolean,label text) RETURNS void L
 BEGIN
   IF condition IS DISTINCT FROM true THEN RAISE EXCEPTION '0137 %',label; END IF;
 END $function$;
-CREATE FUNCTION pg_temp.state_0137() RETURNS jsonb LANGUAGE plpgsql AS $function$
-DECLARE relation record; rows jsonb; result jsonb := '{}'::jsonb;
-BEGIN
-  FOR relation IN SELECT schemaname,tablename FROM pg_catalog.pg_tables WHERE schemaname IN('app_data','app_private') ORDER BY schemaname,tablename LOOP
-    EXECUTE format('SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),''[]''::jsonb) FROM %I.%I t',relation.schemaname,relation.tablename) INTO rows;
-    result := result||jsonb_build_object(relation.schemaname||'.'||relation.tablename,rows);
-  END LOOP;
-  RETURN result;
-END $function$;
+\ir shared/database_state.sql
 CREATE FUNCTION pg_temp.expect_0137_failure(expected_state text,expected_message text,statement text) RETURNS void LANGUAGE plpgsql AS $function$
-DECLARE before_state jsonb := pg_temp.state_0137(); actual_state text; actual_message text;
+DECLARE before_state jsonb := pg_temp.fixture_database_state(); actual_state text; actual_message text;
 BEGIN
   BEGIN EXECUTE statement;
   EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS actual_state=RETURNED_SQLSTATE,actual_message=MESSAGE_TEXT; END;
   IF actual_state IS DISTINCT FROM expected_state OR(expected_message IS NOT NULL AND actual_message IS DISTINCT FROM expected_message) THEN
     RAISE EXCEPTION '0137 expected % / %, got % / %',expected_state,expected_message,actual_state,actual_message;
   END IF;
-  PERFORM pg_temp.assert_0137(before_state=pg_temp.state_0137(),'rejected planner changed business data, context, audit, or fence');
+  PERFORM pg_temp.assert_0137(before_state=pg_temp.fixture_database_state(),'rejected planner changed business data, context, audit, or fence');
 END $function$;
 CREATE TEMP TABLE fixture_0137_context AS SELECT * FROM app_data.bootstrap_personal_context('https://synthetic-0137.example.test','owner');
 CREATE TEMP TABLE fixture_0137_other AS SELECT * FROM app_data.bootstrap_personal_context('https://synthetic-0137.example.test','other');
@@ -138,7 +130,7 @@ BEGIN
 END $function$;
 CREATE TEMP TABLE fixture_0137_initial AS SELECT kind,pg_temp.read_0137(kind) AS document FROM fixture_0137_plans;
 DO $baseline$
-DECLARE before_state jsonb := pg_temp.state_0137(); p record; reordered jsonb;
+DECLARE before_state jsonb := pg_temp.fixture_database_state(); p record; reordered jsonb;
 BEGIN
   FOR p IN TABLE fixture_0137_plans LOOP
     PERFORM pg_temp.assert_shape_0137(pg_temp.read_0137(p.kind),p.kind);
@@ -149,16 +141,16 @@ BEGIN
   PERFORM pg_temp.assert_0137((SELECT document->>'conflict_count'='2' AND jsonb_array_length(document->'assignments')=4 FROM fixture_0137_initial WHERE kind='person')
     AND (SELECT document->>'conflict_count'='1' FROM fixture_0137_initial WHERE kind='institution')
     AND (SELECT document->'source_slots'='[]'::jsonb AND document->'assignments'='[]'::jsonb AND document->>'conflict_count'='0' FROM fixture_0137_initial WHERE kind='empty')
-    AND before_state=pg_temp.state_0137(),'equal-value events were deduplicated, empty plan changed, or planner wrote persistent state');
+    AND before_state=pg_temp.fixture_database_state(),'equal-value events were deduplicated, empty plan changed, or planner wrote persistent state');
 END $baseline$;
 SAVEPOINT readonly_scope;
 SET LOCAL transaction_read_only=on;
 DO $readonly$
-DECLARE before_state jsonb := pg_temp.state_0137();
+DECLARE before_state jsonb := pg_temp.fixture_database_state();
 BEGIN
   IF current_setting('transaction_read_only')<>'on' THEN RAISE EXCEPTION '0137 READ ONLY was not enabled'; END IF;
   PERFORM pg_temp.assert_shape_0137(pg_temp.read_0137(kind),kind) FROM fixture_0137_plans;
-  PERFORM pg_temp.assert_0137(before_state=pg_temp.state_0137(),'READ ONLY planner changed facts or fence');
+  PERFORM pg_temp.assert_0137(before_state=pg_temp.fixture_database_state(),'READ ONLY planner changed facts or fence');
 END $readonly$;
 ROLLBACK TO readonly_scope;
 RELEASE SAVEPOINT readonly_scope;

@@ -139,12 +139,14 @@ UPDATE fixture_0130_plans p SET choices = (SELECT jsonb_agg(jsonb_build_object('
  (SELECT n.pending_fact_id::text FROM fixture_0130_pending n WHERE n.contact = s->>'contact_id' AND n.source_target_id = (s->>'source_target_id')::uuid ORDER BY n.original_revision,n.pending_fact_id LIMIT 1) END)
  ORDER BY s->>'contact_id' COLLATE "C",(s->>'source_target_id')::uuid) FROM jsonb_array_elements(p.document->'source_slots') s);
 CREATE FUNCTION pg_temp.fixture_0130_state() RETURNS jsonb LANGUAGE plpgsql AS $function$
-DECLARE relation record; rows jsonb; state jsonb := '{}'::jsonb;
+DECLARE relation record; statements text; state jsonb;
 BEGIN
  FOR relation IN SELECT n.nspname,c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname IN ('app_data','app_private') AND c.relkind = 'r' ORDER BY n.nspname,c.relname LOOP
-  EXECUTE format('SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),''[]''::jsonb) FROM %I.%I r',relation.nspname,relation.relname) INTO rows;
-  state := state || jsonb_build_object(relation.nspname || '.' || relation.relname,rows);
+  statements := concat_ws(' UNION ALL ',statements,format('SELECT %L::text AS relation_name,coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),''[]''::jsonb) AS contents FROM %I.%I r',
+      relation.nspname || '.' || relation.relname,relation.nspname,relation.relname));
  END LOOP;
+ IF statements IS NULL THEN RETURN '{}'::jsonb; END IF;
+ EXECUTE 'SELECT jsonb_object_agg(relation_name,contents) FROM (' || statements || ') snapshots' INTO state;
  RETURN state;
 END $function$;
 CREATE FUNCTION pg_temp.fixture_0130_confirm(kind text,mapping jsonb DEFAULT NULL,choices jsonb DEFAULT NULL,request uuid DEFAULT NULL) RETURNS timestamptz LANGUAGE sql AS $function$

@@ -42,7 +42,7 @@ $function$;
 
 CREATE FUNCTION pg_temp.legacy_state_0133()
 RETURNS jsonb LANGUAGE plpgsql AS $function$
-DECLARE relation record; rows jsonb; result jsonb := '{}'::jsonb; expression text;
+DECLARE relation record; statements text; result jsonb; expression text;
 BEGIN
   FOR relation IN SELECT schemaname, tablename FROM pg_catalog.pg_tables
     WHERE schemaname IN ('app_data', 'app_private')
@@ -53,10 +53,11 @@ BEGIN
   LOOP
     expression := CASE WHEN relation.schemaname = 'app_data' AND relation.tablename = 'app_users'
       THEN 'to_jsonb(t) - ''status''' ELSE 'to_jsonb(t)' END;
-    EXECUTE format('SELECT coalesce(jsonb_agg(%s ORDER BY %s::text), ''[]''::jsonb) FROM %I.%I t',
-      expression, expression, relation.schemaname, relation.tablename) INTO rows;
-    result := result || jsonb_build_object(relation.schemaname || '.' || relation.tablename, rows);
+    statements := concat_ws(' UNION ALL ',statements,format('SELECT %L::text AS relation_name,coalesce(jsonb_agg(%s ORDER BY %s::text), ''[]''::jsonb) AS contents FROM %I.%I t',
+      relation.schemaname || '.' || relation.tablename,expression, expression, relation.schemaname, relation.tablename));
   END LOOP;
+  IF statements IS NULL THEN RETURN '{}'::jsonb; END IF;
+  EXECUTE 'SELECT jsonb_object_agg(relation_name,contents) FROM (' || statements || ') snapshots' INTO result;
   RETURN result;
 END
 $function$;

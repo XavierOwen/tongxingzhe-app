@@ -64,13 +64,15 @@ UPDATE app_data.promotion_targets t SET created_at = CASE WHEN t.promotion_targe
 FROM earliest e WHERE t.promotion_target_id IN (e.first_target,e.second_target);
 
 CREATE FUNCTION pg_temp.fixture_0131_state() RETURNS jsonb LANGUAGE plpgsql AS $function$
-DECLARE relation record; rows jsonb; state jsonb := '{}'::jsonb;
+DECLARE relation record; statements text; state jsonb;
 BEGIN
  FOR relation IN SELECT n.nspname,c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
   WHERE n.nspname IN ('app_data','app_private') AND c.relkind='r' ORDER BY n.nspname,c.relname LOOP
-  EXECUTE format('SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),''[]''::jsonb) FROM %I.%I r',relation.nspname,relation.relname) INTO rows;
-  state := state || jsonb_build_object(relation.nspname || '.' || relation.relname,rows);
+  statements := concat_ws(' UNION ALL ',statements,format('SELECT %L::text AS relation_name,coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),''[]''::jsonb) AS contents FROM %I.%I r',
+      relation.nspname || '.' || relation.relname,relation.nspname,relation.relname));
  END LOOP;
+ IF statements IS NULL THEN RETURN '{}'::jsonb; END IF;
+ EXECUTE 'SELECT jsonb_object_agg(relation_name,contents) FROM (' || statements || ') snapshots' INTO state;
  RETURN state;
 END $function$;
 CREATE FUNCTION pg_temp.fixture_0131_dispatch(request uuid,project uuid DEFAULT NULL) RETURNS TABLE(unit_kind text,unit_id uuid,outcome text,failure_code text,failure_sqlstate text,processed_at_utc timestamptz)

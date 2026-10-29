@@ -6,24 +6,16 @@ CREATE FUNCTION pg_temp.assert_0140(condition boolean,label text) RETURNS void L
 BEGIN
   IF condition IS DISTINCT FROM true THEN RAISE EXCEPTION '0140 %',label; END IF;
 END $function$;
-CREATE FUNCTION pg_temp.state_0140() RETURNS jsonb LANGUAGE plpgsql AS $function$
-DECLARE relation record; rows jsonb; result jsonb := '{}'::jsonb;
-BEGIN
-  FOR relation IN SELECT schemaname,tablename FROM pg_catalog.pg_tables WHERE schemaname IN('app_data','app_private') ORDER BY schemaname,tablename LOOP
-    EXECUTE format('SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),''[]''::jsonb) FROM %I.%I t',relation.schemaname,relation.tablename) INTO rows;
-    result := result||jsonb_build_object(relation.schemaname||'.'||relation.tablename,rows);
-  END LOOP;
-  RETURN result;
-END $function$;
+\ir shared/database_state.sql
 CREATE FUNCTION pg_temp.expect_0140_failure(expected_state text,expected_message text,statement text) RETURNS void LANGUAGE plpgsql AS $function$
-DECLARE before_state jsonb := pg_temp.state_0140(); actual_state text; actual_message text;
+DECLARE before_state jsonb := pg_temp.fixture_database_state(); actual_state text; actual_message text;
 BEGIN
   BEGIN EXECUTE statement;
   EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS actual_state=RETURNED_SQLSTATE,actual_message=MESSAGE_TEXT; END;
   IF actual_state IS DISTINCT FROM expected_state OR(expected_message IS NOT NULL AND actual_message IS DISTINCT FROM expected_message) THEN
     RAISE EXCEPTION '0140 expected % / %, got % / %',expected_state,expected_message,actual_state,actual_message;
   END IF;
-  PERFORM pg_temp.assert_0140(before_state=pg_temp.state_0140(),'rejected confirmation changed persistent state');
+  PERFORM pg_temp.assert_0140(before_state=pg_temp.fixture_database_state(),'rejected confirmation changed persistent state');
 END $function$;
 CREATE TEMP TABLE fixture_0140_context AS SELECT * FROM app_data.bootstrap_personal_context('https://synthetic-0140.example.test','owner');
 CREATE TEMP TABLE fixture_0140_other AS SELECT * FROM app_data.bootstrap_personal_context('https://synthetic-0140.example.test','other');
@@ -146,7 +138,7 @@ CREATE TEMP TABLE fixture_0140_payloads AS
 SELECT header.*,payload.new_stage,payload.new_lifecycle_status,payload.follow_up_note,payload.reason_code,payload.reason_detail,pending.source_target_id
 FROM fixture_0140_pending pending JOIN app_private.personal_merge_unassigned_project_relationship_requests_v1 header USING(pending_fact_id)
 JOIN app_data.personal_merge_unassigned_project_relationship_facts_v1 payload USING(pending_fact_id);
-CREATE TEMP TABLE fixture_0140_before_state AS SELECT pg_temp.state_0140() AS document;
+CREATE TEMP TABLE fixture_0140_before_state AS SELECT pg_temp.fixture_database_state() AS document;
 SELECT pg_temp.assert_0140((SELECT jsonb_array_length(acknowledgements)=1 FROM fixture_0140_plans WHERE kind='person')
   AND (SELECT jsonb_array_length(acknowledgements)=2 FROM fixture_0140_plans WHERE kind='institution')
   AND (SELECT acknowledgements='[]'::jsonb FROM fixture_0140_plans WHERE kind='existing'),'missing-slot and empty-acknowledgement setup differs');
@@ -448,7 +440,7 @@ BEGIN
       WHERE pending_fact_id IN(SELECT pending_fact_id FROM fixture_0140_pending)),'confirmation lost same-value history or left payloads');
 END $histories$;
 DO $unrelated$
-DECLARE before_state jsonb:=(SELECT document FROM fixture_0140_before_state); after_state jsonb:=pg_temp.state_0140(); key text;
+DECLARE before_state jsonb:=(SELECT document FROM fixture_0140_before_state); after_state jsonb:=pg_temp.fixture_database_state(); key text;
 BEGIN
   FOR key IN SELECT jsonb_object_keys(before_state) LOOP
     IF key=ANY(ARRAY['app_data.promotion_target_project_relationships','app_data.promotion_target_relationship_revisions',
@@ -467,7 +459,7 @@ BEGIN
     AND position('0140 raw reason' IN coalesce(after_state->>'app_private.personal_merge_project_entry_origins_v1',''))=0,'entry metadata retained a business value');
 END $unrelated$;
 CREATE FUNCTION pg_temp.replay_0140() RETURNS void LANGUAGE plpgsql AS $function$
-DECLARE p record; mappings jsonb; choices jsonb; acks jsonb; before_state jsonb:=pg_temp.state_0140();
+DECLARE p record; mappings jsonb; choices jsonb; acks jsonb; before_state jsonb:=pg_temp.fixture_database_state();
 BEGIN
   FOR p IN SELECT plans.*,results.ended_at FROM fixture_0140_plans plans JOIN fixture_0140_results results USING(kind) LOOP
     SELECT jsonb_agg(jsonb_build_object('pending_fact_id',upper(value->>'pending_fact_id'),'source_target_id',upper(value->>'source_target_id')) ORDER BY ordinal DESC)
@@ -480,7 +472,7 @@ BEGIN
       INTO acks FROM jsonb_array_elements(p.acknowledgements) WITH ORDINALITY entries(value,ordinal);
     PERFORM pg_temp.assert_0140(pg_temp.confirm_0140(p.kind,mappings,choices,acks)=p.ended_at,'canonical exact replay returned a new receipt');
   END LOOP;
-  PERFORM pg_temp.assert_0140(before_state=pg_temp.state_0140(),'replay reinitialized entries, reapplied history, or restored redacted data');
+  PERFORM pg_temp.assert_0140(before_state=pg_temp.fixture_database_state(),'replay reinitialized entries, reapplied history, or restored redacted data');
 END $function$;
 SELECT pg_temp.replay_0140();
 SELECT pg_temp.expect_0140_failure('23505',NULL,format('SELECT pg_temp.confirm_0140(''person'',NULL,NULL,%L::jsonb)',
