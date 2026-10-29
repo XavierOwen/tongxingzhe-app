@@ -78,13 +78,15 @@ SELECT p.kind,p.generation_id,
   ORDER BY n.pending_fact_id) FROM fixture_0129_pending n WHERE n.kind = p.kind) AS assignments
 FROM fixture_0129_context c CROSS JOIN fixture_0129_pairs p;
 CREATE FUNCTION pg_temp.fixture_0129_state() RETURNS jsonb LANGUAGE plpgsql AS $function$
-DECLARE relation record; rows jsonb; state jsonb := '{}'::jsonb;
+DECLARE relation record; statements text; state jsonb;
 BEGIN
  FOR relation IN SELECT n.nspname,c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
   WHERE n.nspname IN ('app_data','app_private') AND c.relkind = 'r' ORDER BY n.nspname,c.relname LOOP
-  EXECUTE format('SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),''[]''::jsonb) FROM %I.%I r',relation.nspname,relation.relname) INTO rows;
-  state := state || jsonb_build_object(relation.nspname || '.' || relation.relname,rows);
+  statements := concat_ws(' UNION ALL ',statements,format('SELECT %L::text AS relation_name,coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),''[]''::jsonb) AS contents FROM %I.%I r',
+      relation.nspname || '.' || relation.relname,relation.nspname,relation.relname));
  END LOOP;
+ IF statements IS NULL THEN RETURN '{}'::jsonb; END IF;
+ EXECUTE 'SELECT jsonb_object_agg(relation_name,contents) FROM (' || statements || ') snapshots' INTO state;
  RETURN state;
 END $function$;
 CREATE FUNCTION pg_temp.fixture_0129_read(kind text,mapping jsonb DEFAULT NULL) RETURNS jsonb LANGUAGE sql STABLE AS $function$

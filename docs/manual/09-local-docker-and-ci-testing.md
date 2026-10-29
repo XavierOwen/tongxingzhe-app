@@ -3260,6 +3260,20 @@ bash -n tool/verify_organization_shareable_join_link_concurrency.sh
 
 三处受控 delayed-launch 回归与 forced-waiter-failure cleanup 是本地测试调度证据。完整 Docker 和精确 head CI 另保留 checksum、业务断言及独立 restore；不改 product writer、migration、fixture 或权限，不证明生产身份、部署或真实故障发生率。
 
+### 11.4 独立恢复后的 fixture 明显变慢
+
+先区分 `pg_restore` 命令和恢复后的 check／fixture。日志中 `restore fixture` 的开始标记到下一标记可以帮助定位慢例，不能把整个恢复验证阶段都算作 `pg_restore` 耗时。查看 main 的 CI 时指定 workflow，避免把 keepalive 等其他任务当作验证结果：
+
+```bash
+gh run list --workflow CI --branch main --limit 5
+```
+
+并发及 integration 阶段会合法提交 synthetic 行，恢复库包含这些事实。不能删掉这些行或缩小断言范围来提速。全库 JSONB 快照若在每张表后拼接一次，就会反复复制已经增长的对象；测试 helper 改为收集每表 SELECT，最后用一次 `jsonb_object_agg` 生成快照。
+
+七个未筛选的 fixture 共用 [database_state.sql](../../backend/database/fixtures/shared/database_state.sql)。八个有独立表范围或字段投影的 fixture 保留本地实现，包括普通表与分区父表的区别、原有排除项及账号 status 投影。[0000 回归](../../backend/database/fixtures/0000_database_state.sql)将新快照与旧算法逐值比较，并检查重复行、NULL、排序、空表、带引号的表名、分区及 READ ONLY 调用。helper 只创建在 `pg_temp`，随 fixture 事务回滚。
+
+性能对照使用同一 synthetic dump、PostgreSQL 版本和完整业务 fixture，先重复原实现，再只替换快照实现。保存每次退出码、断言结果和耗时；只运行一次或同时删数据，不能说明提速来自哪项修改。统计信息或缓存也应单独对照，不能仅凭一般建议认定为原因。全量 Docker、精确 PR head CI、合并树核对及 main CI 仍分别留证，CI 总预算和 SQL／锁限时保持原值。
+
 ## 12. 提交前复制清单
 
 Flutter、Backend 和 PostgreSQL 都发生变化时，从仓库根目录依次执行：

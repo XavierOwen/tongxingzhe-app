@@ -180,15 +180,7 @@ UPDATE fixture_0142_plans p SET project_choices=(SELECT jsonb_agg(jsonb_build_ob
   'candidate_kind',CASE WHEN p.kind='person' AND slot->>'project_id'=(SELECT project_id::text FROM fixture_0142_projects WHERE name='a') THEN 'current' ELSE 'pending' END,
   'pending_fact_id',CASE WHEN p.kind='person' AND slot->>'project_id'=(SELECT project_id::text FROM fixture_0142_projects WHERE name='a') THEN 'null'::jsonb ELSE slot->'pending_fact_ids'->0 END)
   ORDER BY (slot->>'project_id')::uuid,(slot->>'source_target_id')::uuid) FROM jsonb_array_elements(p.project_document->'source_slots') slot);
-CREATE FUNCTION pg_temp.fixture_0142_state() RETURNS jsonb LANGUAGE plpgsql AS $function$
-DECLARE relation record; rows jsonb; state jsonb:='{}'::jsonb;
-BEGIN
-  FOR relation IN SELECT schemaname,tablename FROM pg_catalog.pg_tables WHERE schemaname IN('app_data','app_private') ORDER BY schemaname,tablename LOOP
-    EXECUTE format('SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),''[]''::jsonb) FROM %I.%I t',relation.schemaname,relation.tablename) INTO rows;
-    state:=state||jsonb_build_object(relation.schemaname||'.'||relation.tablename,rows);
-  END LOOP;
-  RETURN state;
-END $function$;
+\ir shared/database_state.sql
 CREATE FUNCTION pg_temp.assert_0142(condition boolean,label text) RETURNS void LANGUAGE plpgsql AS $function$
 BEGIN
   IF condition IS DISTINCT FROM true THEN RAISE EXCEPTION '0142 %',label; END IF;
@@ -201,13 +193,13 @@ CREATE FUNCTION pg_temp.fixture_0142_confirm(kind text,mapping jsonb DEFAULT NUL
   FROM fixture_0142_context c,fixture_0142_projects b,fixture_0142_plans p WHERE b.name='b' AND p.kind=$1
 $function$;
 CREATE FUNCTION pg_temp.fixture_0142_expect(expected text,command text,expected_detail text DEFAULT NULL) RETURNS void LANGUAGE plpgsql AS $function$
-DECLARE before_state jsonb:=pg_temp.fixture_0142_state(); actual text; detail text;
+DECLARE before_state jsonb:=pg_temp.fixture_database_state(); actual text; detail text;
 BEGIN
   BEGIN EXECUTE command; EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS actual=RETURNED_SQLSTATE,detail=MESSAGE_TEXT; END;
   IF actual IS DISTINCT FROM expected OR(expected_detail IS NOT NULL AND detail IS DISTINCT FROM expected_detail) THEN
     RAISE EXCEPTION '0142 expected % / %, got % / %',expected,expected_detail,actual,detail;
   END IF;
-  PERFORM pg_temp.assert_0142(before_state=pg_temp.fixture_0142_state(),'failed mixed confirmation changed persistent state');
+  PERFORM pg_temp.assert_0142(before_state=pg_temp.fixture_database_state(),'failed mixed confirmation changed persistent state');
 END $function$;
 CREATE TEMP TABLE fixture_0142_before_revisions AS SELECT revision.* FROM app_data.contact_revisions revision JOIN fixture_0142_contacts fixture ON fixture.contact=revision.contact_id;
 CREATE TEMP TABLE fixture_0142_before_answers AS SELECT answer.* FROM app_data.contact_answers answer JOIN fixture_0142_contacts fixture ON fixture.contact=answer.contact_id;
@@ -219,7 +211,7 @@ CREATE TEMP TABLE fixture_0142_before_project_revisions AS SELECT * FROM app_dat
 CREATE TEMP TABLE fixture_0142_project_payloads AS SELECT header.*,payload.new_stage,payload.new_lifecycle_status,payload.follow_up_note,payload.reason_code,payload.reason_detail,pending.source_target_id
 FROM fixture_0142_project_pending pending JOIN app_private.personal_merge_unassigned_project_relationship_requests_v1 header USING(pending_fact_id)
 JOIN app_data.personal_merge_unassigned_project_relationship_facts_v1 payload USING(pending_fact_id);
-CREATE TEMP TABLE fixture_0142_before_state AS SELECT pg_temp.fixture_0142_state() AS state;
+CREATE TEMP TABLE fixture_0142_before_state AS SELECT pg_temp.fixture_database_state() AS state;
 
 SELECT pg_temp.fixture_0142_expect('55000',format('SELECT app_private.confirm_personal_merge_contact_resolutions_v1(%L,%L,%L,%L,%L,%L,%L,%L,%L::jsonb,%L::jsonb)',
   c.app_user_id,c.workspace_id,b.project_id,p.request_id,p.generation_id,p.document->'known_source_plan'->>'fact_fingerprint',
@@ -557,7 +549,7 @@ BEGIN
 END $joint_success$;
 
 DO $unrelated$
-DECLARE before_state jsonb:=(SELECT state FROM fixture_0142_before_state); after_state jsonb:=pg_temp.fixture_0142_state(); key text;
+DECLARE before_state jsonb:=(SELECT state FROM fixture_0142_before_state); after_state jsonb:=pg_temp.fixture_database_state(); key text;
 BEGIN
   FOREACH key IN ARRAY ARRAY['app_data.contact_revisions','app_data.contact_answers','app_data.contact_target_links','app_data.contact_location_provenance',
     'app_data.processed_commands','app_data.change_feed','app_data.warehouse_outbox','app_data.contact_audit_events','app_data.promotion_target_relationship_revisions',
@@ -598,7 +590,7 @@ BEGIN
     'ordinary contact provenance anomaly mapping escaped the affected revisions');
 END $unrelated$;
 CREATE FUNCTION pg_temp.replay_0142() RETURNS void LANGUAGE plpgsql AS $function$
-DECLARE p record; mapping jsonb; choices jsonb; project_mapping jsonb; project_choices jsonb; before_state jsonb:=pg_temp.fixture_0142_state();
+DECLARE p record; mapping jsonb; choices jsonb; project_mapping jsonb; project_choices jsonb; before_state jsonb:=pg_temp.fixture_database_state();
 BEGIN
   FOR p IN SELECT plan.*,result.confirmed_at FROM fixture_0142_plans plan JOIN fixture_0142_results result USING(kind) LOOP
     SELECT jsonb_agg(jsonb_build_object('pending_fact_id',upper(value->>'pending_fact_id'),'source_target_id',upper(value->>'source_target_id')) ORDER BY ordinal DESC)
@@ -615,11 +607,11 @@ BEGIN
       AND pg_temp.fixture_0142_confirm(p.kind,mapping,choices,NULL,project_mapping,project_choices)=p.confirmed_at,
       'mixed exact/canonical replay changed the original end time');
   END LOOP;
-  PERFORM pg_temp.assert_0142(before_state=pg_temp.fixture_0142_state(),'mixed replay reapplied history, restored PII, or changed context/fence');
+  PERFORM pg_temp.assert_0142(before_state=pg_temp.fixture_database_state(),'mixed replay reapplied history, restored PII, or changed context/fence');
 END $function$;
 SELECT pg_temp.replay_0142();
 DO $old_terminal_receipts$
-DECLARE p record; c record; before_state jsonb:=pg_temp.fixture_0142_state();
+DECLARE p record; c record; before_state jsonb:=pg_temp.fixture_database_state();
 BEGIN
   SELECT * INTO STRICT c FROM fixture_0142_context;
   FOR p IN SELECT plan.*,result.confirmed_at FROM fixture_0142_plans plan JOIN fixture_0142_results result USING(kind) LOOP
@@ -631,7 +623,7 @@ BEGIN
       p.project_document->'known_source_plan'->>'fact_fingerprint',p.project_document->>'pending_fingerprint',p.project_document->>'resolution_fingerprint',
       p.project_assignments,p.project_choices)=p.confirmed_at,'old terminal metadata replay changed its existing contract');
   END LOOP;
-  PERFORM pg_temp.assert_0142(before_state=pg_temp.fixture_0142_state(),'old single-family terminal replay wrote mixed facts');
+  PERFORM pg_temp.assert_0142(before_state=pg_temp.fixture_database_state(),'old single-family terminal replay wrote mixed facts');
 END $old_terminal_receipts$;
 DO $replay_drift$
 DECLARE p record; family text; mapping jsonb; choices jsonb;

@@ -6,15 +6,7 @@ CREATE FUNCTION pg_temp.assert_0139(condition boolean,label text) RETURNS void L
 BEGIN
   IF condition IS DISTINCT FROM true THEN RAISE EXCEPTION '0139 %',label; END IF;
 END $function$;
-CREATE FUNCTION pg_temp.state_0139() RETURNS jsonb LANGUAGE plpgsql AS $function$
-DECLARE relation record; rows jsonb; document jsonb:='{}'::jsonb;
-BEGIN
-  FOR relation IN SELECT schemaname,tablename FROM pg_catalog.pg_tables WHERE schemaname IN('app_data','app_private') ORDER BY schemaname,tablename LOOP
-    EXECUTE format('SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),''[]''::jsonb) FROM %I.%I t',relation.schemaname,relation.tablename) INTO rows;
-    document:=document||jsonb_build_object(relation.schemaname||'.'||relation.tablename,rows);
-  END LOOP;
-  RETURN document;
-END $function$;
+\ir shared/database_state.sql
 CREATE TEMP TABLE fixture_0139_context AS SELECT * FROM app_data.bootstrap_personal_context('https://synthetic-0139.example.test','owner');
 SELECT count(*) FROM app_data.list_personal_project_contexts('https://synthetic-0139.example.test','owner') WHERE is_current;
 CREATE TEMP TABLE fixture_0139_targets(label text PRIMARY KEY,target_id uuid);
@@ -53,14 +45,14 @@ SELECT pg_temp.assert_0139(result->>'status'='conflict','ordinary stale update d
 FROM fixture_0139_context c,fixture_0139_targets t,LATERAL app_data.update_promotion_target_relationship(c.app_user_id,c.workspace_id,c.project_id,
   t.target_id,1,4,'active','0139-private-conflict-note','other','0139-private-conflict-detail','0139-ordinary-conflict',NULL) updated WHERE t.label='ordinary';
 DO $missing_detail$
-DECLARE before_state jsonb:=pg_temp.state_0139(); actual_state text; c record;
+DECLARE before_state jsonb:=pg_temp.fixture_database_state(); actual_state text; c record;
 BEGIN
   SELECT * INTO STRICT c FROM fixture_0139_context;
   BEGIN
     PERFORM * FROM app_data.update_promotion_target_relationship(c.app_user_id,c.workspace_id,c.project_id,
       (SELECT target_id FROM fixture_0139_targets WHERE label='ordinary'),3,4,'active','0139 rejected note','other',NULL,'0139-missing-detail',NULL);
   EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS actual_state=RETURNED_SQLSTATE; END;
-  PERFORM pg_temp.assert_0139(actual_state='22023' AND before_state=pg_temp.state_0139(),'missing other/detail was accepted or wrote persistent state');
+  PERFORM pg_temp.assert_0139(actual_state='22023' AND before_state=pg_temp.fixture_database_state(),'missing other/detail was accepted or wrote persistent state');
 END $missing_detail$;
 CREATE TEMP TABLE fixture_0139_merge(generation_id uuid,request_id uuid,assignments jsonb,document jsonb,choices jsonb,ended_at timestamptz);
 DO $confirm$
@@ -96,7 +88,7 @@ CREATE TEMP TABLE fixture_0139_before_conflicts AS SELECT * FROM app_data.promot
 CREATE TEMP TABLE fixture_0139_before_relations AS SELECT * FROM app_data.promotion_target_project_relationships;
 UPDATE app_data.promotion_targets SET created_at=clock_timestamp()-interval '2 years'
 WHERE promotion_target_id=(SELECT target_id FROM fixture_0139_targets WHERE label='ordinary');
-CREATE TEMP TABLE fixture_0139_before_state AS SELECT pg_temp.state_0139() AS document;
+CREATE TEMP TABLE fixture_0139_before_state AS SELECT pg_temp.fixture_database_state() AS document;
 CREATE TEMP TABLE fixture_0139_results(label text PRIMARY KEY,result jsonb);
 INSERT INTO fixture_0139_results
 SELECT t.label,action.result FROM fixture_0139_context c,fixture_0139_targets t,LATERAL app_data.apply_promotion_target_retention_action(
@@ -113,21 +105,21 @@ END $function$;
 CREATE TRIGGER fixture_0139_late_failure BEFORE INSERT ON app_data.promotion_target_retention_events
 FOR EACH ROW EXECUTE FUNCTION pg_temp.fail_0139();
 DO $rollback$
-DECLARE before_state jsonb:=pg_temp.state_0139(); actual_state text; c record;
+DECLARE before_state jsonb:=pg_temp.fixture_database_state(); actual_state text; c record;
 BEGIN
   SELECT * INTO STRICT c FROM fixture_0139_context;
   BEGIN
     PERFORM * FROM app_data.apply_promotion_target_retention_action(c.app_user_id,c.workspace_id,c.project_id,
       (SELECT target_id FROM fixture_0139_targets WHERE label='first'),'anonymize','withdrawal','0139-confirmed-withdrawal');
   EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS actual_state=RETURNED_SQLSTATE; END;
-  PERFORM pg_temp.assert_0139(actual_state='P0001' AND before_state=pg_temp.state_0139(),'late failure did not roll back complete anonymization');
+  PERFORM pg_temp.assert_0139(actual_state='P0001' AND before_state=pg_temp.fixture_database_state(),'late failure did not roll back complete anonymization');
 END $rollback$;
 DROP TRIGGER fixture_0139_late_failure ON app_data.promotion_target_retention_events;
 INSERT INTO fixture_0139_results
 SELECT t.label,action.result FROM fixture_0139_context c,fixture_0139_targets t,LATERAL app_data.apply_promotion_target_retention_action(
   c.app_user_id,c.workspace_id,c.project_id,t.target_id,'anonymize','withdrawal','0139-confirmed-withdrawal') action WHERE t.label='first';
 DO $redacted$
-DECLARE old record; live jsonb; before_state jsonb:=(SELECT document FROM fixture_0139_before_state); after_state jsonb:=pg_temp.state_0139(); key text;
+DECLARE old record; live jsonb; before_state jsonb:=(SELECT document FROM fixture_0139_before_state); after_state jsonb:=pg_temp.fixture_database_state(); key text;
 BEGIN
   FOR old IN TABLE fixture_0139_before_revisions LOOP
     SELECT to_jsonb(revision) INTO STRICT live FROM app_data.promotion_target_relationship_revisions revision
@@ -186,7 +178,7 @@ BEGIN
     AND position('0139 original first' IN exported)=0,'PII export retained anonymized originals');
 END $export$;
 DO $replay$
-DECLARE c record; target record; result jsonb; receipt record; before_state jsonb:=pg_temp.state_0139();
+DECLARE c record; target record; result jsonb; receipt record; before_state jsonb:=pg_temp.fixture_database_state();
 BEGIN
   SELECT * INTO STRICT c FROM fixture_0139_context;
   FOR target IN SELECT * FROM fixture_0139_targets WHERE label IN('ordinary','first') LOOP
@@ -199,7 +191,7 @@ BEGIN
   PERFORM pg_temp.assert_0139(app_private.confirm_personal_merge_project_relationship_resolutions_v1(c.app_user_id,c.workspace_id,c.project_id,
     receipt.request_id,receipt.generation_id,receipt.document->'known_source_plan'->>'fact_fingerprint',receipt.document->>'pending_fingerprint',
     receipt.document->>'resolution_fingerprint',receipt.assignments,receipt.choices)=receipt.ended_at,'confirmed resolution replay returned a new end receipt');
-  PERFORM pg_temp.assert_0139(before_state=pg_temp.state_0139(),'exact replay restored redacted text or changed retained facts');
+  PERFORM pg_temp.assert_0139(before_state=pg_temp.fixture_database_state(),'exact replay restored redacted text or changed retained facts');
 END $replay$;
 ROLLBACK;
 

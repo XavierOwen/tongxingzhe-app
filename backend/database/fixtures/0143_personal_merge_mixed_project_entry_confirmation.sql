@@ -207,15 +207,7 @@ UPDATE fixture_0143_plans p SET project_choices=(SELECT jsonb_agg(jsonb_build_ob
   'pending_fact_id',CASE WHEN slot->>'project_id'=(SELECT project_id::text FROM fixture_0143_projects WHERE name='a')
     AND (p.kind='existing' OR (p.kind='person' AND (slot->>'source_target_id')::uuid=(SELECT second_target FROM fixture_0143_pairs WHERE kind='person'))) THEN 'null'::jsonb ELSE slot->'pending_fact_ids'->0 END)
   ORDER BY (slot->>'project_id')::uuid,(slot->>'source_target_id')::uuid) FROM jsonb_array_elements(p.project_document->'source_slots') slot);
-CREATE FUNCTION pg_temp.fixture_0143_state() RETURNS jsonb LANGUAGE plpgsql AS $function$
-DECLARE relation record; rows jsonb; state jsonb:='{}'::jsonb;
-BEGIN
-  FOR relation IN SELECT schemaname,tablename FROM pg_catalog.pg_tables WHERE schemaname IN('app_data','app_private') ORDER BY schemaname,tablename LOOP
-    EXECUTE format('SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),''[]''::jsonb) FROM %I.%I t',relation.schemaname,relation.tablename) INTO rows;
-    state:=state||jsonb_build_object(relation.schemaname||'.'||relation.tablename,rows);
-  END LOOP;
-  RETURN state;
-END $function$;
+\ir shared/database_state.sql
 CREATE FUNCTION pg_temp.assert_0143(condition boolean,label text) RETURNS void LANGUAGE plpgsql AS $function$
 BEGIN
   IF condition IS DISTINCT FROM true THEN RAISE EXCEPTION '0143 %',label; END IF;
@@ -235,13 +227,13 @@ CREATE FUNCTION pg_temp.fixture_0143_confirm(kind text,mapping jsonb DEFAULT NUL
   FROM fixture_0143_context c,fixture_0143_projects b,fixture_0143_plans p WHERE b.name='b' AND p.kind=$1
 $function$;
 CREATE FUNCTION pg_temp.fixture_0143_expect(expected text,command text,expected_detail text DEFAULT NULL) RETURNS void LANGUAGE plpgsql AS $function$
-DECLARE before_state jsonb:=pg_temp.fixture_0143_state(); actual text; detail text;
+DECLARE before_state jsonb:=pg_temp.fixture_database_state(); actual text; detail text;
 BEGIN
   BEGIN EXECUTE command; EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS actual=RETURNED_SQLSTATE,detail=MESSAGE_TEXT; END;
   IF actual IS DISTINCT FROM expected OR(expected_detail IS NOT NULL AND detail IS DISTINCT FROM expected_detail) THEN
     RAISE EXCEPTION '0143 expected % / %, got % / %',expected,expected_detail,actual,detail;
   END IF;
-  PERFORM pg_temp.assert_0143(before_state=pg_temp.fixture_0143_state(),'failed mixed confirmation changed persistent state');
+  PERFORM pg_temp.assert_0143(before_state=pg_temp.fixture_database_state(),'failed mixed confirmation changed persistent state');
 END $function$;
 CREATE TEMP TABLE fixture_0143_before_revisions AS SELECT revision.* FROM app_data.contact_revisions revision JOIN fixture_0143_contacts fixture ON fixture.contact=revision.contact_id;
 CREATE TEMP TABLE fixture_0143_before_answers AS SELECT answer.* FROM app_data.contact_answers answer JOIN fixture_0143_contacts fixture ON fixture.contact=answer.contact_id;
@@ -253,7 +245,7 @@ CREATE TEMP TABLE fixture_0143_before_project_revisions AS SELECT * FROM app_dat
 CREATE TEMP TABLE fixture_0143_project_payloads AS SELECT header.*,payload.new_stage,payload.new_lifecycle_status,payload.follow_up_note,payload.reason_code,payload.reason_detail,pending.source_target_id
 FROM fixture_0143_project_pending pending JOIN app_private.personal_merge_unassigned_project_relationship_requests_v1 header USING(pending_fact_id)
 JOIN app_data.personal_merge_unassigned_project_relationship_facts_v1 payload USING(pending_fact_id);
-CREATE TEMP TABLE fixture_0143_before_state AS SELECT pg_temp.fixture_0143_state() AS state;
+CREATE TEMP TABLE fixture_0143_before_state AS SELECT pg_temp.fixture_database_state() AS state;
 
 SELECT pg_temp.assert_0143((SELECT jsonb_array_length(acknowledgements)=2 FROM fixture_0143_plans WHERE kind='person')
  AND (SELECT jsonb_array_length(acknowledgements)=2 FROM fixture_0143_plans WHERE kind='institution')
@@ -591,7 +583,7 @@ SELECT pg_temp.assert_0143(NOT app_private.personal_merge_mixed_project_entry_re
 ROLLBACK TO missing_origins;
 RELEASE missing_origins;
 DO $unrelated$
-DECLARE before_state jsonb:=(SELECT state FROM fixture_0143_before_state); after_state jsonb:=pg_temp.fixture_0143_state(); key text;
+DECLARE before_state jsonb:=(SELECT state FROM fixture_0143_before_state); after_state jsonb:=pg_temp.fixture_database_state(); key text;
 BEGIN
  FOREACH key IN ARRAY ARRAY['app_data.contact_revisions','app_data.contact_answers','app_data.contact_target_links','app_data.contact_location_provenance',
   'app_data.processed_commands','app_data.change_feed','app_data.warehouse_outbox','app_data.contact_audit_events','app_data.promotion_target_relationship_revisions',
@@ -618,7 +610,7 @@ BEGIN
   WHERE value->>'contact_id' NOT IN(SELECT contact FROM fixture_0143_contacts)),'entry synthesized a contact or changed another current contact');
 END $unrelated$;
 CREATE FUNCTION pg_temp.replay_0143() RETURNS void LANGUAGE plpgsql AS $function$
-DECLARE p record; mapping jsonb; choices jsonb; project_mapping jsonb; project_choices jsonb; acks jsonb; before_state jsonb:=pg_temp.fixture_0143_state();
+DECLARE p record; mapping jsonb; choices jsonb; project_mapping jsonb; project_choices jsonb; acks jsonb; before_state jsonb:=pg_temp.fixture_database_state();
 BEGIN
  FOR p IN SELECT plan.*,result.ended_at FROM fixture_0143_plans plan JOIN fixture_0143_results result USING(kind) LOOP
   SELECT jsonb_agg(jsonb_build_object('pending_fact_id',upper(value->>'pending_fact_id'),'source_target_id',upper(value->>'source_target_id')) ORDER BY ordinal DESC)
@@ -637,7 +629,7 @@ BEGIN
   PERFORM pg_temp.assert_0143(pg_temp.fixture_0143_confirm(p.kind)=p.ended_at
    AND pg_temp.fixture_0143_confirm(p.kind,mapping,choices,NULL,project_mapping,project_choices,acks)=p.ended_at,'exact/canonical terminal replay changed original time');
  END LOOP;
- PERFORM pg_temp.assert_0143(before_state=pg_temp.fixture_0143_state(),'terminal replay reinitialized, applied history, restored private text or changed context');
+ PERFORM pg_temp.assert_0143(before_state=pg_temp.fixture_database_state(),'terminal replay reinitialized, applied history, restored private text or changed context');
 END $function$;
 SELECT pg_temp.replay_0143();
 SELECT pg_temp.fixture_0143_expect('23505',format('SELECT app_private.confirm_personal_merge_mixed_resolutions_v2(%L,%L,%L,%L,%L,%L,%L,%L,%L,%L::jsonb,%L::jsonb,%L::jsonb,%L::jsonb,%L::jsonb)',

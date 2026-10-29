@@ -6,24 +6,16 @@ CREATE FUNCTION pg_temp.assert_0141(condition boolean,label text) RETURNS void L
 BEGIN
   IF condition IS DISTINCT FROM true THEN RAISE EXCEPTION '0141 %',label; END IF;
 END $function$;
-CREATE FUNCTION pg_temp.state_0141() RETURNS jsonb LANGUAGE plpgsql AS $function$
-DECLARE relation record; rows jsonb; result jsonb := '{}'::jsonb;
-BEGIN
-  FOR relation IN SELECT schemaname,tablename FROM pg_catalog.pg_tables WHERE schemaname IN('app_data','app_private') ORDER BY schemaname,tablename LOOP
-    EXECUTE format('SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),''[]''::jsonb) FROM %I.%I t',relation.schemaname,relation.tablename) INTO rows;
-    result := result||jsonb_build_object(relation.schemaname||'.'||relation.tablename,rows);
-  END LOOP;
-  RETURN result;
-END $function$;
+\ir shared/database_state.sql
 CREATE FUNCTION pg_temp.expect_0141_failure(expected_state text,expected_message text,statement text) RETURNS void LANGUAGE plpgsql AS $function$
-DECLARE before_state jsonb := pg_temp.state_0141(); actual_state text; actual_message text;
+DECLARE before_state jsonb := pg_temp.fixture_database_state(); actual_state text; actual_message text;
 BEGIN
   BEGIN EXECUTE statement;
   EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS actual_state=RETURNED_SQLSTATE,actual_message=MESSAGE_TEXT; END;
   IF actual_state IS DISTINCT FROM expected_state OR(expected_message IS NOT NULL AND actual_message IS DISTINCT FROM expected_message) THEN
     RAISE EXCEPTION '0141 expected % / %, got % / %',expected_state,expected_message,actual_state,actual_message;
   END IF;
-  PERFORM pg_temp.assert_0141(before_state=pg_temp.state_0141(),'rejected planner changed business data, context, audit, or fence');
+  PERFORM pg_temp.assert_0141(before_state=pg_temp.fixture_database_state(),'rejected planner changed business data, context, audit, or fence');
 END $function$;
 CREATE TEMP TABLE fixture_0141_context AS SELECT * FROM app_data.bootstrap_personal_context('https://synthetic-0141.example.test','owner');
 CREATE TEMP TABLE fixture_0141_other AS SELECT * FROM app_data.bootstrap_personal_context('https://synthetic-0141.example.test','other');
@@ -159,7 +151,7 @@ SELECT p.kind,pg_temp.read_0141(p.kind) AS document,
     p.contact_inventory->'known_source_plan'->>'fact_fingerprint',p.project_inventory->>'pending_fingerprint',p.project_assignments) AS project_standalone
 FROM fixture_0141_plans p,fixture_0141_context c,fixture_0141_projects b WHERE b.name='b';
 DO $baseline$
-DECLARE before_state jsonb:=pg_temp.state_0141(); item record; canonical_contacts jsonb; canonical_projects jsonb;
+DECLARE before_state jsonb:=pg_temp.fixture_database_state(); item record; canonical_contacts jsonb; canonical_projects jsonb;
 BEGIN
   FOR item IN SELECT p.*,initial.document,initial.contact_standalone,initial.project_standalone FROM fixture_0141_plans p JOIN fixture_0141_initial initial USING(kind) LOOP
     PERFORM pg_temp.assert_document_0141(item.document);
@@ -182,16 +174,16 @@ BEGIN
         JOIN fixture_0141_contacts fixture ON fixture.contact_id=contact->>'contact_id' WHERE fixture.kind=item.kind),
       'exact TEXT contact IDs or C order changed');
   END LOOP;
-  PERFORM pg_temp.assert_0141(before_state=pg_temp.state_0141(),'successful mixed plan wrote business data, audit, context, or fence');
+  PERFORM pg_temp.assert_0141(before_state=pg_temp.fixture_database_state(),'successful mixed plan wrote business data, audit, context, or fence');
 END $baseline$;
 SAVEPOINT readonly_scope;
 SET LOCAL transaction_read_only=on;
 DO $readonly$
-DECLARE before_state jsonb:=pg_temp.state_0141();
+DECLARE before_state jsonb:=pg_temp.fixture_database_state();
 BEGIN
   PERFORM pg_temp.assert_0141(current_setting('transaction_read_only')='on','READ ONLY mode was not enabled');
   PERFORM pg_temp.assert_document_0141(pg_temp.read_0141(kind)) FROM fixture_0141_plans;
-  PERFORM pg_temp.assert_0141(before_state=pg_temp.state_0141(),'READ ONLY mixed plan changed persisted state');
+  PERFORM pg_temp.assert_0141(before_state=pg_temp.fixture_database_state(),'READ ONLY mixed plan changed persisted state');
 END $readonly$;
 ROLLBACK TO readonly_scope;
 RELEASE readonly_scope;
