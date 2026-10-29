@@ -3119,6 +3119,18 @@ READ ONLY transaction 须真实成功；空单类、非法形状／完整集／s
 
 完整 Docker runner 继续验证空库、全部 fixtures／并发／权限、历史升级、Backend PostgreSQL integration 和独立 cluster restore；恢复库不重复执行迁移或提交并发样本。MANUAL-165／TEST-176 不证明全部未知事实、完整拆分、生产、真实 PII、部署、HTTP／UI 或设备验收。
 
+### 7.32 旧受限单项确认的事务隔离（Issue #618）
+
+0128 的真实终态重放曾在 REPEATABLE READ 旧快照中，于账号撤权提交后仍返回原回执。合成探针以同 actor／request advisory key 和精确 waiter／holder PID 证明等待及提交顺序；新的 READ COMMITTED 连接对同一请求正确返回 42501。这是旧事务快照的证据，不是生产事故。
+
+0144 只在旧受限 confirmer 的父请求锁之前插入三行 READ COMMITTED 门禁。结构检查确认门禁恰好一次、先于锁和回执读取，签名、私有 owner／ACL、SECURITY DEFINER、VOLATILE 与 search_path 保持原值。其余旧 body 和历史 migration checksum 不变。
+
+原 0128 并发脚本保留全部 exact-PID 场景，并增加 REPEATABLE READ、SERIALIZABLE、READ UNCOMMITTED 的首次及真实终态重放六组拒绝。错误必须精确为 `0A000 pending contact confirmation requires read committed`，完整 app_data／app_private 状态不变。READ COMMITTED 的真实应用和原回执零写入重放继续通过。
+
+正式 runner 在真实 0143 baseline 先提交单项确认，再冻结全部旧业务数据和函数 catalog。0144 后只允许目标函数精确增加门禁；剥离门禁须还原旧 body，OID／owner／ACL 等 metadata 与其他函数不变。旧回执、checksum 重放、fresh、全部并发和独立 cluster restore 分别验证。
+
+MANUAL-166／TEST-177 只补这个旧私有入口，不据此保证所有旧 writer 都有隔离门禁。普通 writer、其他旧入口、外部身份、生产、runtime、Backend／HTTP／UI 及 scheduler 均不在此片范围内。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：

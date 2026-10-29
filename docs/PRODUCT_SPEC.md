@@ -492,6 +492,8 @@ MANUAL-153／TEST-164 记录此私有数据库能力。旧目录自动到期 hel
 
 MANUAL-154／TEST-165 覆盖此修正。真实 0131 baseline 的历史应用、终结回执和全部旧业务数据在升级后保留；正常确认及精确重放继续有效。该限制不扩展到其他旧私有入口或普通 writer，不改变事务模式、来源选择、历史应用、payload 消费和既有生产边界。
 
+Issue #618 以 0144 单独为旧 0128 受限单项 confirmer 补上相同限制。首次与真实终态重放只允许 READ COMMITTED；输入规范化之后、父请求锁与回执读取前，其他模式固定拒绝 `0A000 pending contact confirmation requires read committed`。只向原 body 插入三行门禁，保留 OID／owner／ACL 和其余实现。MANUAL-166／TEST-177 验证真实 0143 升级、旧单项回执零写重放及六组非 RC 拒绝；不改变其他旧入口或普通 writer。
+
 7EY／#598 为合并期间新增的未知来源项目关系事件增加独立 typed 待分配层。0136 header 只含标识与数据库时间，业务值单独保存；同值也不自动合并。metadata-only 预检真正 READ ONLY，旧 end／接触确认不能漏过此类 pending 而结束代次，pair expiry 原子清除全部敏感载荷。五类已知来源事实不重写。
 
 MANUAL-158／TEST-169 只覆盖这一私有层，不提供普通关系写回资格、来源分配、当前候选、历史应用或完整混合 split；runtime、Backend／HTTP／UI、scheduler、生产 active merge 与 #549 人工门槛不变。
@@ -3463,6 +3465,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-163` | 说明混合只读预检的两份原生 nested 计划、共同 snapshot、完整拟议映射、known／两类 pending 指纹及四键复合指纹。只列候选，既不保留授权也不提供 mixed 确认；两类 confirmer 不能据此直接串联，旧单类合同与生产边界不变。 |
 | `MANUAL-164` | 说明已有关系混合确认的两类完整映射与明确选择、四指纹、完整历史／current／nonpair 关系闭包、统一预锁与 READ COMMITTED 门禁。区分共同最终清单、两类原回执和最小共同 receipt，记录窄 proof／单次 end／两类消费原子性及后来编辑后的 metadata 重放；明确缺关系仍拒绝，无生产、runtime、HTTP 或 UI。 |
 | `MANUAL-165` | 说明混合显式项目进入的精确 missing 槽确认、其他缺失关联拒绝、完整预锁与锁后重验。区分真实当前 rev1 行政进入和原 pending 历史，记录内部指纹重算、外层 origins／内层共同回执证明、整批回滚和 metadata 重放；明确普通 writer 不改，无生产、runtime、HTTP 或 UI。 |
+| `MANUAL-166` | 说明旧受限单项 confirmer 的 READ COMMITTED 门禁、首次与终态重放的固定 0A000、旧事务快照不能重验当前授权的原因。记录三行精确插入、metadata 保留、真实旧回执升级与本片私有范围；不将限制推广到所有旧 writer。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3817,6 +3820,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-174` | 0141 用真实 person／institution 的历史／多项／同值接触及项目 pending 验证同快照 nested 结果等于原 0129／0137、四键与复合 SHA-256、canonical UUID／顺序和精确 TEXT ID、原项目范围及有无当前关系。READ ONLY 成功，空单类、非法形状／完整集／source、陈旧三指纹及失效范围零写拒绝；全部业务、audit、context、fence 与旧 catalog 保留。exact-PID 测试 gate 证明真实 stage 增长或撤权可先提交、reader 仍返回完整旧 snapshot，下一 command 刷新或拒绝。真实 0140 升级、checksum、完整 Docker 与独立恢复继续验证，无新 FK。 |
 | `TEST-175` | 0142 验证两类对象、多原项目、历史／多项／同值 pending、明确 older／current、原 answers／provenance／nonpair links／关系历史和 binding 保留，无新关系或 project_entry。缺关系、两类输入与四指纹、资格／due、任一步故障或抑制均全回滚，伪造共同 receipt 不放行；两类 canonical 重放及普通编辑／匿名化后重放不恢复旧值。指定 PID／锁验证完整预锁、ordinary／两类 stage／expiry／request／撤权／scope／due 与 nonpair 等待，非 RC 首次／重放先拒绝。真实 0141 升级仅四个必要旧函数 body 精确变动，旧 rows／catalog 和新 FK 的 RI trigger 分别核对；严格 inventory 为 388，checksum、完整 Docker 与独立恢复通过。 |
 | `TEST-176` | 0143 验证双类型、同槽两类 pending、历史／多项／同值／旧候选、已有槽与缺失槽及空确认。真实初始 rev1 的 actor／时间／stage 0／active／project_entry／binding 正确，原事实、答案、来源及非配对链接保留。错误确认、其他缺失关系、权限／due／指纹变化、初始化及 metadata 静默篡改、内层应用／end／双消费故障均整批回滚。真实 PID／锁覆盖完整预锁和普通进入／关系竞争，六组非 RC 首次／重放拒绝。真实 0142 升级只允许旧初始化块精确提取及新增 FK 的 RI triggers，严格 inventory 为 396；checksum、完整 Docker 和独立恢复通过，不恢复后来编辑或匿名化的数据。 |
+| `TEST-177` | 0144 fresh／真实 0143 upgrade／checksum／独立恢复确认旧受限 confirmer 只增加一次隔离门禁，OID／owner／ACL／其余 metadata、全部旧函数与业务数据保留。三种非 RC 的首次与真实终态重放均精确拒绝 0A000 且零业务写入；原 RC 单项确认、旧回执、漂移及全部 exact-PID 并发继续通过。无新表或外键。 |
 
 ## 9. UI、视觉与可访问性
 
