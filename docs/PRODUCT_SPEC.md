@@ -500,6 +500,8 @@ Issue #621 以 0146 要求 0117 私有 v2 激活使用 READ COMMITTED。首次�
 
 Issue #622 以 0147 要求 0118 结束分配使用 READ COMMITTED。首次与重放在输入校验后、授权查询前检查隔离模式，其他模式返回固定 0A000。保留既有私有权限、代次锁序、最后分配限制和原回执。MANUAL-169／TEST-180 验证真实升级、六组隔离拒绝及锁后撤权。
 
+Issue #624 以 0148 要求 0114 旧版私有 v1 激活使用 READ COMMITTED，门禁位于首次更新代次 fence 前。若等待期间提交账号删除申请，当前授权检查返回 42501，本次激活不新增代次或成员。MANUAL-170／TEST-181 记录隔离拒绝、真实升级及旧代次保留。
+
 7EY／#598 为合并期间新增的未知来源项目关系事件增加独立 typed 待分配层。0136 header 只含标识与数据库时间，业务值单独保存；同值也不自动合并。metadata-only 预检真正 READ ONLY，旧 end／接触确认不能漏过此类 pending 而结束代次，pair expiry 原子清除全部敏感载荷。五类已知来源事实不重写。
 
 MANUAL-158／TEST-169 只覆盖这一私有层，不提供普通关系写回资格、来源分配、当前候选、历史应用或完整混合 split；runtime、Backend／HTTP／UI、scheduler、生产 active merge 与 #549 人工门槛不变。
@@ -3475,6 +3477,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-167` | 说明已知来源代次直接结束和到期的 READ COMMITTED 要求，记录首次与终态重放的门禁位置、固定错误及两个原回执的升级验证。 |
 | `MANUAL-168` | 说明 0117 私有 v2 激活的 READ COMMITTED 要求、首次与重放的检查位置，以及旧代次的升级和只读重放。 |
 | `MANUAL-169` | 说明 0118 结束分配的 READ COMMITTED 要求、首次与重放的门禁位置、锁后撤权以及原回执的升级与只读重放。 |
+| `MANUAL-170` | 说明 0114 旧版私有 v1 激活的 READ COMMITTED 门禁、等待代次锁时的账号删除竞态和旧代次保留验证。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3833,6 +3836,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-178` | 0145 验证两个私有终结入口的 12 组非 RC 首次／重放拒绝及完整状态不变。真实 0144 升级保留两种原回执、旧数据、完整函数 catalog 和元数据，checksum 重放后仍在只读 READ COMMITTED 中返回原回执。fresh、原并发与独立恢复继续通过结构检查。 |
 | `TEST-179` | 0146 验证 v2 激活的三种非 RC 首次和三种重放精确拒绝，完整业务状态不变。真实 0145 升级保留原请求、审计、活动成员、业务数据和完整函数 catalog。checksum 重放后仍在只读 READ COMMITTED 中返回原代次。fresh、既有锁后撤权与独立恢复继续验证。 |
 | `TEST-180` | 0147 验证结束分配的六组非 RC 首次／重放拒绝和完整业务状态不变。真实 fence 等待后提交撤权，READ COMMITTED 首次返回 42501，分配仍活动且无结束事件。真实 0146 升级与 checksum 重放核对旧业务数据、完整函数 catalog 和原回执。fresh 和独立恢复验证门禁位置、私有 ACL 与现有行为。 |
+| `TEST-181` | 0148 验证旧版私有 v1 激活在三种非 RC 模式下返回固定 0A000 且业务状态不变。READ COMMITTED 等待真实 fence 期间提交账号删除申请后返回 42501，无代次或成员写入。真实 0147 升级与 checksum 重放核对已提交代次、旧数据及函数 catalog。fresh 和独立恢复检查门禁位置及私有 ACL。 |
 
 ## 9. UI、视觉与可访问性
 

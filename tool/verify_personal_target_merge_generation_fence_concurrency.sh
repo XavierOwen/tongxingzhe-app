@@ -210,7 +210,7 @@ activate_sql() {
 
 run_race() {
   local label="$1" holder_kind="$2" preview_id="$3" writer_sql="$4" result_sql="$5"
-  local expected_waiter_status="${6:-0}"
+  local expected_waiter_status="${6:-0}" revocation_sql="${7:-}" holder_finish=COMMIT
   local gate="0114-fence-${run_token}-${label}"
   local gate_app="0114-gate-${label}" holder_app="0114-holder-${label}" waiter_app="0114-waiter-${label}"
   local holder_output="${temporary_directory}/${label}-holder.out" waiter_output="${temporary_directory}/${label}-waiter.out"
@@ -218,17 +218,18 @@ run_race() {
   start_gate "${gate}" "${gate_app}"
   if [[ "${holder_kind}" == 'activation' ]]; then
     PGAPPNAME="${holder_app}" "${psql_base[@]}" --quiet --command="
-      BEGIN;
+      BEGIN ISOLATION LEVEL READ COMMITTED;
       $(activate_sql "${preview_id}");
       SELECT pg_advisory_xact_lock(hashtextextended('${gate}', 0));
       COMMIT;
     " >"${holder_output}" 2>&1 &
   else
+    if [[ -n "${revocation_sql}" ]]; then holder_finish=ROLLBACK; fi
     PGAPPNAME="${holder_app}" "${psql_base[@]}" --quiet --command="
-      BEGIN;
+      BEGIN ISOLATION LEVEL READ COMMITTED;
       ${writer_sql}
       SELECT pg_advisory_xact_lock(hashtextextended('${gate}', 0));
-      COMMIT;
+      ${holder_finish};
     " >"${holder_output}" 2>&1 &
   fi
   local holder_pid=$!
@@ -239,12 +240,18 @@ run_race() {
     PGAPPNAME="${waiter_app}" "${psql_base[@]}" --quiet --command="${writer_sql}" \
       >"${waiter_output}" 2>&1 &
   else
-    PGAPPNAME="${waiter_app}" "${psql_base[@]}" --quiet --command="$(activate_sql "${preview_id}")" \
-      >"${waiter_output}" 2>&1 &
+    PGAPPNAME="${waiter_app}" "${psql_base[@]}" --quiet --command="
+      BEGIN ISOLATION LEVEL READ COMMITTED;
+      $(activate_sql "${preview_id}")
+      COMMIT;
+    " >"${waiter_output}" 2>&1 &
   fi
   local waiter_pid=$!
   child_pids+=("${waiter_pid}")
   wait_for_exact_blocker "${waiter_app}" "${holder_app}" "${waiter_output}"
+  if [[ -n "${revocation_sql}" ]]; then
+    run_psql --quiet --command="${revocation_sql}" >/dev/null
+  fi
   release_gate
 
   local holder_status=0 waiter_status=0
@@ -258,7 +265,7 @@ run_race() {
     exit 1
   fi
   if [[ "${expected_waiter_status}" -ne 0 ]] \
-    && ! grep -q '42501: personal target merge generation activation is forbidden' \
+    && ! grep -q '^ERROR:  42501: personal target merge generation activation is forbidden$' \
       "${waiter_output}"; then
     echo "${label} waiter failed for an unexpected reason." >&2
     sed -n '1,120p' "${waiter_output}" >&2
@@ -305,3 +312,71 @@ run_race relationship-writer-first writer "${relation_writer_preview}" \
   "SELECT relation_row.current_revision = 2 AND bool_and(revision_row.merge_generation_id IS NULL) FROM app_data.promotion_target_project_relationships relation_row JOIN app_data.promotion_target_relationship_revisions revision_row USING (promotion_target_id, project_id) JOIN app_private.personal_target_merge_active_members_v1 active ON active.promotion_target_id = relation_row.promotion_target_id WHERE relation_row.promotion_target_id = '${relation_writer_first}'::uuid AND relation_row.merge_generation_id IS NULL GROUP BY relation_row.current_revision;"
 
 echo '0114 activation/contact/project relationship fence races passed.'
+
+snapshot_definition="$(cat "$(dirname "${BASH_SOURCE[0]}")/../backend/database/fixtures/shared/database_state.sql")"
+business_state() {
+  run_psql --quiet --tuples-only --no-align \
+    --command="${snapshot_definition} SELECT pg_temp.fixture_database_state();"
+}
+
+IFS='|' read -r isolation_first isolation_second isolation_preview <<<"$(create_pair isolation 5)"
+statement="$(activate_sql "${isolation_preview}")"
+before_state="$(business_state)"
+for isolation in 'REPEATABLE READ' SERIALIZABLE 'READ UNCOMMITTED'; do
+  status=0
+  run_psql --quiet --command="BEGIN ISOLATION LEVEL ${isolation}; ${statement} COMMIT;" \
+    >"${temporary_directory}/isolation.out" 2>&1 || status=$?
+  error_line="$(sed -n '/^ERROR:/{p;q;}' "${temporary_directory}/isolation.out")"
+  if [[ "${status}" -eq 0 || "${error_line}" != 'ERROR:  0A000: legacy personal target merge generation activation requires read committed' ]]; then
+    printf '0148 first activation in %s expected exact 0A000, got exit %s\n' "${isolation}" "${status}" >&2
+    cat "${temporary_directory}/isolation.out" >&2
+    exit 1
+  fi
+  if [[ "$(business_state)" != "${before_state}" ]]; then
+    printf '0148 first activation in %s changed business state\n' "${isolation}" >&2
+    exit 1
+  fi
+done
+
+generation="$(run_psql --quiet --tuples-only --no-align \
+  --command="BEGIN ISOLATION LEVEL READ COMMITTED; ${statement} COMMIT;")"
+[[ "${generation}" =~ ^[0-9a-f-]{36}$ ]]
+[[ "$(run_psql --quiet --tuples-only --no-align --command="
+  SELECT EXISTS (SELECT 1 FROM app_private.personal_target_merge_generations_v1
+    WHERE generation_id='${generation}' AND created_by_app_user_id='${app_user_id}' AND workspace_id='${workspace_id}')
+  AND (SELECT count(*)=2 FROM app_private.personal_target_merge_active_members_v1
+    WHERE generation_id='${generation}' AND promotion_target_id IN ('${isolation_first}','${isolation_second}'));
+")" == 't' ]] || { echo '0148 READ COMMITTED did not activate the same pair.' >&2; exit 1; }
+
+IFS='|' read -r revoked_first revoked_second revoked_preview <<<"$(create_pair account-revocation 6)"
+revoked_assignment="$(run_psql --quiet --tuples-only --no-align --command="
+  SELECT first_assignment_id FROM app_private.personal_target_pair_preview_receipts WHERE preview_id='${revoked_preview}';
+")"
+[[ "${revoked_assignment}" =~ ^[0-9a-f-]{36}$ ]]
+deletion_request="$(run_psql --quiet --tuples-only --no-align --command='SELECT gen_random_uuid();')"
+generation_count="$(run_psql --quiet --tuples-only --no-align --command="
+  SELECT count(*) FROM app_private.personal_target_merge_generations_v1 WHERE created_by_app_user_id='${app_user_id}';
+")"
+
+# The assignment end holds the actual fence but rolls back its update. Account
+# deletion commits independently before activation can proceed on that fence.
+run_race account-revocation writer "${revoked_preview}" \
+  "SELECT app_data.end_personal_target_assignment_v1('${app_user_id}','${workspace_id}','${project_id}','${revoked_assignment}');" \
+  "SELECT EXISTS (
+    SELECT 1 FROM app_data.app_users u
+    JOIN app_private.account_deletion_current c USING (app_user_id)
+    JOIN app_private.account_deletion_request_claims r ON r.request_id=c.deletion_request_id
+    JOIN app_private.account_deletion_audit_events a ON a.request_id=r.request_id AND a.deletion_request_id=c.deletion_request_id
+    WHERE u.app_user_id='${app_user_id}' AND u.status='deletion_pending' AND c.status='deletion_pending'
+      AND r.request_id='${deletion_request}' AND r.actor_app_user_id=u.app_user_id
+      AND r.deletion_request_id=c.deletion_request_id AND r.effective_at_utc=c.effective_at_utc
+      AND r.purge_after_utc=c.purge_after_utc
+      AND a.operation='account-deletion-request:v1' AND a.occurred_at_utc=c.effective_at_utc
+  ) AND (SELECT count(*)=${generation_count} FROM app_private.personal_target_merge_generations_v1 WHERE created_by_app_user_id='${app_user_id}')
+  AND NOT EXISTS (SELECT 1 FROM app_private.personal_target_merge_generation_members_v1 WHERE promotion_target_id IN ('${revoked_first}','${revoked_second}'))
+  AND NOT EXISTS (SELECT 1 FROM app_private.personal_target_merge_active_members_v1 WHERE promotion_target_id IN ('${revoked_first}','${revoked_second}'))
+  AND EXISTS (SELECT 1 FROM app_data.promotion_target_assignments WHERE assignment_id='${revoked_assignment}' AND ended_at IS NULL)
+  AND NOT EXISTS (SELECT 1 FROM app_private.personal_target_assignment_end_events_v1 WHERE assignment_id='${revoked_assignment}');" \
+  1 "BEGIN ISOLATION LEVEL READ COMMITTED; SELECT * FROM app_private.request_account_deletion_v1('${app_user_id}','${deletion_request}'); COMMIT;"
+
+echo '0148 legacy activation passed three first-call isolation cases, READ COMMITTED activation, and the real account revocation race.'
