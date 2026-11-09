@@ -9,21 +9,26 @@ SET CONSTRAINTS ALL DEFERRED;
 
 -- Seed active accounts first.  The two accounts used for the deletion cases
 -- are changed after their valid invitations have been issued.
-INSERT INTO app_data.app_users (app_user_id, status)
-VALUES
-  ('00000000-8701-0000-0000-000000000001'::uuid, 'active'),
-  ('00000000-8701-0000-0000-000000000002'::uuid, 'active'),
-  ('00000000-8701-0000-0000-000000000003'::uuid, 'active'),
-  ('00000000-8701-0000-0000-000000000004'::uuid, 'active'),
-  ('00000000-8701-0000-0000-000000000005'::uuid, 'active'),
-  ('00000000-8701-0000-0000-000000000006'::uuid, 'active'),
-  ('00000000-8701-0000-0000-000000000007'::uuid, 'active'),
-  ('00000000-8701-0000-0000-000000000008'::uuid, 'active'),
-  ('00000000-8701-0000-0000-000000000009'::uuid, 'active'),
-  ('00000000-8701-0000-0000-000000000010'::uuid, 'active'),
-  ('00000000-8701-0000-0000-000000000011'::uuid, 'active'),
-  ('00000000-8701-0000-0000-000000000012'::uuid, 'active'),
-  ('00000000-8701-0000-0000-000000000013'::uuid, 'active');
+CREATE TEMP TABLE fixture_0087_actor_ids ON COMMIT DROP AS
+WITH actors AS (
+  INSERT INTO app_data.app_users (app_user_id, status)
+  VALUES
+    ('00000000-8701-0000-0000-000000000001'::uuid, 'active'),
+    ('00000000-8701-0000-0000-000000000002'::uuid, 'active'),
+    ('00000000-8701-0000-0000-000000000003'::uuid, 'active'),
+    ('00000000-8701-0000-0000-000000000004'::uuid, 'active'),
+    ('00000000-8701-0000-0000-000000000005'::uuid, 'active'),
+    ('00000000-8701-0000-0000-000000000006'::uuid, 'active'),
+    ('00000000-8701-0000-0000-000000000007'::uuid, 'active'),
+    ('00000000-8701-0000-0000-000000000008'::uuid, 'active'),
+    ('00000000-8701-0000-0000-000000000009'::uuid, 'active'),
+    ('00000000-8701-0000-0000-000000000010'::uuid, 'active'),
+    ('00000000-8701-0000-0000-000000000011'::uuid, 'active'),
+    ('00000000-8701-0000-0000-000000000012'::uuid, 'active'),
+    ('00000000-8701-0000-0000-000000000013'::uuid, 'active')
+  RETURNING app_user_id
+)
+SELECT app_user_id FROM actors;
 
 INSERT INTO app_data.external_identities (
   external_identity_id,
@@ -105,47 +110,52 @@ VALUES
     '00000000-8701-0000-0000-000000000012'::uuid
   );
 
-INSERT INTO app_data.workspaces (
-  workspace_id,
-  workspace_kind,
-  display_name,
-  personal_owner_app_user_id,
-  deleted_at,
-  created_at
+CREATE TEMP TABLE fixture_0087_workspace_ids ON COMMIT DROP AS
+WITH workspaces AS (
+  INSERT INTO app_data.workspaces (
+    workspace_id,
+    workspace_kind,
+    display_name,
+    personal_owner_app_user_id,
+    deleted_at,
+    created_at
+  )
+  VALUES
+    (
+      '00000000-8701-2000-0000-000000000001'::uuid,
+      'organization',
+      '8701 live organization',
+      NULL,
+      NULL,
+      transaction_timestamp() - interval '1 hour'
+    ),
+    (
+      '00000000-8701-2000-0000-000000000002'::uuid,
+      'organization',
+      '8701 recovery organization',
+      NULL,
+      NULL,
+      transaction_timestamp() - interval '1 hour'
+    ),
+    (
+      '00000000-8701-2000-0000-000000000003'::uuid,
+      'organization',
+      '8701 other organization',
+      NULL,
+      NULL,
+      transaction_timestamp() - interval '1 hour'
+    ),
+    (
+      '00000000-8701-2000-0000-000000000004'::uuid,
+      'personal',
+      '8701 personal workspace',
+      '00000000-8701-0000-0000-000000000001'::uuid,
+      NULL,
+      transaction_timestamp() - interval '1 hour'
+    )
+  RETURNING workspace_id
 )
-VALUES
-  (
-    '00000000-8701-2000-0000-000000000001'::uuid,
-    'organization',
-    '8701 live organization',
-    NULL,
-    NULL,
-    transaction_timestamp() - interval '1 hour'
-  ),
-  (
-    '00000000-8701-2000-0000-000000000002'::uuid,
-    'organization',
-    '8701 recovery organization',
-    NULL,
-    NULL,
-    transaction_timestamp() - interval '1 hour'
-  ),
-  (
-    '00000000-8701-2000-0000-000000000003'::uuid,
-    'organization',
-    '8701 other organization',
-    NULL,
-    NULL,
-    transaction_timestamp() - interval '1 hour'
-  ),
-  (
-    '00000000-8701-2000-0000-000000000004'::uuid,
-    'personal',
-    '8701 personal workspace',
-    '00000000-8701-0000-0000-000000000001'::uuid,
-    NULL,
-    transaction_timestamp() - interval '1 hour'
-  );
+SELECT workspace_id FROM workspaces;
 
 -- History is legal membership data: it is closed before the fixture begins,
 -- while every current membership is an older row with an open end.
@@ -300,6 +310,28 @@ VALUES
     transaction_timestamp() - interval '1 hour',
     NULL
   );
+
+-- An unrelated owner assignment can share a UUID segment with the fixture.
+INSERT INTO app_data.app_users (app_user_id, status)
+VALUES ('c0871000-1109-4000-8000-000000000001', 'active');
+INSERT INTO app_data.workspaces (
+  workspace_id, workspace_kind, display_name, created_at
+) VALUES (
+  'c0871000-1109-4000-8000-000000000002', 'organization',
+  '0087 unrelated organization', transaction_timestamp() - interval '1 hour'
+);
+INSERT INTO app_data.organization_memberships (
+  organization_membership_id, organization_workspace_id, app_user_id, active_from_utc
+) VALUES (
+  'c0871000-1109-4000-8000-000000000003', 'c0871000-1109-4000-8000-000000000002',
+  'c0871000-1109-4000-8000-000000000001', transaction_timestamp() - interval '1 hour'
+);
+INSERT INTO app_data.organization_owner_assignments (
+  organization_owner_assignment_id, organization_membership_id, active_from_utc
+) VALUES (
+  'c0871000-8701-4000-8000-000000000004', 'c0871000-1109-4000-8000-000000000003',
+  transaction_timestamp()
+);
 
 SET CONSTRAINTS ALL IMMEDIATE;
 SET CONSTRAINTS ALL DEFERRED;
@@ -1005,40 +1037,60 @@ BEGIN
 END
 $function$;
 
-CREATE TEMP TABLE fixture_0087_failure_counts AS
+CREATE TEMP VIEW fixture_0087_scoped_claims AS
+SELECT claim.*
+FROM app_private.organization_directed_account_invitation_request_claims AS claim
+WHERE claim.organization_workspace_id IN (SELECT workspace_id FROM fixture_0087_workspace_ids)
+  OR claim.invitation_id::text LIKE '00000000-8701-3000-0000-%';
+
+CREATE TEMP VIEW fixture_0087_scoped_audit AS
+SELECT event.*
+FROM app_private.organization_directed_account_invitation_audit_events AS event
+WHERE event.organization_workspace_id IN (SELECT workspace_id FROM fixture_0087_workspace_ids)
+  OR event.invitation_id::text LIKE '00000000-8701-3000-0000-%';
+
+CREATE TEMP VIEW fixture_0087_current_counts AS
+WITH scoped_workspaces AS (
+  SELECT workspace_id
+  FROM app_data.workspaces
+  WHERE workspace_id IN (SELECT workspace_id FROM fixture_0087_workspace_ids)
+    OR personal_owner_app_user_id IN (SELECT app_user_id FROM fixture_0087_actor_ids)
+), scoped_organization_memberships AS (
+  SELECT organization_membership_id
+  FROM app_data.organization_memberships
+  WHERE organization_workspace_id IN (SELECT workspace_id FROM scoped_workspaces)
+    OR app_user_id IN (SELECT app_user_id FROM fixture_0087_actor_ids)
+), scoped_project_memberships AS (
+  SELECT project_membership_id
+  FROM app_data.project_memberships AS membership
+  JOIN app_data.projects AS project USING (project_id)
+  WHERE membership.organization_membership_id IN (
+      SELECT organization_membership_id FROM scoped_organization_memberships
+    )
+    OR project.workspace_id IN (SELECT workspace_id FROM scoped_workspaces)
+)
 SELECT
-  (SELECT count(*)
-   FROM app_data.workspaces
-   WHERE split_part(workspace_id::text, '-', 2) = '8701') AS workspace_count,
-  (SELECT count(*)
-   FROM app_data.organization_memberships
-   WHERE split_part(organization_workspace_id::text, '-', 2) = '8701')
-    AS membership_count,
+  (SELECT count(*) FROM scoped_workspaces) AS workspace_count,
+  (SELECT count(*) FROM scoped_organization_memberships) AS membership_count,
   (SELECT count(*)
    FROM app_data.organization_owner_assignments
-   WHERE split_part(organization_owner_assignment_id::text, '-', 2) =
-     '8701')
-    AS owner_assignment_count,
-  (SELECT count(*)
-   FROM app_data.project_memberships
-   WHERE split_part(project_membership_id::text, '-', 2) = '8701')
-    AS project_membership_count,
+   WHERE organization_membership_id IN (
+     SELECT organization_membership_id FROM scoped_organization_memberships
+   )) AS owner_assignment_count,
+  (SELECT count(*) FROM scoped_project_memberships) AS project_membership_count,
   (SELECT count(*)
    FROM app_data.management_report_capability_grants
-   WHERE split_part(capability_grant_id::text, '-', 2) = '8701')
-    AS capability_count,
-  (SELECT count(*)
-   FROM app_private.organization_directed_account_invitation_request_claims
-   WHERE split_part(invitation_id::text, '-', 2) = '8701')
-    AS claim_count,
+   WHERE project_membership_id IN (
+     SELECT project_membership_id FROM scoped_project_memberships
+   )) AS capability_count,
+  (SELECT count(*) FROM fixture_0087_scoped_claims) AS claim_count,
   (SELECT count(*)
    FROM app_private.organization_directed_account_invitation_request_tombstones
-   WHERE split_part(invitation_id::text, '-', 2) = '8701')
-    AS tombstone_count,
-  (SELECT count(*)
-   FROM app_private.organization_directed_account_invitation_audit_events
-   WHERE split_part(invitation_id::text, '-', 2) = '8701')
-    AS audit_count;
+   WHERE invitation_id::text LIKE '00000000-8701-3000-0000-%') AS tombstone_count,
+  (SELECT count(*) FROM fixture_0087_scoped_audit) AS audit_count;
+
+CREATE TEMP TABLE fixture_0087_failure_counts ON COMMIT DROP AS
+SELECT * FROM fixture_0087_current_counts;
 
 CREATE TEMP TABLE fixture_0087_failure_claims_before ON COMMIT DROP AS
 SELECT invitation_id,
@@ -1049,8 +1101,7 @@ SELECT invitation_id,
        expires_at_utc,
        accepted_at_utc,
        accepted_organization_membership_id
-FROM app_private.organization_directed_account_invitation_request_claims
-WHERE split_part(invitation_id::text, '-', 2) = '8701'
+FROM fixture_0087_scoped_claims
 ORDER BY invitation_id;
 
 -- Create-side authorization, selector and lifecycle failures.
@@ -1434,33 +1485,7 @@ DECLARE
   after_counts fixture_0087_failure_counts%ROWTYPE;
 BEGIN
   SELECT * INTO STRICT before_counts FROM fixture_0087_failure_counts;
-  SELECT
-    (SELECT count(*)
-     FROM app_data.workspaces
-     WHERE split_part(workspace_id::text, '-', 2) = '8701'),
-    (SELECT count(*)
-     FROM app_data.organization_memberships
-     WHERE split_part(organization_workspace_id::text, '-', 2) = '8701'),
-    (SELECT count(*)
-     FROM app_data.organization_owner_assignments
-     WHERE split_part(organization_owner_assignment_id::text, '-', 2) =
-       '8701'),
-    (SELECT count(*)
-     FROM app_data.project_memberships
-     WHERE split_part(project_membership_id::text, '-', 2) = '8701'),
-    (SELECT count(*)
-     FROM app_data.management_report_capability_grants
-     WHERE split_part(capability_grant_id::text, '-', 2) = '8701'),
-    (SELECT count(*)
-     FROM app_private.organization_directed_account_invitation_request_claims
-     WHERE split_part(invitation_id::text, '-', 2) = '8701'),
-    (SELECT count(*)
-     FROM app_private.organization_directed_account_invitation_request_tombstones
-     WHERE split_part(invitation_id::text, '-', 2) = '8701'),
-    (SELECT count(*)
-     FROM app_private.organization_directed_account_invitation_audit_events
-     WHERE split_part(invitation_id::text, '-', 2) = '8701')
-  INTO after_counts;
+  SELECT * INTO STRICT after_counts FROM fixture_0087_current_counts;
 
   IF after_counts IS DISTINCT FROM before_counts THEN
     RAISE EXCEPTION
@@ -1478,8 +1503,7 @@ BEGIN
            expires_at_utc,
            accepted_at_utc,
            accepted_organization_membership_id
-    FROM app_private.organization_directed_account_invitation_request_claims
-    WHERE split_part(invitation_id::text, '-', 2) = '8701'
+    FROM fixture_0087_scoped_claims
     EXCEPT ALL
     SELECT invitation_id,
            organization_workspace_id,
@@ -1509,8 +1533,7 @@ BEGIN
            expires_at_utc,
            accepted_at_utc,
            accepted_organization_membership_id
-    FROM app_private.organization_directed_account_invitation_request_claims
-    WHERE split_part(invitation_id::text, '-', 2) = '8701'
+    FROM fixture_0087_scoped_claims
   ) THEN
     RAISE EXCEPTION '0087 failed invitation operation changed claim payload';
   END IF;
@@ -1541,9 +1564,8 @@ BEGIN
 
   IF EXISTS (
     SELECT 1
-    FROM app_private.organization_directed_account_invitation_request_claims AS claim_row
-    WHERE split_part(claim_row.invitation_id::text, '-', 2) = '8701'
-      AND (claim_row.accepted_at_utc IS NULL)
+    FROM fixture_0087_scoped_claims AS claim_row
+    WHERE (claim_row.accepted_at_utc IS NULL)
       <> (claim_row.accepted_organization_membership_id IS NULL)
   ) THEN
     RAISE EXCEPTION '0087 claim acceptance fields are not paired';
@@ -1586,21 +1608,16 @@ BEGIN
     RAISE EXCEPTION '0087 acceptance rewrote historical membership';
   END IF;
 
-  SELECT count(*) INTO owner_count
-  FROM app_data.organization_owner_assignments
-  WHERE split_part(organization_owner_assignment_id::text, '-', 2) =
-    '8701';
-  SELECT count(*) INTO project_membership_count
-  FROM app_data.project_memberships
-  WHERE split_part(project_membership_id::text, '-', 2) = '8701';
-  SELECT count(*) INTO capability_count
-  FROM app_data.management_report_capability_grants
-  WHERE split_part(capability_grant_id::text, '-', 2) = '8701';
+  SELECT owner_assignment_count, counts.project_membership_count, counts.capability_count
+  INTO STRICT owner_count, project_membership_count, capability_count
+  FROM fixture_0087_current_counts AS counts;
   IF owner_count <> 3
     OR project_membership_count <> 2
     OR capability_count <> 2
   THEN
-    RAISE EXCEPTION '0087 acceptance changed owner/project/capability facts';
+    RAISE EXCEPTION
+      '0087 acceptance changed owner/project/capability facts (expected 3/2/2, got %/%/%)',
+      owner_count, project_membership_count, capability_count;
   END IF;
 
   IF EXISTS (
@@ -1622,13 +1639,11 @@ BEGIN
   END IF;
 
   SELECT count(*) INTO issued_count
-    FROM app_private.organization_directed_account_invitation_audit_events
-    WHERE split_part(invitation_id::text, '-', 2) = '8701'
-      AND event_kind = 'invitation_issued';
+    FROM fixture_0087_scoped_audit
+    WHERE event_kind = 'invitation_issued';
   SELECT count(*) INTO accepted_audit_count
-  FROM app_private.organization_directed_account_invitation_audit_events
-  WHERE split_part(invitation_id::text, '-', 2) = '8701'
-    AND event_kind = 'invitation_accepted';
+  FROM fixture_0087_scoped_audit
+  WHERE event_kind = 'invitation_accepted';
   IF issued_count <> 8 OR accepted_audit_count <> 3 THEN
     RAISE EXCEPTION
       '0087 audit count is issued %, accepted %, expected 8 and 3',
@@ -1638,15 +1653,13 @@ BEGIN
 
   IF EXISTS (
     SELECT 1
-    FROM app_private.organization_directed_account_invitation_audit_events
-    WHERE split_part(invitation_id::text, '-', 2) = '8701'
-      AND event_kind = 'invitation_issued'
+    FROM fixture_0087_scoped_audit
+    WHERE event_kind = 'invitation_issued'
       AND organization_membership_id IS NOT NULL
   ) OR NOT EXISTS (
     SELECT 1
-    FROM app_private.organization_directed_account_invitation_audit_events
-    WHERE split_part(invitation_id::text, '-', 2) = '8701'
-      AND event_kind = 'invitation_accepted'
+    FROM fixture_0087_scoped_audit
+    WHERE event_kind = 'invitation_accepted'
       AND invitation_id = '00000000-8701-3000-0000-000000000001'::uuid
       AND organization_membership_id = accepted_membership_id
   ) THEN
