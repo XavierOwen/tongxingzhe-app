@@ -452,3 +452,56 @@ collect_waiter export-order success
 assert_expired export-order
 
 echo '0120 concurrency passed: exact expiry replay/request contest, renewal/policy/end/fact orderings, rollback, and export SHARE order.'
+
+snapshot_definition="$(cat "$(dirname "${BASH_SOURCE[0]}")/../backend/database/fixtures/shared/database_state.sql")"
+business_state() {
+  run_psql --quiet --tuples-only --no-align \
+    --command="$snapshot_definition SELECT pg_temp.fixture_database_state();"
+}
+
+expect_isolation_rejection() {
+  local phase="$1" isolation="$2" before_state status=0 error_line
+  before_state="$(business_state)"
+  run_psql --quiet --command="BEGIN ISOLATION LEVEL $isolation; $statement COMMIT;" \
+    >"$temporary_directory/isolation.out" 2>&1 || status=$?
+  error_line="$(sed -n '/^ERROR:/p' "$temporary_directory/isolation.out" | head -n 1)"
+  if [[ "$status" -eq 0 || "$error_line" != "ERROR:  0A000: known-source personal target merge $operation requires read committed" ]]; then
+    printf '0145 %s %s in %s expected exact 0A000, got exit %s\n' "$operation" "$phase" "$isolation" "$status" >&2
+    cat "$temporary_directory/isolation.out" >&2
+    exit 1
+  fi
+  [[ "$(business_state)" == "$before_state" ]] || {
+    printf '0145 %s %s in %s changed business state\n' "$operation" "$phase" "$isolation" >&2
+    exit 1
+  }
+}
+
+for operation in end expiry; do
+  create_pair "isolation-$operation"
+  activate_pair
+  if [[ "$operation" == end ]]; then
+    statement="$(ordinary_end_sql)"
+  else
+    make_due
+    statement="$(expiry_sql)"
+  fi
+
+  for isolation in 'REPEATABLE READ' SERIALIZABLE 'READ UNCOMMITTED'; do
+    expect_isolation_rejection first "$isolation"
+  done
+
+  receipt="$(run_psql --quiet --tuples-only --no-align --command="$statement")"
+  [[ -n "$receipt" ]]
+  terminal_state="$(business_state)"
+  replay="$(run_psql --quiet --tuples-only --no-align --command="$statement")"
+  [[ "$replay" == "$receipt" && "$(business_state)" == "$terminal_state" ]] || {
+    printf '0145 %s READ COMMITTED replay changed the receipt or business state\n' "$operation" >&2
+    exit 1
+  }
+
+  for isolation in 'REPEATABLE READ' SERIALIZABLE 'READ UNCOMMITTED'; do
+    expect_isolation_rejection replay "$isolation"
+  done
+done
+
+echo '0145 isolation checks passed for end and expiry in all six first-call and six replay cases.'
