@@ -111,9 +111,10 @@ create_target() {
     );
   " >/dev/null
 }
-for pair in contact renewal assignment cutoff; do
+for pair in contact renewal assignment cutoff isolation stale-end; do
   case "${pair}" in
     contact) n=1;; renewal) n=2;; assignment) n=3;; cutoff) n=4;;
+    isolation) n=5;; stale-end) n=6;;
   esac
   create_target "Pair preview 0113 ${pair} first" "7d520000-0113-${run_token}-000${n}a" '+1 773 555 0113'
   create_target "Pair preview 0113 ${pair} second" "7d520000-0113-${run_token}-000${n}b" '+1 773 555 0113'
@@ -139,6 +140,8 @@ for pair in contact renewal assignment cutoff; do
     renewal) renewal_first="${pair_first}"; renewal_second="${pair_second}";;
     assignment) assignment_first="${pair_first}"; assignment_second="${pair_second}";;
     cutoff) cutoff_first="${pair_first}"; cutoff_second="${pair_second}";;
+    isolation) isolation_first="${pair_first}"; isolation_second="${pair_second}";;
+    stale-end) stale_end_first="${pair_first}"; stale_end_second="${pair_second}";;
   esac
 done
 run_psql --quiet --command="
@@ -408,4 +411,98 @@ if [[ "${expiry_ok}" != 't' ]]; then
   exit 1
 fi
 
-echo '个人目标 pair preview 并发检查通过：三类并发提交均产生一致但 stale 的 preview；retention cutoff 后 generic failure 且没有副作用，expiry 精确 15 分钟。'
+snapshot_definition="$(cat "$(dirname "${BASH_SOURCE[0]}")/../backend/database/fixtures/shared/database_state.sql")"
+business_state() {
+  run_psql --quiet --tuples-only --no-align \
+    --command="${snapshot_definition} SELECT pg_temp.fixture_database_state();"
+}
+preview_call="SELECT count(*) FROM app_data.preview_personal_target_pair_v1('${issuer}', '${subject}', '${project_id}'::uuid, '${stale_end_first}'::uuid, '${stale_end_second}'::uuid);"
+expect_isolation_rejection() {
+  local isolation="$1" before_state status=0 error_line
+  before_state="$(business_state)"
+  run_psql --quiet --command="BEGIN ISOLATION LEVEL ${isolation}; ${preview_call} COMMIT;" \
+    >"${temporary_directory}/isolation.out" 2>&1 || status=$?
+  error_line="$(sed -n '/^ERROR:/p' "${temporary_directory}/isolation.out" | head -n 1)"
+  if [[ "${status}" -eq 0 || "${error_line}" != 'ERROR:  0A000: personal target pair preview requires read committed' ]]; then
+    printf 'first-call preview in %s expected exact 0A000, got exit %s\n' "${isolation}" "${status}" >&2
+    sed -n '1,80p' "${temporary_directory}/isolation.out" >&2
+    exit 1
+  fi
+  [[ "$(business_state)" == "${before_state}" ]] || {
+    printf 'first-call preview in %s changed business state\n' "${isolation}" >&2
+    exit 1
+  }
+}
+
+# The supported path remains one READ COMMITTED statement in autocommit mode.
+rc_count="$(run_psql --quiet --tuples-only --no-align --command="SELECT count(*) FROM app_data.preview_personal_target_pair_v1('${issuer}', '${subject}', '${project_id}'::uuid, '${isolation_first}'::uuid, '${isolation_second}'::uuid);" | tr -d '[:space:]')"
+[[ "${rc_count}" == '1' ]] || { echo 'fresh READ COMMITTED pair preview did not return one receipt.' >&2; exit 1; }
+expiry_ok="$(run_psql --tuples-only --no-align --command="
+  SELECT count(*) = 4 AND bool_and(expires_at_utc = previewed_at_utc + interval '15 minutes')
+  FROM app_private.personal_target_pair_preview_receipts
+  WHERE actor_app_user_id = '${app_user_id}'::uuid;
+" | tr -d '[:space:]')"
+[[ "${expiry_ok}" == 't' ]] || { echo 'fresh READ COMMITTED receipt expiry/count is incorrect.' >&2; exit 1; }
+for isolation in 'REPEATABLE READ' SERIALIZABLE 'READ UNCOMMITTED'; do
+  expect_isolation_rejection "${isolation}"
+done
+
+# Hold a genuine old RR snapshot across the real assignment-end API call.
+# The first preview in that snapshot must hit the isolation guard; a fresh RC
+# snapshot must see the ended assignment as forbidden with no additional writes.
+stale_assignment="$(run_psql --tuples-only --no-align --command="
+  SELECT assignment_id FROM app_data.promotion_target_assignments
+  WHERE promotion_target_id = '${stale_end_first}'::uuid
+    AND app_user_id = '${app_user_id}'::uuid AND ended_at IS NULL;
+" | tr -d '[:space:]')"
+[[ "${stale_assignment}" =~ ^[0-9a-f-]{36}$ ]] || { echo 'stale-end fixture lacks an active assignment.' >&2; exit 1; }
+mkfifo "${temporary_directory}/stale-rr.fifo"
+"${psql_base[@]}" --quiet --tuples-only --no-align <"${temporary_directory}/stale-rr.fifo" \
+  >"${temporary_directory}/stale-rr.out" 2>&1 &
+stale_rr_pid=$!
+child_pids+=("${stale_rr_pid}")
+exec 3>"${temporary_directory}/stale-rr.fifo"
+printf '%s\n%s\n' \
+  "BEGIN ISOLATION LEVEL REPEATABLE READ; SELECT 'SNAPSHOT|' || (SELECT count(*) FROM app_data.promotion_target_assignments WHERE assignment_id = '${stale_assignment}'::uuid AND ended_at IS NULL);" \
+  '\echo SNAPSHOT_READY' >&3
+for _ in $(seq 1 200); do
+  grep -q '^SNAPSHOT_READY$' "${temporary_directory}/stale-rr.out" && break
+  sleep 0.05
+done
+if ! grep -q '^SNAPSHOT_READY$' "${temporary_directory}/stale-rr.out" \
+  || ! grep -q '^SNAPSHOT|1$' "${temporary_directory}/stale-rr.out"; then
+  echo 'could not establish active-assignment RR snapshot.' >&2
+  sed -n '1,80p' "${temporary_directory}/stale-rr.out" >&2
+  exit 1
+fi
+run_psql --quiet --command="SELECT app_data.end_personal_target_assignment_v1('${app_user_id}'::uuid, '${workspace_id}'::uuid, '${project_id}'::uuid, '${stale_assignment}'::uuid);" >/dev/null
+ended_ok="$(run_psql --tuples-only --no-align --command="
+  SELECT (SELECT ended_at IS NOT NULL FROM app_data.promotion_target_assignments WHERE assignment_id = '${stale_assignment}'::uuid)
+    AND (SELECT count(*) = 1 FROM app_private.personal_target_assignment_end_events_v1 WHERE assignment_id = '${stale_assignment}'::uuid);
+" | tr -d '[:space:]')"
+[[ "${ended_ok}" == 't' ]] || { echo 'real assignment-end call did not commit its assignment and audit event.' >&2; exit 1; }
+after_end_state="$(business_state)"
+printf '%s\nCOMMIT;\n\\q\n' "${preview_call}" >&3
+exec 3>&-
+stale_rr_status=0
+wait "${stale_rr_pid}" || stale_rr_status=$?
+stale_error="$(sed -n '/^ERROR:/p' "${temporary_directory}/stale-rr.out" | head -n 1)"
+if [[ "${stale_rr_status}" -eq 0 || "${stale_error}" != 'ERROR:  0A000: personal target pair preview requires read committed' ]]; then
+  echo 'stale RR preview did not fail at the exact read-committed guard.' >&2
+  sed -n '1,80p' "${temporary_directory}/stale-rr.out" >&2
+  exit 1
+fi
+rc_after_end_status=0
+run_psql --quiet --command="${preview_call}" >"${temporary_directory}/rc-after-end.out" 2>&1 || rc_after_end_status=$?
+rc_after_end_error="$(sed -n '/^ERROR:/p' "${temporary_directory}/rc-after-end.out" | head -n 1)"
+if [[ "${rc_after_end_status}" -eq 0 || "${rc_after_end_error}" != 'ERROR:  42501: personal target pair preview is forbidden' ]]; then
+  echo 'fresh READ COMMITTED preview after assignment end must be generic forbidden.' >&2
+  sed -n '1,80p' "${temporary_directory}/rc-after-end.out" >&2
+  exit 1
+fi
+[[ "$(business_state)" == "${after_end_state}" ]] || {
+  echo 'guarded RR or forbidden RC preview wrote business state after assignment end.' >&2
+  exit 1
+}
+
+echo '个人目标 pair preview 并发检查通过：三类并发提交产生一致但 stale 的 preview；retention cutoff 与 assignment-end 后拒绝均无副作用，fresh READ COMMITTED 正常，expiry 精确 15 分钟。'
