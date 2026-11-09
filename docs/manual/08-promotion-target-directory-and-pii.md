@@ -233,6 +233,8 @@ merge 与 split 分别使用固定 canonical payload 和客户端 request UUID�
 
 关系 create／end 与 activation 复用 0114 的 private fence。现有 0020 单端匿名化只在目标自身是 active member 时失败关闭。目标不是 active member 时，即使关系另一端是 active member，也可结束关系。新 ended revision 记录结束时两端的 active generation。此门禁不提供到期双端清除。0114／0115 的 activation 仍未授予 runtime，用户不能通过 App 建立 active merge。
 
+0148 要求旧版私有 v1 激活使用 READ COMMITTED，其他隔离模式在首次更新代次 fence 前返回 0A000。若账号删除请求在等待期间提交，激活取得锁后按当前授权返回 42501。
+
 7EC／0117 增加 private activation v2：首次成功激活在同一事务中消费 preview receipt，并记录 request 与审计；相同 actor／request 的精确重放返回原 generation，即使 receipt 已由 cleanup 删除；不同 request 不能重复消费同一 receipt。receipt 行锁与 cleanup 的 `SKIP LOCKED` 使并发按先后顺序线性化。0117 仍未授予 runtime activation 权限。
 
 到期双端清除、runtime assignment end、用户可用的 assignment end、runtime merge、合并投影、split、Backend／HTTP／Flutter 和部署仍未交付。以上数据库边界不证明完整到期清除、到期后 60 分钟物理删除 SLA、生产授权、真实 PII 或用户功能可用。
