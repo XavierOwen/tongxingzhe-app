@@ -241,6 +241,8 @@ merge 与 split 分别使用固定 canonical payload 和客户端 request UUID�
 
 结束分配与 merge activation 共用 0114 private generation fence。若对象属于 active merge generation，只有在结束这条分配后仍有另一条活动分配时才允许结束；结束最后一条活动分配必须先完成 split。end 先线性化时，0117 preview 绑定的 assignment 已失效，activation 失败且不创建 generation／activation event；activation 先线性化时，结束最后 assignment 失败且不写 end event。runtime role 没有此函数的执行权；本切片没有 Backend、HTTP、Flutter 或部署接线，不能据此提供用户操作。
 
+0147 要求结束分配的首次调用和重放都使用 READ COMMITTED。输入校验后、首次查询授权前，其他隔离模式返回 `0A000 personal target assignment end requires read committed`。获准继续的首次调用在等待代次 fence 后重验当前授权。
+
 0118 migration、结构检查、升级 fixture 和独立会话并发脚本只证明 synthetic PostgreSQL 中的数据库授权、幂等、append-only、锁顺序及 0117 历史数据保留。它们不证明 runtime／生产身份、实际用户体验、完整 merge／split、到期双端清除或真实 PII 处理。
 
 7EE／0119 为未来 split 提供 DB-only 的 known-source generation end。锁序为 request advisory lock、既有 global fence、按 `(created_at, promotion_target_id)` 排序的两端 target、actor assignments。首次结束在 fence 内确认历史 member／active mapping 恰为同一对，锁定两端 active 对象及 actor 的 active assignments。全部锁就绪后重取数据库时间、重验当前个人 owner 授权和两端保留截止，再重算已知来源 manifest。

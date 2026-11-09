@@ -13996,6 +13996,40 @@ docker exec "${container_name}" psql \
 printf '%s\n' "${activation_isolation_upgrade_replay}"
 echo '0145→0146 complete legacy state/catalog, exact isolation guard, original activation generation and checksum replay: passed.'
 
+echo '验证 0146→0147 private assignment end isolation upgrade 与 checksum replay。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0146_personal_target_assignment_end_isolation_live.sql >/dev/null
+docker exec "${container_name}" sh -ceu \
+  "mkdir /tmp/personal-target-assignment-end-isolation-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0147_personal_target_assignment_end_isolation.sql \\
+     /tmp/personal-target-assignment-end-isolation-upgrade-only/"
+docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-target-assignment-end-isolation-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_personal_target_assignment_end_isolation.sql \
+  --file=/workspace/backend/database/fixtures/shared/database_state.sql \
+  --command='BEGIN ISOLATION LEVEL READ COMMITTED READ ONLY; SELECT public.fixture_0146_assignment_end_isolation_assert_upgrade(); ROLLBACK;' >/dev/null
+assignment_end_isolation_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/personal-target-assignment-end-isolation-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${assignment_end_isolation_upgrade_replay}" != \
+    *'已验证 0147_personal_target_assignment_end_isolation（无需重复执行）'* ]] \
+  || [[ "${assignment_end_isolation_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0147 migration did not skip its checksum-verified replay.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/shared/database_state.sql \
+  --command='BEGIN ISOLATION LEVEL READ COMMITTED READ ONLY; SELECT public.fixture_0146_assignment_end_isolation_assert_upgrade(); ROLLBACK;' >/dev/null
+printf '%s\n' "${assignment_end_isolation_upgrade_replay}"
+echo '0146→0147 complete legacy state/catalog, exact isolation guard, original assignment end receipt and checksum replay: passed.'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 

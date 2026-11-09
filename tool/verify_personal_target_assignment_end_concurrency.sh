@@ -376,3 +376,72 @@ assert_true 'activation-first end has no side effects' "
 "
 
 echo 'assignment end concurrency passed: exact replay and both activation orderings.'
+
+IFS='|' read -r isolation_first isolation_second isolation_preview <<<"$(create_pair isolation "0118-$run_token-isolation")"
+isolation_assignment="$(assignment_for "$isolation_first")"
+[[ "$isolation_assignment" =~ ^[0-9a-f-]{36}$ ]]
+statement="SELECT app_data.end_personal_target_assignment_v1('$app_user_id','$workspace_id','$project_id','$isolation_assignment');"
+
+rc_holder="assignment-end-revoked-holder-$run_token"
+rc_waiter="assignment-end-revoked-waiter-$run_token"
+start_holder "$rc_holder" "assignment-end-revoked-ready-$run_token" "
+  SELECT fence_key FROM app_private.personal_target_merge_generation_fence_v1 WHERE fence_key FOR UPDATE;
+  UPDATE app_data.app_users SET status='deletion_pending' WHERE app_user_id='$app_user_id';"
+run_psql_as "$rc_waiter" --quiet --command="BEGIN ISOLATION LEVEL READ COMMITTED; $statement COMMIT;" \
+  >"$temporary_directory/revoked.out" 2>&1 &
+rc_pid=$!
+child_pids+=("$rc_pid")
+wait_for_exact_blocker "$rc_waiter" "$rc_holder" "$temporary_directory/revoked.out"
+release_holder
+rc_status=0
+wait "$rc_pid" || rc_status=$?
+if [[ "$rc_status" -ne 1 ]] || ! grep -q '^ERROR:  42501: personal target assignment end is forbidden$' "$temporary_directory/revoked.out"; then
+  echo '0147 assignment end did not reject revocation after the fence wait.' >&2
+  cat "$temporary_directory/revoked.out" >&2
+  exit 1
+fi
+assert_true revoked-assignment-unchanged "SELECT ended_at IS NULL AND NOT EXISTS (
+  SELECT 1 FROM app_private.personal_target_assignment_end_events_v1 WHERE assignment_id='$isolation_assignment'
+) FROM app_data.promotion_target_assignments WHERE assignment_id='$isolation_assignment';"
+run_psql --quiet --command="UPDATE app_data.app_users SET status='active' WHERE app_user_id='$app_user_id';"
+
+snapshot_definition="$(cat "$(dirname "${BASH_SOURCE[0]}")/../backend/database/fixtures/shared/database_state.sql")"
+business_state() {
+  run_psql --quiet --tuples-only --no-align \
+    --command="$snapshot_definition SELECT pg_temp.fixture_database_state();"
+}
+
+expect_assignment_isolation_rejection() {
+  local phase="$1" isolation="$2" before_state status=0 error_line
+  before_state="$(business_state)"
+  run_psql --quiet --command="BEGIN ISOLATION LEVEL $isolation; $statement COMMIT;" \
+    >"$temporary_directory/isolation.out" 2>&1 || status=$?
+  error_line="$(sed -n '/^ERROR:/p' "$temporary_directory/isolation.out" | head -n 1)"
+  if [[ "$status" -eq 0 || "$error_line" != 'ERROR:  0A000: personal target assignment end requires read committed' ]]; then
+    printf '0147 %s in %s expected exact 0A000, got exit %s\n' "$phase" "$isolation" "$status" >&2
+    cat "$temporary_directory/isolation.out" >&2
+    exit 1
+  fi
+  [[ "$(business_state)" == "$before_state" ]] || {
+    printf '0147 %s in %s changed business state\n' "$phase" "$isolation" >&2
+    exit 1
+  }
+}
+
+for isolation in 'REPEATABLE READ' SERIALIZABLE 'READ UNCOMMITTED'; do
+  expect_assignment_isolation_rejection first "$isolation"
+done
+
+receipt="$(run_psql --quiet --tuples-only --no-align --command="$statement")"
+[[ -n "$receipt" ]]
+terminal_state="$(business_state)"
+replay="$(run_psql --quiet --tuples-only --no-align --command="$statement")"
+[[ "$replay" == "$receipt" && "$(business_state)" == "$terminal_state" ]] || {
+  echo '0147 READ COMMITTED replay changed the receipt or business state.' >&2
+  exit 1
+}
+
+for isolation in 'REPEATABLE READ' SERIALIZABLE 'READ UNCOMMITTED'; do
+  expect_assignment_isolation_rejection replay "$isolation"
+done
+echo '0147 assignment end passed six isolation cases and the READ COMMITTED revocation race.'
