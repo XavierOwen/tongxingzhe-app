@@ -87,6 +87,8 @@ current due 继续按 target 建立、active contact 或最近 renewal 的最晚
 
 相同 actor、request UUID 和 canonical selectors 返回首次 generation；payload drift 与已消费 receipt 返回稳定冲突。current auth 仍在 exact replay 前重验。首次请求依次取得 request advisory lock、global fence 和 receipt 行锁，再运行 receipt validator。v1 入口保留。v1/v2 均不向 `PUBLIC` 或 `tongxingzhe_runtime` 授权，产品仍不得建立 active merge。
 
+0146 要求 v2 首次激活和精确重放都使用 READ COMMITTED。输入校验后、首次查授权前，其他隔离模式返回 `0A000 personal target merge generation activation requires read committed`。
+
 完整 Docker runner 自动发现 0117 migration、结构 check 和 rollback fixture。
 0116 baseline 升级检查验证旧 preview、generation、member、active member、关系、retention 数据及受保护函数身份不变。
 runner 还验证 0117 checksum replay、dump／restore 与独立会话并发脚本。

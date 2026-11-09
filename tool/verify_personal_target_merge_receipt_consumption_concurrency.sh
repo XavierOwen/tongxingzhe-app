@@ -551,3 +551,48 @@ assert_true writer-activation-first-history "
 "
 
 echo '0117 request, receipt/cleanup, and fenced-writer concurrency races passed.'
+
+snapshot_definition="$(cat "$(dirname "${BASH_SOURCE[0]}")/../backend/database/fixtures/shared/database_state.sql")"
+business_state() {
+  run_psql --quiet --tuples-only --no-align \
+    --command="$snapshot_definition SELECT pg_temp.fixture_database_state();"
+}
+
+expect_activation_isolation_rejection() {
+  local phase="$1" isolation="$2" before_state status=0 error_line
+  before_state="$(business_state)"
+  run_psql --quiet --command="BEGIN ISOLATION LEVEL $isolation; $statement COMMIT;" \
+    >"$temporary_directory/isolation.out" 2>&1 || status=$?
+  error_line="$(sed -n '/^ERROR:/p' "$temporary_directory/isolation.out" | head -n 1)"
+  if [[ "$status" -eq 0 || "$error_line" != 'ERROR:  0A000: personal target merge generation activation requires read committed' ]]; then
+    printf '0146 %s in %s expected exact 0A000, got exit %s\n' "$phase" "$isolation" "$status" >&2
+    cat "$temporary_directory/isolation.out" >&2
+    exit 1
+  fi
+  [[ "$(business_state)" == "$before_state" ]] || {
+    printf '0146 %s in %s changed business state\n' "$phase" "$isolation" >&2
+    exit 1
+  }
+}
+
+IFS='|' read -r isolation_first isolation_second isolation_preview <<<"$(create_pair isolation isolation)"
+isolation_request="$(new_uuid)"
+statement="$(activation_sql "$isolation_request" "$isolation_preview" "$isolation_first" "$isolation_second")"
+for isolation in 'REPEATABLE READ' SERIALIZABLE 'READ UNCOMMITTED'; do
+  expect_activation_isolation_rejection first "$isolation"
+done
+
+generation="$(run_psql --quiet --tuples-only --no-align --command="$statement")"
+[[ "$generation" =~ ^[0-9a-f-]{36}$ ]]
+assert_activated isolation-rc "$isolation_request" "$isolation_preview" "$isolation_first" "$isolation_second"
+terminal_state="$(business_state)"
+replay="$(run_psql --quiet --tuples-only --no-align --command="$statement")"
+[[ "$replay" == "$generation" && "$(business_state)" == "$terminal_state" ]] || {
+  echo '0146 READ COMMITTED replay changed the generation or business state.' >&2
+  exit 1
+}
+
+for isolation in 'REPEATABLE READ' SERIALIZABLE 'READ UNCOMMITTED'; do
+  expect_activation_isolation_rejection replay "$isolation"
+done
+echo '0146 activation isolation checks passed for three first-call and three replay cases.'

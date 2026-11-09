@@ -496,6 +496,8 @@ Issue #618 以 0144 单独为旧 0128 受限单项 confirmer 补上相同限制�
 
 Issue #620 以 0145 要求 0119 直接结束和 0120 直接到期使用 READ COMMITTED。首次与终态重放在输入校验后、授权查询前检查隔离模式，其他模式以各自固定的 0A000 拒绝。原锁序、签名、OID、owner、ACL、终结语义及回执保留。MANUAL-167／TEST-178 覆盖两个原回执的真实升级和 12 组非 RC 拒绝。
 
+Issue #621 以 0146 要求 0117 私有 v2 激活使用 READ COMMITTED。首次与精确重放在输入校验后、授权查询前检查隔离模式，其他模式返回固定 0A000。原预览收据消费、授权、锁序、代次与审计保持原合同。MANUAL-168／TEST-179 记录真实升级与六组隔离回归。
+
 7EY／#598 为合并期间新增的未知来源项目关系事件增加独立 typed 待分配层。0136 header 只含标识与数据库时间，业务值单独保存；同值也不自动合并。metadata-only 预检真正 READ ONLY，旧 end／接触确认不能漏过此类 pending 而结束代次，pair expiry 原子清除全部敏感载荷。五类已知来源事实不重写。
 
 MANUAL-158／TEST-169 只覆盖这一私有层，不提供普通关系写回资格、来源分配、当前候选、历史应用或完整混合 split；runtime、Backend／HTTP／UI、scheduler、生产 active merge 与 #549 人工门槛不变。
@@ -3469,6 +3471,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-165` | 说明混合显式项目进入的精确 missing 槽确认、其他缺失关联拒绝、完整预锁与锁后重验。区分真实当前 rev1 行政进入和原 pending 历史，记录内部指纹重算、外层 origins／内层共同回执证明、整批回滚和 metadata 重放；明确普通 writer 不改，无生产、runtime、HTTP 或 UI。 |
 | `MANUAL-166` | 说明旧受限单项 confirmer 的 READ COMMITTED 门禁、首次与终态重放的固定 0A000、旧事务快照不能重验当前授权的原因。记录三行精确插入、metadata 保留、真实旧回执升级与本片私有范围；不将限制推广到所有旧 writer。 |
 | `MANUAL-167` | 说明已知来源代次直接结束和到期的 READ COMMITTED 要求，记录首次与终态重放的门禁位置、固定错误及两个原回执的升级验证。 |
+| `MANUAL-168` | 说明 0117 私有 v2 激活的 READ COMMITTED 要求、首次与重放的检查位置，以及旧代次的升级和只读重放。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3825,6 +3828,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-176` | 0143 验证双类型、同槽两类 pending、历史／多项／同值／旧候选、已有槽与缺失槽及空确认。真实初始 rev1 的 actor／时间／stage 0／active／project_entry／binding 正确，原事实、答案、来源及非配对链接保留。错误确认、其他缺失关系、权限／due／指纹变化、初始化及 metadata 静默篡改、内层应用／end／双消费故障均整批回滚。真实 PID／锁覆盖完整预锁和普通进入／关系竞争，六组非 RC 首次／重放拒绝。真实 0142 升级只允许旧初始化块精确提取及新增 FK 的 RI triggers，严格 inventory 为 396；checksum、完整 Docker 和独立恢复通过，不恢复后来编辑或匿名化的数据。 |
 | `TEST-177` | 0144 fresh／真实 0143 upgrade／checksum／独立恢复确认旧受限 confirmer 只增加一次隔离门禁，OID／owner／ACL／其余 metadata、全部旧函数与业务数据保留。三种非 RC 的首次与真实终态重放均精确拒绝 0A000 且零业务写入；原 RC 单项确认、旧回执、漂移及全部 exact-PID 并发继续通过。无新表或外键。 |
 | `TEST-178` | 0145 验证两个私有终结入口的 12 组非 RC 首次／重放拒绝及完整状态不变。真实 0144 升级保留两种原回执、旧数据、完整函数 catalog 和元数据，checksum 重放后仍在只读 READ COMMITTED 中返回原回执。fresh、原并发与独立恢复继续通过结构检查。 |
+| `TEST-179` | 0146 验证 v2 激活的三种非 RC 首次和三种重放精确拒绝，完整业务状态不变。真实 0145 升级保留原请求、审计、活动成员、业务数据和完整函数 catalog。checksum 重放后仍在只读 READ COMMITTED 中返回原代次。fresh、既有锁后撤权与独立恢复继续验证。 |
 
 ## 9. UI、视觉与可访问性
 
