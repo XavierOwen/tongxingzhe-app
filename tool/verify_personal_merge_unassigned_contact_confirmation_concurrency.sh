@@ -18,7 +18,7 @@ cleanup() {
     if kill -0 "${pid}" >/dev/null 2>&1; then kill "${pid}" >/dev/null 2>&1 || true; fi
     wait "${pid}" >/dev/null 2>&1 || true
   done
-  rm -f "${temporary_directory}/holder.fifo" "${temporary_directory}/holder.out" "${temporary_directory}/waiter.out"
+  rm -f "${temporary_directory}/holder.fifo" "${temporary_directory}/holder.out" "${temporary_directory}/waiter.out" "${temporary_directory}/isolation.out"
   rmdir "${temporary_directory}"
 }
 trap cleanup EXIT
@@ -230,4 +230,40 @@ run_race actor-revoked "SELECT app_private.acquire_personal_target_merge_generat
   UPDATE app_data.app_users SET status='deletion_pending' WHERE app_user_id='$app_user_id';" "$confirm_sql" 42501
 run_psql --quiet --command="UPDATE app_data.app_users SET status='active' WHERE app_user_id='$app_user_id';"
 
-echo '0128 concurrency passed: exact PIDs, ordinary revisions, post-prelock pending growth, stage/expiry, terminal replay/drift, locked reauthorization and full-state rollback.'
+expect_isolation_rejection() {
+  local label="$1" isolation="$2" before_state status=0 error_line
+  before_state="$(business_state)"
+  set +e
+  run_psql --quiet --command="BEGIN ISOLATION LEVEL $isolation; $confirm_sql COMMIT;" >"${temporary_directory}/isolation.out" 2>&1
+  status=$?
+  set -e
+  error_line="$(sed -n '/^ERROR:/p' "${temporary_directory}/isolation.out" | head -n 1)"
+  [[ "$status" -ne 0 && "$error_line" == 'ERROR:  0A000: pending contact confirmation requires read committed' ]] || {
+    echo "0144 $label expected exact 0A000 isolation error; status $status: $error_line" >&2
+    sed -n '/^ERROR:/p' "${temporary_directory}/isolation.out" >&2
+    exit 1
+  }
+  [[ "$(business_state)" == "$before_state" ]] || { echo "0144 $label changed app_data/app_private state." >&2; exit 1; }
+}
+
+for isolation in 'REPEATABLE READ' SERIALIZABLE 'READ UNCOMMITTED'; do
+  label="first-${isolation// /-}"
+  new_generation "$label"
+  expect_isolation_rejection "$label" "$isolation"
+done
+
+new_generation isolation-rc-single
+rc_confirmed_at="$(run_psql --tuples-only --no-align --command="SELECT extract(epoch FROM (${confirm_sql%;}));" | tr -d '[:space:]')"
+[[ -n "$rc_confirmed_at" ]] || { echo '0144 read committed confirmation returned no receipt.' >&2; exit 1; }
+rc_state="$(business_state)"
+assert_true read-committed-exact-replay "SELECT extract(epoch FROM app_private.confirm_unassigned_personal_merge_contacts_v1(
+  '$app_user_id','$workspace_id','$project_id','$request_id','$generation_id',
+  '$known_fingerprint','$pending_fingerprint',
+  '[{\"pending_fact_id\":\"$pending_id\",\"source_target_id\":\"$second_target\"}]'::jsonb))=$rc_confirmed_at;"
+[[ "$(business_state)" == "$rc_state" ]] || { echo '0144 read committed exact replay changed app_data/app_private state.' >&2; exit 1; }
+
+for isolation in 'REPEATABLE READ' SERIALIZABLE 'READ UNCOMMITTED'; do
+  expect_isolation_rejection "terminal-replay-${isolation// /-}" "$isolation"
+done
+
+echo '0128 concurrency and 0144 isolation checks passed. RC confirmation and replay preserve the original receipt and business state.'

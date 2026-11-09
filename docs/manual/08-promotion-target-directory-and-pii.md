@@ -351,7 +351,9 @@ private header 保存 pending UUID、request、代次、contact／revision、typ
 
 相同 actor/request 的 context、generation、两指纹和完整来源映射一致，才返回原结束时间，且仍通过原 end 的当前授权门禁。映射或请求漂移冲突，不能追加第二批写入。任一非 accepted、证据缺失、计数不符、end 或消费失败，回滚全部业务和 ledger。新 0128 只扩展原 pending end／payload guard，保留 OID／owner／ACL 与原 expiry 分支，不改普通 writer 或历史 migration。
 
-MANUAL-150／TEST-161 覆盖此有界能力。所有新对象仍关闭 PUBLIC／runtime，不接 Backend／HTTP／UI，不支持历史、多项或冲突的完整拆分，不开放生产合并、部署、scheduler 或真实清理 SLA。#582 与 #549 的剩余阻挡不变；合成数据库测试不证明生产身份、真实 PII、外部消费者或设备端同步。
+0144 为这个旧入口补上 READ COMMITTED 限制，首次调用和终态重放均适用。完成输入校验后、父请求锁及回执读取前，其他隔离模式固定拒绝 `0A000 pending contact confirmation requires read committed`。事务提前建立的快照可能仍看到撤权前的 active 状态，不能用“再次执行授权 SELECT”代替新快照。函数不修改调用方的事务模式。
+
+MANUAL-150／TEST-161 覆盖此有界能力，MANUAL-166／TEST-177 补充旧入口的隔离修正。所有新对象仍关闭 PUBLIC／runtime，不接 Backend／HTTP／UI，不支持历史、多项或冲突的完整拆分，不开放生产合并、部署、scheduler 或真实清理 SLA。#582 与 #549 的剩余阻挡不变；合成数据库测试不证明生产身份、真实 PII、外部消费者或设备端同步。
 
 ### 0129 历史、多项与当前关联的私有冲突预检（Issue #585）
 
