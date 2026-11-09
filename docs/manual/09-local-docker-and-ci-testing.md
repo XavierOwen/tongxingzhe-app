@@ -3131,6 +3131,14 @@ READ ONLY transaction 须真实成功；空单类、非法形状／完整集／s
 
 MANUAL-166／TEST-177 只补这个旧私有入口，不据此保证所有旧 writer 都有隔离门禁。普通 writer、其他旧入口、外部身份、生产、runtime、Backend／HTTP／UI 及 scheduler 均不在此片范围内。
 
+### 7.33 已知来源代次结束与到期的事务隔离（Issue #620）
+
+合成双会话分别完成真实结束和到期。终态 waiter 在 REPEATABLE READ 中看到 active，随后等待精确的 actor／request advisory key。holder 提交撤权后，旧版本仍返回原回执。新 READ COMMITTED 连接重放同一请求时正确拒绝 42501。
+
+0145 向两个既有私有入口各插入三行隔离检查。迁移锚点和真实升级确认门禁紧跟输入校验。fresh 与独立 restore 检查门禁先于授权查询、请求锁和回执读取。原并发脚本继续覆盖现有锁序，并验证三种非 RC 模式下各入口的首次与终态重放共 12 组。每组核对固定 0A000、消息及完整业务状态。READ COMMITTED 的原回执可精确重放。
+
+真实 0144 升级先提交结束与到期回执，并确认到期匿名化两端。升级和 checksum 重放后，逐值比对全部旧业务数据与应用函数 catalog。两个目标函数各只增加指定门禁，OID、owner、ACL 与其余 body 完全保留。两种原回执都在只读 READ COMMITTED 事务中零写入重放。MANUAL-167／TEST-178 对应此私有数据库修正。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：

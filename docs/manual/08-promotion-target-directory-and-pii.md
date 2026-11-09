@@ -257,6 +257,8 @@ expiry event 使用固定的 `personal_target_known_source_merge_expire` operati
 
 MANUAL-140 与 TEST-151 说明这只是单 generation 的 DB-only 到期出口。它没有 batch 统一预锁、dispatcher、scheduler、生产部署或 60 分钟物理清理 SLA，也不提供用户功能、来源未知事实分配或完整 split。runtime 权限保持关闭；不得据此开放产品 active merge。合成测试不证明生产授权或真实 PII 清除。
 
+0145 要求已知来源代次的直接结束和到期使用 READ COMMITTED，首次调用与终态重放均适用。输入校验通过后，其他隔离模式在第一次授权查询前返回 0A000。这样，获准继续的请求可以在取得原请求锁后读取已提交的授权变化。两条私有入口继续按原规则确认资格和返回回执。
+
 7EG／0121 为满足完整 v2 字段来源选择的 active generation 增加 private、只读 JSON 投影。一个 SQL command snapshot 返回授权、原始资料、当前截止和来源事实。读取不加行锁、不写审计或 generation fence，也不调用写入型或自动 expiry 的列表入口。
 
 投影只使用 v2 activation 保存的保留对象、姓名、电话和 email 来源 ID。旧 v1 代次没有这些选择，数据库会稳定拒绝；残缺选择或来源不属于这对对象时也会拒绝。选定来源的 NULL 保持 NULL，不回退到另一端。
