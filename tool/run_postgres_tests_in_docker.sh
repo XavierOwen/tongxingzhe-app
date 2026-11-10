@@ -14099,6 +14099,41 @@ docker exec "${container_name}" psql \
 printf '%s\n' "${pair_preview_isolation_upgrade_replay}"
 echo '0148→0149 complete legacy state/catalog, exact isolation guard, original preview receipt and rows, and checksum replay: passed.'
 
+echo '验证 0149→0150 private unassigned contact stage isolation upgrade 与 checksum replay。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0149_personal_merge_unassigned_contact_stage_isolation_live.sql >/dev/null
+docker exec "${container_name}" sh -ceu \
+  "mkdir /tmp/personal-merge-unassigned-contact-stage-isolation-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0150_personal_merge_unassigned_contact_stage_isolation.sql \\
+     /tmp/personal-merge-unassigned-contact-stage-isolation-upgrade-only/"
+docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-merge-unassigned-contact-stage-isolation-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_personal_merge_unassigned_contact_stage_isolation.sql \
+  --file=/workspace/backend/database/fixtures/shared/database_state.sql \
+  --command='BEGIN ISOLATION LEVEL READ COMMITTED READ ONLY; SELECT public.fixture_0149_contact_stage_isolation_assert_upgrade(); ROLLBACK;' >/dev/null
+contact_stage_isolation_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/personal-merge-unassigned-contact-stage-isolation-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${contact_stage_isolation_upgrade_replay}" != \
+    *'已验证 0150_personal_merge_unassigned_contact_stage_isolation（无需重复执行）'* ]] \
+  || [[ "${contact_stage_isolation_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0150 migration did not skip its checksum-verified replay.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_personal_merge_unassigned_contact_stage_isolation.sql \
+  --file=/workspace/backend/database/fixtures/shared/database_state.sql \
+  --command='BEGIN ISOLATION LEVEL READ COMMITTED READ ONLY; SELECT public.fixture_0149_contact_stage_isolation_assert_upgrade(); ROLLBACK;' >/dev/null
+printf '%s\n' "${contact_stage_isolation_upgrade_replay}"
+echo '0149→0150 complete legacy state/catalog, exact isolation guard, original pending header and payload, and checksum replay: passed.'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 

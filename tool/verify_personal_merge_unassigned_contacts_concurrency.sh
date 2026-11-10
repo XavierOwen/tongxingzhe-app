@@ -18,7 +18,7 @@ cleanup() {
     if kill -0 "${pid}" >/dev/null 2>&1; then kill "${pid}" >/dev/null 2>&1 || true; fi
     wait "${pid}" >/dev/null 2>&1 || true
   done
-  rm -f "${temporary_directory}/holder.fifo" "${temporary_directory}/holder.out" "${temporary_directory}/waiter.out"
+  rm -f "${temporary_directory}/holder.fifo" "${temporary_directory}/holder.out" "${temporary_directory}/waiter.out" "${temporary_directory}/isolation.out"
   rmdir "${temporary_directory}"
 }
 trap cleanup EXIT
@@ -188,4 +188,111 @@ run_race actor-revoked "SELECT app_private.acquire_personal_target_merge_generat
   UPDATE app_data.app_users SET status='deletion_pending' WHERE app_user_id='$app_user_id';" "$stage_sql" 42501
 run_psql --quiet --command="UPDATE app_data.app_users SET status='active' WHERE app_user_id='$app_user_id';"
 
-echo '0127 concurrency passed: exact request/fence PIDs, stage/end/expiry ordering, canonical drift rejection, locked reauthorization, full rollback and generation-scoped purge.'
+# Isolation and lifecycle replay checks use a new actor with no prior state.
+issuer="https://7eoc-unassigned-contact-isolation.example.test/auth/v1"
+subject="7eoc-isolation-owner-${run_token}"
+run_psql --quiet --command="SELECT * FROM app_data.bootstrap_personal_context('$issuer','$subject');" >/dev/null
+context="$(run_psql --tuples-only --no-align --field-separator='|' --command="
+  SELECT app_user_id,workspace_id,project_id,questionnaire_version_id
+  FROM app_data.list_personal_project_contexts('$issuer','$subject') WHERE is_current;" | tr -d '[:space:]')"
+IFS='|' read -r app_user_id workspace_id project_id questionnaire_version_id <<<"${context}"
+for context_id in "$app_user_id" "$workspace_id" "$project_id" "$questionnaire_version_id"; do
+  [[ "$context_id" =~ ^[0-9a-f-]{36}$ ]] || { echo '0150 无法取得 isolation actor context。' >&2; exit 1; }
+done
+new_generation isolation-lifecycle
+
+expect_stage_isolation_rejection() {
+  local phase="$1" isolation="$2" before_state status=0 error_line
+  before_state="$(business_state)"
+  run_psql --quiet --command="BEGIN ISOLATION LEVEL $isolation; $stage_sql COMMIT;" \
+    >"${temporary_directory}/isolation.out" 2>&1 || status=$?
+  error_line="$(sed -n '/^ERROR:/p' "${temporary_directory}/isolation.out" | head -n 1)"
+  if [[ "$status" -eq 0 || "$error_line" != 'ERROR:  0A000: unassigned contact staging requires read committed' ]]; then
+    echo "0150 ${phase} in ${isolation} expected exact 0A000, status ${status}: ${error_line}" >&2
+    sed -n '/^ERROR:/p' "${temporary_directory}/isolation.out" >&2
+    exit 1
+  fi
+  [[ "$(business_state)" == "$before_state" ]] || { echo "0150 ${phase} in ${isolation} changed business state." >&2; exit 1; }
+}
+
+for isolation in 'REPEATABLE READ' SERIALIZABLE 'READ UNCOMMITTED'; do
+  expect_stage_isolation_rejection first "$isolation"
+done
+
+pending_id="$(run_psql --tuples-only --no-align --command="$stage_sql" | tr -d '[:space:]')"
+[[ "$pending_id" =~ ^[0-9a-f-]{36}$ ]] || { echo '0150 READ COMMITTED stage returned no pending ID.' >&2; exit 1; }
+replay_state_sql="SELECT snapshot.state - 'app_private.personal_target_merge_generation_fence_v1'
+  FROM (${state_query%;}) AS snapshot(state);"
+epoch_sql='SELECT epoch FROM app_private.personal_target_merge_generation_fence_v1 WHERE fence_key;'
+before_replay="$(run_psql --tuples-only --no-align --command="$replay_state_sql")"
+before_epoch="$(run_psql --tuples-only --no-align --command="$epoch_sql")"
+replay_id="$(run_psql --tuples-only --no-align --command="$stage_sql" | tr -d '[:space:]')"
+[[ "$replay_id" == "$pending_id" ]] || { echo '0150 READ COMMITTED replay did not preserve pending ID.' >&2; exit 1; }
+if [[ "$(run_psql --tuples-only --no-align --command="$replay_state_sql")" != "$before_replay" \
+  || "$(run_psql --tuples-only --no-align --command="$epoch_sql")" != "$((before_epoch + 1))" ]]; then
+  echo '0150 READ COMMITTED replay did not preserve all state except one fence increment.' >&2
+  exit 1
+fi
+
+for isolation in 'REPEATABLE READ' SERIALIZABLE 'READ UNCOMMITTED'; do
+  expect_stage_isolation_rejection replay "$isolation"
+done
+
+# Hold the actor's active/pending replay snapshot while real account deletion
+# commits. The stale RR replay must hit the guard; a fresh RC replay must see
+# the lifecycle revocation and leave the valid deletion state unchanged.
+deletion_request="$(run_psql --tuples-only --no-align --command='SELECT gen_random_uuid();' | tr -d '[:space:]')"
+mkfifo "${temporary_directory}/holder.fifo"
+"${psql_base[@]}" --quiet --tuples-only --no-align \
+  <"${temporary_directory}/holder.fifo" >"${temporary_directory}/holder.out" 2>&1 &
+holder_pid=$!
+exec 3>"${temporary_directory}/holder.fifo"
+printf '%s\n%s\n' \
+  "BEGIN ISOLATION LEVEL REPEATABLE READ; SELECT 'SNAPSHOT|' || (SELECT status FROM app_data.app_users WHERE app_user_id='$app_user_id') || '|' || (SELECT count(*) FROM app_private.personal_merge_unassigned_contact_requests_v1 WHERE request_id='$request_id'::uuid AND pending_fact_id='$pending_id'::uuid);" \
+  '\echo SNAPSHOT_READY' >&3
+for _ in $(seq 1 200); do
+  grep -q '^SNAPSHOT_READY$' "${temporary_directory}/holder.out" && break
+  sleep 0.05
+done
+if ! grep -q '^SNAPSHOT_READY$' "${temporary_directory}/holder.out" \
+  || ! grep -q '^SNAPSHOT|active|1$' "${temporary_directory}/holder.out"; then
+  echo '0150 could not establish old active-actor pending replay snapshot.' >&2
+  sed -n '1,80p' "${temporary_directory}/holder.out" >&2
+  exit 1
+fi
+run_psql --quiet --command="SELECT * FROM app_private.request_account_deletion_v1('$app_user_id','$deletion_request');" >/dev/null
+deletion_state="$(business_state)"
+deletion_valid="$(run_psql --tuples-only --no-align --command="
+  SELECT actor.status='deletion_pending'
+    AND deletion.status='deletion_pending'
+    AND deletion.deletion_request_id='$deletion_request'::uuid
+    AND EXISTS (SELECT 1 FROM app_private.account_deletion_request_claims claim
+      WHERE claim.request_id='$deletion_request'::uuid AND claim.actor_app_user_id='$app_user_id'::uuid)
+    AND EXISTS (SELECT 1 FROM app_private.account_deletion_audit_events audit
+      WHERE audit.request_id='$deletion_request'::uuid AND audit.operation='account-deletion-request:v1')
+  FROM app_data.app_users actor JOIN app_private.account_deletion_current deletion USING(app_user_id)
+  WHERE actor.app_user_id='$app_user_id'::uuid;" | tr -d '[:space:]')"
+[[ "$deletion_valid" == 't' ]] || { echo '0150 real account deletion did not commit valid lifecycle state.' >&2; exit 1; }
+printf '%s\nCOMMIT;\n\\q\n' "$stage_sql" >&3
+exec 3>&-
+holder_status=0
+wait "$holder_pid" || holder_status=$?
+holder_pid=''
+stale_error="$(sed -n '/^ERROR:/p' "${temporary_directory}/holder.out" | head -n 1)"
+if [[ "$holder_status" -eq 0 || "$stale_error" != 'ERROR:  0A000: unassigned contact staging requires read committed' ]]; then
+  echo "0150 stale RR replay expected exact isolation guard, status ${holder_status}: ${stale_error}" >&2
+  sed -n '/^ERROR:/p' "${temporary_directory}/holder.out" >&2
+  exit 1
+fi
+rm -f "${temporary_directory}/holder.fifo"
+rc_status=0
+run_psql --quiet --command="$stage_sql" >"${temporary_directory}/waiter.out" 2>&1 || rc_status=$?
+rc_error="$(sed -n '/^ERROR:/p' "${temporary_directory}/waiter.out" | head -n 1)"
+if [[ "$rc_status" -eq 0 || "$rc_error" != 'ERROR:  42501: known-source personal merge split plan is forbidden' ]]; then
+  echo "0150 fresh RC replay after deletion expected exact 42501, status ${rc_status}: ${rc_error}" >&2
+  sed -n '/^ERROR:/p' "${temporary_directory}/waiter.out" >&2
+  exit 1
+fi
+[[ "$(business_state)" == "$deletion_state" ]] || { echo '0150 stale RR or forbidden fresh RC replay changed state after account deletion.' >&2; exit 1; }
+
+echo '0127 concurrency and 0150 isolation checks passed: first/replay all-isolation guards, READ COMMITTED idempotency, and lifecycle-revocation replay ordering.'

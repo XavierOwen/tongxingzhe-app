@@ -343,6 +343,8 @@ metadata 只返回来源、事实标识和 revision metadata。当前合同将 T
 
 private header 保存 pending UUID、request、代次、contact／revision、type、actor／scope 和数据库时间。反应、联系同意与确认值由调用方明确给出，保存在独立 typed 业务表，不复制或散列进 ledger；登记不推导同意，也不创建任何源对象关联。request advisory 后使用既有 generation fence，锁后重验当前个人 owner、项目、双端 assignment 和当前时钟 due。live pending 内只有完全相同请求可精确重放；终结后不能靠已清除值推断重放。
 
+0150 要求首次暂存和精确重放使用 READ COMMITTED。其他隔离模式在输入校验后、首次取锁前返回 0A000。获准调用仍使用原锁序，精确重放返回原 pending UUID，并按原合同更新 fence。
+
 私有预检为 STABLE、单 command、真实 READ ONLY，返回 `known_source_plan`、`pending_contacts`、`pending_count`、`pending_fingerprint`。known-source plan 保持 0124 原样，pending 每项仅有 `pending_fact_id`、`contact_id`、`revision_number`、`target_type`、六位微秒 UTC `staged_at_utc`，按 pending UUID 排序。当前项目只作资格门禁：代次属于空间，预检包含它在各项目登记的全部 pending，登记项目与真实 contact scope 一致。切换当前项目不能导致遗漏或误报损坏。fingerprint 只覆盖这些 metadata；预检不读取业务值，不写审计或 fence，也不保存资格。TEXT contact ID 仍可能敏感，不能因此宣称数据匿名。
 
 旧 known-source end 若遇未处置 pending，会拒绝并全回滚；不能只处理已知 manifest 就绕过它们。旧 expiry 在原事务中登记不可变 purge metadata、删除该代次 payload，并继续匿名化两端。删除抑制、计数不符或后续匿名化失败都会回滚整次 expiry。header／purge history 只追加，payload 不可更新，仅真实 expiry receipt 允许删除；不影响其他代次。
