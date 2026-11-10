@@ -225,6 +225,8 @@ merge 与 split 分别使用固定 canonical payload 和客户端 request UUID�
 
 0113 已提供 DB-only 的已知对象对 preview：调用方必须给出两个 UUID；数据库在单 command snapshot 中重验授权、revision、assignment、精确匹配信号与 retention 截止，签发 15 分钟 value-free receipt，并提供 private validator 与固定批量 cleanup。runtime 权限保持关闭。
 
+0149 要求私有双对象预览使用 READ COMMITTED。其他隔离模式在首条查询前返回 0A000。预览查询仍使用单语句快照，可见性以查询开始时已提交的资格为准。
+
 0114 为 contact link、项目关系和关系 revision 增加数据库代次 fence。private ledger 保留 generation 及其两个成员，不复制 PII 或事实值。trigger 按事实中的原 target ID 绑定当前 generation，调用方不能伪造或覆盖。既有事实保持未绑定，既有 writer 在没有 active generation 时保持原结果。activation 与 writer 使用同一 private 串行化边界，不允许 activation 已线性化后再提交无代次的新事实。
 
 7EA／0115 为个人—机构关系及其 revision 分别记录 person 与 institution 两端的 generation binding。generation 固定单一 target type，因此两端只能都未绑定、仅一端绑定，或分别绑定不同 generation。新关系及 created revision 使用创建时两端的 active generation。结束关系只让新 ended revision 使用结束时两端的 active generation，不改写原关系或 created revision。既有关系与 revision 不回填。
