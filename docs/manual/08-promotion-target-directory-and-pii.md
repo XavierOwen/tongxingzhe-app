@@ -279,6 +279,8 @@ MANUAL-140 与 TEST-151 说明这只是单 generation 的 DB-only 到期出口�
 
 0122 保留 0121 的 JSON／NULL、当前事实、双端分配和 due 合同，不接 Backend／HTTP／Flutter、缓存、普通目录替换或导出，也不开放产品 active merge。MANUAL-142 与 TEST-153 记录这一边界。测试只证明 synthetic PostgreSQL 合同，不证明生产身份、用户功能或清理 SLA。
 
+0151 要求该私有授权读取器使用 READ COMMITTED，其他隔离模式在输入校验后、授权查询前返回 0A000。项目切换在查询前提交后，旧项目读取返回 42501 且不追加审计。查询仍使用原单语句快照，成功返回两端资料并各记一条 viewed。MANUAL-173／TEST-184 对应该修正。
+
 7EI／#568 以 0123 增加两个 `app_data` runtime 函数。资格 reader `app_data.read_personal_merge_projection_context_v1(text,text,uuid)` 为 STABLE、零写入。它按未经归一化的 issuer／subject 读取 active app user、personal owner、current personal project，以及 `view_assigned_target_pii` 和 `manage_assigned_target_merges`。它不 bootstrap 或修复 context。
 
 审计 reader `app_data.read_personal_known_source_merge_projection_v1(text,text,uuid,uuid)` 为 VOLATILE。它调用 private 0122，在同一 command 中重新授权并为两端追加 `viewed` 审计。本切片只为 runtime 新增这两个函数的 EXECUTE，不开放 0121／0122、涉及的底表、ledger 或其他 merge writer。
