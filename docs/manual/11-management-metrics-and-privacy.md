@@ -385,6 +385,8 @@ production store 使用一次参数化 `pool.query`。PostgreSQL 完成该 state
 
 每次已授权调用都会生成新的访问事件。审计保存授权关系、固定查看能力 grant、请求和命中的快照、报告身份、数据库访问时间、状态和原因码，但不保存 `protected_report`、`cells`、贡献者、触达人数、兴趣度或抑制前数值。事件只可追加；插入 trigger 会重新核对授权区间、项目归属和精确 v2 provenance，普通 `UPDATE` 与 `DELETE` 都被拒绝。未授权调用不写访问事件，因为整个 statement 以 `42501` 失败。
 
+五类管理报告的快照目录和详情读取只支持 `READ COMMITTED`。[0103](../../backend/database/migrations/0103_organization_report_recovery_read.sql) 将十个 reader 接到共享 `resolve_management_report_recovery_read_authorization_v1`。该 resolver 在参数校验后、授权查询前检查隔离模式，其他模式返回数据库错误 `55000 management report recovery read unavailable`。
+
 读取与撤权使用同一组 transaction lock。读取先取得锁时，撤权等到报告和审计提交；撤权先取得锁时，读取等待后看见失效边界，以 `42501` 结束且不写审计。如果调用方在显式外层事务中取得报告后主动 `ROLLBACK`，访问事件也会回滚。因此 `0033` production store 把读取作为单条自动提交操作，并在数据库调用成功以后才把报告交给客户端。
 
 `0032` 仍位于 `app_private`。`tongxingzhe_runtime` 和 `PUBLIC` 对函数与审计表都没有权限。唯一单份报告读取入口是 `0033` 位于 `app_data` 的四参数 bridge；`0034` 的独立导航上下文不能读取报告。当前仍没有一般 organization session、缓存、latest 查询或其他动态导出；6AH 只提供显式项目／快照的固定 canonical JSON v1 导出。不能把私有函数直接授予通用 runtime role。
