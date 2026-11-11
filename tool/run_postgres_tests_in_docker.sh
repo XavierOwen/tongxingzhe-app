@@ -14134,6 +14134,43 @@ docker exec "${container_name}" psql \
 printf '%s\n' "${contact_stage_isolation_upgrade_replay}"
 echo '0149→0150 complete legacy state/catalog, exact isolation guard, original pending header and payload, and checksum replay: passed.'
 
+echo '验证 0150→0151 private authorized projection isolation upgrade 与 checksum replay。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0150_personal_target_authorized_projection_isolation_live.sql >/dev/null
+docker exec "${container_name}" sh -ceu \
+  "mkdir /tmp/personal-target-authorized-projection-isolation-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0151_personal_target_authorized_projection_isolation.sql \\
+     /tmp/personal-target-authorized-projection-isolation-upgrade-only/ && \\
+   test \"\$(find /tmp/personal-target-authorized-projection-isolation-upgrade-only \\
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-target-authorized-projection-isolation-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_personal_target_authorized_projection_isolation.sql \
+  --file=/workspace/backend/database/fixtures/shared/database_state.sql \
+  --command='BEGIN ISOLATION LEVEL READ COMMITTED READ ONLY; SELECT public.fixture_0150_authorized_projection_isolation_assert_upgrade(); ROLLBACK;' >/dev/null
+authorized_projection_isolation_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/personal-target-authorized-projection-isolation-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${authorized_projection_isolation_upgrade_replay}" != \
+    *'已验证 0151_personal_target_authorized_projection_isolation（无需重复执行）'* ]] \
+  || [[ "${authorized_projection_isolation_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0151 migration did not skip its checksum-verified replay.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_personal_target_authorized_projection_isolation.sql \
+  --file=/workspace/backend/database/fixtures/shared/database_state.sql \
+  --command='BEGIN ISOLATION LEVEL READ COMMITTED READ ONLY; SELECT public.fixture_0150_authorized_projection_isolation_assert_upgrade(); ROLLBACK;' >/dev/null
+printf '%s\n' "${authorized_projection_isolation_upgrade_replay}"
+echo '0150→0151 complete state/catalog, exact isolation guard, original projection document/generation/audits, and checksum replay: passed.'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 
