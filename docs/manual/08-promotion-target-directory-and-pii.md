@@ -337,6 +337,8 @@ metadata 只返回来源、事实标识和 revision metadata。当前合同将 T
 
 0126 private core 在一个 SQL command 中重新核对 exact identity／current-personal-project、形成目录并为每个实际返回 member 写一条 `viewed`，每页零至四十条。第 21 项仅判下一页，不写该项审计；重复读取再次审计。审计条数不符或任一插入失败时全回滚。它为 VOLATILE，READ ONLY 会失败，即使空页；runtime 仅获新 wrapper 的 EXECUTE，private schema／表／writer 仍关闭。
 
+0152 要求 0125 授权拆分预检和 0126 目录的私有核心使用 READ COMMITTED，在 context 查询前检查隔离模式。0125 保留原 NULL generation→22023 优先；0126 首条查询前即检查门禁。其余已进入函数的非 RC 调用返回固定 0A000；RC 仍使用原 context 校验和单语句结果／审计，切换后请求旧项目返回 42501。MANUAL-174／TEST-185 对应两处修正。
+
 集合 GET 仅接受可选单个 `after`，禁止其它 query／body，全部响应 no-store。Backend 用同一原始身份先资格读取、再调用重新授权的 bridge；审计提交后 parser 或 HTTP 仍可能失败，因此 `viewed` 不证明送达。MANUAL-148 与 TEST-159 覆盖此链路；没有手填 UUID、创建合并、拆分、导出、普通目录替换或产品 active merge，#549 阻挡不变。合成数据、浏览器或 widget 测试不证明生产身份、真实 PII、native 设备认证或部署。
 
 ### 0127 待分配接触关联的私有基础层（Issue #580）
