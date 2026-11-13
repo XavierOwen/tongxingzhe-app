@@ -130,6 +130,7 @@
 | [0202](./0202-mixed-resolution-preflight-keeps-both-plans-in-one-snapshot.md) | 已接受，2026-10-20 | Slice 7FD／private DB-only；Issue #607 | 同一快照保留两类完整候选计划并生成复合 metadata 指纹；不写事实或保留混合确认资格 |
 | [0203](./0203-mixed-resolution-confirmation-uses-one-final-manifest.md) | 已接受，2026-10-21 | Slice 7FE／private DB-only；Issue #611 | 已有关系的混合确认统一完整预锁、共同最终清单和单次终结；复用两类应用与事实证明，不开放生产入口 |
 | [0204](./0204-mixed-project-entry-prelocks-before-one-confirmation.md) | 已接受，2026-10-21 | Slice 7FF／private DB-only；Issue #613 | 混合批次逐槽明确确认真实项目进入，先锁全部接触和关系集合，再委托原单次终结；其他缺失关联仍拒绝 |
+| [0205](./0205-target-retention-uses-utc-calendar-months.md) | 已接受，2026-11-13 | 私有数据库修正；Issue #641；`PII-004` | 保留期统一按 UTC 日历月，复核窗口为连续 720 小时；历史续期回执保留原截止 |
 
 ## 按主题查找
 
