@@ -3227,6 +3227,16 @@ MANUAL-176／TEST-187 仅证明合成 PostgreSQL 行为，不开放生产、runt
 
 真实 0154 升级先保存两个正常版本、原回执、全部业务数据与完整函数 catalog；升级及 checksum 重放只允许该门禁插入，两个旧回执均在只读 RC 下逐值重放且零写。MANUAL-177／TEST-188 仅覆盖私有 PostgreSQL，不据此声称生产或 HTTP 使用旧快照，也不开放这些入口。
 
+### 7.44 私有管理跟进意愿配置读取的事务隔离（Issue #654）
+
+真实 0155 基线中，reader 的旧 RR 事务在普通 SELECT 固定快照后，仍能沿用另一事务已提交撤销的 grant，返回原 enabled 状态及完整 configuration JSON；同一身份、项目的 fresh RC read 返回 42501。读取没有可触发 serialization 的写入，advisory locks 也不能刷新旧快照。
+
+0156 只在 reader 原输入校验后、首条授权查询与所有锁前加入 READ COMMITTED 门禁。三种非 RC 调用固定返回 `0A000 management follow-up consent opt-in read requires read committed`；NULL／metric 输入错误仍先返回 22023。0074 私有 candidate bridge 通过既有 SECURITY DEFINER helper 委托 reader，窄 ratio role 仍只能执行 helper，原 reader 保持 owner-only ACL。正常 RC 的未配置、enabled、disabled 文档及 0154／0155 writer 修正保留。
+
+[并发脚本](../../tool/verify_management_follow_up_consent_opt_in_read_isolation_concurrency.sh)用正常 bootstrap、组织创建、项目成员分配和 grant DML 建立前提，保留所有约束与 trigger。`MANAGEMENT_OPT_IN_READ_ISOLATION_EXPECT_BASELINE=1` 只接受真实 0155，跳过门禁前置断言，撤权后旧 RR 返回原配置时明确 RED 退出；0156 则验证旧 RR 固定 0A000、fresh RC 42501 及完整业务状态不变。[真实升级 fixture](../../backend/database/fixtures/upgrade/0155_management_follow_up_consent_opt_in_read_isolation_live.sql)保存两个正常版本、原 read／bridge 文档、write 回执、全部业务数据与完整函数 catalog；0156-only 升级及 checksum 重放只允许 reader 门禁插入，所有旧 JSON 逐值保留并在只读 RC 下零写重验。
+
+MANUAL-178／TEST-189 只覆盖合成私有 PostgreSQL，不开放生产、runtime grant、Backend／HTTP／UI 或调度入口。完整 Docker、固定提交 CI 和 main 验收仍须分别通过。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：
