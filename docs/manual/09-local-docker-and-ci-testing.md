@@ -3272,7 +3272,7 @@ CI 的 PostgreSQL job 在 Linux runner 上执行同一个 Docker runner。默认
 | `docker: command not found` | Docker 是否已安装，终端是否重启 |
 | `Cannot connect to the Docker daemon` | Docker Desktop／Engine 是否已启动，当前用户是否有权限 |
 | 镜像下载失败 | 网络、代理和 Docker registry 访问 |
-| `bash -n` 失败 | Docker runner 的 shell 语法 |
+| `bash -n` 失败 | Docker runner 或 PostgreSQL 并发脚本的 shell 语法；CI 逐文件检查 |
 | migration 第一次失败 | 输出中的第一个 migration 文件和 PostgreSQL 错误码 |
 | 第二次 migration 报 checksum 不同 | 已执行的 migration 是否被改写 |
 | fixture 失败 | 最后打印的 fixture 文件和异常文本 |
