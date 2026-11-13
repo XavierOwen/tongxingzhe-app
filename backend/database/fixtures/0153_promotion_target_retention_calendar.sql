@@ -9,7 +9,7 @@ SELECT * FROM app_data.bootstrap_personal_context(
 CREATE TEMP TABLE retention_calendar_targets ON COMMIT DROP AS
 SELECT names.name,(created.target->>'target_id')::uuid AS target_id
 FROM retention_calendar_context c
-CROSS JOIN (VALUES ('normal'),('near'),('far'),('boundary')) names(name)
+CROSS JOIN (VALUES ('normal'),('future'),('near'),('far'),('boundary')) names(name)
 CROSS JOIN LATERAL app_data.create_promotion_target(
   c.app_user_id,c.workspace_id,c.project_id,'person','0153 calendar '||names.name,
   NULL,NULL,'0153-retention-calendar-'||names.name
@@ -32,37 +32,78 @@ BEGIN
 END
 $normal_caller$;
 
+CREATE TEMP TABLE retention_calendar_future_submit ON COMMIT DROP AS
+SELECT submitted.* FROM retention_calendar_context c
+JOIN retention_calendar_targets t ON t.name='future'
+CROSS JOIN LATERAL app_data.apply_contact_submit_v3(
+  c.app_user_id,'0153-calendar-future-submit',1,'contact.submit.v1',
+  '0153-calendar-device','0153-calendar-future-contact',0,
+  jsonb_build_object('contactId','0153-calendar-future-contact','workspaceId',c.workspace_id,
+    'projectId',c.project_id,'questionnaireVersionId',c.questionnaire_version_id,
+    'reason','Synthetic clock input','occurredAtUtc',
+    to_char((clock_timestamp()+interval '12 hours') AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+    'occurredTimeZone','UTC','channel','voice_call','location',jsonb_build_object('kind','not_applicable'),
+    'reachCount',1,'interestLevel',2,'answers','[]'::jsonb,
+    'targetLinks',jsonb_build_array(jsonb_build_object('targetId',t.target_id,
+      'targetType','person','responseLevel',2,'followUpConsent','unknown',
+      'institutionRepresentativeConfirmed',false,'confirmStageZero',true)))
+) submitted;
+DO $accepted_contact$
+BEGIN
+  IF (SELECT result_code FROM retention_calendar_future_submit) IS DISTINCT FROM 'accepted'
+    OR NOT EXISTS (SELECT 1 FROM app_data.contacts contact
+      JOIN app_data.contact_target_links link ON link.contact_id=contact.contact_id
+        AND link.revision_number=contact.current_revision
+      JOIN retention_calendar_targets t ON t.target_id=link.promotion_target_id AND t.name='future'
+      WHERE contact.contact_id='0153-calendar-future-contact' AND contact.lifecycle_status='active'
+        AND contact.occurred_at_utc>clock_timestamp())
+  THEN RAISE EXCEPTION 'future reference contact was not accepted as an active current linked contact'; END IF;
+END
+$accepted_contact$;
+
 SET LOCAL timezone='America/New_York';
 CREATE TEMP TABLE retention_calendar_renewal ON COMMIT DROP AS
-SELECT action.result FROM retention_calendar_context c
-JOIN retention_calendar_targets t ON t.name='normal'
+SELECT t.name,t.target_id,action.result FROM retention_calendar_context c
+JOIN retention_calendar_targets t ON t.name IN ('normal','future')
 CROSS JOIN LATERAL app_data.apply_promotion_target_retention_action(
-  c.app_user_id,c.workspace_id,c.project_id,t.target_id,'renew','purpose_confirmed','0153-calendar-renewal'
+  c.app_user_id,c.workspace_id,c.project_id,t.target_id,'renew','purpose_confirmed','0153-calendar-renewal-'||t.name
 ) action;
 SET LOCAL timezone='Pacific/Kiritimati';
 CREATE TEMP TABLE retention_calendar_replay ON COMMIT DROP AS
-SELECT action.result FROM retention_calendar_context c
-JOIN retention_calendar_targets t ON t.name='normal'
+SELECT t.name,action.result FROM retention_calendar_context c
+JOIN retention_calendar_targets t ON t.name IN ('normal','future')
 CROSS JOIN LATERAL app_data.apply_promotion_target_retention_action(
-  c.app_user_id,c.workspace_id,c.project_id,t.target_id,'renew','purpose_confirmed','0153-calendar-renewal'
+  c.app_user_id,c.workspace_id,c.project_id,t.target_id,'renew','purpose_confirmed','0153-calendar-renewal-'||t.name
 ) action;
 DO $renewal$
-DECLARE event app_data.promotion_target_retention_events%ROWTYPE; accepted jsonb; replayed jsonb;
+DECLARE event app_data.promotion_target_retention_events%ROWTYPE; renewed record; reference_at timestamptz;
 BEGIN
-  SELECT * INTO STRICT event FROM app_data.promotion_target_retention_events
-  WHERE mutation_id='0153-calendar-renewal' AND actor_app_user_id=(SELECT app_user_id FROM retention_calendar_context);
-  SELECT result INTO STRICT accepted FROM retention_calendar_renewal;
-  SELECT result INTO STRICT replayed FROM retention_calendar_replay;
-  IF event.review_due_at IS DISTINCT FROM
-      ((event.occurred_at AT TIME ZONE 'UTC')+interval '6 months') AT TIME ZONE 'UTC'
-    OR (accepted->>'review_due_at')::timestamptz IS DISTINCT FROM event.review_due_at
-    OR app_data.promotion_target_review_due_at(event.promotion_target_id) IS DISTINCT FROM event.review_due_at
-    OR (accepted->>'duplicate')::boolean IS DISTINCT FROM false
-    OR (replayed->>'duplicate')::boolean IS DISTINCT FROM true
-    OR (replayed->>'review_due_at')::timestamptz IS DISTINCT FROM event.review_due_at
-    OR (SELECT count(*) FROM app_data.promotion_target_retention_events
-      WHERE promotion_target_id=event.promotion_target_id)<>1
-  THEN RAISE EXCEPTION 'non-UTC renewal, current deadline or cross-zone exact replay changed its instant'; END IF;
+  FOR renewed IN SELECT accepted.name,accepted.target_id,accepted.result AS accepted,replay.result AS replayed
+    FROM retention_calendar_renewal accepted JOIN retention_calendar_replay replay USING(name)
+  LOOP
+    SELECT * INTO STRICT event FROM app_data.promotion_target_retention_events
+    WHERE mutation_id='0153-calendar-renewal-'||renewed.name
+      AND promotion_target_id=renewed.target_id
+      AND actor_app_user_id=(SELECT app_user_id FROM retention_calendar_context);
+    reference_at:=event.occurred_at;
+    IF renewed.name='future' THEN
+      SELECT occurred_at_utc INTO STRICT reference_at FROM app_data.contacts
+      WHERE contact_id='0153-calendar-future-contact' AND lifecycle_status='active';
+      IF event.occurred_at>=reference_at
+        OR app_data.promotion_target_retention_reference_at(renewed.target_id) IS DISTINCT FROM reference_at
+      THEN RAISE EXCEPTION 'future contact did not remain the latest retention reference'; END IF;
+    END IF;
+    IF event.review_due_at IS DISTINCT FROM
+        ((reference_at AT TIME ZONE 'UTC')+interval '6 months') AT TIME ZONE 'UTC'
+      OR (renewed.accepted->>'review_due_at')::timestamptz IS DISTINCT FROM event.review_due_at
+      OR app_data.promotion_target_review_due_at(event.promotion_target_id) IS DISTINCT FROM event.review_due_at
+      OR (renewed.accepted->>'duplicate')::boolean IS DISTINCT FROM false
+      OR (renewed.replayed->>'duplicate')::boolean IS DISTINCT FROM true
+      OR (renewed.replayed->>'review_due_at')::timestamptz IS DISTINCT FROM event.review_due_at
+      OR (SELECT count(*) FROM app_data.promotion_target_retention_events
+        WHERE promotion_target_id=event.promotion_target_id)<>1
+    THEN RAISE EXCEPTION '% non-UTC renewal, current deadline or cross-zone exact replay changed its instant',renewed.name; END IF;
+  END LOOP;
 END
 $renewal$;
 

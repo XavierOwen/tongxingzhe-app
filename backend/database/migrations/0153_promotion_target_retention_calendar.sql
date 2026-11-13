@@ -29,7 +29,9 @@ BEGIN
         FROM app_data.promotion_target_retention_policies AS policy_row
         WHERE policy_row.workspace_id = trusted_workspace_id
       ), 12))$old$,
-        $new$pg_catalog.date_add(event_time, make_interval(months => COALESCE((
+        $new$pg_catalog.date_add(GREATEST(event_time,
+        app_data.promotion_target_retention_reference_at(requested_target_id)
+      ), make_interval(months => COALESCE((
         SELECT policy_row.retention_months
         FROM app_data.promotion_target_retention_policies AS policy_row
         WHERE policy_row.workspace_id = trusted_workspace_id
