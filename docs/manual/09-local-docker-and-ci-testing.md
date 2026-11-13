@@ -2953,6 +2953,8 @@ MANUAL-151／TEST-162 只证明 synthetic PostgreSQL 中的冲突预检；不证
 
 fixture 使用 person／institution、跨项目 contact、不同历史 revision 的多项 pending、同／异源冲突，以及显式 older／current 选择。真实发布新必填问卷后，旧 contact 的历史及最终 answers 仍引用其固定版本；版本不一致提前拒绝。核对原普通字段、事件时间、非 pair 关联、NULL／真实旧 binding 原行、每项独立应用和最终 current，以及原项目 feed／audit／去标识 outbox。相同值不能折叠应用。
 
+[跨代次 fixture](../../backend/database/fixtures/0130_personal_merge_cross_generation_nonpair_links.sql) 使用两对互不重叠的 person 对象：先登记 A 的 pending，再激活包含原 nonpair 对象的 B。它核对旧 NULL binding 不变，新历史／最终 revision 正确绑定 B，A 结束后 B 仍活动、B manifest 增加实际来源事实，A 精确重放保持全部业务状态不变。
+
 所有形状、完整映射、槽位、候选、三指纹、child 预占和资格错误都比较全业务状态。注入后续 contact／最后 current child 非 accepted、metadata INSERT、provenance 缺行、end 与 payload DELETE 抑制，以及 end receipt 后的 final child 破坏，确认 revisions、answers、links、feed、audit、outbox、回执及 pending 全部回滚。
 
 PG16 函数计数应证明一次确认只执行三次全批 proof，不按 payload 数重复。终结精确重放应返回原时间且零写入，各载荷漂移拒绝。普通 writer 作废已确认的 person／institution 接触后，重放仍须保留作废结果和历史应用，全部业务状态不变；旧 0127／0128／0129 fixture 继续通过。
