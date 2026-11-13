@@ -78,7 +78,11 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Verify PostgreSQL test script syntax
-        run: bash -n tool/run_postgres_tests_in_docker.sh tool/verify_*_concurrency.sh
+        run: |
+          # bash -n parses the first file; other filenames become positional arguments.
+          for postgres_script in tool/run_postgres_tests_in_docker.sh tool/verify_*_concurrency.sh; do
+            bash -n "$postgres_script"
+          done
 
       - name: Run complete auto-discovered PostgreSQL suite
         run: ./tool/run_postgres_tests_in_docker.sh
