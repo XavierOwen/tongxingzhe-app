@@ -3211,6 +3211,14 @@ MANUAL-166／TEST-177 只补这个旧私有入口，不据此保证所有旧 wri
 
 真实 0152 基线先提交一份非 UTC 会话的续期回执，再保存全部业务表和完整函数 catalog。升级与 checksum 重放只允许三处必要 body 变化；原事件、回执及其他数据逐值保留。完整 Docker runner 继续执行 fresh、既有并发和独立恢复。MANUAL-175／TEST-186 只证明合成数据库行为，不证明生产部署或清理 SLA。
 
+### 7.42 管理跟进意愿配置的授权时间精度（Issue #651）
+
+真实 0153 基线中，报告权限在毫秒边界后 1 微秒生效，普通配置调用虽已获授权，仍会因 provenance 参考时间被截到毫秒而返回 42501。0154 只替换配置函数的一处时间赋值：全部锁和最终授权完成后，以完整精度采样时间，再由原 validator 检查 exact actor／membership／grant IDs 及三段半开区间。校验针对保存的参考时点；报告 JSON 和配置回执的毫秒显示合同保留。
+
+fixture 验证 32 次刚生效的合法 grant、逐版本完整 provenance、未来与过期 grant 的零写拒绝，以及原回执精确重放。既有配置、报告发布及并发检查继续运行。真实 0153 升级先保存正常配置回执、全部业务数据和完整函数 catalog；升级与 checksum 重放只允许 configure 的该表达式变化，旧数据、OID、owner、ACL 和其余实现逐值保留。
+
+MANUAL-176／TEST-187 仅证明合成 PostgreSQL 行为，不开放生产、runtime grant、Backend／HTTP／UI 或调度入口。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：
