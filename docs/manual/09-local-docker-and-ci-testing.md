@@ -2955,7 +2955,7 @@ fixture 使用 person／institution、跨项目 contact、不同历史 revision 
 
 所有形状、完整映射、槽位、候选、三指纹、child 预占和资格错误都比较全业务状态。注入后续 contact／最后 current child 非 accepted、metadata INSERT、provenance 缺行、end 与 payload DELETE 抑制，以及 end receipt 后的 final child 破坏，确认 revisions、answers、links、feed、audit、outbox、回执及 pending 全部回滚。
 
-PG16 函数计数应证明一次确认只执行三次全批 proof，不按 payload 数重复。终结精确重放应返回原时间且零写入，各载荷漂移拒绝；旧 0127／0128／0129 fixture 继续通过。
+PG16 函数计数应证明一次确认只执行三次全批 proof，不按 payload 数重复。终结精确重放应返回原时间且零写入，各载荷漂移拒绝。普通 writer 作废已确认的 person／institution 接触后，重放仍须保留作废结果和历史应用，全部业务状态不变；旧 0127／0128／0129 fixture 继续通过。
 
 真实 0129 baseline 捕获旧表数据及完整 pg_proc／OID／owner／ACL。升级仅允许两个 pending guard 的 body 增加新证明分支，其余全部函数 metadata 不变。正式 runner 执行 0130 后核对实际历史应用、显式旧候选、payload 消费和终结收据，再验证 checksum replay 与独立 dump-restore。
 
@@ -3099,7 +3099,7 @@ READ ONLY transaction 须真实成功；空单类、非法形状／完整集／s
 
 0142 fixture 从真实 person／institution、多个原项目和两类历史／多项／同值 pending 建立完整批次。先通过普通 contact 建立全部受影响关系，包含历史与进入前 current 的 nonpair links。按明确 older／current 选择确认后，核对两类实际历史、answers、地点 provenance、原关系历史和 parent binding，关系集与 project_entry 数量不得增加。
 
-两类完整映射与逐槽选择、known／两类 pending／复合指纹、缺失历史或 current 所需关系、失去资格和 due 均须整批零写。对两类实际应用、当前值、family／共同 metadata、end 和两个 payload 消费逐步注入错误或抑制，证明已做的另一类也回滚；静默改写输入指纹或伪造共同回执不能放行。精确重放检查两类 canonical 映射／选择，普通编辑或匿名化后不重复历史、初始化或恢复文本。
+两类完整映射与逐槽选择、known／两类 pending／复合指纹、缺失历史或 current 所需关系、失去资格和 due 均须整批零写。对两类实际应用、当前值、family／共同 metadata、end 和两个 payload 消费逐步注入错误或抑制，证明已做的另一类也回滚；静默改写输入指纹或伪造共同回执不能放行。精确重放检查两类 canonical 映射／选择，普通编辑、接触作废或匿名化后不重复历史、初始化或恢复文本；接触作废后的重放还须返回原确认时间，并保持全部业务状态不变。
 
 `verify_personal_merge_mixed_resolution_confirmation_concurrency.sh` 使用独立会话与指定 PID／精确锁，核对完整子命令／接触预锁先于代次锁，以及其他关联对象和关系也在应用前取锁。覆盖普通接触修订、关系更新、两类待分配登记、到期处置、同请求、撤权、当前项目和等待后期限。集合增长须拒绝，不补取反向锁。三个非 RC 模式的首次与终结重放均先返回固定 0A000，全部持久状态不变。
 

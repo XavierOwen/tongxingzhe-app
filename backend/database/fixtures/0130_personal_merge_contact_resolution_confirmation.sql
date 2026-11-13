@@ -436,6 +436,32 @@ SELECT pg_temp.fixture_0130_expect('23505',format('SELECT app_private.confirm_pe
  CASE WHEN field = 'pending' THEN repeat('0',64) ELSE p.document->>'pending_fingerprint' END,
  CASE WHEN field = 'resolution' THEN repeat('0',64) ELSE p.document->>'resolution_fingerprint' END,p.assignments,p.choices))
 FROM fixture_0130_context c CROSS JOIN fixture_0130_projects b CROSS JOIN fixture_0130_plans p CROSS JOIN (VALUES('workspace'),('project'),('generation'),('known'),('pending'),('resolution')) t(field) WHERE b.name = 'b' AND p.kind = 'person';
+DO $replay_after_void$
+DECLARE t record; result record; p record; before_state jsonb:=pg_temp.fixture_0130_state(); voided_state jsonb;
+BEGIN
+ FOR t IN SELECT contact.*,plan.request_id FROM fixture_0130_contacts fixture JOIN app_data.contacts contact ON contact.contact_id=fixture.contact
+  JOIN fixture_0130_plans plan USING(kind) WHERE fixture.project_name='a' LOOP
+  IF NOT EXISTS (SELECT 1 FROM app_private.personal_merge_contact_history_applications_v1
+   WHERE actor_app_user_id=t.app_user_id AND request_id=t.request_id AND contact_id=t.contact_id)
+  THEN RAISE EXCEPTION '0130 void replay lacks a confirmed history application: %',t.contact_id; END IF;
+  SELECT * INTO STRICT result FROM app_data.apply_contact_void_v3(t.app_user_id,t.contact_id || '-later-void',1,'contact.void.v1','0130-device',
+   t.contact_id,t.current_revision,jsonb_build_object('contactId',t.contact_id,'workspaceId',t.workspace_id,'projectId',t.project_id,'reason','0130 later ordinary void'));
+  IF result.result_code IS DISTINCT FROM 'accepted' OR result.failure_code IS NOT NULL OR result.server_cursor IS NULL
+   OR NOT EXISTS (SELECT 1 FROM app_data.contacts c JOIN app_data.contact_revisions r ON r.contact_id=c.contact_id AND r.revision_number=c.current_revision
+    WHERE c.contact_id=t.contact_id AND c.current_revision=t.current_revision+1 AND c.lifecycle_status='voided' AND r.revision_kind='voided'
+     AND r.reason='0130 later ordinary void')
+   OR app_private.personal_merge_contact_resolution_proof_v1(t.app_user_id,t.request_id) IS DISTINCT FROM false
+  THEN RAISE EXCEPTION '0130 ordinary void did not advance the confirmed contact and invalidate live proof: %',t.contact_id; END IF;
+ END LOOP;
+ voided_state:=pg_temp.fixture_0130_state();
+ IF (voided_state->'app_private.personal_merge_contact_history_applications_v1') IS DISTINCT FROM (before_state->'app_private.personal_merge_contact_history_applications_v1')
+  OR NOT ((voided_state->'app_data.contact_revisions') @> (before_state->'app_data.contact_revisions'))
+ THEN RAISE EXCEPTION '0130 ordinary void lost confirmed history applications or revisions'; END IF;
+ FOR p IN SELECT plan.kind,r.confirmed_at FROM fixture_0130_plans plan JOIN fixture_0130_results r USING(kind) LOOP
+  IF pg_temp.fixture_0130_confirm(p.kind) IS DISTINCT FROM p.confirmed_at THEN RAISE EXCEPTION '0130 terminal replay after void changed original timestamp'; END IF;
+ END LOOP;
+ IF pg_temp.fixture_0130_state() IS DISTINCT FROM voided_state THEN RAISE EXCEPTION '0130 terminal replay after void changed business state'; END IF;
+END $replay_after_void$;
 SELECT pg_temp.fixture_0130_expect('55000',$$UPDATE app_private.personal_merge_contact_resolution_requests_v1 SET confirmed_at_utc = confirmed_at_utc$$);
 SELECT pg_temp.fixture_0130_expect('55000',$$DELETE FROM app_private.personal_merge_contact_history_applications_v1$$);
 ROLLBACK;
