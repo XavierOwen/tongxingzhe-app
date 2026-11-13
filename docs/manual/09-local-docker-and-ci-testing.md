@@ -3007,6 +3007,8 @@ MANUAL-155／TEST-166 只证明 private PostgreSQL 核心。未开放 runtime、
 
 行为覆盖 source revision 漂移、作废、重复预览、同 contact／target 一次贡献、预览过期、完成后冻结重放、撤权、账号状态、组织删除周期和 projection 漂移。副本或 receipt INSERT 注入失败须整笔回滚；三表不可改绑或任意删除，actor／source 只能解除引用。结构 check 固定四个函数、三表、九条即时 FK、owner、ACL 与唯一约束。
 
+普通 owner 删除／恢复流程还须验证：删除周期内的新预览和旧确认重放均拒绝，全部业务状态不变；同一周期真实恢复后，新的个人来源可预览并首次生成五字段核心副本。原来源已修订、作废且预览过期的旧确认仍返回原回执与冻结副本，重放不改写业务事实。
+
 独立会话通过实际 physical PID、blocker 和指定 user／governance／membership／project-status／contact／request 锁证明等待，再由 FIFO 放行。测试同 request 只写一次、同来源不同 request 只成功一份，以及等待中撤权、归档、个人修订／作废、账号 pending、组织删除和预览到期后的重验；三个非 RC 模式分别验证 preview、first confirm 和 confirm replay 零写拒绝。
 
 purge fixture 为两个组织分别生成真实副本与未消费预览。清除一个组织须保留另一组织、个人来源和其他旧事实；晚期 DELETE 故障须完整回滚，跨组织来源漂移须失败关闭。独立 rank 14 的 confirmation request 被收集并留 tombstone，终结重试精确幂等，旧 UUID 不能在其他组织重用。严格 FK inventory 从 347 条增加为 356 条，不放宽原断言。

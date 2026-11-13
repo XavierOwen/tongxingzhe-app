@@ -394,6 +394,74 @@ BEGIN
       '00000000-0134-5000-8000-000000000005', (SELECT preview_id FROM fixture_0134_stale WHERE kind = 'fault')));
 END
 $fixture$;
+SELECT pg_temp.submit_0134('0134-restored');
+DO $contribution_after_restore$
+DECLARE c record; owner record; org record; deletion record; restored record; preview record; receipt record; replay record;
+  deletion_request uuid:=gen_random_uuid(); restore_request uuid:=gen_random_uuid(); contribution_request uuid:=gen_random_uuid();
+  target_project uuid:='00000000-0134-2000-8000-000000000001';
+  before_contributions jsonb:=pg_temp.contribution_state_0134(); before_replay jsonb; before_denied jsonb;
+  copies_before bigint:=(SELECT count(*) FROM app_private.organization_historical_contact_copies_v1);
+BEGIN
+  SELECT * INTO STRICT c FROM fixture_0134_context;
+  SELECT * INTO STRICT owner FROM fixture_0134_owner;
+  SELECT * INTO STRICT org FROM fixture_0134_org;
+  PERFORM pg_temp.assert_0134(EXISTS(SELECT 1 FROM app_private.personal_history_contribution_previews_v1 original
+    JOIN app_data.contacts source ON source.contact_id=original.source_contact_id
+    WHERE original.preview_id=(SELECT preview_id FROM fixture_0134_preview) AND original.actor_app_user_id=c.app_user_id
+      AND original.expires_at_utc<=clock_timestamp() AND source.lifecycle_status='voided'
+      AND source.current_revision>original.source_revision_number),
+    'restore replay requires the existing expired preview and changed, voided source');
+  SELECT * INTO STRICT deletion FROM app_private.request_organization_deletion_v1(owner.app_user_id,deletion_request,org.organization_workspace_id);
+  PERFORM pg_temp.assert_0134(deletion.deletion_request_id=deletion_request
+    AND EXISTS(SELECT 1 FROM app_private.organization_deletion_current cycle JOIN app_data.workspaces workspace
+      ON workspace.workspace_id=cycle.organization_workspace_id
+      WHERE cycle.organization_workspace_id=org.organization_workspace_id AND cycle.deletion_request_id=deletion_request
+        AND cycle.status='deletion_pending' AND workspace.deleted_at=deletion.effective_at_utc),
+    'ordinary organization deletion did not freeze the contribution target');
+  before_denied:=jsonb_build_array(pg_temp.legacy_state_0134(),pg_temp.contribution_state_0134());
+  PERFORM pg_temp.expect_0134_failure('42501','personal history contribution forbidden',
+    format('SELECT * FROM app_private.preview_personal_history_contribution_v1(%L,%L,%L)',c.app_user_id,'0134-restored',target_project));
+  PERFORM pg_temp.assert_0134(before_denied=jsonb_build_array(pg_temp.legacy_state_0134(),pg_temp.contribution_state_0134()),
+    'denied preview changed business state');
+  PERFORM pg_temp.expect_0134_failure('42501','personal history contribution forbidden',
+    format('SELECT * FROM app_private.confirm_personal_history_contribution_v1(%L,%L,%L)',c.app_user_id,
+      '00000000-0134-5000-8000-000000000001',(SELECT preview_id FROM fixture_0134_preview)));
+  PERFORM pg_temp.assert_0134(before_denied=jsonb_build_array(pg_temp.legacy_state_0134(),pg_temp.contribution_state_0134()),
+    'denied confirmation changed business state');
+  SELECT * INTO STRICT restored FROM app_private.restore_organization_v1(owner.app_user_id,restore_request,org.organization_workspace_id,deletion_request);
+  PERFORM pg_temp.assert_0134(restored.organization_deletion_restore_contract_id='organization-deletion-restore:v1'
+    AND restored.deletion_request_id=deletion_request
+    AND EXISTS(SELECT 1 FROM app_private.organization_deletion_current cycle JOIN app_data.workspaces workspace
+      ON workspace.workspace_id=cycle.organization_workspace_id
+      WHERE cycle.organization_workspace_id=org.organization_workspace_id AND cycle.deletion_request_id=deletion_request
+        AND cycle.status='restored' AND cycle.restored_at_utc=restored.restored_at_utc AND workspace.deleted_at IS NULL)
+    AND before_contributions=pg_temp.contribution_state_0134(),
+    'ordinary organization restore did not recover the same cycle without contribution writes');
+  SELECT * INTO STRICT preview FROM app_private.preview_personal_history_contribution_v1(c.app_user_id,'0134-restored',target_project);
+  SELECT * INTO STRICT receipt FROM app_private.confirm_personal_history_contribution_v1(c.app_user_id,contribution_request,preview.preview_id);
+  PERFORM pg_temp.assert_0134(receipt.contribution_contract_id='personal-history-contribution-confirmation:v1'
+    AND receipt.target_project_id=target_project
+    AND (SELECT count(*) FROM app_private.organization_historical_contact_copies_v1)=copies_before+1
+    AND (SELECT count(*) FROM app_private.personal_history_contribution_confirmations_v1
+      WHERE source_contact_id='0134-restored' AND target_project_id=target_project)=1
+    AND EXISTS(SELECT 1 FROM app_private.personal_history_contribution_confirmations_v1 confirmation
+      JOIN app_private.organization_historical_contact_copies_v1 copy USING(copy_id,target_project_id,confirmed_at_utc)
+      WHERE confirmation.request_id=contribution_request AND confirmation.actor_app_user_id=c.app_user_id
+        AND confirmation.source_contact_id='0134-restored' AND confirmation.preview_id=preview.preview_id
+        AND confirmation.copy_id=receipt.copy_id AND confirmation.target_project_id=target_project
+        AND confirmation.confirmed_at_utc=receipt.confirmed_at_utc
+        AND copy.occurred_at_utc=preview.occurred_at_utc AND copy.occurred_time_zone=preview.occurred_time_zone
+        AND copy.channel=preview.channel AND copy.reach_count=preview.reach_count AND copy.interest_level=preview.interest_level),
+    'fresh contribution after restore did not preserve one copy, its five preview facts, and receipt');
+  before_replay:=jsonb_build_array(pg_temp.legacy_state_0134(),pg_temp.contribution_state_0134());
+  SELECT * INTO STRICT replay FROM app_private.confirm_personal_history_contribution_v1(c.app_user_id,
+    '00000000-0134-5000-8000-000000000001',(SELECT preview_id FROM fixture_0134_preview));
+  PERFORM pg_temp.assert_0134(to_jsonb(replay)=(SELECT to_jsonb(original) FROM fixture_0134_confirmed original)
+    AND (SELECT frozen.value=to_jsonb(copy) FROM fixture_0134_frozen frozen CROSS JOIN
+      app_private.organization_historical_contact_copies_v1 copy JOIN fixture_0134_confirmed original USING(copy_id))
+    AND before_replay=jsonb_build_array(pg_temp.legacy_state_0134(),pg_temp.contribution_state_0134()),
+    'restored target changed the old expired-preview receipt, frozen copy, or replay business state');
+END $contribution_after_restore$;
 SELECT pg_temp.assert_0134(NOT has_function_privilege('tongxingzhe_runtime',
     'app_private.preview_personal_history_contribution_v1(uuid,text,uuid)', 'EXECUTE')
   AND NOT has_function_privilege('tongxingzhe_runtime', 'app_private.confirm_personal_history_contribution_v1(uuid,uuid,uuid)', 'EXECUTE')
