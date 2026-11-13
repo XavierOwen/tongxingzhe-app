@@ -3219,6 +3219,14 @@ fixture 验证 32 次刚生效的合法 grant、逐版本完整 provenance、未
 
 MANUAL-176／TEST-187 仅证明合成 PostgreSQL 行为，不开放生产、runtime grant、Backend／HTTP／UI 或调度入口。
 
+### 7.43 私有管理跟进意愿配置的事务隔离（Issue #653）
+
+真实 0154 基线中，配置 writer 的旧 RR 事务在另一事务撤销 grant 并提交后，仍能首次写入并提交新配置；保存的参考时间已晚于撤权边界，fresh RC 则返回 42501。advisory locks 串行化变更，但不能刷新旧事务快照。
+
+0155 在原输入校验后、请求锁及授权查询前加入 READ COMMITTED 门禁。三种非 RC 模式的首次与精确 replay 均返回固定 0A000；原 RC 锁后授权、版本、回执和 0154 时间精度保留。脚本以真实独立事务复现撤权交错，核对拒绝后完整业务状态不变，并继续验证 fresh RC 撤权拒绝。
+
+真实 0154 升级先保存两个正常版本、原回执、全部业务数据与完整函数 catalog；升级及 checksum 重放只允许该门禁插入，两个旧回执均在只读 RC 下逐值重放且零写。MANUAL-177／TEST-188 仅覆盖私有 PostgreSQL，不据此声称生产或 HTTP 使用旧快照，也不开放这些入口。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：

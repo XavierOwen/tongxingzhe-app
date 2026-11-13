@@ -14282,6 +14282,43 @@ docker exec "${container_name}" psql \
 printf '%s\n' "${opt_in_precision_upgrade_replay}"
 echo '0153→0154 exact authorization timestamp, complete state/catalog, original opt-in receipt, and checksum replay: passed.'
 
+echo '验证 0154→0155 follow-up consent opt-in isolation upgrade 与历史回执。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0154_management_follow_up_consent_opt_in_isolation_live.sql >/dev/null
+docker exec "${container_name}" sh -ceu \
+  "mkdir /tmp/management-follow-up-consent-opt-in-isolation-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0155_management_follow_up_consent_opt_in_isolation.sql \\
+     /tmp/management-follow-up-consent-opt-in-isolation-upgrade-only/ && \\
+   test \"\$(find /tmp/management-follow-up-consent-opt-in-isolation-upgrade-only \\
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/management-follow-up-consent-opt-in-isolation-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_management_follow_up_consent_opt_in_isolation.sql \
+  --file=/workspace/backend/database/fixtures/shared/database_state.sql \
+  --command='BEGIN ISOLATION LEVEL READ COMMITTED READ ONLY; SELECT public.fixture_0154_opt_in_isolation_assert_upgrade(); ROLLBACK;' >/dev/null
+opt_in_isolation_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/management-follow-up-consent-opt-in-isolation-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${opt_in_isolation_upgrade_replay}" != \
+    *'已验证 0155_management_follow_up_consent_opt_in_isolation（无需重复执行）'* ]] \
+  || [[ "${opt_in_isolation_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0155 migration did not skip its checksum-verified replay.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_management_follow_up_consent_opt_in_isolation.sql \
+  --file=/workspace/backend/database/fixtures/shared/database_state.sql \
+  --command='BEGIN ISOLATION LEVEL READ COMMITTED READ ONLY; SELECT public.fixture_0154_opt_in_isolation_assert_upgrade(); ROLLBACK;' >/dev/null
+printf '%s\n' "${opt_in_isolation_upgrade_replay}"
+echo '0154→0155 exact isolation guard, complete state/catalog, original opt-in receipt, and checksum replay: passed.'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 
