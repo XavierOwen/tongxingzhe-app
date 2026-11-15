@@ -516,6 +516,8 @@ Issue #651 以 0154 修正私有管理跟进意愿配置的授权时间精度。
 
 Issue #653 以 0155 要求私有管理跟进意愿配置使用 READ COMMITTED，阻止旧事务快照在撤权提交后首次写入新配置。原输入校验优先，其余已进入函数的非 RC 调用在请求锁和授权查询前返回固定 0A000，首次与精确 replay 适用同一门禁。RC 授权、版本、0154 微秒精度和历史回执保留；不新增生产、runtime grant、Backend／HTTP／UI 或调度入口。MANUAL-177／TEST-188 对应验证。
 
+Issue #654 以 0156 要求私有管理跟进意愿配置读取使用 READ COMMITTED，阻止旧事务快照在撤权提交后继续返回原配置。原 NULL／metric 输入校验仍优先；其他非 RC 调用在首条授权查询和所有锁前返回固定 `0A000 management follow-up consent opt-in read requires read committed`。0074 私有 candidate bridge 继续委托同一 reader；正常 RC 文档、owner-only ACL、0154 精度和 0155 writer 门禁保留。MANUAL-178／TEST-189 仅覆盖私有 PostgreSQL，不新增生产、runtime grant、Backend／HTTP／UI 或调度入口。
+
 7EY／#598 为合并期间新增的未知来源项目关系事件增加独立 typed 待分配层。0136 header 只含标识与数据库时间，业务值单独保存；同值也不自动合并。metadata-only 预检真正 READ ONLY，旧 end／接触确认不能漏过此类 pending 而结束代次，pair expiry 原子清除全部敏感载荷。五类已知来源事实不重写。
 
 MANUAL-158／TEST-169 只覆盖这一私有层，不提供普通关系写回资格、来源分配、当前候选、历史应用或完整混合 split；runtime、Backend／HTTP／UI、scheduler、生产 active merge 与 #549 人工门槛不变。
@@ -3499,6 +3501,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-175` | 说明推广对象保留期采用 UTC 日历月、首次续期保留最新基准、提前复核为连续 720 小时，历史续期回执不回填；记录 0152 真实升级与跨时区回归的数据库边界。 |
 | `MANUAL-176` | 说明管理跟进意愿配置在锁后保存完整精度的授权参考时点；记录刚生效 grant 的真实 0153 复现、原 validator 校验及旧回执和权限保留边界。 |
 | `MANUAL-177` | 说明私有管理跟进意愿配置的 READ COMMITTED 门禁、原输入校验顺序、已提交撤权的旧快照复现及历史版本和回执保留。 |
+| `MANUAL-178` | 说明私有管理跟进意愿配置 reader 的 READ COMMITTED 门禁、原输入校验顺序、candidate bridge 的原权限与结果，以及撤权后旧快照拒绝和原文档保留。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3865,6 +3868,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-186` | 0153 通过正常创建、策略、v3 接触提交和续期 writer 验证跨会话时区的绝对截止一致；首次续期包含更晚的有效接触，事件、返回值和当前截止相同。固定日期覆盖月末、闰年、DST 与东西时区，复核窗口为连续 720 小时。真实 0152 升级及 checksum 重放保留全部旧业务数据、历史续期事件和原回执；完整函数 catalog 只允许三处算术变化。fresh、既有并发与独立恢复继续验证，不据此声称生产已部署。 |
 | `TEST-187` | 0154 验证 32 次刚生效的合法 grant、版本与完整 provenance、未来和过期 grant 的零写拒绝，以及配置回执精确重放。正式 fixture 在真实 0153 基线先复现 42501。真实升级及 checksum 重放逐值保留全部旧业务数据、历史回执和完整函数 catalog，仅 configure 的时间表达式可变；fresh、既有配置和报告发布、并发及独立恢复继续验证。 |
 | `TEST-188` | 0155 验证三种非 RC 首次与精确 replay 均以固定 0A000 零写拒绝，原输入 22023 仍优先；RC 初始配置、版本推进和原回执逐值保留。真实独立事务先固定旧 RR、再提交 grant 撤销，旧快照拒绝且完整业务状态不变，fresh RC 返回 42501。真实 0154 升级和 checksum 重放保留两个旧版本、回执、全部业务与完整函数 catalog，仅门禁插入可变；fresh、既有并发及独立恢复继续验证。 |
+| `TEST-189` | 0156 验证 reader 及原 candidate bridge 的三种非 RC 调用以固定 0A000 零写拒绝，NULL／metric 输入 22023 仍优先；RC 未配置、enabled、disabled 的原 JSON 和窄角色权限保留。真实 0155 上先固定旧 RR，再提交 grant 撤销，正式脚本复现仍返回原 enabled 配置并明确失败；0156 后旧 RR 返回 0A000，fresh RC 返回 42501，完整业务状态不变。真实 0155 升级和 checksum 重放保留原 read／bridge 文档、两个版本及 write 回执、全部业务与完整函数 catalog，仅 reader 门禁插入可变；fresh、既有并发和独立恢复继续验证。 |
 
 ## 9. UI、视觉与可访问性
 
