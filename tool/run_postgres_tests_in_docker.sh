@@ -14605,6 +14605,9 @@ docker exec "${container_name}" psql \
 printf '%s\n' "${plan_skipped_upgrade_replay}"
 echo '0162→0163 skipped-date boundaries, unchanged old pending/rows/catalog, derived replay, and checksum replay: passed.'
 
+echo '验证 0163→0164 冻结报告在真实旧镜像升级后保持可读。'
+bash "${script_dir}/verify_management_report_frozen_periods_upgrade.sh" "${container_name}"
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 
