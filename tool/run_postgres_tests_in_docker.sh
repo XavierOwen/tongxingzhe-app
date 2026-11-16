@@ -14498,6 +14498,43 @@ docker exec "${container_name}" psql \
 printf '%s\n' "${bounded_child_upgrade_replay}"
 echo '0159→0160 four-entry long pending confirmation, immutable old state/catalog, completed v1 exact replay, and checksum replay: passed.'
 
+echo '验证 0160→0161 exact contact metadata keys upgrade、长 pending 和旧完成回执。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0160_personal_merge_contact_metadata_keys_live.sql >/dev/null
+docker exec "${container_name}" sh -ceu \
+  "mkdir /tmp/personal-merge-contact-metadata-keys-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0161_personal_merge_contact_metadata_keys.sql \\
+     /tmp/personal-merge-contact-metadata-keys-upgrade-only/ && \\
+   test \"\$(find /tmp/personal-merge-contact-metadata-keys-upgrade-only \\
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-merge-contact-metadata-keys-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --set=fixture_0161_definitions_only=true \
+  --file=/workspace/backend/database/fixtures/0161_personal_merge_contact_metadata_keys.sql \
+  --command='BEGIN; SELECT public.fixture_0160_metadata_assert_upgrade(); ROLLBACK;' >/dev/null
+contact_metadata_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/personal-merge-contact-metadata-keys-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${contact_metadata_upgrade_replay}" != \
+    *'已验证 0161_personal_merge_contact_metadata_keys（无需重复执行）'* ]] \
+  || [[ "${contact_metadata_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0161 migration did not skip its checksum-verified replay.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --set=fixture_0161_definitions_only=true \
+  --file=/workspace/backend/database/fixtures/0161_personal_merge_contact_metadata_keys.sql \
+  --command='BEGIN; SELECT public.fixture_0160_metadata_assert_upgrade(); ROLLBACK;' >/dev/null
+printf '%s\n' "${contact_metadata_upgrade_replay}"
+echo '0160→0161 four-entry metadata keys, original fields/catalog, completed exact replay, and checksum replay: passed.'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 

@@ -532,6 +532,13 @@ Issue #661 以 0159 拒绝新 stage 请求中全为 Unicode `White_Space` 与 BO
 
 Issue #663 以 0160 修正合法长 TEXT contact ID 在私有确认中派生过长子命令、超过 Btree 索引行上限的问题。UTF-8 字节数不超过 2048 时保留原后缀，超过时使用 `sha256-v2:` 加原始 UTF-8 字节的 SHA-256 摘要；contact ID 与业务事实不改。四条确认入口的协调器预锁并检查新键和长 ID 的旧 v1 别名，实际应用只写新键；共享应用与 proof 同步修改，旧完整 v1 回执继续精确零写重放。见 [ADR-0209](./adr/0209-personal-merge-child-command-keys-are-bounded.md)。MANUAL-182／TEST-193 只覆盖私有 PostgreSQL，不新增表、grant、依赖或生产、Backend／HTTP／UI 入口。
 
+Issue #665 以 0161 为四张 private contact application／history／current／choices 收据增加精确 bigint key。
+私有 identity map 保留 raw contact ID 主键、唯一 identity key 及 pair UNIQUE，四表通过非空 key 和 exact pair FK 保持原 ID 对应。
+四个宽 UNIQUE／PK 和 choices→current FK 改用 key，窄 history UNIQUE 与八个 ordinary raw FK 保留。
+BEFORE INSERT 仅在 key 为 null 时赋值，显式错误 key 由 FK 拒绝；map 禁止 UPDATE，随 contacts 删除级联清理。
+独占 DDL 锁下只回填新增列并恢复四个指定 immutable guard，旧字段由真实升级逐字段核对，全部旧函数 body／catalog、普通表和 writer 保留。
+MANUAL-183／TEST-194 覆盖原 0160 metadata 索引超限、四入口、升级、401 项 FK inventory 与 map 清理，仅适用于私有 PostgreSQL，见 [ADR-0210](./adr/0210-personal-merge-contact-metadata-uses-exact-private-keys.md)。
+
 MANUAL-158／TEST-169 只覆盖这一私有层，不提供普通关系写回资格、来源分配、当前候选、历史应用或完整混合 split；runtime、Backend／HTTP／UI、scheduler、生产 active merge 与 #549 人工门槛不变。
 
 7EZ／#600 以 0137 增加项目关系 pending 的只读冲突预检。完整拟议映射绑定 known／pending 两指纹，当前关系指针再进入 resolution fingerprint；候选与同值事件均完整保留。无新表、事实、audit、context 或 fence 写入，不选定 current，不消费 payload，不提供完整 mixed split 或生产入口。
@@ -3518,6 +3525,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-180` | 说明 CSV 新预览的 Unicode 首尾空白归一化、preview 版本绑定、旧完成回执精确重放及旧待确认回执的 stale 条件；记录真实 0157 普通导入和升级验证。 |
 | `MANUAL-181` | 说明项目关系待分配新请求拒绝全 Unicode 空白备注／详情，检测位于原精确重放之后；记录真实 0158 普通 stage 回归、旧原文与回执保留及原漂移错误。 |
 | `MANUAL-182` | 说明长 TEXT contact ID 的内部子命令键上限与 UTF-8 摘要后缀，记录真实 0159 索引超限回归；说明四条确认入口及共享应用、新旧键预锁与预占检查、旧完成回执零写重放和真实升级验证。 |
+| `MANUAL-183` | 说明精确私有 contact identity map、四个 metadata 宽键与 choices→current FK 的替换，以及原 raw 唯一性、八个 ordinary FK 和旧字段保留。说明 null key 分配、显式错 key 拒绝、map 随 contacts 清理、真实 0160 升级及独立恢复的证据边界。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3889,6 +3897,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-191` | 真实 0157 基线通过普通 preview／confirm 接受 tab 电话和 NBSP email 并保留非空值。0158 验证新版本 2 在原长度校验前归一化全部 Unicode White_Space 与 BOM，空姓名拒绝、可选空字段为 null、内部字符保留；新完成请求对归一化等价输入返回原回执。真实 0157 升级和 checksum 重放保留全部旧业务状态、版本 1 canonicalizer、原对象及已完成回执，旧 tab 载荷漂移仍返回 23505；字段会改变的旧待确认回执 stale 且零建立，不变的旧回执可确认。fresh、既有 checks／fixtures 和独立恢复继续验证，完整函数 catalog 只允许本次预期变化。 |
 | `TEST-192` | 真实 0158 普通 stage 接受并保存 U+202F 备注和 U+00A0 other 详情，分别单独输入也被接受；tab 对照返回原 22023，实际内容对照成功。0159 验证非 null 全 Unicode White_Space／BOM 字段的新请求返回原 22023，实际内容及原长度边界保持原值。真实 0158 升级和 checksum 重放保留旧全空白 payload、receipt、全部业务与函数 catalog，仅 stage 增加一处首次请求检测。旧请求成功重放保留业务事实和回执，并沿用原 fence epoch 推进；新请求拒绝与 typed 漂移错误均完整回滚。fresh、既有 checks／fixtures 和独立恢复继续验证。 |
 | `TEST-193` | 真实 0159 中，2600 字节低压缩 contact ID 使用短独立 command，普通 submit／revise／stage 成功，0128 audit 索引与 0130 processed command 主键报 54000，各重复两次且短 ID 对照成功。0160 验证 0128／0130／0142／0143 四入口的长 ID 确认、64 字节对照、2048／2049 UTF-8 字节边界、新旧键预占、typed 漂移和晚期 end 故障整批回滚。真实 0159 升级及 checksum 重放须保留全部旧业务与函数 catalog，仅六个旧 body 按预期变化；旧可压缩长 v1 完成回执零写重放，原四入口 pending 可继续确认。fresh、既有 checks／fixtures 与独立恢复分别验证。 |
+| `TEST-194` | 真实 0160 基线中，2670 字节低压缩 contact ID 用短 command 完成普通 submit／revise／stage，0128 metadata 唯一索引报 54000。0161 验证四入口的短／长 ID、精确 raw/key 映射、同 contact 复用 key、显式错误 key 拒绝、精确重放和晚期 end 故障整批回滚。真实 0160 升级逐字段保留四表旧值和已完成回执，所有旧函数完整 catalog 不变，原 pending 可确认。fresh、checksum、401 项 FK inventory、contacts→map 级联清理、既有 fixtures 与独立恢复分别验证。 |
 
 ## 9. UI、视觉与可访问性
 

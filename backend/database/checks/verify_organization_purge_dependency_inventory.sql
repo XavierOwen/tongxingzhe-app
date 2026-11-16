@@ -420,6 +420,25 @@ INSERT INTO purge_inventory_expected_fk VALUES
   ('app_private.project_reporting_time_zone_versions', 'project_reporting_time_zone_versi_requested_by_app_user_id_fkey', 'app_data.app_users', 'a', 'FOREIGN KEY (requested_by_app_user_id) REFERENCES app_data.app_users(app_user_id)'),
   ('app_private.project_reporting_time_zone_versions', 'project_reporting_time_zone_versions_project_id_fkey', 'app_data.projects', 'a', 'FOREIGN KEY (project_id) REFERENCES app_data.projects(project_id)');
 
+-- Historical 0143 upgrades retain their exact inventory; 0161 adds exact contact keys.
+DO $contact_keys$
+BEGIN
+  IF to_regclass('app_private.personal_merge_contact_keys_v1') IS NOT NULL THEN
+    INSERT INTO purge_inventory_expected_fk VALUES
+      ('app_private.personal_merge_contact_keys_v1', 'pmck_contact_fk', 'app_data.contacts', 'c', 'FOREIGN KEY (contact_id) REFERENCES app_data.contacts(contact_id) ON DELETE CASCADE'),
+      ('app_private.personal_merge_contact_applications_v1', 'pmca_contact_key_fk', 'app_private.personal_merge_contact_keys_v1', 'a', 'FOREIGN KEY (contact_identity_key, contact_id) REFERENCES app_private.personal_merge_contact_keys_v1(contact_identity_key, contact_id)'),
+      ('app_private.personal_merge_contact_history_applications_v1', 'pmch_contact_key_fk', 'app_private.personal_merge_contact_keys_v1', 'a', 'FOREIGN KEY (contact_identity_key, contact_id) REFERENCES app_private.personal_merge_contact_keys_v1(contact_identity_key, contact_id)'),
+      ('app_private.personal_merge_contact_current_revisions_v1', 'pmccr_contact_key_fk', 'app_private.personal_merge_contact_keys_v1', 'a', 'FOREIGN KEY (contact_identity_key, contact_id) REFERENCES app_private.personal_merge_contact_keys_v1(contact_identity_key, contact_id)'),
+      ('app_private.personal_merge_contact_current_choices_v1', 'pmccc_contact_key_fk', 'app_private.personal_merge_contact_keys_v1', 'a', 'FOREIGN KEY (contact_identity_key, contact_id) REFERENCES app_private.personal_merge_contact_keys_v1(contact_identity_key, contact_id)');
+    UPDATE purge_inventory_expected_fk SET definition =
+      'FOREIGN KEY (actor_app_user_id, request_id, contact_identity_key) REFERENCES app_private.personal_merge_contact_current_revisions_v1(actor_app_user_id, request_id, contact_identity_key)'
+    WHERE child_relation = 'app_private.personal_merge_contact_current_choices_v1'
+      AND constraint_name = 'pmcr_choice_current_fk';
+    IF NOT FOUND THEN RAISE EXCEPTION '0161 original choice/current inventory entry is missing'; END IF;
+  END IF;
+END
+$contact_keys$;
+
 CREATE TEMP TABLE purge_inventory_expected_family (relation_name text PRIMARY KEY);
 INSERT INTO purge_inventory_expected_family VALUES
   ('app_private.organization_creation_request_claims'),
