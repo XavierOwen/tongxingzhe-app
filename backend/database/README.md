@@ -89,6 +89,13 @@ MANUAL-185／TEST-196 要求正式 runner 验证 fresh、真实 0162 升级、�
 MANUAL-186／TEST-197 通过固定旧镜像的真实 0163、正常 empty 发布和真实 dump／restore 验证跨 tzdata 读取，再验证正式迁移、checksum、旧行／catalog、原文档和重放。
 回滚事务中的 resolver 故障单元与真实升级证据分开记录；完整 Docker 和独立恢复继续执行，不开放生产、runtime、Backend／HTTP／UI。
 
+## Consent 报告的 canonical UUID（Issue #673）
+
+0165 修正项目 UUID 变体组后三位误限十进制的问题，允许既有 canonical UUID 合同中的小写 a–f。
+只替换 consent validator 的唯一字符类，保留 0164 冻结来源逻辑及其余函数体、元数据、旧行和权限；非法版本、变体或格式仍拒绝。
+MANUAL-187／TEST-198 验证 8000／8abc 及其他合法变体的正常发布、读取、重放，真实 0164 升级、旧回执／catalog、checksum 与独立恢复。
+本票不增加计算版本、helper、表、grant 或生产、Backend／HTTP／UI 入口。
+
 ## 7DS：原子准备个人空间 PII 导出
 
 0112 实现 Issue #537 的 DB-only 子集。`tongxingzhe_runtime` 只能执行 exact-identity bridge；Backend 先验证 JWT 和 `password` AMR，再传入可信 issuer、subject、当前 project 与认证时间。PostgreSQL 不验证 JWT 签名，也不接收原始 token、AMR、actor、workspace 或 capability。

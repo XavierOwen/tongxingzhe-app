@@ -14608,6 +14608,48 @@ echo '0162→0163 skipped-date boundaries, unchanged old pending/rows/catalog, d
 echo '验证 0163→0164 冻结报告在真实旧镜像升级后保持可读。'
 bash "${script_dir}/verify_management_report_frozen_periods_upgrade.sh" "${container_name}"
 
+echo '验证 0164→0165 consent report canonical UUID upgrade、旧回执和待发布文档。'
+docker exec "${container_name}" sh -ceu \
+  "mkdir /tmp/consent-project-uuid-baseline164-only && \
+   cp /workspace/backend/database/migrations/0164_management_report_frozen_periods.sql \
+     /tmp/consent-project-uuid-baseline164-only/"
+docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/consent-project-uuid-baseline164-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0164_management_consent_project_uuid_live.sql >/dev/null
+docker exec "${container_name}" sh -ceu \
+  "mkdir /tmp/consent-project-uuid165-upgrade-only && \
+   cp /workspace/backend/database/migrations/0165_management_consent_project_uuid.sql \
+     /tmp/consent-project-uuid165-upgrade-only/"
+docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/consent-project-uuid165-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --set=fixture_0165_definitions_only=true \
+  --file=/workspace/backend/database/fixtures/0165_management_consent_project_uuid.sql \
+  --command='BEGIN; SELECT public.fixture_0164_consent_uuid_assert_upgrade(); ROLLBACK;' >/dev/null
+consent_uuid_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/consent-project-uuid165-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${consent_uuid_upgrade_replay}" != \
+    *'已验证 0165_management_consent_project_uuid（无需重复执行）'* ]] \
+  || [[ "${consent_uuid_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0165 migration did not skip its checksum-verified replay.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --set=fixture_0165_definitions_only=true \
+  --file=/workspace/backend/database/fixtures/0165_management_consent_project_uuid.sql \
+  --command='BEGIN; SELECT public.fixture_0164_consent_uuid_assert_upgrade(); ROLLBACK;' >/dev/null
+printf '%s\n' "${consent_uuid_upgrade_replay}"
+echo '0164→0165 canonical UUID publication, old rows/receipts/catalog, and checksum replay: passed.'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 

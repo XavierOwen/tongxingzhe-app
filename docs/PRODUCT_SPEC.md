@@ -558,6 +558,10 @@ Issue #672 以 0164 保留时区数据升级后原已发布报告的读取：完
 只改变四个原函数体，不新增 helper、表、grant 或生产、Backend／HTTP／UI 入口。
 MANUAL-186／TEST-197 验证真实旧镜像／0163 发布、dump／restore、正式升级、旧行及完整 catalog、原文档读取与重放；resolver 故障单元与真实 RED 分开留证，见 [ADR-0213](./adr/0213-published-report-periods-keep-frozen-provenance.md)。
 
+Issue #673 以 0165 修正 consent validator 对有效 canonical 项目 UUID 的误拒：变体组后三位允许小写十六进制 a–f，与其余 UUID 字段合同一致。
+仅改变唯一字符类，原版本／变体／格式校验、0164 冻结来源、函数身份／权限和全部旧事实保留，不引入计算版本或新入口。
+MANUAL-187／TEST-198 覆盖真实 0164 下 8000 接受、8abc 正常 producer 完成却 validator／release 22023 的 RED，以及升级后正常发布、读取、重放、旧行／catalog、checksum 和独立恢复。
+
 MANUAL-158／TEST-169 只覆盖这一私有层，不提供普通关系写回资格、来源分配、当前候选、历史应用或完整混合 split；runtime、Backend／HTTP／UI、scheduler、生产 active merge 与 #549 人工门槛不变。
 
 7EZ／#600 以 0137 增加项目关系 pending 的只读冲突预检。完整拟议映射绑定 known／pending 两指纹，当前关系指针再进入 resolution fingerprint；候选与同值事件均完整保留。无新表、事实、audit、context 或 fence 写入，不选定 current，不消费 payload，不提供完整 mixed split 或生产入口。
@@ -3921,6 +3925,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-195` | 真实 0161 基线以 Havana 周日起始、第一次 00:30 运行普通首版 save，旧 cycle start 在未来，已写版本后返回 SQL NULL；第二次 00:30、UTC／Chicago 对照正常。0162 验证两次午夜取同一首次边界、Casey 三小时回拨中间的前日 23:30 仍归新周期、正常／gap 对照和相邻周期衔接。真实升级逐字段保留计划、版本和 effective 时间，旧异常版本的历史读取／重放 NULL 不被改写，完整旧函数 catalog 仅两个 cycle helper 的 prosrc 按预期变化。fresh、checksum、既有 fixtures 与独立恢复分别验证。 |
 | `TEST-196` | 真实 0162 以 Apia Friday 周期正常保存并修改目标，先复现 until 晚于下一 start 一天、新目标延迟生效。0163 验证初始周期、下一版 effective、边界前／正好／后场次、三种连接时区及 UTC、Apia Saturday、历史 Havana fold／gap、Casey 和 Chicago 对照；保留 requested 设置的原下一周期策略。真实升级逐字段保留全部旧行、旧 pending 时间及完整函数 catalog，只改 document／save 两个 prosrc；旧 replay 零写而派生 until 更新，fresh、checksum、既有回归和独立恢复分别留证。 |
 | `TEST-197` | 固定官方旧 PG16.14 上的真实 0163 经正常 empty 发布、dump／restore 到当前镜像，先验证旧冻结 UTC periods 被重算造成读取失败；正式 0164 后原 protected_report／receipt 保持逐值相同，详情恢复、审计增量准确且重放不新增发布事实。fresh 未冻结文档仍按当前 resolver，变造 periods／fingerprint 拒绝，四 family 正常回归保留。另以回滚事务 resolver 故障单元验证精确冻结来源不重算。真实升级保留全部旧业务行和完整 catalog，只改四个 prosrc，checksum、完整 Docker 和独立恢复分别验收。 |
+| `TEST-198` | 正常 consent 项目的 8000 UUID 路径先通过，合法 8abc 同 prefix/tail 的 producer 完成而原 validator／release 抛22023；正式 fixture 在真实164先RED。0165 验证 8000、8abc、9def、a123、bfed 的 producer／validator／approved release、完整读取和精确重放，以及非法版本／变体／格式拒绝。真实164存原完成回执和8abc合法配置／待发布文档，原拒绝零发布事实；升级保留所有旧行和完整catalog，仅该validator字符类改变，checksum、既有consent／冻结来源回归、完整Docker和独立恢复分别验收。 |
 
 ## 9. UI、视觉与可访问性
 
