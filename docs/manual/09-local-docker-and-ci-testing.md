@@ -3253,6 +3253,14 @@ preview 的 `normalization_version` 将既有回执固定为 1、新回执固定
 
 [正式 fixture](../../backend/database/fixtures/0158_personal_target_csv_import_whitespace.sql)验证新字段值、长度边界与重放；[真实升级 fixture](../../backend/database/fixtures/upgrade/0157_personal_target_csv_import_whitespace_live.sql)保存旧完成及待确认回执、全部业务状态和完整函数 catalog，核对升级与 checksum 重放的预期变化。从仓库根目录运行 `./tool/run_postgres_tests_in_docker.sh`，由正式 runner 继续执行 fresh、既有 checks／fixtures 和独立恢复。MANUAL-180／TEST-191 仅覆盖合成私有 PostgreSQL；完整 Docker 与固定提交 CI 分别留证，不开放生产、runtime grant、Backend／HTTP／UI。
 
+### 7.47 项目关系待分配文本的 Unicode 空白（Issue #661）
+
+真实 0158 基线中，正常 private stage 接受并原样保存仅含 U+202F 的备注和仅含 U+00A0 的 `other` 详情；两个字段单独输入也被接受。tab 对照返回原 22023，含实际内容的对照成功。0159 只在原精确重放返回之后、首次 pending UUID 创建之前增加检测，拒绝新请求中全为 Unicode `White_Space` 与 BOM 的非 null 字段，错误仍为 `22023 invalid unassigned project relationship request`。
+
+[正式 fixture](../../backend/database/fixtures/0159_personal_merge_project_relationship_unicode_text.sql)验证新请求拒绝、原长度边界和有内容原文的保存。[真实升级 fixture](../../backend/database/fixtures/upgrade/0158_personal_merge_project_relationship_unicode_text_live.sql)保留真实旧全空白 payload 与 receipt，验证精确重放和 typed 漂移仍走原合同。全部旧业务状态不变，函数 catalog 只允许 stage 的该检测插入。原 POSIX 检查、表 CHECK、普通 writer 与锁序保留，不修改历史文本或增加归一化版本。
+
+从仓库根目录运行 `./tool/run_postgres_tests_in_docker.sh`，由正式 runner 执行 fresh、真实升级、checksum、既有 checks／fixtures 和独立恢复。MANUAL-181／TEST-192 仅覆盖合成私有 PostgreSQL；完整 Docker 与固定提交 CI 分别留证，不开放生产、runtime grant、Backend／HTTP／UI。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：
