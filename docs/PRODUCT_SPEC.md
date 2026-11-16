@@ -553,6 +553,11 @@ document／save 两处分别传当前／requested weekday；签名和元数据�
 MANUAL-185／TEST-196 要求正式 0162 RED、真实升级、边界场次、fold／gap／普通对照、checksum 和独立恢复，见 [ADR-0212](./adr/0212-personal-action-plan-until-retains-configured-weekday.md)。
 只覆盖私有 PostgreSQL，不增加 runtime grant、生产、Backend／HTTP／UI 或通知入口。
 
+Issue #672 以 0164 保留时区数据升级后原已发布报告的读取：完整文档精确匹配既有 snapshot 及本 family approved 同值 provenance 时，四个严格 validator 使用已保存的 UTC periods，否则仍按当前 resolver 校验。
+原 shape、指标、隐私、source、版本和读取资格校验保留；不改旧报告、回执、时区版本、resolver 或 lineage 比较政策。
+只改变四个原函数体，不新增 helper、表、grant 或生产、Backend／HTTP／UI 入口。
+MANUAL-186／TEST-197 验证真实旧镜像／0163 发布、dump／restore、正式升级、旧行及完整 catalog、原文档读取与重放；resolver 故障单元与真实 RED 分开留证，见 [ADR-0213](./adr/0213-published-report-periods-keep-frozen-provenance.md)。
+
 MANUAL-158／TEST-169 只覆盖这一私有层，不提供普通关系写回资格、来源分配、当前候选、历史应用或完整混合 split；runtime、Backend／HTTP／UI、scheduler、生产 active merge 与 #549 人工门槛不变。
 
 7EZ／#600 以 0137 增加项目关系 pending 的只读冲突预检。完整拟议映射绑定 known／pending 两指纹，当前关系指针再进入 resolution fingerprint；候选与同值事件均完整保留。无新表、事实、audit、context 或 fence 写入，不选定 current，不消费 payload，不提供完整 mixed split 或生产入口。
@@ -3915,6 +3920,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-194` | 真实 0160 基线中，2670 字节低压缩 contact ID 用短 command 完成普通 submit／revise／stage，0128 metadata 唯一索引报 54000。0161 验证四入口的短／长 ID、精确 raw/key 映射、同 contact 复用 key、显式错误 key 拒绝、精确重放和晚期 end 故障整批回滚。真实 0160 升级逐字段保留四表旧值和已完成回执，所有旧函数完整 catalog 不变，原 pending 可确认。fresh、checksum、401 项 FK inventory、contacts→map 级联清理、既有 fixtures 与独立恢复分别验证。 |
 | `TEST-195` | 真实 0161 基线以 Havana 周日起始、第一次 00:30 运行普通首版 save，旧 cycle start 在未来，已写版本后返回 SQL NULL；第二次 00:30、UTC／Chicago 对照正常。0162 验证两次午夜取同一首次边界、Casey 三小时回拨中间的前日 23:30 仍归新周期、正常／gap 对照和相邻周期衔接。真实升级逐字段保留计划、版本和 effective 时间，旧异常版本的历史读取／重放 NULL 不被改写，完整旧函数 catalog 仅两个 cycle helper 的 prosrc 按预期变化。fresh、checksum、既有 fixtures 与独立恢复分别验证。 |
 | `TEST-196` | 真实 0162 以 Apia Friday 周期正常保存并修改目标，先复现 until 晚于下一 start 一天、新目标延迟生效。0163 验证初始周期、下一版 effective、边界前／正好／后场次、三种连接时区及 UTC、Apia Saturday、历史 Havana fold／gap、Casey 和 Chicago 对照；保留 requested 设置的原下一周期策略。真实升级逐字段保留全部旧行、旧 pending 时间及完整函数 catalog，只改 document／save 两个 prosrc；旧 replay 零写而派生 until 更新，fresh、checksum、既有回归和独立恢复分别留证。 |
+| `TEST-197` | 固定官方旧 PG16.14 上的真实 0163 经正常 empty 发布、dump／restore 到当前镜像，先验证旧冻结 UTC periods 被重算造成读取失败；正式 0164 后原 protected_report／receipt 保持逐值相同，详情恢复、审计增量准确且重放不新增发布事实。fresh 未冻结文档仍按当前 resolver，变造 periods／fingerprint 拒绝，四 family 正常回归保留。另以回滚事务 resolver 故障单元验证精确冻结来源不重算。真实升级保留全部旧业务行和完整 catalog，只改四个 prosrc，checksum、完整 Docker 和独立恢复分别验收。 |
 
 ## 9. UI、视觉与可访问性
 

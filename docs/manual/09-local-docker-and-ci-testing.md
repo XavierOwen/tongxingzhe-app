@@ -3420,6 +3420,23 @@ CI 的 PostgreSQL job 在 Linux runner 上执行同一个 Docker runner。默认
 由 `./tool/run_postgres_tests_in_docker.sh` 执行 fresh、真实升级、checksum、既有回归和独立恢复，局部 GREEN 不能替代完整 Docker 或固定提交 CI。
 MANUAL-185／TEST-196 仅覆盖私有 PostgreSQL，不新增生产、runtime、Backend／HTTP／UI 或通知入口；PR CI 通过后合并，精确 main CI 通过后关票。
 
+### 7.52 时区数据升级后的冻结报告（Issue #672）
+
+真实 PG16.14／0163 上以数据库当前时间正常发布 Havana empty interest baseline，无联系人或伪造 attempts。
+旧详情读取 completed、精确 release replay 原样；实际 dump／restore 到 PG16.16 后，详情变为 untrusted_provenance，直接 validator 报 invalid periods，而原报告、回执和相关函数定义未变。
+根因是新旧 tzdata 的 UTC 周界不同；本票保留原发布结果，不重算历史，也不改变 #670 的新计算版本范围。
+
+0164 的四个 validator 先精确查找已冻结文档及本 family approved 同值 provenance，使用原 periods；没有该来源时仍调用原 resolver。
+各 owner 只读已有权限的 ledger，原其他校验、当前读取资格、接口和元数据保留，无新 helper／表／grant。
+[正式 fixture](../../backend/database/fixtures/0164_management_report_frozen_periods.sql)验证新文档、正常冻结发布、变造拒绝、完整文档及回执、准确 access audit 增量和无新增发布事实。
+其 resolver 故障单元只在回滚事务中执行，证明冻结结果不依赖重算；不能把该注入写成真实跨版本升级已复现。
+
+[真实升级 fixture](../../backend/database/fixtures/upgrade/0163_management_report_frozen_periods_live.sql)由 [跨镜像检查](../../tool/verify_management_report_frozen_periods_upgrade.sh)以固定官方 PG16.14 建立旧来源，实际 dump／restore，再用正式 runner 只升级 0164。
+跨 restore 后按当前数据库 OID 重新冻结 catalog，业务行须先与原源比较；SQL 升级只允许四个 prosrc 改变。
+实际新旧 periods 不同时须明确确认旧读取 RED；规则相同时正常对照通过，永久性分支回归由故障单元补足，避免未来规则变化造成夹具误报。
+脚本删除自己启动的旧容器和匿名 volume；完整入口继续执行 fresh、checksum、既有回归和独立恢复。
+MANUAL-186／TEST-197 只覆盖私有 PostgreSQL，不开放生产、runtime、Backend／HTTP／UI 或通知，固定 PR CI 通过后合并、精确 main CI 通过后关票。
+
 ### 11.1 先区分项目失败与平台故障
 
 项目失败通常发生在 checkout 之后。日志会显示仓库命令、测试断言、编译器或数据库返回的具体错误。

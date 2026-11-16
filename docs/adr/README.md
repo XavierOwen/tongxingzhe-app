@@ -138,6 +138,7 @@
 | [0210](./0210-personal-merge-contact-metadata-uses-exact-private-keys.md) | 已接受，2026-11-16 | 私有数据库修正；Issue #665；`PII-009`、`PII-013`、`TEST-194`、`MANUAL-183` | 私有 identity map 以精确 raw ID 对应 bigint，缩短四个 metadata 复合键并保留原唯一性、引用和历史 |
 | [0211](./0211-personal-action-plan-midnight-folds-use-first-occurrence.md) | 已接受，2026-11-16 | 私有数据库修正；Issue #667；`PLAN-005`、`TEST-195`、`MANUAL-184` | 个人计划的回拨午夜取第一次出现；start／until 共用边界，保留 gap 行为与旧存储时间，旧异常版本另行处理 |
 | [0212](./0212-personal-action-plan-until-retains-configured-weekday.md) | 已接受，2026-11-16 | 私有数据库修正；Issue #669；`PLAN-005`、`TEST-196`、`MANUAL-185` | 周期结束保留配置 weekday，整日跳过后与下一周期衔接；旧 pending 不回写 |
+| [0213](./0213-published-report-periods-keep-frozen-provenance.md) | 已接受，2026-11-16 | 私有数据库修正；Issue #672；`ANALYTICS-001`、`ANALYTICS-004`、`TEST-197`、`MANUAL-186` | 精确匹配已冻结 approved 来源的报告沿用原 UTC periods，保留时区数据升级后的历史读取；新文档仍按当前规则校验 |
 
 ## 按主题查找
 

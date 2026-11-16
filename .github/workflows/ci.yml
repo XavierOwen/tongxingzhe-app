@@ -80,7 +80,7 @@ jobs:
       - name: Verify PostgreSQL test script syntax
         run: |
           # bash -n parses the first file; other filenames become positional arguments.
-          for postgres_script in tool/run_postgres_tests_in_docker.sh tool/verify_*_concurrency.sh; do
+          for postgres_script in tool/run_postgres_tests_in_docker.sh tool/verify_*_concurrency.sh tool/verify_management_report_frozen_periods_upgrade.sh; do
             bash -n "$postgres_script"
           done
 

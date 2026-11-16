@@ -80,6 +80,15 @@ MANUAL-184／TEST-195 要求正式 runner 验证普通 save 回归、两次午�
 MANUAL-185／TEST-196 要求正式 runner 验证 fresh、真实 0162 升级、全部旧行／catalog、checksum、边界场次和独立恢复。
 只覆盖私有 PostgreSQL，不增加 runtime、生产、Backend／HTTP／UI 或通知入口。
 
+## 时区数据升级后的已发布报告（Issue #672）
+
+0164 让四个严格文档 validator 对精确匹配的已冻结 approved snapshot／本 family attempt 沿用原 UTC periods。
+没有精确来源的新文档继续调用当前 resolver，其他文档和读取资格校验保留；不回写旧报告、回执、时区版本或改变 lineage 比较政策。
+仅改变四个原 prosrc，不新增 helper、表、grant 或入口，见 [ADR-0213](../../docs/adr/0213-published-report-periods-keep-frozen-provenance.md)。
+
+MANUAL-186／TEST-197 通过固定旧镜像的真实 0163、正常 empty 发布和真实 dump／restore 验证跨 tzdata 读取，再验证正式迁移、checksum、旧行／catalog、原文档和重放。
+回滚事务中的 resolver 故障单元与真实升级证据分开记录；完整 Docker 和独立恢复继续执行，不开放生产、runtime、Backend／HTTP／UI。
+
 ## 7DS：原子准备个人空间 PII 导出
 
 0112 实现 Issue #537 的 DB-only 子集。`tongxingzhe_runtime` 只能执行 exact-identity bridge；Backend 先验证 JWT 和 `password` AMR，再传入可信 issuer、subject、当前 project 与认证时间。PostgreSQL 不验证 JWT 签名，也不接收原始 token、AMR、actor、workspace 或 capability。
