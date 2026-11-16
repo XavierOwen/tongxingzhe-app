@@ -3437,6 +3437,18 @@ MANUAL-185／TEST-196 仅覆盖私有 PostgreSQL，不新增生产、runtime、B
 脚本删除自己启动的旧容器和匿名 volume；完整入口继续执行 fresh、checksum、既有回归和独立恢复。
 MANUAL-186／TEST-197 只覆盖私有 PostgreSQL，不开放生产、runtime、Backend／HTTP／UI 或通知，固定 PR CI 通过后合并、精确 main CI 通过后关票。
 
+### 7.53 Consent 报告的 canonical 项目 UUID（Issue #673）
+
+真实 0164 中以正常配置、真实数据库时间、opt-in 和私有报告入口，对照 UUID 变体组 8000 与合法 8abc。
+前者正常 approved，后者 producer 完成，但原 validator／release 抛 22023；正式 fixture 必须先 RED，原拒绝不留下发布事实。
+0165 只把唯一的 `[89ab][0-9]{3}` 改为 `[89ab][0-9a-f]{3}`，其余函数体、0164 冻结来源、OID、owner、ACL、配置和旧行全部保留。
+
+[正式 fixture](../../backend/database/fixtures/0165_management_consent_project_uuid.sql)覆盖五个合法变体组的发布、读取和重放，以及非法版本／变体／格式拒绝。
+[真实升级 fixture](../../backend/database/fixtures/upgrade/0164_management_consent_project_uuid_live.sql)保存 8000 完成回执和 8abc 合法配置／待发布文档，升级前后核对全部旧业务和完整 catalog，只允许该字符类变化，再完成原 8abc 发布并验证旧回执不变。
+升级后的新发布测试放在外层 BEGIN／ROLLBACK 中，使 checksum 重放前后仍可严格比较同一 seed。
+由 `./tool/run_postgres_tests_in_docker.sh` 执行 fresh、真实升级、checksum、既有回归及独立恢复；MANUAL-187／TEST-198 不替代固定 PR/main CI。
+无新 helper、表、grant、计算版本或生产、Backend／HTTP／UI 入口，PR CI 通过后合并，精确 main CI 通过后关票。
+
 ### 11.1 先区分项目失败与平台故障
 
 项目失败通常发生在 checkout 之后。日志会显示仓库命令、测试断言、编译器或数据库返回的具体错误。
