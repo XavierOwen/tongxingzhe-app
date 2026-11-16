@@ -14535,6 +14535,41 @@ docker exec "${container_name}" psql \
 printf '%s\n' "${contact_metadata_upgrade_replay}"
 echo '0160→0161 four-entry metadata keys, original fields/catalog, completed exact replay, and checksum replay: passed.'
 
+echo '验证 0161→0162 personal plan midnight fold upgrade、旧计划和版本回执。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0161_personal_action_plan_midnight_fold_live.sql >/dev/null
+docker exec "${container_name}" sh -ceu \
+  "mkdir /tmp/personal-action-plan-midnight-fold-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0162_personal_action_plan_midnight_fold.sql \\
+     /tmp/personal-action-plan-midnight-fold-upgrade-only/ && \\
+   test \"\$(find /tmp/personal-action-plan-midnight-fold-upgrade-only \\
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-action-plan-midnight-fold-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/shared/database_state.sql \
+  --command='BEGIN; SELECT public.fixture_0161_midnight_assert_upgrade(); ROLLBACK;' >/dev/null
+plan_midnight_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/personal-action-plan-midnight-fold-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${plan_midnight_upgrade_replay}" != \
+    *'已验证 0162_personal_action_plan_midnight_fold（无需重复执行）'* ]] \
+  || [[ "${plan_midnight_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0162 migration did not skip its checksum-verified replay.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/shared/database_state.sql \
+  --command='BEGIN; SELECT public.fixture_0161_midnight_assert_upgrade(); ROLLBACK;' >/dev/null
+printf '%s\n' "${plan_midnight_upgrade_replay}"
+echo '0161→0162 normal and anomalous old plans, corrected derived boundaries, immutable rows/catalog, and checksum replay: passed.'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 

@@ -3295,6 +3295,31 @@ map 禁止 UPDATE，DELETE 允许 contacts 级联；四表到 map 的 NO ACTION 
 MANUAL-183／TEST-194 只覆盖合成私有 PostgreSQL；各项运行结果分别留证，不能将局部回归写成完整 Docker、固定提交 CI 或 main 已通过。
 不新增生产、runtime、Backend／HTTP／UI 入口。
 
+### 7.50 个人计划回拨午夜的首次边界（Issue #667）
+
+真实 0161 基线用正常 bootstrap／list context 建立个人上下文，首版目标设为 3、周起始日设为 7、统计时区为 `America/Havana`。
+在 `2025-11-02T04:30Z`（第一次当地 `00:30`）保存，原 cycle start 返回未来的 `05:00Z`，已写 revision 1 后返回 SQL NULL。
+同日 `05:30Z`（第二次 `00:30`）、UTC 和 Chicago 对照正常。
+
+0162 的新私有 helper 对 nominal 本身及前后各连续 24 小时采样 offset，构造当地午夜的 UTC 候选并精确 round-trip 过滤，取最早解。
+无 exact 候选时仍返回原 nominal，保留 gap 转换。
+cycle start 与两参数 cycle until 共用该 helper，Havana 的两个午夜均取 `04:00Z`。
+cycle start 在当前周起始日期及其后七天的首次午夜中取不晚于 reference 的最大值，使本票回拨情形的当前 UTC 周期包含 reference。
+Casey 的 `2010-03-05` 午夜应取前日 `13:00Z`，较晚解为 `16:00Z`；该三小时回拨已由 PG16 确认。
+中间的 `15:30Z` 对应前日 `23:30`，也必须保留 `13:00Z` 开始的新周期。
+
+[正式 fixture](../../backend/database/fixtures/0162_personal_action_plan_midnight_fold.sql)须通过普通 save／read 验证首次与重复午夜、正常和 gap 对照、相邻周期边界。
+[真实升级 fixture](../../backend/database/fixtures/upgrade/0161_personal_action_plan_midnight_fold_live.sql)在 0161 保存旧行和旧异常版本，升级后逐字段核对计划、版本及 effective 时间。
+完整旧函数 catalog 只允许两个 cycle helper 的 prosrc 变化；原 OID、owner、ACL 和其他函数保留，新 helper 的私有权限单独检查。
+
+旧较晚 effective 时间不会被修正后的 helper 提前激活。
+如果历史参考时刻仍早于保存值，read 和精确 replay 可能继续返回 SQL NULL；升级检查须保留并明确这项兼容边界，不能写成历史数据已修复。
+PLAN-005 的下一周期生效政策保留，整日跳过（如 Pacific/Apia）另行跟踪。
+
+从仓库根目录运行 `./tool/run_postgres_tests_in_docker.sh`，由正式 runner 执行 fresh、真实升级、checksum、既有 checks／fixtures 和独立恢复。
+MANUAL-184／TEST-195 只覆盖合成私有 PostgreSQL，各项执行结果分别留证；未完成的全套或固定提交 CI 不能记为通过。
+不新增 runtime、HTTP／UI 或通知入口。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：

@@ -539,6 +539,13 @@ BEFORE INSERT 仅在 key 为 null 时赋值，显式错误 key 由 FK 拒绝；m
 独占 DDL 锁下只回填新增列并恢复四个指定 immutable guard，旧字段由真实升级逐字段核对，全部旧函数 body／catalog、普通表和 writer 保留。
 MANUAL-183／TEST-194 覆盖原 0160 metadata 索引超限、四入口、升级、401 项 FK inventory 与 map 清理，仅适用于私有 PostgreSQL，见 [ADR-0210](./adr/0210-personal-merge-contact-metadata-uses-exact-private-keys.md)。
 
+Issue #667 以 0162 修正个人计划在回拨午夜选择较晚 UTC、使普通首版 save 写出未来 effective 时间并返回 SQL NULL 的问题。
+两个私有 cycle helper 共用当地午夜解析：采样原 nominal 及前后连续 24 小时的 offset，保留精确 round-trip 候选并取最早 UTC，无 exact 候选时保留原 gap 转换。
+cycle start 从当前周起始日期及其后七天的首次午夜中取不晚于 reference 的最大值，使本票回拨情形的当前 UTC 周期包含 reference；Casey 中间回到前日 `23:30` 时仍归新周期，PLAN-005 的固定统计时区、周起始日及下一周期生效政策保留。
+迁移不改 save／read／document、旧行、历史版本和保存的 effective 时间，旧较晚 effective 导致的历史读取或重放 NULL 仍需独立处理。
+MANUAL-184／TEST-195 要求 fresh、真实 0161 升级、checksum、旧 catalog 和独立恢复留证，见 [ADR-0211](./adr/0211-personal-action-plan-midnight-folds-use-first-occurrence.md)。
+仅覆盖私有 PostgreSQL，不新增 runtime、HTTP／UI 或通知入口，整日跳过的周期边界不混入本票。
+
 MANUAL-158／TEST-169 只覆盖这一私有层，不提供普通关系写回资格、来源分配、当前候选、历史应用或完整混合 split；runtime、Backend／HTTP／UI、scheduler、生产 active merge 与 #549 人工门槛不变。
 
 7EZ／#600 以 0137 增加项目关系 pending 的只读冲突预检。完整拟议映射绑定 known／pending 两指纹，当前关系指针再进入 resolution fingerprint；候选与同值事件均完整保留。无新表、事实、audit、context 或 fence 写入，不选定 current，不消费 payload，不提供完整 mixed split 或生产入口。
@@ -3526,6 +3533,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-181` | 说明项目关系待分配新请求拒绝全 Unicode 空白备注／详情，检测位于原精确重放之后；记录真实 0158 普通 stage 回归、旧原文与回执保留及原漂移错误。 |
 | `MANUAL-182` | 说明长 TEXT contact ID 的内部子命令键上限与 UTF-8 摘要后缀，记录真实 0159 索引超限回归；说明四条确认入口及共享应用、新旧键预锁与预占检查、旧完成回执零写重放和真实升级验证。 |
 | `MANUAL-183` | 说明精确私有 contact identity map、四个 metadata 宽键与 choices→current FK 的替换，以及原 raw 唯一性、八个 ordinary FK 和旧字段保留。说明 null key 分配、显式错 key 拒绝、map 随 contacts 清理、真实 0160 升级及独立恢复的证据边界。 |
+| `MANUAL-184` | 说明个人计划回拨午夜取第一次出现、两种 cycle helper 共用边界、三点 offset 采样及 gap 回退，当前 UTC 周期须包含 reference。记录 Havana 普通 save 的 SQL NULL 复现、Casey 三小时回拨、真实 0161 升级和旧 effective 时间不回写；明确旧异常读取／重放及整日跳过另行处理。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3898,6 +3906,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-192` | 真实 0158 普通 stage 接受并保存 U+202F 备注和 U+00A0 other 详情，分别单独输入也被接受；tab 对照返回原 22023，实际内容对照成功。0159 验证非 null 全 Unicode White_Space／BOM 字段的新请求返回原 22023，实际内容及原长度边界保持原值。真实 0158 升级和 checksum 重放保留旧全空白 payload、receipt、全部业务与函数 catalog，仅 stage 增加一处首次请求检测。旧请求成功重放保留业务事实和回执，并沿用原 fence epoch 推进；新请求拒绝与 typed 漂移错误均完整回滚。fresh、既有 checks／fixtures 和独立恢复继续验证。 |
 | `TEST-193` | 真实 0159 中，2600 字节低压缩 contact ID 使用短独立 command，普通 submit／revise／stage 成功，0128 audit 索引与 0130 processed command 主键报 54000，各重复两次且短 ID 对照成功。0160 验证 0128／0130／0142／0143 四入口的长 ID 确认、64 字节对照、2048／2049 UTF-8 字节边界、新旧键预占、typed 漂移和晚期 end 故障整批回滚。真实 0159 升级及 checksum 重放须保留全部旧业务与函数 catalog，仅六个旧 body 按预期变化；旧可压缩长 v1 完成回执零写重放，原四入口 pending 可继续确认。fresh、既有 checks／fixtures 与独立恢复分别验证。 |
 | `TEST-194` | 真实 0160 基线中，2670 字节低压缩 contact ID 用短 command 完成普通 submit／revise／stage，0128 metadata 唯一索引报 54000。0161 验证四入口的短／长 ID、精确 raw/key 映射、同 contact 复用 key、显式错误 key 拒绝、精确重放和晚期 end 故障整批回滚。真实 0160 升级逐字段保留四表旧值和已完成回执，所有旧函数完整 catalog 不变，原 pending 可确认。fresh、checksum、401 项 FK inventory、contacts→map 级联清理、既有 fixtures 与独立恢复分别验证。 |
+| `TEST-195` | 真实 0161 基线以 Havana 周日起始、第一次 00:30 运行普通首版 save，旧 cycle start 在未来，已写版本后返回 SQL NULL；第二次 00:30、UTC／Chicago 对照正常。0162 验证两次午夜取同一首次边界、Casey 三小时回拨中间的前日 23:30 仍归新周期、正常／gap 对照和相邻周期衔接。真实升级逐字段保留计划、版本和 effective 时间，旧异常版本的历史读取／重放 NULL 不被改写，完整旧函数 catalog 仅两个 cycle helper 的 prosrc 按预期变化。fresh、checksum、既有 fixtures 与独立恢复分别验证。 |
 
 ## 9. UI、视觉与可访问性
 

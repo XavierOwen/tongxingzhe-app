@@ -60,6 +60,16 @@ MANUAL-182／TEST-193 要求正式 runner 验证真实 0159 升级、四入口�
 MANUAL-183／TEST-194 要求正式 runner 验证 0160 的 metadata 索引超限、四入口、真实升级、旧回执、checksum、401 项 FK inventory、map 级联清理及独立恢复。
 只覆盖合成私有 PostgreSQL，不开放生产、runtime 或 Backend／HTTP／UI 入口。
 
+## 个人计划回拨午夜的首次边界（Issue #667）
+
+0162 让两个 owner-only cycle helper 共同解析当地午夜，在精确 round-trip 的候选中取最早 UTC，无候选时保留原 nominal gap 转换。
+新私有 helper 采样 nominal 及前后连续 24 小时的 offset，覆盖本票 Havana 一小时与 Casey 三小时回拨，见 [ADR-0211](../../docs/adr/0211-personal-action-plan-midnight-folds-use-first-occurrence.md)。
+cycle start 在当前周日期及其后七天的首次午夜中取不晚于 reference 的最大值；Casey 中间回到前日 `23:30` 时仍归新周期，使本票回拨情形的当前 UTC 周期包含 reference。
+save／read／document、旧版本及保存的 effective 时间保留；旧较晚 effective 造成的历史读取／重放 NULL 不会被本次修正补救，需独立处理。
+
+MANUAL-184／TEST-195 要求正式 runner 验证普通 save 回归、两次午夜、Casey、正常／gap 对照、相邻周期、真实 0161 升级、checksum 和独立恢复。
+仅覆盖私有 PostgreSQL，不新增 runtime、HTTP／UI 或通知入口；整日跳过的周期行为另行跟踪。
+
 ## 7DS：原子准备个人空间 PII 导出
 
 0112 实现 Issue #537 的 DB-only 子集。`tongxingzhe_runtime` 只能执行 exact-identity bridge；Backend 先验证 JWT 和 `password` AMR，再传入可信 issuer、subject、当前 project 与认证时间。PostgreSQL 不验证 JWT 签名，也不接收原始 token、AMR、actor、workspace 或 capability。
