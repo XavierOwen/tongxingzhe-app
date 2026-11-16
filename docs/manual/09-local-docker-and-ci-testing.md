@@ -3245,6 +3245,14 @@ MANUAL-178／TEST-189 只覆盖合成私有 PostgreSQL，不开放生产、runti
 
 从仓库根目录运行 `./tool/run_postgres_tests_in_docker.sh`，由正式 runner 执行 fresh、升级、旧 0111／0113 checks 与 fixtures、checksum 和独立恢复。MANUAL-179／TEST-190 只覆盖合成私有 PostgreSQL；局部回归通过不代替完整 Docker、固定提交 CI 或 main 验收，也不开放生产、runtime grant、Backend／HTTP／UI。
 
+### 7.46 CSV 字段归一化与回执版本（Issue #659）
+
+真实 0157 基线用合法名称、仅含 tab 的电话和仅含 NBSP 的 email 完成普通 preview／confirm，返回 `confirmed`、建立数为 1，两个可选字段仍非 null。0158 新预览使用 normalization version 2，在原长度校验前去除 Unicode `White_Space` 与 BOM，空姓名拒绝，可选空字段转 null，内部字符保留。
+
+preview 的 `normalization_version` 将既有回执固定为 1、新回执固定为 2。确认和重放只按保存版本选择 canonicalizer；旧完成请求继续按原指纹精确重放，原 tab 漂移仍返回 23505。旧待确认字段若按新版会改变，返回 `stale_preview` 且零建立；字段不变的旧回执可确认。新版本的归一化等价输入返回同一已完成回执，不改写原对象或普通创建 writer。
+
+[正式 fixture](../../backend/database/fixtures/0158_personal_target_csv_import_whitespace.sql)验证新字段值、长度边界与重放；[真实升级 fixture](../../backend/database/fixtures/upgrade/0157_personal_target_csv_import_whitespace_live.sql)保存旧完成及待确认回执、全部业务状态和完整函数 catalog，核对升级与 checksum 重放的预期变化。从仓库根目录运行 `./tool/run_postgres_tests_in_docker.sh`，由正式 runner 继续执行 fresh、既有 checks／fixtures 和独立恢复。MANUAL-180／TEST-191 仅覆盖合成私有 PostgreSQL；完整 Docker 与固定提交 CI 分别留证，不开放生产、runtime grant、Backend／HTTP／UI。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：

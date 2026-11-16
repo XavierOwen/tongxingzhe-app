@@ -289,7 +289,7 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 
 CSV v1 只处理当前可信账号拥有的个人空间。数据库只在 exact identity 对应 active app user、该账号拥有 active personal workspace 且当前项目有效时，为个人空间上下文派生 `import_target_pii`。Backend 检查该 capability，确认 writer 再根据可信身份重验同一 owner 事实。客户端 capability 字符串、建立按钮或 preview receipt 都不授权。组织空间目标还没有接入当前资料授权链，因此不在本合同中。
 
-文件必须是 UTF-8，可以带 BOM，并按 RFC 4180 解码；record 换行接受 CRLF 或 LF。实际字节不超过 1 MiB，且最多包含 500 条解码后数据记录。解码后的 header 精确为 `target_type,display_name,phone,email`；缺失、重复或额外列全部拒绝。`target_type` 只接受 `person` 或 `institution`。字段沿用现有对象合同：去除首尾空白后，名称为 1 至 200 个字符，电话为 1 至 80 个字符，email 为 1 至 320 个字符；空电话或 email 转为 `null`。
+文件必须是 UTF-8，可以带 BOM，并按 RFC 4180 解码；record 换行接受 CRLF 或 LF。实际字节不超过 1 MiB，且最多包含 500 条解码后数据记录。解码后的 header 精确为 `target_type,display_name,phone,email`；缺失、重复或额外列全部拒绝。`target_type` 只接受 `person` 或 `institution`。新预览在长度校验前去除姓名、电话和 email 首尾的 Unicode `White_Space` 与 BOM（U+FEFF），保留内部字符。名称为 1 至 200 个字符，非空电话为 1 至 80 个字符，非空 email 为 1 至 320 个字符；空姓名拒绝，空电话或 email 转为 `null`。
 
 预览显示每行的校验结果和同空间疑似重复，但不建立对象。重复信号只包含去除首尾空白后完全相同的电话，或去除首尾空白后不区分大小写的 email。名称不参与匹配。同文件重复和当前账号已分配的 active 对象都进入提示，但不读取其他空间或当前不可见的对象。使用者必须排除提示行，或者明确选择建立独立对象；系统不自动合并、覆盖或更新已有对象。提示是确认事务当时的 best-effort 结果，不是唯一性约束；并发建立仍可能生成两个独立对象。
 
@@ -298,6 +298,8 @@ CSV v1 只处理当前可信账号拥有的个人空间。数据库只在 exact 
 预览返回 opaque receipt，绑定规范化完整行集、行序和当时提示；它不携带或授予权限。receipt 从数据库 UTC `previewed_at` 起连续 15 分钟有效，有效区间为半开的 `[previewed_at, previewed_at + 15 minutes)`。确认必须引用该 receipt：无提示的有效行只接受 `skip` 或 `create`，提示行只接受 `skip` 或明确的 `create_separate`。确认时重新运行同一组行校验与重复检查。receipt 过期或任何行内容、行序、提示漂移都返回 stale preview，且不写入任何对象。客户端生成的 import request UUID 固定账号、空间、receipt、规范化行序和完整选择；精确重放返回首次确认结果，任何载荷漂移发生冲突。首次确认在一个事务中建立所有已选行、初始分配和审计；任一行、授权或审计写入失败时整批回滚。
 
 每个新对象的 creator、assignment actor 和 assignee 都是当前可信账号。导入不建立接触、兴趣、对象反应、项目关系、阶段、同意、个人机构关系或共享备注。预览和确认分别追加 value-free 审计，只保存 actor、workspace、request／preview ID、phase、outcome、行数、提示数、建立数、`source_kind = csv` 和数据库时间。原文件名、CSV bytes、字段值、错误行内容和对象 PII 不进入审计、日志或错误。
+
+private preview 保存 `normalization_version`：既有回执为 1，新回执为 2。确认和精确重放只使用该版本，不通过其他 canonicalizer 回退匹配指纹。旧完成请求保留原行指纹和原结果；旧规则下的载荷漂移仍 conflict。旧待确认回执的字段若按新版归一化会改变，首次确认返回 stale preview 且不建立对象；不变的旧回执可继续确认。版本 2 接受归一化后相同的首尾空白表示精确重放。普通创建 writer 和已保存对象保持原值，见 [ADR-0207](./adr/0207-csv-import-normalization-is-bound-to-preview-version.md)。
 
 #### 5.6.4 个人空间 PII 导出 v1
 
@@ -521,6 +523,8 @@ Issue #653 以 0155 要求私有管理跟进意愿配置使用 READ COMMITTED，
 Issue #654 以 0156 要求私有管理跟进意愿配置读取使用 READ COMMITTED，阻止旧事务快照在撤权提交后继续返回原配置。原 NULL／metric 输入校验仍优先；其他非 RC 调用在首条授权查询和所有锁前返回固定 `0A000 management follow-up consent opt-in read requires read committed`。0074 私有 candidate bridge 继续委托同一 reader；正常 RC 文档、owner-only ACL、0154 精度和 0155 writer 门禁保留。MANUAL-178／TEST-189 仅覆盖私有 PostgreSQL，不新增生产、runtime grant、Backend／HTTP／UI 或调度入口。
 
 Issue #657 以 0157 修正首尾 tab、换行和 Unicode 空白造成的联系方式重复漏报。CSV 提示、双对象预览和 receipt validator 共用纯比较 helper；原 PII 值、CSV canonicalizer、行指纹和已完成导入回执保留。待确认 preview 的提示发生变化时仍按原合同返回 stale preview。MANUAL-179／TEST-190 覆盖真实 0156 基线回归及升级保留，不新增生产、runtime grant、Backend／HTTP／UI。
+
+Issue #659 以 0158 修正 CSV 字段本身的 Unicode 首尾空白处理，新预览按版本 2 归一化并校验。确认和重放绑定 preview 的版本，保留版本 1 已完成回执；旧待确认字段若会改变，返回 stale preview 并要求重新预览。原对象、普通创建 writer 和行指纹算法不改写。MANUAL-180／TEST-191 覆盖真实 0157 普通导入回归、两版回执与升级保留，仅适用于私有 PostgreSQL。
 
 7EY／#598 为合并期间新增的未知来源项目关系事件增加独立 typed 待分配层。0136 header 只含标识与数据库时间，业务值单独保存；同值也不自动合并。metadata-only 预检真正 READ ONLY，旧 end／接触确认不能漏过此类 pending 而结束代次，pair expiry 原子清除全部敏感载荷。五类已知来源事实不重写。
 
@@ -3507,6 +3511,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-177` | 说明私有管理跟进意愿配置的 READ COMMITTED 门禁、原输入校验顺序、已提交撤权的旧快照复现及历史版本和回执保留。 |
 | `MANUAL-178` | 说明私有管理跟进意愿配置 reader 的 READ COMMITTED 门禁、原输入校验顺序、candidate bridge 的原权限与结果，以及撤权后旧快照拒绝和原文档保留。 |
 | `MANUAL-179` | 说明疑似重复联系方式比较去除首尾 Unicode 空白与 BOM；记录真实 0156 漏报、原资料与已完成 CSV 回执保留，以及提示改变后旧 preview 的 stale 行为。 |
+| `MANUAL-180` | 说明 CSV 新预览的 Unicode 首尾空白归一化、preview 版本绑定、旧完成回执精确重放及旧待确认回执的 stale 条件；记录真实 0157 普通导入和升级验证。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3875,6 +3880,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-188` | 0155 验证三种非 RC 首次与精确 replay 均以固定 0A000 零写拒绝，原输入 22023 仍优先；RC 初始配置、版本推进和原回执逐值保留。真实独立事务先固定旧 RR、再提交 grant 撤销，旧快照拒绝且完整业务状态不变，fresh RC 返回 42501。真实 0154 升级和 checksum 重放保留两个旧版本、回执、全部业务与完整函数 catalog，仅门禁插入可变；fresh、既有并发及独立恢复继续验证。 |
 | `TEST-189` | 0156 验证 reader 及原 candidate bridge 的三种非 RC 调用以固定 0A000 零写拒绝，NULL／metric 输入 22023 仍优先；RC 未配置、enabled、disabled 的原 JSON 和窄角色权限保留。真实 0155 上先固定旧 RR，再提交 grant 撤销，正式脚本复现仍返回原 enabled 配置并明确失败；0156 后旧 RR 返回 0A000，fresh RC 返回 42501，完整业务状态不变。真实 0155 升级和 checksum 重放保留原 read／bridge 文档、两个版本及 write 回执、全部业务与完整函数 catalog，仅 reader 门禁插入可变；fresh、既有并发和独立恢复继续验证。 |
 | `TEST-190` | 正式 0157 fixture 在真实 0156 基线对 Unicode 首尾空白返回空提示而失败，普通空格对照通过；0157 验证 CSV 同文件及已有对象、双对象预览与 receipt validator 的一致信号，空白空值无信号，电话大小写、标点和内部空白不归一，email 保留原 lower 比较。真实 0156 升级和 checksum 重放逐值保留全部业务状态、完整函数 catalog 及已完成 CSV 回执，仅三个旧函数的比较表达式和新增 helper 可变；待确认 preview 的提示改变后返回 stale preview。fresh、旧 0111／0113 checks 与 fixtures、独立恢复继续验证。 |
+| `TEST-191` | 真实 0157 基线通过普通 preview／confirm 接受 tab 电话和 NBSP email 并保留非空值。0158 验证新版本 2 在原长度校验前归一化全部 Unicode White_Space 与 BOM，空姓名拒绝、可选空字段为 null、内部字符保留；新完成请求对归一化等价输入返回原回执。真实 0157 升级和 checksum 重放保留全部旧业务状态、版本 1 canonicalizer、原对象及已完成回执，旧 tab 载荷漂移仍返回 23505；字段会改变的旧待确认回执 stale 且零建立，不变的旧回执可确认。fresh、既有 checks／fixtures 和独立恢复继续验证，完整函数 catalog 只允许本次预期变化。 |
 
 ## 9. UI、视觉与可访问性
 

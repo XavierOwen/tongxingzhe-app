@@ -14390,6 +14390,42 @@ docker exec "${container_name}" psql \
 printf '%s\n' "${duplicate_whitespace_upgrade_replay}"
 echo '0156→0157 duplicate comparisons, complete state/catalog, raw import replay, pending preview staleness, and checksum replay: passed.'
 
+echo '验证 0157→0158 CSV whitespace normalization upgrade 与版本绑定回执。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0157_personal_target_csv_import_whitespace_live.sql >/dev/null
+docker exec "${container_name}" sh -ceu \
+  "mkdir /tmp/csv-import-whitespace-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0158_personal_target_csv_import_whitespace.sql \\
+     /tmp/csv-import-whitespace-upgrade-only/ && \\
+   test \"\$(find /tmp/csv-import-whitespace-upgrade-only \\
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/csv-import-whitespace-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_personal_target_csv_import_whitespace.sql \
+  --file=/workspace/backend/database/fixtures/shared/database_state.sql \
+  --command='BEGIN; SELECT public.fixture_0157_csv_whitespace_assert_upgrade(); ROLLBACK;' >/dev/null
+csv_whitespace_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/csv-import-whitespace-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${csv_whitespace_upgrade_replay}" != \
+    *'已验证 0158_personal_target_csv_import_whitespace（无需重复执行）'* ]] \
+  || [[ "${csv_whitespace_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0158 migration did not skip its checksum-verified replay.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/shared/database_state.sql \
+  --command='BEGIN; SELECT public.fixture_0157_csv_whitespace_assert_upgrade(); ROLLBACK;' >/dev/null
+printf '%s\n' "${csv_whitespace_upgrade_replay}"
+echo '0157→0158 versioned field normalization, old business state/catalog, original import replay, legacy pending behavior, and checksum replay: passed.'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 

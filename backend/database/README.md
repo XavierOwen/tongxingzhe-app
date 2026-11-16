@@ -31,6 +31,12 @@ Backend adapter 集成通过。
 
 正式 runner 执行 0157 fixture、真实 0156 升级、旧 0111／0113 checks 与 fixtures、checksum 和独立恢复，核对全部业务状态及函数 catalog 的保留。使用上述完整 Docker 命令运行；MANUAL-179／TEST-190 只覆盖合成私有 PostgreSQL，不增加生产、runtime grant、Backend／HTTP／UI。
 
+## CSV 字段归一化的预览版本（Issue #659）
+
+0158 为 private CSV preview 增加 `normalization_version`，旧回执为 1，新预览为 2。新版本在原长度校验前去除字段首尾 Unicode `White_Space` 与 BOM，空姓名拒绝，空电话和 email 转 null。确认和重放只按保存版本处理，不回退匹配指纹；旧完成请求及其载荷漂移语义保留，字段会改变的旧待确认回执返回 `stale_preview`，不变者可继续确认。原对象和普通创建 writer 不变，见 [ADR-0207](../../docs/adr/0207-csv-import-normalization-is-bound-to-preview-version.md)。
+
+MANUAL-180／TEST-191 通过正式 runner 检查真实 0157 升级、两版回执、fresh、checksum、既有 fixtures 和独立恢复。只覆盖合成私有 PostgreSQL，不新增生产、runtime grant、Backend／HTTP／UI。
+
 ## 7DS：原子准备个人空间 PII 导出
 
 0112 实现 Issue #537 的 DB-only 子集。`tongxingzhe_runtime` 只能执行 exact-identity bridge；Backend 先验证 JWT 和 `password` AMR，再传入可信 issuer、subject、当前 project 与认证时间。PostgreSQL 不验证 JWT 签名，也不接收原始 token、AMR、actor、workspace 或 capability。
