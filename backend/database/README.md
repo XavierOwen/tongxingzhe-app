@@ -70,6 +70,16 @@ save／read／document、旧版本及保存的 effective 时间保留；旧较�
 MANUAL-184／TEST-195 要求正式 runner 验证普通 save 回归、两次午夜、Casey、正常／gap 对照、相邻周期、真实 0161 升级、checksum 和独立恢复。
 仅覆盖私有 PostgreSQL，不新增 runtime、HTTP／UI 或通知入口；整日跳过的周期行为另行跟踪。
 
+## 个人计划整日跳过后的周期衔接（Issue #669）
+
+0163 为新私有 until helper 传入配置 weekday，从已解析 start 的当地日期还原 nominal 周起始日后再加七天。
+这使 Apia 跳过 Friday 后映射到 Saturday 的当前周期，在下一 Friday 结束；普通目标修改也按该边界生效。
+仅修改 document／save 两个调用点，旧函数签名、元数据、两参数 helper 及 0162 helper 保留，见 [ADR-0212](../../docs/adr/0212-personal-action-plan-until-retains-configured-weekday.md)。
+
+旧行和已存 pending effective 不回写，旧错误 pending 仍可能晚一天生效；旧重放零写，但派生 until 采用新计算。
+MANUAL-185／TEST-196 要求正式 runner 验证 fresh、真实 0162 升级、全部旧行／catalog、checksum、边界场次和独立恢复。
+只覆盖私有 PostgreSQL，不增加 runtime、生产、Backend／HTTP／UI 或通知入口。
+
 ## 7DS：原子准备个人空间 PII 导出
 
 0112 实现 Issue #537 的 DB-only 子集。`tongxingzhe_runtime` 只能执行 exact-identity bridge；Backend 先验证 JWT 和 `password` AMR，再传入可信 issuer、subject、当前 project 与认证时间。PostgreSQL 不验证 JWT 签名，也不接收原始 token、AMR、actor、workspace 或 capability。

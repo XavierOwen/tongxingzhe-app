@@ -3405,6 +3405,21 @@ CI 的 PostgreSQL job 在 Linux runner 上执行同一个 Docker runner。默认
 
 先保存第一条稳定错误。后续清理错误常由第一条失败引起，不应同时修改多个层次。
 
+### 7.51 个人计划整日跳过后的周期衔接（Issue #669）
+
+在真实 0162、`Pacific/Apia`、Friday 起始的计划中，正常 bootstrap／list／save 于 `2011-12-31T00:00Z` 创建目标 3。
+旧 until 为 `2012-01-06T10:00Z`，下一 Friday start 却是 `2012-01-05T10:00Z`，重叠一天。
+正常新 mutation 仅把目标改成 4，也排到较晚一天；下一 Friday 读取仍为目标 3。正式 fixture 必须先在 0162 命中这一 RED。
+
+0163 新私有 helper 输入同一配置算出的 resolved start、时区和 weekday，恢复 nominal 周起始日期后加七天，再调用首次午夜 helper。
+只修改 document／save 两个调用点，完整旧函数 catalog 仅允许两处 prosrc 改变；旧两参数 helper、0162 helper 和元数据保留。
+[正式 fixture](../../backend/database/fixtures/0163_personal_action_plan_skipped_date.sql)覆盖目标变更、边界场次、三种连接时区、重放、requested 设置的既有下一周期政策，以及 UTC、Apia Saturday、Havana 历史 fold／gap、Casey 和 Chicago 对照。
+[真实升级 fixture](../../backend/database/fixtures/upgrade/0162_personal_action_plan_skipped_date_live.sql)经正常 writer 提交旧计划和 pending，冻结全部旧行及函数 catalog，再核对新派生边界和零写重放。
+
+不回写已存 pending effective。旧错误 pending 仍可能晚一天生效并阻止新修改；历史 replay 的派生 until 可变化，不能断言整个 JSON 不变。
+由 `./tool/run_postgres_tests_in_docker.sh` 执行 fresh、真实升级、checksum、既有回归和独立恢复，局部 GREEN 不能替代完整 Docker 或固定提交 CI。
+MANUAL-185／TEST-196 仅覆盖私有 PostgreSQL，不新增生产、runtime、Backend／HTTP／UI 或通知入口；PR CI 通过后合并，精确 main CI 通过后关票。
+
 ### 11.1 先区分项目失败与平台故障
 
 项目失败通常发生在 checkout 之后。日志会显示仓库命令、测试断言、编译器或数据库返回的具体错误。
