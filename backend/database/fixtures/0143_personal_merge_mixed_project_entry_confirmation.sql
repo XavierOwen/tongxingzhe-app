@@ -591,6 +591,23 @@ BEGIN
   PERFORM pg_temp.assert_0143((before_state->key)<@(after_state->key),'confirmation rewrote an old append-only row in '||key);
  END LOOP;
  FOR key IN SELECT jsonb_object_keys(before_state) LOOP
+  IF key='app_private.personal_merge_contact_keys_v1' THEN
+    PERFORM pg_temp.assert_0143((before_state->key)<@(after_state->key),'confirmation changed an existing contact identity mapping');
+    PERFORM pg_temp.assert_0143((SELECT coalesce(jsonb_agg(mapped->>'contact_id' ORDER BY mapped->>'contact_id'),'[]'::jsonb)
+      FROM jsonb_array_elements(after_state->key) mapped WHERE NOT (before_state->key)@>jsonb_build_array(mapped))=
+      (SELECT coalesce(jsonb_agg(contact ORDER BY contact),'[]'::jsonb) FROM fixture_0143_contacts fixture
+        WHERE NOT EXISTS(SELECT 1 FROM jsonb_array_elements(before_state->key) mapped WHERE mapped->>'contact_id'=fixture.contact)),
+      'confirmation contact identity additions differ from the affected contacts');
+    PERFORM pg_temp.assert_0143(NOT EXISTS(SELECT 1 FROM (VALUES
+      ('app_private.personal_merge_contact_history_applications_v1'),('app_private.personal_merge_contact_current_revisions_v1'),
+      ('app_private.personal_merge_contact_current_choices_v1')) receipts(relation_name)
+      CROSS JOIN LATERAL jsonb_array_elements(after_state->receipts.relation_name) receipt
+      WHERE receipt->>'contact_id' IN(SELECT contact FROM fixture_0143_contacts)
+        AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(after_state->key) mapped
+          WHERE mapped->>'contact_id'=receipt->>'contact_id' AND mapped->'contact_identity_key'=receipt->'contact_identity_key')),
+      'confirmation receipt contact ID and identity key do not match the exact mapping');
+    CONTINUE;
+  END IF;
   IF key=ANY(ARRAY['app_data.contacts','app_data.contact_revisions','app_data.contact_answers','app_data.contact_target_links','app_data.contact_location_provenance',
    'app_data.processed_commands','app_data.change_feed','app_data.warehouse_outbox','app_data.contact_audit_events','app_private.deidentified_location_anomaly_ids',
    'app_data.promotion_target_project_relationships','app_data.promotion_target_relationship_revisions',
