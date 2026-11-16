@@ -3298,7 +3298,7 @@ MANUAL-183／TEST-194 只覆盖合成私有 PostgreSQL；各项运行结果分�
 ### 7.50 个人计划回拨午夜的首次边界（Issue #667）
 
 真实 0161 基线用正常 bootstrap／list context 建立个人上下文，首版目标设为 3、周起始日设为 7、统计时区为 `America/Havana`。
-在 `2026-11-01T04:30Z`（第一次当地 `00:30`）保存，原 cycle start 返回未来的 `05:00Z`，已写 revision 1 后返回 SQL NULL。
+在 `2025-11-02T04:30Z`（第一次当地 `00:30`）保存，原 cycle start 返回未来的 `05:00Z`，已写 revision 1 后返回 SQL NULL。
 同日 `05:30Z`（第二次 `00:30`）、UTC 和 Chicago 对照正常。
 
 0162 的新私有 helper 对 nominal 本身及前后各连续 24 小时采样 offset，构造当地午夜的 UTC 候选并精确 round-trip 过滤，取最早解。

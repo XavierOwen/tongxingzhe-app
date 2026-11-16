@@ -23,7 +23,7 @@ BEGIN
       RAISE EXCEPTION '0162 original cycle helper metadata or private privileges drift: %',original_signature;
     END IF;
   END LOOP;
-  IF app_private.personal_action_plan_local_midnight_v1(date '2026-11-01','America/Havana') IS DISTINCT FROM timestamptz '2026-11-01 04:00Z'
+  IF app_private.personal_action_plan_local_midnight_v1(date '2025-11-02','America/Havana') IS DISTINCT FROM timestamptz '2025-11-02 04:00Z'
     OR app_private.personal_action_plan_local_midnight_v1(date '2010-03-05','Antarctica/Casey') IS DISTINCT FROM timestamptz '2010-03-04 13:00Z'
     OR app_private.personal_action_plan_local_midnight_v1(date '2026-03-08','America/Havana') IS DISTINCT FROM
       (timestamp '2026-03-08 00:00' AT TIME ZONE 'America/Havana') THEN

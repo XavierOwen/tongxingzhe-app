@@ -3,9 +3,10 @@
 BEGIN;
 SET LOCAL TIME ZONE 'UTC';
 
+-- Use the historical fold; tzdata 2026f canceled Havana's scheduled 2026 rollback.
 -- The first repeated midnight hour must already belong to the new weekly cycle.
 DO $first_fold_creation$
-DECLARE c record; document jsonb; effective timestamptz; reference_at timestamptz := '2026-11-01 04:30+00';
+DECLARE c record; document jsonb; effective timestamptz; reference_at timestamptz := '2025-11-02 04:30+00';
 BEGIN
   SELECT * INTO STRICT c FROM app_data.bootstrap_personal_context('https://synthetic-0162.example.test','first-midnight-fold');
   PERFORM app_data.list_personal_project_contexts('https://synthetic-0162.example.test','first-midnight-fold');
@@ -14,8 +15,8 @@ BEGIN
     JOIN app_data.personal_action_plan_versions version USING(plan_id)
     WHERE plan.app_user_id=c.app_user_id AND version.revision_number=1;
   IF document IS NULL OR jsonb_typeof(document) IS DISTINCT FROM 'object' OR effective>reference_at
-    OR (document#>>'{progress,cycle_start_utc}')::timestamptz IS DISTINCT FROM timestamptz '2026-11-01 04:00+00'
-    OR (document#>>'{progress,cycle_until_utc}')::timestamptz IS DISTINCT FROM timestamptz '2026-11-08 05:00+00'
+    OR (document#>>'{progress,cycle_start_utc}')::timestamptz IS DISTINCT FROM timestamptz '2025-11-02 04:00+00'
+    OR (document#>>'{progress,cycle_until_utc}')::timestamptz IS DISTINCT FROM timestamptz '2025-11-09 05:00+00'
   THEN RAISE EXCEPTION '0162 first midnight-fold creation returned NULL or a cycle outside the reference: document=%, effective=%, reference=%',document,effective,reference_at; END IF;
 END
 $first_fold_creation$;
@@ -43,12 +44,12 @@ BEGIN
   FOREACH session_zone IN ARRAY ARRAY['UTC','America/Chicago','Pacific/Auckland'] LOOP
     PERFORM set_config('TimeZone',session_zone,true);
     FOR item IN SELECT * FROM (VALUES
-      ('America/Havana',7,timestamptz '2026-11-01 04:30Z',timestamptz '2026-11-01 04:00Z',timestamptz '2026-11-08 05:00Z'),
-      ('America/Havana',7,timestamptz '2026-11-01 05:30Z',timestamptz '2026-11-01 04:00Z',timestamptz '2026-11-08 05:00Z'),
+      ('America/Havana',7,timestamptz '2025-11-02 04:30Z',timestamptz '2025-11-02 04:00Z',timestamptz '2025-11-09 05:00Z'),
+      ('America/Havana',7,timestamptz '2025-11-02 05:30Z',timestamptz '2025-11-02 04:00Z',timestamptz '2025-11-09 05:00Z'),
       ('Antarctica/Casey',5,timestamptz '2010-03-04 13:30Z',timestamptz '2010-03-04 13:00Z',timestamptz '2010-03-11 16:00Z'),
       ('Antarctica/Casey',5,timestamptz '2010-03-04 15:30Z',timestamptz '2010-03-04 13:00Z',timestamptz '2010-03-11 16:00Z'),
       ('Antarctica/Casey',5,timestamptz '2010-03-04 16:30Z',timestamptz '2010-03-04 13:00Z',timestamptz '2010-03-11 16:00Z'),
-      ('UTC',7,timestamptz '2026-11-01 04:30Z',timestamptz '2026-11-01 00:00Z',timestamptz '2026-11-08 00:00Z'),
+      ('UTC',7,timestamptz '2025-11-02 04:30Z',timestamptz '2025-11-02 00:00Z',timestamptz '2025-11-09 00:00Z'),
       ('America/Chicago',1,timestamptz '2030-03-09 18:00Z',timestamptz '2030-03-04 06:00Z',timestamptz '2030-03-11 05:00Z'),
       ('America/Havana',7,timestamptz '2026-03-08 06:30Z',timestamptz '2026-03-08 05:00Z',timestamptz '2026-03-15 04:00Z')
     ) AS cases(zone,week_day,reference,expected_start,expected_until) LOOP
@@ -71,7 +72,7 @@ DO $ordinary_progress$
 DECLARE c record; occurred timestamptz; result record; document jsonb; before_replay jsonb; scheduled jsonb;
 BEGIN
   SELECT * INTO STRICT c FROM app_data.bootstrap_personal_context('https://synthetic-0162.example.test','first-midnight-fold');
-  FOREACH occurred IN ARRAY ARRAY[timestamptz '2026-11-01 04:10Z',timestamptz '2026-11-01 05:10Z'] LOOP
+  FOREACH occurred IN ARRAY ARRAY[timestamptz '2025-11-02 04:10Z',timestamptz '2025-11-02 05:10Z'] LOOP
     SELECT * INTO STRICT result FROM app_data.apply_contact_submit_v3(c.app_user_id,'0162-contact-'||extract(epoch FROM occurred),1,
       'contact.submit.v1','0162-device','0162-contact-'||extract(epoch FROM occurred),0,
       jsonb_build_object('contactId','0162-contact-'||extract(epoch FROM occurred),'workspaceId',c.workspace_id,'projectId',c.project_id,
@@ -79,21 +80,21 @@ BEGIN
         'location',jsonb_build_object('kind','not_applicable'),'reachCount',1,'interestLevel',2,'answers','[]'::jsonb,'targetLinks','[]'::jsonb));
     IF result.result_code IS DISTINCT FROM 'accepted' THEN RAISE EXCEPTION '0162 ordinary fold contact submit failed: %',result.result_code; END IF;
   END LOOP;
-  FOREACH occurred IN ARRAY ARRAY[timestamptz '2026-11-01 04:30Z',timestamptz '2026-11-01 05:30Z'] LOOP
+  FOREACH occurred IN ARRAY ARRAY[timestamptz '2025-11-02 04:30Z',timestamptz '2025-11-02 05:30Z'] LOOP
     document := app_data.read_personal_action_plan(c.app_user_id,c.workspace_id,c.project_id,occurred);
-    IF document IS NULL OR (document#>>'{progress,cycle_start_utc}')::timestamptz IS DISTINCT FROM timestamptz '2026-11-01 04:00Z'
-      OR (document#>>'{progress,recorded_contact_sessions}')::integer IS DISTINCT FROM (CASE WHEN occurred=timestamptz '2026-11-01 04:30Z' THEN 1 ELSE 2 END) THEN
+    IF document IS NULL OR (document#>>'{progress,cycle_start_utc}')::timestamptz IS DISTINCT FROM timestamptz '2025-11-02 04:00Z'
+      OR (document#>>'{progress,recorded_contact_sessions}')::integer IS DISTINCT FROM (CASE WHEN occurred=timestamptz '2025-11-02 04:30Z' THEN 1 ELSE 2 END) THEN
       RAISE EXCEPTION '0162 ordinary progress lost a contact in the repeated first hour: %',document;
     END IF;
   END LOOP;
-  scheduled := app_data.save_personal_action_plan(c.app_user_id,c.workspace_id,c.project_id,1,5,'America/Havana',7,'change',timestamptz '2026-11-01 04:30Z');
+  scheduled := app_data.save_personal_action_plan(c.app_user_id,c.workspace_id,c.project_id,1,5,'America/Havana',7,'change',timestamptz '2025-11-02 04:30Z');
   IF scheduled#>>'{current,weekly_contact_target}' IS DISTINCT FROM '3'
     OR scheduled#>>'{pending,weekly_contact_target}' IS DISTINCT FROM '5'
-    OR (scheduled#>>'{pending,effective_from_utc}')::timestamptz IS DISTINCT FROM timestamptz '2026-11-08 05:00Z' THEN
+    OR (scheduled#>>'{pending,effective_from_utc}')::timestamptz IS DISTINCT FROM timestamptz '2025-11-09 05:00Z' THEN
     RAISE EXCEPTION '0162 fold change did not retain the next-cycle version policy: %',scheduled;
   END IF;
   before_replay := pg_temp.fixture_database_state();
-  document := app_data.save_personal_action_plan(c.app_user_id,c.workspace_id,c.project_id,1,5,'America/Havana',7,'change',timestamptz '2026-11-01 04:30Z');
+  document := app_data.save_personal_action_plan(c.app_user_id,c.workspace_id,c.project_id,1,5,'America/Havana',7,'change',timestamptz '2025-11-02 04:30Z');
   IF document IS DISTINCT FROM (scheduled||jsonb_build_object('duplicate',true))
     OR pg_temp.fixture_database_state() IS DISTINCT FROM before_replay THEN
     RAISE EXCEPTION '0162 same-payload replay changed the pending version or database';

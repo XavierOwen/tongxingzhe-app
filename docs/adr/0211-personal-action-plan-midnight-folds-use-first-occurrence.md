@@ -6,9 +6,10 @@
 - Requirement：`PLAN-005`、`TEST-195`、`MANUAL-184`
 - 关联：[ADR-0050](./0050-weekly-goals-use-a-fixed-plan-time-zone.md)
 
-真实 0161 基线中，`America/Havana` 以周日为周期起始日，参考时刻为 `2026-11-01T04:30Z`，即第一次当地 `00:30`。
+真实 0161 基线中，`America/Havana` 以周日为周期起始日，参考时刻为 `2025-11-02T04:30Z`，即第一次当地 `00:30`。
 原 cycle start 返回尚未到达的 `05:00Z`，普通首版 save 写出该 effective 时间后返回 SQL NULL。
 同日第二次 `00:30`、UTC 和 Chicago 对照返回正常文档。
+回归使用已发生的 2025 回拨：[tzdata 2026f](https://www.iana.org/time-zones/releases/2026f)取消了原定 2026-11-01 的回拨，初始本地缓存镜像仍含旧规则；不能把该未来规则当作固定夹具前提。
 PostgreSQL 对回拨重叠时间默认采用切换后的 offset，见 [PG16 的歧义时间规则](https://www.postgresql.org/docs/16/datetime-invalid-input.html)。
 
 0162 为个人计划的当地日期边界选取第一次出现的午夜。
