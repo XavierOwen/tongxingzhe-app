@@ -14356,6 +14356,40 @@ docker exec "${container_name}" psql \
 printf '%s\n' "${opt_in_read_isolation_upgrade_replay}"
 echo '0155→0156 exact isolation guard, complete state/catalog, original opt-in receipt, and checksum replay: passed.'
 
+echo '验证 0156→0157 duplicate contact whitespace upgrade 与原始导入回执。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0156_personal_target_duplicate_contact_whitespace_live.sql >/dev/null
+docker exec "${container_name}" sh -ceu \
+  "mkdir /tmp/duplicate-contact-whitespace-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0157_personal_target_duplicate_contact_whitespace.sql \\
+     /tmp/duplicate-contact-whitespace-upgrade-only/"
+docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/duplicate-contact-whitespace-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/checks/verify_personal_target_duplicate_contact_whitespace.sql \
+  --file=/workspace/backend/database/fixtures/shared/database_state.sql \
+  --command='BEGIN; SELECT public.fixture_0156_duplicate_assert_upgrade(); ROLLBACK;' >/dev/null
+duplicate_whitespace_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/duplicate-contact-whitespace-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${duplicate_whitespace_upgrade_replay}" != \
+    *'已验证 0157_personal_target_duplicate_contact_whitespace（无需重复执行）'* ]] \
+  || [[ "${duplicate_whitespace_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0157 migration did not skip its checksum-verified replay.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/shared/database_state.sql \
+  --command='BEGIN; SELECT public.fixture_0156_duplicate_assert_upgrade(); ROLLBACK;' >/dev/null
+printf '%s\n' "${duplicate_whitespace_upgrade_replay}"
+echo '0156→0157 duplicate comparisons, complete state/catalog, raw import replay, pending preview staleness, and checksum replay: passed.'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 

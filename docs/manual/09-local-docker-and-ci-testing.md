@@ -3237,6 +3237,14 @@ MANUAL-176／TEST-187 仅证明合成 PostgreSQL 行为，不开放生产、runt
 
 MANUAL-178／TEST-189 只覆盖合成私有 PostgreSQL，不开放生产、runtime grant、Backend／HTTP／UI 或调度入口。完整 Docker、固定提交 CI 和 main 验收仍须分别通过。
 
+### 7.45 疑似重复联系方式的首尾空白（Issue #657）
+
+真实 0156 基线运行[正式 fixture](../../backend/database/fixtures/0157_personal_target_duplicate_contact_whitespace.sql)时，`all_unicode_edges` 返回空提示，期望为 `{1,2}`，因此明确失败；普通空格对照通过。0157 让 CSV 同文件和已有对象提示、双对象预览及 receipt validator 共用比较 helper，去除首尾 Unicode `White_Space` 与 BOM，空结果转 null。电话大小写、标点和内部空白不变，email 继续使用原 `lower` 比较。
+
+原资料值、普通创建 writer、CSV canonicalizer 和行指纹不变。[真实升级 fixture](../../backend/database/fixtures/upgrade/0156_personal_target_duplicate_contact_whitespace_live.sql)保存全部业务状态、完整函数 catalog 和旧已完成 CSV 回执；0157-only 升级与 checksum 重放只允许三个旧函数的比较表达式变化及新增 helper。旧完成回执仍精确重放；待确认 preview 的提示改变时返回原合同的 `stale_preview`。
+
+从仓库根目录运行 `./tool/run_postgres_tests_in_docker.sh`，由正式 runner 执行 fresh、升级、旧 0111／0113 checks 与 fixtures、checksum 和独立恢复。MANUAL-179／TEST-190 只覆盖合成私有 PostgreSQL；局部回归通过不代替完整 Docker、固定提交 CI 或 main 验收，也不开放生产、runtime grant、Backend／HTTP／UI。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：
