@@ -49,9 +49,12 @@ BEGIN
       WHEN 'app_private.personal_merge_contact_current_revisions_v1'::regclass THEN
         ARRAY['actor_app_user_id','request_id','contact_id','original_revision_number','from_revision_number',
           'to_revision_number','child_command_id']
-      ELSE ARRAY['actor_app_user_id','request_id','contact_id','source_target_id','selected_pending_fact_id'] END)
+      ELSE ARRAY['actor_app_user_id','request_id','contact_id','source_target_id','selected_pending_fact_id'] END
+      || CASE WHEN relation <> 'app_private.personal_merge_contact_resolution_requests_v1'::regclass
+          AND to_regclass('app_private.personal_merge_contact_keys_v1') IS NOT NULL
+        THEN ARRAY['contact_identity_key'] ELSE ARRAY[]::text[] END)
       OR EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = relation AND attnum > 0 AND NOT attisdropped
-        AND atttypid NOT IN ('uuid'::regtype,'text'::regtype,'int4'::regtype,'timestamptz'::regtype))
+        AND atttypid NOT IN ('uuid'::regtype,'text'::regtype,'int4'::regtype,'int8'::regtype,'timestamptz'::regtype))
     THEN RAISE EXCEPTION '0130 receipts must contain typed metadata only: %',relation; END IF;
     IF (SELECT count(*) FROM pg_trigger WHERE tgrelid = relation AND NOT tgisinternal AND tgenabled = 'O'
       AND tgfoid = 'app_private.reject_personal_target_merge_history_mutation_v1()'::regprocedure) <> 1

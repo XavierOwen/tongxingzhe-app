@@ -3271,6 +3271,30 @@ preview 的 `normalization_version` 将既有回执固定为 1、新回执固定
 
 从仓库根目录运行 `./tool/run_postgres_tests_in_docker.sh`，由正式 runner 执行 fresh、真实升级、checksum、既有 checks／fixtures 和独立恢复。MANUAL-182／TEST-193 只覆盖合成私有 PostgreSQL；局部通过不代替完整 Docker、固定提交 CI 或 main 验收。无新表、grant 或依赖，不新增生产、Backend／HTTP／UI 入口。
 
+### 7.49 个人合并接触 metadata 的精确私有键（Issue #665）
+
+真实 0160 基线中，2670 字节低压缩 TEXT contact ID 使用独立短 command ID，普通 submit、revise 和 0127 stage 成功。
+0128 确认仍在 private application 的复合唯一索引报 `54000`，索引行 2720 字节超过测试库的 2704 字节上限。
+此处验证 metadata 索引，0160 的有界子命令修正继续保留；ordinary writer 已拒绝的数据不计为本项回归。
+
+0161 的 private identity map 用 raw contact ID 主键和唯一 bigint identity 建立精确对应，另设 pair UNIQUE。
+四张收据表的 key 非空且有 exact pair FK，四个宽 UNIQUE／PK 与 choices→current FK 改用 key，窄 history UNIQUE 和八个 ordinary raw FK 保留。
+BEFORE INSERT 只补 null key，显式错误 key 必须被 FK 拒绝。
+map 禁止 UPDATE，DELETE 允许 contacts 级联；四表到 map 的 NO ACTION 不能删除历史收据。
+
+[正式 fixture](../../backend/database/fixtures/0161_personal_merge_contact_metadata_keys.sql)验证 0128、0130、0142 mixed v1 和 0143 mixed v2 的短／长 ID、精确映射、同 contact 复用 key、错 key、精确重放与晚期 end 故障整批回滚。
+[真实升级 fixture](../../backend/database/fixtures/upgrade/0160_personal_merge_contact_metadata_keys_live.sql)先在 0160 提交四入口长 pending 和短／长已完成回执。
+升级后须逐字段核对全部旧值、旧收据和完整旧函数 catalog，再重放原回执及确认原 pending；schema 按 0161 变更。
+
+迁移在独占 DDL 锁下只回填新增列，四个指定 immutable guard 必须恢复启用。
+结构检查核对 NOT NULL、identity／pair 唯一性、exact FK、trigger 和私有权限；strict purge inventory 净增五个 FK 至 401，并更新 choices→current 定义。
+另验证 contacts 删除会清理 map，其他 contact 映射保留。
+原 coordinator、proof、普通表与 writer 不改，不扩大 finalizer 的固定删除范围。
+
+从仓库根目录运行 `./tool/run_postgres_tests_in_docker.sh`，由正式 runner 执行 fresh、真实升级、checksum、既有 checks／fixtures 和独立恢复。
+MANUAL-183／TEST-194 只覆盖合成私有 PostgreSQL；各项运行结果分别留证，不能将局部回归写成完整 Docker、固定提交 CI 或 main 已通过。
+不新增生产、runtime、Backend／HTTP／UI 入口。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：

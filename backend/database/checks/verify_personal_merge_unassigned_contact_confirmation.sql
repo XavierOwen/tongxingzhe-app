@@ -45,7 +45,10 @@ BEGIN
         ARRAY['actor_app_user_id','request_id','workspace_id','project_id','generation_id',
           'known_fact_fingerprint','pending_fingerprint','post_known_fact_fingerprint','confirmed_at_utc']
       ELSE ARRAY['pending_fact_id','actor_app_user_id','request_id','contact_id','from_revision_number',
-        'to_revision_number','source_target_id','child_command_id'] END)
+        'to_revision_number','source_target_id','child_command_id'] END
+      || CASE WHEN relation = 'app_private.personal_merge_contact_applications_v1'::regclass
+          AND to_regclass('app_private.personal_merge_contact_keys_v1') IS NOT NULL
+        THEN ARRAY['contact_identity_key'] ELSE ARRAY[]::text[] END)
       OR EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = relation AND attnum > 0 AND NOT attisdropped
         AND atttypid IN ('json'::regtype,'jsonb'::regtype,'boolean'::regtype))
     THEN RAISE EXCEPTION '0128 private receipts must contain typed metadata only: %',relation; END IF;

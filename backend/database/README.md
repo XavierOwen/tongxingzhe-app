@@ -49,6 +49,17 @@ MANUAL-181／TEST-192 通过正式 runner 检查真实 0158 升级、旧原文�
 
 MANUAL-182／TEST-193 要求正式 runner 验证真实 0159 升级、四入口长 ID 与 UTF-8 边界、新旧键预占、整批回滚、旧回执、checksum 及独立恢复。局部通过不代替完整 Docker 或固定提交 CI；无新表、grant、依赖或生产、Backend／HTTP／UI 入口。
 
+## 个人合并接触 metadata 的精确私有键（Issue #665）
+
+0161 用 private contact identity map 将原 TEXT ID 精确对应到 bigint identity，四张收据表以非空 key 和 exact pair FK 保留原唯一性及引用语义。
+四个宽 metadata 键及 choices→current FK 改用 key，窄 history UNIQUE 和八个 ordinary raw FK 保留。
+新 trigger 只补 null key，显式错误 key 由 FK 拒绝；map 禁止 UPDATE，随 contacts 删除级联清理。
+旧字段由真实升级逐字段核对，旧 coordinator、proof、普通表和 writer 均不改。
+决定见 [ADR-0210](../../docs/adr/0210-personal-merge-contact-metadata-uses-exact-private-keys.md)。
+
+MANUAL-183／TEST-194 要求正式 runner 验证 0160 的 metadata 索引超限、四入口、真实升级、旧回执、checksum、401 项 FK inventory、map 级联清理及独立恢复。
+只覆盖合成私有 PostgreSQL，不开放生产、runtime 或 Backend／HTTP／UI 入口。
+
 ## 7DS：原子准备个人空间 PII 导出
 
 0112 实现 Issue #537 的 DB-only 子集。`tongxingzhe_runtime` 只能执行 exact-identity bridge；Backend 先验证 JWT 和 `password` AMR，再传入可信 issuer、subject、当前 project 与认证时间。PostgreSQL 不验证 JWT 签名，也不接收原始 token、AMR、actor、workspace 或 capability。
