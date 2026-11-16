@@ -133,6 +133,7 @@
 | [0205](./0205-target-retention-uses-utc-calendar-months.md) | 已接受，2026-11-13 | 私有数据库修正；Issue #641；`PII-004` | 保留期统一按 UTC 日历月，复核窗口为连续 720 小时；历史续期回执保留原截止 |
 | [0206](./0206-duplicate-contact-signals-trim-whitespace-without-rewriting-values.md) | 已接受，2026-11-16 | 私有数据库修正；Issue #657；`PII-010`、`TEST-190`、`MANUAL-179` | 疑似重复比较去除首尾 Unicode 空白与 BOM，原资料值、CSV 指纹及已完成回执保留 |
 | [0207](./0207-csv-import-normalization-is-bound-to-preview-version.md) | 已接受，2026-11-16 | 私有数据库修正；Issue #659；`PII-010`、`TEST-191`、`MANUAL-180` | 新 CSV 预览归一化 Unicode 首尾空白；回执绑定版本，保留旧完成请求的精确重放 |
+| [0208](./0208-personal-merge-pending-text-rejects-unicode-blank-new-requests.md) | 已接受，2026-11-16 | 私有数据库修正；Issue #661；`PII-014`、`PII-015`、`TEST-192`、`MANUAL-181` | 项目关系待分配新请求拒绝全 Unicode 空白文本，旧原文与精确重放保留 |
 
 ## 按主题查找
 

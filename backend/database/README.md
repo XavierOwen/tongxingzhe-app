@@ -37,6 +37,12 @@ Backend adapter 集成通过。
 
 MANUAL-180／TEST-191 通过正式 runner 检查真实 0157 升级、两版回执、fresh、checksum、既有 fixtures 和独立恢复。只覆盖合成私有 PostgreSQL，不新增生产、runtime grant、Backend／HTTP／UI。
 
+## 项目关系待分配新请求的空白检测（Issue #661）
+
+0159 在 private stage 的原精确重放返回之后，拒绝新请求中全为 Unicode `White_Space` 与 BOM 的非 null 备注或原因详情，返回原 22023。旧 payload／receipt、typed 漂移错误和含实际内容的原文保留；原 POSIX 检查、表 CHECK、普通 writer、锁序与权限不变，也不增加归一化版本。决定见 [ADR-0208](../../docs/adr/0208-personal-merge-pending-text-rejects-unicode-blank-new-requests.md)。
+
+MANUAL-181／TEST-192 通过正式 runner 检查真实 0158 升级、旧原文及回执、fresh、checksum、既有 fixtures 和独立恢复，仅允许 stage 的该检测插入。证据只覆盖合成私有 PostgreSQL，不新增生产、runtime grant、Backend／HTTP／UI。
+
 ## 7DS：原子准备个人空间 PII 导出
 
 0112 实现 Issue #537 的 DB-only 子集。`tongxingzhe_runtime` 只能执行 exact-identity bridge；Backend 先验证 JWT 和 `password` AMR，再传入可信 issuer、subject、当前 project 与认证时间。PostgreSQL 不验证 JWT 签名，也不接收原始 token、AMR、actor、workspace 或 capability。

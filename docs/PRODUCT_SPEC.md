@@ -275,7 +275,7 @@ Magic Link、社交登录和短信登录不在首版认证合同中。
 | `PII-012` | 个人空间 PII JSON 导出分为 artifact 准备与 Web 浏览器下载请求两步。准备完成只在当前页面内存保留已验证的原始 bytes、固定 MIME 和文件名；只有用户再次明确操作才请求下载。失败重试复用同一 artifact，不重新请求导出、不重新序列化或新增服务端审计；非 Web 明确 unavailable。成功只表示浏览器已接受请求，不证明文件已保存、打开或保留。 |
 | `PII-013` | 个人空间疑似重复对象合并 v1 要求 `view_assigned_target_pii` 与独立 `manage_assigned_target_merges`。候选只来自同空间、同类型、当前可见且仍获分配的 active 对象，并只使用精确电话或 email 信号。一次 active merge 只含两个对象，保留原对象与来源，并以合并代次约束全部相关 writer。拆分必须完整分配本代次内来源不明的事实，并在一个事务中全部生效或零变更。合并不续期；较早的成员截止控制复核，到期未续期或拆分时原子结束 merge 并匿名化两端及本代次敏感事实。 |
 | `PII-014` | 合并期间新增的未知来源项目关系事件显式登记到独立待分配区，不从 NULL generation binding 推断，不创建普通关系／revision。每个 request 是独立事件，时间由锁后数据库签发，不回填合并前历史，不按值去重或自动取最新。 |
-| `PII-015` | 私有登记重验本人 personal scope、active project、查看／管理合并两项 capability、两端活动分配及未到期代次；live 精确重放返回原结果，context／typed payload 漂移 conflict。metadata-only READ ONLY 预检不返回或散列阶段、备注等业务值，不保存确认资格。 |
+| `PII-015` | 私有登记重验本人 personal scope、active project、查看／管理合并两项 capability、两端活动分配及未到期代次；live 精确重放返回原结果，context／typed payload 漂移 conflict。新请求的非 null 备注或原因详情不能全为 Unicode White_Space 与 BOM；检测位于原精确重放之后，含实际内容的原文及旧 receipt 不改写。metadata-only READ ONLY 预检不返回或散列阶段、备注等业务值，不保存确认资格。 |
 | `PII-016` | 本类 pending 未处理时，所有 known_source_split 整次拒绝，既有接触确认不得绕过。pair expiry 原子写精确 purge 标识并清除全部 typed 载荷；来源、完整性或删除失败使整对回滚，既有 batch 无关项继续。 |
 | `PII-017` | 首片只交付登记、只读 metadata、结束门禁与到期清除，不交付分配／消费、当前候选、完整混合 split 或普通 writer 改写；PUBLIC／runtime 关闭，无 Backend／HTTP／UI、scheduler 或生产 active merge。 |
 | `PII-018` | 项目关系待分配处置预检只接受绑定当前 known／pending 指纹的完整拟议来源映射；按 source／原项目列出全部 pending 与已有当前 revision／binding 候选。同值不去重，不自动取最新或选赢家；metadata-only 指纹和 READ ONLY 结果不保存分配或写回资格。 |
@@ -527,6 +527,8 @@ Issue #657 以 0157 修正首尾 tab、换行和 Unicode 空白造成的联系�
 Issue #659 以 0158 修正 CSV 字段本身的 Unicode 首尾空白处理，新预览按版本 2 归一化并校验。确认和重放绑定 preview 的版本，保留版本 1 已完成回执；旧待确认字段若会改变，返回 stale preview 并要求重新预览。原对象、普通创建 writer 和行指纹算法不改写。MANUAL-180／TEST-191 覆盖真实 0157 普通导入回归、两版回执与升级保留，仅适用于私有 PostgreSQL。
 
 7EY／#598 为合并期间新增的未知来源项目关系事件增加独立 typed 待分配层。0136 header 只含标识与数据库时间，业务值单独保存；同值也不自动合并。metadata-only 预检真正 READ ONLY，旧 end／接触确认不能漏过此类 pending 而结束代次，pair expiry 原子清除全部敏感载荷。五类已知来源事实不重写。
+
+Issue #661 以 0159 拒绝新 stage 请求中全为 Unicode `White_Space` 与 BOM 的非 null 备注或原因详情。检测放在原精确重放返回之后：旧已接受 payload 与 receipt 保留，typed 值漂移仍按原合同 conflict，实际内容不裁剪或归一化。原 POSIX 检查、表 CHECK、普通 writer、锁序与权限不变，见 [ADR-0208](./adr/0208-personal-merge-pending-text-rejects-unicode-blank-new-requests.md)。MANUAL-181／TEST-192 仅覆盖私有 PostgreSQL。
 
 MANUAL-158／TEST-169 只覆盖这一私有层，不提供普通关系写回资格、来源分配、当前候选、历史应用或完整混合 split；runtime、Backend／HTTP／UI、scheduler、生产 active merge 与 #549 人工门槛不变。
 
@@ -3512,6 +3514,7 @@ audit 不保存 anomaly ID、坐标、发生时间、provenance、contact、revi
 | `MANUAL-178` | 说明私有管理跟进意愿配置 reader 的 READ COMMITTED 门禁、原输入校验顺序、candidate bridge 的原权限与结果，以及撤权后旧快照拒绝和原文档保留。 |
 | `MANUAL-179` | 说明疑似重复联系方式比较去除首尾 Unicode 空白与 BOM；记录真实 0156 漏报、原资料与已完成 CSV 回执保留，以及提示改变后旧 preview 的 stale 行为。 |
 | `MANUAL-180` | 说明 CSV 新预览的 Unicode 首尾空白归一化、preview 版本绑定、旧完成回执精确重放及旧待确认回执的 stale 条件；记录真实 0157 普通导入和升级验证。 |
+| `MANUAL-181` | 说明项目关系待分配新请求拒绝全 Unicode 空白备注／详情，检测位于原精确重放之后；记录真实 0158 普通 stage 回归、旧原文与回执保留及原漂移错误。 |
 
 ## 6. 领域数据模型与生命周期
 
@@ -3881,6 +3884,7 @@ Drift、HTTP、Auth、Location、Notification 等 Adapter
 | `TEST-189` | 0156 验证 reader 及原 candidate bridge 的三种非 RC 调用以固定 0A000 零写拒绝，NULL／metric 输入 22023 仍优先；RC 未配置、enabled、disabled 的原 JSON 和窄角色权限保留。真实 0155 上先固定旧 RR，再提交 grant 撤销，正式脚本复现仍返回原 enabled 配置并明确失败；0156 后旧 RR 返回 0A000，fresh RC 返回 42501，完整业务状态不变。真实 0155 升级和 checksum 重放保留原 read／bridge 文档、两个版本及 write 回执、全部业务与完整函数 catalog，仅 reader 门禁插入可变；fresh、既有并发和独立恢复继续验证。 |
 | `TEST-190` | 正式 0157 fixture 在真实 0156 基线对 Unicode 首尾空白返回空提示而失败，普通空格对照通过；0157 验证 CSV 同文件及已有对象、双对象预览与 receipt validator 的一致信号，空白空值无信号，电话大小写、标点和内部空白不归一，email 保留原 lower 比较。真实 0156 升级和 checksum 重放逐值保留全部业务状态、完整函数 catalog 及已完成 CSV 回执，仅三个旧函数的比较表达式和新增 helper 可变；待确认 preview 的提示改变后返回 stale preview。fresh、旧 0111／0113 checks 与 fixtures、独立恢复继续验证。 |
 | `TEST-191` | 真实 0157 基线通过普通 preview／confirm 接受 tab 电话和 NBSP email 并保留非空值。0158 验证新版本 2 在原长度校验前归一化全部 Unicode White_Space 与 BOM，空姓名拒绝、可选空字段为 null、内部字符保留；新完成请求对归一化等价输入返回原回执。真实 0157 升级和 checksum 重放保留全部旧业务状态、版本 1 canonicalizer、原对象及已完成回执，旧 tab 载荷漂移仍返回 23505；字段会改变的旧待确认回执 stale 且零建立，不变的旧回执可确认。fresh、既有 checks／fixtures 和独立恢复继续验证，完整函数 catalog 只允许本次预期变化。 |
+| `TEST-192` | 真实 0158 普通 stage 接受并保存 U+202F 备注和 U+00A0 other 详情，分别单独输入也被接受；tab 对照返回原 22023，实际内容对照成功。0159 验证非 null 全 Unicode White_Space／BOM 字段的新请求返回原 22023，实际内容及原长度边界保持原值。真实 0158 升级和 checksum 重放保留旧全空白 payload、receipt、全部业务与函数 catalog，仅 stage 增加一处首次请求检测。旧请求成功重放保留业务事实和回执，并沿用原 fence epoch 推进；新请求拒绝与 typed 漂移错误均完整回滚。fresh、既有 checks／fixtures 和独立恢复继续验证。 |
 
 ## 9. UI、视觉与可访问性
 
