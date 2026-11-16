@@ -25,6 +25,12 @@ Node 阶段按[正式 runner](../../tool/run_postgres_tests_in_docker.sh)中明�
 入口缺失、编译失败或断言失败都会使整套测试失败；不能把此前 SQL fixture 的通过单独写成
 Backend adapter 集成通过。
 
+## 疑似重复联系方式的空白比较（Issue #657）
+
+0157 仅统一 CSV 提示、双对象预览和 receipt validator 的比较值：去除首尾 Unicode `White_Space` 与 BOM，空值无信号。电话大小写、标点及内部空白保持原样，email 继续使用原 `lower`。原 PII 值、普通创建 writer、CSV canonicalizer、行指纹和已完成导入回执不变；提示改变的待确认 preview 按原合同返回 `stale_preview`。决定见 [ADR-0206](../../docs/adr/0206-duplicate-contact-signals-trim-whitespace-without-rewriting-values.md)。
+
+正式 runner 执行 0157 fixture、真实 0156 升级、旧 0111／0113 checks 与 fixtures、checksum 和独立恢复，核对全部业务状态及函数 catalog 的保留。使用上述完整 Docker 命令运行；MANUAL-179／TEST-190 只覆盖合成私有 PostgreSQL，不增加生产、runtime grant、Backend／HTTP／UI。
+
 ## 7DS：原子准备个人空间 PII 导出
 
 0112 实现 Issue #537 的 DB-only 子集。`tongxingzhe_runtime` 只能执行 exact-identity bridge；Backend 先验证 JWT 和 `password` AMR，再传入可信 issuer、subject、当前 project 与认证时间。PostgreSQL 不验证 JWT 签名，也不接收原始 token、AMR、actor、workspace 或 capability。
