@@ -3261,6 +3261,16 @@ preview 的 `normalization_version` 将既有回执固定为 1、新回执固定
 
 从仓库根目录运行 `./tool/run_postgres_tests_in_docker.sh`，由正式 runner 执行 fresh、真实升级、checksum、既有 checks／fixtures 和独立恢复。MANUAL-181／TEST-192 仅覆盖合成私有 PostgreSQL；完整 Docker 与固定提交 CI 分别留证，不开放生产、runtime grant、Backend／HTTP／UI。
 
+### 7.48 个人合并接触确认的有界子命令键（Issue #663）
+
+真实 0159 基线用 2600 字节低压缩 TEXT contact ID 和独立短 command ID，普通 submit、revise、0127 stage 均成功。0128 确认在 audit 唯一索引报 `54000`，索引行 2720 字节超过测试库的 2704 字节上限；0130 的 current 子命令在 `processed_commands` 主键处失败。两条路径各重复两次，短 ID 对照成功。不要把 contact ID 拼入普通提交的 command ID，否则可能在进入本次确认路径前就触发超限。
+
+0160 只缩短内部子命令的 contact 后缀：UTF-8 字节数不超过 2048 时保留原 `字节数:contact ID`，超过时改为 `sha256-v2:` 加原始 UTF-8 字节的 SHA-256 十六进制摘要。外前缀、请求 UUID、current 标记和原 ID 保留。0128、0130、0142 mixed v1、0143 mixed v2 的协调器须在 fence 前预锁新键及长 ID 的旧 v1 别名，并检查两者预占；0142 共享应用只执行新派生键。proof 精确接受旧完整 v1 或新派生式，不改普通 v3 writer。
+
+[正式 fixture](../../backend/database/fixtures/0160_personal_merge_bounded_child_commands.sql)验证四入口长 ID 确认、64 字节对照、2048／2049 UTF-8 字节边界、新旧键预占、typed 漂移和晚期 end 异常的整批回滚。[真实升级 fixture](../../backend/database/fixtures/upgrade/0159_personal_merge_bounded_child_commands_live.sql)先在 0159 提交四入口 pending 和旧可压缩长 v1 完成回执，升级后须逐值核对全部旧业务及完整函数 catalog，验证旧回执零写重放和原 pending 继续确认。仅六个旧函数 body 及新增 helper 可有预期变化，OID、owner、ACL 保留。
+
+从仓库根目录运行 `./tool/run_postgres_tests_in_docker.sh`，由正式 runner 执行 fresh、真实升级、checksum、既有 checks／fixtures 和独立恢复。MANUAL-182／TEST-193 只覆盖合成私有 PostgreSQL；局部通过不代替完整 Docker、固定提交 CI 或 main 验收。无新表、grant 或依赖，不新增生产、Backend／HTTP／UI 入口。
+
 ## 8. Drift v19 生成文件怎样检查
 
 当前本地 schema 版本是 v19。数据库结构变化后先重新生成：

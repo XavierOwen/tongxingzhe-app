@@ -10,6 +10,8 @@ status: accepted
 
 0130 复用原 v3 writer，为每项 pending 追加原历史完整 snapshot 与明确来源，再为每个 contact 追加进入前 current 的普通事实、answers、非 pair 关联和显式来源候选。每次 base 都使用锁下真实 head，避免触发 stale revision 的三路合并。
 
+0142 提取的共享应用与各协调器的有界子命令键及旧回执兼容，见 [ADR-0209](./0209-personal-merge-child-command-keys-are-bounded.md)。
+
 metadata-only 回执分别指向原 revision、实际应用 revision 和最终 revision，proof 核对实际 answers、地点 provenance、command、feed、audit 与去标识 warehouse。全批证明在结束前、end guard 和消费后分别执行；每项删除另须与实际应用值和精确 end receipt 对应，避免逐项重复全批证明。
 
 问卷版本固定在 contact 上，不由项目后来发布的新版本替换。协调器先核对历史及入口 current snapshot 的版本；否则原 writer 可能把兼容答案静默改标为 contact 版本。原事件时间保留，修订时间使用真实确认时间。原历史及 binding 不改，新 revision 的 binding 仍由普通 trigger 分配。

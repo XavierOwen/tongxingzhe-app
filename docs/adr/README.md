@@ -134,6 +134,7 @@
 | [0206](./0206-duplicate-contact-signals-trim-whitespace-without-rewriting-values.md) | 已接受，2026-11-16 | 私有数据库修正；Issue #657；`PII-010`、`TEST-190`、`MANUAL-179` | 疑似重复比较去除首尾 Unicode 空白与 BOM，原资料值、CSV 指纹及已完成回执保留 |
 | [0207](./0207-csv-import-normalization-is-bound-to-preview-version.md) | 已接受，2026-11-16 | 私有数据库修正；Issue #659；`PII-010`、`TEST-191`、`MANUAL-180` | 新 CSV 预览归一化 Unicode 首尾空白；回执绑定版本，保留旧完成请求的精确重放 |
 | [0208](./0208-personal-merge-pending-text-rejects-unicode-blank-new-requests.md) | 已接受，2026-11-16 | 私有数据库修正；Issue #661；`PII-014`、`PII-015`、`TEST-192`、`MANUAL-181` | 项目关系待分配新请求拒绝全 Unicode 空白文本，旧原文与精确重放保留 |
+| [0209](./0209-personal-merge-child-command-keys-are-bounded.md) | 已接受，2026-11-16 | 私有数据库修正；Issue #663；`PII-009`、`PII-013`、`TEST-193`、`MANUAL-182` | 长 TEXT contact ID 的内部子命令使用有界摘要后缀，保留短键、旧回执及新旧键预占检查 |
 
 ## 按主题查找
 

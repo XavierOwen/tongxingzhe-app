@@ -14461,6 +14461,43 @@ docker exec "${container_name}" psql \
 printf '%s\n' "${pending_unicode_upgrade_replay}"
 echo '0158→0159 first-request text validation, complete state/catalog, legacy raw receipt replay, original drift errors, and checksum replay: passed.'
 
+echo '验证 0159→0160 bounded contact child commands upgrade、长 pending 和旧 v1 回执。'
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --file=/workspace/backend/database/fixtures/upgrade/0159_personal_merge_bounded_child_commands_live.sql >/dev/null
+docker exec "${container_name}" sh -ceu \
+  "mkdir /tmp/personal-merge-bounded-child-commands-upgrade-only && \\
+   cp /workspace/backend/database/migrations/0160_personal_merge_bounded_child_commands.sql \\
+     /tmp/personal-merge-bounded-child-commands-upgrade-only/ && \\
+   test \"\$(find /tmp/personal-merge-bounded-child-commands-upgrade-only \\
+     -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')\" -eq 1"
+docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+  --env MIGRATION_DIR=/tmp/personal-merge-bounded-child-commands-upgrade-only \
+  "${container_name}" bash /workspace/tool/postgres_migrate.sh
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --set=fixture_0160_definitions_only=true \
+  --file=/workspace/backend/database/fixtures/0160_personal_merge_bounded_child_commands.sql \
+  --command='BEGIN; SELECT public.fixture_0159_bounded_assert_upgrade(); ROLLBACK;' >/dev/null
+bounded_child_upgrade_replay="$(
+  docker exec --env DATABASE_URL="${personal_target_pair_upgrade_url}" \
+    --env MIGRATION_DIR=/tmp/personal-merge-bounded-child-commands-upgrade-only \
+    "${container_name}" bash /workspace/tool/postgres_migrate.sh
+)"
+if [[ "${bounded_child_upgrade_replay}" != \
+    *'已验证 0160_personal_merge_bounded_child_commands（无需重复执行）'* ]] \
+  || [[ "${bounded_child_upgrade_replay}" == *'已执行 '* ]]; then
+  echo '0160 migration did not skip its checksum-verified replay.' >&2
+  exit 1
+fi
+docker exec "${container_name}" psql \
+  -U postgres -d "${personal_target_pair_upgrade_database}" --no-psqlrc --set=ON_ERROR_STOP=1 \
+  --set=fixture_0160_definitions_only=true \
+  --file=/workspace/backend/database/fixtures/0160_personal_merge_bounded_child_commands.sql \
+  --command='BEGIN; SELECT public.fixture_0159_bounded_assert_upgrade(); ROLLBACK;' >/dev/null
+printf '%s\n' "${bounded_child_upgrade_replay}"
+echo '0159→0160 four-entry long pending confirmation, immutable old state/catalog, completed v1 exact replay, and checksum replay: passed.'
+
 echo '第一次执行 migration：从空库建立全部 schema。'
 run_migrations
 
